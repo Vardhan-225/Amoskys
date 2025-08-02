@@ -1,0 +1,74 @@
+// proto/messaging_schema.proto
+
+syntax = "proto3";                             // We’re using Proto3 syntax (recommended).
+
+package infraspectre.messaging;                // Namespacing for generated code.
+
+
+// ─── Event Envelope ────────────────────────────────────────────────────────────
+
+// A generic wrapper that every agent uses to publish any kind of event.
+// This lets subscribers (e.g. SomaCore) handle all messages uniformly.
+message Event {
+  string event_id   = 1;   // UUID for deduplication across retries.
+  string agent_id   = 2;   // Logical name/ID of the publishing agent.
+  string timestamp  = 3;   // ISO-8601 UTC when event was generated.
+  EventType type    = 4;   // What kind of payload is carried in `payload`.
+  bytes payload     = 5;   // Serialized nested message (e.g. a FlowEvent).
+}
+
+
+// ─── EventType Enumeration ─────────────────────────────────────────────────────
+
+// Defines every payload type your agents can emit.
+enum EventType {
+  UNKNOWN_EVENT       = 0;  // Fallback/invalid.
+  FLOW_EVENT          = 1;  // From FlowAgent-In/Out.
+  PROCESS_EVENT       = 2;  // From ProcessAgent.
+  THREAT_INTEL_EVENT  = 3;  // From ThreatIntelAgent.
+  VULN_SCAN_EVENT     = 4;  // From VulnAgent.
+  DECISION_EVENT      = 5;  // From NeuroSentinel.
+  PROFILE_EVENT       = 6;  // From ProfilingAgent.
+}
+
+
+// ─── FlowEvent Payload ──────────────────────────────────────────────────────────
+
+// The data structure for network flows captured by FlowAgent.
+message FlowEvent {
+  string  flow_id      = 1;  // Correlate start/end of a single flow.
+  string  src_ip       = 2;  // Source IP address.
+  uint32  src_port     = 3;  // Source port.
+  string  dst_ip       = 4;  // Destination IP address.
+  uint32  dst_port     = 5;  // Destination port.
+  string  protocol     = 6;  // "TCP", "UDP", etc.
+  uint64  bytes_sent   = 7;  // Total bytes sent from src → dst.
+  uint64  bytes_recv   = 8;  // Total bytes sent from dst → src.
+  uint32  flags        = 9;  // TCP flag bitmask.
+  int64   start_time   = 10; // UNIX epoch ms when flow began.
+  int64   end_time     = 11; // UNIX epoch ms when flow ended.
+}
+
+
+// ─── EventBus Service Definition ────────────────────────────────────────────────
+
+// gRPC service that all agents use to publish/subscribe Events.
+service EventBus {
+  // Agents call this RPC to publish an Event.
+  rpc Publish(Event) returns (PublishAck) {}
+
+  // Agents call this RPC to subscribe to a stream of Events.
+  rpc Subscribe(SubscriptionRequest) returns (stream Event) {}
+}
+
+// Acknowledgment for Publish calls.
+message PublishAck {
+  bool   success = 1;       // True if accepted.
+  string message = 2;       // Optional error/info.
+}
+
+// Request to set up a subscription stream.
+message SubscriptionRequest {
+  repeated EventType types = 1;  // Which EventType(s) to receive.
+  string agent_id          = 2;  // Filter by specific agent.
+}
