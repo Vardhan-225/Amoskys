@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN useradd -r -u 10001 -s /usr/sbin/nologin infra
+WORKDIR /app
+
+COPY InfraSpectre/requirements.txt /app/InfraSpectre/requirements.txt
+RUN pip install --no-cache-dir -r /app/InfraSpectre/requirements.txt
+
+COPY InfraSpectre /app/InfraSpectre
+COPY proto /app/proto
+
+RUN python -m grpc_tools.protoc -I proto \
+    --python_out=InfraSpectre/proto_stubs \
+    --grpc_python_out=InfraSpectre/proto_stubs \
+    proto/messaging_schema.proto
+
+VOLUME ["/certs"]
+EXPOSE 50051 9100 8080
+
+USER infra:infra
+ENV PYTHONUNBUFFERED=1
+CMD ["python", "InfraSpectre/common/eventbus/server.py"]

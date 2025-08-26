@@ -1,0 +1,16 @@
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "archMap": [{ "architecture": "SCMP_ARCH_X86_64", "subArchitectures": ["SCMP_ARCH_X86", "SCMP_ARCH_X32"] }],
+  "syscalls": [
+    { "names": ["read","write","close","fstat","lseek","mmap","mprotect","munmap","brk","rt_sigaction","rt_sigprocmask","rt_sigreturn","clone","execve","exit","exit_group","arch_prctl","prlimit64","getrandom","futex","sched_yield","nanosleep","clock_gettime","clock_nanosleep","getpid","gettid","tgkill","set_tid_address"], "action": "SCMP_ACT_ALLOW" },
+    { "names": ["openat","statx","renameat","unlinkat","mkdirat","faccessat2"], "action": "SCMP_ACT_ALLOW" },
+    { "names": ["socket","bind","connect","accept","accept4","listen","getsockname","getpeername","setsockopt","getsockopt","recvfrom","sendto","recvmsg","sendmsg","shutdown"], "action": "SCMP_ACT_ALLOW" },
+    { "names": ["epoll_create1","epoll_ctl","epoll_pwait","eventfd2","pipe2"], "action": "SCMP_ACT_ALLOW" },
+    { "names": ["stat","lstat","fstatfs","getcwd","uname"], "action": "SCMP_ACT_ALLOW" },
+    { "names": ["ioctl"], "action": "SCMP_ACT_ALLOW" },
+    { "names": ["pread64","pwrite64","fsync","fdatasync"], "action": "SCMP_ACT_ALLOW" },
+    { "names": ["set_robust_list","prctl"], "action": "SCMP_ACT_ALLOW" },
+    { "names": ["chown","fchown","fchmod","chmod","utimensat"], "action": "SCMP_ACT_ALLOW" },
+    { "names": ["getuid","geteuid","getgid","getegid","setgid","setuid"], "action": "SCMP_ACT_ALLOW" }
+  ]
+}
