@@ -1,0 +1,42 @@
+groups:
+- name: infraspectre
+  rules:
+  - alert: AgentWALBacklogHigh
+    expr: agent_wal_backlog_bytes > 2.0e8
+    for: 5m
+    labels: { severity: warning }
+    annotations:
+      summary: "Agent WAL backlog high"
+      description: "WAL backlog {{ $value | humanize }} bytes > 200MB for 5m"
+
+  - alert: PublishFailures
+    expr: rate(agent_publish_fail_total[1m]) > 0
+    for: 2m
+    labels: { severity: critical }
+    annotations:
+      summary: "Agent publish failures"
+      description: "agent_publish_fail_total increasing > 0 for 2m"
+
+  - alert: RetryStorm
+    expr: rate(agent_publish_retry_total[1m]) > 5
+    for: 2m
+    labels: { severity: warning }
+    annotations:
+      summary: "High RETRY rate"
+      description: "agent_publish_retry_total > 5/min for 2m — possible bus overload"
+
+  - alert: BusInflightHigh
+    expr: bus_inflight_requests > 100
+    for: 1m
+    labels: { severity: warning }
+    annotations:
+      summary: "EventBus inflight high"
+      description: "bus_inflight_requests > 100 for >1m — backpressure expected"
+
+  - alert: BusHardCapHits
+    expr: increase(bus_retry_total[5m]) > 50
+    for: 5m
+    labels: { severity: critical }
+    annotations:
+      summary: "EventBus issuing many RETRYs"
+      description: "High RETRY rate — clients backing off or data loss risk if WAL caps"

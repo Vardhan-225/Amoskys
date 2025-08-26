@@ -1,0 +1,5 @@
+groups:
+- name: latency
+  rules:
+  - record: agent_publish_latency_ms:p95_5m
+    expr: histogram_quantile(0.95, sum(rate(agent_publish_latency_ms_bucket[5m])) by (le))
