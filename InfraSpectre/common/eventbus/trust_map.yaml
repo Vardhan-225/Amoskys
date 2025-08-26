@@ -1,0 +1,3 @@
+agents:
+  agent-dev-001: certs/agent.ed25519.pub
+  # add more agents here

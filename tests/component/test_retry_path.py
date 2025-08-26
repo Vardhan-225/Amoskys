@@ -41,42 +41,35 @@ def bus_overloaded(certs):
     env = os.environ.copy()
     env["BUS_OVERLOAD"] = "1"
     env["PYTHONUNBUFFERED"] = "1"  # Force unbuffered output
+    env["PYTHONPATH"] = os.path.abspath(os.path.dirname(__file__) + "/../..")
+    env["LOGLEVEL"] = "DEBUG"  # Increase logging verbosity
     
-    # Ensure proper Python path for imports
     repo_root = os.path.abspath(os.path.dirname(__file__) + "/../..")
-    env["PYTHONPATH"] = repo_root
-    
-    # Use absolute paths
     python_path = os.path.join(repo_root, "InfraSpectre/.venv/bin/python")
     server_path = os.path.join(repo_root, "InfraSpectre/common/eventbus/server.py")
     
-    print("[DEBUG] Starting server with environment:")
+    print("[TEST] Starting server with environment:")
     for k, v in sorted(env.items()):
-        print(f"[DEBUG]   {k}={v}")
-    print("[DEBUG] Server path:", server_path)
+        if k in ["BUS_OVERLOAD", "PYTHONPATH", "LOGLEVEL"]:
+            print(f"[TEST]   {k}={v}")
+    print("[TEST] Server path:", server_path)
     sys.stdout.flush()
     
-    # Start server with environment and capture output
+    # Start server with real-time output
     p = subprocess.Popen(
-        [python_path, "-u", server_path],  # -u for unbuffered output
+        [python_path, "-u", server_path],
         env=env,
         cwd=repo_root,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        universal_newlines=True
+        text=True,
+        bufsize=1  # Line buffered
     )
 
     def log_output():
-        while True:
-            line = p.stdout.readline()
-            if not line and p.poll() is not None:
-                break
-            if line:
-                print("[SERVER]", line.rstrip())
-                sys.stdout.flush()
+        for line in iter(p.stderr.readline, ""):
+            print("[SERVER]", line.rstrip(), flush=True)
 
-    # Start thread to log server output
-    import threading
     log_thread = threading.Thread(target=log_output, daemon=True)
     log_thread.start()
     
