@@ -1,0 +1,62 @@
+{
+  "title": "InfraSpectre Overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Agent WAL Backlog (bytes)",
+      "targets": [{ "expr": "agent_wal_backlog_bytes" }],
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 7 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Agent Publish Latency (ms, p50/p95)",
+      "targets": [
+        { "expr": "histogram_quantile(0.5, sum(rate(agent_publish_latency_ms_bucket[5m])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(agent_publish_latency_ms_bucket[5m])) by (le))", "legendFormat": "p95" }
+      ],
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 7 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Retry & Fail Rates (/s)",
+      "targets": [
+        { "expr": "rate(agent_publish_retry_total[1m])", "legendFormat": "retry/s" },
+        { "expr": "rate(agent_publish_fail_total[1m])", "legendFormat": "fail/s" }
+      ],
+      "gridPos": { "x": 0, "y": 7, "w": 12, "h": 7 }
+    },
+    {
+      "type": "stat",
+      "title": "Bus Invalid Total",
+      "targets": [{ "expr": "bus_invalid_total" }],
+      "gridPos": { "x": 12, "y": 7, "w": 6, "h": 7 }
+    },
+    {
+      "type": "stat",
+      "title": "Bus Publish Total",
+      "targets": [{ "expr": "bus_publish_total" }],
+      "gridPos": { "x": 18, "y": 7, "w": 6, "h": 7 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Bus In-Flight Requests (queue depth)",
+      "targets": [{ "expr": "bus_inflight_requests" }],
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 7 }
+    },
+    {
+      "type": "stat",
+      "title": "Bus RETRY Total",
+      "targets": [{ "expr": "bus_retry_total" }],
+      "gridPos": { "x": 12, "y": 14, "w": 6, "h": 7 }
+    },
+    {
+      "type": "stat",
+      "title": "Agent Publish p95 (ms, 5m)",
+      "targets": [{ "expr": "agent_publish_latency_ms:p95_5m" }],
+      "gridPos": { "x": 18, "y": 14, "w": 6, "h": 7 }
+    }
+  ]
+}

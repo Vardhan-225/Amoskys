@@ -1,0 +1,35 @@
+[Unit]
+Description=InfraSpectre FlowAgent (WAL + mTLS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%E{HOME}/infraspectre
+ExecStart=/usr/bin/env python3 InfraSpectre/agents/flowagent/main.py
+ExecReload=/bin/kill -HUP $MAINPID
+
+User=infra
+Group=infra
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+ReadWritePaths=%E{HOME}/infraspectre/InfraSpectre/agents/flowagent
+ReadWritePaths=%E{HOME}/infraspectre/certs
+Environment=PYTHONUNBUFFERED=1
+LimitNOFILE=65535
+
+Restart=always
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

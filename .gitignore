@@ -220,3 +220,4 @@ venv/
 # Editor/IDE settings
 .vscode/
 .idea/
+/InfraSpectre/
