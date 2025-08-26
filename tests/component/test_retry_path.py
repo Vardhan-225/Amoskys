@@ -5,17 +5,19 @@ from InfraSpectre.proto_stubs import messaging_schema_pb2_grpc as pbrpc
 
 BUS_ADDR = "localhost:50051"
 
-def wait_for_port(port: int, timeout=6.0):
+def wait_for_port(port: int, timeout=10.0):
     import time, socket
     deadline = time.time() + timeout
     while time.time() < deadline:
         with socket.socket() as s:
-            s.settimeout(0.2)
+            s.settimeout(1.0)
             try:
                 s.connect(("127.0.0.1", port))
+                # Give the server a moment to fully initialize
+                time.sleep(1.0)
                 return True
             except OSError:
-                time.sleep(0.1)
+                time.sleep(0.2)
     return False
 
 @pytest.fixture(scope="session")
