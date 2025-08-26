@@ -1,0 +1,89 @@
+version: "3.9"
+services:
+  eventbus:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.eventbus
+    image: infraspectre/eventbus:dev
+    container_name: is_eventbus
+    environment:
+      BUS_OVERLOAD: "0"
+      BUS_MAX_INFLIGHT: "100"
+      BUS_HARD_MAX: "500"
+    ports:
+      - "50051:50051"
+      - "9100:9100"
+      - "8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - ../certs:/certs:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+      - apparmor=docker-default
+      - seccomp:unconfined
+    cap_drop:
+      - ALL
+
+  agent:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.agent
+    image: infraspectre/agent:dev
+    container_name: is_agent
+    depends_on:
+      eventbus:
+        condition: service_healthy
+    environment:
+      IS_CERT_DIR: /certs
+      IS_WAL_PATH: /wal/wal.db
+    ports:
+      - "9101:9101"
+      - "8081:8081"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - ../certs:/certs:ro
+      - agent_wal:/wal
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+      - apparmor=docker-default
+      - seccomp:unconfined
+    cap_drop:
+      - ALL
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: is_prom
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: is_grafana
+    ports: ["3000:3000"]
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+
+volumes:
+  agent_wal:
+  grafana_data:
