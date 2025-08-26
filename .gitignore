@@ -220,3 +220,12 @@ venv/
 # Editor/IDE settings
 .vscode/
 .idea/
+InfraSpectre/**/__pycache__/
+InfraSpectre/**/.pytest_cache/
+InfraSpectre/**/.mypy_cache/
+InfraSpectre/**/*.pyc
+InfraSpectre/**/.venv/
+InfraSpectre/**/env/
+InfraSpectre/**/IS/
+InfraSpectre/agents/activate/
+InfraSpectre/agents/flowagent/wal.db
