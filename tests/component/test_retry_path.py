@@ -2,8 +2,11 @@ import os, sys, time, socket, subprocess
 import grpc, pytest
 from InfraSpectre.proto_stubs import messaging_schema_pb2 as pb
 from InfraSpectre.proto_stubs import messaging_schema_pb2_grpc as pbrpc
+import threading
 
 BUS_ADDR = "localhost:50051"
+SERVER_SCRIPT = "InfraSpectre/common/eventbus/server.py"
+SERVER_ARGS = ["--overload", "on"]
 
 def wait_for_port(port: int, timeout=10.0):
     import time, socket
@@ -14,7 +17,7 @@ def wait_for_port(port: int, timeout=10.0):
             try:
                 s.connect(("127.0.0.1", port))
                 # Give the server a moment to fully initialize
-                time.sleep(1.0)
+                time.sleep(0.5)
                 return True
             except OSError:
                 time.sleep(0.2)
@@ -39,25 +42,26 @@ def mtls_channel():
 @pytest.fixture
 def bus_overloaded(certs):
     env = os.environ.copy()
-    env["BUS_OVERLOAD"] = "1"
-    env["PYTHONUNBUFFERED"] = "1"  # Force unbuffered output
-    env["PYTHONPATH"] = os.path.abspath(os.path.dirname(__file__) + "/../..")
-    env["LOGLEVEL"] = "DEBUG"  # Increase logging verbosity
-    
+    env["BUS_SERVER_PORT"] = "50051"
+    env["BUS_METRICS_DISABLE"] = "1"  # Disable metrics to avoid port contention
+
     repo_root = os.path.abspath(os.path.dirname(__file__) + "/../..")
-    python_path = os.path.join(repo_root, "InfraSpectre/.venv/bin/python")
-    server_path = os.path.join(repo_root, "InfraSpectre/common/eventbus/server.py")
-    
+    python_path = sys.executable
+    server_path = os.path.join(repo_root, "InfraSpectre", "common", "eventbus", "server.py")
+
     print("[TEST] Starting server with environment:")
     for k, v in sorted(env.items()):
-        if k in ["BUS_OVERLOAD", "PYTHONPATH", "LOGLEVEL"]:
+        if k in ["BUS_SERVER_PORT", "BUS_METRICS_DISABLE"]:
             print(f"[TEST]   {k}={v}")
     print("[TEST] Server path:", server_path)
     sys.stdout.flush()
-    
-    # Start server with real-time output
+
+    # Reset _OVERLOAD before starting the server
+    global _OVERLOAD
+    _OVERLOAD = None
+
     p = subprocess.Popen(
-        [python_path, "-u", server_path],
+        [python_path, "-u", server_path, "--overload", "on"],
         env=env,
         cwd=repo_root,
         stdout=subprocess.PIPE,
@@ -66,27 +70,25 @@ def bus_overloaded(certs):
         bufsize=1  # Line buffered
     )
 
-    def log_output():
-        for line in iter(p.stderr.readline, ""):
-            print("[SERVER]", line.rstrip(), flush=True)
-
-    log_thread = threading.Thread(target=log_output, daemon=True)
-    log_thread.start()
-    
-    assert wait_for_port(50051), "bus failed to start"
-    yield p
-    p.terminate()
     try:
-        p.wait(timeout=2)
-    except subprocess.TimeoutExpired:
-        p.kill()
+        if not wait_for_port(50051):
+            out, err = p.communicate(timeout=5)
+            print("[SERVER] Startup stdout:", out)
+            print("[SERVER] Startup stderr:", err)
+            raise AssertionError("bus failed to start")
+        yield p
     finally:
-        # Print any remaining output
-        out, err = p.communicate()
-        if out:
-            print("[SERVER] Final output:", out)
-        if err:
-            print("[SERVER] Final errors:", err)
+        p.terminate()
+        try:
+            p.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            p.kill()
+        finally:
+            out, err = p.communicate()
+            if out:
+                print("[SERVER] Final output:", out)
+            if err:
+                print("[SERVER] Final errors:", err)
 
 def make_valid_env():
     flow = pb.FlowEvent(src_ip="1.1.1.1", dst_ip="8.8.8.8", src_port=1, dst_port=53, proto="UDP", bytes_tx=1, bytes_rx=2, duration_ms=3)
@@ -96,7 +98,9 @@ def make_valid_env():
 def test_retry_ack_when_overloaded(bus_overloaded):
     with mtls_channel() as ch:
         stub = pbrpc.EventBusStub(ch)
+        print("[TEST] Sending Publish request...")
         ack = stub.Publish(make_valid_env(), timeout=3.0)
+        print(f"[TEST] Received response: status={ack.status}, reason={ack.reason}")
         assert ack.status == pb.PublishAck.RETRY
         assert "overload" in (ack.reason or "").lower()
         assert ack.backoff_hint_ms >= 0

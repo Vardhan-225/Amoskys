@@ -48,11 +48,25 @@ BUS_RETRY_TOTAL = Counter("bus_retry_total", "Total Publish RETRY acks issued")
 BUS_MAX_INFLIGHT = int(os.getenv("BUS_MAX_INFLIGHT", "100"))
 BUS_HARD_MAX = int(os.getenv("BUS_HARD_MAX", "500"))
 
-def is_overloaded():
-    """Check if server is in overload mode."""
-    val = os.environ.get("BUS_OVERLOAD", "0")
-    logger.info(f"Checking overload status: BUS_OVERLOAD={val}")
-    return val == "1"
+# Runtime overload control: 'auto' (use env), 'on', 'off'
+BUS_OVERLOAD_SETTING = None
+BUS_OVERLOAD_SOURCE = "env"
+BUS_IS_OVERLOADED = False
+
+_OVERLOAD = None  # Global variable to store overload state
+
+def set_overload_setting(val):
+    global BUS_OVERLOAD_SETTING, BUS_OVERLOAD_SOURCE
+    if val in ("on", "off", "auto", None):
+        BUS_OVERLOAD_SETTING = val or "auto"
+        BUS_OVERLOAD_SOURCE = "cli" if val is not None else "env"
+    else:
+        BUS_OVERLOAD_SETTING = "auto"
+        BUS_OVERLOAD_SOURCE = "cli"
+
+def is_overloaded() -> bool:
+    """Check if the server is in overload mode."""
+    return bool(_OVERLOAD)
 
 AGENT_PUBKEY = None
 TRUST = {}
@@ -174,22 +188,47 @@ def _ack_invalid(msg: str = "INVALID") -> "pb.PublishAck":
 def _ack_err(msg: str = "ERROR") -> "pb.PublishAck":
     return _ack_with_status("ERROR", msg)
 
+# Define constants for repeated literals
+OVERLOAD_REASON = "Server is overloaded"
+OVERLOAD_LOG = "[Publish] Server is overloaded"
+
 class EventBusServicer(pbrpc.EventBusServicer):
     """Implements the EventBus gRPC service."""
 
     def Publish(self, request, context):
+        logger.debug("[Publish] Method called")
+        logger.debug(f"[Publish] _OVERLOAD={_OVERLOAD}")
+        logger.debug(f"[Publish] is_overloaded()={is_overloaded()}")
+
+        # Early guard for overload
+        if is_overloaded():
+            logger.info(OVERLOAD_LOG)
+            return pb.PublishAck(
+                status=pb.PublishAck.Status.RETRY,
+                reason=OVERLOAD_REASON,
+                backoff_hint_ms=2000
+            )
+
         t0 = time.time()
         BUS_REQS.inc()
 
-        try:
-            is_overloaded = os.environ.get("BUS_OVERLOAD") == "1"
-            logger.debug(f"[Publish] Checking environment: BUS_OVERLOAD={os.environ.get('BUS_OVERLOAD')}")
+        # Early guard for overload
+        if is_overloaded():
+            logger.info(OVERLOAD_LOG)
+            BUS_RETRY_TOTAL.inc()
+            return _ack_retry(OVERLOAD_REASON, 2000)
 
-            if is_overloaded:
-                logger.info("[Publish] Server is overloaded")
+        try:
+            logger.debug(f"[Publish] Received request: {request}")
+            # Debug log to check overload status
+            logger.debug(f"[Publish] BUS_IS_OVERLOADED={BUS_IS_OVERLOADED}")
+
+            # Use startup-evaluated overload flag to ensure deterministic behavior
+            if BUS_IS_OVERLOADED:
+                logger.info(OVERLOAD_LOG)
                 BUS_RETRY_TOTAL.inc()
                 BUS_LAT.observe((time.time() - t0) * 1000.0)
-                return _ack_retry("Server is overloaded", 2000)
+                return _ack_retry(OVERLOAD_REASON, 2000)
 
             # Size check
             if _sizeof_env(request) > MAX_ENV_BYTES:
@@ -244,65 +283,87 @@ def _start_health_server():
 
 def serve():
     """Run the EventBus gRPC server."""
-    _load_keys()
-    _load_trust()
-    
-    # Set up logging and verify environment
-    logging.basicConfig(
-        format='%(asctime)s %(levelname)-8s %(message)s',
-        level=logging.INFO,
-        force=True
-    )
-    
-    # Log critical environment variables first
-    overload_status = is_overloaded()
-    logger.info("Starting server with configuration:")
-    logger.info(f"  BUS_OVERLOAD={overload_status}")
-    logger.info(f"  BUS_MAX_INFLIGHT={BUS_MAX_INFLIGHT}")
-    logger.info(f"  BUS_HARD_MAX={BUS_HARD_MAX}")
-    
-    executor = futures.ThreadPoolExecutor(max_workers=50)
-    server = grpc.server(executor)
+    global _OVERLOAD
 
-    # Register the EventBus service
-    pbrpc.add_EventBusServicer_to_server(EventBusServicer(), server)
-
-    # Load TLS certs
-    with open("certs/server.key", "rb") as f: key = f.read()
-    with open("certs/server.crt", "rb") as f: crt = f.read()
-    with open("certs/ca.crt", "rb") as f: ca = f.read()
-
-    creds = grpc.ssl_server_credentials(
-        [(key, crt)], 
-        root_certificates=ca,
-        require_client_auth=True,
-    )
-    server.add_secure_port("[::]:50051", creds)
-    
-    # Start metrics servers, continue if ports are busy
     try:
-        start_http_server(9000)
-        logger.info("Started metrics server on :9000")
-    except OSError as e:
-        logger.warning(f"Could not start metrics on :9000: {e}")
-    
-    try:
-        start_http_server(9100)
-        logger.info("Started metrics server on :9100")
-    except OSError as e:
-        logger.warning(f"Could not start metrics on :9100: {e}")
+        def parse_overload():
+            parser = argparse.ArgumentParser(add_help=False)
+            parser.add_argument("--overload", choices=["on", "off", "auto"], default="auto")
+            args, _ = parser.parse_known_args()
+            if args.overload == "on":
+                return True, "cli:on"
+            if args.overload == "off":
+                return False, "cli:off"
+            env = os.getenv("BUS_OVERLOAD", "")
+            if env.strip() in ("1", "true", "on", "yes"):
+                return True, "env:" + env
+            return False, "default"
 
-    server.start()
-    logger.info("gRPC server started on :50051")
-    logging.info("Health on :8080  (GET /healthz)")
+        _OVERLOAD, source = parse_overload()
+        logger.info("Starting server with configuration:")
+        logger.info("  BUS_OVERLOAD=%s (source=%s)", _OVERLOAD, source)
 
-    while True:
-        if _SHOULD_EXIT:
-            logging.info("SIGHUP received; exiting for systemd restart")
-            server.stop(0)
-            sys.exit(0)
-        time.sleep(1)
+        def start_metrics_server(port):
+            try:
+                start_http_server(port)
+                logger.info("Started metrics server on :%d", port)
+            except OSError as e:
+                logger.warning("Could not start metrics on :%d: %s", port, e)
+
+        METRICS1 = int(os.getenv("BUS_METRICS_PORT_1", "9000"))
+        METRICS2 = int(os.getenv("BUS_METRICS_PORT_2", "9100"))
+        DISABLE_METRICS = os.getenv("BUS_METRICS_DISABLE", "") in ("1", "true", "on", "yes")
+
+        if not DISABLE_METRICS:
+            start_metrics_server(METRICS1)
+            start_metrics_server(METRICS2)
+
+        logger.info("Initializing gRPC server...")
+        server = grpc.server(futures.ThreadPoolExecutor(max_workers=50))
+
+        # Load TLS certs
+        try:
+            with open("certs/server.key", "rb") as f: key = f.read()
+            with open("certs/server.crt", "rb") as f: crt = f.read()
+            with open("certs/ca.crt", "rb") as f: ca = f.read()
+
+            creds = grpc.ssl_server_credentials(
+                [(key, crt)], 
+                root_certificates=ca,
+                require_client_auth=True,
+            )
+            logger.info("Loaded TLS certificates successfully")
+        except Exception as e:
+            logger.exception("Failed to load TLS certificates: %s", e)
+            raise
+
+        server.add_secure_port("[::]:50051", creds)
+        logger.info("gRPC server bound to port 50051 with TLS")
+
+        # Register EventBus service
+        try:
+            pbrpc.add_EventBusServicer_to_server(EventBusServicer(), server)
+            logger.info("Registered EventBusServicer with gRPC server")
+        except Exception as e:
+            logger.exception("Failed to register EventBusServicer: %s", e)
+            raise
+
+        logger.info("Starting gRPC server...")
+        server.start()
+        logger.info("gRPC server started successfully")
+
+        while True:
+            time.sleep(1)
+
+    except Exception as e:
+        logger.exception("Unhandled exception during server initialization: %s", e)
+        raise
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--overload', choices=['on', 'off', 'auto'], default=None,
+                        help="Override overload behavior: on/off/auto (default: use BUS_OVERLOAD env)")
+    args = parser.parse_args()
     serve()
