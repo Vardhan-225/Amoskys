@@ -1,11 +1,15 @@
 import os, sys, time, socket, subprocess
 import grpc, pytest
-from InfraSpectre.proto_stubs import messaging_schema_pb2 as pb
-from InfraSpectre.proto_stubs import messaging_schema_pb2_grpc as pbrpc
 import threading
 
+# Add src to path for clean imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+
+from infraspectre.proto import messaging_schema_pb2 as pb
+from infraspectre.proto import messaging_schema_pb2_grpc as pbrpc
+
 BUS_ADDR = "localhost:50052"
-SERVER_SCRIPT = "InfraSpectre/common/eventbus/server.py"
+SERVER_SCRIPT = "src/infraspectre/eventbus/server.py"
 SERVER_ARGS = ["--overload", "on"]
 
 def wait_for_port(port: int, timeout=10.0):
@@ -47,7 +51,7 @@ def bus_overloaded(certs):
 
     repo_root = os.path.abspath(os.path.dirname(__file__) + "/../..")
     python_path = sys.executable
-    server_path = os.path.join(repo_root, "InfraSpectre", "common", "eventbus", "server.py")
+    server_path = os.path.join(repo_root, "src", "infraspectre", "eventbus", "server.py")
 
     print("[TEST] Starting server with environment:")
     for k, v in sorted(env.items()):

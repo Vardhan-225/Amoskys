@@ -7,22 +7,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -r -u 10002 -s /usr/sbin/nologin infra
 WORKDIR /app
 
-COPY InfraSpectre/requirements.txt /app/InfraSpectre/requirements.txt
-RUN pip install --no-cache-dir -r /app/InfraSpectre/requirements.txt
+# Copy requirements and install dependencies
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-COPY InfraSpectre /app/InfraSpectre
-COPY proto /app/proto
+# Copy source code and configuration
+COPY src/ /app/src/
+COPY config/ /app/config/
+COPY infraspectre-agent /app/infraspectre-agent
 
-RUN python -m grpc_tools.protoc -I proto \
-    --python_out=InfraSpectre/proto_stubs \
-    --grpc_python_out=InfraSpectre/proto_stubs \
-    proto/messaging_schema.proto
+# Make entry point executable
+RUN chmod +x /app/infraspectre-agent
 
 VOLUME ["/certs", "/wal"]
 EXPOSE 9101 8081
 
 USER infra:infra
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/src
 ENV IS_WAL_PATH=/wal/wal.db
 ENV IS_CERT_DIR=/certs
-CMD ["python", "InfraSpectre/agents/flowagent/main.py"]
+CMD ["/app/infraspectre-agent"]

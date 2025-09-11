@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""
+InfraSpectre EventBus Server
+
+Entry point for the InfraSpectre event bus server.
+Loads configuration and starts the gRPC server.
+"""
+
+import sys
+import os
+import argparse
+
+# Add src to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+from infraspectre.eventbus.server import serve
+from infraspectre.config import get_config, init_config, InfraSpectreConfig
+
+
+def main():
+    parser = argparse.ArgumentParser(description="InfraSpectre EventBus Server")
+    parser.add_argument('--overload', choices=['on', 'off', 'auto'], default=None,
+                        help="Override overload behavior: on/off/auto (default: use BUS_OVERLOAD env)")
+    parser.add_argument('--config', help="Path to configuration YAML file")
+    parser.add_argument('--port', type=int, help="Override server port")
+    parser.add_argument('--host', help="Override server host")
+    
+    args = parser.parse_args()
+    
+    # Load configuration
+    if args.config:
+        config = InfraSpectreConfig.from_yaml(args.config)
+    else:
+        config = InfraSpectreConfig.from_env()
+    
+    # Apply CLI overrides
+    if args.overload == 'on':
+        config.eventbus.overload_mode = True
+    elif args.overload == 'off':
+        config.eventbus.overload_mode = False
+    
+    if args.port:
+        config.eventbus.port = args.port
+    
+    if args.host:
+        config.eventbus.host = args.host
+    
+    # Initialize global config
+    init_config(config)
+    
+    # Start server
+    serve()
+
+
+if __name__ == "__main__":
+    main()

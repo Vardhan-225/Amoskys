@@ -1,7 +1,7 @@
 import tempfile, os
 from types import SimpleNamespace
-from InfraSpectre.proto_stubs import messaging_schema_pb2 as pb
-from InfraSpectre.agents.flowagent.wal_sqlite import SQLiteWAL
+from infraspectre.proto import messaging_schema_pb2 as pb
+from infraspectre.agents.flowagent.wal_sqlite import SQLiteWAL
 
 def make_env(idem="k1", ts=1):
     flow = pb.FlowEvent(src_ip="1.1.1.1", dst_ip="8.8.8.8", src_port=1, dst_port=53,
