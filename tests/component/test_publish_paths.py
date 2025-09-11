@@ -3,7 +3,6 @@ import time
 import socket
 import subprocess
 from pathlib import Path
-import sys
 
 import grpc
 import pytest
@@ -12,8 +11,7 @@ from InfraSpectre.proto_stubs import messaging_schema_pb2 as pb
 from InfraSpectre.proto_stubs import messaging_schema_pb2_grpc as pbrpc
 
 CERT_DIR = Path("certs")
-SERVER_SCRIPT = "InfraSpectre/common/eventbus/server.py"
-SERVER_ARGS = ["--overload", "off"]
+SERVER_CMD = ["python", "InfraSpectre/common/eventbus/server.py"]
 BUS_ADDR = "localhost:50051"
 
 def wait_for_port(host: str, port: int, timeout: float = 5.0):
@@ -37,13 +35,7 @@ def certs_available():
 
 @pytest.fixture(scope="session")
 def bus_process(certs_available):
-    repo_root = Path(__file__).resolve().parents[2]
-    server_path = repo_root / "InfraSpectre" / "common" / "eventbus" / "server.py"
-    env = os.environ.copy()
-    # Ensure tests are deterministic: remove ambient BUS_OVERLOAD if present
-    env.pop("BUS_OVERLOAD", None)
-    env["PYTHONUNBUFFERED"] = "1"
-    proc = subprocess.Popen([sys.executable, str(server_path)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(SERVER_CMD, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     ok = wait_for_port("127.0.0.1", 50051, timeout=6.0)
     if not ok:
         try:
