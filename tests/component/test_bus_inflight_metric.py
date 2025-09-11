@@ -1,6 +1,6 @@
 import os, time, requests, subprocess, socket
-from InfraSpectre.proto_stubs import messaging_schema_pb2 as pb
-from InfraSpectre.proto_stubs import messaging_schema_pb2_grpc as pbrpc
+from infraspectre.proto import messaging_schema_pb2 as pb
+from infraspectre.proto import messaging_schema_pb2_grpc as pbrpc
 import grpc
 
 def wait_port(port, t=6.0):
@@ -24,7 +24,8 @@ def mtls_channel():
 def test_inflight_metric_rises_then_falls(tmp_path):
     env = os.environ.copy()
     env["BUS_MAX_INFLIGHT"] = "1"
-    p = subprocess.Popen(["python","InfraSpectre/common/eventbus/server.py"], env=env)
+    import sys
+    p = subprocess.Popen([sys.executable, "src/infraspectre/eventbus/server.py"], env=env)
     assert wait_port(50051)
     time.sleep(0.5)
     m0 = requests.get("http://127.0.0.1:9100/metrics", timeout=2).text

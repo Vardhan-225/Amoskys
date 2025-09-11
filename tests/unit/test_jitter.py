@@ -1,5 +1,5 @@
 import math
-from InfraSpectre.agents.flowagent.main import sleep_with_jitter
+from infraspectre.agents.flowagent.main import sleep_with_jitter
 
 def test_sleep_with_jitter_bounds(monkeypatch):
     called = {"t": 0.0}

@@ -1,0 +1,45 @@
+# InfraSpectre Configuration
+# This file defines the default configuration for InfraSpectre components
+# Environment variables will override these values
+
+eventbus:
+  host: "0.0.0.0"
+  port: 50051
+  tls_enabled: true
+  cert_dir: "certs"
+  overload_mode: false
+  max_inflight: 100
+  hard_max: 500
+  metrics_port_1: 9000
+  metrics_port_2: 9100
+  health_port: 8080
+  metrics_disabled: false
+  log_level: "INFO"
+
+agent:
+  cert_dir: "certs"
+  wal_path: "data/wal/flowagent.db"
+  bus_address: "localhost:50051"
+  max_env_bytes: 131072  # 128KB
+  send_rate: 0  # 0=unlimited
+  retry_max: 6
+  retry_timeout: 1.0
+  metrics_port: 9101
+  health_port: 8081
+  log_level: "INFO"
+
+crypto:
+  ed25519_private_key: "certs/agent.ed25519"
+  trust_map_path: "config/trust_map.yaml"
+  ca_cert: "certs/ca.crt"
+  server_cert: "certs/server.crt"
+  server_key: "certs/server.key"
+  agent_cert: "certs/agent.crt"
+  agent_key: "certs/agent.key"
+
+storage:
+  data_dir: "data"
+  wal_dir: "data/wal"
+  storage_dir: "data/storage"
+  metrics_dir: "data/metrics"
+  max_wal_bytes: 209715200  # 200MB

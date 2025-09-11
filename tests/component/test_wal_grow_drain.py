@@ -1,7 +1,7 @@
 import os, time, subprocess, socket, pathlib
 import grpc, pytest
-from InfraSpectre.proto_stubs import messaging_schema_pb2 as pb
-from InfraSpectre.proto_stubs import messaging_schema_pb2_grpc as pbrpc
+from infraspectre.proto import messaging_schema_pb2 as pb
+from infraspectre.proto import messaging_schema_pb2_grpc as pbrpc
 
 def wait_port(port, timeout=8):
     deadline = time.time() + timeout
@@ -31,10 +31,11 @@ def make_env(i=0):
     return env
 
 def test_wal_grows_then_drains():
+    import sys
     env = os.environ.copy(); env["BUS_OVERLOAD"]="1"
-    bus = subprocess.Popen(["python","InfraSpectre/common/eventbus/server.py"], env=env)
+    bus = subprocess.Popen([sys.executable, "src/infraspectre/eventbus/server.py"], env=env)
     assert wait_port(50051)
-    agent = subprocess.Popen(["python","InfraSpectre/agents/flowagent/main.py"])
+    agent = subprocess.Popen([sys.executable, "src/infraspectre/agents/flowagent/main.py"])
     assert wait_port(8081)
     time.sleep(1.0)
     with mtls_channel() as ch:
