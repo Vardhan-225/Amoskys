@@ -4,7 +4,7 @@ from InfraSpectre.proto_stubs import messaging_schema_pb2 as pb
 from InfraSpectre.proto_stubs import messaging_schema_pb2_grpc as pbrpc
 import threading
 
-BUS_ADDR = "localhost:50051"
+BUS_ADDR = "localhost:50052"
 SERVER_SCRIPT = "InfraSpectre/common/eventbus/server.py"
 SERVER_ARGS = ["--overload", "on"]
 
@@ -42,7 +42,7 @@ def mtls_channel():
 @pytest.fixture
 def bus_overloaded(certs):
     env = os.environ.copy()
-    env["BUS_SERVER_PORT"] = "50051"
+    env["BUS_SERVER_PORT"] = "50052"  # Use different port to avoid conflicts
     env["BUS_METRICS_DISABLE"] = "1"  # Disable metrics to avoid port contention
 
     repo_root = os.path.abspath(os.path.dirname(__file__) + "/../..")
@@ -56,10 +56,6 @@ def bus_overloaded(certs):
     print("[TEST] Server path:", server_path)
     sys.stdout.flush()
 
-    # Reset _OVERLOAD before starting the server
-    global _OVERLOAD
-    _OVERLOAD = None
-
     p = subprocess.Popen(
         [python_path, "-u", server_path, "--overload", "on"],
         env=env,
@@ -71,7 +67,7 @@ def bus_overloaded(certs):
     )
 
     try:
-        if not wait_for_port(50051):
+        if not wait_for_port(50052):
             out, err = p.communicate(timeout=5)
             print("[SERVER] Startup stdout:", out)
             print("[SERVER] Startup stderr:", err)

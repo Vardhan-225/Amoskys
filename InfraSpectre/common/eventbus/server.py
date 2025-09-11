@@ -200,35 +200,18 @@ class EventBusServicer(pbrpc.EventBusServicer):
         logger.debug(f"[Publish] _OVERLOAD={_OVERLOAD}")
         logger.debug(f"[Publish] is_overloaded()={is_overloaded()}")
 
-        # Early guard for overload
-        if is_overloaded():
-            logger.info(OVERLOAD_LOG)
-            return pb.PublishAck(
-                status=pb.PublishAck.Status.RETRY,
-                reason=OVERLOAD_REASON,
-                backoff_hint_ms=2000
-            )
-
         t0 = time.time()
         BUS_REQS.inc()
 
-        # Early guard for overload
+        # Single overload check using the properly initialized variable
         if is_overloaded():
             logger.info(OVERLOAD_LOG)
             BUS_RETRY_TOTAL.inc()
+            BUS_LAT.observe((time.time() - t0) * 1000.0)
             return _ack_retry(OVERLOAD_REASON, 2000)
 
         try:
             logger.debug(f"[Publish] Received request: {request}")
-            # Debug log to check overload status
-            logger.debug(f"[Publish] BUS_IS_OVERLOADED={BUS_IS_OVERLOADED}")
-
-            # Use startup-evaluated overload flag to ensure deterministic behavior
-            if BUS_IS_OVERLOADED:
-                logger.info(OVERLOAD_LOG)
-                BUS_RETRY_TOTAL.inc()
-                BUS_LAT.observe((time.time() - t0) * 1000.0)
-                return _ack_retry(OVERLOAD_REASON, 2000)
 
             # Size check
             if _sizeof_env(request) > MAX_ENV_BYTES:
@@ -283,23 +266,25 @@ def _start_health_server():
 
 def serve():
     """Run the EventBus gRPC server."""
-    global _OVERLOAD
+    global _OVERLOAD, BUS_IS_OVERLOADED
 
     try:
-        def parse_overload():
-            parser = argparse.ArgumentParser(add_help=False)
-            parser.add_argument("--overload", choices=["on", "off", "auto"], default="auto")
-            args, _ = parser.parse_known_args()
-            if args.overload == "on":
-                return True, "cli:on"
-            if args.overload == "off":
-                return False, "cli:off"
+        # Determine source for logging
+        if _OVERLOAD is None:
+            # Fallback to environment if not set by CLI
             env = os.getenv("BUS_OVERLOAD", "")
             if env.strip() in ("1", "true", "on", "yes"):
-                return True, "env:" + env
-            return False, "default"
-
-        _OVERLOAD, source = parse_overload()
+                _OVERLOAD = True
+                source = f"env:{env}"
+            else:
+                _OVERLOAD = False
+                source = "default"
+        else:
+            source = "cli"
+        
+        # Also set the legacy BUS_IS_OVERLOADED for backward compatibility
+        BUS_IS_OVERLOADED = _OVERLOAD
+        
         logger.info("Starting server with configuration:")
         logger.info("  BUS_OVERLOAD=%s (source=%s)", _OVERLOAD, source)
 
@@ -337,8 +322,10 @@ def serve():
             logger.exception("Failed to load TLS certificates: %s", e)
             raise
 
-        server.add_secure_port("[::]:50051", creds)
-        logger.info("gRPC server bound to port 50051 with TLS")
+        # Bind server to configurable port
+        server_port = int(os.getenv("BUS_SERVER_PORT", "50051"))
+        server.add_secure_port(f"[::]:{server_port}", creds)
+        logger.info("gRPC server bound to port %d with TLS", server_port)
 
         # Register EventBus service
         try:
@@ -366,4 +353,17 @@ if __name__ == "__main__":
     parser.add_argument('--overload', choices=['on', 'off', 'auto'], default=None,
                         help="Override overload behavior: on/off/auto (default: use BUS_OVERLOAD env)")
     args = parser.parse_args()
+    
+    # Initialize _OVERLOAD based on CLI argument or environment
+    if args.overload == 'on':
+        _OVERLOAD = True
+        logger.info("Overload mode ENABLED via CLI argument")
+    elif args.overload == 'off':
+        _OVERLOAD = False
+        logger.info("Overload mode DISABLED via CLI argument")
+    else:
+        # Default to environment variable
+        _OVERLOAD = os.getenv('BUS_OVERLOAD', 'false').lower() == 'true'
+        logger.info(f"Overload mode set to {_OVERLOAD} via environment variable")
+    
     serve()
