@@ -73,7 +73,7 @@ openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out s
 ```
 Agent                           EventBus
   │                               │
-  │ 1. ClientHello               │
+  │ 1. ClientHello                │
   ├──────────────────────────────>│
   │                               │
   │ 2. ServerHello + ServerCert   │
