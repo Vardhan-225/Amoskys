@@ -8,12 +8,12 @@ InfraSpectre implements a **defense-in-depth security architecture** with multip
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Defense in Depth                        │
+│                    Defense in Depth                         │
 ├─────────────────────────────────────────────────────────────┤
-│ Layer 5: Application Security (Ed25519 Message Signing)    │
-│ Layer 4: Transport Security (mTLS with Certificate Auth)   │
-│ Layer 3: Network Security (gRPC with TLS 1.3)            │
-│ Layer 2: Host Security (Process Isolation, WAL Integrity) │
+│ Layer 5: Application Security (Ed25519 Message Signing)     │
+│ Layer 4: Transport Security (mTLS with Certificate Auth)    │
+│ Layer 3: Network Security (gRPC with TLS 1.3)               │
+│ Layer 2: Host Security (Process Isolation, WAL Integrity)   │
 │ Layer 1: Infrastructure (Container Security, Host Hardening)│
 └─────────────────────────────────────────────────────────────┘
 ```
