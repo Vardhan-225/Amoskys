@@ -101,7 +101,7 @@ dmglib==0.9.5
 docker==7.1.0
 docstring-to-markdown==0.11
 docutils==0.21.2
-et_xmlfile==1.1.0
+et_xmlfile==2.0.0
 evalidate==2.0.3
 executing==0.8.3
 fastapi==0.116.1
