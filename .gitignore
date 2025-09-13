@@ -212,20 +212,88 @@ agents/*/proto_stubs/
 # Virtual environments
 env/
 venv/
+.venv/
 
 # Docker logs & env
 *.log
 .env
+.env.*
 
 # Editor/IDE settings
 .vscode/
 .idea/
-InfraSpectre/**/__pycache__/
-InfraSpectre/**/.pytest_cache/
-InfraSpectre/**/.mypy_cache/
-InfraSpectre/**/*.pyc
-InfraSpectre/**/.venv/
-InfraSpectre/**/env/
-InfraSpectre/**/IS/
-InfraSpectre/agents/activate/
-InfraSpectre/agents/flowagent/wal.db
+
+# AMOSKYS-specific ignores
+# Assessment reports and temporary analysis files
+assessment_report_*.json
+final_assessment*.json
+*_assessment*.json
+
+# Temporary Python files and caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Data directories and runtime files
+data/storage/
+data/wal/
+data/metrics/
+*.db
+*.sqlite
+*.sqlite3
+
+# Certificate files (should be generated, not committed)
+certs/*.key
+certs/*.crt
+certs/*.csr
+certs/*.pem
+certs/ca.srl
+
+# Backup directories
+backup_before_cleanup/
+backup_*/
+
+# Test artifacts and temporary files
+.pytest_cache/
+.coverage
+.nyc_output/
+coverage.xml
+nosetests.xml
+
+# Build and dist directories
+build/
+dist/
+*.egg-info/
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs and debugging
+*.log
+logs/
+debug.log
+error.log
+
+# Environment and config overrides
+config/local.yaml
+config/*.local.*
+.env.local
+.env.production
+
+# IDE and editor temp files
+*.swp
+*.swo
+*~
+.vscode/launch.json
+.vscode/tasks.json
+.vscode/extensions.json
+# Keep settings.json for team consistency
+
+# Runtime artifacts
+*.pid
+*.sock
+*.lock

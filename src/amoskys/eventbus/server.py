@@ -144,34 +144,39 @@ def _flow_from_envelope(env: "pb.Envelope") -> "pb.FlowEvent":
 
 def _ack_with_status(name: str, reason: str = "") -> "pb.PublishAck":
     ack = pb.PublishAck()
-    status_enum = getattr(pb.PublishAck.Status, name, None)
-    if status_enum is None:
-        status_enum = pb.PublishAck.Status.ERROR
-    try:
-        ack.status = status_enum
-    except Exception:
-        pass
+    # Use proper enum assignment
+    if name == "OK":
+        ack.status = pb.PublishAck.Status.OK
+    elif name == "RETRY":
+        ack.status = pb.PublishAck.Status.RETRY
+    elif name == "INVALID":
+        ack.status = pb.PublishAck.Status.INVALID
+    elif name == "UNAUTHORIZED":
+        ack.status = pb.PublishAck.Status.UNAUTHORIZED
+    else:
+        # Default to INVALID for unknown status
+        ack.status = pb.PublishAck.Status.INVALID
+    
     if hasattr(ack, 'reason'):
         ack.reason = reason or ''
     return ack
 
 def _ack_ok(msg: str = "OK") -> "pb.PublishAck":
     ack = pb.PublishAck()
-    ack.status = 0  # OK is 0
+    ack.status = pb.PublishAck.Status.OK
     ack.reason = msg
     return ack
 
 def _ack_retry(msg: str = "RETRY", backoff_ms: int = 1000) -> "pb.PublishAck":
-    # Create response with numeric enum value
     ack = pb.PublishAck()
-    ack.status = 1  # RETRY is 1
+    ack.status = pb.PublishAck.Status.RETRY
     ack.reason = msg
     ack.backoff_hint_ms = backoff_ms
     return ack
 
 def _ack_invalid(msg: str = "INVALID") -> "pb.PublishAck":
     ack = pb.PublishAck()
-    ack.status = 2  # INVALID is 2
+    ack.status = pb.PublishAck.Status.INVALID
     ack.reason = msg
     return ack
 
@@ -208,7 +213,7 @@ class EventBusServicer(pbrpc.EventBusServicer):
                 logger.info(f"[Publish] Envelope too large: {_sizeof_env(request)} bytes")
                 BUS_INVALID.inc()
                 response = pb.PublishAck()
-                response.status = pb.PublishAck.Status.Value('INVALID')
+                response.status = pb.PublishAck.Status.INVALID
                 response.reason = f"Envelope too large ({_sizeof_env(request)} > {MAX_ENV_BYTES} bytes)"
                 return response
 
@@ -224,10 +229,7 @@ class EventBusServicer(pbrpc.EventBusServicer):
                 # Process the request
                 flow = _flow_from_envelope(request)
                 logger.info(f"[Publish] src_ip={flow.src_ip} dst_ip={flow.dst_ip} bytes_tx={flow.bytes_tx}")
-                response = pb.PublishAck()
-                response.status = pb.PublishAck.Status.Value('OK')
-                response.reason = "accepted"
-                return response
+                return _ack_ok("accepted")
             finally:
                 _dec_inflight()
         except ValueError as e:

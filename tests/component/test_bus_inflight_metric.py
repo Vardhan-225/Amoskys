@@ -24,11 +24,16 @@ def mtls_channel():
 def test_inflight_metric_rises_then_falls(tmp_path):
     env = os.environ.copy()
     env["BUS_MAX_INFLIGHT"] = "1"
+    # Set up environment to ensure the subprocess can find imports
+    if 'PYTHONPATH' in env:
+        env['PYTHONPATH'] = f"src:{env['PYTHONPATH']}"
+    else:
+        env['PYTHONPATH'] = 'src'
+    
     import sys
     p = subprocess.Popen([sys.executable, "src/amoskys/eventbus/server.py"], env=env)
     assert wait_port(50051)
     time.sleep(0.5)
-    m0 = requests.get("http://127.0.0.1:9100/metrics", timeout=2).text
     with mtls_channel() as ch:
         stub = pbrpc.EventBusStub(ch)
         flow = pb.FlowEvent(src_ip="1.1.1.1", dst_ip="8.8.8.8", src_port=1, dst_port=53, proto="UDP")

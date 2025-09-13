@@ -7,7 +7,10 @@ def load_private_key(path: str) -> ed25519.Ed25519PrivateKey:
 
 def load_public_key(path: str) -> ed25519.Ed25519PublicKey:
     with open(path, "rb") as f:
-        return serialization.load_pem_public_key(f.read())
+        key = serialization.load_pem_public_key(f.read())
+        if not isinstance(key, ed25519.Ed25519PublicKey):
+            raise ValueError(f"Expected Ed25519 public key, got {type(key)}")
+        return key
 
 def sign(sk: ed25519.Ed25519PrivateKey, data: bytes) -> bytes:
     return sk.sign(data)

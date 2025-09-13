@@ -1,0 +1,56 @@
+# AMOSKYS Web Interface Systemd Service
+# Location: /etc/systemd/system/amoskys-web.service
+
+[Unit]
+Description=AMOSKYS Neural Security Command Platform - Web Interface
+Documentation=https://github.com/amoskys/platform
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+RuntimeDirectory=amoskys-web
+RuntimeDirectoryMode=755
+
+# Working directory and environment
+WorkingDirectory=/opt/amoskys
+Environment=FLASK_ENV=production
+Environment=PYTHONPATH=/opt/amoskys
+Environment=PYTHONUNBUFFERED=1
+
+# Service execution
+ExecStart=/opt/amoskys/.venv/bin/gunicorn --config web/gunicorn_config.py web.wsgi:app
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+
+# Security settings
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/amoskys/web
+ReadWritePaths=/opt/amoskys/data
+ReadWritePaths=/var/log/amoskys
+ReadWritePaths=/tmp
+
+# Resource limits
+LimitNOFILE=65536
+MemoryAccounting=yes
+MemoryMax=1G
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=amoskys-web
+
+[Install]
+WantedBy=multi-user.target

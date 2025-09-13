@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AMOSKYS Cortex Dashboard{% endblock %}</title>
+    
+    <!-- Neural Security Styling -->
+    <style>
+        :root {
+            /* Neural Color Palette */
+            --neural-primary: #00ff88;
+            --neural-secondary: #0088ff;
+            --neural-warning: #ffaa00;
+            --neural-danger: #ff3366;
+            --neural-critical: #ff0000;
+            
+            /* Dark Neural Theme */
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #1a1a1a;
+            --bg-tertiary: #2a2a2a;
+            --text-primary: #ffffff;
+            --text-secondary: #cccccc;
+            --text-muted: #888888;
+            
+            /* Gradients */
+            --gradient-neural: linear-gradient(135deg, #001122 0%, #002244 50%, #001133 100%);
+            --gradient-threat: linear-gradient(135deg, #330011 0%, #660022 50%, #440011 100%);
+            --gradient-success: linear-gradient(135deg, #003311 0%, #006622 50%, #004411 100%);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        
+        /* Neural Grid Background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 136, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            z-index: -1;
+            animation: neural-pulse 10s ease-in-out infinite;
+        }
+        
+        @keyframes neural-pulse {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.3; }
+        }
+        
+        /* Header */
+        .neural-header {
+            background: var(--gradient-neural);
+            padding: 1rem 2rem;
+            border-bottom: 2px solid var(--neural-primary);
+            box-shadow: 0 4px 20px rgba(0, 255, 136, 0.3);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .neural-logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .neural-logo h1 {
+            color: var(--neural-primary);
+            font-size: 1.8rem;
+            font-weight: 700;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+        
+        .neural-status {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .status-online { background: var(--neural-primary); }
+        .status-warning { background: var(--neural-warning); }
+        .status-critical { background: var(--neural-danger); }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+        }
+        
+        /* Navigation */
+        .neural-nav {
+            background: var(--bg-secondary);
+            padding: 0 2rem;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+        }
+        
+        .nav-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            gap: 2rem;
+        }
+        
+        .nav-link {
+            padding: 1rem 1.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .nav-link:hover {
+            color: var(--neural-primary);
+            border-bottom-color: var(--neural-primary);
+            background: rgba(0, 255, 136, 0.1);
+        }
+        
+        .nav-link.active {
+            color: var(--neural-primary);
+            border-bottom-color: var(--neural-primary);
+            background: rgba(0, 255, 136, 0.15);
+        }
+        
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .nav-link:hover::before {
+            left: 100%;
+        }
+        
+        /* Main Content */
+        .dashboard-main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            min-height: calc(100vh - 140px);
+        }
+        
+        /* Cards */
+        .neural-card {
+            background: var(--bg-secondary);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .neural-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--neural-primary), var(--neural-secondary));
+        }
+        
+        .neural-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 255, 136, 0.2);
+            border-color: var(--neural-primary);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+        }
+        
+        .card-title {
+            color: var(--neural-primary);
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        
+        .card-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .badge-success { background: var(--neural-primary); color: var(--bg-primary); }
+        .badge-warning { background: var(--neural-warning); color: var(--bg-primary); }
+        .badge-danger { background: var(--neural-danger); color: white; }
+        
+        /* Metrics */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .metric-card {
+            background: var(--gradient-neural);
+            padding: 1.5rem;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--neural-primary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        /* Buttons */
+        .neural-button {
+            background: linear-gradient(135deg, var(--neural-primary), var(--neural-secondary));
+            color: var(--bg-primary);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 25px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .neural-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
+        }
+        
+        /* Loading Animation */
+        .neural-loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 255, 136, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid var(--neural-primary);
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .neural-status {
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+            
+            .nav-content {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            
+            .dashboard-main {
+                padding: 1rem;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--neural-primary);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--neural-secondary);
+        }
+    </style>
+    
+    <!-- Chart.js for Visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Socket.IO for Real-time Updates -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    
+    <!-- Mobile Responsive Enhancements -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-responsive.css') }}">
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Neural Header -->
+    <header class="neural-header">
+        <div class="header-content">
+            <div class="neural-logo">
+                <h1>🧠 AMOSKYS</h1>
+                <span style="color: var(--text-secondary);">Neural Security Command Platform</span>
+            </div>
+            <div class="neural-status">
+                <div class="status-indicator">
+                    <div class="status-dot status-online" id="system-status"></div>
+                    <span id="system-status-text">System Online</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot" id="threat-status"></div>
+                    <span id="threat-level-text">Threat Level: LOW</span>
+                </div>
+                <div class="status-indicator">
+                    <span id="current-time"></span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Neural Navigation -->
+    <nav class="neural-nav">
+        <div class="nav-content">
+            <a href="/dashboard/" class="nav-link">🏠 Command Center</a>
+            <a href="/dashboard/soc" class="nav-link">🛡️ SOC Operations</a>
+            <a href="/dashboard/agents" class="nav-link">🤖 Agent Network</a>
+            <a href="/dashboard/system" class="nav-link">📊 System Health</a>
+            <a href="/dashboard/neural" class="nav-link">🧠 Neural Insights</a>
+            <a href="/api-access" class="nav-link">🔌 API Gateway</a>
+        </div>
+    </nav>
+    
+    <!-- Main Dashboard Content -->
+    <main class="dashboard-main">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Real-time Update Script -->
+    <script>
+        // Real-time dashboard updates
+        class NeuralDashboard {
+            constructor() {
+                this.updateInterval = 5000; // 5 seconds
+                this.init();
+            }
+            
+            init() {
+                this.updateActiveNav();
+                this.startRealTimeUpdates();
+                this.updateTime();
+                setInterval(() => this.updateTime(), 1000);
+            }
+            
+            updateActiveNav() {
+                const currentPath = window.location.pathname;
+                const navLinks = document.querySelectorAll('.nav-link');
+                
+                navLinks.forEach(link => {
+                    if (link.getAttribute('href') === currentPath) {
+                        link.classList.add('active');
+                    } else {
+                        link.classList.remove('active');
+                    }
+                });
+            }
+            
+            async startRealTimeUpdates() {
+                try {
+                    await this.updateSystemStatus();
+                    await this.updateThreatLevel();
+                } catch (error) {
+                    console.error('Dashboard update error:', error);
+                }
+                
+                // Schedule next update
+                setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
+            }
+            
+            async updateSystemStatus() {
+                try {
+                    const response = await fetch('/dashboard/api/live/metrics');
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        const statusDot = document.getElementById('system-status');
+                        const statusText = document.getElementById('system-status-text');
+                        
+                        const cpu = data.metrics.cpu.percent;
+                        const memory = data.metrics.memory.percent;
+                        
+                        if (cpu > 85 || memory > 90) {
+                            statusDot.className = 'status-dot status-critical';
+                            statusText.textContent = 'System Critical';
+                        } else if (cpu > 70 || memory > 75) {
+                            statusDot.className = 'status-dot status-warning';
+                            statusText.textContent = 'System Warning';
+                        } else {
+                            statusDot.className = 'status-dot status-online';
+                            statusText.textContent = 'System Online';
+                        }
+                    }
+                } catch (error) {
+                    console.error('System status update failed:', error);
+                }
+            }
+            
+            async updateThreatLevel() {
+                try {
+                    const response = await fetch('/dashboard/api/live/threat-score');
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        const threatDot = document.getElementById('threat-status');
+                        const threatText = document.getElementById('threat-level-text');
+                        
+                        const level = data.threat_level;
+                        const score = data.threat_score;
+                        
+                        if (level === 'CRITICAL') {
+                            threatDot.className = 'status-dot status-critical';
+                        } else if (level === 'HIGH') {
+                            threatDot.className = 'status-dot status-warning';
+                        } else {
+                            threatDot.className = 'status-dot status-online';
+                        }
+                        
+                        threatText.textContent = `Threat Level: ${level} (${score})`;
+                    }
+                } catch (error) {
+                    console.error('Threat level update failed:', error);
+                }
+            }
+            
+            updateTime() {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString() + ' UTC';
+                document.getElementById('current-time').textContent = timeString;
+            }
+        }
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            new NeuralDashboard();
+        });
+    </script>
+    
+    <!-- Real-time WebSocket Connection -->
+    <script>
+        class RealTimeConnection {
+            constructor() {
+                this.socket = null;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 5;
+                this.reconnectDelay = 1000;
+                this.connected = false;
+                this.initConnection();
+            }
+            
+            initConnection() {
+                try {
+                    this.socket = io('/dashboard');
+                    this.setupEventHandlers();
+                } catch (error) {
+                    console.error('Failed to initialize socket connection:', error);
+                    this.scheduleReconnect();
+                }
+            }
+            
+            setupEventHandlers() {
+                this.socket.on('connect', () => {
+                    console.log('📡 Real-time connection established');
+                    this.connected = true;
+                    this.reconnectAttempts = 0;
+                    this.updateConnectionStatus(true);
+                    
+                    // Join current dashboard room
+                    const dashboardType = this.getCurrentDashboard();
+                    this.socket.emit('join_dashboard', { dashboard: dashboardType });
+                });
+                
+                this.socket.on('disconnect', () => {
+                    console.log('📡 Real-time connection lost');
+                    this.connected = false;
+                    this.updateConnectionStatus(false);
+                    this.scheduleReconnect();
+                });
+                
+                this.socket.on('initial_data', (data) => {
+                    console.log('📊 Initial dashboard data received');
+                    this.handleDataUpdate(data);
+                });
+                
+                this.socket.on('dashboard_update', (data) => {
+                    console.log('🔄 Dashboard update received');
+                    this.handleDataUpdate(data);
+                });
+                
+                this.socket.on('error', (error) => {
+                    console.error('WebSocket error:', error);
+                });
+                
+                this.socket.on('connect_error', (error) => {
+                    console.error('Connection error:', error);
+                    this.scheduleReconnect();
+                });
+            }
+            
+            getCurrentDashboard() {
+                const path = window.location.pathname;
+                if (path.includes('/cortex')) return 'cortex';
+                if (path.includes('/soc')) return 'soc';
+                if (path.includes('/agents')) return 'agents';
+                if (path.includes('/system')) return 'system';
+                if (path.includes('/neural')) return 'neural';
+                return 'cortex';
+            }
+            
+            handleDataUpdate(data) {
+                // Dispatch custom events that individual dashboards can listen to
+                window.dispatchEvent(new CustomEvent('dashboardUpdate', {
+                    detail: data
+                }));
+                
+                // Update last update time
+                if (data.timestamp) {
+                    const updateTime = new Date(data.timestamp * 1000);
+                    const elements = document.querySelectorAll('.last-update');
+                    elements.forEach(el => {
+                        el.textContent = `Last updated: ${updateTime.toLocaleTimeString()}`;
+                    });
+                }
+            }
+            
+            updateConnectionStatus(connected) {
+                const statusElement = document.getElementById('system-status');
+                const statusText = document.getElementById('system-status-text');
+                
+                if (statusElement && statusText) {
+                    if (connected) {
+                        statusElement.className = 'status-dot status-online';
+                        statusText.textContent = 'System Online';
+                    } else {
+                        statusElement.className = 'status-dot status-warning';
+                        statusText.textContent = 'Connection Lost';
+                    }
+                }
+            }
+            
+            scheduleReconnect() {
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.reconnectAttempts++;
+                    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+                    
+                    console.log(`🔄 Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+                    
+                    setTimeout(() => {
+                        if (!this.connected) {
+                            this.initConnection();
+                        }
+                    }, delay);
+                } else {
+                    console.error('❌ Max reconnection attempts reached');
+                    this.updateConnectionStatus(false);
+                }
+            }
+            
+            requestUpdate(dashboardType = null) {
+                if (this.connected && this.socket) {
+                    this.socket.emit('request_update', { 
+                        dashboard: dashboardType || this.getCurrentDashboard() 
+                    });
+                }
+            }
+        }
+        
+        // Global real-time connection
+        window.realTimeConnection = null;
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            window.realTimeConnection = new RealTimeConnection();
+        });
+    </script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

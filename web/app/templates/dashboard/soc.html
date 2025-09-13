@@ -1,0 +1,660 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}SOC Operations - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="soc-dashboard">
+    <!-- SOC Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">🛡️ Security Operations Center</h2>
+            <div class="card-badge badge-success">Live Monitoring</div>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+            Real-time security event monitoring and threat analysis for distributed AMOSKYS agents.
+        </p>
+    </div>
+
+    <!-- Threat Level Overview -->
+    <div class="metrics-grid">
+        <div class="metric-card" id="threat-level-card">
+            <div class="metric-value" id="current-threat-level">LOW</div>
+            <div class="metric-label">Current Threat Level</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="threat-score-display">Score: --</div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="metric-value" id="events-last-hour">--</div>
+            <div class="metric-label">Events (Last Hour)</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="hourly-trend">Trend: Calculating...</div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="metric-value" id="critical-alerts">--</div>
+            <div class="metric-label">Critical Alerts</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;">Requiring attention</div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="metric-value" id="investigating-count">--</div>
+            <div class="metric-label">Under Investigation</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;">Active cases</div>
+        </div>
+    </div>
+
+    <!-- Main SOC Layout -->
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- Live Event Feed -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">🔴 Live Event Feed</h3>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <select id="severity-filter" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--neural-primary); border-radius: 5px; padding: 0.25rem;">
+                        <option value="">All Severities</option>
+                        <option value="critical">Critical</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                    </select>
+                    <span class="neural-loading" id="events-loading" style="display: none;"></span>
+                </div>
+            </div>
+            <div id="live-events-container" style="max-height: 600px; overflow-y: auto;">
+                <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                    Loading live event feed...
+                </p>
+            </div>
+        </div>
+
+        <!-- Event Analytics -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <!-- Severity Distribution -->
+            <div class="neural-card">
+                <div class="card-header">
+                    <h3 class="card-title">📊 Severity Distribution</h3>
+                </div>
+                <canvas id="severity-chart" width="300" height="200"></canvas>
+            </div>
+
+            <!-- Top Source IPs -->
+            <div class="neural-card">
+                <div class="card-header">
+                    <h3 class="card-title">🎯 Top Source IPs</h3>
+                </div>
+                <div id="top-ips-list">
+                    <p style="color: var(--text-muted); text-align: center; padding: 1rem;">
+                        Analyzing source IPs...
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Event Timeline -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">📈 Event Timeline (24 Hours)</h3>
+            <div style="display: flex; gap: 1rem;">
+                <button class="neural-button" onclick="socDashboard.changeTimeRange(6)">6H</button>
+                <button class="neural-button" onclick="socDashboard.changeTimeRange(12)">12H</button>
+                <button class="neural-button" onclick="socDashboard.changeTimeRange(24)" style="background: var(--neural-primary);">24H</button>
+            </div>
+        </div>
+        <canvas id="timeline-chart" width="800" height="300"></canvas>
+    </div>
+
+    <!-- Event Investigation Modal -->
+    <div id="investigation-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔍 Event Investigation</h3>
+                <span class="modal-close" onclick="socDashboard.closeInvestigation()">&times;</span>
+            </div>
+            <div class="modal-body" id="investigation-content">
+                <!-- Investigation content will be populated here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.soc-dashboard {
+    max-width: 100%;
+}
+
+.event-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border-left: 4px solid var(--neural-warning);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.event-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateX(5px);
+}
+
+.event-item.severity-low { border-left-color: var(--neural-primary); }
+.event-item.severity-medium { border-left-color: var(--neural-warning); }
+.event-item.severity-high { border-left-color: #ff6600; }
+.event-item.severity-critical { 
+    border-left-color: var(--neural-critical);
+    background: rgba(255, 0, 0, 0.1);
+    animation: critical-pulse 3s ease-in-out infinite;
+}
+
+@keyframes critical-pulse {
+    0%, 100% { box-shadow: 0 0 5px rgba(255, 0, 0, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(255, 0, 0, 0.6); }
+}
+
+.event-main {
+    flex: 1;
+}
+
+.event-type {
+    font-weight: 700;
+    color: var(--neural-primary);
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.event-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+}
+
+.event-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.event-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+
+.event-severity {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.severity-low { background: var(--neural-primary); color: var(--bg-primary); }
+.severity-medium { background: var(--neural-warning); color: var(--bg-primary); }
+.severity-high { background: #ff6600; color: white; }
+.severity-critical { background: var(--neural-critical); color: white; }
+
+.event-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.ip-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 5px;
+    border-left: 3px solid var(--neural-secondary);
+}
+
+.ip-address {
+    font-family: 'Courier New', monospace;
+    color: var(--neural-secondary);
+    font-weight: 600;
+}
+
+.ip-count {
+    background: var(--neural-secondary);
+    color: var(--bg-primary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border: 2px solid var(--neural-primary);
+    border-radius: 10px;
+    max-width: 800px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0, 255, 136, 0.3);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+}
+
+.modal-header h3 {
+    color: var(--neural-primary);
+    margin: 0;
+}
+
+.modal-close {
+    font-size: 2rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: var(--neural-primary);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+    .soc-dashboard > div[style*="grid-template-columns: 2fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    .event-item {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .event-actions {
+        align-items: flex-start;
+        flex-direction: row;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+class SOCDashboard {
+    constructor() {
+        this.updateInterval = 3000; // 3 seconds for SOC
+        this.timeRange = 24; // hours
+        this.charts = {};
+        this.selectedEvent = null;
+        this.init();
+    }
+    
+    init() {
+        this.initCharts();
+        this.initEventFilters();
+        this.startRealTimeUpdates();
+    }
+    
+    initCharts() {
+        // Severity Distribution Chart
+        this.charts.severity = new Chart(document.getElementById('severity-chart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Critical', 'High', 'Medium', 'Low'],
+                datasets: [{
+                    data: [0, 0, 0, 0],
+                    backgroundColor: ['#ff0000', '#ff6600', '#ffaa00', '#00ff88'],
+                    borderWidth: 2,
+                    borderColor: '#1a1a1a'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#cccccc', font: { size: 12 } }
+                    }
+                }
+            }
+        });
+        
+        // Timeline Chart
+        this.charts.timeline = new Chart(document.getElementById('timeline-chart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Events per Hour',
+                    data: [],
+                    borderColor: '#00ff88',
+                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        ticks: { color: '#cccccc' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    y: {
+                        ticks: { color: '#cccccc' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: '#cccccc' }
+                    }
+                }
+            }
+        });
+    }
+    
+    initEventFilters() {
+        const severityFilter = document.getElementById('severity-filter');
+        severityFilter.addEventListener('change', () => {
+            this.updateEventFeed();
+        });
+    }
+    
+    async startRealTimeUpdates() {
+        try {
+            await Promise.all([
+                this.updateThreatMetrics(),
+                this.updateEventFeed(),
+                this.updateEventAnalytics(),
+                this.updateTimeline()
+            ]);
+        } catch (error) {
+            console.error('SOC dashboard update error:', error);
+        }
+        
+        setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
+    }
+    
+    async updateThreatMetrics() {
+        try {
+            const [threatResponse, eventsResponse] = await Promise.all([
+                fetch('/dashboard/api/live/threat-score'),
+                fetch('/dashboard/api/live/threats')
+            ]);
+            
+            const threatData = await threatResponse.json();
+            const eventsData = await eventsResponse.json();
+            
+            if (threatData.status === 'success') {
+                document.getElementById('current-threat-level').textContent = threatData.threat_level;
+                document.getElementById('threat-score-display').textContent = `Score: ${threatData.threat_score}`;
+                
+                const card = document.getElementById('threat-level-card');
+                card.style.background = `linear-gradient(135deg, ${threatData.threat_color}22, ${threatData.threat_color}11)`;
+            }
+            
+            if (eventsData.status === 'success') {
+                const events = eventsData.threats;
+                const lastHour = new Date(Date.now() - 60 * 60 * 1000);
+                const recentEvents = events.filter(e => new Date(e.timestamp) > lastHour);
+                const criticalAlerts = events.filter(e => e.severity === 'critical').length;
+                
+                document.getElementById('events-last-hour').textContent = recentEvents.length;
+                document.getElementById('critical-alerts').textContent = criticalAlerts;
+                document.getElementById('investigating-count').textContent = '0'; // Placeholder
+                
+                const trend = recentEvents.length > 10 ? 'High' : recentEvents.length > 5 ? 'Moderate' : 'Low';
+                document.getElementById('hourly-trend').textContent = `Trend: ${trend}`;
+            }
+        } catch (error) {
+            console.error('Threat metrics update failed:', error);
+        }
+    }
+    
+    async updateEventFeed() {
+        try {
+            document.getElementById('events-loading').style.display = 'inline-block';
+            
+            const response = await fetch('/dashboard/api/live/threats');
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                const severityFilter = document.getElementById('severity-filter').value;
+                let filteredEvents = data.threats;
+                
+                if (severityFilter) {
+                    filteredEvents = filteredEvents.filter(e => e.severity === severityFilter);
+                }
+                
+                this.renderEventFeed(filteredEvents.slice(0, 20)); // Show top 20
+            }
+        } catch (error) {
+            console.error('Event feed update failed:', error);
+        } finally {
+            document.getElementById('events-loading').style.display = 'none';
+        }
+    }
+    
+    async updateEventAnalytics() {
+        try {
+            const response = await fetch('/dashboard/api/live/event-clustering');
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                const clusters = data.clusters;
+                
+                // Update severity chart
+                const severityCounts = clusters.by_severity;
+                this.charts.severity.data.datasets[0].data = [
+                    severityCounts.critical || 0,
+                    severityCounts.high || 0,
+                    severityCounts.medium || 0,
+                    severityCounts.low || 0
+                ];
+                this.charts.severity.update();
+                
+                // Update top IPs
+                this.renderTopIPs(clusters.by_source_ip);
+            }
+        } catch (error) {
+            console.error('Event analytics update failed:', error);
+        }
+    }
+    
+    async updateTimeline() {
+        try {
+            const response = await fetch('/dashboard/api/live/threats');
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                const events = data.threats;
+                const hourlyData = this.aggregateEventsByHour(events, this.timeRange);
+                
+                this.charts.timeline.data.labels = hourlyData.labels;
+                this.charts.timeline.data.datasets[0].data = hourlyData.counts;
+                this.charts.timeline.update();
+            }
+        } catch (error) {
+            console.error('Timeline update failed:', error);
+        }
+    }
+    
+    renderEventFeed(events) {
+        const container = document.getElementById('live-events-container');
+        
+        if (events.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No events match current filter</p>';
+            return;
+        }
+        
+        const eventsHtml = events.map(event => `
+            <div class="event-item severity-${event.severity}" onclick="socDashboard.openInvestigation('${event.id}')">
+                <div class="event-main">
+                    <div class="event-type">${this.formatEventType(event.type)}</div>
+                    <div class="event-description">${event.description}</div>
+                    <div class="event-meta">
+                        <span>🏷️ Agent: ${event.agent_id}</span>
+                        <span>📍 Source: ${event.source_ip}</span>
+                    </div>
+                </div>
+                <div class="event-actions">
+                    <span class="event-severity severity-${event.severity}">${event.severity}</span>
+                    <div class="event-time">${this.formatTimestamp(event.timestamp)}</div>
+                </div>
+            </div>
+        `).join('');
+        
+        container.innerHTML = eventsHtml;
+    }
+    
+    renderTopIPs(ipData) {
+        const container = document.getElementById('top-ips-list');
+        
+        const sortedIPs = Object.entries(ipData)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 8);
+        
+        if (sortedIPs.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 1rem;">No IP data available</p>';
+            return;
+        }
+        
+        const ipsHtml = sortedIPs.map(([ip, count]) => `
+            <div class="ip-item">
+                <div class="ip-address">${ip}</div>
+                <div class="ip-count">${count}</div>
+            </div>
+        `).join('');
+        
+        container.innerHTML = ipsHtml;
+    }
+    
+    aggregateEventsByHour(events, hours) {
+        const now = new Date();
+        const labels = [];
+        const counts = [];
+        
+        for (let i = hours - 1; i >= 0; i--) {
+            const hourStart = new Date(now.getTime() - i * 60 * 60 * 1000);
+            const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
+            
+            const label = hourStart.getHours().toString().padStart(2, '0') + ':00';
+            labels.push(label);
+            
+            const count = events.filter(event => {
+                const eventTime = new Date(event.timestamp);
+                return eventTime >= hourStart && eventTime < hourEnd;
+            }).length;
+            
+            counts.push(count);
+        }
+        
+        return { labels, counts };
+    }
+    
+    formatEventType(type) {
+        return type.split('_').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' ');
+    }
+    
+    formatTimestamp(timestamp) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
+        
+        if (diff < 60000) return 'Just now';
+        if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+        if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+        return date.toLocaleDateString();
+    }
+    
+    changeTimeRange(hours) {
+        this.timeRange = hours;
+        this.updateTimeline();
+        
+        // Update button styles
+        document.querySelectorAll('.neural-button').forEach(btn => {
+            btn.style.background = '';
+        });
+        event.target.style.background = 'var(--neural-primary)';
+    }
+    
+    openInvestigation(eventId) {
+        // Simulate event investigation
+        const modal = document.getElementById('investigation-modal');
+        const content = document.getElementById('investigation-content');
+        
+        content.innerHTML = `
+            <div style="margin-bottom: 1rem;">
+                <h4 style="color: var(--neural-primary);">Event ID: ${eventId}</h4>
+                <p style="color: var(--text-secondary);">Investigation interface would be implemented here</p>
+            </div>
+            <div style="padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 5px;">
+                <strong>Investigation Tools:</strong>
+                <ul style="margin-top: 0.5rem; color: var(--text-secondary);">
+                    <li>Event correlation analysis</li>
+                    <li>Source IP reputation lookup</li>
+                    <li>Timeline reconstruction</li>
+                    <li>Related events search</li>
+                    <li>Response recommendation</li>
+                </ul>
+            </div>
+        `;
+        
+        modal.style.display = 'flex';
+    }
+    
+    closeInvestigation() {
+        document.getElementById('investigation-modal').style.display = 'none';
+    }
+}
+
+// Initialize SOC Dashboard
+let socDashboard;
+document.addEventListener('DOMContentLoaded', () => {
+    socDashboard = new SOCDashboard();
+});
+
+// Close modal on outside click
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('investigation-modal');
+    if (e.target === modal) {
+        socDashboard.closeInvestigation();
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,30 @@
+# AMOSKYS Neural Security Command Platform
+# Core Dependencies - Web Interface
+# Updated: September 12, 2025
+
+# Web Framework
+flask==3.0.0
+gunicorn==21.2.0
+Werkzeug==3.0.1
+
+# Security & Cryptography
+cryptography>=41.0.0
+
+# Event Bus & Messaging (existing dependencies)
+grpcio>=1.50.0
+protobuf>=4.21.0
+
+# Data Processing & Storage
+pydantic>=2.0.0
+pyyaml>=6.0
+
+# Monitoring & Observability
+prometheus-client>=0.19.0
+
+# Development & Testing
+pytest>=7.0.0
+python-dotenv>=1.0.0
+
+# Optional: Production WSGI alternatives
+# waitress>=2.1.0  # Alternative to gunicorn for Windows
+# uwsgi>=2.0.21    # Alternative WSGI server

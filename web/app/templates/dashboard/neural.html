@@ -1,0 +1,1102 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Neural Insights - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="neural-dashboard">
+    <!-- Neural Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">🧠 Neural Insights Dashboard</h2>
+            <div class="card-badge badge-success">Phase 2.4 Active</div>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+            Advanced AI-powered analysis and neural network insights. Monitor detection patterns, 
+            model performance, and prepare for Phase 2.5 Neural Engine integration.
+        </p>
+    </div>
+
+    <!-- Neural Readiness Assessment -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">🎯 Phase 2.5 Neural Engine Readiness</h3>
+            <span class="neural-loading" id="readiness-loading" style="display: none;"></span>
+        </div>
+        <div id="neural-readiness-container">
+            <div class="readiness-overview">
+                <div class="readiness-score-display">
+                    <div class="score-circle" id="readiness-circle">
+                        <div class="score-text" id="readiness-score">--</div>
+                        <div class="score-label">Readiness Score</div>
+                    </div>
+                    <div class="readiness-details">
+                        <div class="readiness-level" id="readiness-level">Assessing...</div>
+                        <div class="readiness-eta" id="readiness-eta">Calculating timeline...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="readiness-criteria" id="readiness-criteria">
+                <!-- Criteria will be populated dynamically -->
+            </div>
+            <div class="readiness-recommendations" id="readiness-recommendations">
+                <!-- Recommendations will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Intelligence Analysis Grid -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- Pattern Detection -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">🔍 Pattern Detection</h3>
+            </div>
+            <div id="pattern-analysis">
+                <div class="pattern-metric">
+                    <span class="pattern-label">Event Patterns Detected:</span>
+                    <span class="pattern-value" id="patterns-detected">--</span>
+                </div>
+                <div class="pattern-metric">
+                    <span class="pattern-label">Anomaly Score:</span>
+                    <span class="pattern-value" id="anomaly-score">--</span>
+                </div>
+                <div class="pattern-metric">
+                    <span class="pattern-label">Clustering Confidence:</span>
+                    <span class="pattern-value" id="clustering-confidence">--</span>
+                </div>
+                <div class="pattern-metric">
+                    <span class="pattern-label">Behavioral Baseline:</span>
+                    <span class="pattern-value" id="behavioral-baseline">Establishing...</span>
+                </div>
+            </div>
+            <canvas id="pattern-visualization" width="400" height="200"></canvas>
+        </div>
+
+        <!-- Intelligence Metrics -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">📊 Intelligence Metrics</h3>
+            </div>
+            <div id="intelligence-metrics">
+                <div class="intel-metric">
+                    <span class="intel-label">Data Quality Score:</span>
+                    <span class="intel-value" id="data-quality">--</span>
+                </div>
+                <div class="intel-metric">
+                    <span class="intel-label">Feature Richness:</span>
+                    <span class="intel-value" id="feature-richness">--</span>
+                </div>
+                <div class="intel-metric">
+                    <span class="intel-label">Signal-to-Noise Ratio:</span>
+                    <span class="intel-value" id="signal-noise-ratio">--</span>
+                </div>
+                <div class="intel-metric">
+                    <span class="intel-label">Training Data Volume:</span>
+                    <span class="intel-value" id="training-volume">--</span>
+                </div>
+            </div>
+            <canvas id="intelligence-radar" width="400" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- Neural Architecture Preview -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">🏗️ Phase 2.5 Neural Architecture Preview</h3>
+        </div>
+        <div class="neural-architecture">
+            <div class="architecture-layer" data-layer="axon">
+                <div class="layer-header">
+                    <div class="layer-icon">🧠</div>
+                    <div class="layer-name">Axon Layer</div>
+                    <div class="layer-status status-planned">Planned</div>
+                </div>
+                <div class="layer-description">Feature extraction and preprocessing</div>
+                <div class="layer-capabilities">
+                    <span class="capability">Packet Analysis</span>
+                    <span class="capability">Protocol Parsing</span>
+                    <span class="capability">Entropy Calculation</span>
+                </div>
+            </div>
+
+            <div class="architecture-arrow">→</div>
+
+            <div class="architecture-layer" data-layer="soma">
+                <div class="layer-header">
+                    <div class="layer-icon">🎯</div>
+                    <div class="layer-name">Soma Layer</div>
+                    <div class="layer-status status-planned">Planned</div>
+                </div>
+                <div class="layer-description">Pattern recognition and anomaly detection</div>
+                <div class="layer-capabilities">
+                    <span class="capability">Signature Matching</span>
+                    <span class="capability">Anomaly Detection</span>
+                    <span class="capability">Behavioral Analysis</span>
+                </div>
+            </div>
+
+            <div class="architecture-arrow">→</div>
+
+            <div class="architecture-layer" data-layer="cortex">
+                <div class="layer-header">
+                    <div class="layer-icon">🧠</div>
+                    <div class="layer-name">Cortex Layer</div>
+                    <div class="layer-status status-planned">Planned</div>
+                </div>
+                <div class="layer-description">Contextual intelligence and correlation</div>
+                <div class="layer-capabilities">
+                    <span class="capability">Threat Correlation</span>
+                    <span class="capability">Business Context</span>
+                    <span class="capability">Campaign Detection</span>
+                </div>
+            </div>
+
+            <div class="architecture-arrow">→</div>
+
+            <div class="architecture-layer" data-layer="reflex">
+                <div class="layer-header">
+                    <div class="layer-icon">⚡</div>
+                    <div class="layer-name">Reflex Layer</div>
+                    <div class="layer-status status-planned">Planned</div>
+                </div>
+                <div class="layer-description">Decision engine and response generation</div>
+                <div class="layer-capabilities">
+                    <span class="capability">Threat Scoring</span>
+                    <span class="capability">Response Recommendations</span>
+                    <span class="capability">Confidence Assessment</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Flow Analysis -->
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- Event Intelligence -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">📈 Event Intelligence Timeline</h3>
+                <div style="display: flex; gap: 1rem;">
+                    <button class="neural-button" onclick="neuralDashboard.changeTimeWindow(6)">6H</button>
+                    <button class="neural-button" onclick="neuralDashboard.changeTimeWindow(24)" style="background: var(--neural-primary);">24H</button>
+                    <button class="neural-button" onclick="neuralDashboard.changeTimeWindow(168)">7D</button>
+                </div>
+            </div>
+            <canvas id="intelligence-timeline" width="600" height="300"></canvas>
+        </div>
+
+        <!-- Feature Extraction Preview -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">🔬 Feature Extraction</h3>
+            </div>
+            <div id="feature-preview">
+                <div class="feature-category">
+                    <div class="feature-title">Network Features</div>
+                    <div class="feature-list">
+                        <div class="feature-item">Packet Size Distribution</div>
+                        <div class="feature-item">Inter-arrival Times</div>
+                        <div class="feature-item">Protocol Anomalies</div>
+                    </div>
+                </div>
+                <div class="feature-category">
+                    <div class="feature-title">Payload Features</div>
+                    <div class="feature-list">
+                        <div class="feature-item">Entropy Analysis</div>
+                        <div class="feature-item">Compression Ratios</div>
+                        <div class="feature-item">Character Frequencies</div>
+                    </div>
+                </div>
+                <div class="feature-category">
+                    <div class="feature-title">Behavioral Features</div>
+                    <div class="feature-list">
+                        <div class="feature-item">Connection Patterns</div>
+                        <div class="feature-item">Temporal Sequences</div>
+                        <div class="feature-item">Flow Dynamics</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Neural Development Roadmap -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">🗓️ Neural Development Roadmap</h3>
+        </div>
+        <div class="roadmap-timeline">
+            <div class="roadmap-phase completed">
+                <div class="phase-marker"></div>
+                <div class="phase-content">
+                    <div class="phase-title">Phase 2.3 - API Gateway</div>
+                    <div class="phase-status">✅ Completed</div>
+                    <div class="phase-description">RESTful API with JWT authentication</div>
+                </div>
+            </div>
+
+            <div class="roadmap-phase active">
+                <div class="phase-marker"></div>
+                <div class="phase-content">
+                    <div class="phase-title">Phase 2.4 - Cortex Dashboard</div>
+                    <div class="phase-status">🔄 In Progress</div>
+                    <div class="phase-description">Real-time visualization and monitoring</div>
+                </div>
+            </div>
+
+            <div class="roadmap-phase planned">
+                <div class="phase-marker"></div>
+                <div class="phase-content">
+                    <div class="phase-title">Phase 2.5 - Neural Engine</div>
+                    <div class="phase-status">📋 Planned</div>
+                    <div class="phase-description">Multi-layer AI detection system</div>
+                </div>
+            </div>
+
+            <div class="roadmap-phase future">
+                <div class="phase-marker"></div>
+                <div class="phase-content">
+                    <div class="phase-title">Phase 2.6 - Integration</div>
+                    <div class="phase-status">🔮 Future</div>
+                    <div class="phase-description">Performance optimization and scaling</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.neural-dashboard {
+    max-width: 100%;
+}
+
+/* Neural Readiness Styles */
+.readiness-overview {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.readiness-score-display {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+}
+
+.score-circle {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 6px solid var(--neural-primary);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle, rgba(0, 255, 136, 0.1), transparent);
+    position: relative;
+}
+
+.score-text {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--neural-primary);
+}
+
+.score-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.readiness-details {
+    flex: 1;
+}
+
+.readiness-level {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--neural-primary);
+    margin-bottom: 0.5rem;
+}
+
+.readiness-eta {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.readiness-criteria {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.criteria-item {
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border-left: 4px solid var(--neural-primary);
+}
+
+.criteria-item.status-warning { border-left-color: var(--neural-warning); }
+.criteria-item.status-critical { border-left-color: var(--neural-critical); }
+
+.criteria-score {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--neural-primary);
+    margin-bottom: 0.5rem;
+}
+
+.criteria-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Pattern Analysis Styles */
+.pattern-metric, .intel-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pattern-metric:last-child, .intel-metric:last-child {
+    border-bottom: none;
+}
+
+.pattern-label, .intel-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.pattern-value, .intel-value {
+    color: var(--neural-primary);
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+
+/* Neural Architecture Styles */
+.neural-architecture {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem;
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.05), rgba(0, 136, 255, 0.05));
+    border-radius: 10px;
+    overflow-x: auto;
+}
+
+.architecture-layer {
+    min-width: 200px;
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    border-radius: 10px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.architecture-layer:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 255, 136, 0.2);
+    border-color: var(--neural-primary);
+}
+
+.layer-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.layer-icon {
+    font-size: 2rem;
+}
+
+.layer-name {
+    font-weight: 700;
+    color: var(--neural-primary);
+    font-size: 1.1rem;
+}
+
+.layer-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-planned {
+    background: rgba(0, 136, 255, 0.2);
+    color: var(--neural-secondary);
+    border: 1px solid rgba(0, 136, 255, 0.3);
+}
+
+.layer-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    line-height: 1.4;
+}
+
+.layer-capabilities {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.capability {
+    padding: 0.25rem 0.5rem;
+    background: rgba(0, 255, 136, 0.1);
+    color: var(--neural-primary);
+    border-radius: 8px;
+    font-size: 0.8rem;
+    border: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.architecture-arrow {
+    font-size: 2rem;
+    color: var(--neural-primary);
+    font-weight: 700;
+}
+
+/* Feature Preview Styles */
+.feature-category {
+    margin-bottom: 1.5rem;
+}
+
+.feature-title {
+    font-weight: 600;
+    color: var(--neural-secondary);
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+}
+
+.feature-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.feature-item {
+    padding: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 5px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    border-left: 3px solid var(--neural-secondary);
+}
+
+/* Roadmap Styles */
+.roadmap-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    position: relative;
+    padding-left: 2rem;
+}
+
+.roadmap-timeline::before {
+    content: '';
+    position: absolute;
+    left: 1rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--neural-primary), var(--neural-secondary));
+}
+
+.roadmap-phase {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.phase-marker {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 3px solid var(--neural-primary);
+    background: var(--bg-primary);
+    position: absolute;
+    left: -2rem;
+    z-index: 1;
+}
+
+.roadmap-phase.completed .phase-marker {
+    background: var(--neural-primary);
+    border-color: var(--neural-primary);
+}
+
+.roadmap-phase.active .phase-marker {
+    background: var(--neural-warning);
+    border-color: var(--neural-warning);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.roadmap-phase.planned .phase-marker {
+    background: var(--neural-secondary);
+    border-color: var(--neural-secondary);
+}
+
+.roadmap-phase.future .phase-marker {
+    background: transparent;
+    border-color: var(--text-muted);
+}
+
+.phase-content {
+    flex: 1;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.roadmap-phase.active .phase-content {
+    border-color: var(--neural-warning);
+    background: rgba(255, 170, 0, 0.1);
+}
+
+.phase-title {
+    font-weight: 600;
+    color: var(--neural-primary);
+    margin-bottom: 0.25rem;
+}
+
+.phase-status {
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.phase-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+@media (max-width: 1024px) {
+    .neural-architecture {
+        flex-direction: column;
+        gap: 2rem;
+    }
+    
+    .architecture-arrow {
+        transform: rotate(90deg);
+    }
+    
+    .readiness-score-display {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .neural-dashboard > div[style*="grid-template-columns: 1fr 1fr"],
+    .neural-dashboard > div[style*="grid-template-columns: 2fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .architecture-layer {
+        min-width: auto;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+class NeuralDashboard {
+    constructor() {
+        this.updateInterval = 8000; // 8 seconds for neural analysis
+        this.timeWindow = 24; // hours
+        this.charts = {};
+        this.init();
+    }
+    
+    init() {
+        this.initCharts();
+        this.startRealTimeUpdates();
+    }
+    
+    initCharts() {
+        // Pattern Visualization Chart
+        this.charts.patterns = new Chart(document.getElementById('pattern-visualization'), {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Normal Events',
+                    data: [],
+                    backgroundColor: 'rgba(0, 255, 136, 0.6)',
+                    borderColor: '#00ff88',
+                    pointRadius: 4
+                }, {
+                    label: 'Anomalous Events',
+                    data: [],
+                    backgroundColor: 'rgba(255, 51, 102, 0.6)',
+                    borderColor: '#ff3366',
+                    pointRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom',
+                        title: { display: true, text: 'Feature 1', color: '#cccccc' },
+                        ticks: { color: '#cccccc' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Feature 2', color: '#cccccc' },
+                        ticks: { color: '#cccccc' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: '#cccccc' }
+                    }
+                }
+            }
+        });
+        
+        // Intelligence Radar Chart
+        this.charts.radar = new Chart(document.getElementById('intelligence-radar'), {
+            type: 'radar',
+            data: {
+                labels: ['Data Quality', 'Feature Richness', 'Signal/Noise', 'Volume', 'Diversity', 'Freshness'],
+                datasets: [{
+                    label: 'Current State',
+                    data: [0, 0, 0, 0, 0, 0],
+                    borderColor: '#00ff88',
+                    backgroundColor: 'rgba(0, 255, 136, 0.2)',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#00ff88',
+                    pointBorderColor: '#00ff88',
+                    pointRadius: 4
+                }, {
+                    label: 'Target State',
+                    data: [85, 90, 80, 95, 75, 85],
+                    borderColor: '#0088ff',
+                    backgroundColor: 'rgba(0, 136, 255, 0.1)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointBackgroundColor: '#0088ff',
+                    pointBorderColor: '#0088ff',
+                    pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { color: '#888888', backdropColor: 'transparent' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                        pointLabels: { color: '#cccccc', font: { size: 11 } }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: '#cccccc' }
+                    }
+                }
+            }
+        });
+        
+        // Intelligence Timeline Chart
+        this.charts.timeline = new Chart(document.getElementById('intelligence-timeline'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Event Volume',
+                    data: [],
+                    borderColor: '#00ff88',
+                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    yAxisID: 'y'
+                }, {
+                    label: 'Threat Score',
+                    data: [],
+                    borderColor: '#ff3366',
+                    backgroundColor: 'rgba(255, 51, 102, 0.1)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                }, {
+                    label: 'Anomaly Rate',
+                    data: [],
+                    borderColor: '#ffaa00',
+                    backgroundColor: 'rgba(255, 170, 0, 0.1)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { intersect: false },
+                scales: {
+                    x: {
+                        ticks: { color: '#cccccc' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        ticks: { color: '#cccccc' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        ticks: { color: '#cccccc' },
+                        grid: { drawOnChartArea: false }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: '#cccccc' }
+                    }
+                }
+            }
+        });
+    }
+    
+    async startRealTimeUpdates() {
+        try {
+            await Promise.all([
+                this.updateNeuralReadiness(),
+                this.updatePatternAnalysis(),
+                this.updateIntelligenceMetrics(),
+                this.updateIntelligenceTimeline(),
+                this.simulatePatternVisualization()
+            ]);
+        } catch (error) {
+            console.error('Neural dashboard update error:', error);
+        }
+        
+        setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
+    }
+    
+    async updateNeuralReadiness() {
+        try {
+            document.getElementById('readiness-loading').style.display = 'inline-block';
+            
+            // Simulate neural readiness assessment
+            const readiness = await this.calculateNeuralReadiness();
+            
+            // Update score circle
+            const scoreElement = document.getElementById('readiness-score');
+            const levelElement = document.getElementById('readiness-level');
+            const etaElement = document.getElementById('readiness-eta');
+            const circle = document.getElementById('readiness-circle');
+            
+            scoreElement.textContent = readiness.overall_score + '%';
+            levelElement.textContent = readiness.readiness_level;
+            etaElement.textContent = readiness.next_phase_eta;
+            
+            // Update circle color based on score
+            const color = readiness.readiness_color;
+            circle.style.borderColor = color;
+            circle.style.background = `radial-gradient(circle, ${color}22, transparent)`;
+            
+            // Update criteria
+            this.renderReadinessCriteria(readiness.criteria);
+            this.renderReadinessRecommendations(readiness.recommendations);
+            
+        } catch (error) {
+            console.error('Neural readiness update failed:', error);
+        } finally {
+            document.getElementById('readiness-loading').style.display = 'none';
+        }
+    }
+    
+    async updatePatternAnalysis() {
+        try {
+            // Simulate pattern analysis
+            const patterns = Math.floor(Math.random() * 8) + 5;
+            const anomalyScore = (Math.random() * 0.3 + 0.1).toFixed(3);
+            const confidence = (Math.random() * 0.2 + 0.75).toFixed(3);
+            
+            document.getElementById('patterns-detected').textContent = patterns;
+            document.getElementById('anomaly-score').textContent = anomalyScore;
+            document.getElementById('clustering-confidence').textContent = confidence;
+            document.getElementById('behavioral-baseline').textContent = 'Stable';
+        } catch (error) {
+            console.error('Pattern analysis update failed:', error);
+        }
+    }
+    
+    async updateIntelligenceMetrics() {
+        try {
+            // Simulate intelligence metrics
+            const dataQuality = Math.floor(Math.random() * 20) + 75;
+            const featureRichness = Math.floor(Math.random() * 15) + 80;
+            const signalNoise = (Math.random() * 2 + 3).toFixed(1);
+            const trainingVolume = Math.floor(Math.random() * 5000) + 15000;
+            
+            document.getElementById('data-quality').textContent = dataQuality + '%';
+            document.getElementById('feature-richness').textContent = featureRichness + '%';
+            document.getElementById('signal-noise-ratio').textContent = signalNoise + ':1';
+            document.getElementById('training-volume').textContent = trainingVolume.toLocaleString() + ' events';
+            
+            // Update radar chart
+            this.charts.radar.data.datasets[0].data = [
+                dataQuality,
+                featureRichness,
+                parseFloat(signalNoise) * 10,
+                Math.min(trainingVolume / 500, 100),
+                Math.floor(Math.random() * 15) + 70,
+                Math.floor(Math.random() * 10) + 85
+            ];
+            this.charts.radar.update('none');
+            
+        } catch (error) {
+            console.error('Intelligence metrics update failed:', error);
+        }
+    }
+    
+    async updateIntelligenceTimeline() {
+        try {
+            const response = await fetch('/dashboard/api/live/threats');
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                const timelineData = this.generateTimelineData(data.threats);
+                
+                this.charts.timeline.data.labels = timelineData.labels;
+                this.charts.timeline.data.datasets[0].data = timelineData.volumes;
+                this.charts.timeline.data.datasets[1].data = timelineData.threats;
+                this.charts.timeline.data.datasets[2].data = timelineData.anomalies;
+                this.charts.timeline.update('none');
+            }
+        } catch (error) {
+            console.error('Intelligence timeline update failed:', error);
+        }
+    }
+    
+    simulatePatternVisualization() {
+        // Generate simulated pattern data
+        const normalEvents = [];
+        const anomalousEvents = [];
+        
+        // Normal events cluster
+        for (let i = 0; i < 30; i++) {
+            normalEvents.push({
+                x: Math.random() * 50 + 25 + (Math.random() - 0.5) * 20,
+                y: Math.random() * 50 + 25 + (Math.random() - 0.5) * 20
+            });
+        }
+        
+        // Anomalous events scattered
+        for (let i = 0; i < 8; i++) {
+            anomalousEvents.push({
+                x: Math.random() * 100,
+                y: Math.random() * 100
+            });
+        }
+        
+        this.charts.patterns.data.datasets[0].data = normalEvents;
+        this.charts.patterns.data.datasets[1].data = anomalousEvents;
+        this.charts.patterns.update('none');
+    }
+    
+    async calculateNeuralReadiness() {
+        try {
+            // Simulate readiness calculation based on current system state
+            const [threatResponse, agentResponse, metricsResponse] = await Promise.all([
+                fetch('/dashboard/api/live/threats'),
+                fetch('/dashboard/api/live/agents'),
+                fetch('/dashboard/api/live/metrics')
+            ]);
+            
+            const threatData = await threatResponse.json();
+            const agentData = await agentResponse.json();
+            const metricsData = await metricsResponse.json();
+            
+            // Calculate component scores
+            const dataFlowScore = Math.min((threatData.threats?.length || 0) / 50 * 100, 100);
+            const agentScore = agentData.agents ? 
+                (agentData.agents.filter(a => a.status === 'online').length / agentData.agents.length) * 100 : 0;
+            const systemScore = metricsData.metrics ? 
+                100 - Math.max(metricsData.metrics.cpu?.percent || 0, metricsData.metrics.memory?.percent || 0) : 50;
+            
+            const overallScore = (dataFlowScore + agentScore + systemScore) / 3;
+            
+            let readinessLevel, readinessColor, eta;
+            if (overallScore >= 85) {
+                readinessLevel = 'OPTIMAL';
+                readinessColor = '#00ff88';
+                eta = 'Phase 2.5 ready for immediate implementation';
+            } else if (overallScore >= 70) {
+                readinessLevel = 'READY';
+                readinessColor = '#ffaa00';
+                eta = 'Phase 2.5 ready with minor optimizations';
+            } else if (overallScore >= 50) {
+                readinessLevel = 'LIMITED';
+                readinessColor = '#ff6600';
+                eta = 'Phase 2.5 requires significant preparation';
+            } else {
+                readinessLevel = 'NOT_READY';
+                readinessColor = '#ff0000';
+                eta = 'Phase 2.5 blocked - system optimization required';
+            }
+            
+            return {
+                overall_score: Math.round(overallScore),
+                readiness_level: readinessLevel,
+                readiness_color: readinessColor,
+                next_phase_eta: eta,
+                criteria: {
+                    data_flow: {
+                        description: 'Event data pipeline health',
+                        score: Math.round(dataFlowScore),
+                        status: dataFlowScore >= 80 ? 'ready' : dataFlowScore >= 60 ? 'warning' : 'critical'
+                    },
+                    agent_connectivity: {
+                        description: 'Agent network reliability',
+                        score: Math.round(agentScore),
+                        status: agentScore >= 80 ? 'ready' : agentScore >= 60 ? 'warning' : 'critical'
+                    },
+                    system_performance: {
+                        description: 'System resource availability',
+                        score: Math.round(systemScore),
+                        status: systemScore >= 80 ? 'ready' : systemScore >= 60 ? 'warning' : 'critical'
+                    }
+                },
+                recommendations: this.generateRecommendations(dataFlowScore, agentScore, systemScore)
+            };
+            
+        } catch (error) {
+            console.error('Readiness calculation failed:', error);
+            return {
+                overall_score: 50,
+                readiness_level: 'LIMITED',
+                readiness_color: '#ff6600',
+                next_phase_eta: 'Error calculating readiness',
+                criteria: {},
+                recommendations: ['Fix data connectivity issues']
+            };
+        }
+    }
+    
+    generateRecommendations(dataScore, agentScore, systemScore) {
+        const recommendations = [];
+        
+        if (dataScore < 80) {
+            recommendations.push('Increase event data collection volume for better training datasets');
+        }
+        if (agentScore < 80) {
+            recommendations.push('Improve agent connectivity and reduce network latency');
+        }
+        if (systemScore < 80) {
+            recommendations.push('Optimize system resources for neural processing workloads');
+        }
+        if (dataScore >= 80 && agentScore >= 80 && systemScore >= 80) {
+            recommendations.push('System ready for Phase 2.5 Neural Engine implementation');
+        }
+        
+        return recommendations;
+    }
+    
+    renderReadinessCriteria(criteria) {
+        const container = document.getElementById('readiness-criteria');
+        
+        const criteriaHtml = Object.entries(criteria).map(([key, criterion]) => `
+            <div class="criteria-item status-${criterion.status}">
+                <div class="criteria-score">${criterion.score}%</div>
+                <div class="criteria-description">${criterion.description}</div>
+            </div>
+        `).join('');
+        
+        container.innerHTML = criteriaHtml;
+    }
+    
+    renderReadinessRecommendations(recommendations) {
+        const container = document.getElementById('readiness-recommendations');
+        
+        const recommendationsHtml = `
+            <h4 style="color: var(--neural-primary); margin-bottom: 1rem;">🎯 Optimization Recommendations</h4>
+            <ul style="margin-left: 1rem; color: var(--text-secondary);">
+                ${recommendations.map(rec => `<li style="margin-bottom: 0.5rem; line-height: 1.4;">${rec}</li>`).join('')}
+            </ul>
+        `;
+        
+        container.innerHTML = recommendationsHtml;
+    }
+    
+    generateTimelineData(events) {
+        const now = new Date();
+        const labels = [];
+        const volumes = [];
+        const threats = [];
+        const anomalies = [];
+        
+        for (let i = this.timeWindow - 1; i >= 0; i--) {
+            const time = new Date(now.getTime() - i * 60 * 60 * 1000);
+            const timeNext = new Date(time.getTime() + 60 * 60 * 1000);
+            
+            labels.push(time.getHours().toString().padStart(2, '0') + ':00');
+            
+            // Filter events for this hour
+            const hourEvents = events.filter(event => {
+                const eventTime = new Date(event.timestamp);
+                return eventTime >= time && eventTime < timeNext;
+            });
+            
+            volumes.push(hourEvents.length);
+            
+            // Calculate threat score for this hour
+            const hourThreatScore = hourEvents.reduce((sum, event) => {
+                const weights = { low: 1, medium: 3, high: 7, critical: 15 };
+                return sum + (weights[event.severity] || 1);
+            }, 0);
+            
+            threats.push(Math.min(hourThreatScore, 100));
+            
+            // Calculate anomaly rate (simulation)
+            const anomalyRate = hourEvents.length > 0 ? 
+                (Math.random() * 0.2 + 0.05) * 100 : 0;
+            anomalies.push(anomalyRate);
+        }
+        
+        return { labels, volumes, threats, anomalies };
+    }
+    
+    changeTimeWindow(hours) {
+        this.timeWindow = hours;
+        this.updateIntelligenceTimeline();
+        
+        // Update button styles
+        document.querySelectorAll('.neural-button').forEach(btn => {
+            btn.style.background = '';
+        });
+        event.target.style.background = 'var(--neural-primary)';
+    }
+}
+
+// Initialize Neural Dashboard
+let neuralDashboard;
+document.addEventListener('DOMContentLoaded', () => {
+    neuralDashboard = new NeuralDashboard();
+});
+</script>
+{% endblock %}

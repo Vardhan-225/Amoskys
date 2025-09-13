@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import socket
 import subprocess
@@ -11,7 +12,8 @@ from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
 
 CERT_DIR = Path("certs")
-SERVER_CMD = ["python", "src/amoskys/eventbus/server.py"]
+# Use the same Python interpreter that's running the test
+SERVER_CMD = [sys.executable, "src/amoskys/eventbus/server.py"]
 BUS_ADDR = "localhost:50051"
 
 def wait_for_port(host: str, port: int, timeout: float = 5.0):
@@ -35,7 +37,14 @@ def certs_available():
 
 @pytest.fixture(scope="session")
 def bus_process(certs_available):
-    proc = subprocess.Popen(SERVER_CMD, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # Set up environment to ensure the subprocess can find imports
+    env = os.environ.copy()
+    if 'PYTHONPATH' in env:
+        env['PYTHONPATH'] = f"src:{env['PYTHONPATH']}"
+    else:
+        env['PYTHONPATH'] = 'src'
+    
+    proc = subprocess.Popen(SERVER_CMD, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     ok = wait_for_port("127.0.0.1", 50051, timeout=6.0)
     if not ok:
         try:

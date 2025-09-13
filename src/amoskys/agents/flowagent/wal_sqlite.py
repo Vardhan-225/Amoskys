@@ -48,18 +48,16 @@ class SQLiteWAL:
             env = pb.Envelope()
             env.ParseFromString(bytes(blob))
             ack = publish_fn(env)
-            try:
-                status = ack.status
-            except Exception:
+            status = getattr(ack, "status", None)
+            if status is None:
                 break
-            if status == 0:
-                self.db.execute("DELETE FROM wal WHERE id = ?", (rowid,))
-                drained += 1
-            elif status == 1:
+            
+            if status == 1:  # RETRY - stop processing
                 break
-            else:
-                self.db.execute("DELETE FROM wal WHERE id = ?", (rowid,))
-                drained += 1
+            
+            # For OK (0) or error statuses (2, 3, etc.), delete the record
+            self.db.execute("DELETE FROM wal WHERE id = ?", (rowid,))
+            drained += 1
         return drained
 
     def _enforce_backlog(self):

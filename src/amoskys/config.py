@@ -37,7 +37,7 @@ class AgentConfig:
     wal_path: str = "data/wal/flowagent.db"
     bus_address: str = "localhost:50051"
     max_env_bytes: int = 131072  # 128KB
-    send_rate: int = 0  # 0=unlimited
+    send_rate: int = 0  # Rate limit for sending (0 means unlimited)
     retry_max: int = 6
     retry_timeout: float = 1.0
     metrics_port: int = 9101

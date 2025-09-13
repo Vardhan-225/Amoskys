@@ -49,15 +49,15 @@ class SQLiteWAL:
             env.ParseFromString(bytes(blob))
             ack = publish_fn(env)
             try:
-                status = ack.status
+                status = getattr(ack, 'status', None)
             except Exception:
                 break
-            if status == 0:
-                self.db.execute("DELETE FROM wal WHERE id = ?", (rowid,))
-                drained += 1
-            elif status == 1:
+            
+            if status == 1:  # RETRY - stop processing
                 break
-            else:
+            
+            # For OK (0) or error statuses (2, 3, etc.), delete the record
+            if status is not None:
                 self.db.execute("DELETE FROM wal WHERE id = ?", (rowid,))
                 drained += 1
         return drained
