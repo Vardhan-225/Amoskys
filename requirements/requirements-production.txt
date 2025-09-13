@@ -327,7 +327,7 @@ scipy==1.15.3
 Scrapy==2.12.0
 seaborn==0.13.2
 semver==3.0.2
-Send2Trash==1.8.2
+Send2Trash==1.8.3
 sentry-sdk==2.18.0
 service-identity==24.2.0
 setuptools==72.1.0
