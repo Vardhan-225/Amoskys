@@ -1,4 +1,11 @@
-# Amoskys
+# AMOSKYS – Neural Security Orchestration That Evolves 🧠🛡️
+
+[![Amoskys CI](https://github.com/Vardhan-225/Amoskys/actions/workflows/ci.yml/badge.svg)](https://github.com/Vardhan-225/Amoskys/actions)
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)](https://github.com/Vardhan-225/Amoskys/releases)
+[![Powered by Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+
+> **Amoskys** is a neuro-inspired security intelligence platform designed to detect, correlate, and adapt to cyber anomalies in real time. Built for resilience, engineered for evolution.
 
 **Amoskys** is a security-focused infrastructure monitoring system designed to collect, process, and analyze security-relevant events from distributed environments in real-time.
 
