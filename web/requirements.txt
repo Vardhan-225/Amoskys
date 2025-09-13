@@ -1,0 +1,24 @@
+# AMOSKYS Flask Web Interface Dependencies
+# Production-ready stack for NGINX + Gunicorn deployment
+# Phase 2.4 - Dashboard Integration with Real-time Updates
+
+flask==3.0.0
+gunicorn==21.2.0
+Werkzeug==3.0.1
+
+# Real-time communication (Phase 2.4)
+flask-socketio==5.3.6
+python-socketio[asyncio]==5.10.0
+# eventlet==0.33.3  # Disabled due to Python 3.13 compatibility issues
+
+# System monitoring
+psutil==5.9.6
+
+# Security
+cryptography==41.0.7
+
+# Monitoring and observability
+prometheus-client==0.19.0
+
+# Development dependencies (remove in production)
+python-dotenv==1.0.0

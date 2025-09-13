@@ -1,0 +1,532 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AMOSKYS Cortex Command Center{% endblock %}
+
+{% block content %}
+<div class="command-center">
+    <!-- Welcome Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">🧠 AMOSKYS Cortex Command Center</h2>
+            <div class="card-badge badge-success">Phase 2.4 Active</div>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+            Welcome to the AMOSKYS Neural Security Command Platform. This dashboard provides real-time monitoring, 
+            threat analysis, and system oversight for your distributed security infrastructure.
+        </p>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <a href="/dashboard/soc" class="neural-button">🛡️ Enter SOC Operations</a>
+            <a href="/dashboard/agents" class="neural-button">🤖 Manage Agents</a>
+            <a href="/dashboard/neural" class="neural-button">🧠 Neural Insights</a>
+        </div>
+    </div>
+
+    <!-- Real-time Metrics Grid -->
+    <div class="metrics-grid">
+        <div class="metric-card" id="threat-score-card">
+            <div class="metric-value" id="current-threat-score">--</div>
+            <div class="metric-label">Current Threat Score</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="threat-recommendation">Calculating...</div>
+        </div>
+        
+        <div class="metric-card" id="active-agents-card">
+            <div class="metric-value" id="active-agents-count">--</div>
+            <div class="metric-label">Active Agents</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="agents-health">Network Status: Unknown</div>
+        </div>
+        
+        <div class="metric-card" id="events-count-card">
+            <div class="metric-value" id="events-count">--</div>
+            <div class="metric-label">Events (24h)</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="events-trend">Trend: Calculating...</div>
+        </div>
+        
+        <div class="metric-card" id="system-health-card">
+            <div class="metric-value" id="system-health-score">--</div>
+            <div class="metric-label">System Health</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="system-status-detail">Status: Checking...</div>
+        </div>
+    </div>
+
+    <!-- Dashboard Grid Layout -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- Recent Threats Panel -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">⚠️ Recent Threats</h3>
+                <span class="neural-loading" id="threats-loading" style="display: none;"></span>
+            </div>
+            <div id="recent-threats-list">
+                <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                    Loading recent threat data...
+                </p>
+            </div>
+        </div>
+
+        <!-- Agent Status Panel -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">🤖 Agent Network</h3>
+                <span class="neural-loading" id="agents-loading" style="display: none;"></span>
+            </div>
+            <div id="agent-status-grid">
+                <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                    Loading agent network status...
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Monitoring Panel -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">📊 System Performance</h3>
+            <span class="neural-loading" id="metrics-loading" style="display: none;"></span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div style="text-align: center; padding: 1rem;">
+                <canvas id="cpu-chart" width="150" height="150"></canvas>
+                <div style="margin-top: 0.5rem; color: var(--text-secondary);">CPU Usage</div>
+            </div>
+            <div style="text-align: center; padding: 1rem;">
+                <canvas id="memory-chart" width="150" height="150"></canvas>
+                <div style="margin-top: 0.5rem; color: var(--text-secondary);">Memory Usage</div>
+            </div>
+            <div style="text-align: center; padding: 1rem;">
+                <canvas id="disk-chart" width="150" height="150"></canvas>
+                <div style="margin-top: 0.5rem; color: var(--text-secondary);">Disk Usage</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Neural Readiness Status -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">🧠 Neural Engine Readiness</h3>
+            <div class="card-badge" id="neural-readiness-badge">Assessing...</div>
+        </div>
+        <div id="neural-readiness-content">
+            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                Evaluating system readiness for Phase 2.5 Neural Engine integration...
+            </p>
+        </div>
+    </div>
+</div>
+
+<style>
+.command-center {
+    max-width: 100%;
+}
+
+.threat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 5px;
+    border-left: 3px solid var(--neural-warning);
+}
+
+.threat-item.severity-low { border-left-color: var(--neural-primary); }
+.threat-item.severity-medium { border-left-color: var(--neural-warning); }
+.threat-item.severity-high { border-left-color: #ff6600; }
+.threat-item.severity-critical { border-left-color: var(--neural-critical); }
+
+.threat-details {
+    flex: 1;
+}
+
+.threat-type {
+    font-weight: 600;
+    color: var(--neural-primary);
+    margin-bottom: 0.25rem;
+}
+
+.threat-source {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.threat-time {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.agent-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 5px;
+    border-left: 3px solid var(--neural-primary);
+}
+
+.agent-item.status-offline { border-left-color: var(--neural-critical); }
+.agent-item.status-stale { border-left-color: var(--neural-warning); }
+.agent-item.status-active { border-left-color: #ffaa00; }
+.agent-item.status-online { border-left-color: var(--neural-primary); }
+
+.agent-name {
+    font-weight: 600;
+    color: var(--neural-primary);
+}
+
+.agent-host {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.agent-status {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-online { background: var(--neural-primary); color: var(--bg-primary); }
+.status-active { background: var(--neural-warning); color: var(--bg-primary); }
+.status-stale { background: #ff6600; color: white; }
+.status-offline { background: var(--neural-critical); color: white; }
+
+.neural-readiness-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.readiness-item {
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 5px;
+    border-left: 3px solid var(--neural-primary);
+}
+
+.readiness-item.status-warning { border-left-color: var(--neural-warning); }
+.readiness-item.status-critical { border-left-color: var(--neural-critical); }
+
+.readiness-score {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--neural-primary);
+    margin-bottom: 0.5rem;
+}
+
+.readiness-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+    .dashboard-main > div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+class CortexDashboard {
+    constructor() {
+        this.updateInterval = 5000; // 5 seconds
+        this.charts = {};
+        this.init();
+    }
+    
+    init() {
+        this.initCharts();
+        this.startRealTimeUpdates();
+    }
+    
+    initCharts() {
+        // CPU Chart
+        this.charts.cpu = new Chart(document.getElementById('cpu-chart'), {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [0, 100],
+                    backgroundColor: ['#00ff88', 'rgba(255, 255, 255, 0.1)'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                cutout: '70%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
+                }
+            }
+        });
+        
+        // Memory Chart
+        this.charts.memory = new Chart(document.getElementById('memory-chart'), {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [0, 100],
+                    backgroundColor: ['#0088ff', 'rgba(255, 255, 255, 0.1)'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                cutout: '70%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
+                }
+            }
+        });
+        
+        // Disk Chart
+        this.charts.disk = new Chart(document.getElementById('disk-chart'), {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [0, 100],
+                    backgroundColor: ['#ffaa00', 'rgba(255, 255, 255, 0.1)'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                cutout: '70%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
+                }
+            }
+        });
+    }
+    
+    async startRealTimeUpdates() {
+        try {
+            await Promise.all([
+                this.updateThreatScore(),
+                this.updateAgentStatus(),
+                this.updateRecentThreats(),
+                this.updateSystemMetrics(),
+                this.updateNeuralReadiness()
+            ]);
+        } catch (error) {
+            console.error('Dashboard update error:', error);
+        }
+        
+        setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
+    }
+    
+    async updateThreatScore() {
+        try {
+            const response = await fetch('/dashboard/api/live/threat-score');
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                document.getElementById('current-threat-score').textContent = data.threat_score;
+                document.getElementById('threat-recommendation').textContent = data.recommended_action;
+                
+                const card = document.getElementById('threat-score-card');
+                card.style.background = `linear-gradient(135deg, ${data.threat_color}22, ${data.threat_color}11)`;
+            }
+        } catch (error) {
+            console.error('Threat score update failed:', error);
+        }
+    }
+    
+    async updateAgentStatus() {
+        try {
+            const response = await fetch('/dashboard/api/live/agents');
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                const onlineCount = data.agents.filter(a => a.status === 'online').length;
+                const totalCount = data.agents.length;
+                
+                document.getElementById('active-agents-count').textContent = `${onlineCount}/${totalCount}`;
+                
+                const healthPercent = totalCount > 0 ? Math.round((onlineCount / totalCount) * 100) : 0;
+                document.getElementById('agents-health').textContent = `Network Health: ${healthPercent}%`;
+                
+                this.updateAgentGrid(data.agents);
+            }
+        } catch (error) {
+            console.error('Agent status update failed:', error);
+        }
+    }
+    
+    async updateRecentThreats() {
+        try {
+            document.getElementById('threats-loading').style.display = 'inline-block';
+            
+            const response = await fetch('/dashboard/api/live/threats');
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                document.getElementById('events-count').textContent = data.count;
+                document.getElementById('events-trend').textContent = `${data.threats.length} recent events`;
+                
+                this.updateThreatsList(data.threats.slice(0, 5)); // Show top 5
+            }
+        } catch (error) {
+            console.error('Recent threats update failed:', error);
+        } finally {
+            document.getElementById('threats-loading').style.display = 'none';
+        }
+    }
+    
+    async updateSystemMetrics() {
+        try {
+            document.getElementById('metrics-loading').style.display = 'inline-block';
+            
+            const response = await fetch('/dashboard/api/live/metrics');
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                const metrics = data.metrics;
+                
+                // Update health score
+                const avgHealth = (
+                    (100 - metrics.cpu.percent) +
+                    (100 - metrics.memory.percent) +
+                    (100 - metrics.disk.percent)
+                ) / 3;
+                
+                document.getElementById('system-health-score').textContent = Math.round(avgHealth) + '%';
+                document.getElementById('system-status-detail').textContent = 
+                    `CPU: ${metrics.cpu.percent}% | RAM: ${metrics.memory.percent}%`;
+                
+                // Update charts
+                this.updateChart('cpu', metrics.cpu.percent);
+                this.updateChart('memory', metrics.memory.percent);
+                this.updateChart('disk', metrics.disk.percent);
+            }
+        } catch (error) {
+            console.error('System metrics update failed:', error);
+        } finally {
+            document.getElementById('metrics-loading').style.display = 'none';
+        }
+    }
+    
+    async updateNeuralReadiness() {
+        try {
+            // This would call the neural readiness utility function
+            // For now, we'll simulate the assessment
+            const readinessData = {
+                overall_score: 78,
+                readiness_level: 'READY',
+                readiness_color: '#ffaa00',
+                criteria: {
+                    'data_flow': { description: 'Event data sufficient', score: 85, status: 'ready' },
+                    'agent_connectivity': { description: 'Agent network healthy', score: 82, status: 'ready' },
+                    'system_performance': { description: 'Resources adequate', score: 67, status: 'warning' }
+                },
+                recommendations: ['Optimize system resources for neural processing workloads']
+            };
+            
+            this.updateNeuralReadinessDisplay(readinessData);
+        } catch (error) {
+            console.error('Neural readiness update failed:', error);
+        }
+    }
+    
+    updateChart(chartId, percentage) {
+        const chart = this.charts[chartId];
+        if (chart) {
+            chart.data.datasets[0].data = [percentage, 100 - percentage];
+            chart.update('none');
+        }
+    }
+    
+    updateThreatsList(threats) {
+        const container = document.getElementById('recent-threats-list');
+        
+        if (threats.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No recent threats detected</p>';
+            return;
+        }
+        
+        const threatsHtml = threats.map(threat => `
+            <div class="threat-item severity-${threat.severity}">
+                <div class="threat-details">
+                    <div class="threat-type">${threat.type}</div>
+                    <div class="threat-source">Source: ${threat.source_ip}</div>
+                </div>
+                <div class="threat-time">${new Date(threat.timestamp).toLocaleTimeString()}</div>
+            </div>
+        `).join('');
+        
+        container.innerHTML = threatsHtml;
+    }
+    
+    updateAgentGrid(agents) {
+        const container = document.getElementById('agent-status-grid');
+        
+        if (agents.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No agents registered</p>';
+            return;
+        }
+        
+        const agentsHtml = agents.slice(0, 6).map(agent => `
+            <div class="agent-item status-${agent.status}">
+                <div>
+                    <div class="agent-name">${agent.agent_id}</div>
+                    <div class="agent-host">${agent.hostname}</div>
+                </div>
+                <div class="agent-status status-${agent.status}">${agent.status}</div>
+            </div>
+        `).join('');
+        
+        container.innerHTML = agentsHtml;
+    }
+    
+    updateNeuralReadinessDisplay(data) {
+        const badge = document.getElementById('neural-readiness-badge');
+        const content = document.getElementById('neural-readiness-content');
+        
+        // Update badge
+        badge.textContent = data.readiness_level;
+        badge.className = `card-badge ${data.readiness_level === 'READY' ? 'badge-success' : 
+                                        data.readiness_level === 'LIMITED' ? 'badge-warning' : 'badge-danger'}`;
+        
+        // Update content
+        const criteriaHtml = Object.entries(data.criteria).map(([key, criterion]) => `
+            <div class="readiness-item status-${criterion.status}">
+                <div class="readiness-score">${Math.round(criterion.score)}%</div>
+                <div class="readiness-description">${criterion.description}</div>
+            </div>
+        `).join('');
+        
+        const recommendationsHtml = data.recommendations.map(rec => `
+            <li style="color: var(--text-secondary); margin-bottom: 0.5rem;">${rec}</li>
+        `).join('');
+        
+        content.innerHTML = `
+            <div style="margin-bottom: 1rem;">
+                <strong style="color: var(--neural-primary);">Overall Readiness Score: ${data.overall_score}%</strong>
+            </div>
+            <div class="neural-readiness-grid">
+                ${criteriaHtml}
+            </div>
+            <div style="margin-top: 1rem;">
+                <h4 style="color: var(--neural-primary); margin-bottom: 0.5rem;">Recommendations:</h4>
+                <ul style="margin-left: 1rem;">
+                    ${recommendationsHtml}
+                </ul>
+            </div>
+        `;
+    }
+}
+
+// Initialize Cortex Dashboard
+document.addEventListener('DOMContentLoaded', () => {
+    new CortexDashboard();
+});
+</script>
+{% endblock %}

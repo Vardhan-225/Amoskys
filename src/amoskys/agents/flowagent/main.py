@@ -206,7 +206,7 @@ def start_health():
             else:
                 self.send_response(404)
                 self.end_headers()
-        def log_message(self, fmt, *args):
+        def log_message(self, format, *args):
             return
     threading.Thread(
         target=lambda: HTTPServer(("0.0.0.0", config.agent.health_port), H).serve_forever(),

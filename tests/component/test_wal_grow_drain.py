@@ -32,10 +32,19 @@ def make_env(i=0):
 
 def test_wal_grows_then_drains():
     import sys
-    env = os.environ.copy(); env["BUS_OVERLOAD"]="1"
+    env = os.environ.copy()
+    env["BUS_OVERLOAD"] = "1"
+    # Set up environment to ensure the subprocess can find imports
+    if 'PYTHONPATH' in env:
+        env['PYTHONPATH'] = f"src:{env['PYTHONPATH']}"
+    else:
+        env['PYTHONPATH'] = 'src'
+    
     bus = subprocess.Popen([sys.executable, "src/amoskys/eventbus/server.py"], env=env)
     assert wait_port(50051)
-    agent = subprocess.Popen([sys.executable, "src/amoskys/agents/flowagent/main.py"])
+    
+    # Agent also needs the same environment
+    agent = subprocess.Popen([sys.executable, "src/amoskys/agents/flowagent/main.py"], env=env)
     assert wait_port(8081)
     time.sleep(1.0)
     with mtls_channel() as ch:

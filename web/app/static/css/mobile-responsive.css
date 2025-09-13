@@ -1,0 +1,364 @@
+/*
+AMOSKYS Neural Security Command Platform
+Mobile Responsive Enhancements for Dashboard
+Phase 2.4 - Mobile Optimization
+*/
+
+/* Mobile-First Responsive Design */
+@media (max-width: 768px) {
+    /* Header Adjustments */
+    .neural-header {
+        padding: 10px 15px;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .neural-logo h1 {
+        font-size: 1.8rem;
+    }
+    
+    .neural-logo span {
+        font-size: 0.9rem;
+    }
+    
+    .neural-status {
+        flex-direction: column;
+        gap: 5px;
+        align-items: center;
+    }
+    
+    /* Navigation */
+    .dashboard-nav {
+        flex-direction: column;
+        gap: 5px;
+        padding: 10px;
+    }
+    
+    .nav-item {
+        text-align: center;
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+    
+    /* Main Content */
+    .dashboard-container {
+        padding: 15px 10px;
+        margin-top: 100px; /* Account for taller mobile header */
+    }
+    
+    /* Grid Layouts */
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .grid-2 {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .grid-3 {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    .grid-4 {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    /* Cards */
+    .neural-card {
+        padding: 15px;
+        margin-bottom: 10px;
+    }
+    
+    .card-header h3 {
+        font-size: 1.1rem;
+    }
+    
+    .metric-value {
+        font-size: 1.8rem;
+    }
+    
+    .metric-label {
+        font-size: 0.85rem;
+    }
+    
+    /* Charts */
+    .chart-container {
+        height: 250px;
+        margin: 10px 0;
+    }
+    
+    .chart-small {
+        height: 200px;
+    }
+    
+    /* Tables */
+    .event-table,
+    .agent-table {
+        font-size: 0.85rem;
+    }
+    
+    .event-table th,
+    .event-table td,
+    .agent-table th,
+    .agent-table td {
+        padding: 8px 4px;
+    }
+    
+    /* Hide less important columns on mobile */
+    .hide-mobile {
+        display: none !important;
+    }
+    
+    /* Status Indicators */
+    .status-indicator {
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .status-dot {
+        width: 8px;
+        height: 8px;
+    }
+    
+    /* Buttons */
+    .neural-btn {
+        padding: 8px 16px;
+        font-size: 0.9rem;
+        margin: 5px 2px;
+    }
+    
+    .btn-group {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    /* Modals */
+    .modal-content {
+        width: 95vw;
+        max-height: 90vh;
+        margin: 5vh auto;
+        padding: 20px;
+    }
+    
+    .modal-header h3 {
+        font-size: 1.2rem;
+    }
+    
+    /* Forms */
+    .form-group {
+        margin-bottom: 15px;
+    }
+    
+    .form-control {
+        padding: 10px;
+        font-size: 16px; /* Prevent zoom on iOS */
+    }
+    
+    /* Neural Effects - Reduce for mobile performance */
+    .neural-glow {
+        animation: none;
+    }
+    
+    .matrix-rain {
+        display: none;
+    }
+    
+    /* Scrollable containers */
+    .scrollable-mobile {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    /* Touch-friendly interactions */
+    .neural-card:hover {
+        transform: none; /* Disable hover effects on mobile */
+    }
+    
+    /* Swipe indicators */
+    .swipe-indicator {
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        padding: 5px;
+        display: block;
+    }
+}
+
+/* Tablet Responsive Design */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .metrics-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .chart-container {
+        height: 300px;
+    }
+}
+
+/* Landscape Mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+    .dashboard-container {
+        margin-top: 80px;
+    }
+    
+    .metrics-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .chart-container {
+        height: 200px;
+    }
+}
+
+/* Very Small Screens */
+@media (max-width: 480px) {
+    .neural-logo h1 {
+        font-size: 1.5rem;
+    }
+    
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .metric-value {
+        font-size: 1.5rem;
+    }
+    
+    .neural-card {
+        padding: 12px;
+    }
+    
+    .chart-container {
+        height: 200px;
+    }
+    
+    /* Stack everything vertically */
+    .grid-2,
+    .grid-3,
+    .grid-4 {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* Compact event list */
+    .event-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+        padding: 10px;
+    }
+    
+    .event-time {
+        font-size: 0.75rem;
+    }
+    
+    /* Simplified status */
+    .status-indicator {
+        font-size: 0.8rem;
+    }
+}
+
+/* Touch Device Optimizations */
+@media (hover: none) and (pointer: coarse) {
+    /* Remove hover effects on touch devices */
+    .neural-card:hover,
+    .nav-item:hover,
+    .neural-btn:hover {
+        transform: none;
+        box-shadow: inherit;
+    }
+    
+    /* Larger touch targets */
+    .neural-btn,
+    .nav-item {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    /* Prevent text selection issues */
+    .metric-value,
+    .status-dot {
+        user-select: none;
+        -webkit-user-select: none;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .neural-header,
+    .dashboard-nav,
+    .neural-btn {
+        display: none !important;
+    }
+    
+    .dashboard-container {
+        margin-top: 0;
+        padding: 0;
+    }
+    
+    .neural-card {
+        break-inside: avoid;
+        border: 1px solid #000;
+        margin-bottom: 10px;
+    }
+    
+    .chart-container {
+        height: 300px;
+    }
+    
+    /* Ensure dark theme content is visible when printed */
+    * {
+        color: #000 !important;
+        background: #fff !important;
+    }
+}
+
+/* Accessibility Enhancements */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation: none !important;
+        transition: none !important;
+    }
+    
+    .neural-glow,
+    .pulse-animation,
+    .matrix-rain {
+        animation: none !important;
+    }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+    :root {
+        --neural-primary: #00ff00;
+        --neural-secondary: #0099ff;
+        --neural-warning: #ffff00;
+        --neural-danger: #ff0000;
+        --text-primary: #ffffff;
+        --text-secondary: #ffffff;
+        --bg-primary: #000000;
+        --bg-secondary: #000000;
+    }
+    
+    .neural-card {
+        border: 2px solid var(--neural-primary);
+    }
+    
+    .status-dot {
+        border: 2px solid #fff;
+    }
+}

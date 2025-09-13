@@ -5,9 +5,7 @@ def canonical_bytes(env: pb.Envelope) -> bytes:
     clone.version = env.version
     clone.ts_ns = env.ts_ns
     clone.idempotency_key = env.idempotency_key
-    which = env.WhichOneof("payload")
-    if which == "flow":
+    # Only handle flow field as per current protobuf schema
+    if hasattr(env, 'flow') and env.flow.ByteSize() > 0:
         clone.flow.CopyFrom(env.flow)
-    elif which == "proc":
-        clone.proc.CopyFrom(env.proc)
     return clone.SerializeToString()

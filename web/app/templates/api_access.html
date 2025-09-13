@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMOSKYS API Access - Neural Security Command Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a, #1a1a2e, #16213e);
+            color: #00ff88;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        .logo {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #00ff88;
+            text-shadow: 0 0 20px #00ff88;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            color: #88ccff;
+            opacity: 0.8;
+        }
+        
+        .api-section {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #00ff88;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        .api-section h2 {
+            color: #00ff88;
+            border-bottom: 2px solid #00ff88;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .endpoint {
+            background: rgba(0, 255, 136, 0.1);
+            border-left: 4px solid #00ff88;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        
+        .method {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .method.post { background: #ff6b35; color: white; }
+        .method.get { background: #4CAF50; color: white; }
+        .method.put { background: #2196F3; color: white; }
+        
+        .code {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            color: #00ff88;
+            overflow-x: auto;
+        }
+        
+        .auth-info {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid #ffc107;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #ffc107;
+        }
+        
+        .nav-links {
+            text-align: center;
+            margin-top: 40px;
+        }
+        
+        .nav-links a {
+            color: #00ff88;
+            text-decoration: none;
+            margin: 0 20px;
+            padding: 10px 20px;
+            border: 1px solid #00ff88;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-links a:hover {
+            background: #00ff88;
+            color: #0a0a0a;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+        }
+        
+        .glow {
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from { text-shadow: 0 0 20px #00ff88; }
+            to { text-shadow: 0 0 30px #00ff88, 0 0 40px #00ff88; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="logo glow">AMOSKYS</h1>
+            <p class="subtitle">Neural Security Command Platform - API Gateway</p>
+        </div>
+
+        <div class="api-section">
+            <h2>🔐 Authentication</h2>
+            <p>All API endpoints (except health checks) require JWT authentication.</p>
+            
+            <div class="endpoint">
+                <span class="method post">POST</span>
+                <strong>/api/auth/login</strong> - Authenticate and get JWT token
+            </div>
+            
+            <div class="auth-info">
+                <strong>Test Credentials:</strong><br>
+                Agent ID: <code>flowagent-001</code><br>
+                Secret: <code>amoskys-neural-flow-secure-key-2025</code>
+            </div>
+            
+            <div class="code">
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "flowagent-001", "secret": "amoskys-neural-flow-secure-key-2025"}'
+            </div>
+        </div>
+
+        <div class="api-section">
+            <h2>🤖 Agent Management</h2>
+            <div class="endpoint">
+                <span class="method post">POST</span>
+                <strong>/api/agents/ping</strong> - Agent heartbeat with system metrics
+            </div>
+            <div class="endpoint">
+                <span class="method post">POST</span>
+                <strong>/api/agents/register</strong> - Register new agent
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <strong>/api/agents/list</strong> - List all registered agents
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <strong>/api/agents/stats</strong> - Agent statistics and metrics
+            </div>
+        </div>
+
+        <div class="api-section">
+            <h2>🚨 Event Management</h2>
+            <div class="endpoint">
+                <span class="method post">POST</span>
+                <strong>/api/events/submit</strong> - Submit security event
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <strong>/api/events/list</strong> - List events (with filtering)
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <strong>/api/events/schema</strong> - Event submission schema
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <strong>/api/events/stats</strong> - Event statistics and trends
+            </div>
+            
+            <div class="code">
+# Example event submission
+curl -X POST http://localhost:8000/api/events/submit \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_type": "network_anomaly",
+    "severity": "medium",
+    "source_ip": "192.168.1.100",
+    "description": "Unusual network activity detected"
+  }'
+            </div>
+        </div>
+
+        <div class="api-section">
+            <h2>🖥️ System Monitoring</h2>
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <strong>/api/system/health</strong> - System health (no auth required)
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <strong>/api/system/status</strong> - Platform status and metrics
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <strong>/api/system/info</strong> - Detailed system information
+            </div>
+            <div class="endpoint">
+                <span class="method get">GET</span>
+                <strong>/api/system/metrics</strong> - Performance metrics
+            </div>
+        </div>
+
+        <div class="nav-links">
+            <a href="/">← Home</a>
+            <a href="/command">Command Center</a>
+            <a href="/api/docs">📖 OpenAPI Docs</a>
+            <a href="/api/system/health">🏥 Health Check</a>
+        </div>
+    </div>
+</body>
+</html>

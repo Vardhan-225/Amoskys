@@ -48,6 +48,11 @@ def bus_overloaded(certs):
     env = os.environ.copy()
     env["BUS_SERVER_PORT"] = "50052"  # Use different port to avoid conflicts
     env["BUS_METRICS_DISABLE"] = "1"  # Disable metrics to avoid port contention
+    # Set up environment to ensure the subprocess can find imports
+    if 'PYTHONPATH' in env:
+        env['PYTHONPATH'] = f"src:{env['PYTHONPATH']}"
+    else:
+        env['PYTHONPATH'] = 'src'
 
     repo_root = os.path.abspath(os.path.dirname(__file__) + "/../..")
     python_path = sys.executable
