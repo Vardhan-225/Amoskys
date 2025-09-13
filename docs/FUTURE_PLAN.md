@@ -1,8 +1,8 @@
-# InfraSpectre Future Plan: Phase 2 AI Detection Engine
+# Amoskys Future Plan: Phase 2 AI Detection Engine
 
 ## Vision Statement
 
-Transform InfraSpectre from a **data collection platform** into an **intelligent threat detection system** using multi-layer AI analysis inspired by biological neural processing. Phase 2 will deliver real-time, adaptive threat detection with < 50ms latency and > 95% accuracy.
+Transform Amoskys from a **data collection platform** into an **intelligent threat detection system** using multi-layer AI analysis inspired by biological neural processing. Phase 2 will deliver real-time, adaptive threat detection with < 50ms latency and > 95% accuracy.
 
 ## Strategic Overview
 
@@ -51,7 +51,7 @@ Network Traffic → [Axon] → [Soma] → [Cortex] → [Reflex] → Threat Score
 ### Component Integration
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    InfraSpectre Phase 2 Stack                  │
+│                    Amoskys Phase 2 Stack                  │
 ├─────────────────┬─────────────────┬─────────────────────────────┤
 │  Data Layer     │  Processing     │  Intelligence Layer         │
 │                 │  Layer          │                             │
@@ -77,7 +77,7 @@ Network Traffic → [Axon] → [Soma] → [Cortex] → [Reflex] → Threat Score
 
 #### New Components
 ```
-src/infraspectre/
+src/amoskys/
 ├── pcap/
 │   ├── capture.py              # Live packet capture using libpcap
 │   ├── reader.py               # PCAP file processing for batch analysis
@@ -785,8 +785,8 @@ models:
 
 ## Conclusion
 
-Phase 2 transforms InfraSpectre from a reliable data platform into an intelligent threat detection system that rivals commercial solutions while maintaining open-source flexibility. The multi-layer neural architecture provides both high accuracy and explainable results, essential for enterprise security operations.
+Phase 2 transforms Amoskys from a reliable data platform into an intelligent threat detection system that rivals commercial solutions while maintaining open-source flexibility. The multi-layer neural architecture provides both high accuracy and explainable results, essential for enterprise security operations.
 
 Building on the solid Phase 1 foundation, Phase 2 can focus purely on detection intelligence rather than infrastructure concerns. The modular architecture enables rapid experimentation and iteration, while the comprehensive observability ensures production-ready operations from day one.
 
-Upon completion, InfraSpectre will be positioned as a leading open-source security platform, enabling organizations worldwide to defend against sophisticated cyber threats with state-of-the-art AI detection capabilities.
+Upon completion, Amoskys will be positioned as a leading open-source security platform, enabling organizations worldwide to defend against sophisticated cyber threats with state-of-the-art AI detection capabilities.

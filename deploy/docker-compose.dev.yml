@@ -4,8 +4,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.eventbus
-    image: infraspectre/eventbus:dev
-    container_name: is_eventbus
+    image: amoskys/eventbus:dev
+    container_name: amoskys_eventbus
     environment:
       BUS_OVERLOAD: "0"
       BUS_MAX_INFLIGHT: "100"
@@ -37,8 +37,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.agent
-    image: infraspectre/agent:dev
-    container_name: is_agent
+    image: amoskys/agent:dev
+    container_name: amoskys_agent
     depends_on:
       eventbus:
         condition: service_healthy
@@ -64,7 +64,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.54.1
-    container_name: is_prom
+    container_name: amoskys_prom
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -76,7 +76,7 @@ services:
 
   grafana:
     image: grafana/grafana:11.1.0
-    container_name: is_grafana
+    container_name: amoskys_grafana
     ports: ["3000:3000"]
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin

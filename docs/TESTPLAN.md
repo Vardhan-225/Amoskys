@@ -1,10 +1,10 @@
-# InfraSpectre Testing Philosophy & Coverage
+# Amoskys Testing Philosophy & Coverage
 
 **Purpose**: Comprehensive testing strategy ensuring reliability, security, and performance at scale.
 
 ## 🎯 Testing Philosophy
 
-InfraSpectre follows a **defense-in-depth testing approach** with multiple layers of validation:
+Amoskys follows a **defense-in-depth testing approach** with multiple layers of validation:
 
 ```
 ┌─────────────────────────────────────────────────────────┐

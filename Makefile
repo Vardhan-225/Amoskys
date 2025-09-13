@@ -1,11 +1,11 @@
-# Makefile — InfraSpectre Phase 1 Clean Structure
+# Makefile — Amoskys Phase 1 Clean Structure
 
 # Configuration
 PYTHON := python3
 PIP := pip
 PROTO_DIR := proto
 SRC_DIR := src
-STUBS_DIR := $(SRC_DIR)/infraspectre/proto
+STUBS_DIR := $(SRC_DIR)/amoskys/proto
 CONFIG_DIR := config
 DATA_DIR := data
 DOCS_DIR := docs
@@ -16,20 +16,20 @@ VENV_PYTHON := $(VENV_DIR)/bin/python
 VENV_PIP := $(VENV_DIR)/bin/pip
 
 # Entry points
-EVENTBUS_ENTRY := ./infraspectre-eventbus
-AGENT_ENTRY := ./infraspectre-agent
+EVENTBUS_ENTRY := ./amoskys-eventbus
+AGENT_ENTRY := ./amoskys-agent
 
 # Targets
 .PHONY: help setup venv install-deps proto clean run-eventbus run-agent run-all test fmt lint certs ed25519 check loadgen chaos docs validate-config
 
 help: ## Show this help message
-	@echo "InfraSpectre Development Commands"
-	@echo "================================="
+	@echo "Amoskys Development Commands"
+	@echo "============================"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # Setup and Installation
 setup: venv install-deps proto dirs certs ## Complete development setup
-	@echo "✅ InfraSpectre development environment ready"
+	@echo "✅ Amoskys development environment ready"
 
 venv: ## Create Python virtual environment
 	@if [ ! -d "$(VENV_DIR)" ]; then \
@@ -74,15 +74,15 @@ clean: ## Clean generated files and caches
 
 # Running Services
 run-eventbus: ## Start the EventBus server
-	@echo "Starting InfraSpectre EventBus..."
+	@echo "Starting Amoskys EventBus..."
 	$(EVENTBUS_ENTRY)
 
 run-agent: ## Start the FlowAgent
-	@echo "Starting InfraSpectre Agent..."
+	@echo "Starting Amoskys Agent..."
 	$(AGENT_ENTRY)
 
 run-all: ## Start all services with Docker Compose
-	@echo "Starting all InfraSpectre services..."
+	@echo "Starting all Amoskys services..."
 	docker compose -f deploy/docker-compose.dev.yml up -d
 	@sleep 3
 	@curl -sS -i http://127.0.0.1:8081/healthz || echo "Agent health check failed"
@@ -137,7 +137,7 @@ fmt: ## Format code with black
 
 lint: venv ## Run linting checks
 	$(VENV_PYTHON) -m flake8 $(SRC_DIR) tests/ --max-line-length=88 --extend-ignore=E203,W503
-	$(VENV_PYTHON) -m mypy $(SRC_DIR)/infraspectre/ --ignore-missing-imports
+	$(VENV_PYTHON) -m mypy $(SRC_DIR)/amoskys/ --ignore-missing-imports
 	@echo "✅ Linting passed"
 
 # Security and Certificates
@@ -154,11 +154,11 @@ ed25519: ## Generate Ed25519 signing keys
 # Configuration
 validate-config: ## Validate configuration
 	@echo "Validating configuration..."
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m infraspectre.config --validate
+	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m amoskys.config --validate
 	@echo "✅ Configuration is valid"
 
 dump-config: ## Show current configuration
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m infraspectre.config --dump
+	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m amoskys.config --dump
 
 # Tools and Utilities
 loadgen: ## Run load generator
@@ -188,8 +188,8 @@ logs-agent: ## Show Agent logs
 # Build and Package
 build-docker: ## Build Docker images
 	@echo "Building Docker images..."
-	@docker build -f deploy/Dockerfile.eventbus -t infraspectre/eventbus:dev .
-	@docker build -f deploy/Dockerfile.agent -t infraspectre/agent:dev .
+	@docker build -f deploy/Dockerfile.eventbus -t amoskys/eventbus:dev .
+	@docker build -f deploy/Dockerfile.agent -t amoskys/agent:dev .
 	@echo "✅ Docker images built"
 
 # Development workflow targets
@@ -203,7 +203,7 @@ format: venv ## Format code with black and isort
 	@echo "✅ Code formatted"
 
 test-coverage: venv proto ## Run tests with coverage report
-	$(VENV_PYTHON) -m pytest tests/ --cov=$(SRC_DIR)/infraspectre --cov-report=html --cov-report=term
+	$(VENV_PYTHON) -m pytest tests/ --cov=$(SRC_DIR)/amoskys --cov-report=html --cov-report=term
 	@echo "✅ Coverage report generated in htmlcov/"
 
 security-scan: venv ## Run security scans

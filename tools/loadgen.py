@@ -3,7 +3,7 @@ import time, os, grpc, random, argparse, sys
 # Add src directory to path for infraspectre imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from infraspectre.proto import messaging_schema_pb2 as pb, messaging_schema_pb2_grpc as pbrpc
+from amoskys.proto import messaging_schema_pb2 as pb, messaging_schema_pb2_grpc as pbrpc
 
 def channel(cert_dir):
     with open(os.path.join(cert_dir,"ca.crt"),"rb") as f: ca=f.read()

@@ -1,6 +1,6 @@
-# InfraSpectre Documentation
+# Amoskys Documentation
 
-This directory contains comprehensive documentation for the InfraSpectre security monitoring system. The documentation is organized by functional area to provide clear guidance for different user roles and use cases.
+This directory contains comprehensive documentation for the Amoskys security monitoring system. The documentation is organized by functional area to provide clear guidance for different user roles and use cases.
 
 ## 📚 Documentation Index
 
@@ -92,4 +92,4 @@ Documentation is maintained as a living resource and updated with:
 
 ---
 
-*This documentation suite represents the comprehensive technical foundation for InfraSpectre, supporting development, operations, and strategic planning activities.*
+*This documentation suite represents the comprehensive technical foundation for Amoskys, supporting development, operations, and strategic planning activities.*

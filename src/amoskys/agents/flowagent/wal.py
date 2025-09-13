@@ -1,6 +1,6 @@
 import sqlite3, time, os
 from typing import Callable
-from infraspectre.proto import messaging_schema_pb2 as pb
+from amoskys.proto import messaging_schema_pb2 as pb
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;

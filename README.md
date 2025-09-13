@@ -1,10 +1,10 @@
-# InfraSpectre
+# Amoskys
 
-**InfraSpectre** is a security-focused infrastructure monitoring system designed to collect, process, and analyze security-relevant events from distributed environments in real-time.
+**Amoskys** is a security-focused infrastructure monitoring system designed to collect, process, and analyze security-relevant events from distributed environments in real-time.
 
 ## 🎯 Overview
 
-InfraSpectre provides a foundation for building security detection and monitoring capabilities through:
+Amoskys provides a foundation for building security detection and monitoring capabilities through:
 
 - **Event Collection**: Distributed agents collect network flows, process events, and system activities
 - **Secure Transport**: All communication secured with mTLS and Ed25519 cryptographic signatures
@@ -48,8 +48,8 @@ InfraSpectre provides a foundation for building security detection and monitorin
 
 ```bash
 # Clone the repository
-git clone https://github.com/Vardhan-225/InfraSpectre.git
-cd InfraSpectre
+git clone https://github.com/Vardhan-225/Amoskys.git
+cd Amoskys
 
 # Complete setup (creates venv, installs deps, generates certs, builds protos)
 make setup
@@ -72,7 +72,7 @@ make ed25519
 make run-eventbus
 
 # Or with custom configuration
-./infraspectre-eventbus --config config/infraspectre.yaml --port 50052
+./amoskys-eventbus --config config/amoskys.yaml --port 50052
 ```
 
 ### 4. Start FlowAgent
@@ -82,7 +82,7 @@ make run-eventbus
 make run-agent
 
 # Or run directly
-./infraspectre-agent --config config/infraspectre.yaml
+./amoskys-agent --config config/amoskys.yaml
 ```
 
 ### 5. Verify System Health
@@ -100,7 +100,7 @@ curl http://localhost:9101/metrics
 
 ## 📊 Monitoring & Metrics
 
-InfraSpectre provides observability through Prometheus metrics:
+Amoskys provides observability through Prometheus metrics:
 
 ### EventBus Metrics
 - `bus_publish_total` - Total publish requests
@@ -138,7 +138,7 @@ make run-all
 
 ### Configuration File
 
-Create `config/infraspectre.yaml`:
+Create `config/amoskys.yaml`:
 
 ```yaml
 eventbus:
@@ -169,10 +169,10 @@ python -m pytest tests/component/
 python -m pytest tests/integration/
 
 # Run with coverage
-python -m pytest --cov=src/infraspectre tests/
+python -m pytest --cov=src/amoskys tests/
 
 # Validate configuration
-python src/infraspectre/config.py --validate
+python src/amoskys/config.py --validate
 ```
 
 ## 🏭 Production Deployment
@@ -197,7 +197,7 @@ docker compose -f deploy/docker-compose.dev.yml ps
 kubectl apply -f deploy/k8s/
 
 # Check deployment
-kubectl get pods -l app=infraspectre
+kubectl get pods -l app=amoskys
 ```
 
 ### Systemd Services
@@ -208,8 +208,8 @@ sudo cp deploy/systemd/*.service /etc/systemd/system/
 sudo systemctl daemon-reload
 
 # Start services
-sudo systemctl enable --now infraspectre-eventbus
-sudo systemctl enable --now infraspectre-agent
+sudo systemctl enable --now amoskys-eventbus
+sudo systemctl enable --now amoskys-agent
 ```
 
 ## 🔒 Security Features
@@ -234,8 +234,8 @@ sudo systemctl enable --now infraspectre-agent
 ### Project Structure
 
 ```
-InfraSpectre/
-├── src/infraspectre/           # Main source code
+Amoskys/
+├── src/amoskys/                # Main source code
 │   ├── config.py               # Configuration management
 │   ├── agents/                 # Agent implementations
 │   ├── eventbus/               # EventBus server
@@ -255,9 +255,9 @@ InfraSpectre/
 
 ### Adding New Agents
 
-1. Create agent directory: `src/infraspectre/agents/newagent/`
+1. Create agent directory: `src/amoskys/agents/newagent/`
 2. Implement agent interface in `main.py`
-3. Add configuration to `config/infraspectre.yaml`
+3. Add configuration to `config/amoskys.yaml`
 4. Create tests in `tests/unit/test_newagent.py`
 5. Update documentation
 
@@ -315,11 +315,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For technical support and community engagement:
 
-- **Issue Reports**: [GitHub Issues](https://github.com/Vardhan-225/InfraSpectre/issues)
-- **Feature Requests**: [GitHub Issues](https://github.com/Vardhan-225/InfraSpectre/issues)
-- **Community Discussion**: [GitHub Discussions](https://github.com/Vardhan-225/InfraSpectre/discussions)
-- **Documentation**: [Project Documentation](https://github.com/Vardhan-225/InfraSpectre/tree/main/docs)
+- **Issue Reports**: [GitHub Issues](https://github.com/Vardhan-225/Amoskys/issues)
+- **Feature Requests**: [GitHub Issues](https://github.com/Vardhan-225/Amoskys/issues)
+- **Community Discussion**: [GitHub Discussions](https://github.com/Vardhan-225/Amoskys/discussions)
+- **Documentation**: [Project Documentation](https://github.com/Vardhan-225/Amoskys/tree/main/docs)
 
 ---
 
-**InfraSpectre** - *Security monitoring that doesn't sleep* 🛡️
+**Amoskys** - *Neural security orchestration that evolves* 🧠🛡️

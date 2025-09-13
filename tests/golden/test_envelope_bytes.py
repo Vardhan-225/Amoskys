@@ -1,5 +1,5 @@
 import pathlib, hashlib
-from infraspectre.proto import messaging_schema_pb2 as pb
+from amoskys.proto import messaging_schema_pb2 as pb
 
 GOLD = pathlib.Path("tests/golden/envelope_v1.bin")
 HASH = pathlib.Path("tests/golden/envelope_v1.sha256")

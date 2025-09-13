@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-InfraSpectre Configuration Management
+Amoskys Configuration Management
 
-This module provides centralized configuration for the entire InfraSpectre system.
+This module provides centralized configuration for the entire Amoskys system.
 It loads configuration from environment variables, YAML files, and provides validation.
 """
 
@@ -68,7 +68,7 @@ class StorageConfig:
 
 
 @dataclass
-class InfraSpectreConfig:
+class AmoskysConfig:
     """Main configuration container"""
     eventbus: EventBusConfig = field(default_factory=EventBusConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
@@ -76,7 +76,7 @@ class InfraSpectreConfig:
     storage: StorageConfig = field(default_factory=StorageConfig)
     
     @classmethod
-    def from_env(cls) -> 'InfraSpectreConfig':
+    def from_env(cls) -> 'AmoskysConfig':
         """Load configuration from environment variables"""
         config = cls()
         
@@ -113,7 +113,7 @@ class InfraSpectreConfig:
         return config
     
     @classmethod
-    def from_yaml(cls, yaml_path: str) -> 'InfraSpectreConfig':
+    def from_yaml(cls, yaml_path: str) -> 'AmoskysConfig':
         """Load configuration from YAML file"""
         with open(yaml_path, 'r') as f:
             data = yaml.safe_load(f)
@@ -189,19 +189,19 @@ class InfraSpectreConfig:
 
 
 # Global configuration instance
-_config: Optional[InfraSpectreConfig] = None
+_config: Optional[AmoskysConfig] = None
 
 
-def get_config() -> InfraSpectreConfig:
+def get_config() -> AmoskysConfig:
     """Get the global configuration instance"""
     global _config
     if _config is None:
         # Try to load from config.yaml first, then fall back to environment
-        config_path = Path("config/infraspectre.yaml")
+        config_path = Path("config/amoskys.yaml")
         if config_path.exists():
-            _config = InfraSpectreConfig.from_yaml(str(config_path))
+            _config = AmoskysConfig.from_yaml(str(config_path))
         else:
-            _config = InfraSpectreConfig.from_env()
+            _config = AmoskysConfig.from_env()
         
         # Validate configuration
         if not _config.validate():
@@ -213,7 +213,7 @@ def get_config() -> InfraSpectreConfig:
     return _config
 
 
-def init_config(config: InfraSpectreConfig):
+def init_config(config: AmoskysConfig):
     """Initialize global configuration"""
     global _config
     _config = config
@@ -223,7 +223,7 @@ if __name__ == "__main__":
     # CLI tool for configuration management
     import argparse
     
-    parser = argparse.ArgumentParser(description="InfraSpectre Configuration Tool")
+    parser = argparse.ArgumentParser(description="Amoskys Configuration Tool")
     parser.add_argument("--dump", action="store_true", help="Dump current configuration")
     parser.add_argument("--validate", action="store_true", help="Validate configuration")
     parser.add_argument("--config", help="Path to configuration YAML file")
@@ -231,9 +231,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.config:
-        config = InfraSpectreConfig.from_yaml(args.config)
+        config = AmoskysConfig.from_yaml(args.config)
     else:
-        config = InfraSpectreConfig.from_env()
+        config = AmoskysConfig.from_env()
     
     if args.validate:
         if config.validate():

@@ -1,5 +1,5 @@
-# InfraSpectre Configuration
-# This file defines the default configuration for InfraSpectre components
+# Amoskys Configuration
+# This file defines the default configuration for Amoskys neural components
 # Environment variables will override these values
 
 eventbus:

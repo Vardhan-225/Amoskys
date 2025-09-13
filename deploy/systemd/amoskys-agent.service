@@ -1,16 +1,16 @@
 [Unit]
-Description=InfraSpectre EventBus (gRPC + metrics + health)
+Description=Amoskys Agent (Distributed intelligence node)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%E{HOME}/infraspectre
-ExecStart=/usr/bin/env python3 InfraSpectre/common/eventbus/server.py
+WorkingDirectory=%E{HOME}/amoskys
+ExecStart=%E{HOME}/amoskys/amoskys-agent
 ExecReload=/bin/kill -HUP $MAINPID
 
-User=infra
-Group=infra
+User=amoskys
+Group=amoskys
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -23,11 +23,9 @@ RestrictRealtime=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 
-ReadWritePaths=%E{HOME}/infraspectre/certs
+ReadWritePaths=%E{HOME}/amoskys/data
+ReadWritePaths=%E{HOME}/amoskys/certs
 Environment=PYTHONUNBUFFERED=1
-Environment=BUS_OVERLOAD=0
-Environment=BUS_MAX_INFLIGHT=100
-Environment=BUS_HARD_MAX=500
 LimitNOFILE=65535
 
 Restart=always

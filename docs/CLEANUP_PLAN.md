@@ -1,25 +1,25 @@
-# InfraSpectre Phase 1 Foundation Cleanup Plan
+# Amoskys Phase 1 Foundation Cleanup Plan
 
 ## 🎯 Objective
-Transform InfraSpectre from a messy prototype into a clean, production-ready foundation for building advanced detection logic.
+Transform Amoskys from a messy prototype into a clean, production-ready foundation for building advanced detection logic.
 
 ## 🧹 Current Structure Issues
 
 ### ❌ Problems to Fix
 ```
-├── InfraSpectre/                    # DUPLICATE: Remove this entire directory
+├── Amoskys/                    # DUPLICATE: Remove this entire directory
 │   ├── agents/flowagent/           # Move to top-level agents/
 │   ├── common/eventbus/            # Move to top-level src/
 │   ├── proto_stubs/                # Move to top-level src/
 │   └── requirements.txt            # Consolidate with root
 ├── common/eventbus/                # DUPLICATE: Remove after moving logic
-├── agents/flowagent/               # OUTDATED: Replace with InfraSpectre version
+├── agents/flowagent/               # OUTDATED: Replace with Amoskys version
 └── Multiple .venv directories      # CONSOLIDATE: Keep only root .venv
 ```
 
 ## ✅ Target Clean Structure
 ```
-InfraSpectre/
+Amoskys/
 ├── .env.example                    # Configuration template
 ├── .gitignore                      # Updated to ignore data/, logs/, .env
 ├── README.md                       # Complete documentation

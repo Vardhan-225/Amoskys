@@ -1,8 +1,8 @@
-# InfraSpectre Phase 2: Detection Engine Implementation Plan
+# Amoskys Phase 2: Detection Engine Implementation Plan
 
 ## Executive Summary
 
-Phase 2 transforms InfraSpectre from a solid infrastructure platform into an intelligent threat detection system. Building on our production-ready foundation, we'll implement AI-powered network analysis capabilities using a multi-layer neural architecture inspired by biological cognition.
+Phase 2 transforms Amoskys from a solid infrastructure platform into an intelligent threat detection system. Building on our production-ready foundation, we'll implement AI-powered network analysis capabilities using a multi-layer neural architecture inspired by biological cognition.
 
 ## Phase 2 Objectives
 
@@ -120,7 +120,7 @@ class ReflexDecision:
 
 **Components**:
 ```
-src/infraspectre/
+src/amoskys/
 ├── pcap/
 │   ├── capture.py           # Live packet capture
 │   ├── reader.py            # PCAP file processing  
@@ -143,7 +143,7 @@ src/infraspectre/
 
 **Components**:
 ```
-src/infraspectre/detection/
+src/amoskys/detection/
 ├── axon/
 │   ├── feature_engine.py    # Core feature extraction
 │   ├── packet_analyzer.py   # Deep packet inspection
@@ -162,7 +162,7 @@ src/infraspectre/detection/
 
 **Components**:
 ```
-src/infraspectre/detection/
+src/amoskys/detection/
 ├── soma/
 │   ├── signature_engine.py  # Rule-based detection
 │   ├── anomaly_detector.py  # Statistical anomaly detection
@@ -181,7 +181,7 @@ src/infraspectre/detection/
 
 **Components**:
 ```
-src/infraspectre/detection/
+src/amoskys/detection/
 ├── cortex/
 │   ├── correlator.py        # Cross-flow correlation
 │   ├── context_manager.py   # Business context integration
@@ -200,7 +200,7 @@ src/infraspectre/detection/
 
 **Components**:
 ```
-src/infraspectre/detection/
+src/amoskys/detection/
 ├── reflex/
 │   ├── decision_engine.py   # Final scoring logic
 │   ├── confidence_calc.py   # Confidence assessment
@@ -427,7 +427,7 @@ class DetectionAccuracyTest:
 
 ## Phase 2 Success Marks Transition to Production
 
-Upon completion of Phase 2, InfraSpectre will be:
+Upon completion of Phase 2, Amoskys will be:
 - **Research-Ready**: Platform for security research and experimentation
 - **Production-Deployed**: Enterprise-grade threat detection system
 - **AI-Powered**: Intelligent, adaptive security analysis
@@ -435,4 +435,4 @@ Upon completion of Phase 2, InfraSpectre will be:
 
 The foundation from Phase 1 enables rapid Phase 2 development. By building on our secure, reliable, observable platform, we can focus purely on detection intelligence rather than infrastructure concerns.
 
-Phase 3 will add enterprise features (compliance reporting, integration APIs, management dashboards), but Phase 2 delivers the core detection value that makes InfraSpectre revolutionary.
+Phase 3 will add enterprise features (compliance reporting, integration APIs, management dashboards), but Phase 2 delivers the core detection value that makes Amoskys revolutionary.

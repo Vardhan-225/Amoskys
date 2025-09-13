@@ -1,4 +1,4 @@
-# InfraSpectre Backpressure & Incident Response Runbook
+# Amoskys Backpressure & Incident Response Runbook
 
 ## Quick Reference
 
@@ -113,7 +113,7 @@ Metrics:
 #!/bin/bash
 # Quick system health assessment
 
-echo "=== InfraSpectre Health Check ==="
+echo "=== Amoskys Health Check ==="
 echo "Timestamp: $(date)"
 echo
 
@@ -479,32 +479,32 @@ groups:
   rules:
   
   # Level 2: Backpressure Engaged
-  - alert: InfraSpectreBackpressureEngaged
+  - alert: AmoskysBackpressureEngaged
     expr: infraspectre_eventbus_overload_mode == 1
     for: 1m
     labels:
       severity: warning
     annotations:
-      summary: "InfraSpectre EventBus backpressure engaged"
+      summary: "Amoskys EventBus backpressure engaged"
       description: "EventBus queue depth triggered backpressure mode"
 
   # Level 3: High WAL Queue
-  - alert: InfraSpectreHighWALQueue
+  - alert: AmoskysHighWALQueue
     expr: infraspectre_agent_wal_events_queued > 1000
     for: 2m
     labels:
       severity: critical
     annotations:
-      summary: "InfraSpectre Agent WAL queue very high"
+      summary: "Amoskys Agent WAL queue very high"
       description: "Agent WAL queue at {{ $value }} events, data loss risk"
 
   # Level 4: Data Loss
-  - alert: InfraSpectreDataLoss
+  - alert: AmoskysDataLoss
     expr: increase(infraspectre_agent_wal_events_dropped_total[5m]) > 0
     labels:
       severity: critical
     annotations:
-      summary: "InfraSpectre data loss detected"
+      summary: "Amoskys data loss detected"
       description: "{{ $value }} events dropped in last 5 minutes"
 ```
 
@@ -524,13 +524,13 @@ while true; do
     # Check for concerning conditions
     if [ "$QUEUE_DEPTH" -gt 200 ]; then
         curl -X POST -H 'Content-type: application/json' \
-            --data '{"text":"🚨 InfraSpectre EventBus queue very high: '$QUEUE_DEPTH'"}' \
+            --data '{"text":"🚨 Amoskys EventBus queue very high: '$QUEUE_DEPTH'"}' \
             "$ALERT_WEBHOOK"
     fi
     
     if [ "$WAL_QUEUE" -gt 1000 ]; then
         curl -X POST -H 'Content-type: application/json' \
-            --data '{"text":"⚠️ InfraSpectre Agent WAL queue high: '$WAL_QUEUE'"}' \
+            --data '{"text":"⚠️ Amoskys Agent WAL queue high: '$WAL_QUEUE'"}' \
             "$ALERT_WEBHOOK"
     fi
     

@@ -1,15 +1,15 @@
-# InfraSpectre Component Documentation
+# Amoskys Component Documentation
 
 ## Overview
 
-This document provides **comprehensive technical documentation** for every component in the InfraSpectre system. Each component is analyzed in detail with implementation specifics, interfaces, configuration options, and operational characteristics.
+This document provides **comprehensive technical documentation** for every component in the Amoskys system. Each component is analyzed in detail with implementation specifics, interfaces, configuration options, and operational characteristics.
 
 ## Component Architecture
 
 ### System-Level Architecture
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    InfraSpectre System                         │
+│                    Amoskys System                         │
 ├─────────────────┬─────────────────┬─────────────────────────────┤
 │  Core Services  │  Infrastructure │  Operational Support       │
 │                 │  Components     │                             │
@@ -30,7 +30,7 @@ This document provides **comprehensive technical documentation** for every compo
 
 ## Core Service Components
 
-### 1. EventBus Server (`src/infraspectre/eventbus/server.py`)
+### 1. EventBus Server (`src/amoskys/eventbus/server.py`)
 
 #### Purpose
 Central message routing and processing hub that receives events from agents, validates them, and coordinates distribution to downstream systems.
@@ -129,7 +129,7 @@ class EventBusErrors:
 - **Connections**: Supports 1000+ concurrent agent connections
 - **Reliability**: 99.9% uptime with graceful degradation
 
-### 2. FlowAgent (`src/infraspectre/agents/flowagent/main.py`)
+### 2. FlowAgent (`src/amoskys/agents/flowagent/main.py`)
 
 #### Purpose
 Distributed data collection agent that captures network flows, extracts metadata, and reliably transmits events to the EventBus with WAL-based persistence.
@@ -231,7 +231,7 @@ class AgentState(Enum):
     ERROR = "error"                 # Error state requiring intervention
 ```
 
-### 3. Write-Ahead Log (WAL) (`src/infraspectre/agents/flowagent/wal_sqlite.py`)
+### 3. Write-Ahead Log (WAL) (`src/amoskys/agents/flowagent/wal_sqlite.py`)
 
 #### Purpose
 Reliable event persistence system that ensures no data loss during network outages, EventBus unavailability, or agent restarts.
@@ -319,7 +319,7 @@ class WALManager:
         """Import events from external source"""
 ```
 
-### 4. Configuration Management (`src/infraspectre/config.py`)
+### 4. Configuration Management (`src/amoskys/config.py`)
 
 #### Purpose
 Centralized configuration system that provides type-safe, validated configuration loading with environment variable overrides and YAML file support.
@@ -327,7 +327,7 @@ Centralized configuration system that provides type-safe, validated configuratio
 #### Technical Specifications
 ```python
 @dataclass
-class InfraSpectreConfig:
+class AmoskysConfig:
     """Complete system configuration with validation"""
     eventbus: EventBusConfig
     agent: AgentConfig
@@ -335,7 +335,7 @@ class InfraSpectreConfig:
     storage: StorageConfig
     
     @classmethod
-    def load(cls, config_path: Optional[str] = None) -> 'InfraSpectreConfig':
+    def load(cls, config_path: Optional[str] = None) -> 'AmoskysConfig':
         """Load configuration from YAML with environment overrides"""
         
     def validate(self) -> ValidationResult:
@@ -410,7 +410,7 @@ export IS_LOG_LEVEL=DEBUG
 
 ## Infrastructure Components
 
-### 5. Cryptographic Services (`src/infraspectre/common/crypto/`)
+### 5. Cryptographic Services (`src/amoskys/common/crypto/`)
 
 #### Purpose
 Comprehensive cryptographic functionality including Ed25519 message signing, certificate management, and secure communication primitives.
@@ -450,7 +450,7 @@ class CanonicalProcessor:
         """Verify envelope signature against canonical form"""
 ```
 
-### 6. Protocol Buffer Definitions (`src/infraspectre/proto/`)
+### 6. Protocol Buffer Definitions (`src/amoskys/proto/`)
 
 #### Message Schema (`messaging_schema.proto`)
 ```protobuf
@@ -600,7 +600,7 @@ class HealthChecker:
 ```json
 {
   "dashboard": {
-    "title": "InfraSpectre System Overview",
+    "title": "Amoskys System Overview",
     "panels": [
       {
         "title": "Message Throughput",
@@ -671,8 +671,8 @@ setup-dev: setup
 # Build operations
 proto:
 	python -m grpc_tools.protoc -I proto \
-		--python_out=src/infraspectre/proto \
-		--grpc_python_out=src/infraspectre/proto \
+		--python_out=src/amoskys/proto \
+		--grpc_python_out=src/amoskys/proto \
 		proto/messaging_schema.proto
 
 clean:
@@ -685,7 +685,7 @@ test:
 	pytest tests/ -v
 
 test-coverage:
-	pytest tests/ --cov=src/infraspectre --cov-report=html
+	pytest tests/ --cov=src/amoskys --cov-report=html
 
 # Service operations
 run-eventbus:
@@ -737,7 +737,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 def main():
-    parser = argparse.ArgumentParser(description="InfraSpectre EventBus Server")
+    parser = argparse.ArgumentParser(description="Amoskys EventBus Server")
     parser.add_argument("--overload", choices=["on", "off", "auto"],
                        help="Override overload behavior")
     parser.add_argument("--config", help="Path to configuration YAML file")
@@ -797,7 +797,7 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
-    "--cov=src/infraspectre",
+    "--cov=src/amoskys",
     "--cov-branch",
     "--cov-report=term-missing:skip-covered",
     "--cov-report=html:htmlcov",
@@ -818,7 +818,7 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["src/infraspectre"]
+source = ["src/amoskys"]
 omit = [
     "*/tests/*",
     "*/test_*.py",
@@ -970,4 +970,4 @@ restart_infraspectre() {
 }
 ```
 
-This comprehensive component documentation provides the technical depth needed to understand, maintain, and extend every aspect of the InfraSpectre system.
+This comprehensive component documentation provides the technical depth needed to understand, maintain, and extend every aspect of the Amoskys system.

@@ -1,4 +1,4 @@
-# InfraSpectre Migration Plan - Phase 1 Foundation Cleanup
+# Amoskys Migration Plan - Phase 1 Foundation Cleanup
 
 ## Current Status
 ✅ New directory structure created
@@ -7,30 +7,30 @@
 
 ## Migration Mapping
 
-### Source Files (InfraSpectre/) → Target (src/infraspectre/)
+### Source Files (Amoskys/) → Target (src/amoskys/)
 ```
-./InfraSpectre/agents/flowagent/main.py → src/infraspectre/agents/flowagent/main.py
-./InfraSpectre/agents/flowagent/wal_sqlite.py → src/infraspectre/agents/flowagent/wal_sqlite.py
-./InfraSpectre/common/crypto/signing.py → src/infraspectre/common/crypto/signing.py
-./InfraSpectre/common/crypto/canonical.py → src/infraspectre/common/crypto/canonical.py
-./InfraSpectre/common/eventbus/server.py → src/infraspectre/eventbus/server.py
-./InfraSpectre/proto_stubs/* → src/infraspectre/proto/*
-./InfraSpectre/common/eventbus/trust_map.yaml → config/trust_map.yaml
+./Amoskys/agents/flowagent/main.py → src/amoskys/agents/flowagent/main.py
+./Amoskys/agents/flowagent/wal_sqlite.py → src/amoskys/agents/flowagent/wal_sqlite.py
+./Amoskys/common/crypto/signing.py → src/amoskys/common/crypto/signing.py
+./Amoskys/common/crypto/canonical.py → src/amoskys/common/crypto/canonical.py
+./Amoskys/common/eventbus/server.py → src/amoskys/eventbus/server.py
+./Amoskys/proto_stubs/* → src/amoskys/proto/*
+./Amoskys/common/eventbus/trust_map.yaml → config/trust_map.yaml
 ```
 
 ### Files to Remove (duplicates)
 ```
-./InfraSpectre/agents/flowagent/wal.py (duplicate of wal_sqlite.py)
+./Amoskys/agents/flowagent/wal.py (duplicate of wal_sqlite.py)
 ./common/eventbus/server.py (old duplicate)
 ./agents/flowagent/main.py (old duplicate)
 ```
 
 ### Import Path Updates Required
 ```
-Old: from InfraSpectre.proto_stubs import messaging_schema_pb2 as pb
+Old: from Amoskys.proto_stubs import messaging_schema_pb2 as pb
 New: from src.infraspectre.proto import messaging_schema_pb2 as pb
 
-Old: from InfraSpectre.common.crypto.canonical import canonical_bytes
+Old: from Amoskys.common.crypto.canonical import canonical_bytes
 New: from src.infraspectre.common.crypto.canonical import canonical_bytes
 ```
 

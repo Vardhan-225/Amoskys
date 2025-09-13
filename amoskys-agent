@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-InfraSpectre Flow Agent
+Amoskys Flow Agent
 
-Entry point for the InfraSpectre flow monitoring agent.
+Entry point for the Amoskys distributed intelligence agent.
 Loads configuration and starts the agent.
 """
 
@@ -13,12 +13,12 @@ import argparse
 # Add src to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from infraspectre.agents.flowagent.main import main
-from infraspectre.config import get_config, init_config, InfraSpectreConfig
+from amoskys.agents.flowagent.main import main
+from amoskys.config import get_config, init_config, AmoskysConfig
 
 
 def run_agent():
-    parser = argparse.ArgumentParser(description="InfraSpectre Flow Agent")
+    parser = argparse.ArgumentParser(description="Amoskys Flow Agent")
     parser.add_argument('--config', help="Path to configuration YAML file")
     parser.add_argument('--wal-path', help="Override WAL database path")
     parser.add_argument('--bus-address', help="Override EventBus address")
@@ -28,9 +28,9 @@ def run_agent():
     
     # Load configuration
     if args.config:
-        config = InfraSpectreConfig.from_yaml(args.config)
+        config = AmoskysConfig.from_yaml(args.config)
     else:
-        config = InfraSpectreConfig.from_env()
+        config = AmoskysConfig.from_env()
     
     # Apply CLI overrides
     if args.wal_path:

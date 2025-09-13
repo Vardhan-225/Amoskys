@@ -1,8 +1,8 @@
-# InfraSpectre Reproducibility Guide
+# Amoskys Reproducibility Guide
 
 ## Overview
 
-This document ensures **100% reproducible builds** across all development and production environments. InfraSpectre uses multiple dependency management strategies to guarantee consistent behavior.
+This document ensures **100% reproducible builds** across all development and production environments. Amoskys uses multiple dependency management strategies to guarantee consistent behavior.
 
 ## Environment Locking Strategy
 
@@ -70,8 +70,8 @@ conda activate infraspectre
 
 ### Method 1: Automated Setup (Recommended)
 ```bash
-git clone https://github.com/yourusername/InfraSpectre.git
-cd InfraSpectre
+git clone https://github.com/yourusername/Amoskys.git
+cd Amoskys
 make setup-dev
 source .venv/bin/activate
 make test  # Verify installation
@@ -164,8 +164,8 @@ mypy==1.13.0            # Type checking
 
 ### Required for Development
 ```bash
-export PYTHONPATH=/path/to/InfraSpectre/src
-export IS_CONFIG_PATH=/path/to/InfraSpectre/config/infraspectre.yaml
+export PYTHONPATH=/path/to/Amoskys/src
+export IS_CONFIG_PATH=/path/to/Amoskys/config/infraspectre.yaml
 ```
 
 ### Required for Testing
@@ -251,7 +251,7 @@ pip install protobuf==5.28.2 grpcio==1.66.2 grpcio-tools==1.66.2
 ```bash
 # Symptoms: Module not found errors
 # Solution: Set PYTHONPATH correctly
-export PYTHONPATH=/path/to/InfraSpectre/src:$PYTHONPATH
+export PYTHONPATH=/path/to/Amoskys/src:$PYTHONPATH
 ```
 
 #### 3. Certificate Generation Failures
@@ -355,4 +355,4 @@ bandit -r src/
 - Security scanning results are archived
 - Environment configurations are version controlled
 
-This reproducibility guide ensures that InfraSpectre can be built and deployed consistently across all environments, from development laptops to production clusters.
+This reproducibility guide ensures that Amoskys can be built and deployed consistently across all environments, from development laptops to production clusters.

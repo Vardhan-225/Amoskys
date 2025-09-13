@@ -7,12 +7,12 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 
 # Clean imports for new structure
-from infraspectre.proto import messaging_schema_pb2 as pb
-from infraspectre.proto import messaging_schema_pb2_grpc as pbrpc
-from infraspectre.agents.flowagent.wal_sqlite import SQLiteWAL
-from infraspectre.common.crypto.canonical import canonical_bytes
-from infraspectre.common.crypto.signing import load_private_key, sign
-from infraspectre.config import get_config
+from amoskys.proto import messaging_schema_pb2 as pb
+from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
+from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
+from amoskys.common.crypto.canonical import canonical_bytes
+from amoskys.common.crypto.signing import load_private_key, sign
+from amoskys.config import get_config
 
 # Load configuration
 config = get_config()
