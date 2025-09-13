@@ -7,11 +7,11 @@ from pathlib import Path
 import grpc
 import pytest
 
-from infraspectre.proto import messaging_schema_pb2 as pb
-from infraspectre.proto import messaging_schema_pb2_grpc as pbrpc
+from amoskys.proto import messaging_schema_pb2 as pb
+from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
 
 CERT_DIR = Path("certs")
-SERVER_CMD = ["python", "src/infraspectre/eventbus/server.py"]
+SERVER_CMD = ["python", "src/amoskys/eventbus/server.py"]
 BUS_ADDR = "localhost:50051"
 
 def wait_for_port(host: str, port: int, timeout: float = 5.0):

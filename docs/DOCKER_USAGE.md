@@ -1,15 +1,15 @@
-# InfraSpectre Docker Usage Guide
+# Amoskys Docker Usage Guide
 
 ## Overview
 
-InfraSpectre is designed as a **cloud-native, container-first** architecture. This guide covers Docker integration, container orchestration, and production deployment strategies.
+Amoskys is designed as a **cloud-native, container-first** architecture. This guide covers Docker integration, container orchestration, and production deployment strategies.
 
 ## Container Architecture
 
 ### Multi-Service Architecture
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                 InfraSpectre Container Stack                │
+│                 Amoskys Container Stack                │
 ├─────────────────┬─────────────────┬─────────────────────────┤
 │  EventBus       │  FlowAgent      │  Observability Stack    │
 │  Container      │  Container      │  (Prometheus/Grafana)   │
@@ -502,11 +502,11 @@ infraspectre_agent_health_check_duration_seconds 0.045
 
 ### Grafana Dashboards
 
-#### InfraSpectre System Overview
+#### Amoskys System Overview
 ```json
 {
   "dashboard": {
-    "title": "InfraSpectre System Overview",
+    "title": "Amoskys System Overview",
     "panels": [
       {
         "title": "Message Throughput",
@@ -856,4 +856,4 @@ FROM python:3.11-alpine
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 ```
 
-This comprehensive Docker guide enables efficient container deployment and management of InfraSpectre in any environment.
+This comprehensive Docker guide enables efficient container deployment and management of Amoskys in any environment.

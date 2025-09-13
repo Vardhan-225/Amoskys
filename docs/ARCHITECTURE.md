@@ -1,8 +1,8 @@
-# InfraSpectre Architecture
+# Amoskys Architecture
 
 ## Overview
 
-InfraSpectre is designed as a distributed, event-driven security monitoring system with a focus on reliability, security, and scalability. The architecture follows a producer-consumer pattern with agents collecting events and an event bus processing them.
+Amoskys is designed as a distributed, event-driven security monitoring system with a focus on reliability, security, and scalability. The architecture follows a producer-consumer pattern with agents collecting events and an event bus processing them.
 
 ## System Components
 
@@ -10,7 +10,7 @@ InfraSpectre is designed as a distributed, event-driven security monitoring syst
 
 #### FlowAgent
 - **Purpose**: Monitors network flows and generates security events
-- **Location**: `src/infraspectre/agents/flowagent/`
+- **Location**: `src/amoskys/agents/flowagent/`
 - **Key Features**:
   - Network packet analysis
   - Process monitoring capabilities
@@ -27,7 +27,7 @@ InfraSpectre is designed as a distributed, event-driven security monitoring syst
 
 #### EventBus Server
 - **Purpose**: Central event ingestion and validation service
-- **Location**: `src/infraspectre/eventbus/`
+- **Location**: `src/amoskys/eventbus/`
 - **Key Features**:
   - gRPC server with mTLS authentication
   - Message validation and cryptographic verification
@@ -61,7 +61,7 @@ Message Flow:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        InfraSpectre Data Flow                   │
+│                        Amoskys Data Flow                   │
 └─────────────────────────────────────────────────────────────────┘
 
     Event Sources                    Collection                Processing
@@ -120,7 +120,7 @@ message FlowEvent {
 ## Configuration Management
 
 ### Centralized Configuration
-- **Location**: `src/infraspectre/config.py`
+- **Location**: `src/amoskys/config.py`
 - **Features**:
   - Environment variable override support
   - YAML configuration file support

@@ -1,13 +1,13 @@
-# InfraSpectre Contributing Guide
+# Amoskys Contributing Guide
 
-Thank you for your interest in contributing to InfraSpectre! This guide will help you get started.
+Thank you for your interest in contributing to Amoskys! This guide will help you get started.
 
 ## Development Setup
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/yourusername/InfraSpectre.git
-cd InfraSpectre
+git clone https://github.com/yourusername/Amoskys.git
+cd Amoskys
 ```
 
 2. **Set up development environment**:
@@ -156,8 +156,8 @@ Be respectful, inclusive, and constructive. We're building something important t
 ### Environment Variables
 ```bash
 # Development
-export PYTHONPATH=/path/to/InfraSpectre/src
-export IS_CONFIG_PATH=/path/to/InfraSpectre/config/infraspectre.yaml
+export PYTHONPATH=/path/to/Amoskys/src
+export IS_CONFIG_PATH=/path/to/Amoskys/config/infraspectre.yaml
 
 # Testing
 export IS_TEST_MODE=true
@@ -213,4 +213,4 @@ cd tools && python loadgen.py --help
 - Implement distributed tracing
 - Monitor error rates and latency
 
-Thank you for contributing to InfraSpectre! 🛡️
+Thank you for contributing to Amoskys! 🛡️

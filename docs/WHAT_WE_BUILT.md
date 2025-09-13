@@ -1,8 +1,8 @@
-# What We Built: InfraSpectre Evolution Story
+# What We Built: Amoskys Evolution Story
 
 ## Vision: From Concept to Foundation
 
-InfraSpectre began as an ambitious idea to create a next-generation infrastructure monitoring system that could detect subtle security threats and performance anomalies through intelligent network analysis. What started as a host-based monitor evolved into something far more powerful: a universal detection framework ready for AI-driven analysis.
+Amoskys began as an ambitious idea to create a next-generation infrastructure monitoring system that could detect subtle security threats and performance anomalies through intelligent network analysis. What started as a host-based monitor evolved into something far more powerful: a universal detection framework ready for AI-driven analysis.
 
 ## The Journey: Three Phases of Evolution
 
@@ -27,7 +27,7 @@ InfraSpectre began as an ambitious idea to create a next-generation infrastructu
 
 **What We Built:**
 ```
-InfraSpectre: A secure, scalable detection framework
+Amoskys: A secure, scalable detection framework
 ├── EventBus: Central nervous system for event routing
 ├── FlowAgent: Network data collection and preprocessing  
 ├── Security Layer: mTLS + Ed25519 message authentication
@@ -45,10 +45,10 @@ InfraSpectre: A secure, scalable detection framework
 ## Challenges Overcome
 
 ### 1. **Repository Structure Chaos**
-**Problem:** Nested `InfraSpectre/` directories, duplicate files, messy imports
+**Problem:** Nested `Amoskys/` directories, duplicate files, messy imports
 ```
 # Before: Confusing nested structure
-./InfraSpectre/proto_stubs/
+./Amoskys/proto_stubs/
 ./common/eventbus/  # Duplicate!
 ./agents/flowagent/  # Another duplicate!
 ```
@@ -56,7 +56,7 @@ InfraSpectre: A secure, scalable detection framework
 **Solution:** Clean, professional structure
 ```
 # After: Clear, organized hierarchy
-src/infraspectre/
+src/amoskys/
 ├── agents/flowagent/
 ├── eventbus/
 ├── common/crypto/
@@ -67,7 +67,7 @@ src/infraspectre/
 **Problem:** Inconsistent import paths breaking modularity
 ```python
 # Before: Brittle paths
-from InfraSpectre.proto_stubs import messaging_schema_pb2
+from Amoskys.proto_stubs import messaging_schema_pb2
 ```
 
 **Solution:** Standardized import system
@@ -159,7 +159,7 @@ VENV_PYTHON := $(VENV_DIR)/bin/python
 ## What Makes This Special
 
 ### 1. **Research-Ready Foundation**
-InfraSpectre provides a clean platform for security research:
+Amoskys provides a clean platform for security research:
 - Modular architecture supports experimentation
 - Rich observability enables hypothesis testing
 - Secure communication allows production deployment
@@ -203,7 +203,7 @@ What started as a simple monitoring tool has evolved into a sophisticated platfo
 
 ## The Foundation is Set
 
-InfraSpectre Phase 1 represents more than cleanup—it's a transformation from prototype to platform. We've built:
+Amoskys Phase 1 represents more than cleanup—it's a transformation from prototype to platform. We've built:
 
 - **A secure, scalable communication layer** ready for high-volume data
 - **Reliable persistence mechanisms** that survive failures

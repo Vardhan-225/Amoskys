@@ -1,8 +1,8 @@
-# InfraSpectre Phase 0 Review: From Prototype to Foundation
+# Amoskys Phase 0 Review: From Prototype to Foundation
 
 ## Executive Summary
 
-This document provides a **comprehensive historical analysis** of InfraSpectre's evolution from its initial prototype state (Phase 0) through the foundation transformation (Phase 1). We examine what worked, what didn't, lessons learned, and architectural decisions that shaped the current system.
+This document provides a **comprehensive historical analysis** of Amoskys's evolution from its initial prototype state (Phase 0) through the foundation transformation (Phase 1). We examine what worked, what didn't, lessons learned, and architectural decisions that shaped the current system.
 
 ## Phase 0: The Original Prototype
 
@@ -21,11 +21,11 @@ Original Concept: Simple host-based infrastructure monitoring
 ```
 # Phase 0 Structure (Problematic)
 ./
-├── InfraSpectre/              # Nested project directory (confusing)
+├── Amoskys/              # Nested project directory (confusing)
 │   ├── proto_stubs/          # Generated files in source tree
 │   ├── agents/flowagent/     # Duplicated across multiple locations
 │   └── requirements.txt
-├── common/                   # Duplicate of some InfraSpectre/ contents
+├── common/                   # Duplicate of some Amoskys/ contents
 │   └── eventbus/
 ├── agents/                   # Another duplicate!
 │   └── flowagent/
@@ -43,8 +43,8 @@ Original Concept: Simple host-based infrastructure monitoring
 #### 2. **Import System Fragmentation**
 ```python
 # Phase 0 Import Mess
-from InfraSpectre.proto_stubs import messaging_schema_pb2 as pb
-from InfraSpectre.agents.flowagent.main import sleep_with_jitter
+from Amoskys.proto_stubs import messaging_schema_pb2 as pb
+from Amoskys.agents.flowagent.main import sleep_with_jitter
 from common.eventbus.server import EventBusServer  # Duplicate!
 ```
 
@@ -133,10 +133,10 @@ The prototype was extremely difficult to work with:
 
 ```bash
 # Phase 0 Development Workflow (Painful)
-cd InfraSpectre/  # Or was it common/? Or agents/?
+cd Amoskys/  # Or was it common/? Or agents/?
 python -m grpc_tools.protoc ...  # Different command every time
 export PYTHONPATH=...  # Complex path manipulation
-python InfraSpectre/agents/flowagent/main.py  # Hope it works
+python Amoskys/agents/flowagent/main.py  # Hope it works
 ```
 
 **Failure Analysis:**
@@ -190,11 +190,11 @@ def process_message(msg):
 #### 1. **Repository Structure: Chaos → Organization**
 ```
 # Before: Confusing nested structure
-./InfraSpectre/proto_stubs/
+./Amoskys/proto_stubs/
 ./common/eventbus/
 
 # After: Clean professional hierarchy
-src/infraspectre/
+src/amoskys/
 ├── agents/flowagent/
 ├── eventbus/
 ├── common/crypto/
@@ -210,7 +210,7 @@ src/infraspectre/
 #### 2. **Import System: Fragmentation → Consistency**
 ```python
 # Before: Inconsistent imports
-from InfraSpectre.proto_stubs import messaging_schema_pb2
+from Amoskys.proto_stubs import messaging_schema_pb2
 
 # After: Clean, predictable imports
 from infraspectre.proto import messaging_schema_pb2

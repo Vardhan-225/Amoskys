@@ -1,4 +1,4 @@
-from infraspectre.proto import messaging_schema_pb2 as pb
+from amoskys.proto import messaging_schema_pb2 as pb
 
 def canonical_bytes(env: pb.Envelope) -> bytes:
     clone = pb.Envelope()

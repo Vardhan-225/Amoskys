@@ -4,27 +4,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates sqlite3 && \
     rm -rf /var/lib/apt/lists/*
 
-RUN useradd -r -u 10002 -s /usr/sbin/nologin infra
+RUN useradd -r -u 10002 -s /usr/sbin/nologin amoskys
 WORKDIR /app
 
 # Copy requirements and install dependencies
-COPY requirements.txt /app/requirements.txt
+COPY requirements/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy source code and configuration
 COPY src/ /app/src/
 COPY config/ /app/config/
-COPY infraspectre-agent /app/infraspectre-agent
+COPY amoskys-agent /app/amoskys-agent
 
 # Make entry point executable
-RUN chmod +x /app/infraspectre-agent
+RUN chmod +x /app/amoskys-agent
 
 VOLUME ["/certs", "/wal"]
 EXPOSE 9101 8081
 
-USER infra:infra
+USER amoskys:amoskys
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
 ENV IS_WAL_PATH=/wal/wal.db
 ENV IS_CERT_DIR=/certs
-CMD ["/app/infraspectre-agent"]
+CMD ["/app/amoskys-agent"]

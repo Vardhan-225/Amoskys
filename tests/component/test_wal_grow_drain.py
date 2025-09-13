@@ -1,7 +1,7 @@
 import os, time, subprocess, socket, pathlib
 import grpc, pytest
-from infraspectre.proto import messaging_schema_pb2 as pb
-from infraspectre.proto import messaging_schema_pb2_grpc as pbrpc
+from amoskys.proto import messaging_schema_pb2 as pb
+from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
 
 def wait_port(port, timeout=8):
     deadline = time.time() + timeout
@@ -33,9 +33,9 @@ def make_env(i=0):
 def test_wal_grows_then_drains():
     import sys
     env = os.environ.copy(); env["BUS_OVERLOAD"]="1"
-    bus = subprocess.Popen([sys.executable, "src/infraspectre/eventbus/server.py"], env=env)
+    bus = subprocess.Popen([sys.executable, "src/amoskys/eventbus/server.py"], env=env)
     assert wait_port(50051)
-    agent = subprocess.Popen([sys.executable, "src/infraspectre/agents/flowagent/main.py"])
+    agent = subprocess.Popen([sys.executable, "src/amoskys/agents/flowagent/main.py"])
     assert wait_port(8081)
     time.sleep(1.0)
     with mtls_channel() as ch:
@@ -47,7 +47,7 @@ def test_wal_grows_then_drains():
     assert "wal_bytes=" in body
     bus.terminate(); bus.wait(timeout=2)
     env["BUS_OVERLOAD"]="0"
-    bus2 = subprocess.Popen(["python","InfraSpectre/common/eventbus/server.py"], env=env)
+    bus2 = subprocess.Popen([sys.executable, "src/amoskys/eventbus/server.py"], env=env)
     assert wait_port(50051)
     time.sleep(3.0)
     body2 = urllib.request.urlopen("http://localhost:8081/healthz", timeout=2).read().decode()

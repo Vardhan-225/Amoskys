@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-InfraSpectre EventBus Server
+Amoskys EventBus Server
 
-Entry point for the InfraSpectre event bus server.
+Entry point for the Amoskys neural event bus server.
 Loads configuration and starts the gRPC server.
 """
 
@@ -13,12 +13,12 @@ import argparse
 # Add src to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from infraspectre.eventbus.server import serve
-from infraspectre.config import get_config, init_config, InfraSpectreConfig
+from amoskys.eventbus.server import serve
+from amoskys.config import get_config, init_config, AmoskysConfig
 
 
 def main():
-    parser = argparse.ArgumentParser(description="InfraSpectre EventBus Server")
+    parser = argparse.ArgumentParser(description="Amoskys EventBus Server")
     parser.add_argument('--overload', choices=['on', 'off', 'auto'], default=None,
                         help="Override overload behavior: on/off/auto (default: use BUS_OVERLOAD env)")
     parser.add_argument('--config', help="Path to configuration YAML file")
@@ -29,9 +29,9 @@ def main():
     
     # Load configuration
     if args.config:
-        config = InfraSpectreConfig.from_yaml(args.config)
+        config = AmoskysConfig.from_yaml(args.config)
     else:
-        config = InfraSpectreConfig.from_env()
+        config = AmoskysConfig.from_env()
     
     # Apply CLI overrides
     if args.overload == 'on':

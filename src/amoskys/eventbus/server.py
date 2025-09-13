@@ -17,11 +17,11 @@ from collections import OrderedDict
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 # Clean imports for new structure
-from infraspectre.common.crypto.canonical import canonical_bytes
-from infraspectre.common.crypto.signing import load_public_key, verify
-from infraspectre.proto import messaging_schema_pb2 as pb
-from infraspectre.proto import messaging_schema_pb2_grpc as pbrpc
-from infraspectre.config import get_config
+from amoskys.common.crypto.canonical import canonical_bytes
+from amoskys.common.crypto.signing import load_public_key, verify
+from amoskys.proto import messaging_schema_pb2 as pb
+from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
+from amoskys.config import get_config
 
 # Load configuration
 config = get_config()

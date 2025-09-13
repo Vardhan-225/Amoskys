@@ -1,8 +1,8 @@
-# InfraSpectre Security Model
+# Amoskys Security Model
 
 ## Executive Summary
 
-InfraSpectre implements a **defense-in-depth security architecture** with multiple layers of protection. The security model assumes breach mentality and implements zero-trust principles throughout the system.
+Amoskys implements a **defense-in-depth security architecture** with multiple layers of protection. The security model assumes breach mentality and implements zero-trust principles throughout the system.
 
 ## Security Architecture Overview
 
@@ -50,13 +50,13 @@ Client Certificates:
 openssl genrsa -out ca.key 4096
 
 # 2. Generate CA certificate
-openssl req -new -x509 -key ca.key -sha256 -subj "/C=US/ST=Security/L=InfraSpectre/O=InfraSpectre/CN=InfraSpectre CA" -days 3650 -out ca.crt
+openssl req -new -x509 -key ca.key -sha256 -subj "/C=US/ST=Security/L=Amoskys/O=Amoskys/CN=Amoskys CA" -days 3650 -out ca.crt
 
 # 3. Generate server private key
 openssl genrsa -out server.key 4096
 
 # 4. Generate server certificate signing request
-openssl req -new -key server.key -out server.csr -subj "/C=US/ST=Security/L=InfraSpectre/O=InfraSpectre/CN=infraspectre-eventbus"
+openssl req -new -key server.key -out server.csr -subj "/C=US/ST=Security/L=Amoskys/O=Amoskys/CN=infraspectre-eventbus"
 
 # 5. Generate server certificate
 openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 365 -sha256 -extensions v3_req -extfile server.ext
@@ -548,4 +548,4 @@ class SecurityMonitor:
 - **Quarterly**: Penetration testing and audit
 - **Annually**: Security architecture review and updates
 
-This security model provides comprehensive protection for InfraSpectre deployments across all threat vectors and compliance requirements.
+This security model provides comprehensive protection for Amoskys deployments across all threat vectors and compliance requirements.
