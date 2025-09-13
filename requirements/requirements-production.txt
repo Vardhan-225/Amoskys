@@ -16,7 +16,7 @@ aiohttp==3.11.10
 aioitertools==0.7.1
 aiosignal==1.2.0
 alabaster==0.7.16
-alembic==1.16.2
+alembic==1.16.5
 altair==5.5.0
 anaconda-anon-usage==0.7.1
 anaconda-auth==0.8.6
