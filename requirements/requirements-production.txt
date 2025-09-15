@@ -257,7 +257,7 @@ pycosat==0.6.6
 pycparser==2.21
 pyct==0.5.0
 pycurl==7.45.6
-pydantic==2.10.3
+pydantic==2.11.9
 pydantic_core==2.27.1
 pydantic-settings==2.6.1
 PyDispatcher==2.0.5
