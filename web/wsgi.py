@@ -10,4 +10,4 @@ app, socketio = create_app()
 
 if __name__ == '__main__':
     # Development server with SocketIO support
-    socketio.run(app, host='0.0.0.0', port=8000, debug=False)
+    socketio.run(app, host='0.0.0.0', port=8000, debug=False, allow_unsafe_werkzeug=True)
