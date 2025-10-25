@@ -154,18 +154,20 @@ class EnvironmentManager:
     def select_requirements_file(self, mode: str) -> Path:
         """Select appropriate requirements file based on mode"""
         requirements_map = {
-            "production": "requirements.txt",
-            "development": "requirements.txt",  # Same base, dev tools included conditionally
-            "minimal": "requirements-clean.txt",
-            "testing": "requirements.txt"
+            "production": "requirements/requirements.txt",
+            "development": "requirements/requirements.txt",  # Same base, dev tools included conditionally
+            "minimal": "requirements/requirements-clean.txt",
+            "testing": "requirements/requirements.txt"
         }
-        
-        req_file = self.project_root / requirements_map.get(mode, "requirements.txt")
-        
+
+        req_file = self.project_root / requirements_map.get(mode, "requirements/requirements.txt")
+
         if not req_file.exists():
-            # Fallback to main requirements.txt
-            req_file = self.project_root / "requirements.txt"
-        
+            # Fallback to requirements/requirements.txt, then root requirements.txt
+            req_file = self.project_root / "requirements" / "requirements.txt"
+            if not req_file.exists():
+                req_file = self.project_root / "requirements.txt"
+
         return req_file
     
     def install_requirements(self, mode: str = "development") -> bool:
