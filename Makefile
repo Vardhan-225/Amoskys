@@ -28,8 +28,8 @@ ASSESSMENT_SCRIPT := scripts/automation/assess_repository.py
 DEV_SETUP_SCRIPT := scripts/automation/setup_dev_env.py
 
 # Targets
-.PHONY: help setup venv install-deps proto clean run-eventbus run-agent run-all test fmt lint certs ed25519 check loadgen chaos docs validate-config
-.PHONY: env-setup env-clean env-rebuild assess assess-quick assess-save requirements-consolidate health-check
+.PHONY: help setup venv install-deps proto clean run-eventbus run-agent run-web run-all test fmt lint certs ed25519 check loadgen chaos docs validate-config
+.PHONY: env-setup env-clean env-rebuild env-activate env-info assess assess-quick assess-save requirements-consolidate health-check shell
 
 help: ## Show this help message
 	@echo "AMOSKYS Neural Security Command Platform"
@@ -39,9 +39,19 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "💡 Quick Start:"
-	@echo "   make env-setup    # Professional environment setup"
-	@echo "   make check        # Run full test suite"
-	@echo "   make assess       # Comprehensive repository assessment"
+	@echo "   make setup        # Complete setup (creates .venv, installs deps, generates certs)"
+	@echo "   make env-activate # Generate environment activation script"
+	@echo "   make shell        # Activate environment in interactive shell"
+	@echo ""
+	@echo "🚀 Running Services:"
+	@echo "   make run-eventbus # Start EventBus gRPC server"
+	@echo "   make run-agent    # Start FlowAgent"
+	@echo "   make run-web      # Start Web Platform (Flask)"
+	@echo ""
+	@echo "🧪 Testing & Quality:"
+	@echo "   make test         # Run all tests"
+	@echo "   make check        # Run full test suite with dependencies"
+	@echo "   make fmt          # Format code with black"
 
 # ==============================================
 # PROFESSIONAL ENVIRONMENT MANAGEMENT
@@ -51,6 +61,11 @@ env-setup: ## Professional environment setup with automation
 	@echo "🔧 Setting up AMOSKYS professional environment..."
 	$(PYTHON) $(ENV_SETUP_SCRIPT) --mode development
 	@echo "✅ Professional environment setup completed"
+	@echo ""
+	@echo "🎯 To activate the virtual environment, run:"
+	@echo "   source .venv/bin/activate"
+	@echo ""
+	@echo "Or use: make env-activate (generates activation script)"
 
 env-production: ## Production environment setup
 	@echo "🏭 Setting up AMOSKYS production environment..."
@@ -63,6 +78,64 @@ env-clean: ## Clean environment and rebuild
 	@echo "✅ Environment cleaned and rebuilt"
 
 env-rebuild: env-clean ## Alias for env-clean
+
+env-activate: ## Generate activation helper script
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "❌ Virtual environment not found. Run 'make setup' first."; \
+		exit 1; \
+	fi
+	@echo "#!/bin/bash" > activate_env.sh
+	@echo "# AMOSKYS Environment Activation Helper" >> activate_env.sh
+	@echo "# Generated: $$(date)" >> activate_env.sh
+	@echo "" >> activate_env.sh
+	@echo "source .venv/bin/activate" >> activate_env.sh
+	@echo "export PYTHONPATH=\"\$$PWD/src:\$$PYTHONPATH\"" >> activate_env.sh
+	@echo "echo \"🧠⚡ AMOSKYS environment activated\"" >> activate_env.sh
+	@echo "echo \"Python: \$$(python --version)\"" >> activate_env.sh
+	@echo "echo \"Virtual env: .venv\"" >> activate_env.sh
+	@echo "echo \"\"" >> activate_env.sh
+	@echo "echo \"Quick commands:\"" >> activate_env.sh
+	@echo "echo \"  make run-eventbus  - Start EventBus\"" >> activate_env.sh
+	@echo "echo \"  make run-agent     - Start FlowAgent\"" >> activate_env.sh
+	@echo "echo \"  make run-web       - Start Web Platform\"" >> activate_env.sh
+	@echo "echo \"  make test          - Run tests\"" >> activate_env.sh
+	@echo "echo \"  deactivate         - Exit virtual env\"" >> activate_env.sh
+	@chmod +x activate_env.sh
+	@echo "✅ Activation script created: activate_env.sh"
+	@echo ""
+	@echo "🎯 To activate the environment, run:"
+	@echo "   source activate_env.sh"
+
+env-info: ## Show environment information
+	@echo "🔍 AMOSKYS Environment Information"
+	@echo "=================================="
+	@echo ""
+	@if [ -d "$(VENV_DIR)" ]; then \
+		echo "✅ Virtual Environment: $(VENV_DIR)"; \
+		echo "   Python: $$($(VENV_PYTHON) --version 2>&1)"; \
+		echo "   Pip: $$($(VENV_PIP) --version 2>&1 | head -1)"; \
+		echo ""; \
+		echo "📦 Key Packages:"; \
+		$(VENV_PIP) list 2>/dev/null | grep -E '(Flask|grpcio|pytest|cryptography)' || echo "   (Run 'make install-deps' to install)"; \
+	else \
+		echo "❌ Virtual environment not found"; \
+		echo "   Run 'make setup' to create it"; \
+	fi
+	@echo ""
+	@echo "📂 Project Structure:"
+	@echo "   Source: $(SRC_DIR)/"
+	@echo "   Web: $(WEB_DIR)/"
+	@echo "   Config: $(CONFIG_DIR)/"
+	@echo "   Data: $(DATA_DIR)/"
+
+shell: ## Activate environment and start interactive shell
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "❌ Virtual environment not found. Run 'make setup' first."; \
+		exit 1; \
+	fi
+	@echo "🧠⚡ Starting AMOSKYS interactive shell..."
+	@echo "   Type 'exit' or Ctrl+D to quit"
+	@bash --init-file <(echo "source .venv/bin/activate; export PYTHONPATH=\$$PWD/src:\$$PYTHONPATH; echo '✅ AMOSKYS environment active'; echo ''; echo 'Quick commands:'; echo '  make run-eventbus  - Start EventBus'; echo '  make run-agent     - Start FlowAgent'; echo '  make run-web       - Start Web Platform'; echo '  make test          - Run tests'; echo ''; PS1='(amoskys) \u@\h:\w\$$ '")
 
 # ==============================================
 # REPOSITORY ASSESSMENT & HEALTH
@@ -160,6 +233,36 @@ run-eventbus: ## Start the EventBus server
 run-agent: ## Start the FlowAgent
 	@echo "Starting Amoskys Agent..."
 	$(AGENT_ENTRY)
+
+run-web: ## Start the Web Platform (Flask + SocketIO)
+	@echo "Starting AMOSKYS Web Platform..."
+	@echo "🌐 Dashboards will be available at:"
+	@echo "   http://localhost:5000"
+	@echo ""
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "❌ Virtual environment not found. Run 'make setup' first."; \
+		exit 1; \
+	fi
+	@cd $(WEB_DIR) && PYTHONPATH=$$PWD/../src:$$PYTHONPATH $(VENV_PYTHON) -m flask --app app run --debug --host=0.0.0.0 --port=5000
+
+run-web-prod: ## Start Web Platform in production mode (Gunicorn)
+	@echo "Starting AMOSKYS Web Platform (Production Mode)..."
+	@echo "🌐 Server will be available at:"
+	@echo "   http://localhost:8000"
+	@echo ""
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "❌ Virtual environment not found. Run 'make setup' first."; \
+		exit 1; \
+	fi
+	@cd $(WEB_DIR) && PYTHONPATH=$$PWD/../src:$$PYTHONPATH \
+		$(VENV_PYTHON) -m gunicorn \
+		--worker-class eventlet \
+		--workers 4 \
+		--bind 0.0.0.0:8000 \
+		--timeout 120 \
+		--access-logfile - \
+		--error-logfile - \
+		wsgi:application
 
 run-all: ## Start all services with Docker Compose
 	@echo "Starting all Amoskys services..."
