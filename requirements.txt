@@ -37,7 +37,7 @@ pydantic-core==2.27.1
 python-dotenv==1.1.0
 
 # Database & Storage
-sqlite3  # Built-in to Python
+# sqlite3 is built-in to Python, no pip install needed
 
 # ==========================================
 # MONITORING & OBSERVABILITY

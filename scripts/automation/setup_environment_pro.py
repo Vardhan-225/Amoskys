@@ -380,9 +380,9 @@ Examples:
     
     args = parser.parse_args()
     
-    # Get project root
-    project_root = Path(__file__).parent.absolute()
-    
+    # Get project root (go up two levels from scripts/automation/ to repo root)
+    project_root = Path(__file__).parent.parent.parent.absolute()
+
     # Initialize environment manager
     env_manager = EnvironmentManager(project_root)
     
