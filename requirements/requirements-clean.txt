@@ -11,8 +11,8 @@ cryptography==43.0.1
 pycryptodome==3.21.0
 
 # Data & Storage
-sqlite3  # Built-in to Python
-prometheus_client==0.21.0
+# sqlite3 is built-in to Python, no pip install needed
+prometheus-client==0.21.1
 
 # Testing & Development (optional for production)
 pytest==8.4.1
