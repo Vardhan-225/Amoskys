@@ -297,3 +297,4 @@ config/*.local.*
 *.pid
 *.sock
 *.lock
+activate_env.sh
