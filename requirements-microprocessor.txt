@@ -1,0 +1,62 @@
+# Microprocessor Agent Requirements
+# Core dependencies for the AMOSKYS microprocessor agent transformation
+
+# Existing dependencies (keep current versions)
+asyncio-mqtt>=0.11.0
+pyyaml>=6.0
+protobuf>=4.0.0
+grpcio>=1.50.0
+
+# Network packet analysis
+scapy>=2.5.0
+dpkt>=1.9.8
+pypcap>=1.2.3
+
+# Data analysis and machine learning
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+scipy>=1.10.0
+
+# Network discovery and device fingerprinting
+python-nmap>=0.7.1
+netaddr>=0.8.0
+ipaddress>=1.0.23
+
+# Protocol support
+pysnmp>=4.4.12
+pymodbus>=3.4.0
+paho-mqtt>=1.6.0
+pymongo>=4.5.0
+
+# Performance optimization
+lz4>=4.3.0
+orjson>=3.9.0
+uvloop>=0.17.0
+
+# Monitoring and metrics
+psutil>=5.9.0
+prometheus-client>=0.17.0
+
+# Security and cryptography
+cryptography>=41.0.0
+pyopenssl>=23.0.0
+
+# Industrial protocols (optional)
+opcua>=0.98.13
+
+# Medical device protocols (optional)
+hl7>=0.4.5
+
+# Development and testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+flake8>=6.0.0
+
+# Optional dependencies for enhanced functionality
+# Uncomment if needed:
+# tensorflow>=2.13.0  # For advanced ML models
+# torch>=2.0.0        # Alternative ML framework
+# kafka-python>=2.0.2 # For Kafka integration
+# redis>=4.6.0        # For caching and state management

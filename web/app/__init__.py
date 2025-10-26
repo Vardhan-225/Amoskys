@@ -11,9 +11,20 @@ import os
 def create_app():
     """Application factory pattern for AMOSKYS web interface"""
     app = Flask(__name__)
-    
+
     # Configure app
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'amoskys-neural-security-dev-key')
+    # IMPORTANT: Set SECRET_KEY environment variable in production!
+    # Default key is for development only and should NEVER be used in production
+    secret_key = os.environ.get('SECRET_KEY', 'amoskys-neural-security-dev-key')
+    if secret_key == 'amoskys-neural-security-dev-key' and not app.config.get('DEBUG'):
+        import warnings
+        warnings.warn(
+            "Using default SECRET_KEY in production! "
+            "Set the SECRET_KEY environment variable to a secure random value.",
+            UserWarning,
+            stacklevel=2
+        )
+    app.config['SECRET_KEY'] = secret_key
     app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     
     # Register blueprints

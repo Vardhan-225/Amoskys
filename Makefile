@@ -325,9 +325,14 @@ lint: venv ## Run linting checks
 
 # Security and Certificates
 certs: ## Generate TLS certificates
-	@echo "Generating TLS certificates..."
-	@bash scripts/gen_certs.sh
-	@echo "✅ TLS certificates generated"
+	@echo "Checking TLS certificates..."
+	@if [ -f "certs/server.crt" ] && [ -f "certs/server.key" ]; then \
+		echo "✅ TLS certificates already exist"; \
+	else \
+		echo "Generating TLS certificates..."; \
+		bash scripts/ssl_setup.sh; \
+		echo "✅ TLS certificates generated"; \
+	fi
 
 ed25519: ## Generate Ed25519 signing keys
 	@echo "Generating Ed25519 keys..."

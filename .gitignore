@@ -298,3 +298,8 @@ config/*.local.*
 *.sock
 *.lock
 activate_env.sh
+
+# Security scan reports (generated artifacts)
+bandit-report.json
+safety-report.json
+security-*.json
