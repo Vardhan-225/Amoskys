@@ -74,6 +74,8 @@ import logging
 import ssl
 import threading
 import signal
+import sqlite3
+import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from concurrent import futures
 from prometheus_client import start_http_server, Counter, Histogram, Gauge
@@ -89,10 +91,16 @@ from amoskys.common.crypto.signing import load_public_key, verify
 from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
 from amoskys.config import get_config
+from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
 
 # Load configuration
 config = get_config()
 logger = logging.getLogger("EventBus")
+
+# Initialize WAL for persistent storage
+WAL_PATH = config.agent.wal_path
+wal_storage = None  # Will be initialized in serve()
+_wal_lock = threading.Lock()  # Thread-safe WAL access
 
 # Prometheus metrics
 BUS_REQS = Counter("bus_publish_total", "Total Publish RPCs")
@@ -891,6 +899,39 @@ class EventBusServicer(pbrpc.EventBusServicer):
                 # Process the request
                 flow = _flow_from_envelope(request)
                 logger.info(f"[Publish] src_ip={flow.src_ip} dst_ip={flow.dst_ip} bytes_tx={flow.bytes_tx}")
+                
+                # Store in WAL for dashboard visibility
+                if wal_storage:
+                    try:
+                        with _wal_lock:
+                            # Create a new connection for this thread if needed
+                            conn = sqlite3.connect(WAL_PATH, timeout=5.0, isolation_level=None, check_same_thread=False)
+                            
+                            # Handle both UniversalEnvelope (idempotency_key) and Envelope (idem)
+                            if hasattr(request, 'idempotency_key'):
+                                idem = request.idempotency_key
+                            elif hasattr(request, 'idem'):
+                                idem = request.idem
+                            else:
+                                idem = f"unknown_{request.ts_ns}"
+                            
+                            ts_ns = request.ts_ns
+                            env_bytes = request.SerializeToString()
+                            checksum = hashlib.blake2b(env_bytes, digest_size=32).digest()
+                            
+                            try:
+                                conn.execute(
+                                    "INSERT INTO wal (idem, ts_ns, bytes, checksum) VALUES (?, ?, ?, ?)",
+                                    (idem, ts_ns, env_bytes, checksum)
+                                )
+                                logger.debug("[Publish] Stored event in WAL (idem=%s)", idem)
+                            except sqlite3.IntegrityError:
+                                logger.debug("[Publish] Duplicate event (idem=%s), skipped", idem)
+                            finally:
+                                conn.close()
+                    except Exception as wal_err:
+                        logger.error("[Publish] Failed to store in WAL: %s", wal_err)
+                
                 return _ack_ok("accepted")
             finally:
                 _dec_inflight()
@@ -1087,9 +1128,18 @@ def serve():
         (cli vs env vs default) to help operators understand the server's runtime
         configuration.
     """
-    global _OVERLOAD, BUS_IS_OVERLOADED
+    global _OVERLOAD, BUS_IS_OVERLOADED, wal_storage
 
     try:
+        # Initialize WAL storage for persistent event storage
+        try:
+            wal_storage = SQLiteWAL(path=WAL_PATH, max_bytes=config.storage.max_wal_bytes)
+            logger.info(f"Initialized WAL storage at {WAL_PATH}")
+        except Exception as e:
+            logger.error(f"Failed to initialize WAL storage: {e}")
+            logger.warning("EventBus will run without persistent storage")
+            wal_storage = None
+
         # Determine source for logging
         if _OVERLOAD is None:
             # Fallback to environment if not set by CLI
