@@ -1,0 +1,353 @@
+# Microprocessor Agent Configuration
+# Enhanced configuration for comprehensive attack surface protection
+
+# Core system settings
+system:
+  log_level: INFO
+  max_memory_mb: 512
+  max_cpu_percent: 80
+  data_retention_days: 30
+  
+# Network capture and analysis
+packet_capture:
+  enabled: false  # Set to true for live packet analysis
+  interface: null  # Auto-detect if null
+  capture_filter: "not host 127.0.0.1"  # Exclude localhost
+  max_packets_per_second: 10000
+  buffer_size_mb: 100
+
+# Device discovery configuration
+device_discovery:
+  enabled: true
+  scan_interval_minutes: 15
+  networks:
+    - "192.168.1.0/24"
+    - "10.0.0.0/16"
+    - "172.16.0.0/12"
+  discovery_methods:
+    - "ping_sweep"
+    - "port_scan"
+    - "snmp_discovery"
+    - "mdns_discovery"
+  
+  # Port scan configuration
+  port_scan:
+    common_ports: [21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 443, 993, 995, 1433, 1521, 3306, 3389, 5432, 5900, 8080]
+    timeout_seconds: 3
+    concurrent_scans: 50
+
+# Telemetry collection
+telemetry_collection:
+  enabled: true
+  collection_interval_seconds: 60
+  
+  # Protocol-specific collectors
+  collectors:
+    snmp:
+      enabled: true
+      community: "public"
+      timeout_seconds: 5
+      retries: 3
+      standard_oids:
+        - "1.3.6.1.2.1.1.1.0"  # sysDescr
+        - "1.3.6.1.2.1.1.3.0"  # sysUpTime
+        - "1.3.6.1.2.1.2.2.1.10" # ifInOctets
+    
+    mqtt:
+      enabled: true
+      broker_host: "localhost"
+      broker_port: 1883
+      topics:
+        - "sensors/+/data"
+        - "devices/+/status"
+        - "alerts/+/+"
+      qos: 1
+    
+    modbus:
+      enabled: true
+      timeout_seconds: 5
+      common_registers:
+        - 0  # Coils
+        - 1  # Discrete Inputs
+        - 3  # Input Registers
+        - 4  # Holding Registers
+    
+    hl7:
+      enabled: true
+      port: 2575
+      mllp_enabled: true
+    
+    syslog:
+      enabled: true
+      port: 514
+      facilities: [16, 17, 18, 19, 20, 21, 22, 23]  # Local facilities
+
+# Intelligence and threat detection
+intelligence:
+  fusion_engine:
+    enabled: true
+    correlation_window_minutes: 15
+    threat_threshold: 0.7
+    
+  # Device behavior baselines
+  behavioral_analysis:
+    enabled: true
+    learning_period_days: 7
+    anomaly_threshold: 0.8
+    adaptation_rate: 0.1
+    
+  # Threat intelligence feeds
+  threat_intelligence:
+    enabled: true
+    update_interval_hours: 6
+    feeds:
+      - name: "misp"
+        url: "https://misp.local/attributes/restSearch"
+        api_key: "${MISP_API_KEY}"
+      - name: "alienvault"
+        url: "https://otx.alienvault.com/api/v1/pulses/subscribed"
+        api_key: "${OTX_API_KEY}"
+
+# Device-specific configurations
+device_types:
+  iot_devices:
+    detection_rules:
+      - ports: [1883, 8883]  # MQTT
+        protocols: ["mqtt"]
+        characteristics: ["periodic_communication", "small_payloads"]
+    
+    compliance_requirements:
+      encryption_required: true
+      authentication_required: true
+      firmware_update_monitoring: true
+    
+    threat_models:
+      - "botnet_enrollment"
+      - "credential_theft"
+      - "firmware_manipulation"
+      - "lateral_movement_pivot"
+
+  medical_devices:
+    detection_rules:
+      - ports: [2575, 2576]  # HL7
+        protocols: ["hl7", "dicom"]
+        characteristics: ["scheduled_transmissions", "patient_data"]
+    
+    compliance_requirements:
+      hipaa_compliance: true
+      encryption_in_transit: true
+      audit_logging: true
+      access_control: true
+    
+    threat_models:
+      - "patient_data_theft"
+      - "device_manipulation"
+      - "ransomware_targeting"
+      - "compliance_violation"
+
+  industrial_controls:
+    detection_rules:
+      - ports: [502, 20000, 44818]  # Modbus, EtherNet/IP
+        protocols: ["modbus", "dnp3", "ethernet_ip"]
+        characteristics: ["real_time_control", "deterministic_timing"]
+    
+    compliance_requirements:
+      iec_62443_compliance: true
+      network_segmentation: true
+      change_management: true
+    
+    threat_models:
+      - "process_manipulation"
+      - "safety_system_bypass"
+      - "production_disruption"
+      - "physical_damage"
+
+  network_devices:
+    detection_rules:
+      - ports: [161, 162, 22, 80, 443]  # SNMP, SSH, HTTP
+        protocols: ["snmp", "ssh", "http"]
+        characteristics: ["management_traffic", "high_availability"]
+    
+    threat_models:
+      - "configuration_tampering"
+      - "traffic_interception"
+      - "network_disruption"
+      - "lateral_movement"
+
+# Edge optimization for resource-constrained environments
+edge_optimization:
+  enabled: true
+  
+  # Resource constraints
+  constraints:
+    max_memory_mb: 256
+    max_cpu_percent: 75
+    max_disk_mb: 1024
+    max_network_mbps: 10
+  
+  # Optimization strategies
+  optimization:
+    compression_enabled: true
+    compression_algorithm: "lz4"  # Fast compression
+    batch_processing: true
+    batch_size: 100
+    adaptive_sampling: true
+    priority_filtering: true
+  
+  # Performance targets
+  targets:
+    max_latency_ms: 100
+    min_throughput_events_per_sec: 1000
+    max_memory_growth_mb_per_hour: 10
+
+# Integration with existing EventBus
+eventbus_integration:
+  enabled: true
+  connection:
+    host: "localhost"
+    port: 5672
+    username: "amoskys"
+    password: "${EVENTBUS_PASSWORD}"
+  
+  # Message routing
+  routing:
+    threats: "amoskys.threats"
+    devices: "amoskys.devices"
+    anomalies: "amoskys.anomalies"
+    compliance: "amoskys.compliance"
+    telemetry: "amoskys.telemetry"
+
+# Alerting and notifications
+alerting:
+  enabled: true
+  
+  # Alert channels
+  channels:
+    syslog:
+      enabled: true
+      facility: "local0"
+      severity: "warning"
+    
+    webhook:
+      enabled: false
+      url: "https://alerts.company.com/webhook"
+      headers:
+        Authorization: "Bearer ${WEBHOOK_TOKEN}"
+    
+    email:
+      enabled: false
+      smtp_server: "mail.company.com"
+      from_address: "amoskys@company.com"
+      to_addresses: ["security@company.com"]
+  
+  # Alert rules
+  rules:
+    critical_threats:
+      threat_level: "CRITICAL"
+      immediate_notification: true
+      escalation_minutes: 15
+    
+    compliance_violations:
+      device_types: ["medical_device", "industrial_control"]
+      immediate_notification: true
+    
+    anomaly_patterns:
+      anomaly_score_threshold: 0.9
+      correlation_required: true
+
+# Compliance and governance
+compliance:
+  frameworks:
+    hipaa:
+      enabled: true
+      audit_logging: true
+      encryption_requirements: true
+      access_controls: true
+    
+    iec_62443:
+      enabled: true
+      network_segmentation: true
+      security_levels: [1, 2, 3]
+      change_management: true
+    
+    nist_csf:
+      enabled: true
+      functions: ["identify", "protect", "detect", "respond", "recover"]
+      maturity_target: 3
+
+# Security hardening
+security:
+  authentication:
+    api_key_required: true
+    token_expiration_hours: 24
+    rate_limiting: true
+  
+  encryption:
+    data_at_rest: true
+    data_in_transit: true
+    key_rotation_days: 90
+  
+  network_security:
+    tls_min_version: "1.2"
+    certificate_validation: true
+    firewall_integration: true
+
+# Monitoring and health checks
+monitoring:
+  health_checks:
+    enabled: true
+    interval_seconds: 30
+    endpoints:
+      - component: "packet_processor"
+        metric: "packets_per_second"
+        threshold: 1
+      - component: "fusion_engine"
+        metric: "events_processed"
+        threshold: 10
+      - component: "device_scanner"
+        metric: "devices_discovered"
+        threshold: 1
+  
+  metrics:
+    prometheus_enabled: true
+    prometheus_port: 9090
+    custom_metrics:
+      - "amoskys_threats_detected_total"
+      - "amoskys_devices_monitored"
+      - "amoskys_events_processed_total"
+      - "amoskys_processing_latency_seconds"
+
+# Development and testing
+development:
+  debug_mode: false
+  test_data_enabled: false
+  mock_devices: []
+  log_sensitive_data: false
+  
+# Environment-specific overrides
+environments:
+  production:
+    system:
+      log_level: WARNING
+    development:
+      debug_mode: false
+  
+  staging:
+    system:
+      log_level: INFO
+    development:
+      test_data_enabled: true
+  
+  development:
+    system:
+      log_level: DEBUG
+    development:
+      debug_mode: true
+      test_data_enabled: true
+      mock_devices:
+        - ip: "192.168.1.100"
+          type: "iot_device"
+          name: "Test IoT Camera"
+        - ip: "192.168.1.101"
+          type: "medical_device"
+          name: "Test Patient Monitor"
