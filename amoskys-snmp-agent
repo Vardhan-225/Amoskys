@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+"""
+AMOSKYS SNMP Agent - Production Entry Point
+Collects SNMP telemetry and publishes to EventBus
+"""
+
+import sys
+from pathlib import Path
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+# Import and run the main function from snmp_agent module
+from amoskys.agents.snmp.snmp_agent import main
+
+if __name__ == "__main__":
+    main()

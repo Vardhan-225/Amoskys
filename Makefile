@@ -231,11 +231,25 @@ run-eventbus: ## Start the EventBus server
 	@echo "Starting Amoskys EventBus..."
 	$(EVENTBUS_ENTRY)
 
-run-agent: ## Start the FlowAgent
-	@echo "Starting Amoskys Agent..."
-	$(AGENT_ENTRY)
+run-agent: ## Start FlowAgent (gRPC client)
+	@echo "Starting AMOSKYS FlowAgent..."
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "❌ Virtual environment not found. Run 'make setup' first."; \
+		exit 1; \
+	fi
+	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) $(AGENT_ENTRY)
 
-run-web: ## Start the Web Platform (Flask + SocketIO)
+run-snmp-agent: ## Start SNMP Agent (real telemetry collector)
+	@echo "🧠⚡ Starting AMOSKYS SNMP Agent..."
+	@echo "Collecting real device telemetry via SNMP"
+	@echo ""
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "❌ Virtual environment not found. Run 'make setup' first."; \
+		exit 1; \
+	fi
+	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) ./amoskys-snmp-agent
+
+run-web: ## Start Web Platform (Flask dev server)
 	@echo "Starting AMOSKYS Web Platform..."
 	@echo "🌐 Dashboards will be available at:"
 	@echo "   http://localhost:5000"

@@ -1,0 +1,107 @@
+# AMOSKYS SNMP Agent Configuration
+# Production-ready SNMP telemetry collector
+
+agent:
+  name: "amoskys-snmp-agent"
+  version: "0.1.0"
+  collection_interval: 60  # seconds
+  retry_attempts: 3
+  retry_delay: 5  # seconds
+  
+  # EventBus connection
+  bus_address: "localhost:50051"
+  cert_dir: "certs"
+  
+  # Ed25519 signing
+  signing_key: "certs/agent.ed25519"
+
+# SNMP devices to monitor
+devices:
+  - name: "localhost"
+    host: "localhost"
+    port: 161
+    community: "public"
+    version: "2c"  # 1, 2c, or 3
+    enabled: true
+    tags:
+      - "mac"
+      - "development"
+      - "system"
+    
+  # Example: Add your router
+  # - name: "home-router"
+  #   host: "192.168.1.1"
+  #   port: 161
+  #   community: "public"
+  #   version: "2c"
+  #   enabled: true
+  #   tags:
+  #     - "router"
+  #     - "network"
+  #     - "gateway"
+
+# SNMP OIDs to collect
+# Standard OIDs work across most devices
+oids:
+  system:
+    - name: "sysDescr"
+      oid: "1.3.6.1.2.1.1.1.0"
+      description: "System description"
+      
+    - name: "sysUpTime"
+      oid: "1.3.6.1.2.1.1.3.0"
+      description: "System uptime (timeticks)"
+      
+    - name: "sysContact"
+      oid: "1.3.6.1.2.1.1.4.0"
+      description: "System contact"
+      
+    - name: "sysName"
+      oid: "1.3.6.1.2.1.1.5.0"
+      description: "System hostname"
+      
+    - name: "sysLocation"
+      oid: "1.3.6.1.2.1.1.6.0"
+      description: "System location"
+
+  # Optional: CPU and Memory (Host Resources MIB)
+  # Uncomment to enable
+  # resources:
+  #   - name: "hrProcessorLoad"
+  #     oid: "1.3.6.1.2.1.25.3.3.1.2.1"
+  #     description: "CPU load percentage"
+  #     
+  #   - name: "hrMemorySize"
+  #     oid: "1.3.6.1.2.1.25.2.2.0"
+  #     description: "Total RAM in KB"
+  #     
+  #   - name: "hrStorageUsed"
+  #     oid: "1.3.6.1.2.1.25.2.3.1.6.1"
+  #     description: "Storage used"
+
+  # Optional: Network Interfaces (IF-MIB)
+  # interfaces:
+  #   - name: "ifInOctets"
+  #     oid: "1.3.6.1.2.1.2.2.1.10.1"
+  #     description: "Bytes received on interface 1"
+  #     
+  #   - name: "ifOutOctets"
+  #     oid: "1.3.6.1.2.1.2.2.1.16.1"
+  #     description: "Bytes sent on interface 1"
+  #     
+  #   - name: "ifInErrors"
+  #     oid: "1.3.6.1.2.1.2.2.1.14.1"
+  #     description: "Inbound errors on interface 1"
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "data/snmp_agent.log"  # Optional: log to file
+
+# Telemetry metadata
+metadata:
+  manufacturer: "Auto-detected"  # Will be extracted from sysDescr
+  model: "Auto-detected"
+  protocols:
+    - "SNMP"
