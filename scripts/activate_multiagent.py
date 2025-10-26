@@ -75,8 +75,10 @@ class MultiAgentOrchestrator:
         
         # 4. Create ScoreJunction
         self.score_junction = ScoreJunction(
-            correlation_window=300,  # 5 minutes
-            min_confidence=0.3
+            config={
+                'correlation_window_seconds': 300,  # 5 minutes
+                'min_confidence': 0.3
+            }
         )
         
         logger.info("✓ All agents initialized")
