@@ -38,10 +38,12 @@
 ```bash
 cd /Users/athanneeru/Downloads/GitHub/Amoskys
 source .venv/bin/activate
-pip install pysnmp-lextudio
+pip install pysnmp==7.1.21
 ```
 
-**Why pysnmp-lextudio?** It's the modern, maintained fork of pysnmp.
+**Why pysnmp v7.x?** It's the modern, actively maintained version with async support.
+
+**Note:** The library is already installed if you ran `make setup`!
 
 ---
 
@@ -88,10 +90,11 @@ from datetime import datetime
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 
 try:
-    from pysnmp.hlapi.v3arch.asyncio import *
+    from pysnmp.hlapi.v1arch.asyncio import *
+    from pysnmp.smi.rfc1902 import ObjectType, ObjectIdentity
     PYSNMP_AVAILABLE = True
 except ImportError:
-    print("❌ pysnmp not installed. Run: pip install pysnmp-lextudio")
+    print("❌ pysnmp not installed. Run: pip install pysnmp==7.1.21")
     PYSNMP_AVAILABLE = False
 
 async def collect_snmp_data(host='localhost', community='public'):
@@ -114,28 +117,23 @@ async def collect_snmp_data(host='localhost', community='public'):
     
     for name, oid in oids.items():
         try:
-            snmpEngine = SnmpEngine()
-            iterator = getCmd(
-                snmpEngine,
-                CommunityData(community, mpModel=1),  # SNMPv2c
+            # Modern pysnmp v7.x API
+            error_indication, error_status, error_index, var_binds = await get_cmd(
+                SnmpDispatcher(),
+                CommunityData(community),
                 await UdpTransportTarget.create((host, 161)),
-                ContextData(),
                 ObjectType(ObjectIdentity(oid))
             )
             
-            errorIndication, errorStatus, errorIndex, varBinds = await iterator
-            
             if errorIndication:
-                print(f"  ❌ {name}: {errorIndication}")
+                print(f"  ❌ {name}: {error_indication}")
             elif errorStatus:
-                print(f"  ❌ {name}: {errorStatus.prettyPrint()}")
+                print(f"  ❌ {name}: {error_status}")
             else:
-                for varBind in varBinds:
-                    value = varBind[1].prettyPrint()
+                for varBind in var_binds:
+                    value = str(varBind[1])
                     collected_data[name] = value
                     print(f"  ✅ {name}: {value[:80]}...")  # Truncate long values
-            
-            snmpEngine.closeDispatcher()
             
         except Exception as e:
             print(f"  ❌ {name}: {str(e)}")
@@ -250,10 +248,11 @@ python tests/manual/test_snmp_real.py
 🧪 AMOSKYS SNMP Collection Test
 ==================================================
 📡 Collecting SNMP data from localhost...
-  ✅ sysDescr: Darwin MacBook-Pro.local 26.0.0 Darwin Kernel Version...
-  ✅ sysUpTime: 1234567890
-  ✅ sysName: MacBook-Pro.local
-  ...
+  ✅ sysDescr: Darwin Mac 25.0.0 Darwin Kernel Version 25.0.0: Mon Aug 25 2...
+  ✅ sysUpTime: 70862
+  ✅ sysContact: Administrator <postmaster@example.com>
+  ✅ sysName: Mac
+  ✅ sysLocation: Right here, right now.
 
 ✅ Collected 5 SNMP metrics
 
@@ -263,11 +262,60 @@ python tests/manual/test_snmp_real.py
   ✅ Protocol: SNMP
   ✅ Events: 5
 
-✅ Serialized size: 347 bytes
+✅ Serialized size: 852 bytes
 ✅ Deserialization successful
 
 ==================================================
 🎉 SUCCESS! You just collected and serialized real device telemetry!
+```
+
+---
+
+### Step 4b: Run Continuous Collection (Optional)
+
+Want to see data streaming in real-time? Run the continuous collector:
+
+```bash
+cd /Users/athanneeru/Downloads/GitHub/Amoskys
+python tests/manual/test_snmp_continuous.py
+```
+
+This will collect SNMP data every 60 seconds and display:
+- Current metrics
+- Collection statistics
+- Success/failure rates
+- Protobuf serialization size
+
+Press **Ctrl+C** to stop.
+
+**Output:**
+```
+🧠⚡ AMOSKYS Continuous SNMP Collection
+======================================================================
+Collecting SNMP data every 60 seconds
+Press Ctrl+C to stop
+
+======================================================================
+🔄 Collection #1 - 2025-10-25 20:35:47
+======================================================================
+
+📊 Collected Metrics:
+  ✅ sysDescr       : Darwin Mac 25.0.0 Darwin Kernel Version...
+  ✅ sysUpTime      : 70862
+  ✅ sysContact     : Administrator <postmaster@example.com>
+  ✅ sysName        : Mac
+  ✅ sysLocation    : Right here, right now.
+
+📦 Telemetry Summary:
+  Device ID:       localhost
+  Device Type:     NETWORK
+  Protocol:        SNMP
+  Events:          5
+  Serialized Size: 858 bytes
+  Collection Agent: amoskys-continuous-agent
+
+📈 Statistics: 1 successful, 0 failed
+⏰ Next collection in 60 seconds...
 ```
 
 ---
@@ -291,7 +339,8 @@ from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.config import get_config
-from pysnmp.hlapi.v3arch.asyncio import *
+from pysnmp.hlapi.v1arch.asyncio import *
+from pysnmp.smi.rfc1902 import ObjectType, ObjectIdentity
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("SNMPAgent")
@@ -336,22 +385,17 @@ class SNMPAgent:
         collected = {}
         for name, oid in oids.items():
             try:
-                snmpEngine = SnmpEngine()
-                iterator = getCmd(
-                    snmpEngine,
-                    CommunityData(community, mpModel=1),
+                # Modern pysnmp v7.x API
+                error_indication, error_status, error_index, var_binds = await get_cmd(
+                    SnmpDispatcher(),
+                    CommunityData(community),
                     await UdpTransportTarget.create((host, 161)),
-                    ContextData(),
                     ObjectType(ObjectIdentity(oid))
                 )
                 
-                errorIndication, errorStatus, errorIndex, varBinds = await iterator
-                
-                if not errorIndication and not errorStatus:
-                    for varBind in varBinds:
-                        collected[name] = varBind[1].prettyPrint()
-                
-                snmpEngine.closeDispatcher()
+                if not error_indication and not error_status:
+                    for var_bind in var_binds:
+                        collected[name] = str(var_bind[1])
                 
             except Exception as e:
                 logger.error(f"SNMP error for {name}: {e}")

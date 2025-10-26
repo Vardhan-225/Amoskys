@@ -51,6 +51,15 @@ psutil==5.9.0
 sentry-sdk==2.18.0
 
 # ==========================================
+# DEVICE TELEMETRY & SNMP
+# ==========================================
+
+# SNMP Protocol Support (modern pysnmp, not the deprecated lextudio fork)
+pysnmp==7.1.21
+pyasn1==0.6.0
+pycryptodomex==3.21.0
+
+# ==========================================
 # UTILITIES & HELPERS
 # ==========================================
 
