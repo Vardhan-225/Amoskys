@@ -54,7 +54,7 @@ protobuf==5.28.2
 psutil==6.1.1
 pycparser==2.23
 pycryptodome==3.21.0
-pydantic==2.10.3
+pydantic==2.12.3
 pydantic_core==2.27.1
 Pygments==2.19.2
 PyJWT==2.10.1
