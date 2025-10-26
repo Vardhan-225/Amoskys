@@ -250,8 +250,8 @@ class ProcAgent:
                 'new_processes': len(changes['new']),
                 'terminated_processes': len(changes['terminated']),
                 'suspicious_processes': len(changes['suspicious']),
-                'top_cpu': [{'pid': p.pid, 'name': p.name, 'cpu_percent': p.cpu_percent} for p in top_cpu[:5]],
-                'top_memory': [{'pid': p.pid, 'name': p.name, 'memory_percent': p.memory_percent} for p in top_memory[:5]],
+                'top_cpu': [{'pid': p.pid, 'name': p.name, 'cpu_percent': p.cpu_percent if p.cpu_percent is not None else 0.0} for p in top_cpu[:5]],
+                'top_memory': [{'pid': p.pid, 'name': p.name, 'memory_percent': p.memory_percent if p.memory_percent is not None else 0.0} for p in top_memory[:5]],
                 'suspicious': [{'pid': p.pid, 'name': p.name, 'exe': p.exe} for p in changes['suspicious']]
             }
             

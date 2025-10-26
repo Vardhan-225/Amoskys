@@ -1,377 +1,291 @@
-# AMOSKYS SNMP Metrics Configuration
-# Comprehensive OID collection for system monitoring
-# Last Updated: October 25, 2025
-
-# Metrics are organized by category for easy management
-# Each metric can be enabled/disabled independently
-
-metrics:
-  # ============================================================================
-  # SYSTEM INFORMATION (Already Collecting)
-  # ============================================================================
-  system_info:
-    enabled: true
-    description: "Basic system identification and status"
-    oids:
-      - name: "sysDescr"
-        oid: "1.3.6.1.2.1.1.1.0"
-        type: "string"
-        description: "System description and OS information"
-        severity: "INFO"
-        
-      - name: "sysUpTime"
-        oid: "1.3.6.1.2.1.1.3.0"
-        type: "counter"
-        description: "System uptime in timeticks (1/100th second)"
-        severity: "INFO"
-        unit: "timeticks"
-        
-      - name: "sysContact"
-        oid: "1.3.6.1.2.1.1.4.0"
-        type: "string"
-        description: "System administrator contact"
-        severity: "INFO"
-        
-      - name: "sysName"
-        oid: "1.3.6.1.2.1.1.5.0"
-        type: "string"
-        description: "System hostname"
-        severity: "INFO"
-        
-      - name: "sysLocation"
-        oid: "1.3.6.1.2.1.1.6.0"
-        type: "string"
-        description: "Physical location"
-        severity: "INFO"
-
-  # ============================================================================
-  # CPU METRICS (Host Resources MIB - hrProcessorTable)
-  # ============================================================================
-  cpu:
-    enabled: false  # Set to true to enable
-    description: "CPU load and processor metrics"
-    oids:
-      - name: "hrProcessorLoad"
-        oid: "1.3.6.1.2.1.25.3.3.1.2"
-        type: "gauge"
-        description: "CPU load average (1-minute) as percentage"
-        severity: "WARNING"
-        unit: "percent"
-        thresholds:
-          warning: 70
-          critical: 90
-        # Note: This is a table - will query .1, .2, .3 for multi-core
-        is_table: true
-        
-  # ============================================================================
-  # MEMORY METRICS (Host Resources MIB - hrStorage)
-  # ============================================================================
-  memory:
-    enabled: false  # Set to true to enable
-    description: "Physical and virtual memory usage"
-    oids:
-      - name: "hrMemorySize"
-        oid: "1.3.6.1.2.1.25.2.2.0"
-        type: "gauge"
-        description: "Total physical RAM in KiloBytes"
-        severity: "INFO"
-        unit: "KB"
-        
-      - name: "hrStorageDescr"
-        oid: "1.3.6.1.2.1.25.2.3.1.3"
-        type: "string"
-        description: "Storage description (Physical memory, Virtual memory, etc.)"
-        severity: "INFO"
-        is_table: true
-        
-      - name: "hrStorageSize"
-        oid: "1.3.6.1.2.1.25.2.3.1.5"
-        type: "gauge"
-        description: "Total storage size in allocation units"
-        severity: "INFO"
-        unit: "units"
-        is_table: true
-        
-      - name: "hrStorageUsed"
-        oid: "1.3.6.1.2.1.25.2.3.1.6"
-        type: "gauge"
-        description: "Used storage in allocation units"
-        severity: "WARNING"
-        unit: "units"
-        is_table: true
-        thresholds:
-          warning: 80  # Percentage
-          critical: 95
-        
-      - name: "hrStorageAllocationUnits"
-        oid: "1.3.6.1.2.1.25.2.3.1.4"
-        type: "gauge"
-        description: "Size of allocation unit in bytes"
-        severity: "INFO"
-        unit: "bytes"
-        is_table: true
-
-  # ============================================================================
-  # DISK/STORAGE METRICS
-  # ============================================================================
-  disk:
-    enabled: false  # Set to true to enable
-    description: "Disk usage and I/O statistics"
-    oids:
-      # Disk I/O (UCD-SNMP-MIB for Linux)
-      - name: "diskIODevice"
-        oid: "1.3.6.1.4.1.2021.13.15.1.1.2"
-        type: "string"
-        description: "Disk device name"
-        severity: "INFO"
-        is_table: true
-        vendor_specific: "UCD-SNMP"
-        
-      - name: "diskIOReads"
-        oid: "1.3.6.1.4.1.2021.13.15.1.1.3"
-        type: "counter"
-        description: "Number of read operations"
-        severity: "INFO"
-        unit: "operations"
-        is_table: true
-        vendor_specific: "UCD-SNMP"
-        
-      - name: "diskIOWrites"
-        oid: "1.3.6.1.4.1.2021.13.15.1.1.4"
-        type: "counter"
-        description: "Number of write operations"
-        severity: "INFO"
-        unit: "operations"
-        is_table: true
-        vendor_specific: "UCD-SNMP"
-
-  # ============================================================================
-  # NETWORK INTERFACE METRICS (IF-MIB - ifTable)
-  # ============================================================================
-  network_interfaces:
-    enabled: false  # Set to true to enable
-    description: "Network interface statistics and performance"
-    oids:
-      - name: "ifDescr"
-        oid: "1.3.6.1.2.1.2.2.1.2"
-        type: "string"
-        description: "Interface description/name"
-        severity: "INFO"
-        is_table: true
-        
-      - name: "ifType"
-        oid: "1.3.6.1.2.1.2.2.1.3"
-        type: "gauge"
-        description: "Interface type (6=ethernet, 24=softwareLoopback)"
-        severity: "INFO"
-        is_table: true
-        
-      - name: "ifSpeed"
-        oid: "1.3.6.1.2.1.2.2.1.5"
-        type: "gauge"
-        description: "Interface speed in bits per second"
-        severity: "INFO"
-        unit: "bps"
-        is_table: true
-        
-      - name: "ifOperStatus"
-        oid: "1.3.6.1.2.1.2.2.1.8"
-        type: "gauge"
-        description: "Operational status (1=up, 2=down, 3=testing)"
-        severity: "CRITICAL"
-        is_table: true
-        
-      - name: "ifInOctets"
-        oid: "1.3.6.1.2.1.2.2.1.10"
-        type: "counter"
-        description: "Total bytes received on interface"
-        severity: "INFO"
-        unit: "bytes"
-        is_table: true
-        
-      - name: "ifInErrors"
-        oid: "1.3.6.1.2.1.2.2.1.14"
-        type: "counter"
-        description: "Number of inbound errors"
-        severity: "WARNING"
-        unit: "errors"
-        is_table: true
-        thresholds:
-          warning: 100
-          critical: 1000
-        
-      - name: "ifOutOctets"
-        oid: "1.3.6.1.2.1.2.2.1.16"
-        type: "counter"
-        description: "Total bytes sent on interface"
-        severity: "INFO"
-        unit: "bytes"
-        is_table: true
-        
-      - name: "ifOutErrors"
-        oid: "1.3.6.1.2.1.2.2.1.20"
-        type: "counter"
-        description: "Number of outbound errors"
-        severity: "WARNING"
-        unit: "errors"
-        is_table: true
-        thresholds:
-          warning: 100
-          critical: 1000
-
-  # ============================================================================
-  # PROCESS METRICS (Host Resources MIB - hrSWRun)
-  # ============================================================================
-  processes:
-    enabled: false  # Set to true to enable
-    description: "Running process information"
-    oids:
-      - name: "hrSWRunName"
-        oid: "1.3.6.1.2.1.25.4.2.1.2"
-        type: "string"
-        description: "Process name"
-        severity: "INFO"
-        is_table: true
-        
-      - name: "hrSWRunPath"
-        oid: "1.3.6.1.2.1.25.4.2.1.4"
-        type: "string"
-        description: "Process executable path"
-        severity: "INFO"
-        is_table: true
-        
-      - name: "hrSWRunParameters"
-        oid: "1.3.6.1.2.1.25.4.2.1.5"
-        type: "string"
-        description: "Process parameters/arguments"
-        severity: "INFO"
-        is_table: true
-        
-      - name: "hrSWRunStatus"
-        oid: "1.3.6.1.2.1.25.4.2.1.7"
-        type: "gauge"
-        description: "Process status (1=running, 2=runnable, 3=notRunnable, 4=invalid)"
-        severity: "WARNING"
-        is_table: true
-
-  # ============================================================================
-  # SYSTEM LOAD (UCD-SNMP-MIB for Linux/Unix)
-  # ============================================================================
-  system_load:
-    enabled: false  # Set to true to enable
-    description: "System load averages (1, 5, 15 minute)"
-    oids:
-      - name: "laLoad1"
-        oid: "1.3.6.1.4.1.2021.10.1.3.1"
-        type: "gauge"
-        description: "1-minute load average"
-        severity: "WARNING"
-        unit: "load"
-        vendor_specific: "UCD-SNMP"
-        thresholds:
-          warning: 4.0
-          critical: 8.0
-        
-      - name: "laLoad5"
-        oid: "1.3.6.1.4.1.2021.10.1.3.2"
-        type: "gauge"
-        description: "5-minute load average"
-        severity: "WARNING"
-        unit: "load"
-        vendor_specific: "UCD-SNMP"
-        
-      - name: "laLoad15"
-        oid: "1.3.6.1.4.1.2021.10.1.3.3"
-        type: "gauge"
-        description: "15-minute load average"
-        severity: "INFO"
-        unit: "load"
-        vendor_specific: "UCD-SNMP"
-
-# ============================================================================
-# COLLECTION PROFILES
-# ============================================================================
-# Predefined profiles for different monitoring scenarios
-
-profiles:
-  minimal:
-    description: "Minimal monitoring - just system identification"
-    enabled_categories:
-      - system_info
-      
-  standard:
-    description: "Standard monitoring - system + CPU + memory"
-    enabled_categories:
-      - system_info
-      - cpu
-      - memory
-      
-  full:
-    description: "Full monitoring - all available metrics"
-    enabled_categories:
-      - system_info
-      - cpu
-      - memory
-      - disk
-      - network_interfaces
-      - system_load
-      
-  network_focus:
-    description: "Focus on network performance"
-    enabled_categories:
-      - system_info
-      - network_interfaces
-      - cpu
-      
-  performance:
-    description: "Performance monitoring focus"
-    enabled_categories:
-      - system_info
-      - cpu
-      - memory
-      - disk
-      - system_load
-
-# ============================================================================
-# ADVANCED SETTINGS
-# ============================================================================
 advanced:
-  # Table walking settings
-  table_walk:
-    max_rows: 100  # Maximum rows to walk in SNMP tables
-    timeout: 10    # Timeout for table walks in seconds
-    
-  # Retry settings
-  retry:
-    max_attempts: 3
-    backoff_factor: 2  # Exponential backoff
-    
-  # Performance
-  parallel_collection: true
-  max_concurrent_requests: 10
-  
-  # Thresholds
   apply_thresholds: true
+  max_concurrent_requests: 10
+  parallel_collection: true
+  retry:
+    backoff_factor: 2
+    max_attempts: 3
+  table_walk:
+    max_rows: 100
+    timeout: 10
   threshold_actions:
-    warning: "log"      # log, alert, ignore
-    critical: "alert"   # log, alert, ignore
-
-# ============================================================================
-# VENDOR-SPECIFIC EXTENSIONS
-# ============================================================================
+    critical: alert
+    warning: log
+metrics:
+  cpu:
+    description: CPU load and processor metrics
+    enabled: true
+    oids:
+    - description: CPU load average (1-minute) as percentage
+      is_table: true
+      name: hrProcessorLoad
+      oid: 1.3.6.1.2.1.25.3.3.1.2
+      severity: WARNING
+      thresholds:
+        critical: 90
+        warning: 70
+      type: gauge
+      unit: percent
+  disk:
+    description: Disk usage and I/O statistics
+    enabled: true
+    oids:
+    - description: Disk device name
+      is_table: true
+      name: diskIODevice
+      oid: 1.3.6.1.4.1.2021.13.15.1.1.2
+      severity: INFO
+      type: string
+      vendor_specific: UCD-SNMP
+    - description: Number of read operations
+      is_table: true
+      name: diskIOReads
+      oid: 1.3.6.1.4.1.2021.13.15.1.1.3
+      severity: INFO
+      type: counter
+      unit: operations
+      vendor_specific: UCD-SNMP
+    - description: Number of write operations
+      is_table: true
+      name: diskIOWrites
+      oid: 1.3.6.1.4.1.2021.13.15.1.1.4
+      severity: INFO
+      type: counter
+      unit: operations
+      vendor_specific: UCD-SNMP
+  memory:
+    description: Physical and virtual memory usage
+    enabled: true
+    oids:
+    - description: Total physical RAM in KiloBytes
+      name: hrMemorySize
+      oid: 1.3.6.1.2.1.25.2.2.0
+      severity: INFO
+      type: gauge
+      unit: KB
+    - description: Storage description (Physical memory, Virtual memory, etc.)
+      is_table: true
+      name: hrStorageDescr
+      oid: 1.3.6.1.2.1.25.2.3.1.3
+      severity: INFO
+      type: string
+    - description: Total storage size in allocation units
+      is_table: true
+      name: hrStorageSize
+      oid: 1.3.6.1.2.1.25.2.3.1.5
+      severity: INFO
+      type: gauge
+      unit: units
+    - description: Used storage in allocation units
+      is_table: true
+      name: hrStorageUsed
+      oid: 1.3.6.1.2.1.25.2.3.1.6
+      severity: WARNING
+      thresholds:
+        critical: 95
+        warning: 80
+      type: gauge
+      unit: units
+    - description: Size of allocation unit in bytes
+      is_table: true
+      name: hrStorageAllocationUnits
+      oid: 1.3.6.1.2.1.25.2.3.1.4
+      severity: INFO
+      type: gauge
+      unit: bytes
+  network_interfaces:
+    description: Network interface statistics and performance
+    enabled: true
+    oids:
+    - description: Interface description/name
+      is_table: true
+      name: ifDescr
+      oid: 1.3.6.1.2.1.2.2.1.2
+      severity: INFO
+      type: string
+    - description: Interface type (6=ethernet, 24=softwareLoopback)
+      is_table: true
+      name: ifType
+      oid: 1.3.6.1.2.1.2.2.1.3
+      severity: INFO
+      type: gauge
+    - description: Interface speed in bits per second
+      is_table: true
+      name: ifSpeed
+      oid: 1.3.6.1.2.1.2.2.1.5
+      severity: INFO
+      type: gauge
+      unit: bps
+    - description: Operational status (1=up, 2=down, 3=testing)
+      is_table: true
+      name: ifOperStatus
+      oid: 1.3.6.1.2.1.2.2.1.8
+      severity: CRITICAL
+      type: gauge
+    - description: Total bytes received on interface
+      is_table: true
+      name: ifInOctets
+      oid: 1.3.6.1.2.1.2.2.1.10
+      severity: INFO
+      type: counter
+      unit: bytes
+    - description: Number of inbound errors
+      is_table: true
+      name: ifInErrors
+      oid: 1.3.6.1.2.1.2.2.1.14
+      severity: WARNING
+      thresholds:
+        critical: 1000
+        warning: 100
+      type: counter
+      unit: errors
+    - description: Total bytes sent on interface
+      is_table: true
+      name: ifOutOctets
+      oid: 1.3.6.1.2.1.2.2.1.16
+      severity: INFO
+      type: counter
+      unit: bytes
+    - description: Number of outbound errors
+      is_table: true
+      name: ifOutErrors
+      oid: 1.3.6.1.2.1.2.2.1.20
+      severity: WARNING
+      thresholds:
+        critical: 1000
+        warning: 100
+      type: counter
+      unit: errors
+  processes:
+    description: Running process information
+    enabled: true
+    oids:
+    - description: Process name
+      is_table: true
+      name: hrSWRunName
+      oid: 1.3.6.1.2.1.25.4.2.1.2
+      severity: INFO
+      type: string
+    - description: Process executable path
+      is_table: true
+      name: hrSWRunPath
+      oid: 1.3.6.1.2.1.25.4.2.1.4
+      severity: INFO
+      type: string
+    - description: Process parameters/arguments
+      is_table: true
+      name: hrSWRunParameters
+      oid: 1.3.6.1.2.1.25.4.2.1.5
+      severity: INFO
+      type: string
+    - description: Process status (1=running, 2=runnable, 3=notRunnable, 4=invalid)
+      is_table: true
+      name: hrSWRunStatus
+      oid: 1.3.6.1.2.1.25.4.2.1.7
+      severity: WARNING
+      type: gauge
+  system_info:
+    description: Basic system identification and status
+    enabled: true
+    oids:
+    - description: System description and OS information
+      name: sysDescr
+      oid: 1.3.6.1.2.1.1.1.0
+      severity: INFO
+      type: string
+    - description: System uptime in timeticks (1/100th second)
+      name: sysUpTime
+      oid: 1.3.6.1.2.1.1.3.0
+      severity: INFO
+      type: counter
+      unit: timeticks
+    - description: System administrator contact
+      name: sysContact
+      oid: 1.3.6.1.2.1.1.4.0
+      severity: INFO
+      type: string
+    - description: System hostname
+      name: sysName
+      oid: 1.3.6.1.2.1.1.5.0
+      severity: INFO
+      type: string
+    - description: Physical location
+      name: sysLocation
+      oid: 1.3.6.1.2.1.1.6.0
+      severity: INFO
+      type: string
+  system_load:
+    description: System load averages (1, 5, 15 minute)
+    enabled: true
+    oids:
+    - description: 1-minute load average
+      name: laLoad1
+      oid: 1.3.6.1.4.1.2021.10.1.3.1
+      severity: WARNING
+      thresholds:
+        critical: 8.0
+        warning: 4.0
+      type: gauge
+      unit: load
+      vendor_specific: UCD-SNMP
+    - description: 5-minute load average
+      name: laLoad5
+      oid: 1.3.6.1.4.1.2021.10.1.3.2
+      severity: WARNING
+      type: gauge
+      unit: load
+      vendor_specific: UCD-SNMP
+    - description: 15-minute load average
+      name: laLoad15
+      oid: 1.3.6.1.4.1.2021.10.1.3.3
+      severity: INFO
+      type: gauge
+      unit: load
+      vendor_specific: UCD-SNMP
+profiles:
+  full:
+    description: Full monitoring - all available metrics
+    enabled_categories:
+    - system_info
+    - cpu
+    - memory
+    - disk
+    - network_interfaces
+    - system_load
+  minimal:
+    description: Minimal monitoring - just system identification
+    enabled_categories:
+    - system_info
+  network_focus:
+    description: Focus on network performance
+    enabled_categories:
+    - system_info
+    - network_interfaces
+    - cpu
+  performance:
+    description: Performance monitoring focus
+    enabled_categories:
+    - system_info
+    - cpu
+    - memory
+    - disk
+    - system_load
+  standard:
+    description: Standard monitoring - system + CPU + memory
+    enabled_categories:
+    - system_info
+    - cpu
+    - memory
 vendor_extensions:
-  # Cisco-specific OIDs
   cisco:
     enabled: false
     oids:
-      - name: "cpmCPUTotal5sec"
-        oid: "1.3.6.1.4.1.9.9.109.1.1.1.1.3"
-        description: "CPU usage over 5 seconds"
-        
-  # HP/Aruba-specific OIDs  
+    - description: CPU usage over 5 seconds
+      name: cpmCPUTotal5sec
+      oid: 1.3.6.1.4.1.9.9.109.1.1.1.1.3
   hp:
     enabled: false
     oids:
-      - name: "hpLocalMemFreeBytes"
-        oid: "1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.7"
-        description: "Free memory in bytes"
+    - description: Free memory in bytes
+      name: hpLocalMemFreeBytes
+      oid: 1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.7
