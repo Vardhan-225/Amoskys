@@ -204,7 +204,7 @@ dirs: ## Create required directories
 
 # Protocol Buffers
 proto: ## Generate protocol buffer stubs
-	@echo "Generating protocol buffer stubs..."
+	@echo "🔧 Compiling Protocol Buffers (messaging_schema + universal_telemetry)..."
 	@mkdir -p $(STUBS_DIR)
 	@touch $(STUBS_DIR)/__init__.py
 	$(VENV_PYTHON) -m grpc_tools.protoc \
@@ -212,10 +212,11 @@ proto: ## Generate protocol buffer stubs
 		--python_out=$(STUBS_DIR) \
 		--grpc_python_out=$(STUBS_DIR) \
 		--pyi_out=$(STUBS_DIR) \
-		$(PROTO_DIR)/messaging_schema.proto
+		$(PROTO_DIR)/messaging_schema.proto \
+		$(PROTO_DIR)/universal_telemetry.proto
 	@# Fix import paths in generated files
 	@sed -i '' 's/^import \([a-zA-Z0-9_]*_pb2\)/from . import \1/' $(STUBS_DIR)/*_pb2_grpc.py 2>/dev/null || true
-	@echo "✅ Protocol buffers generated"
+	@echo "✅ Protocol buffers generated (both schemas compiled)"
 
 clean: ## Clean generated files and caches
 	@echo "Cleaning generated files..."

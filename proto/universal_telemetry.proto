@@ -2,31 +2,8 @@ syntax = "proto3";
 
 package messaging;
 
-// Original messages (keep for backward compatibility)
-message ProcessEvent {
-  uint64 pid = 1;
-  uint64 ppid = 2;
-  string exe = 3;
-  repeated string args = 4;
-  uint64 start_ts_ns = 5;
-  uint32 uid = 6;
-  uint32 gid = 7;
-  string cgroup = 8;
-  string container_id = 9;
-}
-
-message FlowEvent {
-  string src_ip     = 1;
-  string dst_ip     = 2;
-  uint32 src_port   = 3;
-  uint32 dst_port   = 4;
-  string protocol   = 5;
-  uint64 bytes_sent = 6;
-  uint64 bytes_recv = 7;
-  uint32 flags      = 8;
-  uint64 start_time = 9;
-  uint64 end_time   = 10;
-}
+// Import existing schema for backward compatibility
+import "messaging_schema.proto";
 
 // NEW: Universal Device Telemetry Schema
 message DeviceTelemetry {
@@ -481,33 +458,7 @@ service UniversalEventBus {
   rpc GetMetrics(MetricsRequest) returns (MetricsResponse);
 }
 
-// Legacy messages (keep for backward compatibility)
-message Envelope {
-  string version = 1;
-  uint64 ts_ns = 2;
-  string idempotency_key = 3;
-  
-  oneof event {
-    FlowEvent flow = 4;
-    ProcessEvent process = 5;
-  }
-  
-  bytes sig = 6;
-  bytes prev_sig = 7;
-}
-
-message PublishAck {
-  enum Status {
-    OK = 0;
-    RETRY = 1;
-    INVALID = 2;
-  }
-  Status status = 1;
-  string reason = 2;
-  uint32 backoff_hint_ms = 3;
-}
-
-// Device deregistration
+// Device deregistration (no conflicts with messaging_schema.proto)
 message DeviceDeregistration {
   string device_id = 1;
   string reason = 2;               // DECOMMISSIONED, REPLACED, MAINTENANCE
