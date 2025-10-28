@@ -1,0 +1,36 @@
+{
+  "timestamp": "2025-10-26T21:08:52.572636",
+  "n_training_samples": 800,
+  "n_validation_samples": 200,
+  "n_features": 100,
+  "models_trained": [
+    "Isolation Forest",
+    "Ensemble"
+  ],
+  "results": {
+    "Isolation Forest": {
+      "model_name": "Isolation Forest",
+      "train_anomaly_rate": 0.1,
+      "val_anomaly_rate": 0.17,
+      "train_scores_mean": 0.45308851704336844,
+      "val_scores_mean": 0.46211667816906216,
+      "val_auc_roc": 0.6843711843711844,
+      "val_accuracy": 0.81,
+      "val_precision": 0.20588235294117646,
+      "val_recall": 0.3888888888888889,
+      "val_f1": 0.2692307692307692
+    },
+    "Ensemble": {
+      "model_name": "Ensemble Fusion",
+      "n_models": 1,
+      "model_weights": [
+        1.0
+      ],
+      "val_accuracy": 0.84,
+      "val_precision": 0.25,
+      "val_recall": 0.3888888888888889,
+      "val_f1": 0.30434782608695654,
+      "val_auc_roc": 0.6843711843711844
+    }
+  }
+}
