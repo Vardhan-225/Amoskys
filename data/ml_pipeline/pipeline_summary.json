@@ -1,0 +1,56 @@
+{
+  "pipeline_version": "2.0.0",
+  "execution_date": "2025-10-26T21:06:15.354253",
+  "data_source": "mock",
+  "input_samples": 1000,
+  "train_samples": 800,
+  "val_samples": 200,
+  "total_features": 104,
+  "numeric_features": 102,
+  "categorical_features": 1,
+  "devices": 5,
+  "time_span_hours": 24.0,
+  "configuration": {
+    "wal_db_path": "/Users/athanneeru/Downloads/GitHub/Amoskys/data/wal/flowagent.db",
+    "output_dir": "/Users/athanneeru/Downloads/GitHub/Amoskys/data/ml_pipeline",
+    "window_size_sec": 60,
+    "step_size_sec": 30,
+    "entropy_bins": 50,
+    "quantiles": [
+      0.25,
+      0.5,
+      0.75,
+      0.95,
+      0.99
+    ],
+    "cpu_threshold": 80,
+    "memory_threshold": 85,
+    "connections_threshold": 50,
+    "disk_io_threshold": 1000,
+    "scaler_type": "robust",
+    "log_transform_features": [
+      "network_bytes",
+      "disk_io",
+      "process_count"
+    ],
+    "validation_split": 0.2,
+    "random_seed": 42,
+    "stratify_by": "device_id",
+    "save_csv": true,
+    "save_parquet": true,
+    "compression": "snappy",
+    "mock_samples": 1000,
+    "mock_devices": 5,
+    "mock_timespan_hours": 24
+  },
+  "output_files": {
+    "full_csv": "/Users/athanneeru/Downloads/GitHub/Amoskys/data/ml_pipeline/canonical_telemetry_full.csv",
+    "full_parquet": "/Users/athanneeru/Downloads/GitHub/Amoskys/data/ml_pipeline/canonical_telemetry_full.parquet",
+    "train_csv": "/Users/athanneeru/Downloads/GitHub/Amoskys/data/ml_pipeline/train_features.csv",
+    "train_parquet": "/Users/athanneeru/Downloads/GitHub/Amoskys/data/ml_pipeline/train_features.parquet",
+    "val_csv": "/Users/athanneeru/Downloads/GitHub/Amoskys/data/ml_pipeline/val_features.csv",
+    "val_parquet": "/Users/athanneeru/Downloads/GitHub/Amoskys/data/ml_pipeline/val_features.parquet"
+  },
+  "metadata_file": "/Users/athanneeru/Downloads/GitHub/Amoskys/data/ml_pipeline/feature_metadata.json",
+  "status": "SUCCESS"
+}
