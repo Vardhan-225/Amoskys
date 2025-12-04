@@ -26,9 +26,7 @@ from prometheus_client import start_http_server, Counter, Histogram, Gauge
 from typing import Dict, List, Optional
 
 # AMOSKYS imports
-from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
-from amoskys.common.crypto.canonical import canonical_bytes
 from amoskys.common.crypto.signing import load_private_key, sign
 from amoskys.config import get_config
 
@@ -80,18 +78,70 @@ signal.signal(signal.SIGINT, _graceful)
 signal.signal(signal.SIGTERM, _graceful)
 
 
-# SNMP Collection OIDs
-SYSTEM_OIDS = {
-    'sysDescr': '1.3.6.1.2.1.1.1.0',      # System description
-    'sysUpTime': '1.3.6.1.2.1.1.3.0',    # Uptime
-    'sysContact': '1.3.6.1.2.1.1.4.0',   # Contact
-    'sysName': '1.3.6.1.2.1.1.5.0',      # Hostname
-    'sysLocation': '1.3.6.1.2.1.1.6.0',  # Location
-}
+def load_snmp_config(config_path: str = "config/snmp_metrics_config.yaml") -> Dict[str, Dict]:
+    """Load SNMP metrics configuration from YAML file.
+
+    Args:
+        config_path: Path to YAML config file
+
+    Returns:
+        Dictionary of metric_name -> {oid, description, type, is_table, etc.}
+    """
+    import yaml
+
+    try:
+        with open(config_path, 'r') as f:
+            cfg = yaml.safe_load(f)
+
+        oids = {}
+        metrics_config = cfg.get('metrics', {})
+
+        for category, details in metrics_config.items():
+            if not details.get('enabled', True):
+                logger.debug(f"Skipping disabled category: {category}")
+                continue
+
+            for oid_def in details.get('oids', []):
+                name = oid_def['name']
+                oids[name] = {
+                    'oid': oid_def['oid'],
+                    'description': oid_def.get('description', ''),
+                    'type': oid_def.get('type', 'string'),
+                    'is_table': oid_def.get('is_table', False),
+                    'unit': oid_def.get('unit', ''),
+                    'category': category
+                }
+
+        logger.info(f"Loaded {len(oids)} SNMP metrics from {config_path}")
+        return oids
+
+    except FileNotFoundError:
+        logger.warning(f"Config file not found: {config_path}, using default OIDs")
+        # Fallback to default basic OIDs
+        return {
+            'sysDescr': {'oid': '1.3.6.1.2.1.1.1.0', 'description': 'System description',
+                        'type': 'string', 'is_table': False, 'unit': '', 'category': 'system_info'},
+            'sysUpTime': {'oid': '1.3.6.1.2.1.1.3.0', 'description': 'System uptime',
+                         'type': 'counter', 'is_table': False, 'unit': 'timeticks', 'category': 'system_info'},
+            'sysContact': {'oid': '1.3.6.1.2.1.1.4.0', 'description': 'System contact',
+                          'type': 'string', 'is_table': False, 'unit': '', 'category': 'system_info'},
+            'sysName': {'oid': '1.3.6.1.2.1.1.5.0', 'description': 'System hostname',
+                       'type': 'string', 'is_table': False, 'unit': '', 'category': 'system_info'},
+            'sysLocation': {'oid': '1.3.6.1.2.1.1.6.0', 'description': 'Physical location',
+                           'type': 'string', 'is_table': False, 'unit': '', 'category': 'system_info'},
+        }
+    except Exception as e:
+        logger.error(f"Error loading SNMP config: {e}", exc_info=True)
+        # Return basic fallback
+        return {}
+
+
+# Load SNMP OIDs from configuration
+SNMP_OIDS = load_snmp_config()
 
 
 async def collect_snmp_data(host: str, community: str = 'public') -> Optional[Dict[str, str]]:
-    """Collect SNMP data from a device.
+    """Collect SNMP data from a device using configured OIDs.
 
     Args:
         host: Device IP or hostname
@@ -104,13 +154,27 @@ async def collect_snmp_data(host: str, community: str = 'public') -> Optional[Di
         logger.error("pysnmp not available")
         return None
 
+    if not SNMP_OIDS:
+        logger.error("No SNMP OIDs configured")
+        return None
+
     collected_data = {}
     t0 = time.time()
 
     try:
-        for name, oid in SYSTEM_OIDS.items():
+        for name, oid_config in SNMP_OIDS.items():
+            oid = oid_config['oid']
+            is_table = oid_config.get('is_table', False)
+
             try:
-                error_indication, error_status, error_index, var_binds = await get_cmd(
+                if is_table:
+                    # For table OIDs, we'll collect just the first row for now
+                    # Full table walking can be added later if needed
+                    logger.debug(f"Skipping table OID {name} (table walking not yet implemented)")
+                    continue
+
+                # Single OID GET
+                error_indication, error_status, _, var_binds = await get_cmd(
                     SnmpDispatcher(),
                     CommunityData(community),
                     await UdpTransportTarget.create((host, 161)),
@@ -118,27 +182,30 @@ async def collect_snmp_data(host: str, community: str = 'public') -> Optional[Di
                 )
 
                 if error_indication:
-                    logger.warning(f"SNMP error for {name} on {host}: {error_indication}")
+                    logger.debug(f"SNMP error for {name} on {host}: {error_indication}")
                     continue
 
                 if error_status:
-                    logger.warning(f"SNMP error for {name} on {host}: {error_status}")
+                    logger.debug(f"SNMP error for {name} on {host}: {error_status}")
                     continue
 
                 for var_bind in var_binds:
                     value = str(var_bind[1])
                     collected_data[name] = value
                     SNMP_METRICS_COLLECTED.inc()
+                    logger.debug(f"Collected {name} = {value}")
 
             except Exception as e:
-                logger.error(f"Exception collecting {name} from {host}: {e}")
+                logger.debug(f"Exception collecting {name} from {host}: {e}")
                 continue
 
         if collected_data:
             SNMP_COLLECTION_LATENCY.observe((time.time() - t0) * 1000)
             SNMP_COLLECTION_SUCCESS.inc()
+            logger.debug(f"Successfully collected {len(collected_data)} metrics from {host}")
         else:
             SNMP_COLLECTION_ERRORS.inc()
+            logger.warning(f"No metrics collected from {host}")
 
         return collected_data if collected_data else None
 
@@ -313,49 +380,33 @@ def publish_telemetry(envelope: telemetry_pb2.UniversalEnvelope) -> bool:
     t0 = time.time()
 
     try:
-        # TODO: Once EventBus supports UniversalEnvelope, use that directly
-        # For now, wrap in a FlowEvent as a temporary bridge
-        from amoskys.proto import messaging_schema_pb2_grpc as pb_grpc
-        
+        # Publish UniversalEnvelope directly via PublishTelemetry RPC
+        from amoskys.proto import universal_telemetry_pb2_grpc as telemetry_grpc
+
         device_id = envelope.device_telemetry.device_id
-        
-        # Create a FlowEvent wrapper (temporary solution)
-        flow = pb.FlowEvent(
-            src_ip=device_id,
-            dst_ip="eventbus",
-            protocol="SNMP-TELEMETRY",
-            bytes_sent=len(serialized),
-            start_time=envelope.ts_ns
-        )
-        
-        # Wrap in Envelope
-        flow_envelope = pb.Envelope(
-            version="1",
-            ts_ns=envelope.ts_ns,
-            idempotency_key=envelope.idempotency_key,
-            flow=flow,
-            sig=envelope.sig  # Use sig field
-        )
-        
+
         with grpc_channel() as ch:
-            stub = pb_grpc.EventBusStub(ch)
-            ack = stub.Publish(flow_envelope, timeout=5.0)
+            stub = telemetry_grpc.UniversalEventBusStub(ch)
+            ack = stub.PublishTelemetry(envelope, timeout=5.0)
 
         latency_ms = (time.time() - t0) * 1000
         SNMP_PUBLISH_LATENCY.observe(latency_ms)
 
-        if ack.status == pb.PublishAck.OK:
+        if ack.status == telemetry_pb2.UniversalAck.Status.OK:
             SNMP_PUBLISH_OK.inc()
-            logger.info(f"✅ Published telemetry: {device_id} "
-                       f"({len(serialized)} bytes, {latency_ms:.1f}ms)")
+            logger.info(f"✅ Published DeviceTelemetry: {device_id} "
+                       f"({len(serialized)} bytes, {ack.events_accepted} events, {latency_ms:.1f}ms)")
             return True
-        elif ack.status == pb.PublishAck.RETRY:
+        elif ack.status in (telemetry_pb2.UniversalAck.Status.RETRY,
+                            telemetry_pb2.UniversalAck.Status.OVERLOAD):
             SNMP_PUBLISH_RETRY.inc()
-            logger.warning(f"⚠️  EventBus requested retry: {ack.reason}")
+            logger.warning(f"⚠️  EventBus requested retry: {ack.reason} "
+                          f"(backoff: {ack.backoff_hint_ms}ms)")
             return False
         else:
             SNMP_PUBLISH_FAIL.inc()
-            logger.error(f"❌ Publish failed: {ack.reason}")
+            logger.error(f"❌ Publish failed: {ack.reason} "
+                        f"(accepted: {ack.events_accepted}, rejected: {ack.events_rejected})")
             return False
 
     except grpc.RpcError as e:
