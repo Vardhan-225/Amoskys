@@ -15,13 +15,19 @@ import psutil
 import asyncio
 import time
 import logging
+import os
+import grpc
 from datetime import datetime
 from typing import Dict, List, Optional, Set
 from dataclasses import dataclass, asdict
 
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
+from amoskys.proto import universal_telemetry_pb2_grpc as telemetry_grpc
 from amoskys.common.crypto.signing import load_private_key, sign
+from amoskys.config import get_config
 
+# Load configuration
+config = get_config()
 logger = logging.getLogger("ProcAgent")
 
 
@@ -256,7 +262,55 @@ class ProcAgent:
         """Load Ed25519 private key for signing"""
         self.sk = load_private_key('certs/agent.ed25519')
         logger.info("✅ Loaded Ed25519 private key")
-    
+
+    def publish_telemetry(self, envelope: telemetry_pb2.UniversalEnvelope) -> bool:
+        """Publish UniversalEnvelope to EventBus via gRPC.
+
+        Args:
+            envelope: Signed UniversalEnvelope to publish
+
+        Returns:
+            bool: True if publish succeeded, False otherwise
+        """
+        try:
+            # Load certificates
+            cert_dir = config.agent.cert_dir
+            with open(os.path.join(cert_dir, "ca.crt"), "rb") as f:
+                ca = f.read()
+            with open(os.path.join(cert_dir, "agent.crt"), "rb") as f:
+                crt = f.read()
+            with open(os.path.join(cert_dir, "agent.key"), "rb") as f:
+                key = f.read()
+
+            creds = grpc.ssl_channel_credentials(
+                root_certificates=ca,
+                private_key=key,
+                certificate_chain=crt
+            )
+
+            # Connect and publish
+            with grpc.secure_channel(config.agent.bus_address, creds) as ch:
+                stub = telemetry_grpc.UniversalEventBusStub(ch)
+                ack = stub.PublishTelemetry(envelope, timeout=5.0)
+
+                if ack.status == telemetry_pb2.UniversalAck.Status.OK:
+                    logger.info(f"✅ Published process telemetry ({ack.events_accepted} events)")
+                    return True
+                elif ack.status in (telemetry_pb2.UniversalAck.Status.RETRY,
+                                    telemetry_pb2.UniversalAck.Status.OVERLOAD):
+                    logger.warning(f"⚠️ EventBus retry: {ack.reason} (backoff: {ack.backoff_hint_ms}ms)")
+                    return False
+                else:
+                    logger.error(f"❌ Publish failed: {ack.reason}")
+                    return False
+
+        except grpc.RpcError as e:
+            logger.error(f"❌ gRPC error: {e.code()} - {e.details()}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Publish error: {e}", exc_info=True)
+            return False
+
     async def collect_once(self) -> List[telemetry_pb2.UniversalEnvelope]:
         """Collect process data once and return envelopes
         
@@ -475,10 +529,17 @@ class ProcAgent:
                 # Create telemetry
                 device_telemetry = self.create_device_telemetry(processes, changes, system_stats)
                 envelope = self.create_universal_envelope(device_telemetry)
-                
-                # TODO: Publish to EventBus
-                logger.info(f"✅ Created telemetry envelope ({len(envelope.SerializeToString())} bytes)")
-                
+
+                # Publish to EventBus
+                envelope_bytes = envelope.SerializeToString()
+                logger.info(f"📤 Publishing telemetry envelope ({len(envelope_bytes)} bytes, {len(device_telemetry.events)} events)")
+
+                success = self.publish_telemetry(envelope)
+                if success:
+                    logger.info(f"✅ Telemetry published successfully")
+                else:
+                    logger.warning("⚠️ Failed to publish telemetry, will retry next cycle")
+
                 # Show top processes
                 top_cpu = self.monitor.get_top_processes(by='cpu', limit=5)
                 logger.info("\n🔥 Top 5 CPU consumers:")

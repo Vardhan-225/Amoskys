@@ -90,6 +90,8 @@ from amoskys.common.crypto.canonical import canonical_bytes
 from amoskys.common.crypto.signing import load_public_key, verify
 from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
+from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
+from amoskys.proto import universal_telemetry_pb2_grpc as telemetry_grpc
 from amoskys.config import get_config
 from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
 
@@ -481,63 +483,81 @@ def _dec_inflight():
         _inflight = max(0, _inflight - 1)
         BUS_INFLIGHT.set(_inflight)
 
-def _flow_from_envelope(env: "pb.Envelope") -> "pb.FlowEvent":
-    """Extract a FlowEvent message from an Envelope.
+def _data_from_envelope(env):
+    """Extract telemetry data from Envelope or UniversalEnvelope.
 
-    This function handles backward-compatible extraction of FlowEvent data from
-    Envelope messages. It supports both the new structured format (env.flow field)
-    and the legacy format (serialized bytes in env.payload).
+    This function handles extraction from both:
+    - Legacy Envelope (with FlowEvent)
+    - New UniversalEnvelope (with DeviceTelemetry, ProcessEvent, or FlowEvent)
 
     Args:
-        env: A protobuf Envelope message containing either:
-             - A populated flow field (new format), or
-             - Serialized FlowEvent bytes in payload field (legacy format)
+        env: Either a pb.Envelope or telemetry_pb2.UniversalEnvelope message
 
     Returns:
-        pb.FlowEvent: The extracted and parsed FlowEvent message containing
-                      network flow telemetry data.
+        Tuple of (event_type: str, data: protobuf message)
+        Examples:
+            ('DeviceTelemetry', telemetry_pb2.DeviceTelemetry)
+            ('FlowEvent', pb.FlowEvent)
+            ('ProcessEvent', telemetry_pb2.ProcessEvent)
 
     Raises:
-        ValueError: If the envelope contains neither a valid flow field nor
-                    a parseable payload field. The error message is
-                    "Envelope missing flow/payload".
-
-    Implementation:
-        The function tries two extraction methods in order:
-        1. New format: Check if env.flow exists and has non-zero size
-        2. Legacy format: Parse env.payload as serialized FlowEvent bytes
-
-        This allows gradual migration from the old to new format without
-        breaking existing agents.
-
-    Backward Compatibility:
-        The legacy format support ensures old agents that still serialize
-        FlowEvents into the payload field continue to work. New agents should
-        populate the flow field directly for better type safety and debugging.
-
-    Security:
-        The payload parsing uses ParseFromString which validates the protobuf
-        format. Malformed payloads will raise an exception caught by the Publish
-        handler, which returns INVALID status to the client.
-
-    Note:
-        The hasattr and ByteSize checks in the new format path handle both:
-        - Old protobuf schemas where env.flow might not exist
-        - Envelopes where flow exists but is empty (default message)
+        ValueError: If envelope contains no valid telemetry data
     """
+    # Try UniversalEnvelope fields first (new format)
     try:
-        # If tests set env.flow, it'll be a non-empty message.
-        if hasattr(env, "flow") and env.flow.ByteSize() > 0:
-            return env.flow
+        if hasattr(env, 'device_telemetry') and env.device_telemetry.ByteSize() > 0:
+            return ('DeviceTelemetry', env.device_telemetry)
     except Exception:
         pass
+
+    try:
+        if hasattr(env, 'process') and env.process.ByteSize() > 0:
+            return ('ProcessEvent', env.process)
+    except Exception:
+        pass
+
+    try:
+        if hasattr(env, 'telemetry_batch') and env.telemetry_batch.ByteSize() > 0:
+            return ('TelemetryBatch', env.telemetry_batch)
+    except Exception:
+        pass
+
+    # Try legacy Envelope flow field
+    try:
+        if hasattr(env, "flow") and env.flow.ByteSize() > 0:
+            return ('FlowEvent', env.flow)
+    except Exception:
+        pass
+
     # Back-compat for old producers that sent serialized FlowEvent bytes
     payload = getattr(env, "payload", b"")
     if payload:
         msg = pb.FlowEvent()
         msg.ParseFromString(payload)
-        return msg
-    raise ValueError("Envelope missing flow/payload")
+        return ('FlowEvent', msg)
+
+    raise ValueError("Envelope missing telemetry data")
+
+def _flow_from_envelope(env: "pb.Envelope") -> "pb.FlowEvent":
+    """Extract a FlowEvent message from an Envelope.
+
+    DEPRECATED: Use _data_from_envelope instead for multi-type support.
+    Kept for backward compatibility with existing code.
+
+    Args:
+        env: A protobuf Envelope message
+
+    Returns:
+        pb.FlowEvent: The extracted FlowEvent message
+
+    Raises:
+        ValueError: If envelope contains no FlowEvent data
+    """
+    event_type, data = _data_from_envelope(env)
+    if event_type == 'FlowEvent':
+        return data
+    # If we got DeviceTelemetry or ProcessEvent, this is the wrong function
+    raise ValueError(f"Envelope contains {event_type}, not FlowEvent. Use _data_from_envelope instead.")
 
 def _ack_with_status(name: str, reason: str = "") -> "pb.PublishAck":
     """Build a PublishAck response with the specified status and reason.
@@ -768,12 +788,15 @@ def _ack_err(msg: str = "ERROR") -> "pb.PublishAck":
 OVERLOAD_REASON = "Server is overloaded"
 OVERLOAD_LOG = "[Publish] Server is overloaded"
 
-class EventBusServicer(pbrpc.EventBusServicer):
-    """Implements the EventBus gRPC service for message routing.
+class EventBusServicer(pbrpc.EventBusServicer, telemetry_grpc.UniversalEventBusServicer):
+    """Implements the EventBus and UniversalEventBus gRPC services for message routing.
 
-    This servicer handles the Publish and Subscribe RPCs defined in the EventBus
-    protobuf service definition. It implements the core message ingestion logic
-    with validation, rate limiting, and acknowledgment.
+    This servicer handles both legacy and new telemetry publishing:
+    - Publish (legacy): Accepts Envelope with FlowEvent
+    - PublishTelemetry (new): Accepts UniversalEnvelope with any telemetry type
+
+    It implements core message ingestion logic with validation, rate limiting,
+    and acknowledgment.
 
     The servicer is registered with the gRPC server and receives callbacks for
     each RPC invocation. It has access to the gRPC context for authentication
@@ -896,9 +919,21 @@ class EventBusServicer(pbrpc.EventBusServicer):
                     BUS_RETRY_TOTAL.inc()
                     return _ack_retry(f"Server at capacity ({inflight} requests inflight)", 1000)
 
-                # Process the request
-                flow = _flow_from_envelope(request)
-                logger.info(f"[Publish] src_ip={flow.src_ip} dst_ip={flow.dst_ip} bytes_tx={flow.bytes_tx}")
+                # Process the request - supports all telemetry types
+                event_type, data = _data_from_envelope(request)
+
+                # Log based on event type
+                if event_type == 'DeviceTelemetry':
+                    logger.info(f"[Publish] DeviceTelemetry from {data.device_id}, "
+                               f"protocol={data.protocol}, {len(data.events)} events")
+                elif event_type == 'FlowEvent':
+                    logger.info(f"[Publish] FlowEvent {data.src_ip} → {data.dst_ip}, bytes_tx={data.bytes_tx}")
+                elif event_type == 'ProcessEvent':
+                    logger.info(f"[Publish] ProcessEvent pid={data.pid}, exe={data.exe}")
+                elif event_type == 'TelemetryBatch':
+                    logger.info(f"[Publish] TelemetryBatch with {len(data.telemetry_records)} records")
+                else:
+                    logger.info(f"[Publish] {event_type} received")
                 
                 # Store in WAL for dashboard visibility
                 if wal_storage:
@@ -982,6 +1017,133 @@ class EventBusServicer(pbrpc.EventBusServicer):
         _ = request  # Mark request as used to avoid linter warning
         logger.warning("Subscribe() called but not implemented.")
         context.abort(grpc.StatusCode.UNIMPLEMENTED, "Subscribe not supported")
+
+    def PublishTelemetry(self, request, context):
+        """Handle PublishTelemetry RPC for UniversalEnvelope messages.
+
+        This is the new unified endpoint for publishing all telemetry types:
+        DeviceTelemetry, ProcessEvent, FlowEvent, and TelemetryBatch.
+
+        Args:
+            request: telemetry_pb2.UniversalEnvelope containing telemetry data
+            context: The gRPC ServicerContext
+
+        Returns:
+            telemetry_pb2.UniversalAck: Acknowledgment with detailed status
+        """
+        logger.debug("[PublishTelemetry] Method called")
+        t0 = time.time()
+        BUS_REQS.inc()
+
+        # Check overload
+        if is_overloaded():
+            logger.info("[PublishTelemetry] Server is overloaded")
+            BUS_RETRY_TOTAL.inc()
+            BUS_LAT.observe((time.time() - t0) * 1000.0)
+            # Return UniversalAck with RETRY status
+            ack = telemetry_pb2.UniversalAck()
+            ack.status = telemetry_pb2.UniversalAck.Status.OVERLOAD
+            ack.reason = "Server is overloaded"
+            ack.backoff_hint_ms = 2000
+            return ack
+
+        try:
+            # Size check
+            serialized = request.SerializeToString()
+            if len(serialized) > MAX_ENV_BYTES:
+                logger.info(f"[PublishTelemetry] Envelope too large: {len(serialized)} bytes")
+                BUS_INVALID.inc()
+                ack = telemetry_pb2.UniversalAck()
+                ack.status = telemetry_pb2.UniversalAck.Status.INVALID
+                ack.reason = f"Envelope too large ({len(serialized)} > {MAX_ENV_BYTES} bytes)"
+                ack.events_rejected = 1
+                return ack
+
+            # Track inflight
+            inflight = _inc_inflight()
+            try:
+                # Check capacity
+                if inflight > BUS_MAX_INFLIGHT:
+                    logger.info(f"[PublishTelemetry] Server at capacity: {inflight} requests")
+                    BUS_RETRY_TOTAL.inc()
+                    ack = telemetry_pb2.UniversalAck()
+                    ack.status = telemetry_pb2.UniversalAck.Status.OVERLOAD
+                    ack.reason = f"Server at capacity ({inflight} requests inflight)"
+                    ack.backoff_hint_ms = 1000
+                    ack.current_load = float(inflight) / BUS_MAX_INFLIGHT
+                    ack.queue_depth = inflight
+                    return ack
+
+                # Extract and log telemetry
+                event_type, data = _data_from_envelope(request)
+
+                if event_type == 'DeviceTelemetry':
+                    logger.info(f"[PublishTelemetry] DeviceTelemetry from {data.device_id}, "
+                               f"{len(data.events)} events, {len(serialized)} bytes")
+                    event_count = len(data.events)
+                elif event_type == 'ProcessEvent':
+                    logger.info(f"[PublishTelemetry] ProcessEvent pid={data.pid}")
+                    event_count = 1
+                elif event_type == 'TelemetryBatch':
+                    logger.info(f"[PublishTelemetry] TelemetryBatch with {len(data.telemetry_records)} records")
+                    event_count = len(data.telemetry_records)
+                else:
+                    logger.info(f"[PublishTelemetry] {event_type}")
+                    event_count = 1
+
+                # Store in WAL
+                if wal_storage:
+                    try:
+                        with _wal_lock:
+                            conn = sqlite3.connect(WAL_PATH, timeout=5.0, isolation_level=None, check_same_thread=False)
+
+                            idem = request.idempotency_key if hasattr(request, 'idempotency_key') else f"unknown_{request.ts_ns}"
+                            ts_ns = request.ts_ns
+                            checksum = hashlib.blake2b(serialized, digest_size=32).digest()
+
+                            try:
+                                conn.execute(
+                                    "INSERT INTO wal (idem, ts_ns, bytes, checksum) VALUES (?, ?, ?, ?)",
+                                    (idem, ts_ns, serialized, checksum)
+                                )
+                                logger.debug(f"[PublishTelemetry] Stored {event_type} in WAL (idem={idem}, size={len(serialized)})")
+                            except sqlite3.IntegrityError:
+                                logger.debug(f"[PublishTelemetry] Duplicate (idem={idem}), skipped")
+                            finally:
+                                conn.close()
+                    except Exception as wal_err:
+                        logger.error(f"[PublishTelemetry] WAL error: {wal_err}")
+
+                # Success response
+                latency_ms = (time.time() - t0) * 1000
+                BUS_LAT.observe(latency_ms)
+
+                ack = telemetry_pb2.UniversalAck()
+                ack.status = telemetry_pb2.UniversalAck.Status.OK
+                ack.reason = "accepted"
+                ack.events_accepted = event_count
+                ack.events_rejected = 0
+                ack.processed_timestamp_ns = int(time.time() * 1e9)
+                ack.current_load = float(inflight) / BUS_MAX_INFLIGHT
+                return ack
+
+            finally:
+                _dec_inflight()
+
+        except ValueError as e:
+            BUS_INVALID.inc()
+            ack = telemetry_pb2.UniversalAck()
+            ack.status = telemetry_pb2.UniversalAck.Status.INVALID
+            ack.reason = str(e)
+            ack.events_rejected = 1
+            return ack
+        except Exception as e:
+            logger.exception("[PublishTelemetry] Error")
+            ack = telemetry_pb2.UniversalAck()
+            ack.status = telemetry_pb2.UniversalAck.Status.PROCESSING_ERROR
+            ack.reason = str(e)
+            ack.events_rejected = 1
+            return ack
 
 
 def _start_health_server():
@@ -1198,12 +1360,14 @@ def serve():
         server.add_secure_port(f"[::]:{server_port}", creds)
         logger.info("gRPC server bound to port %d with TLS", server_port)
 
-        # Register EventBus service
+        # Register EventBus services (both legacy and new)
         try:
-            pbrpc.add_EventBusServicer_to_server(EventBusServicer(), server)
-            logger.info("Registered EventBusServicer with gRPC server")
+            servicer = EventBusServicer()
+            pbrpc.add_EventBusServicer_to_server(servicer, server)
+            telemetry_grpc.add_UniversalEventBusServicer_to_server(servicer, server)
+            logger.info("Registered EventBusServicer (legacy) and UniversalEventBusServicer (new) with gRPC server")
         except Exception as e:
-            logger.exception("Failed to register EventBusServicer: %s", e)
+            logger.exception("Failed to register servicers: %s", e)
             raise
 
         logger.info("Starting gRPC server...")
