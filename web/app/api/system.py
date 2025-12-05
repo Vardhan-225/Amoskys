@@ -6,6 +6,7 @@ System health, metrics, and administrative endpoints
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timezone
 from .auth import require_auth
+from .rate_limiter import require_rate_limit
 import psutil
 import platform
 import os
@@ -279,3 +280,167 @@ def get_logs():
         'status': 'success',
         'logs': logs
     })
+
+@system_bp.route('/stats', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
+def system_health_stats():
+    """
+    Get comprehensive system health statistics
+    Similar to process telemetry stats, provides aggregated system health data
+    """
+    try:
+        # Get current metrics
+        cpu_percent = psutil.cpu_percent(interval=0.1)  # Quick sample
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        # Get all processes for analysis
+        process_count = len(psutil.pids())
+        
+        # Network metrics
+        network = psutil.net_io_counters()
+        
+        # CPU frequency
+        cpu_freq = psutil.cpu_freq()
+        
+        stats = {
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'status': 'healthy',
+            'system': {
+                'platform': platform.platform(),
+                'hostname': platform.node(),
+                'python_version': platform.python_version()
+            },
+            'cpu': {
+                'percent': round(cpu_percent, 2),
+                'count': psutil.cpu_count(logical=True),
+                'count_physical': psutil.cpu_count(logical=False),
+                'frequency_current': round(cpu_freq.current, 2) if cpu_freq else None,
+                'frequency_max': round(cpu_freq.max, 2) if cpu_freq else None
+            },
+            'memory': {
+                'percent': round(memory.percent, 2),
+                'used_gb': round(memory.used / (1024**3), 2),
+                'available_gb': round(memory.available / (1024**3), 2),
+                'total_gb': round(memory.total / (1024**3), 2)
+            },
+            'disk': {
+                'percent': round((disk.used / disk.total) * 100, 2),
+                'used_gb': round(disk.used / (1024**3), 2),
+                'total_gb': round(disk.total / (1024**3), 2),
+                'free_gb': round(disk.free / (1024**3), 2)
+            },
+            'network': {
+                'bytes_sent': network.bytes_sent,
+                'bytes_recv': network.bytes_recv,
+                'packets_sent': network.packets_sent,
+                'packets_recv': network.packets_recv
+            },
+            'processes': {
+                'total': process_count
+            }
+        }
+        
+        # Determine health status
+        if cpu_percent > 90 or memory.percent > 90 or (disk.used / disk.total * 100) > 95:
+            stats['status'] = 'degraded'
+        elif cpu_percent > 75 or memory.percent > 80 or (disk.used / disk.total * 100) > 90:
+            stats['status'] = 'warning'
+        
+        return jsonify(stats), 200
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'error',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+
+@system_bp.route('/processes', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
+def system_processes():
+    """
+    Get top processes by CPU and memory usage
+    Useful for identifying resource hogs
+    """
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        limit = min(limit, 100)  # Cap at 100
+        
+        processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
+            try:
+                pinfo = proc.info
+                if pinfo['cpu_percent'] or pinfo['memory_percent']:
+                    processes.append({
+                        'pid': pinfo['pid'],
+                        'name': pinfo['name'],
+                        'cpu_percent': round(pinfo['cpu_percent'], 2),
+                        'memory_percent': round(pinfo['memory_percent'], 2)
+                    })
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        
+        # Sort by CPU first, then memory
+        processes_by_cpu = sorted(processes, key=lambda x: x['cpu_percent'], reverse=True)[:limit]
+        processes_by_memory = sorted(processes, key=lambda x: x['memory_percent'], reverse=True)[:limit]
+        
+        return jsonify({
+            'status': 'success',
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'by_cpu': processes_by_cpu,
+            'by_memory': processes_by_memory,
+            'total_processes': len(processes)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'error',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+
+@system_bp.route('/disk', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
+def system_disk_usage():
+    """
+    Get disk usage statistics for all mounted partitions
+    Helps identify which disks are filling up
+    """
+    try:
+        partitions = psutil.disk_partitions()
+        disk_usage = []
+        
+        for partition in partitions:
+            try:
+                usage = psutil.disk_usage(partition.mountpoint)
+                disk_usage.append({
+                    'device': partition.device,
+                    'mountpoint': partition.mountpoint,
+                    'fstype': partition.fstype,
+                    'total_gb': round(usage.total / (1024**3), 2),
+                    'used_gb': round(usage.used / (1024**3), 2),
+                    'free_gb': round(usage.free / (1024**3), 2),
+                    'percent': round(usage.percent, 2)
+                })
+            except OSError:
+                pass
+        
+        # Sort by usage percentage
+        disk_usage = sorted(disk_usage, key=lambda x: x['percent'], reverse=True)
+        
+        return jsonify({
+            'status': 'success',
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'partitions': disk_usage,
+            'total': len(disk_usage)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'error',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500

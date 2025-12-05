@@ -258,6 +258,11 @@
             border: 1px solid rgba(0, 255, 136, 0.3);
             text-align: center;
             transition: all 0.3s ease;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 160px;
         }
         
         .metric-card:hover {
@@ -266,10 +271,13 @@
         }
         
         .metric-value {
-            font-size: 2.5rem;
+            font-size: clamp(1.8rem, 5vw, 2.5rem);
             font-weight: 700;
             color: var(--neural-primary);
             margin-bottom: 0.5rem;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
         }
         
         .metric-label {
@@ -277,6 +285,7 @@
             font-size: 0.9rem;
             text-transform: uppercase;
             letter-spacing: 1px;
+            overflow-wrap: break-word;
         }
         
         /* Buttons */
@@ -400,6 +409,7 @@
             <a href="/dashboard/" class="nav-link">🏠 Command Center</a>
             <a href="/dashboard/soc" class="nav-link">🛡️ SOC Operations</a>
             <a href="/dashboard/agents" class="nav-link">🤖 Agent Network</a>
+            <a href="/dashboard/processes" class="nav-link">🔬 Process Telemetry</a>
             <a href="/dashboard/system" class="nav-link">📊 System Health</a>
             <a href="/dashboard/neural" class="nav-link">🧠 Neural Insights</a>
             <a href="/api-access" class="nav-link">🔌 API Gateway</a>

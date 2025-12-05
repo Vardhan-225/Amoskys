@@ -3,7 +3,7 @@
 {% block title %}AMOSKYS Cortex Command Center{% endblock %}
 
 {% block content %}
-<div class="command-center">
+<div class="command-center-v2">
     <!-- Welcome Header -->
     <div class="neural-card">
         <div class="card-header">
@@ -11,522 +11,607 @@
             <div class="card-badge badge-success">Phase 2.4 Active</div>
         </div>
         <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-            Welcome to the AMOSKYS Neural Security Command Platform. This dashboard provides real-time monitoring, 
-            threat analysis, and system oversight for your distributed security infrastructure.
+            Real-time neural security monitoring and threat analysis for distributed infrastructure.
         </p>
         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-            <a href="/dashboard/soc" class="neural-button">🛡️ Enter SOC Operations</a>
+            <a href="/dashboard/soc" class="neural-button">🛡️ SOC Operations</a>
             <a href="/dashboard/agents" class="neural-button">🤖 Manage Agents</a>
+            <a href="/dashboard/processes" class="neural-button">🔬 Process Telemetry</a>
             <a href="/dashboard/neural" class="neural-button">🧠 Neural Insights</a>
         </div>
     </div>
 
     <!-- Real-time Metrics Grid -->
-    <div class="metrics-grid">
-        <div class="metric-card" id="threat-score-card">
-            <div class="metric-value" id="current-threat-score">--</div>
-            <div class="metric-label">Current Threat Score</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="threat-recommendation">Calculating...</div>
+    <div class="metrics-grid-v2">
+        <div class="metric-card">
+            <div class="metric-value" id="threat-score">0</div>
+            <div class="metric-label">Threat Level</div>
+            <div class="metric-detail" id="threat-status">NORMAL</div>
         </div>
         
-        <div class="metric-card" id="active-agents-card">
-            <div class="metric-value" id="active-agents-count">--</div>
+        <div class="metric-card">
+            <div class="metric-value" id="agent-count">0</div>
             <div class="metric-label">Active Agents</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="agents-health">Network Status: Unknown</div>
+            <div class="metric-detail" id="agent-status">Initializing...</div>
         </div>
         
-        <div class="metric-card" id="events-count-card">
-            <div class="metric-value" id="events-count">--</div>
+        <div class="metric-card">
+            <div class="metric-value" id="event-count">0</div>
             <div class="metric-label">Events (24h)</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="events-trend">Trend: Calculating...</div>
+            <div class="metric-detail" id="event-status">Monitoring...</div>
         </div>
         
-        <div class="metric-card" id="system-health-card">
-            <div class="metric-value" id="system-health-score">--</div>
+        <div class="metric-card">
+            <div class="metric-value" id="health-score">0%</div>
             <div class="metric-label">System Health</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="system-status-detail">Status: Checking...</div>
+            <div class="metric-detail" id="health-status">Checking...</div>
         </div>
     </div>
 
-    <!-- Dashboard Grid Layout -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
-        <!-- Recent Threats Panel -->
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">⚠️ Recent Threats</h3>
-                <span class="neural-loading" id="threats-loading" style="display: none;"></span>
-            </div>
-            <div id="recent-threats-list">
-                <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
-                    Loading recent threat data...
-                </p>
-            </div>
-        </div>
-
-        <!-- Agent Status Panel -->
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">🤖 Agent Network</h3>
-                <span class="neural-loading" id="agents-loading" style="display: none;"></span>
-            </div>
-            <div id="agent-status-grid">
-                <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
-                    Loading agent network status...
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <!-- System Monitoring Panel -->
+    <!-- System Metrics Dashboard -->
     <div class="neural-card">
         <div class="card-header">
             <h3 class="card-title">📊 System Performance</h3>
-            <span class="neural-loading" id="metrics-loading" style="display: none;"></span>
+            <span class="metric-timestamp" id="metrics-timestamp">Last updated: -</span>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-            <div style="text-align: center; padding: 1rem;">
-                <canvas id="cpu-chart" width="150" height="150"></canvas>
-                <div style="margin-top: 0.5rem; color: var(--text-secondary);">CPU Usage</div>
+        <div class="system-metrics-grid">
+            <div class="metric-box">
+                <div style="position: relative; width: 120px; height: 120px; margin: 0 auto;">
+                    <canvas id="cpu-chart"></canvas>
+                </div>
+                <div class="metric-box-label">CPU Usage</div>
+                <div class="metric-box-value" id="cpu-value">--%</div>
             </div>
-            <div style="text-align: center; padding: 1rem;">
-                <canvas id="memory-chart" width="150" height="150"></canvas>
-                <div style="margin-top: 0.5rem; color: var(--text-secondary);">Memory Usage</div>
+            <div class="metric-box">
+                <div style="position: relative; width: 120px; height: 120px; margin: 0 auto;">
+                    <canvas id="memory-chart"></canvas>
+                </div>
+                <div class="metric-box-label">Memory Usage</div>
+                <div class="metric-box-value" id="memory-value">--%</div>
             </div>
-            <div style="text-align: center; padding: 1rem;">
-                <canvas id="disk-chart" width="150" height="150"></canvas>
-                <div style="margin-top: 0.5rem; color: var(--text-secondary);">Disk Usage</div>
+            <div class="metric-box">
+                <div style="position: relative; width: 120px; height: 120px; margin: 0 auto;">
+                    <canvas id="disk-chart"></canvas>
+                </div>
+                <div class="metric-box-label">Disk Usage</div>
+                <div class="metric-box-value" id="disk-value">--%</div>
+            </div>
+            <div class="metric-box">
+                <div style="position: relative; width: 120px; height: 120px; margin: 0 auto;">
+                    <canvas id="network-chart"></canvas>
+                </div>
+                <div class="metric-box-label">Network Activity</div>
+                <div class="metric-box-value" id="network-value">--%</div>
             </div>
         </div>
     </div>
 
-    <!-- Neural Readiness Status -->
-    <div class="neural-card">
-        <div class="card-header">
-            <h3 class="card-title">🧠 Neural Engine Readiness</h3>
-            <div class="card-badge" id="neural-readiness-badge">Assessing...</div>
+    <!-- Recent Events and Status -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 2rem;">
+        <!-- Recent Threats -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">⚠️ Recent Threats</h3>
+            </div>
+            <div id="threats-container" style="max-height: 300px; overflow-y: auto;">
+                <div style="color: var(--text-secondary); text-align: center; padding: 2rem;">
+                    Loading threats...
+                </div>
+            </div>
         </div>
-        <div id="neural-readiness-content">
-            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
-                Evaluating system readiness for Phase 2.5 Neural Engine integration...
-            </p>
+
+        <!-- Agent Status -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">🤖 Agent Network</h3>
+            </div>
+            <div id="agents-container" style="max-height: 300px; overflow-y: auto;">
+                <div style="color: var(--text-secondary); text-align: center; padding: 2rem;">
+                    Loading agents...
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 <style>
-.command-center {
-    max-width: 100%;
+.command-center-v2 {
+    padding: 2rem;
 }
 
-.threat-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 5px;
-    border-left: 3px solid var(--neural-warning);
-}
-
-.threat-item.severity-low { border-left-color: var(--neural-primary); }
-.threat-item.severity-medium { border-left-color: var(--neural-warning); }
-.threat-item.severity-high { border-left-color: #ff6600; }
-.threat-item.severity-critical { border-left-color: var(--neural-critical); }
-
-.threat-details {
-    flex: 1;
-}
-
-.threat-type {
-    font-weight: 600;
-    color: var(--neural-primary);
-    margin-bottom: 0.25rem;
-}
-
-.threat-source {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-.threat-time {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    text-align: right;
-}
-
-.agent-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 5px;
-    border-left: 3px solid var(--neural-primary);
-}
-
-.agent-item.status-offline { border-left-color: var(--neural-critical); }
-.agent-item.status-stale { border-left-color: var(--neural-warning); }
-.agent-item.status-active { border-left-color: #ffaa00; }
-.agent-item.status-online { border-left-color: var(--neural-primary); }
-
-.agent-name {
-    font-weight: 600;
-    color: var(--neural-primary);
-}
-
-.agent-host {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-.agent-status {
-    font-size: 0.75rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-}
-
-.status-online { background: var(--neural-primary); color: var(--bg-primary); }
-.status-active { background: var(--neural-warning); color: var(--bg-primary); }
-.status-stale { background: #ff6600; color: white; }
-.status-offline { background: var(--neural-critical); color: white; }
-
-.neural-readiness-grid {
+.metrics-grid-v2 {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
-    margin-top: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
 }
 
-.readiness-item {
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 5px;
-    border-left: 3px solid var(--neural-primary);
+.metric-card {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 136, 255, 0.1));
+    border: 2px solid rgba(0, 255, 136, 0.3);
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
 }
 
-.readiness-item.status-warning { border-left-color: var(--neural-warning); }
-.readiness-item.status-critical { border-left-color: var(--neural-critical); }
-
-.readiness-score {
-    font-size: 1.5rem;
+.metric-value {
+    font-size: 2.5rem;
     font-weight: 700;
-    color: var(--neural-primary);
+    color: #00ff88;
+    text-shadow: 0 0 10px #00ff88;
     margin-bottom: 0.5rem;
 }
 
-.readiness-description {
+.metric-label {
     color: var(--text-secondary);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.metric-detail {
+    color: #0088ff;
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+}
+
+.metric-timestamp {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.system-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 2rem;
+    padding: 1.5rem 0;
+}
+
+.metric-box {
+    text-align: center;
+}
+
+.metric-box canvas {
+    margin: 0 auto;
+    display: block;
+}
+
+.metric-box-label {
+    color: var(--text-secondary);
+    margin-top: 1rem;
     font-size: 0.9rem;
 }
 
-@media (max-width: 768px) {
-    .dashboard-main > div[style*="grid-template-columns: 1fr 1fr"] {
-        grid-template-columns: 1fr !important;
-    }
+.metric-box-value {
+    color: #00ff88;
+    font-weight: 700;
+    font-size: 1.2rem;
+    margin-top: 0.3rem;
+}
+
+#threats-container > div,
+#agents-container > div {
+    padding: 0.8rem;
+    border-bottom: 1px solid rgba(0, 255, 136, 0.1);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+#threats-container > div:last-child,
+#agents-container > div:last-child {
+    border-bottom: none;
+}
+
+.threat-item {
+    padding: 1rem !important;
+    background: rgba(255, 51, 102, 0.1);
+    border-left: 3px solid #ff3366;
+    margin-bottom: 0.5rem;
+    border-radius: 4px;
+}
+
+.threat-type {
+    color: #ff3366;
+    font-weight: 700;
+}
+
+.threat-time {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-top: 0.3rem;
+}
+
+.agent-item {
+    padding: 1rem !important;
+    background: rgba(0, 136, 255, 0.1);
+    border-left: 3px solid #0088ff;
+    margin-bottom: 0.5rem;
+    border-radius: 4px;
+}
+
+.agent-name {
+    color: #00ff88;
+    font-weight: 700;
+}
+
+.agent-status {
+    color: #00ff88;
+    font-size: 0.85rem;
+    margin-top: 0.3rem;
+}
+
+.status-online {
+    color: #00ff88;
+}
+
+.status-offline {
+    color: #ffaa00;
+}
+
+.status-error {
+    color: #ff3366;
 }
 </style>
-{% endblock %}
 
-{% block extra_scripts %}
 <script>
-class CortexDashboard {
+class CortexDashboardV2 {
     constructor() {
-        this.updateInterval = 5000; // 5 seconds
         this.charts = {};
+        this.updateInterval = 5000; // 5 seconds
+        this.updateTimer = null;
+        this.failureCount = { metrics: 0, threats: 0, agents: 0 };
+        this.maxRetries = 3;
+        this.lastUpdateTime = { metrics: null, threats: null, agents: null };
         this.init();
     }
-    
-    init() {
+
+    async init() {
+        console.log('Initializing Cortex Dashboard V2');
         this.initCharts();
-        this.startRealTimeUpdates();
+        this.startUpdates();
+        // Do initial update immediately
+        await this.updateAll();
     }
-    
+
     initCharts() {
+        const chartConfig = {
+            type: 'doughnut',
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                cutout: '70%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
+                }
+            }
+        };
+
         // CPU Chart
         this.charts.cpu = new Chart(document.getElementById('cpu-chart'), {
-            type: 'doughnut',
+            ...chartConfig,
             data: {
                 datasets: [{
                     data: [0, 100],
                     backgroundColor: ['#00ff88', 'rgba(255, 255, 255, 0.1)'],
                     borderWidth: 0
                 }]
-            },
-            options: {
-                responsive: true,
-                cutout: '70%',
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { enabled: false }
-                }
             }
         });
-        
+
         // Memory Chart
         this.charts.memory = new Chart(document.getElementById('memory-chart'), {
-            type: 'doughnut',
+            ...chartConfig,
             data: {
                 datasets: [{
                     data: [0, 100],
                     backgroundColor: ['#0088ff', 'rgba(255, 255, 255, 0.1)'],
                     borderWidth: 0
                 }]
-            },
-            options: {
-                responsive: true,
-                cutout: '70%',
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { enabled: false }
-                }
             }
         });
-        
+
         // Disk Chart
         this.charts.disk = new Chart(document.getElementById('disk-chart'), {
-            type: 'doughnut',
+            ...chartConfig,
             data: {
                 datasets: [{
                     data: [0, 100],
                     backgroundColor: ['#ffaa00', 'rgba(255, 255, 255, 0.1)'],
                     borderWidth: 0
                 }]
-            },
-            options: {
-                responsive: true,
-                cutout: '70%',
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { enabled: false }
-                }
             }
         });
-    }
-    
-    async startRealTimeUpdates() {
-        try {
-            await Promise.all([
-                this.updateThreatScore(),
-                this.updateAgentStatus(),
-                this.updateRecentThreats(),
-                this.updateSystemMetrics(),
-                this.updateNeuralReadiness()
-            ]);
-        } catch (error) {
-            console.error('Dashboard update error:', error);
-        }
-        
-        setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
-    }
-    
-    async updateThreatScore() {
-        try {
-            const response = await fetch('/dashboard/api/live/threat-score');
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                document.getElementById('current-threat-score').textContent = data.threat_score;
-                document.getElementById('threat-recommendation').textContent = data.recommended_action;
-                
-                const card = document.getElementById('threat-score-card');
-                card.style.background = `linear-gradient(135deg, ${data.threat_color}22, ${data.threat_color}11)`;
+
+        // Network Chart (synthetic - bytes sent/recv ratio)
+        this.charts.network = new Chart(document.getElementById('network-chart'), {
+            ...chartConfig,
+            data: {
+                datasets: [{
+                    data: [50, 50],
+                    backgroundColor: ['#ff00ff', 'rgba(255, 255, 255, 0.1)'],
+                    borderWidth: 0
+                }]
             }
-        } catch (error) {
-            console.error('Threat score update failed:', error);
+        });
+
+        console.log('Charts initialized');
+    }
+
+    startUpdates() {
+        // Update every 5 seconds
+        this.updateTimer = setInterval(() => this.updateAll(), this.updateInterval);
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => this.cleanup());
+    }
+
+    cleanup() {
+        if (this.updateTimer) {
+            clearInterval(this.updateTimer);
+            this.updateTimer = null;
         }
     }
-    
-    async updateAgentStatus() {
-        try {
-            const response = await fetch('/dashboard/api/live/agents');
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                const onlineCount = data.agents.filter(a => a.status === 'online').length;
-                const totalCount = data.agents.length;
-                
-                document.getElementById('active-agents-count').textContent = `${onlineCount}/${totalCount}`;
-                
-                const healthPercent = totalCount > 0 ? Math.round((onlineCount / totalCount) * 100) : 0;
-                document.getElementById('agents-health').textContent = `Network Health: ${healthPercent}%`;
-                
-                this.updateAgentGrid(data.agents);
-            }
-        } catch (error) {
-            console.error('Agent status update failed:', error);
-        }
-    }
-    
-    async updateRecentThreats() {
-        try {
-            document.getElementById('threats-loading').style.display = 'inline-block';
-            
-            const response = await fetch('/dashboard/api/live/threats');
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                document.getElementById('events-count').textContent = data.count;
-                document.getElementById('events-trend').textContent = `${data.threats.length} recent events`;
-                
-                this.updateThreatsList(data.threats.slice(0, 5)); // Show top 5
-            }
-        } catch (error) {
-            console.error('Recent threats update failed:', error);
-        } finally {
-            document.getElementById('threats-loading').style.display = 'none';
-        }
-    }
-    
-    async updateSystemMetrics() {
-        try {
-            document.getElementById('metrics-loading').style.display = 'inline-block';
-            
-            const response = await fetch('/dashboard/api/live/metrics');
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                const metrics = data.metrics;
-                
-                // Update health score
-                const avgHealth = (
-                    (100 - metrics.cpu.percent) +
-                    (100 - metrics.memory.percent) +
-                    (100 - metrics.disk.percent)
-                ) / 3;
-                
-                document.getElementById('system-health-score').textContent = Math.round(avgHealth) + '%';
-                document.getElementById('system-status-detail').textContent = 
-                    `CPU: ${metrics.cpu.percent}% | RAM: ${metrics.memory.percent}%`;
-                
-                // Update charts
-                this.updateChart('cpu', metrics.cpu.percent);
-                this.updateChart('memory', metrics.memory.percent);
-                this.updateChart('disk', metrics.disk.percent);
-            }
-        } catch (error) {
-            console.error('System metrics update failed:', error);
-        } finally {
-            document.getElementById('metrics-loading').style.display = 'none';
-        }
-    }
-    
-    async updateNeuralReadiness() {
-        try {
-            // This would call the neural readiness utility function
-            // For now, we'll simulate the assessment
-            const readinessData = {
-                overall_score: 78,
-                readiness_level: 'READY',
-                readiness_color: '#ffaa00',
-                criteria: {
-                    'data_flow': { description: 'Event data sufficient', score: 85, status: 'ready' },
-                    'agent_connectivity': { description: 'Agent network healthy', score: 82, status: 'ready' },
-                    'system_performance': { description: 'Resources adequate', score: 67, status: 'warning' }
-                },
-                recommendations: ['Optimize system resources for neural processing workloads']
-            };
-            
-            this.updateNeuralReadinessDisplay(readinessData);
-        } catch (error) {
-            console.error('Neural readiness update failed:', error);
-        }
-    }
-    
-    updateChart(chartId, percentage) {
-        const chart = this.charts[chartId];
-        if (chart) {
-            chart.data.datasets[0].data = [percentage, 100 - percentage];
-            chart.update('none');
-        }
-    }
-    
-    updateThreatsList(threats) {
-        const container = document.getElementById('recent-threats-list');
+
+    /**
+     * Display error state in UI with retry button
+     */
+    showErrorState(containerId, message, retryFn) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
         
-        if (threats.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No recent threats detected</p>';
-            return;
-        }
-        
-        const threatsHtml = threats.map(threat => `
-            <div class="threat-item severity-${threat.severity}">
-                <div class="threat-details">
-                    <div class="threat-type">${threat.type}</div>
-                    <div class="threat-source">Source: ${threat.source_ip}</div>
-                </div>
-                <div class="threat-time">${new Date(threat.timestamp).toLocaleTimeString()}</div>
-            </div>
-        `).join('');
-        
-        container.innerHTML = threatsHtml;
-    }
-    
-    updateAgentGrid(agents) {
-        const container = document.getElementById('agent-status-grid');
-        
-        if (agents.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No agents registered</p>';
-            return;
-        }
-        
-        const agentsHtml = agents.slice(0, 6).map(agent => `
-            <div class="agent-item status-${agent.status}">
-                <div>
-                    <div class="agent-name">${agent.agent_id}</div>
-                    <div class="agent-host">${agent.hostname}</div>
-                </div>
-                <div class="agent-status status-${agent.status}">${agent.status}</div>
-            </div>
-        `).join('');
-        
-        container.innerHTML = agentsHtml;
-    }
-    
-    updateNeuralReadinessDisplay(data) {
-        const badge = document.getElementById('neural-readiness-badge');
-        const content = document.getElementById('neural-readiness-content');
-        
-        // Update badge
-        badge.textContent = data.readiness_level;
-        badge.className = `card-badge ${data.readiness_level === 'READY' ? 'badge-success' : 
-                                        data.readiness_level === 'LIMITED' ? 'badge-warning' : 'badge-danger'}`;
-        
-        // Update content
-        const criteriaHtml = Object.entries(data.criteria).map(([key, criterion]) => `
-            <div class="readiness-item status-${criterion.status}">
-                <div class="readiness-score">${Math.round(criterion.score)}%</div>
-                <div class="readiness-description">${criterion.description}</div>
-            </div>
-        `).join('');
-        
-        const recommendationsHtml = data.recommendations.map(rec => `
-            <li style="color: var(--text-secondary); margin-bottom: 0.5rem;">${rec}</li>
-        `).join('');
-        
-        content.innerHTML = `
-            <div style="margin-bottom: 1rem;">
-                <strong style="color: var(--neural-primary);">Overall Readiness Score: ${data.overall_score}%</strong>
-            </div>
-            <div class="neural-readiness-grid">
-                ${criteriaHtml}
-            </div>
-            <div style="margin-top: 1rem;">
-                <h4 style="color: var(--neural-primary); margin-bottom: 0.5rem;">Recommendations:</h4>
-                <ul style="margin-left: 1rem;">
-                    ${recommendationsHtml}
-                </ul>
+        const errorHtml = `
+            <div style="color: #ff3366; padding: 1rem; border: 1px solid #ff3366; border-radius: 4px; background: rgba(255, 51, 102, 0.1);">
+                <div style="font-weight: 700; margin-bottom: 0.5rem;">⚠️ Error</div>
+                <div style="font-size: 0.9rem; margin-bottom: 1rem;">${message}</div>
+                <button onclick="window.cortexDashboard && window.cortexDashboard.retryUpdate('${containerId}')" 
+                    style="padding: 0.5rem 1rem; background: #ff3366; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Retry
+                </button>
             </div>
         `;
+        container.innerHTML = errorHtml;
+    }
+
+    /**
+     * Get time elapsed since last successful update
+     */
+    getTimeSinceUpdate(updateType) {
+        const lastTime = this.lastUpdateTime[updateType];
+        if (!lastTime) return 'Never';
+        
+        const elapsed = Math.floor((Date.now() - lastTime) / 1000);
+        if (elapsed < 60) return elapsed + 's ago';
+        if (elapsed < 3600) return Math.floor(elapsed / 60) + 'm ago';
+        return Math.floor(elapsed / 3600) + 'h ago';
+    }
+
+    /**
+     * Update timestamp display with freshness indicator
+     */
+    updateTimestampDisplay(elementId, updateType) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        
+        const elapsed = this.getTimeSinceUpdate(updateType);
+        const color = this.getTimestampColor(this.lastUpdateTime[updateType]);
+        element.textContent = `Last updated: ${elapsed}`;
+        element.style.color = color;
+    }
+
+    /**
+     * Determine color based on data freshness
+     */
+    getTimestampColor(lastTime) {
+        if (!lastTime) return '#ff3366'; // Error red
+        const elapsed = Date.now() - lastTime;
+        if (elapsed < 10000) return '#00ff88'; // Fresh - green
+        if (elapsed < 30000) return '#ffaa00'; // Stale - yellow
+        return '#ff3366'; // Very stale - red
+    }
+
+    /**
+     * Retry a specific update
+     */
+    async retryUpdate(updateType) {
+        console.log('Retrying update:', updateType);
+        if (updateType === 'metrics') await this.updateMetrics();
+        else if (updateType === 'threats') await this.updateThreats();
+        else if (updateType === 'agents') await this.updateAgents();
+    }
+
+    cleanup() {
+        if (this.updateTimer) {
+            clearInterval(this.updateTimer);
+            this.updateTimer = null;
+        }
+    }
+
+    async updateAll() {
+        try {
+            await Promise.all([
+                this.updateMetrics(),
+                this.updateThreats(),
+                this.updateAgents()
+            ]);
+        } catch (error) {
+            console.error('Update error:', error);
+        }
+    }
+
+    async updateMetrics() {
+        try {
+            const response = await fetch('/dashboard/api/live/metrics', { timeout: 5000 });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const data = await response.json();
+            if (data.status !== 'success') throw new Error('API error: ' + data.status);
+
+            const metrics = data.metrics;
+            
+            // Update CPU
+            const cpu = Math.round(metrics.cpu.percent);
+            document.getElementById('cpu-value').textContent = cpu + '%';
+            this.updateChart('cpu', cpu);
+
+            // Update Memory
+            const mem = Math.round(metrics.memory.percent);
+            document.getElementById('memory-value').textContent = mem + '%';
+            this.updateChart('memory', mem);
+
+            // Update Disk
+            const disk = Math.round(metrics.disk.percent);
+            document.getElementById('disk-value').textContent = disk + '%';
+            this.updateChart('disk', disk);
+
+            // Calculate network activity (synthetic)
+            const netTotal = metrics.network.bytes_sent + metrics.network.bytes_recv;
+            const netPercent = Math.min(100, Math.round((netTotal / (1024 * 1024 * 1024)) % 100));
+            document.getElementById('network-value').textContent = netPercent + '%';
+            this.updateChart('network', netPercent);
+
+            // Update health score
+            const health = Math.round((100 - cpu + 100 - mem + 100 - disk) / 3);
+            document.getElementById('health-score').textContent = health + '%';
+            document.getElementById('health-status').textContent = 
+                health > 80 ? 'OPTIMAL' : health > 60 ? 'GOOD' : 'WARNING';
+
+            // Update timestamp with freshness indicator
+            this.lastUpdateTime.metrics = Date.now();
+            this.updateTimestampDisplay('metrics-timestamp', 'metrics');
+            
+            // Clear any previous error state
+            this.failureCount.metrics = 0;
+
+        } catch (error) {
+            console.error('Metrics update failed:', error);
+            this.failureCount.metrics++;
+            
+            if (this.failureCount.metrics >= this.maxRetries) {
+                this.showErrorState('metrics-error', 
+                    `Failed to fetch metrics: ${error.message}. Retrying...`,
+                    () => this.updateMetrics());
+                document.getElementById('health-status').textContent = 'Connection Error';
+            }
+        }
+    }
+
+    async updateThreats() {
+        try {
+            const response = await fetch('/dashboard/api/live/threats', { timeout: 5000 });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const data = await response.json();
+            if (data.status !== 'success') throw new Error('API error');
+
+            const container = document.getElementById('threats-container');
+            
+            if (data.threats.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">No threats detected in last 24 hours</div>';
+            } else {
+                container.innerHTML = data.threats.slice(0, 10).map(threat => `
+                    <div class="threat-item">
+                        <div class="threat-type">${threat.type.toUpperCase()}</div>
+                        <div style="color: var(--text-secondary); font-size: 0.85rem;">
+                            ${threat.description || threat.source_ip || 'No details'}
+                        </div>
+                        <div class="threat-time">${new Date(threat.timestamp).toLocaleString()}</div>
+                    </div>
+                `).join('');
+            }
+
+            document.getElementById('event-count').textContent = data.count;
+            document.getElementById('event-status').textContent = data.count > 0 ? 'ACTIVE' : 'NORMAL';
+
+            // Update timestamp with freshness indicator
+            this.lastUpdateTime.threats = Date.now();
+            
+            // Clear any previous error state
+            this.failureCount.threats = 0;
+
+        } catch (error) {
+            console.error('Threats update failed:', error);
+            this.failureCount.threats++;
+            
+            if (this.failureCount.threats >= this.maxRetries) {
+                this.showErrorState('threats-container', 
+                    `Failed to fetch threats: ${error.message}. Click Retry to try again.`);
+                document.getElementById('event-status').textContent = 'Error';
+            }
+        }
+    }
+
+    async updateAgents() {
+        try {
+            const response = await fetch('/dashboard/api/live/agents', { timeout: 5000 });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const data = await response.json();
+            if (data.status !== 'success') throw new Error('API error');
+
+            const container = document.getElementById('agents-container');
+            
+            if (!data.agents || data.agents.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">No agents registered</div>';
+                document.getElementById('agent-count').textContent = '0';
+                document.getElementById('agent-status').textContent = 'No Agents';
+            } else {
+                const onlineCount = data.agents.filter(a => a.status === 'online').length;
+                document.getElementById('agent-count').textContent = onlineCount + '/' + data.agents.length;
+                document.getElementById('agent-status').textContent = 
+                    onlineCount === data.agents.length ? 'ALL ONLINE' : 
+                    onlineCount > 0 ? 'PARTIAL' : 'OFFLINE';
+
+                container.innerHTML = data.agents.slice(0, 5).map(agent => {
+                    const statusClass = agent.status === 'online' ? 'status-online' : 'status-offline';
+                    return `
+                        <div class="agent-item">
+                            <div class="agent-name">${agent.agent_id || agent.id}</div>
+                            <div class="agent-status ${statusClass}">
+                                ● ${agent.status || 'unknown'}
+                            </div>
+                            ${agent.last_heartbeat ? `<div class="threat-time">Last seen: ${new Date(agent.last_heartbeat).toLocaleString()}</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Update timestamp with freshness indicator
+            this.lastUpdateTime.agents = Date.now();
+            
+            // Clear any previous error state
+            this.failureCount.agents = 0;
+
+        } catch (error) {
+            console.error('Agents update failed:', error);
+            this.failureCount.agents++;
+            
+            if (this.failureCount.agents >= this.maxRetries) {
+                this.showErrorState('agents-container', 
+                    `Failed to fetch agents: ${error.message}. Click Retry to try again.`);
+                document.getElementById('agent-status').textContent = 'Error';
+            }
+        }
+    }
+
+    updateChart(chartName, percentage) {
+        const chart = this.charts[chartName];
+        if (chart && chart.data.datasets[0]) {
+            chart.data.datasets[0].data = [percentage, 100 - percentage];
+            chart.update('none'); // 'none' = no animation (faster)
+        }
     }
 }
 
-// Initialize Cortex Dashboard
+// Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
-    new CortexDashboard();
+    window.cortexDashboard = new CortexDashboardV2();
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (window.cortexDashboard) {
+        window.cortexDashboard.cleanup();
+    }
 });
 </script>
 {% endblock %}

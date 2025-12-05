@@ -1,15 +1,15 @@
 # AMOSKYS: Comprehensive Architecture Audit & Technical Deep-Dive
 
-**Document Version**: 2.0
-**Last Updated**: December 3, 2025
-**Audit Date**: Post-Universal Telemetry Integration
-**System Status**: Production-Ready Foundation with Active Data Pipeline
+**Document Version**: 2.1
+**Last Updated**: December 4, 2025
+**Audit Date**: Post-Mac Validation & Complete Data Pipeline
+**System Status**: Production-Ready with ML-Ready Data Neurons
 
 ---
 
 ## Executive Summary
 
-**Amoskys** is a neuro-inspired security intelligence platform designed for distributed telemetry collection, real-time analysis, and ML-powered threat detection. This audit represents the complete state of the system after successful implementation of the **Universal Telemetry Pipeline**, which eliminates 86% data loss and enables multi-protocol device monitoring.
+**Amoskys** is a neuro-inspired security intelligence platform designed for distributed telemetry collection, real-time analysis, and ML-powered threat detection. This audit represents the complete state of the system after successful implementation of the **Universal Telemetry Pipeline** and **complete Mac process data pipeline** proving end-to-end neuron-to-ML-features transformation.
 
 ### System Health: ✅ PRODUCTION READY
 
@@ -21,7 +21,7 @@
 | **Observability** | ✅ COMPLETE | Prometheus metrics, health checks |
 | **Codebase Health** | ✅ EXCELLENT | 10,794 LOC, clean architecture |
 | **Documentation** | ✅ COMPREHENSIVE | 70+ markdown files |
-| **ML Pipeline** | ✅ OPERATIONAL | 100+ features, ONNX-ready |
+| **ML Pipeline** | ✅ OPERATIONAL | SNMP: 104 features, Mac Process: 37 features, ONNX-ready |
 
 ---
 
@@ -79,7 +79,9 @@ Phase 1 (Foundation) ✅ COMPLETE
 Phase 2 (Current) ✅ DATA PIPELINE OPERATIONAL
   └─ Universal Telemetry Protocol
   └─ Multi-protocol agent support
-  └─ ML feature engineering (100+ features)
+  └─ Mac process telemetry validated (164K+ events)
+  └─ Complete ML pipeline (SNMP: 104 features, Process: 37 features)
+  └─ End-to-end neuron-to-features transformation proven
   └─ Zero data loss architecture
   └─ ONNX-ready deployment
 
@@ -993,7 +995,13 @@ STAGE 6: Export
 
 ### 7.2 Feature Catalog
 
-**Total Features**: 104 (as of last pipeline run)
+**Active Pipelines**:
+- **SNMP Device Telemetry**: 104 features (network devices, servers)
+- **Mac Process Telemetry**: 37 features (Mac process behavior)
+
+---
+
+#### SNMP Device Features (104 total)
 
 #### Category 1: Raw SNMP Metrics (29)
 ```python
@@ -1071,9 +1079,93 @@ Anomaly Flags:
 - network_burst = network > 95th_percentile
 ```
 
+---
+
+#### Mac Process Features (37 total)
+
+**Pipeline**: [build_process_features.py](scripts/ml_pipeline/build_process_features.py)
+**Input**: 164,883 Mac ProcessEvents → Canonical table
+**Windows**: 30s (291 windows) + 5min (30 windows) = 321 total
+**Output**: [process_features_train.parquet](data/ml_pipeline/process_features_train.parquet) (256 samples), [process_features_val.parquet](data/ml_pipeline/process_features_val.parquet) (65 samples)
+
+##### Category 1: Volume Metrics (6)
+```python
+Process Counts:
+- num_processes          # Total processes in window
+- num_unique_pids        # Unique process IDs
+- num_unique_ppids       # Unique parent process IDs
+- num_unique_exes        # Unique executables
+- num_unique_uids        # Unique user IDs
+- num_unique_gids        # Unique group IDs
+```
+
+##### Category 2: User Type Metrics (5)
+```python
+User Classifications:
+- num_root_procs         # Root processes (UID 0)
+- num_system_procs       # System processes (UID < 500)
+- num_user_procs         # User processes (UID ≥ 500)
+- root_proc_ratio        # % of processes running as root
+- user_proc_ratio        # % of processes running as user
+```
+
+##### Category 3: Process Class Metrics (6)
+```python
+Path-Based Classification:
+- num_system_lib         # /System/ processes
+- num_applications       # /Applications/ processes
+- num_daemons            # /usr/libexec/, /usr/sbin/ processes
+- num_third_party        # /opt/, .venv processes
+- application_ratio      # % of application processes
+- daemon_ratio           # % of daemon processes
+```
+
+##### Category 4: Diversity Metrics (3)
+```python
+Behavioral Indicators:
+- exe_diversity          # Ratio of unique exes to total processes
+- pid_diversity          # Ratio of unique PIDs to total processes
+- rare_exe_ratio         # % of executables appearing < 2% of time
+```
+
+##### Category 5: Process Tree & Temporal Features (17)
+```python
+Process Relationships:
+- orphan_ratio           # % of processes with ppid=0
+- avg_args_count         # Mean number of arguments per process
+- max_args_count         # Max arguments in any process
+
+Time-Based:
+- hour                   # Hour of day (0-23)
+- day_of_week            # Day of week (0-6)
+
+Delta Features (change from previous window):
+- num_processes_delta
+- num_unique_exes_delta
+- num_root_procs_delta
+
+Rolling Statistics (3-window moving averages):
+- num_processes_rolling_mean_3
+- num_processes_rolling_std_3
+- num_unique_exes_rolling_mean_3
+- num_unique_exes_rolling_std_3
+- exe_diversity_rolling_mean_3
+- exe_diversity_rolling_std_3
+```
+
+**Feature Engineering Highlights**:
+- Time-windowed aggregation captures behavioral patterns over 30s and 5min intervals
+- User type classification enables privilege escalation detection
+- Process class categorization identifies abnormal application types
+- Diversity metrics detect unusual process spawning patterns
+- Rolling statistics identify temporal anomalies
+- Temporal split (80/20) preserves time ordering for realistic validation
+
 ### 7.3 ML Pipeline Outputs
 
-**Generated Files** (as of Oct 26, 2025):
+**Active Pipelines**: SNMP Device Telemetry + Mac Process Telemetry
+
+#### SNMP Pipeline Outputs (as of Oct 26, 2025):
 
 ```bash
 data/ml_pipeline/
@@ -1124,6 +1216,71 @@ Outliers: 2.3% (flagged, not removed)
 Correlation Range: [-0.85, 0.92]
 Feature Variance: All > 0.01 (no zero-variance features)
 Temporal Consistency: 100% (no gaps)
+```
+
+---
+
+#### Mac Process Pipeline Outputs (as of Dec 4, 2025):
+
+```bash
+data/ml_pipeline/
+├── process_canonical_full.parquet    # 5.6 MB (164,883 events)
+├── process_canonical_full.csv        # Human-readable canonical table
+│
+├── process_features_full.parquet     # ~90 KB (321 windows, 37 features)
+├── process_features_full.csv         # Human-readable features
+│
+├── process_features_train.parquet    # 52 KB (256 train windows)
+├── process_features_val.parquet      # 32 KB (65 val windows)
+│
+├── feature_metadata_process.json     # 5 KB
+│   {
+│     "created_at": "2025-12-04T...",
+│     "canonical_rows": 164883,
+│     "feature_windows": 321,
+│     "train_windows": 256,
+│     "val_windows": 65,
+│     "num_features": 37,
+│     "window_sizes": ["30s", "5min"],
+│     "feature_columns": [...],
+│     "dtypes": {...},
+│     "missing_percentages": {...},
+│     "summary_stats": {...}
+│   }
+│
+└── pipeline_summary_process.json     # Validation results
+    {
+      "validation_timestamp": "2025-12-04T...",
+      "status": "SUCCESS",
+      "issues": [],
+      "files_validated": [...],
+      "thresholds": {...}
+    }
+```
+
+**Data Quality Metrics**:
+```python
+Source Events: 164,883 ProcessEvents (2.4 hours of Mac activity)
+Canonical Table: 1,461 unique PIDs, 598 unique executables
+Time Windows: 321 total (291 @ 30s, 30 @ 5min)
+Missing Values: 0.31% max (excellent)
+Critical Fields: 0% nulls in pid, exe, uid, gid
+Train/Val Split: 256/65 (80/20 temporal split)
+Validation Status: ALL CHECKS PASSED ✅
+```
+
+**Mac Process Diversity**:
+```python
+Process Classes:
+- System processes: 88,728 (/System/)
+- Daemons: 45,882 (/usr/libexec/, /usr/sbin/)
+- Applications: 18,495 (/Applications/)
+- Third party: Remainder (/opt/, .venv)
+
+User Types:
+- Root (UID 0): ~15%
+- System (UID < 500): ~25%
+- User (UID ≥ 500): ~60%
 ```
 
 ### 7.4 Future ML Models (Roadmap)
@@ -2193,6 +2350,92 @@ SNMP Collection → DeviceTelemetry (1,165 bytes, 29 metrics)
 - Statistical features: mean, std, min, max, median (60 features)
 - Advanced features: rate of change, cross-correlations, anomaly indicators (15 features)
 - Data quality: < 0.1% missing values, 100% temporal consistency
+
+### 13.5 Mac Process Data Pipeline (December 4, 2025)
+
+**Achievement**: Complete end-to-end data pipeline from raw Mac telemetry to ML-ready features
+
+**Context**: Building on Mac validation (Stages 0-6), implemented the full data spine architecture proving the neuron-to-features pathway works end-to-end.
+
+**Pipeline Execution (Stages 7-9)**:
+
+**Stage 7 - Canonical Table Extraction** ([build_process_canonical.py](scripts/ml_pipeline/build_process_canonical.py)):
+- **Input**: 164,883 ProcessEvents from WAL
+- **Output**: [process_canonical_full.parquet](data/ml_pipeline/process_canonical_full.parquet) (5.6 MB)
+- **Time Range**: 2.4 hours of continuous Mac activity
+- **Diversity**: 1,461 unique PIDs, 598 unique executables
+- **Enrichment**:
+  - User type classification: root (UID 0) / system (UID < 500) / user (UID ≥ 500)
+  - Process class categorization: system (/System/) / application (/Applications/) / daemon (/usr/libexec/) / third_party (/opt/)
+  - Executable basename extraction
+  - Temporal features (hour, day_of_week)
+- **Distribution**: 88,728 system processes, 45,882 daemons, 18,495 applications
+
+**Stage 8 - Feature Engineering** ([build_process_features.py](scripts/ml_pipeline/build_process_features.py)):
+- **Windows**: 30s (291 windows) + 5min (30 windows) = 321 total feature windows
+- **Features**: 37 engineered features across 5 categories:
+  - **Volume metrics** (6): num_processes, num_unique_pids, num_unique_ppids, num_unique_exes, num_unique_uids, num_unique_gids
+  - **User type metrics** (5): num_root_procs, num_system_procs, num_user_procs, root_proc_ratio, user_proc_ratio
+  - **Process class metrics** (6): num_system_lib, num_applications, num_daemons, num_third_party, application_ratio, daemon_ratio
+  - **Diversity metrics** (3): exe_diversity, pid_diversity, rare_exe_ratio
+  - **Temporal features** (17): hour, day_of_week, deltas (3), rolling means (3), rolling stds (3), orphan_ratio, avg_args_count, max_args_count
+- **Train/Val Split**: 256 train (80%) / 65 val (20%) with temporal ordering preserved
+- **Outputs**:
+  - [process_features_train.parquet](data/ml_pipeline/process_features_train.parquet) (52 KB)
+  - [process_features_val.parquet](data/ml_pipeline/process_features_val.parquet) (32 KB)
+  - [feature_metadata_process.json](data/ml_pipeline/feature_metadata_process.json) (5 KB)
+  - [process_features_full.csv](data/ml_pipeline/process_features_full.csv) (inspection format)
+
+**Stage 9 - Pipeline Validation** ([validate_process_pipeline.py](scripts/validate_process_pipeline.py)):
+- **Validation Results**: ✅ **ALL CHECKS PASSED**
+  - Canonical rows: 164,883 (threshold: ≥ 100) ✅
+  - Feature windows: 321 (threshold: ≥ 5) ✅
+  - Unique executables: 598 (threshold: ≥ 10) ✅
+  - Missing values: 0.31% max (threshold: < 5%) ✅
+  - Train/Val split: 256 + 65 = 321 (consistency verified) ✅
+  - Numeric ranges: All valid (no negatives, ratios ≤ 1.0) ✅
+  - Critical columns: No nulls in pid, exe, uid, gid ✅
+- **Summary**: [pipeline_summary_process.json](data/ml_pipeline/pipeline_summary_process.json) (status: SUCCESS)
+
+**Key Validation Metrics**:
+```python
+{
+  "status": "SUCCESS",
+  "canonical_rows": 164883,
+  "feature_windows": 321,
+  "num_features": 37,
+  "max_missing_percent": 0.31,
+  "unique_executables": 598,
+  "time_range_hours": 2.4
+}
+```
+
+**ML Readiness Confirmed**:
+```python
+import pandas as pd
+X_train = pd.read_parquet('data/ml_pipeline/process_features_train.parquet')
+X_val = pd.read_parquet('data/ml_pipeline/process_features_val.parquet')
+# 256 train windows × 37 features = Ready for training
+# 65 val windows × 37 features = Ready for evaluation
+```
+
+**Impact**:
+- ✅ **First complete proof**: Mac telemetry → canonical table → ML-ready features works end-to-end
+- ✅ **Data neurons validated**: Raw ProcessEvents (neurons) transformed through structured pipeline to feature matrices
+- ✅ **Reproducible pattern**: Architecture proven for Mac, ready to apply to Flow and SNMP telemetry
+- ✅ **Quality guardrails**: Validation framework ensures data integrity at each stage
+- ✅ **Production ready**: Can now train anomaly detection models on real Mac process behavior
+
+**Files Created**:
+- `scripts/ml_pipeline/build_process_canonical.py` (170 lines) - Stage 7 implementation
+- `scripts/ml_pipeline/build_process_features.py` (277 lines) - Stage 8 implementation
+- `scripts/validate_process_pipeline.py` (289 lines) - Stage 9 validation framework
+
+**Next Steps Enabled**:
+1. Train unsupervised anomaly detection on Mac process features
+2. Apply same pipeline pattern to Flow telemetry
+3. Apply same pipeline pattern to SNMP telemetry
+4. Multi-source feature fusion for comprehensive threat detection
 
 ---
 

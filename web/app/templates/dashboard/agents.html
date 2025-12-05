@@ -49,21 +49,37 @@
             <div class="card-header">
                 <h3 class="card-title">📊 Agent Status Distribution</h3>
             </div>
-            <canvas id="agent-status-chart" width="300" height="250"></canvas>
+            <div style="position: relative; width: 100%; height: 300px;">
+                <canvas id="agent-status-chart"></canvas>
+            </div>
         </div>
 
         <div class="neural-card">
             <div class="card-header">
                 <h3 class="card-title">📈 Network Performance Timeline</h3>
             </div>
-            <canvas id="performance-timeline" width="600" height="250"></canvas>
+            <div style="position: relative; width: 100%; height: 300px;">
+                <canvas id="performance-timeline"></canvas>
+            </div>
         </div>
     </div>
 
     <!-- Agent Management Panel -->
     <div class="neural-card">
         <div class="card-header">
-            <h3 class="card-title">🔧 Agent Management</h3>
+            <h3 class="card-title">📋 Available Agents</h3>
+        </div>
+        <div id="available-agents-grid" class="agents-grid">
+            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                Loading available agent types...
+            </p>
+        </div>
+    </div>
+
+    <!-- Registered Agents Management Panel -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">🔧 Registered Agents</h3>
             <div style="display: flex; gap: 1rem; align-items: center;">
                 <select id="status-filter" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--neural-primary); border-radius: 5px; padding: 0.5rem;">
                     <option value="">All Agents</option>
@@ -173,6 +189,7 @@
 .agent-card.status-stale::before { background: var(--neural-warning); }
 .agent-card.status-active::before { background: #ffaa00; }
 .agent-card.status-online::before { background: var(--neural-primary); }
+.agent-card.available-agent::before { background: #00ff88; }
 
 .agent-card:hover {
     transform: translateY(-3px);
@@ -424,7 +441,8 @@ class AgentDashboard {
             await Promise.all([
                 this.updateAgentMetrics(),
                 this.updateAgentData(),
-                this.updatePerformanceTimeline()
+                this.updatePerformanceTimeline(),
+                this.updateAvailableAgents()
             ]);
         } catch (error) {
             console.error('Agent dashboard update error:', error);
@@ -529,6 +547,53 @@ class AgentDashboard {
         } catch (error) {
             console.error('Performance timeline update failed:', error);
         }
+    }
+    
+    async updateAvailableAgents() {
+        try {
+            const response = await fetch('/dashboard/api/available-agents');
+            const data = await response.json();
+            
+            if (data.status === 'success' && data.agents) {
+                this.renderAvailableAgents(data.agents);
+            }
+        } catch (error) {
+            console.error('Available agents update failed:', error);
+        }
+    }
+    
+    renderAvailableAgents(agents) {
+        const container = document.getElementById('available-agents-grid');
+        
+        if (!agents || agents.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem; grid-column: 1 / -1;">No agents available</p>';
+            return;
+        }
+        
+        const agentsHtml = agents.map(agent => `
+            <div class="agent-card available-agent" onclick="agentDashboard.showAgentInfo('${agent.id}', '${agent.name}')">
+                <div class="agent-header">
+                    <div class="agent-id">${agent.name}</div>
+                    <div class="agent-status" style="background: #00ff88; color: #000;">Available</div>
+                </div>
+                <div class="agent-details">
+                    <p style="margin: 0.5rem 0; color: var(--text-secondary); font-size: 0.85rem;">
+                        ${agent.description}
+                    </p>
+                    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                            <span>Type: ${agent.type}</span>
+                            <span>Port: ${agent.port}</span>
+                        </div>
+                        <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            ${agent.platform.map(p => `<span style="background: rgba(0, 255, 136, 0.2); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">${p}</span>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        container.innerHTML = agentsHtml;
     }
     
     renderAgents() {
@@ -707,6 +772,10 @@ class AgentDashboard {
                 alert('Failed to remove agent: ' + error.message);
             }
         }
+    }
+    
+    showAgentInfo(agentId, agentName) {
+        alert(`Agent: ${agentName}\n\nID: ${agentId}\n\nThis agent can be deployed to monitor your infrastructure.`);
     }
     
     formatDuration(seconds) {

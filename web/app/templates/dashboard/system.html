@@ -43,6 +43,26 @@
         </div>
     </div>
 
+    <!-- System Health Recommendations -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">💡 System Health Recommendations</h3>
+            <span class="neural-loading" id="recommendations-loading" style="display: none;"></span>
+        </div>
+        <div id="recommendations-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+            <div id="recommendations-list">
+                <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                    Analyzing system health...
+                </p>
+            </div>
+            <div id="system-insights">
+                <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                    Loading insights...
+                </p>
+            </div>
+        </div>
+    </div>
+
     <!-- Resource Monitoring Grid -->
     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
         <!-- CPU Monitoring -->
@@ -51,7 +71,9 @@
                 <h3 class="card-title">🖥️ CPU Performance</h3>
             </div>
             <div style="text-align: center;">
-                <canvas id="cpu-gauge" width="200" height="200"></canvas>
+                <div style="position: relative; width: 200px; height: 200px; margin: 0 auto;">
+                    <canvas id="cpu-gauge"></canvas>
+                </div>
                 <div style="margin-top: 1rem;">
                     <div style="color: var(--neural-primary); font-size: 1.2rem; font-weight: 600;" id="cpu-cores">-- Cores</div>
                     <div style="color: var(--text-secondary); font-size: 0.9rem;">Available Cores</div>
@@ -65,7 +87,9 @@
                 <h3 class="card-title">💾 Memory Usage</h3>
             </div>
             <div style="text-align: center;">
-                <canvas id="memory-gauge" width="200" height="200"></canvas>
+                <div style="position: relative; width: 200px; height: 200px; margin: 0 auto;">
+                    <canvas id="memory-gauge"></canvas>
+                </div>
                 <div style="margin-top: 1rem;">
                     <div style="color: var(--neural-secondary); font-size: 1.2rem; font-weight: 600;" id="memory-details">-- GB / -- GB</div>
                     <div style="color: var(--text-secondary); font-size: 0.9rem;">Used / Total</div>
@@ -79,7 +103,9 @@
                 <h3 class="card-title">💽 Disk Storage</h3>
             </div>
             <div style="text-align: center;">
-                <canvas id="disk-gauge" width="200" height="200"></canvas>
+                <div style="position: relative; width: 200px; height: 200px; margin: 0 auto;">
+                    <canvas id="disk-gauge"></canvas>
+                </div>
                 <div style="margin-top: 1rem;">
                     <div style="color: var(--neural-warning); font-size: 1.2rem; font-weight: 600;" id="disk-details">-- GB / -- GB</div>
                     <div style="color: var(--text-secondary); font-size: 0.9rem;">Used / Total</div>
@@ -99,7 +125,9 @@
                 <button class="neural-button" onclick="systemDashboard.changeTimeRange(1440)" id="btn-24h">24h</button>
             </div>
         </div>
-        <canvas id="performance-timeline" width="800" height="300"></canvas>
+        <div id="performance-timeline-container" style="position: relative; width: 100%; height: 300px; overflow: hidden;">
+            <canvas id="performance-timeline"></canvas>
+        </div>
     </div>
 
     <!-- Network and Process Information -->
@@ -202,6 +230,17 @@
 <style>
 .system-dashboard {
     max-width: 100%;
+}
+
+/* Canvas constraints to prevent overflow */
+#cpu-gauge, #memory-gauge, #disk-gauge, #performance-timeline {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+#performance-timeline-container {
+    overflow: hidden;
 }
 
 .network-metric, .process-metric {
@@ -342,6 +381,65 @@
         grid-template-columns: 1fr;
     }
 }
+
+.recommendation-item {
+    padding: 1rem;
+    background: rgba(0, 255, 136, 0.05);
+    border-left: 4px solid var(--neural-primary);
+    border-radius: 5px;
+    margin-bottom: 0.75rem;
+}
+
+.recommendation-item.warning {
+    background: rgba(255, 170, 0, 0.05);
+    border-left-color: var(--neural-warning);
+}
+
+.recommendation-item.critical {
+    background: rgba(255, 0, 0, 0.05);
+    border-left-color: var(--neural-critical);
+}
+
+.recommendation-title {
+    font-weight: 600;
+    color: var(--neural-primary);
+    margin-bottom: 0.5rem;
+}
+
+.recommendation-item.warning .recommendation-title {
+    color: var(--neural-warning);
+}
+
+.recommendation-item.critical .recommendation-title {
+    color: var(--neural-critical);
+}
+
+.recommendation-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.insight-box {
+    padding: 1rem;
+    background: rgba(0, 136, 255, 0.05);
+    border-left: 4px solid var(--neural-secondary);
+    border-radius: 5px;
+    margin-bottom: 0.75rem;
+}
+
+.insight-label {
+    font-weight: 600;
+    color: var(--neural-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.insight-value {
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
 </style>
 {% endblock %}
 
@@ -533,7 +631,8 @@ class SystemDashboard {
                 this.updateNetworkStats(),
                 this.updateProcessStats(),
                 this.updatePerformanceTimeline(),
-                this.checkSystemAlerts()
+                this.checkSystemAlerts(),
+                this.updateRecommendations()
             ]);
         } catch (error) {
             console.error('System dashboard update error:', error);
@@ -810,6 +909,95 @@ class SystemDashboard {
         
         updateUptime();
         setInterval(updateUptime, 60000); // Update every minute
+    }
+
+    async updateRecommendations() {
+        try {
+            const response = await fetch('/dashboard/api/live/metrics');
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                const metrics = data.metrics;
+                const recommendations = [];
+                const insights = [];
+                
+                // Generate recommendations based on metrics
+                if (metrics.cpu.percent > 70) {
+                    recommendations.push({
+                        title: '🖥️ Optimize CPU Usage',
+                        description: `Current CPU: ${metrics.cpu.percent.toFixed(1)}%. Consider enabling Process Agent to identify resource-heavy processes.`,
+                        severity: metrics.cpu.percent > 85 ? 'critical' : 'warning'
+                    });
+                }
+                
+                if (metrics.memory.percent > 75) {
+                    recommendations.push({
+                        title: '💾 Free Up Memory',
+                        description: `Current Memory: ${metrics.memory.percent.toFixed(1)}%. Monitor and close unnecessary applications.`,
+                        severity: metrics.memory.percent > 90 ? 'critical' : 'warning'
+                    });
+                }
+                
+                if (metrics.disk.percent > 80) {
+                    recommendations.push({
+                        title: '💽 Manage Disk Space',
+                        description: `Current Disk: ${metrics.disk.percent.toFixed(1)}%. Consider archiving old data or expanding storage.`,
+                        severity: metrics.disk.percent > 95 ? 'critical' : 'warning'
+                    });
+                }
+                
+                // Add proactive recommendations
+                if (recommendations.length === 0) {
+                    recommendations.push({
+                        title: '✅ System Healthy',
+                        description: 'All resources are within normal operating parameters. No immediate action required.',
+                        severity: 'info'
+                    });
+                }
+                
+                // Generate insights
+                insights.push({
+                    label: 'Processes Monitored',
+                    value: metrics.process.threads
+                });
+                
+                insights.push({
+                    label: 'Available Memory',
+                    value: (metrics.memory.total_gb - metrics.memory.used_gb).toFixed(2) + ' GB'
+                });
+                
+                insights.push({
+                    label: 'Network Activity',
+                    value: (metrics.network.bytes_sent / (1024**3)).toFixed(2) + ' GB sent'
+                });
+                
+                this.renderRecommendations(recommendations, insights);
+            }
+        } catch (error) {
+            console.error('Recommendations update failed:', error);
+        }
+    }
+    
+    renderRecommendations(recommendations, insights) {
+        const recContainer = document.getElementById('recommendations-list');
+        const insightContainer = document.getElementById('system-insights');
+        
+        const recHtml = recommendations.map(rec => `
+            <div class="recommendation-item ${rec.severity}">
+                <div class="recommendation-title">${rec.title}</div>
+                <div class="recommendation-description">${rec.description}</div>
+            </div>
+        `).join('');
+        
+        const insightHtml = insights.map(insight => `
+            <div class="insight-box">
+                <div class="insight-label">${insight.label}</div>
+                <div class="insight-value">${insight.value}</div>
+            </div>
+        `).join('');
+        
+        recContainer.innerHTML = recHtml;
+        insightContainer.innerHTML = insightHtml;
     }
 }
 
