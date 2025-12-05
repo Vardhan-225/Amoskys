@@ -303,3 +303,15 @@ activate_env.sh
 bandit-report.json
 safety-report.json
 security-*.json
+data/ml_pipeline/feature_metadata_process.json
+data/ml_pipeline/pipeline_summary_process.json
+data/ml_pipeline/process_canonical_full.csv
+data/ml_pipeline/process_canonical_full.parquet
+data/ml_pipeline/process_features_full.csv
+data/ml_pipeline/process_features_full.parquet
+data/ml_pipeline/process_features_train.parquet
+data/ml_pipeline/process_features_val.parquet
+data/wal/flowagent.db
+FRAMEWORK_SUMMARY.txt
+GIT_COMMIT_MESSAGE.txt
+data/wal/flowagent.db
