@@ -49,6 +49,7 @@ Amoskys provides a foundation for building security detection and monitoring cap
 
 - Python 3.11+
 - OpenSSL (for certificate generation)
+- macOS, Linux, or Windows
 - Docker (optional, for containerized deployment)
 
 ### 1. Setup Development Environment

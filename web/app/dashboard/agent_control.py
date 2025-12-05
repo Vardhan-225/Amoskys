@@ -378,11 +378,15 @@ def _build_startup_command(agent_id: str, config: Dict[str, Any]) -> Optional[Li
         snmp_path = repo_root / 'amoskys-snmp-agent'
         if snmp_path.exists():
             return [str(snmp_path)]
+        # Try Python script as fallback
+        snmp_py = repo_root / 'src' / 'amoskys' / 'agents' / 'snmp' / 'snmp_agent.py'
+        if snmp_py.exists():
+            return ['python', str(snmp_py)]
         return None
     
     elif agent_id == 'device_scanner':
         # Device Scanner: Python script
-        scanner_path = repo_root / 'src' / 'amoskys' / 'agents' / 'scanner' / 'device_scanner.py'
+        scanner_path = repo_root / 'src' / 'amoskys' / 'agents' / 'discovery' / 'device_scanner.py'
         if scanner_path.exists():
             return ['python', str(scanner_path)]
         return None
