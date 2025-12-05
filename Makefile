@@ -30,6 +30,7 @@ DEV_SETUP_SCRIPT := scripts/automation/setup_dev_env.py
 # Targets
 .PHONY: help setup venv install-deps proto clean run-eventbus run-agent run-web run-all test fmt lint certs ed25519 check loadgen chaos docs validate-config
 .PHONY: env-setup env-clean env-rebuild env-activate env-info assess assess-quick assess-save requirements-consolidate health-check shell
+.PHONY: env check-env validate run-dashboard stop-dashboard status logs-dashboard
 
 help: ## Show this help message
 	@echo "AMOSKYS Neural Security Command Platform"
@@ -39,14 +40,20 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "💡 Quick Start:"
-	@echo "   make setup        # Complete setup (creates .venv, installs deps, generates certs)"
-	@echo "   make env-activate # Generate environment activation script"
-	@echo "   make shell        # Activate environment in interactive shell"
+	@echo "   make env          # Set up environment (RECOMMENDED)"
+	@echo "   make check-env    # Verify environment is activated"
+	@echo "   make run-dashboard# Start the AMOSKYS Dashboard"
+	@echo ""
+	@echo "📦 Environment:"
+	@echo "   make env          # Create and install dependencies"
+	@echo "   make check-env    # Check if environment is activated"
+	@echo "   make validate     # Validate installation"
 	@echo ""
 	@echo "🚀 Running Services:"
+	@echo "   make run-dashboard# Start AMOSKYS Dashboard (Flask)"
 	@echo "   make run-eventbus # Start EventBus gRPC server"
 	@echo "   make run-agent    # Start FlowAgent"
-	@echo "   make run-web      # Start Web Platform (Flask)"
+	@echo "   make stop-dashboard# Stop dashboard"
 	@echo ""
 	@echo "🧪 Testing & Quality:"
 	@echo "   make test         # Run all tests"
@@ -446,3 +453,62 @@ dev-clean: ## Clean development artifacts
 	@find . -name "*.pyc" -delete 2>/dev/null || true
 	@rm -f assessment_report_*.json final_assessment*.json
 	@echo "✅ Development artifacts cleaned!"
+
+# ==============================================
+# DASHBOARD-SPECIFIC TARGETS
+# ==============================================
+
+env: venv install-deps dirs ## Quick environment setup (alias for setup)
+	@echo "✅ Environment ready! Activate with: source .venv/bin/activate"
+
+check-env: ## Check if virtual environment is activated
+	@if [ -z "$$VIRTUAL_ENV" ]; then \
+		echo "❌ Virtual environment not activated!"; \
+		echo "   Activate with: source .venv/bin/activate"; \
+		echo "   Or run with: make shell"; \
+		exit 1; \
+	else \
+		echo "✅ Virtual environment active: $$VIRTUAL_ENV"; \
+	fi
+
+validate: venv ## Validate environment and dependencies
+	@echo "🔍 Validating AMOSKYS installation..."
+	@$(VENV_PYTHON) -c 'import flask; print("✅ Flask:", flask.__version__)' || echo "❌ Flask missing"
+	@$(VENV_PYTHON) -c 'import psutil; print("✅ psutil:", psutil.__version__)' || echo "❌ psutil missing"
+	@$(VENV_PYTHON) -c 'import flask_socketio; print("✅ Flask-SocketIO: OK")' || echo "⚠️  Flask-SocketIO missing"
+	@test -f web/wsgi.py && echo "✅ web/wsgi.py" || echo "❌ web/wsgi.py missing"
+	@test -d web/app && echo "✅ web/app/" || echo "❌ web/app/ missing"
+	@test -d logs && echo "✅ logs/" || mkdir -p logs && echo "⚠️  logs/ created"
+	@echo "✅ Validation complete!"
+
+run-dashboard: ## Start AMOSKYS Dashboard (recommended method)
+	@if [ -z "$$VIRTUAL_ENV" ]; then \
+		echo "❌ Virtual environment not activated!"; \
+		echo "   Activate with: source .venv/bin/activate"; \
+		echo "   Then run: make run-dashboard"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting AMOSKYS Dashboard..."
+	@./start_amoskys.sh
+
+stop-dashboard: ## Stop AMOSKYS Dashboard
+	@./stop_amoskys.sh
+
+restart-dashboard: stop-dashboard run-dashboard ## Restart dashboard
+
+status: ## Show dashboard status
+	@if [ -f "logs/flask.pid" ]; then \
+		PID=$$(cat logs/flask.pid); \
+		if kill -0 $$PID 2>/dev/null; then \
+			echo "✅ Dashboard running (PID: $$PID)"; \
+			lsof -i :5000 2>/dev/null | grep -q LISTEN && echo "   Port: 5000" || echo "   ⚠️  Port not listening"; \
+		else \
+			echo "❌ Dashboard not running (stale PID)"; \
+		fi; \
+	else \
+		echo "❌ Dashboard not running"; \
+	fi
+
+logs-dashboard: ## Tail dashboard logs
+	@tail -f logs/flask.log 2>/dev/null || echo "No logs found"
+
