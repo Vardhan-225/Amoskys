@@ -1,0 +1,226 @@
+<!-- Agent Control Panel - Standard Production Version -->
+<div class="agent-control-section" style="margin-bottom: 2rem;">
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">🤖 Agent Control Panel</h3>
+            <button id="refresh-agents-btn" class="neural-button" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; cursor: pointer;">🔄 Refresh</button>
+        </div>
+        <div id="agent-controls-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; padding: 1.5rem 0 0 0;"></div>
+    </div>
+</div>
+
+<script>
+class AgentControlPanel {
+    constructor() {
+        this.agents = [];
+        this.operationInProgress = new Set();
+        this.metricsInterval = null;
+        this.init();
+    }
+
+    async init() {
+        console.log('🤖 Agent Control Panel initialized');
+        await this.loadAgents();
+        const refreshBtn = document.getElementById('refresh-agents-btn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.loadAgents());
+        }
+        this.startMetricsUpdate();
+    }
+
+    async loadAgents() {
+        try {
+            const response = await fetch('/dashboard/api/agents/status', { signal: AbortSignal.timeout(5000) });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            if (data.status === 'success' && Array.isArray(data.data?.agents)) {
+                this.agents = data.data.agents;
+                this.render();
+                return true;
+            }
+            throw new Error('Invalid response format');
+        } catch (error) {
+            console.error('Failed to load agents:', error);
+            this.showError();
+        }
+    }
+
+    render() {
+        const grid = document.getElementById('agent-controls-grid');
+        if (!grid) return;
+        if (this.agents.length === 0) {
+            grid.innerHTML = '<div style="grid-column: 1/-1; padding: 2rem; text-align: center; color: var(--text-secondary);">No agents found</div>';
+            return;
+        }
+        grid.innerHTML = this.agents.map((agent, idx) => this.createCard(agent, idx)).join('');
+        this.attachListeners();
+    }
+
+    createCard(agent, idx) {
+        const id = agent.agent_id;
+        const running = agent.status === 'running';
+        const statusColor = running ? 'var(--neural-primary)' : '#999';
+        return `
+<div class="agent-item" data-agent-id="${id}" style="background: var(--gradient-neural); padding: 1.2rem; border-radius: 10px; border: 1px solid rgba(0, 255, 136, 0.3);">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <div style="width: 10px; height: 10px; border-radius: 50%; background: ${statusColor}; box-shadow: 0 0 8px ${statusColor};"></div>
+        <div style="flex: 1;">
+            <h4 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">${agent.name || id}</h4>
+            <p style="margin: 0; font-size: 0.7rem; color: var(--text-muted); font-family: monospace;">${id}</p>
+        </div>
+    </div>
+    <div style="font-size: 0.8rem; margin-bottom: 1rem;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div>
+                <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 0.2rem;">CPU</div>
+                <div style="color: var(--text-primary); font-weight: 500;" class="metric-cpu">${running ? (agent.cpu_percent?.toFixed(1) || '0') + '%' : '-'}</div>
+            </div>
+            <div>
+                <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 0.2rem;">Memory</div>
+                <div style="color: var(--text-primary); font-weight: 500;" class="metric-mem">${running ? (agent.memory_mb?.toFixed(0) || '0') + 'MB' : '-'}</div>
+            </div>
+            <div>
+                <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 0.2rem;">PID</div>
+                <div style="color: var(--text-primary); font-family: monospace; font-size: 0.75rem;" class="metric-pid">${agent.pid || '-'}</div>
+            </div>
+            <div>
+                <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 0.2rem;">Status</div>
+                <div style="color: ${statusColor}; font-weight: 500;" class="metric-status">${running ? 'Running' : 'Stopped'}</div>
+            </div>
+        </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+        <button class="btn-start" data-agent-id="${id}" style="padding: 0.5rem; font-size: 0.75rem; background: linear-gradient(135deg, var(--neural-primary), var(--neural-secondary)); color: var(--bg-primary); border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s; ${running ? 'opacity: 0.4; cursor: not-allowed;' : ''}" ${running ? 'disabled' : ''}>▶️ Start</button>
+        <button class="btn-stop" data-agent-id="${id}" style="padding: 0.5rem; font-size: 0.75rem; background: rgba(255, 107, 53, 0.2); color: #FF6B35; border: 1px solid #FF6B35; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s; ${running ? '' : 'opacity: 0.4; cursor: not-allowed;'}" ${running ? '' : 'disabled'}>⏹️ Stop</button>
+    </div>
+    <div class="status-msg" style="margin-top: 0.75rem; font-size: 0.75rem; text-align: center; min-height: 1.2rem; display: none;"></div>
+</div>`;
+    }
+
+    attachListeners() {
+        document.querySelectorAll('.btn-start').forEach(btn => btn.addEventListener('click', (e) => this.startAgent(e.target.dataset.agentId)));
+        document.querySelectorAll('.btn-stop').forEach(btn => btn.addEventListener('click', (e) => this.stopAgent(e.target.dataset.agentId)));
+    }
+
+    async startAgent(agentId) {
+        if (this.operationInProgress.has(agentId)) return;
+        const card = document.querySelector(`[data-agent-id="${agentId}"]`);
+        const btn = card.querySelector('.btn-start');
+        this.operationInProgress.add(agentId);
+        btn.disabled = true;
+        btn.textContent = '⏳ Starting...';
+        try {
+            const response = await fetch(`/dashboard/api/agents/${agentId}/start`, { method: 'POST', signal: AbortSignal.timeout(30000) });
+            const data = await response.json();
+            if (data.status === 'started' || data.status === 'already_running') {
+                this.showMessage(card, '✅ Started', 'success');
+                const agent = this.agents.find(a => a.agent_id === agentId);
+                if (agent) { agent.status = 'running'; agent.pid = data.pid; this.updateCard(card, agent); }
+                setTimeout(() => this.loadAgents(), 2000);
+            } else {
+                this.showMessage(card, `❌ ${data.message || 'Failed'}`, 'error');
+            }
+        } catch (error) {
+            this.showMessage(card, `❌ ${error.message}`, 'error');
+        } finally {
+            btn.textContent = '▶️ Start';
+            btn.disabled = false;
+            this.operationInProgress.delete(agentId);
+        }
+    }
+
+    async stopAgent(agentId) {
+        if (this.operationInProgress.has(agentId)) return;
+        const card = document.querySelector(`[data-agent-id="${agentId}"]`);
+        const btn = card.querySelector('.btn-stop');
+        this.operationInProgress.add(agentId);
+        btn.disabled = true;
+        btn.textContent = '⏳ Stopping...';
+        try {
+            const response = await fetch(`/dashboard/api/agents/${agentId}/stop`, { method: 'POST', signal: AbortSignal.timeout(15000) });
+            const data = await response.json();
+            if (data.status === 'stopped' || data.status === 'force_killed' || data.status === 'not_running') {
+                this.showMessage(card, '✅ Stopped', 'success');
+                const agent = this.agents.find(a => a.agent_id === agentId);
+                if (agent) { agent.status = 'stopped'; agent.pid = null; this.updateCard(card, agent); }
+                setTimeout(() => this.loadAgents(), 2000);
+            } else {
+                this.showMessage(card, `❌ ${data.message || 'Failed'}`, 'error');
+            }
+        } catch (error) {
+            this.showMessage(card, `❌ ${error.message}`, 'error');
+        } finally {
+            btn.textContent = '⏹️ Stop';
+            btn.disabled = false;
+            this.operationInProgress.delete(agentId);
+        }
+    }
+
+    updateCard(card, agent) {
+        const running = agent.status === 'running';
+        const statusColor = running ? 'var(--neural-primary)' : '#999';
+        const indicator = card.querySelector('div[style*="border-radius: 50%"]');
+        if (indicator) { indicator.style.background = statusColor; indicator.style.boxShadow = `0 0 8px ${statusColor}`; }
+        card.querySelector('.metric-cpu').textContent = running ? (agent.cpu_percent?.toFixed(1) || '0') + '%' : '-';
+        card.querySelector('.metric-mem').textContent = running ? (agent.memory_mb?.toFixed(0) || '0') + 'MB' : '-';
+        card.querySelector('.metric-pid').textContent = agent.pid || '-';
+        card.querySelector('.metric-status').textContent = running ? 'Running' : 'Stopped';
+        card.querySelector('.metric-status').style.color = statusColor;
+        const startBtn = card.querySelector('.btn-start');
+        const stopBtn = card.querySelector('.btn-stop');
+        startBtn.disabled = running;
+        startBtn.style.opacity = running ? '0.4' : '1';
+        stopBtn.disabled = running ? false : true;
+        stopBtn.style.opacity = running ? '1' : '0.4';
+    }
+
+    startMetricsUpdate() {
+        if (this.metricsInterval) clearInterval(this.metricsInterval);
+        this.metricsInterval = setInterval(async () => {
+            try {
+                const response = await fetch('/dashboard/api/agents/status', { signal: AbortSignal.timeout(5000) });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.status === 'success' && Array.isArray(data.data?.agents)) {
+                    data.data.agents.forEach(newAgent => {
+                        const idx = this.agents.findIndex(a => a.agent_id === newAgent.agent_id);
+                        if (idx !== -1) {
+                            const oldStatus = this.agents[idx].status;
+                            this.agents[idx].cpu_percent = newAgent.cpu_percent;
+                            this.agents[idx].memory_mb = newAgent.memory_mb;
+                            this.agents[idx].pid = newAgent.pid;
+                            this.agents[idx].status = newAgent.status;
+                            const card = document.querySelector(`[data-agent-id="${newAgent.agent_id}"]`);
+                            if (card) this.updateCard(card, this.agents[idx]);
+                            if (oldStatus !== newAgent.status) this.loadAgents();
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Metrics update failed:', error);
+            }
+        }, 5000);
+    }
+
+    showMessage(card, message, type) {
+        const msg = card.querySelector('.status-msg');
+        if (!msg) return;
+        msg.textContent = message;
+        msg.style.background = type === 'success' ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 107, 53, 0.2)';
+        msg.style.color = type === 'success' ? 'var(--neural-primary)' : '#FF6B35';
+        msg.style.display = 'block';
+        setTimeout(() => { msg.style.display = 'none'; }, 3000);
+    }
+
+    showError() {
+        const grid = document.getElementById('agent-controls-grid');
+        if (grid) grid.innerHTML = '<div style="grid-column: 1/-1; padding: 2rem; text-align: center; color: var(--text-secondary);">Failed to load agents. <button onclick="location.reload()" class="neural-button" style="margin-top: 1rem; padding: 0.5rem 1rem;">Retry</button></div>';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('agent-controls-grid')) {
+        window.agentControlPanel = new AgentControlPanel();
+    }
+});
+</script>

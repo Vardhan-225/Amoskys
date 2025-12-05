@@ -323,6 +323,182 @@
             100% { transform: rotate(360deg); }
         }
         
+        /* Phase 9: Enhanced Animations and Polish */
+        
+        /* Metric Value Transition Animation */
+        @keyframes metric-pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+        
+        .metric-value {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .metric-value.updating {
+            animation: metric-pulse 0.5s ease-in-out;
+            color: var(--neural-primary);
+            text-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
+        }
+        
+        /* Card Slide-In Animation */
+        @keyframes slide-in-up {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .neural-card {
+            animation: slide-in-up 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Staggered Card Animation */
+        .neural-card:nth-child(1) { animation-delay: 0.05s; }
+        .neural-card:nth-child(2) { animation-delay: 0.1s; }
+        .neural-card:nth-child(3) { animation-delay: 0.15s; }
+        .neural-card:nth-child(4) { animation-delay: 0.2s; }
+        .neural-card:nth-child(n+5) { animation-delay: 0.25s; }
+        
+        /* Status Indicator Animation */
+        @keyframes status-glow {
+            0%, 100% { 
+                box-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
+            }
+            50% { 
+                box-shadow: 0 0 20px rgba(0, 255, 136, 0.8);
+            }
+        }
+        
+        .status-indicator {
+            animation: status-glow 2s ease-in-out infinite;
+        }
+        
+        /* Toast Notification */
+        @keyframes toast-slide-in {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes toast-slide-out {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+        
+        .toast-notification {
+            animation: toast-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .toast-notification.dismissing {
+            animation: toast-slide-out 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Chart Data Update Animation */
+        @keyframes chart-update {
+            0% {
+                opacity: 0.5;
+                transform: scale(0.98);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        .chart-updating {
+            animation: chart-update 0.4s ease-in-out;
+        }
+        
+        /* Alert Notification Badge */
+        @keyframes alert-pulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(255, 51, 102, 0.7);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 10px rgba(255, 51, 102, 0);
+            }
+        }
+        
+        .alert-badge {
+            animation: alert-pulse 2s infinite;
+        }
+        
+        /* Smooth Value Transitions */
+        .metric-value,
+        .metric-label,
+        .card-title,
+        .neural-button {
+            transition: all 0.2s ease;
+        }
+        
+        /* Hover Effects Enhancement */
+        .neural-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .neural-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 35px rgba(0, 255, 136, 0.25);
+        }
+        
+        .neural-button:active {
+            transform: translateY(0px);
+        }
+        
+        /* Loading Skeleton */
+        @keyframes skeleton-loading {
+            0% {
+                background-position: -1000px 0;
+            }
+            100% {
+                background-position: 1000px 0;
+            }
+        }
+        
+        .skeleton-loader {
+            background: linear-gradient(
+                90deg,
+                rgba(0, 255, 136, 0.1) 25%,
+                rgba(0, 255, 136, 0.2) 50%,
+                rgba(0, 255, 136, 0.1) 75%
+            );
+            background-size: 1000px 100%;
+            animation: skeleton-loading 2s infinite;
+        }
+        
+        /* Responsive Touch Improvements */
+        @media (hover: none) {
+            .neural-button {
+                padding: 0.7rem 1.2rem;
+            }
+            
+            .neural-card {
+                border-radius: 12px;
+            }
+        }
+        
         /* Responsive Design */
         @media (max-width: 768px) {
             .header-content {
@@ -666,6 +842,9 @@
             window.realTimeConnection = new RealTimeConnection();
         });
     </script>
+    
+    <!-- Phase 9: Notification System -->
+    <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
     
     {% block extra_scripts %}{% endblock %}
 </body>

@@ -50,7 +50,7 @@ def login():
         if response.status_code == 200:
             data = response.json()
             API_TOKEN = data.get('token')
-            print("✅ Authentication successful")
+            print(f"✅ Authentication successful")
             return API_TOKEN
         else:
             print(f"❌ Authentication failed: {response.status_code}")
@@ -125,6 +125,7 @@ def submit_event(event_type, severity, source_ip, description=""):
             print(f"  📝 Event submitted: {event_type} ({severity})")
             return True
         else:
+            # Still continue even if event submission fails
             print(f"  ⚠️  Event submission returned {response.status_code}")
             return False
     except Exception as e:
@@ -180,7 +181,7 @@ def populate_test_data():
     print("="*60)
     print(f"✓ Agents registered: {len(agent_ids)}")
     print(f"✓ Events submitted: {event_count}")
-    print("\n📊 Dashboards should now show data at:")
+    print(f"\n📊 Dashboards should now show data at:")
     print("   • http://127.0.0.1:5001/dashboard/soc")
     print("   • http://127.0.0.1:5001/dashboard/cortex")
     print("   • http://127.0.0.1:5001/dashboard/agents")

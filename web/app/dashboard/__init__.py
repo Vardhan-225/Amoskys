@@ -11,6 +11,7 @@ from flask import Blueprint, render_template, jsonify, request
 from datetime import datetime, timezone, timedelta
 from ..api.rate_limiter import require_rate_limit
 import json
+import time
 
 # Constants
 UTC_TIMEZONE_SUFFIX = '+00:00'
@@ -334,6 +335,175 @@ def neural_readiness():
             'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+# Agent Control Endpoints (Phase 8)
+@dashboard_bp.route('/api/agents/status', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
+def agents_detailed_status():
+    """Get detailed status of all agents with health checks"""
+    from .agent_control import get_all_agents_status_detailed
+    
+    try:
+        status_data = get_all_agents_status_detailed()
+        return jsonify({
+            'status': 'success',
+            'data': status_data,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+@dashboard_bp.route('/api/agents/<agent_id>/status', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
+def agent_status(agent_id):
+    """Get detailed status of a specific agent"""
+    from .agent_control import get_agent_status
+    
+    try:
+        status = get_agent_status(agent_id)
+        return jsonify({
+            'status': 'success',
+            'data': status,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+@dashboard_bp.route('/api/agents/<agent_id>/start', methods=['POST'])
+@require_rate_limit(max_requests=20, window_seconds=60)
+def start_agent(agent_id):
+    """Start a stopped agent"""
+    from .agent_control import start_agent as start_agent_fn
+    
+    try:
+        result = start_agent_fn(agent_id)
+        status_code = 200 if result.get('status') in ('started', 'already_running') else 400
+        return jsonify(result), status_code
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'agent_id': agent_id,
+            'message': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+@dashboard_bp.route('/api/agents/<agent_id>/stop', methods=['POST'])
+@require_rate_limit(max_requests=20, window_seconds=60)
+def stop_agent(agent_id):
+    """Stop a running agent"""
+    from .agent_control import stop_agent as stop_agent_fn
+    
+    try:
+        result = stop_agent_fn(agent_id)
+        status_code = 200 if result.get('status') in ('stopped', 'force_killed', 'not_running') else 400
+        return jsonify(result), status_code
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'agent_id': agent_id,
+            'message': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+@dashboard_bp.route('/api/agents/<agent_id>/health', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
+def agent_health_check(agent_id):
+    """Perform health check on a specific agent"""
+    from .agent_control import health_check_agent
+    
+    try:
+        health = health_check_agent(agent_id)
+        status_code = 200 if health.get('healthy') else 400
+        return jsonify({
+            'status': 'success',
+            'data': health,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), status_code
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+@dashboard_bp.route('/api/agents/<agent_id>/logs', methods=['GET'])
+@require_rate_limit(max_requests=50, window_seconds=60)
+def agent_logs(agent_id):
+    """Get startup logs for an agent"""
+    from .agent_control import get_startup_logs
+    
+    lines = request.args.get('lines', default=50, type=int)
+    
+    try:
+        logs = get_startup_logs(agent_id, lines=min(lines, 500))
+        return jsonify({
+            'status': 'success',
+            'data': logs,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 500
+
+@dashboard_bp.route('/api/agents/restart-all', methods=['POST'])
+@require_rate_limit(max_requests=5, window_seconds=60)
+def restart_all_agents():
+    """Restart all agents (with proper shutdown and restart)"""
+    from .agent_control import stop_agent as stop_agent_fn, start_agent as start_agent_fn
+    from .agent_discovery import AGENT_CATALOG
+    
+    try:
+        results = {
+            'total': len(AGENT_CATALOG),
+            'stopped': 0,
+            'started': 0,
+            'failed': 0,
+            'agents': {}
+        }
+        
+        # First, stop all running agents
+        for agent_id in AGENT_CATALOG:
+            stop_result = stop_agent_fn(agent_id)
+            if stop_result.get('status') in ('stopped', 'force_killed', 'not_running'):
+                results['stopped'] += 1
+            results['agents'][agent_id] = {'stopped': stop_result.get('status')}
+        
+        # Wait a moment between shutdown and startup
+        time.sleep(2)
+        
+        # Then, start critical agents
+        for agent_id, config in AGENT_CATALOG.items():
+            if config.get('critical', False):
+                start_result = start_agent_fn(agent_id)
+                if start_result.get('status') in ('started', 'already_running'):
+                    results['started'] += 1
+                else:
+                    results['failed'] += 1
+                results['agents'][agent_id]['started'] = start_result.get('status')
+        
+        return jsonify({
+            'status': 'success',
+            'data': results,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+    
     except Exception as e:
         return jsonify({
             'status': 'error',

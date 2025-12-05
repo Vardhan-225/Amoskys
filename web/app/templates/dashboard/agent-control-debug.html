@@ -1,0 +1,116 @@
+<!-- Agent Control System - Debug & Diagnostic Panel -->
+<div style="margin-top: 2rem; padding: 1.5rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+        <h3 style="margin: 0; color: var(--text-primary);">🔧 System Diagnostics</h3>
+        <button id="diagnostic-toggle-btn" class="neural-button" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Show Details</button>
+    </div>
+
+    <div id="diagnostic-panel" style="display: none;">
+        <!-- Connection Status -->
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-primary); border-radius: 8px; border-left: 3px solid var(--neural-primary);">
+            <h4 style="margin: 0 0 0.5rem 0; color: var(--text-primary);">API Connection Status</h4>
+            <div id="api-status" style="font-size: 0.85rem; color: var(--text-secondary); font-family: monospace;">
+                <div>Testing API endpoints...</div>
+            </div>
+        </div>
+
+        <!-- JavaScript Status -->
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-primary); border-radius: 8px; border-left: 3px solid #4ECDC4;">
+            <h4 style="margin: 0 0 0.5rem 0; color: var(--text-primary);">JavaScript Status</h4>
+            <div id="js-status" style="font-size: 0.8rem; color: var(--text-secondary); font-family: monospace;">
+                <div id="panel-check">Control Panel: <span id="panel-result">Checking...</span></div>
+                <div id="class-check">Class Status: <span id="class-result">Checking...</span></div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="margin-top: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem;">
+            <button id="test-api-btn" class="neural-button" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Test API</button>
+            <button id="refresh-diagnostic-btn" class="neural-button neural-button-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Refresh</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Lightweight Diagnostic System
+class AgentDiagnostics {
+    constructor() {
+        this.init();
+    }
+
+    init() {
+        try {
+            this.setupEventListeners();
+            this.performDiagnostics();
+        } catch (error) {
+            console.error('Diagnostics init error:', error);
+        }
+    }
+
+    setupEventListeners() {
+        const toggleBtn = document.getElementById('diagnostic-toggle-btn');
+        const testBtn = document.getElementById('test-api-btn');
+        const refreshBtn = document.getElementById('refresh-diagnostic-btn');
+        const panel = document.getElementById('diagnostic-panel');
+
+        if (toggleBtn && panel) {
+            toggleBtn.addEventListener('click', () => {
+                const isHidden = panel.style.display === 'none';
+                panel.style.display = isHidden ? 'block' : 'none';
+                toggleBtn.textContent = isHidden ? 'Hide Details' : 'Show Details';
+            });
+        }
+
+        if (testBtn) testBtn.addEventListener('click', () => this.testAPI());
+        if (refreshBtn) refreshBtn.addEventListener('click', () => this.performDiagnostics());
+    }
+
+    performDiagnostics() {
+        this.checkPanel();
+        this.checkAPI();
+    }
+
+    checkPanel() {
+        const panelExists = !!document.getElementById('agents-control-grid');
+        const classExists = !!window.agentControlPanel;
+        
+        document.getElementById('panel-result').textContent = panelExists ? '✅ Present' : '❌ Missing';
+        document.getElementById('class-result').textContent = classExists ? '✅ Loaded' : '⏳ Loading...';
+    }
+
+    checkAPI() {
+        const statusDiv = document.getElementById('api-status');
+        if (!statusDiv) return;
+
+        fetch('/dashboard/api/agents/status', { signal: AbortSignal.timeout(5000) })
+            .then(res => {
+                statusDiv.innerHTML = `<div>✅ /dashboard/api/agents/status - ${res.status}</div>`;
+            })
+            .catch(err => {
+                statusDiv.innerHTML = `<div>❌ API Error: ${err.message}</div>`;
+            });
+    }
+
+    testAPI() {
+        const statusDiv = document.getElementById('api-status');
+        if (!statusDiv) return;
+        
+        statusDiv.innerHTML = '<div>Testing...</div>';
+        fetch('/dashboard/api/agents/status', { signal: AbortSignal.timeout(5000) })
+            .then(res => res.json())
+            .then(data => {
+                const count = data.data?.agents?.length || 0;
+                statusDiv.innerHTML = `<div>✅ API Working: Found ${count} agents</div>`;
+            })
+            .catch(err => {
+                statusDiv.innerHTML = `<div>❌ Test Failed: ${err.message}</div>`;
+            });
+    }
+}
+
+// Initialize when ready
+document.addEventListener('DOMContentLoaded', () => {
+    window.agentDiagnostics = new AgentDiagnostics();
+    console.log('🔧 Diagnostics initialized');
+});
+</script>
