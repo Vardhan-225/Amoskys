@@ -529,7 +529,7 @@ class IntelligenceFusionEngine:
                 src_private = ipaddress.ip_address(src_ip).is_private
                 dst_private = ipaddress.ip_address(dst_ip).is_private
                 return src_private and dst_private
-            except:
+            except (ValueError, TypeError):
                 return False
         
         elif pattern == 'large_outbound_transfer':
@@ -541,7 +541,7 @@ class IntelligenceFusionEngine:
             dst_ip = event.data.get('dst_ip', '')
             try:
                 return not ipaddress.ip_address(dst_ip).is_private
-            except:
+            except (ValueError, TypeError):
                 return False
         
         return False
