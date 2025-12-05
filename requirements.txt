@@ -45,7 +45,7 @@ python-dotenv==1.1.0
 
 # Metrics & Monitoring
 prometheus-client==0.21.1
-psutil==5.9.0
+psutil==6.1.1
 
 # Logging & Error Tracking
 sentry-sdk==2.18.0
