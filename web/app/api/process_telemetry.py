@@ -23,6 +23,19 @@ sys.path.insert(0, str(project_root / "src"))
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 
 
+def safe_int(value, default=0, min_val=None, max_val=None):
+    """Safely parse integer from request parameter"""
+    try:
+        result = int(value)
+        if min_val is not None and result < min_val:
+            return default
+        if max_val is not None and result > max_val:
+            return max_val
+        return result
+    except (ValueError, TypeError):
+        return default
+
+
 def get_db_connection():
     """Create connection to WAL database"""
     if not os.path.exists(WAL_DB_PATH):
@@ -35,7 +48,7 @@ def get_db_connection():
 @process_bp.route('/recent', methods=['GET'])
 def get_recent_processes():
     """Get recent ProcessEvents from WAL"""
-    limit = min(int(request.args.get('limit', 100)), 500)
+    limit = safe_int(request.args.get('limit', 100), default=100, min_val=1, max_val=500)
 
     conn = get_db_connection()
     if not conn:
@@ -104,7 +117,8 @@ def get_recent_processes():
             'count': len(processes),
             'timestamp': datetime.now().isoformat()
         })
-
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
 
@@ -216,7 +230,7 @@ def get_process_stats():
 @process_bp.route('/top-executables', methods=['GET'])
 def get_top_executables():
     """Get most frequently seen executables"""
-    limit = min(int(request.args.get('limit', 20)), 100)
+    limit = safe_int(request.args.get('limit', 20), default=20, min_val=1, max_val=100)
 
     conn = get_db_connection()
     if not conn:
@@ -255,7 +269,8 @@ def get_top_executables():
             'total_unique': len(exe_counts),
             'timestamp': datetime.now().isoformat()
         })
-
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
 
@@ -266,7 +281,7 @@ def search_processes():
     exe_filter = request.args.get('exe', '').lower()
     user_type_filter = request.args.get('user_type', '').lower()
     process_class_filter = request.args.get('process_class', '').lower()
-    limit = min(int(request.args.get('limit', 100)), 500)
+    limit = safe_int(request.args.get('limit', 100), default=100, min_val=1, max_val=500)
 
     conn = get_db_connection()
     if not conn:
@@ -347,7 +362,8 @@ def search_processes():
             },
             'timestamp': datetime.now().isoformat()
         })
-
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
 

@@ -53,7 +53,7 @@ def publish_mac_processes():
 
                 try:
                     process_event.ppid = proc.ppid()
-                except:
+                except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError):
                     process_event.ppid = 0
 
                 process_event.exe = info.get('exe', '') or ''
@@ -67,13 +67,13 @@ def publish_mac_processes():
                 try:
                     uids = proc.uids()
                     process_event.uid = uids.real
-                except:
+                except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError):
                     process_event.uid = 0
 
                 try:
                     gids = proc.gids()
                     process_event.gid = gids.real
-                except:
+                except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError):
                     process_event.gid = 0
 
                 # Note: ProcessEvent schema only has basic fields
