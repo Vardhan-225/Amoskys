@@ -1,0 +1,613 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Process Telemetry - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="process-dashboard">
+    <!-- Process Telemetry Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">🔬 Mac Process Telemetry</h2>
+            <div class="card-badge badge-success">Live Monitoring</div>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+            Real-time visibility into Mac process activity. Collected from EventBus WAL with
+            canonical enrichment and ML-ready feature extraction.
+        </p>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <a href="/dashboard/cortex" class="neural-button">← Back to Cortex</a>
+            <button class="neural-button" onclick="processDashboard.refreshAll()">🔄 Refresh Data</button>
+            <button class="neural-button" onclick="processDashboard.toggleAutoRefresh()">
+                <span id="auto-refresh-btn">⏸️ Pause Auto-Refresh</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Process Statistics Grid -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-value" id="total-events">--</div>
+            <div class="metric-label">Total ProcessEvents</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="collection-duration">Collection Duration: --</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-value" id="unique-pids">--</div>
+            <div class="metric-label">Unique PIDs</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="unique-exes">Unique Executables: --</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-value" id="root-ratio">--%</div>
+            <div class="metric-label">Root Processes</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="user-ratio">User: --%</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-value" id="ml-features">--</div>
+            <div class="metric-label">ML Feature Windows</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="feature-count">Features: --</div>
+        </div>
+    </div>
+
+    <!-- Process Distribution Charts -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- User Type Distribution -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">👥 User Type Distribution</h3>
+                <span class="neural-loading" id="user-type-loading" style="display: none;"></span>
+            </div>
+            <div style="text-align: center; padding: 1rem; position: relative; height: 300px; width: 100%;">
+                <canvas id="user-type-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Process Class Distribution -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">🏷️ Process Class Distribution</h3>
+                <span class="neural-loading" id="process-class-loading" style="display: none;"></span>
+            </div>
+            <div style="text-align: center; padding: 1rem; position: relative; height: 300px; width: 100%;">
+                <canvas id="process-class-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Executables -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">🔝 Top Executables by Frequency</h3>
+            <span class="neural-loading" id="top-exes-loading" style="display: none;"></span>
+        </div>
+        <div id="top-executables-list">
+            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                Loading executable frequency data...
+            </p>
+        </div>
+    </div>
+
+    <!-- Live Process Stream -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">📡 Live Process Stream (Last 50)</h3>
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="neural-button-sm" onclick="processDashboard.filterByUserType('all')">All</button>
+                <button class="neural-button-sm" onclick="processDashboard.filterByUserType('root')">Root</button>
+                <button class="neural-button-sm" onclick="processDashboard.filterByUserType('system')">System</button>
+                <button class="neural-button-sm" onclick="processDashboard.filterByUserType('user')">User</button>
+            </div>
+        </div>
+        <div class="process-stream-container">
+            <table class="process-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>PID</th>
+                        <th>PPID</th>
+                        <th>Executable</th>
+                        <th>User Type</th>
+                        <th>Process Class</th>
+                        <th>Age</th>
+                    </tr>
+                </thead>
+                <tbody id="process-stream-body">
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                            Loading process stream...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Data Pipeline Status -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">🔄 ML Pipeline Status</h3>
+        </div>
+        <div class="pipeline-status-grid">
+            <div class="pipeline-step" id="step-wal">
+                <div class="step-icon">💾</div>
+                <div class="step-title">WAL Database</div>
+                <div class="step-status">Checking...</div>
+            </div>
+            <div class="pipeline-step" id="step-canonical">
+                <div class="step-icon">📊</div>
+                <div class="step-title">Canonical Table</div>
+                <div class="step-status">Checking...</div>
+            </div>
+            <div class="pipeline-step" id="step-features">
+                <div class="step-icon">🧮</div>
+                <div class="step-title">ML Features</div>
+                <div class="step-status">Checking...</div>
+            </div>
+            <div class="pipeline-step" id="step-model">
+                <div class="step-icon">🤖</div>
+                <div class="step-title">ML Model (v1)</div>
+                <div class="step-status">Pending</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.process-dashboard {
+    max-width: 100%;
+}
+
+.neural-button-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    background: rgba(0, 255, 136, 0.1);
+    border: 1px solid var(--neural-primary);
+    color: var(--neural-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.neural-button-sm:hover {
+    background: var(--neural-primary);
+    color: var(--bg-primary);
+}
+
+.process-stream-container {
+    overflow-x: auto;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.process-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+
+.process-table thead {
+    background: rgba(0, 255, 136, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.process-table th {
+    padding: 0.75rem;
+    text-align: left;
+    color: var(--neural-primary);
+    font-weight: 600;
+    border-bottom: 2px solid var(--neural-primary);
+}
+
+.process-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+}
+
+.process-table tbody tr:hover {
+    background: rgba(0, 255, 136, 0.05);
+}
+
+.user-type-root {
+    color: #ff6600;
+    font-weight: 600;
+}
+
+.user-type-system {
+    color: #ffaa00;
+}
+
+.user-type-user {
+    color: var(--neural-primary);
+}
+
+.process-class-system {
+    color: #0088ff;
+}
+
+.process-class-application {
+    color: var(--neural-primary);
+}
+
+.process-class-daemon {
+    color: #ffaa00;
+}
+
+.process-class-third_party {
+    color: #ff00ff;
+}
+
+.exe-truncate {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.top-exe-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 5px;
+    border-left: 3px solid var(--neural-primary);
+}
+
+.top-exe-name {
+    font-family: 'Courier New', monospace;
+    color: var(--neural-primary);
+    font-weight: 600;
+}
+
+.top-exe-stats {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.top-exe-count {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.top-exe-percentage {
+    background: rgba(0, 255, 136, 0.2);
+    color: var(--neural-primary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.pipeline-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.pipeline-step {
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border-left: 4px solid var(--text-muted);
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.pipeline-step.status-ready {
+    border-left-color: var(--neural-primary);
+}
+
+.pipeline-step.status-pending {
+    border-left-color: #ffaa00;
+}
+
+.pipeline-step.status-error {
+    border-left-color: #ff0000;
+}
+
+.step-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.step-title {
+    font-weight: 600;
+    color: var(--neural-primary);
+    margin-bottom: 0.5rem;
+}
+
+.step-status {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 1024px) {
+    .process-dashboard > div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+class ProcessDashboard {
+    constructor() {
+        this.updateInterval = 5000; // 5 seconds
+        this.autoRefresh = true;
+        this.currentFilter = 'all';
+        this.charts = {};
+        this.init();
+    }
+
+    init() {
+        this.initCharts();
+        this.startRealTimeUpdates();
+    }
+
+    initCharts() {
+        // User Type Chart
+        this.charts.userType = new Chart(document.getElementById('user-type-chart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Root', 'System', 'User'],
+                datasets: [{
+                    data: [0, 0, 0],
+                    backgroundColor: ['#ff6600', '#ffaa00', '#00ff88'],
+                    borderWidth: 2,
+                    borderColor: '#1a1a1a'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#cccccc' }
+                    }
+                }
+            }
+        });
+
+        // Process Class Chart
+        this.charts.processClass = new Chart(document.getElementById('process-class-chart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['System', 'Application', 'Daemon', 'Third Party', 'Other'],
+                datasets: [{
+                    data: [0, 0, 0, 0, 0],
+                    backgroundColor: ['#0088ff', '#00ff88', '#ffaa00', '#ff00ff', '#666666'],
+                    borderWidth: 2,
+                    borderColor: '#1a1a1a'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#cccccc' }
+                    }
+                }
+            }
+        });
+    }
+
+    async startRealTimeUpdates() {
+        if (this.autoRefresh) {
+            await this.refreshAll();
+        }
+
+        setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
+    }
+
+    async refreshAll() {
+        try {
+            await Promise.all([
+                this.updateProcessStats(),
+                this.updateTopExecutables(),
+                this.updateProcessStream(),
+                this.updatePipelineStatus()
+            ]);
+        } catch (error) {
+            console.error('Process dashboard update error:', error);
+        }
+    }
+
+    async updateProcessStats() {
+        try {
+            const response = await fetch('/api/process-telemetry/stats');
+            const data = await response.json();
+
+            // Update metrics
+            document.getElementById('total-events').textContent = data.total_process_events.toLocaleString();
+            document.getElementById('unique-pids').textContent = data.unique_pids.toLocaleString();
+            document.getElementById('unique-exes').textContent = `Executables: ${data.unique_executables}`;
+
+            // Duration
+            if (data.collection_period) {
+                document.getElementById('collection-duration').textContent =
+                    `Duration: ${data.collection_period.duration_hours} hours`;
+            }
+
+            // User type distribution
+            const userDist = data.user_type_distribution;
+            const totalProcs = userDist.root + userDist.system + userDist.user;
+            const rootPct = Math.round((userDist.root / totalProcs) * 100);
+            const userPct = Math.round((userDist.user / totalProcs) * 100);
+
+            document.getElementById('root-ratio').textContent = `${rootPct}%`;
+            document.getElementById('user-ratio').textContent = `User: ${userPct}%`;
+
+            // Update user type chart
+            this.charts.userType.data.datasets[0].data = [
+                userDist.root,
+                userDist.system,
+                userDist.user
+            ];
+            this.charts.userType.update('none');
+
+            // Update process class chart
+            const procClass = data.process_class_distribution;
+            this.charts.processClass.data.datasets[0].data = [
+                procClass.system || 0,
+                procClass.application || 0,
+                procClass.daemon || 0,
+                procClass.third_party || 0,
+                procClass.other || 0
+            ];
+            this.charts.processClass.update('none');
+
+        } catch (error) {
+            console.error('Process stats update failed:', error);
+        }
+    }
+
+    async updateTopExecutables() {
+        try {
+            document.getElementById('top-exes-loading').style.display = 'inline-block';
+
+            const response = await fetch('/api/process-telemetry/top-executables?limit=15');
+            const data = await response.json();
+
+            const container = document.getElementById('top-executables-list');
+
+            if (data.executables.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No executable data available</p>';
+                return;
+            }
+
+            const exesHtml = data.executables.map(exe => `
+                <div class="top-exe-item">
+                    <div class="top-exe-name">${exe.name}</div>
+                    <div class="top-exe-stats">
+                        <span class="top-exe-count">${exe.count} occurrences</span>
+                        <span class="top-exe-percentage">${exe.percentage}%</span>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = exesHtml;
+
+        } catch (error) {
+            console.error('Top executables update failed:', error);
+        } finally {
+            document.getElementById('top-exes-loading').style.display = 'none';
+        }
+    }
+
+    async updateProcessStream() {
+        try {
+            let url = '/api/process-telemetry/recent?limit=50';
+
+            // Apply filter if needed
+            if (this.currentFilter !== 'all') {
+                url = `/api/process-telemetry/search?user_type=${this.currentFilter}&limit=50`;
+            }
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            const tbody = document.getElementById('process-stream-body');
+
+            if (data.processes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">No processes found</td></tr>';
+                return;
+            }
+
+            const processRows = data.processes.map(proc => `
+                <tr>
+                    <td>${new Date(proc.timestamp).toLocaleTimeString()}</td>
+                    <td>${proc.pid}</td>
+                    <td>${proc.ppid}</td>
+                    <td class="exe-truncate" title="${proc.exe}">${proc.exe_basename || proc.exe}</td>
+                    <td class="user-type-${proc.user_type}">${proc.user_type}</td>
+                    <td class="process-class-${proc.process_class}">${proc.process_class}</td>
+                    <td>${proc.age_seconds}s ago</td>
+                </tr>
+            `).join('');
+
+            tbody.innerHTML = processRows;
+
+        } catch (error) {
+            console.error('Process stream update failed:', error);
+        }
+    }
+
+    async updatePipelineStatus() {
+        try {
+            // Check WAL
+            const statsResp = await fetch('/api/process-telemetry/stats');
+            const statsData = await statsResp.json();
+
+            const walStep = document.getElementById('step-wal');
+            walStep.classList.add('status-ready');
+            walStep.querySelector('.step-status').textContent = `${statsData.total_process_events} events`;
+
+            // Check Canonical Table
+            try {
+                const canonicalResp = await fetch('/api/process-telemetry/canonical-summary');
+                const canonicalData = await canonicalResp.json();
+
+                const canonicalStep = document.getElementById('step-canonical');
+                canonicalStep.classList.add('status-ready');
+                canonicalStep.querySelector('.step-status').textContent = `${canonicalData.total_rows} rows`;
+            } catch (e) {
+                const canonicalStep = document.getElementById('step-canonical');
+                canonicalStep.classList.add('status-pending');
+                canonicalStep.querySelector('.step-status').textContent = 'Not generated';
+            }
+
+            // Check ML Features
+            try {
+                const featuresResp = await fetch('/api/process-telemetry/features-summary');
+                const featuresData = await featuresResp.json();
+
+                const featuresStep = document.getElementById('step-features');
+                featuresStep.classList.add('status-ready');
+                featuresStep.querySelector('.step-status').textContent = `${featuresData.total_windows} windows`;
+
+                // Update metric card
+                document.getElementById('ml-features').textContent = featuresData.total_windows;
+                document.getElementById('feature-count').textContent = `Features: ${featuresData.total_features}`;
+            } catch (e) {
+                const featuresStep = document.getElementById('step-features');
+                featuresStep.classList.add('status-pending');
+                featuresStep.querySelector('.step-status').textContent = 'Not generated';
+
+                document.getElementById('ml-features').textContent = '--';
+                document.getElementById('feature-count').textContent = 'Features: --';
+            }
+
+        } catch (error) {
+            console.error('Pipeline status update failed:', error);
+        }
+    }
+
+    filterByUserType(userType) {
+        this.currentFilter = userType;
+        this.updateProcessStream();
+    }
+
+    toggleAutoRefresh() {
+        this.autoRefresh = !this.autoRefresh;
+        const btn = document.getElementById('auto-refresh-btn');
+        btn.textContent = this.autoRefresh ? '⏸️ Pause Auto-Refresh' : '▶️ Resume Auto-Refresh';
+    }
+}
+
+// Initialize Process Dashboard
+let processDashboard;
+document.addEventListener('DOMContentLoaded', () => {
+    processDashboard = new ProcessDashboard();
+});
+</script>
+{% endblock %}

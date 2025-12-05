@@ -73,7 +73,9 @@
                 <div class="card-header">
                     <h3 class="card-title">📊 Severity Distribution</h3>
                 </div>
-                <canvas id="severity-chart" width="300" height="200"></canvas>
+                <div style="position: relative; width: 100%; height: 250px;">
+                    <canvas id="severity-chart"></canvas>
+                </div>
             </div>
 
             <!-- Top Source IPs -->
@@ -100,7 +102,10 @@
                 <button class="neural-button" onclick="socDashboard.changeTimeRange(24)" style="background: var(--neural-primary);">24H</button>
             </div>
         </div>
-        <canvas id="timeline-chart" width="800" height="300"></canvas>
+        <!-- Canvas wrapper with fixed height to prevent infinite expansion -->
+        <div id="timeline-chart-container" style="position: relative; height: 300px; width: 100%;">
+            <canvas id="timeline-chart"></canvas>
+        </div>
     </div>
 
     <!-- Event Investigation Modal -->
@@ -315,6 +320,7 @@ class SOCDashboard {
         this.timeRange = 24; // hours
         this.charts = {};
         this.selectedEvent = null;
+        this.updateTimer = null;  // FIXED: Track timer for cleanup
         this.init();
     }
     
@@ -322,6 +328,24 @@ class SOCDashboard {
         this.initCharts();
         this.initEventFilters();
         this.startRealTimeUpdates();
+        
+        // FIXED: Add cleanup on page unload
+        window.addEventListener('beforeunload', () => this.cleanup());
+    }
+    
+    // FIXED: Add cleanup method to prevent memory leaks
+    cleanup() {
+        if (this.updateTimer) {
+            clearInterval(this.updateTimer);
+            this.updateTimer = null;
+        }
+        // Destroy charts to free memory
+        Object.values(this.charts).forEach(chart => {
+            if (chart && chart.destroy) {
+                chart.destroy();
+            }
+        });
+        this.charts = {};
     }
     
     initCharts() {
@@ -366,6 +390,10 @@ class SOCDashboard {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                // FIXED: Add explicit constraints to prevent canvas expansion
+                layout: {
+                    padding: 0
+                },
                 scales: {
                     x: {
                         ticks: { color: '#cccccc' },
@@ -374,12 +402,17 @@ class SOCDashboard {
                     y: {
                         ticks: { color: '#cccccc' },
                         grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                        beginAtZero: true
+                        beginAtZero: true,
+                        max: 100  // Prevent y-axis from expanding infinitely
                     }
                 },
                 plugins: {
                     legend: {
                         labels: { color: '#cccccc' }
+                    },
+                    // FIXED: Disable animation on update to prevent memory issues
+                    animation: {
+                        enabled: false
                     }
                 }
             }
@@ -405,7 +438,8 @@ class SOCDashboard {
             console.error('SOC dashboard update error:', error);
         }
         
-        setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
+        // FIXED: Track timer so it can be cleared on cleanup
+        this.updateTimer = setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
     }
     
     async updateThreatMetrics() {

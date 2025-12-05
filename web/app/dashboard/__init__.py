@@ -9,6 +9,7 @@ an intelligent neural interface.
 
 from flask import Blueprint, render_template, jsonify, request
 from datetime import datetime, timezone, timedelta
+from ..api.rate_limiter import require_rate_limit
 import json
 
 # Constants
@@ -56,8 +57,14 @@ def neural_insights():
     """Neural Insights Dashboard - AI Detection Visualization"""
     return render_template('dashboard/neural.html')
 
+@dashboard_bp.route('/processes')
+def process_telemetry():
+    """Process Telemetry Dashboard - Mac Process Monitoring"""
+    return render_template('dashboard/processes.html')
+
 # Real-time Data Endpoints
 @dashboard_bp.route('/api/live/threats')
+@require_rate_limit(max_requests=100, window_seconds=60)
 def live_threats():
     """Real-time threat feed for dashboard"""
     from ..api.events import EVENT_STORE
@@ -91,6 +98,7 @@ def live_threats():
     })
 
 @dashboard_bp.route('/api/live/agents')
+@require_rate_limit(max_requests=100, window_seconds=60)
 def live_agents():
     """Real-time agent status for dashboard"""
     from ..api.agents import AGENT_REGISTRY
@@ -134,7 +142,50 @@ def live_agents():
         'timestamp': current_time.isoformat()
     })
 
+@dashboard_bp.route('/api/available-agents')
+def available_agents():
+    """List available agent types that can be deployed"""
+    current_time = datetime.now(timezone.utc)
+    available = {
+        'status': 'success',
+        'agents': [
+            {
+                'id': 'proc-agent',
+                'name': 'Process Agent',
+                'type': 'process_monitoring',
+                'description': 'Monitors running processes, resource usage, and suspicious behavior',
+                'platform': ['Linux', 'macOS'],
+                'status': 'available',
+                'port': 8082,
+                'location': 'src/amoskys/agents/proc/proc_agent.py'
+            },
+            {
+                'id': 'snmp-agent',
+                'name': 'SNMP Agent',
+                'type': 'network_telemetry',
+                'description': 'Collects device telemetry from SNMP-enabled network devices',
+                'platform': ['Linux', 'macOS', 'Windows'],
+                'status': 'available',
+                'port': 8081,
+                'location': 'src/amoskys/agents/snmp/snmp_agent.py'
+            },
+            {
+                'id': 'flow-agent',
+                'name': 'Flow Agent',
+                'type': 'network_flow',
+                'description': 'Publishes network flow events with write-ahead log reliability',
+                'platform': ['Linux', 'macOS'],
+                'status': 'available',
+                'port': 8080,
+                'location': 'src/amoskys/agents/flowagent/main.py'
+            }
+        ],
+        'timestamp': current_time.isoformat()
+    }
+    return jsonify(available)
+
 @dashboard_bp.route('/api/live/metrics')
+@require_rate_limit(max_requests=100, window_seconds=60)
 def live_metrics():
     """Real-time system metrics for dashboard"""
     import psutil
@@ -154,28 +205,36 @@ def live_metrics():
         metrics = {
             'cpu': {
                 'percent': cpu_percent,
-                'count': psutil.cpu_count()
+                'count': psutil.cpu_count(),
+                'cores': psutil.cpu_count(),
+                'status': 'healthy' if cpu_percent < 80 else ('warning' if cpu_percent < 90 else 'critical')
             },
             'memory': {
                 'percent': memory.percent,
                 'used_gb': memory.used / (1024**3),
-                'total_gb': memory.total / (1024**3)
+                'total_gb': memory.total / (1024**3),
+                'available_gb': memory.available / (1024**3),
+                'status': 'healthy' if memory.percent < 80 else ('warning' if memory.percent < 90 else 'critical')
             },
             'disk': {
                 'percent': (disk.used / disk.total) * 100,
                 'used_gb': disk.used / (1024**3),
-                'total_gb': disk.total / (1024**3)
+                'total_gb': disk.total / (1024**3),
+                'status': 'healthy' if (disk.used / disk.total * 100) < 80 else ('warning' if (disk.used / disk.total * 100) < 90 else 'critical')
             },
             'network': {
                 'bytes_sent': network.bytes_sent,
                 'bytes_recv': network.bytes_recv,
+                'bytes_sent_mb': network.bytes_sent / (1024**2),
+                'bytes_recv_mb': network.bytes_recv / (1024**2),
                 'packets_sent': network.packets_sent,
                 'packets_recv': network.packets_recv
             },
             'process': {
                 'memory_percent': process.memory_percent(),
                 'cpu_percent': process.cpu_percent(),
-                'threads': process.num_threads()
+                'threads': process.num_threads(),
+                'status': 'running'
             }
         }
         

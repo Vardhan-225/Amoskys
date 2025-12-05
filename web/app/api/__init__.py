@@ -18,6 +18,7 @@ from .events import events_bp
 from .system import system_bp
 from .integration import integration_bp
 from .snmp_simple import snmp_simple_bp  # Simple SNMP telemetry API
+from .process_telemetry import process_bp  # Process telemetry API
 from .docs import generate_openapi_spec
 
 # Register sub-blueprints
@@ -27,6 +28,7 @@ api_bp.register_blueprint(events_bp)
 api_bp.register_blueprint(system_bp)
 api_bp.register_blueprint(integration_bp)
 api_bp.register_blueprint(snmp_simple_bp)  # Register simple SNMP API
+api_bp.register_blueprint(process_bp)  # Register process telemetry API
 
 # Add API documentation endpoint
 @api_bp.route('/docs/openapi.json', methods=['GET'])

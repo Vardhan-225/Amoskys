@@ -6,6 +6,7 @@ Agent registration, heartbeat, and status management
 from flask import Blueprint, request, jsonify, g
 from datetime import datetime, timezone
 from .auth import require_auth
+from .rate_limiter import require_rate_limit
 import psutil
 import platform
 
@@ -18,6 +19,7 @@ AGENT_REGISTRY = {}
 UTC_TIMEZONE_SUFFIX = '+00:00'
 
 @agents_bp.route('/register', methods=['POST'])
+@require_rate_limit(max_requests=50, window_seconds=60)
 @require_auth(permissions=['agent.register'])
 def register_agent():
     """Register a new agent with the AMOSKYS platform"""

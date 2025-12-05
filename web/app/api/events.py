@@ -6,6 +6,7 @@ Security event ingestion and management
 from flask import Blueprint, request, jsonify, g
 from datetime import datetime, timezone
 from .auth import require_auth
+from .rate_limiter import require_rate_limit
 import hashlib
 import json
 
@@ -37,6 +38,7 @@ def validate_event_schema(event_data):
 
 @events_bp.route('/submit', methods=['POST'])
 @require_auth(permissions=['event.submit'])
+@require_rate_limit(max_requests=100, window_seconds=60)
 def submit_event():
     """Submit a security event to AMOSKYS"""
     data = request.get_json()
