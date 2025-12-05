@@ -100,89 +100,61 @@ def live_threats():
 @dashboard_bp.route('/api/live/agents')
 @require_rate_limit(max_requests=100, window_seconds=60)
 def live_agents():
-    """Real-time agent status for dashboard"""
-    from ..api.agents import AGENT_REGISTRY
-    
-    agents_data = []
-    current_time = datetime.now(timezone.utc)
-    
-    for agent_id, info in AGENT_REGISTRY.items():
-        last_seen = datetime.fromisoformat(info['last_seen'].replace('Z', UTC_TIMEZONE_SUFFIX))
-        seconds_since_ping = (current_time - last_seen).total_seconds()
-        
-        # Determine status
-        if seconds_since_ping <= 60:
-            status = 'online'
-            status_color = '#00ff88'
-        elif seconds_since_ping <= 300:
-            status = 'active'
-            status_color = '#ffaa00'
-        elif seconds_since_ping <= 600:
-            status = 'stale'
-            status_color = '#ff6600'
-        else:
-            status = 'offline'
-            status_color = '#ff0000'
-        
-        agents_data.append({
-            'agent_id': agent_id,
-            'hostname': info.get('hostname', 'unknown'),
-            'status': status,
-            'status_color': status_color,
-            'last_seen': info['last_seen'],
-            'seconds_since_ping': int(seconds_since_ping),
-            'platform': info.get('platform', 'unknown'),
-            'capabilities': info.get('capabilities', [])
+    """Real-time agent status for dashboard with actual process detection"""
+    from .agent_discovery import get_all_agents_status
+
+    agent_data = get_all_agents_status()
+
+    # Format for dashboard consumption
+    agents_formatted = []
+    for agent in agent_data['agents']:
+        # Determine uptime from first process if running
+        uptime_seconds = 0
+        if agent['processes']:
+            uptime_seconds = agent['processes'][0]['uptime_seconds']
+
+        agents_formatted.append({
+            'agent_id': agent['agent_id'],
+            'hostname': agent.get('name', agent['agent_id']),
+            'status': agent['status'],
+            'status_color': agent.get('color', '#00ff88'),
+            'last_seen': agent['last_check'],
+            'seconds_since_ping': 0 if agent['running'] else 999999,
+            'platform': agent_data['platform'],
+            'capabilities': agent['capabilities'],
+            'running': agent['running'],
+            'instances': agent['instances'],
+            'monitors': agent['monitors'],
+            'neurons': agent['neurons'],
+            'blockers': agent['blockers'],
+            'warnings': agent['warnings'],
+            'uptime_seconds': uptime_seconds,
+            'critical': agent['critical']
         })
-    
+
     return jsonify({
         'status': 'success',
-        'agents': agents_data,
-        'total_agents': len(agents_data),
-        'timestamp': current_time.isoformat()
+        'agents': agents_formatted,
+        'total_agents': len(agents_formatted),
+        'summary': agent_data['summary'],
+        'timestamp': agent_data['timestamp']
     })
 
 @dashboard_bp.route('/api/available-agents')
 def available_agents():
-    """List available agent types that can be deployed"""
+    """List available agent types that can be deployed on this platform"""
+    from .agent_discovery import get_available_agents, get_platform_name
+
+    available_agents_list = get_available_agents()
     current_time = datetime.now(timezone.utc)
-    available = {
+
+    return jsonify({
         'status': 'success',
-        'agents': [
-            {
-                'id': 'proc-agent',
-                'name': 'Process Agent',
-                'type': 'process_monitoring',
-                'description': 'Monitors running processes, resource usage, and suspicious behavior',
-                'platform': ['Linux', 'macOS'],
-                'status': 'available',
-                'port': 8082,
-                'location': 'src/amoskys/agents/proc/proc_agent.py'
-            },
-            {
-                'id': 'snmp-agent',
-                'name': 'SNMP Agent',
-                'type': 'network_telemetry',
-                'description': 'Collects device telemetry from SNMP-enabled network devices',
-                'platform': ['Linux', 'macOS', 'Windows'],
-                'status': 'available',
-                'port': 8081,
-                'location': 'src/amoskys/agents/snmp/snmp_agent.py'
-            },
-            {
-                'id': 'flow-agent',
-                'name': 'Flow Agent',
-                'type': 'network_flow',
-                'description': 'Publishes network flow events with write-ahead log reliability',
-                'platform': ['Linux', 'macOS'],
-                'status': 'available',
-                'port': 8080,
-                'location': 'src/amoskys/agents/flowagent/main.py'
-            }
-        ],
+        'platform': get_platform_name(),
+        'agents': available_agents_list,
+        'count': len(available_agents_list),
         'timestamp': current_time.isoformat()
-    }
-    return jsonify(available)
+    })
 
 @dashboard_bp.route('/api/live/metrics')
 @require_rate_limit(max_requests=100, window_seconds=60)
