@@ -32,7 +32,7 @@ bcrypt==4.3.0
 
 # Configuration & Serialization
 PyYAML==6.0.2
-pydantic==2.10.3
+pydantic==2.12.3
 pydantic-core==2.27.1
 python-dotenv==1.1.0
 
