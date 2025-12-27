@@ -316,3 +316,4 @@ FRAMEWORK_SUMMARY.txt
 GIT_COMMIT_MESSAGE.txt
 data/wal/flowagent.db
 data/wal/flowagent.db
+*.db
