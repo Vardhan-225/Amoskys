@@ -317,3 +317,4 @@ GIT_COMMIT_MESSAGE.txt
 data/wal/flowagent.db
 data/wal/flowagent.db
 *.db
+/data/wal
