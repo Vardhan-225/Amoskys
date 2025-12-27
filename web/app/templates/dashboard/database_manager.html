@@ -1,0 +1,638 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Database Manager - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="database-manager">
+    <!-- Database Manager Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">🗄️ Database Manager</h2>
+            <div class="card-badge badge-warning">Zero-Trust Architecture</div>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+            Read-only view of telemetry database with audit-controlled data management.
+            All operations are logged and irreversible to maintain zero-trust integrity.
+        </p>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <a href="/dashboard/cortex" class="neural-button">← Back to Cortex</a>
+            <button class="neural-button" onclick="dbManager.refreshAll()">🔄 Refresh Statistics</button>
+        </div>
+    </div>
+
+    <!-- Database Statistics Grid -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-value" id="db-size">--</div>
+            <div class="metric-label">Database Size</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="db-path">Path: --</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-value" id="total-rows">--</div>
+            <div class="metric-label">Total Records</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="total-tables">Tables: --</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-value" id="wal-size">--</div>
+            <div class="metric-label">WAL Queue Size</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="wal-pending">Pending: --</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-value" id="oldest-record">--</div>
+            <div class="metric-label">Data Retention</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="newest-record">Latest: --</div>
+        </div>
+    </div>
+
+    <!-- Table Statistics -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">📊 Table Statistics</h3>
+            <span class="neural-loading" id="tables-loading" style="display: none;"></span>
+        </div>
+        <div id="table-stats-container">
+            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                Loading table statistics...
+            </p>
+        </div>
+    </div>
+
+    <!-- Raw Data Viewer -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">🔍 Raw Data Viewer (Read-Only)</h3>
+            <div style="display: flex; gap: 0.5rem;">
+                <select id="table-selector" class="table-select" onchange="dbManager.loadTableData()">
+                    <option value="">-- Select Table --</option>
+                    <option value="process_events">process_events</option>
+                    <option value="device_telemetry">device_telemetry</option>
+                    <option value="peripheral_events">peripheral_events</option>
+                    <option value="flow_events">flow_events</option>
+                    <option value="security_events">security_events</option>
+                </select>
+                <button class="neural-button-sm" onclick="dbManager.loadTableData()">Load Data</button>
+            </div>
+        </div>
+        <div class="data-viewer-container">
+            <div id="data-viewer-content">
+                <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                    Select a table and click "Load Data" to view records
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Maintenance (Zero-Trust) -->
+    <div class="neural-card maintenance-card">
+        <div class="card-header">
+            <h3 class="card-title">⚠️ Database Maintenance (Audit Required)</h3>
+        </div>
+
+        <div class="maintenance-section">
+            <div class="maintenance-warning">
+                <div class="warning-icon">⚠️</div>
+                <div>
+                    <strong>Zero-Trust Policy:</strong> Individual record modification is prohibited after ingestion.
+                    Only complete table truncation is permitted to maintain audit integrity.
+                    All operations are logged with timestamp and operator identity.
+                </div>
+            </div>
+
+            <div class="maintenance-actions">
+                <div class="action-group">
+                    <h4>📋 Table Truncation</h4>
+                    <p class="action-description">
+                        Delete ALL records from a specific table. This operation is irreversible and will be logged.
+                    </p>
+                    <div style="display: flex; gap: 1rem; align-items: center; margin-top: 1rem;">
+                        <select id="truncate-table-selector" class="table-select">
+                            <option value="">-- Select Table to Truncate --</option>
+                            <option value="process_events">process_events</option>
+                            <option value="device_telemetry">device_telemetry</option>
+                            <option value="peripheral_events">peripheral_events</option>
+                            <option value="flow_events">flow_events</option>
+                            <option value="security_events">security_events</option>
+                        </select>
+                        <button class="danger-button" onclick="dbManager.confirmTruncateTable()">
+                            🗑️ Truncate Table
+                        </button>
+                    </div>
+                </div>
+
+                <div class="action-group">
+                    <h4>💥 Complete Database Reset</h4>
+                    <p class="action-description">
+                        Delete ALL data from ALL tables. Preserves schema. Requires confirmation.
+                    </p>
+                    <button class="danger-button" onclick="dbManager.confirmResetDatabase()" style="margin-top: 1rem;">
+                        ⚠️ Reset All Data
+                    </button>
+                </div>
+
+                <div class="action-group">
+                    <h4>🧹 WAL Queue Management</h4>
+                    <p class="action-description">
+                        Clear the Write-Ahead Log queue (already processed events).
+                    </p>
+                    <button class="neural-button" onclick="dbManager.clearWAL()" style="margin-top: 1rem;">
+                        🗑️ Clear WAL Queue
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Log -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">📜 Maintenance Audit Log</h3>
+        </div>
+        <div id="audit-log-container">
+            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                No maintenance operations recorded in this session
+            </p>
+        </div>
+    </div>
+</div>
+
+<style>
+.database-manager {
+    max-width: 100%;
+}
+
+.maintenance-card {
+    border-left: 4px solid #ff6600;
+}
+
+.maintenance-section {
+    padding: 1rem 0;
+}
+
+.maintenance-warning {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba(255, 102, 0, 0.1);
+    border-radius: 8px;
+    border-left: 4px solid #ff6600;
+    margin-bottom: 2rem;
+    color: var(--text-secondary);
+}
+
+.warning-icon {
+    font-size: 2rem;
+}
+
+.maintenance-actions {
+    display: grid;
+    gap: 2rem;
+}
+
+.action-group {
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.action-group h4 {
+    color: var(--neural-primary);
+    margin-bottom: 0.5rem;
+}
+
+.action-description {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 0;
+}
+
+.table-select {
+    padding: 0.5rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--neural-primary);
+    color: var(--neural-primary);
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    min-width: 250px;
+}
+
+.danger-button {
+    padding: 0.5rem 1.5rem;
+    background: rgba(255, 0, 0, 0.2);
+    border: 2px solid #ff0000;
+    color: #ff0000;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.danger-button:hover {
+    background: #ff0000;
+    color: white;
+}
+
+.neural-button-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    background: rgba(0, 255, 136, 0.1);
+    border: 1px solid var(--neural-primary);
+    color: var(--neural-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.neural-button-sm:hover {
+    background: var(--neural-primary);
+    color: var(--bg-primary);
+}
+
+.table-stat-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border-left: 4px solid var(--neural-primary);
+}
+
+.table-stat-info {
+    flex: 1;
+}
+
+.table-stat-name {
+    font-weight: 600;
+    color: var(--neural-primary);
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+    font-family: 'Courier New', monospace;
+}
+
+.table-stat-details {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 1.5rem;
+}
+
+.data-viewer-container {
+    max-height: 600px;
+    overflow: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+}
+
+.data-table thead {
+    background: rgba(0, 255, 136, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.data-table th {
+    padding: 0.75rem;
+    text-align: left;
+    color: var(--neural-primary);
+    font-weight: 600;
+    border-bottom: 2px solid var(--neural-primary);
+    white-space: nowrap;
+}
+
+.data-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.data-table tbody tr:hover {
+    background: rgba(0, 255, 136, 0.05);
+}
+
+.audit-entry {
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    background: rgba(255, 102, 0, 0.1);
+    border-radius: 5px;
+    border-left: 3px solid #ff6600;
+}
+
+.audit-timestamp {
+    font-weight: 600;
+    color: #ff6600;
+    margin-bottom: 0.25rem;
+}
+
+.audit-action {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+class DatabaseManager {
+    constructor() {
+        this.auditLog = [];
+        this.init();
+    }
+
+    init() {
+        this.refreshAll();
+    }
+
+    async refreshAll() {
+        await Promise.all([
+            this.updateStatistics(),
+            this.updateTableStats()
+        ]);
+    }
+
+    async updateStatistics() {
+        try {
+            const response = await fetch('/api/database-manager/statistics');
+            const data = await response.json();
+
+            // Update database info
+            document.getElementById('db-size').textContent = this.formatBytes(data.database_size);
+            document.getElementById('db-path').textContent = `Path: ${data.database_path}`;
+
+            // Update totals
+            document.getElementById('total-rows').textContent = data.total_records.toLocaleString();
+            document.getElementById('total-tables').textContent = `Tables: ${data.table_count}`;
+
+            // Update WAL info
+            document.getElementById('wal-size').textContent = this.formatBytes(data.wal_size);
+            document.getElementById('wal-pending').textContent = `Pending: ${data.wal_pending_events}`;
+
+            // Update retention info
+            if (data.oldest_record) {
+                const oldestDate = new Date(data.oldest_record);
+                const now = new Date();
+                const daysDiff = Math.floor((now - oldestDate) / (1000 * 60 * 60 * 24));
+                document.getElementById('oldest-record').textContent = `${daysDiff}d`;
+                document.getElementById('newest-record').textContent = `Latest: ${data.newest_record || 'N/A'}`;
+            }
+
+        } catch (error) {
+            console.error('Statistics update failed:', error);
+        }
+    }
+
+    async updateTableStats() {
+        try {
+            document.getElementById('tables-loading').style.display = 'inline-block';
+
+            const response = await fetch('/api/database-manager/table-stats');
+            const data = await response.json();
+
+            const container = document.getElementById('table-stats-container');
+
+            if (!data.tables || data.tables.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No tables found</p>';
+                return;
+            }
+
+            const tablesHtml = data.tables.map(table => `
+                <div class="table-stat-card">
+                    <div class="table-stat-info">
+                        <div class="table-stat-name">${table.name}</div>
+                        <div class="table-stat-details">
+                            <span>📊 ${table.row_count.toLocaleString()} rows</span>
+                            <span>💾 ${this.formatBytes(table.size_bytes)}</span>
+                            <span>📅 ${table.time_range || 'No data'}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = tablesHtml;
+
+        } catch (error) {
+            console.error('Table stats update failed:', error);
+        } finally {
+            document.getElementById('tables-loading').style.display = 'none';
+        }
+    }
+
+    async loadTableData() {
+        const tableName = document.getElementById('table-selector').value;
+
+        if (!tableName) {
+            alert('Please select a table');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/database-manager/view-table/${tableName}?limit=100`);
+            const data = await response.json();
+
+            const container = document.getElementById('data-viewer-content');
+
+            if (!data.records || data.records.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No records found in this table</p>';
+                return;
+            }
+
+            // Build table HTML
+            const columns = data.columns;
+            const records = data.records;
+
+            const tableHtml = `
+                <div style="margin-bottom: 1rem; color: var(--text-secondary);">
+                    Showing ${records.length} of ${data.total_count.toLocaleString()} records (read-only)
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            ${columns.map(col => `<th>${col}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${records.map(record => `
+                            <tr>
+                                ${columns.map(col => `<td title="${record[col]}">${this.formatValue(record[col])}</td>`).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = tableHtml;
+
+        } catch (error) {
+            console.error('Load table data failed:', error);
+            alert('Failed to load table data: ' + error.message);
+        }
+    }
+
+    async confirmTruncateTable() {
+        const tableName = document.getElementById('truncate-table-selector').value;
+
+        if (!tableName) {
+            alert('Please select a table to truncate');
+            return;
+        }
+
+        const confirmed = confirm(
+            `⚠️ CRITICAL OPERATION ⚠️\n\n` +
+            `This will DELETE ALL records from table: ${tableName}\n\n` +
+            `This operation is IRREVERSIBLE and will be LOGGED.\n\n` +
+            `Are you absolutely sure you want to proceed?`
+        );
+
+        if (!confirmed) return;
+
+        // Second confirmation
+        const doubleConfirm = prompt(
+            `Type the table name "${tableName}" to confirm truncation:`
+        );
+
+        if (doubleConfirm !== tableName) {
+            alert('Table name did not match. Operation cancelled.');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/database-manager/truncate-table/${tableName}`, {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.logAudit(`Truncated table: ${tableName} (${result.rows_deleted} rows deleted)`);
+                alert(`✅ Table ${tableName} truncated successfully`);
+                this.refreshAll();
+            } else {
+                alert(`❌ Failed to truncate table: ${result.error}`);
+            }
+
+        } catch (error) {
+            console.error('Truncate failed:', error);
+            alert('Failed to truncate table: ' + error.message);
+        }
+    }
+
+    async confirmResetDatabase() {
+        const confirmed = confirm(
+            `⚠️ CRITICAL OPERATION ⚠️\n\n` +
+            `This will DELETE ALL DATA from ALL TABLES.\n\n` +
+            `This operation is IRREVERSIBLE and will be LOGGED.\n\n` +
+            `Are you absolutely sure?`
+        );
+
+        if (!confirmed) return;
+
+        const verification = prompt(
+            'Type "RESET ALL DATA" to confirm complete database reset:'
+        );
+
+        if (verification !== 'RESET ALL DATA') {
+            alert('Verification failed. Operation cancelled.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/database-manager/reset-database', {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.logAudit(`Complete database reset (${result.total_deleted} total rows deleted)`);
+                alert(`✅ Database reset successfully`);
+                this.refreshAll();
+            } else {
+                alert(`❌ Failed to reset database: ${result.error}`);
+            }
+
+        } catch (error) {
+            console.error('Reset failed:', error);
+            alert('Failed to reset database: ' + error.message);
+        }
+    }
+
+    async clearWAL() {
+        const confirmed = confirm('Clear WAL queue? This will delete already-processed events from the queue.');
+
+        if (!confirmed) return;
+
+        try {
+            const response = await fetch('/api/database-manager/clear-wal', {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.logAudit(`Cleared WAL queue (${result.rows_deleted} events removed)`);
+                alert(`✅ WAL queue cleared`);
+                this.refreshAll();
+            } else {
+                alert(`❌ Failed to clear WAL: ${result.error}`);
+            }
+
+        } catch (error) {
+            console.error('Clear WAL failed:', error);
+            alert('Failed to clear WAL: ' + error.message);
+        }
+    }
+
+    logAudit(action) {
+        const timestamp = new Date().toISOString();
+        this.auditLog.push({ timestamp, action });
+
+        const container = document.getElementById('audit-log-container');
+
+        const auditHtml = this.auditLog.map(entry => `
+            <div class="audit-entry">
+                <div class="audit-timestamp">${new Date(entry.timestamp).toLocaleString()}</div>
+                <div class="audit-action">${entry.action}</div>
+            </div>
+        `).reverse().join('');
+
+        container.innerHTML = auditHtml;
+    }
+
+    formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    formatValue(value) {
+        if (value === null || value === undefined) {
+            return '<span style="color: #666; font-style: italic;">—</span>';
+        }
+        if (typeof value === 'string' && value.length > 100) {
+            return value.substring(0, 100) + '...';
+        }
+        return value;
+    }
+}
+
+// Initialize Database Manager
+let dbManager;
+document.addEventListener('DOMContentLoaded', () => {
+    dbManager = new DatabaseManager();
+});
+</script>
+{% endblock %}

@@ -1,43 +1,88 @@
 #!/bin/bash
-#
-# AMOSKYS Flask Dashboard Stop Script
-#
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PID_FILE="$SCRIPT_DIR/logs/flask.pid"
+# AMOSKYS System Shutdown Script
+# Platform: macOS/Linux
+# Purpose: Gracefully stop all AMOSKYS services
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+echo "🛑 AMOSKYS Neural Security Platform - Shutdown"
+echo "=============================================="
+echo ""
 
-echo -e "${YELLOW}Stopping AMOSKYS Dashboard Server...${NC}"
+echo "Stopping services..."
+echo ""
 
-# Stop by PID file
-if [ -f "$PID_FILE" ]; then
-    PID=$(cat "$PID_FILE")
-    if kill -0 "$PID" 2>/dev/null; then
-        echo -e "  → Stopping Flask process (PID: $PID)"
-        kill "$PID"
-        sleep 2
-
-        # Force kill if still running
-        if kill -0 "$PID" 2>/dev/null; then
-            echo -e "  → Force stopping..."
-            kill -9 "$PID"
-        fi
-
-        echo -e "${GREEN}  ✓ Server stopped${NC}"
-    else
-        echo -e "${YELLOW}  → Process not running${NC}"
-    fi
-    rm -f "$PID_FILE"
+# Stop Dashboard
+if pgrep -f "flask.*run.py" > /dev/null; then
+    echo "🔄 Stopping Flask Dashboard..."
+    pkill -f "flask.*run.py"
+    sleep 1
+    echo "✅ Dashboard stopped"
 else
-    echo -e "${YELLOW}  → No PID file found${NC}"
+    echo "⚠️  Dashboard not running"
 fi
 
-# Kill any stray processes
-pkill -f "flask run" 2>/dev/null && echo -e "  → Cleaned up stray Flask processes"
-lsof -ti :5000 | xargs kill -9 2>/dev/null && echo -e "  → Freed port 5000"
+# Stop SNMP Agent
+if pgrep -f "snmp_agent.py" > /dev/null; then
+    echo "🔄 Stopping SNMP Agent..."
+    pkill -f "snmp_agent.py"
+    sleep 1
+    echo "✅ SNMP Agent stopped"
+else
+    echo "⚠️  SNMP Agent not running"
+fi
 
-echo -e "${GREEN}Done.${NC}"
+# Stop Peripheral Agent
+if pgrep -f "peripheral_agent.py" > /dev/null; then
+    echo "🔄 Stopping Peripheral Agent..."
+    pkill -f "peripheral_agent.py"
+    sleep 1
+    echo "✅ Peripheral Agent stopped"
+else
+    echo "⚠️  Peripheral Agent not running"
+fi
+
+# Stop Proc Agent
+if pgrep -f "proc_agent.py" > /dev/null; then
+    echo "🔄 Stopping Proc Agent..."
+    pkill -f "proc_agent.py"
+    sleep 1
+    echo "✅ Proc Agent stopped"
+else
+    echo "⚠️  Proc Agent not running"
+fi
+
+# Stop WAL Processor
+if pgrep -f "wal_processor" > /dev/null; then
+    echo "🔄 Stopping WAL Processor..."
+    pkill -f "wal_processor"
+    sleep 2
+    echo "✅ WAL Processor stopped"
+else
+    echo "⚠️  WAL Processor not running"
+fi
+
+# Stop EventBus
+if pgrep -f "eventbus/server.py" > /dev/null; then
+    echo "🔄 Stopping EventBus..."
+    pkill -f "eventbus/server.py"
+    sleep 2
+    echo "✅ EventBus stopped"
+else
+    echo "⚠️  EventBus not running"
+fi
+
+echo ""
+echo "=============================================="
+echo "✅ AMOSKYS System Shutdown Complete"
+echo "=============================================="
+echo ""
+
+# Verify all stopped
+REMAINING=$(ps aux | grep -E "(eventbus|wal_processor|proc_agent|peripheral_agent|snmp_agent|flask)" | grep -v grep | wc -l)
+if [ "$REMAINING" -eq 0 ]; then
+    echo "✅ All AMOSKYS services stopped successfully"
+else
+    echo "⚠️  Warning: $REMAINING process(es) still running"
+    ps aux | grep -E "(eventbus|wal_processor|proc_agent|peripheral_agent|snmp_agent|flask)" | grep -v grep
+fi
+echo ""

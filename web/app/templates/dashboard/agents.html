@@ -192,11 +192,11 @@
 .agent-card.status-stale::before { background: var(--neural-warning); }
 .agent-card.status-active::before { background: #ffaa00; }
 .agent-card.status-online::before { background: var(--neural-primary); }
-.agent-card.available-agent::before { background: #00ff88; }
+.agent-card.available-agent::before { background: #5cb85c; }
 
 .agent-card:hover {
     transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(0, 255, 136, 0.2);
+    box-shadow: 0 8px 25px rgba(92, 184, 92, 0.2);
     border-color: var(--neural-primary);
 }
 
@@ -362,7 +362,7 @@ class AgentDashboard {
                 labels: ['Online', 'Active', 'Stale', 'Offline'],
                 datasets: [{
                     data: [0, 0, 0, 0],
-                    backgroundColor: ['#00ff88', '#ffaa00', '#ff6600', '#ff0000'],
+                    backgroundColor: ['#5cb85c', '#f0ad4e', '#ff6600', '#d9534f'],
                     borderWidth: 2,
                     borderColor: '#1a1a1a'
                 }]
@@ -577,7 +577,7 @@ class AgentDashboard {
             <div class="agent-card available-agent" onclick="agentDashboard.showAgentInfo('${agent.id}', '${agent.name}')">
                 <div class="agent-header">
                     <div class="agent-id">${agent.name}</div>
-                    <div class="agent-status" style="background: #00ff88; color: #000;">Available</div>
+                    <div class="agent-status" style="background: #5cb85c; color: #000;">Available</div>
                 </div>
                 <div class="agent-details">
                     <p style="margin: 0.5rem 0; color: var(--text-secondary); font-size: 0.85rem;">

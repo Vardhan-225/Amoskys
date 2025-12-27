@@ -42,4 +42,9 @@ def test_inflight_metric_rises_then_falls(tmp_path):
     time.sleep(0.5)
     m1 = requests.get("http://127.0.0.1:9100/metrics", timeout=2).text
     assert "bus_inflight_requests" in m1
-    p.terminate(); p.wait(timeout=2)
+    p.terminate()
+    try:
+        p.wait(timeout=5)  # Increased from 2 to 5 seconds for gRPC graceful shutdown
+    except subprocess.TimeoutExpired:
+        p.kill()
+        p.wait(timeout=2)

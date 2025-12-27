@@ -1,0 +1,746 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Peripheral Monitoring - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="peripheral-dashboard">
+    <!-- Peripheral Monitoring Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">🔌 Peripheral Device Monitoring</h2>
+            <div class="card-badge badge-success">Live Monitoring</div>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+            Real-time visibility into USB/Bluetooth peripheral devices. Monitor connections, detect unauthorized devices,
+            and track potential attack vectors including BadUSB, keyloggers, and data exfiltration attempts.
+        </p>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <a href="/dashboard/cortex" class="neural-button">← Back to Cortex</a>
+            <button class="neural-button" onclick="peripheralDashboard.refreshAll()">🔄 Refresh Data</button>
+            <button class="neural-button" onclick="peripheralDashboard.toggleAutoRefresh()">
+                <span id="auto-refresh-btn">⏸️ Pause Auto-Refresh</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Peripheral Statistics Grid -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-value" id="total-devices">--</div>
+            <div class="metric-label">Unique Devices Seen</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="total-events">Events: --</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-value" id="connected-count">--</div>
+            <div class="metric-label">Currently Connected</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="disconnected-count">Disconnected: --</div>
+        </div>
+
+        <div class="metric-card status-warning">
+            <div class="metric-value" id="unauthorized-count">--</div>
+            <div class="metric-label">Unauthorized Devices</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="high-risk-count">High Risk: --</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-value" id="recent-1h-count">--</div>
+            <div class="metric-label">Events (Last Hour)</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="avg-risk-score">Avg Risk: --</div>
+        </div>
+    </div>
+
+    <!-- Security Alerts -->
+    <div id="security-alerts-container" style="display: none; margin-bottom: 1.5rem;">
+        <div class="neural-card alert-card">
+            <div class="card-header">
+                <h3 class="card-title">⚠️ Security Alerts</h3>
+            </div>
+            <div id="security-alerts-list"></div>
+        </div>
+    </div>
+
+    <!-- Device Distribution Charts -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- Device Type Distribution -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">📊 Device Type Distribution</h3>
+                <span class="neural-loading" id="device-type-loading" style="display: none;"></span>
+            </div>
+            <div style="text-align: center; padding: 1rem; position: relative; height: 300px; width: 100%;">
+                <canvas id="device-type-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Connection Status Distribution -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">🔗 Connection Status</h3>
+                <span class="neural-loading" id="connection-status-loading" style="display: none;"></span>
+            </div>
+            <div style="text-align: center; padding: 1rem; position: relative; height: 300px; width: 100%;">
+                <canvas id="connection-status-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Currently Connected Devices -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">🔌 Currently Connected Devices</h3>
+            <span class="neural-loading" id="connected-devices-loading" style="display: none;"></span>
+        </div>
+        <div id="connected-devices-list">
+            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                Loading connected devices...
+            </p>
+        </div>
+    </div>
+
+    <!-- High-Risk Devices -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">🚨 High-Risk Devices</h3>
+            <span class="neural-loading" id="high-risk-loading" style="display: none;"></span>
+        </div>
+        <div id="high-risk-devices-list">
+            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
+                Loading high-risk devices...
+            </p>
+        </div>
+    </div>
+
+    <!-- Connection Timeline -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">📡 Connection Timeline (Last 24h)</h3>
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="neural-button-sm" onclick="peripheralDashboard.updateTimeWindow(24)">24h</button>
+                <button class="neural-button-sm" onclick="peripheralDashboard.updateTimeWindow(12)">12h</button>
+                <button class="neural-button-sm" onclick="peripheralDashboard.updateTimeWindow(6)">6h</button>
+                <button class="neural-button-sm" onclick="peripheralDashboard.updateTimeWindow(1)">1h</button>
+            </div>
+        </div>
+        <div class="timeline-container">
+            <table class="peripheral-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Event</th>
+                        <th>Device Name</th>
+                        <th>Device Type</th>
+                        <th>VID:PID</th>
+                        <th>Risk Score</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="timeline-body">
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                            Loading timeline...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+.peripheral-dashboard {
+    max-width: 100%;
+}
+
+.neural-button-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    background: rgba(0, 255, 136, 0.1);
+    border: 1px solid var(--neural-primary);
+    color: var(--neural-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.neural-button-sm:hover {
+    background: var(--neural-primary);
+    color: var(--bg-primary);
+}
+
+.alert-card {
+    border-left: 4px solid #ff6600;
+    background: rgba(255, 102, 0, 0.05);
+}
+
+.security-alert-item {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 102, 0, 0.1);
+    border-radius: 5px;
+    border-left: 3px solid #ff6600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.alert-device-info {
+    flex: 1;
+}
+
+.alert-device-name {
+    font-weight: 600;
+    color: #ff6600;
+    margin-bottom: 0.25rem;
+}
+
+.alert-device-details {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.alert-risk-badge {
+    background: #ff6600;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.device-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border-left: 4px solid var(--neural-primary);
+    transition: all 0.3s ease;
+}
+
+.device-card:hover {
+    background: rgba(0, 255, 136, 0.1);
+    transform: translateX(5px);
+}
+
+.device-card.high-risk {
+    border-left-color: #ff0000;
+    background: rgba(255, 0, 0, 0.05);
+}
+
+.device-card.unauthorized {
+    border-left-color: #ff6600;
+    background: rgba(255, 102, 0, 0.05);
+}
+
+.device-info {
+    flex: 1;
+}
+
+.device-name {
+    font-weight: 600;
+    color: var(--neural-primary);
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.device-details {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.device-detail-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.device-badges {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.device-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.badge-authorized {
+    background: rgba(0, 255, 136, 0.2);
+    color: var(--neural-primary);
+}
+
+.badge-unauthorized {
+    background: rgba(255, 102, 0, 0.2);
+    color: #ff6600;
+}
+
+.badge-connected {
+    background: rgba(0, 255, 136, 0.2);
+    color: var(--neural-primary);
+}
+
+.badge-disconnected {
+    background: rgba(102, 102, 102, 0.2);
+    color: #999999;
+}
+
+.risk-score-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.risk-score-value {
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.risk-score-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.risk-low {
+    color: var(--neural-primary);
+}
+
+.risk-medium {
+    color: #ffaa00;
+}
+
+.risk-high {
+    color: #ff6600;
+}
+
+.risk-critical {
+    color: #ff0000;
+}
+
+.timeline-container {
+    overflow-x: auto;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.peripheral-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+
+.peripheral-table thead {
+    background: rgba(0, 255, 136, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.peripheral-table th {
+    padding: 0.75rem;
+    text-align: left;
+    color: var(--neural-primary);
+    font-weight: 600;
+    border-bottom: 2px solid var(--neural-primary);
+}
+
+.peripheral-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+}
+
+.peripheral-table tbody tr:hover {
+    background: rgba(0, 255, 136, 0.05);
+}
+
+.event-type-connected {
+    color: var(--neural-primary);
+    font-weight: 600;
+}
+
+.event-type-disconnected {
+    color: #999999;
+}
+
+.device-type-keyboard {
+    color: #ff6600;
+    font-weight: 600;
+}
+
+.device-type-storage {
+    color: #ffaa00;
+    font-weight: 600;
+}
+
+.device-type-camera {
+    color: #ff00ff;
+}
+
+.device-type-mouse {
+    color: var(--neural-primary);
+}
+
+@media (max-width: 1024px) {
+    .peripheral-dashboard > div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+class PeripheralDashboard {
+    constructor() {
+        this.updateInterval = 5000; // 5 seconds
+        this.autoRefresh = true;
+        this.timeWindow = 24; // hours
+        this.charts = {};
+        this.init();
+    }
+
+    init() {
+        this.initCharts();
+        this.startRealTimeUpdates();
+    }
+
+    initCharts() {
+        // Device Type Chart
+        this.charts.deviceType = new Chart(document.getElementById('device-type-chart'), {
+            type: 'doughnut',
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    backgroundColor: [
+                        '#ff6600',  // Keyboard
+                        '#ffaa00',  // Storage
+                        '#00ff88',  // Mouse
+                        '#ff00ff',  // Camera
+                        '#0088ff',  // Bluetooth
+                        '#666666'   // Other
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#1a1a1a'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#cccccc', font: { size: 11 } }
+                    }
+                }
+            }
+        });
+
+        // Connection Status Chart
+        this.charts.connectionStatus = new Chart(document.getElementById('connection-status-chart'), {
+            type: 'doughnut',
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    backgroundColor: ['#00ff88', '#999999'],
+                    borderWidth: 2,
+                    borderColor: '#1a1a1a'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#cccccc', font: { size: 11 } }
+                    }
+                }
+            }
+        });
+    }
+
+    async startRealTimeUpdates() {
+        if (this.autoRefresh) {
+            await this.refreshAll();
+        }
+
+        setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
+    }
+
+    async refreshAll() {
+        try {
+            await Promise.all([
+                this.updateStatistics(),
+                this.updateConnectedDevices(),
+                this.updateHighRiskDevices(),
+                this.updateTimeline()
+            ]);
+        } catch (error) {
+            console.error('Peripheral dashboard update error:', error);
+        }
+    }
+
+    async updateStatistics() {
+        try {
+            const response = await fetch('/api/peripheral-telemetry/stats');
+            const data = await response.json();
+
+            // Update metrics
+            document.getElementById('total-devices').textContent = data.unique_devices.toLocaleString();
+            document.getElementById('total-events').textContent = `Events: ${data.total_events.toLocaleString()}`;
+            document.getElementById('unauthorized-count').textContent = data.unauthorized_devices.toLocaleString();
+            document.getElementById('high-risk-count').textContent = `High Risk: ${data.high_risk_devices}`;
+            document.getElementById('recent-1h-count').textContent = data.recent_connections_1h.toLocaleString();
+
+            // Calculate average risk score
+            const avgRisk = data.total_events > 0 ?
+                (data.high_risk_devices / data.total_events * 100).toFixed(1) : 0;
+            document.getElementById('avg-risk-score').textContent = `Avg Risk: ${avgRisk}%`;
+
+            // Update device type chart
+            const deviceTypes = data.device_type_distribution;
+            this.charts.deviceType.data.labels = Object.keys(deviceTypes);
+            this.charts.deviceType.data.datasets[0].data = Object.values(deviceTypes);
+            this.charts.deviceType.update('none');
+
+            // Update connection status chart
+            const connStatus = data.connection_status_distribution;
+            this.charts.connectionStatus.data.labels = Object.keys(connStatus);
+            this.charts.connectionStatus.data.datasets[0].data = Object.values(connStatus);
+            this.charts.connectionStatus.update('none');
+
+            // Check for security alerts (unauthorized or high-risk devices)
+            if (data.unauthorized_devices > 0 || data.high_risk_devices > 0) {
+                this.showSecurityAlerts(data);
+            } else {
+                document.getElementById('security-alerts-container').style.display = 'none';
+            }
+
+        } catch (error) {
+            console.error('Statistics update failed:', error);
+        }
+    }
+
+    showSecurityAlerts(data) {
+        const container = document.getElementById('security-alerts-container');
+        const alertsList = document.getElementById('security-alerts-list');
+
+        let alerts = [];
+
+        if (data.unauthorized_devices > 0) {
+            alerts.push({
+                type: 'unauthorized',
+                count: data.unauthorized_devices,
+                message: `${data.unauthorized_devices} unauthorized device(s) detected`,
+                severity: 'high'
+            });
+        }
+
+        if (data.high_risk_devices > 0) {
+            alerts.push({
+                type: 'high_risk',
+                count: data.high_risk_devices,
+                message: `${data.high_risk_devices} high-risk device(s) detected`,
+                severity: 'critical'
+            });
+        }
+
+        const alertsHtml = alerts.map(alert => `
+            <div class="security-alert-item">
+                <div class="alert-device-info">
+                    <div class="alert-device-name">${alert.message}</div>
+                    <div class="alert-device-details">Review devices below for security assessment</div>
+                </div>
+                <div class="alert-risk-badge">${alert.severity.toUpperCase()}</div>
+            </div>
+        `).join('');
+
+        alertsList.innerHTML = alertsHtml;
+        container.style.display = 'block';
+    }
+
+    async updateConnectedDevices() {
+        try {
+            document.getElementById('connected-devices-loading').style.display = 'inline-block';
+
+            const response = await fetch('/api/peripheral-telemetry/connected');
+            const data = await response.json();
+
+            const container = document.getElementById('connected-devices-list');
+
+            // Update connected count
+            document.getElementById('connected-count').textContent = data.devices.length;
+
+            // Calculate disconnected count from stats
+            const statsResp = await fetch('/api/peripheral-telemetry/stats');
+            const statsData = await statsResp.json();
+            const disconnectedCount = statsData.unique_devices - data.devices.length;
+            document.getElementById('disconnected-count').textContent = `Disconnected: ${disconnectedCount}`;
+
+            if (data.devices.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No devices currently connected</p>';
+                return;
+            }
+
+            const devicesHtml = data.devices.map(device => {
+                const riskClass = this.getRiskClass(device.risk_score);
+                const authClass = device.is_authorized ? 'authorized' : 'unauthorized';
+                const cardClass = device.is_authorized ? '' : 'unauthorized';
+
+                return `
+                    <div class="device-card ${cardClass}">
+                        <div class="device-info">
+                            <div class="device-name">${device.device_name}</div>
+                            <div class="device-details">
+                                <span class="device-detail-item">📱 ${device.device_type}</span>
+                                <span class="device-detail-item">🔢 ${device.vendor_id}:${device.product_id}</span>
+                                <span class="device-detail-item">🏢 ${device.manufacturer || 'Unknown'}</span>
+                                <span class="device-detail-item">⏱️ ${device.seconds_since_seen}s ago</span>
+                            </div>
+                        </div>
+                        <div class="device-badges">
+                            <span class="device-badge badge-${authClass}">
+                                ${device.is_authorized ? '✓ Authorized' : '⚠️ Unauthorized'}
+                            </span>
+                            <span class="device-badge badge-connected">Connected</span>
+                            <div class="risk-score-indicator">
+                                <div class="risk-score-value ${riskClass}">${(device.risk_score * 100).toFixed(0)}%</div>
+                                <div class="risk-score-label">Risk</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = devicesHtml;
+
+        } catch (error) {
+            console.error('Connected devices update failed:', error);
+        } finally {
+            document.getElementById('connected-devices-loading').style.display = 'none';
+        }
+    }
+
+    async updateHighRiskDevices() {
+        try {
+            document.getElementById('high-risk-loading').style.display = 'inline-block';
+
+            const response = await fetch('/api/peripheral-telemetry/high-risk');
+            const data = await response.json();
+
+            const container = document.getElementById('high-risk-devices-list');
+
+            if (data.devices.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No high-risk devices detected</p>';
+                return;
+            }
+
+            const devicesHtml = data.devices.map(device => {
+                const riskClass = this.getRiskClass(device.max_risk_score);
+
+                return `
+                    <div class="device-card high-risk">
+                        <div class="device-info">
+                            <div class="device-name">${device.device_name}</div>
+                            <div class="device-details">
+                                <span class="device-detail-item">📱 ${device.device_type}</span>
+                                <span class="device-detail-item">🔢 ${device.vendor_id}:${device.product_id}</span>
+                                <span class="device-detail-item">📊 ${device.event_count} events</span>
+                                <span class="device-detail-item">⏱️ Last seen: ${device.last_seen}</span>
+                            </div>
+                        </div>
+                        <div class="device-badges">
+                            <div class="risk-score-indicator">
+                                <div class="risk-score-value ${riskClass}">${(device.max_risk_score * 100).toFixed(0)}%</div>
+                                <div class="risk-score-label">Max Risk</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = devicesHtml;
+
+        } catch (error) {
+            console.error('High-risk devices update failed:', error);
+        } finally {
+            document.getElementById('high-risk-loading').style.display = 'none';
+        }
+    }
+
+    async updateTimeline() {
+        try {
+            const response = await fetch(`/api/peripheral-telemetry/timeline?hours=${this.timeWindow}`);
+            const data = await response.json();
+
+            const tbody = document.getElementById('timeline-body');
+
+            if (data.events.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">No events in this time window</td></tr>';
+                return;
+            }
+
+            const eventsHtml = data.events.map(event => {
+                const riskClass = this.getRiskClass(event.risk_score);
+                const eventClass = event.event_type === 'CONNECTED' ? 'connected' : 'disconnected';
+                const deviceTypeClass = event.device_type.toLowerCase().replace('_', '-');
+
+                return `
+                    <tr>
+                        <td>${event.hours_ago.toFixed(1)}h ago</td>
+                        <td class="event-type-${eventClass}">${event.event_type}</td>
+                        <td>${event.device_name}</td>
+                        <td class="device-type-${deviceTypeClass}">${event.device_type}</td>
+                        <td style="font-family: monospace;">${event.vendor_id}:${event.product_id}</td>
+                        <td class="${riskClass}">${(event.risk_score * 100).toFixed(0)}%</td>
+                        <td>${event.connection_status}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            tbody.innerHTML = eventsHtml;
+
+        } catch (error) {
+            console.error('Timeline update failed:', error);
+        }
+    }
+
+    getRiskClass(riskScore) {
+        if (riskScore >= 0.8) return 'risk-critical';
+        if (riskScore >= 0.6) return 'risk-high';
+        if (riskScore >= 0.3) return 'risk-medium';
+        return 'risk-low';
+    }
+
+    updateTimeWindow(hours) {
+        this.timeWindow = hours;
+        this.updateTimeline();
+    }
+
+    toggleAutoRefresh() {
+        this.autoRefresh = !this.autoRefresh;
+        const btn = document.getElementById('auto-refresh-btn');
+        btn.textContent = this.autoRefresh ? '⏸️ Pause Auto-Refresh' : '▶️ Resume Auto-Refresh';
+    }
+}
+
+// Initialize Peripheral Dashboard
+let peripheralDashboard;
+document.addEventListener('DOMContentLoaded', () => {
+    peripheralDashboard = new PeripheralDashboard();
+});
+</script>
+{% endblock %}

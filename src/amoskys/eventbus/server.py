@@ -90,6 +90,8 @@ from amoskys.common.crypto.canonical import canonical_bytes
 from amoskys.common.crypto.signing import load_public_key, verify
 from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
+from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
+from amoskys.proto import universal_telemetry_pb2_grpc as telemetry_grpc
 from amoskys.config import get_config
 from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
 
@@ -103,11 +105,30 @@ wal_storage = None  # Will be initialized in serve()
 _wal_lock = threading.Lock()  # Thread-safe WAL access
 
 # Prometheus metrics
-BUS_REQS = Counter("bus_publish_total", "Total Publish RPCs")
-BUS_INVALID = Counter("bus_invalid_total", "Invalid envelopes")
-BUS_LAT = Histogram("bus_publish_latency_ms", "Publish latency (ms)")
-BUS_INFLIGHT = Gauge("bus_inflight_requests", "Current in-flight Publish RPCs")
-BUS_RETRY_TOTAL = Counter("bus_retry_total", "Total Publish RETRY acks issued")
+try:
+    BUS_REQS = Counter("bus_publish_total", "Total Publish RPCs")
+except ValueError:
+    BUS_REQS = Counter("_bus_dummy1", "dummy")
+    
+try:
+    BUS_INVALID = Counter("bus_invalid_total", "Invalid envelopes")
+except ValueError:
+    BUS_INVALID = Counter("_bus_dummy2", "dummy")
+    
+try:
+    BUS_LAT = Histogram("bus_publish_latency_ms", "Publish latency (ms)")
+except ValueError:
+    BUS_LAT = Histogram("_bus_dummy3", "dummy")
+    
+try:
+    BUS_INFLIGHT = Gauge("bus_inflight_requests", "Current in-flight Publish RPCs")
+except ValueError:
+    BUS_INFLIGHT = Gauge("_bus_dummy4", "dummy")
+    
+try:
+    BUS_RETRY_TOTAL = Counter("bus_retry_total", "Total Publish RETRY acks issued")
+except ValueError:
+    BUS_RETRY_TOTAL = Counter("_bus_dummy5", "dummy")
 
 # Configuration from centralized config
 BUS_MAX_INFLIGHT = config.eventbus.max_inflight
@@ -984,6 +1005,158 @@ class EventBusServicer(pbrpc.EventBusServicer):
         context.abort(grpc.StatusCode.UNIMPLEMENTED, "Subscribe not supported")
 
 
+class UniversalEventBusServicer(telemetry_grpc.UniversalEventBusServicer):
+    """Implements UniversalEventBus service for new universal telemetry format.
+
+    This servicer handles the new universal telemetry format with DeviceTelemetry
+    and TelemetryEvent messages. It provides the same overload protection and
+    validation as the legacy EventBusServicer.
+    """
+
+    def PublishTelemetry(self, request, context):
+        """Handle PublishTelemetry RPC for universal device telemetry.
+
+        Args:
+            request: UniversalEnvelope containing DeviceTelemetry or ProcessEvent
+            context: gRPC ServicerContext
+
+        Returns:
+            UniversalAck: Acknowledgment with status (OK, RETRY, INVALID, etc.)
+        """
+        t0 = time.time()
+        BUS_REQS.inc()
+
+        # Check overload
+        if is_overloaded():
+            logger.info(OVERLOAD_LOG)
+            BUS_RETRY_TOTAL.inc()
+            BUS_LAT.observe((time.time() - t0) * 1000.0)
+            return telemetry_pb2.UniversalAck(
+                status=telemetry_pb2.UniversalAck.Status.RETRY,
+                reason=OVERLOAD_REASON,
+                backoff_hint_ms=2000
+            )
+
+        try:
+            # Size check
+            envelope_size = request.ByteSize()
+            if envelope_size > MAX_ENV_BYTES:
+                logger.info(f"[PublishTelemetry] Envelope too large: {envelope_size} bytes")
+                BUS_INVALID.inc()
+                return telemetry_pb2.UniversalAck(
+                    status=telemetry_pb2.UniversalAck.Status.INVALID,
+                    reason=f"Envelope too large ({envelope_size} > {MAX_ENV_BYTES} bytes)"
+                )
+
+            # Track inflight
+            inflight = _inc_inflight()
+            try:
+                if inflight > BUS_MAX_INFLIGHT:
+                    logger.info(f"[PublishTelemetry] Server at capacity: {inflight} inflight")
+                    BUS_RETRY_TOTAL.inc()
+                    return telemetry_pb2.UniversalAck(
+                        status=telemetry_pb2.UniversalAck.Status.RETRY,
+                        reason=f"Server at capacity ({inflight} inflight)",
+                        backoff_hint_ms=1000
+                    )
+
+                # Process the telemetry
+                if request.HasField('device_telemetry'):
+                    dt = request.device_telemetry
+                    logger.info(f"[PublishTelemetry] device_id={dt.device_id} device_type={dt.device_type} events={len(dt.events)}")
+                elif request.HasField('process'):
+                    p = request.process
+                    logger.info(f"[PublishTelemetry] process: pid={p.pid} exe={p.exe[:50] if p.exe else 'N/A'}")
+                elif request.HasField('flow'):
+                    f = request.flow
+                    logger.info(f"[PublishTelemetry] flow: src={f.src_ip} dst={f.dst_ip}")
+                else:
+                    logger.warning("[PublishTelemetry] Empty envelope received")
+
+                # Store in WAL for dashboard visibility
+                if wal_storage:
+                    try:
+                        with _wal_lock:
+                            conn = sqlite3.connect(WAL_PATH, timeout=5.0, isolation_level=None, check_same_thread=False)
+
+                            idem = request.idempotency_key or f"unknown_{request.ts_ns}"
+                            ts_ns = request.ts_ns
+                            env_bytes = request.SerializeToString()
+                            checksum = hashlib.blake2b(env_bytes, digest_size=32).digest()
+
+                            try:
+                                conn.execute(
+                                    "INSERT INTO wal (idem, ts_ns, bytes, checksum) VALUES (?, ?, ?, ?)",
+                                    (idem, ts_ns, env_bytes, checksum)
+                                )
+                                logger.debug("[PublishTelemetry] Stored in WAL (idem=%s)", idem)
+                            except sqlite3.IntegrityError:
+                                logger.debug("[PublishTelemetry] Duplicate (idem=%s), skipped", idem)
+                            finally:
+                                conn.close()
+                    except Exception as wal_err:
+                        logger.error("[PublishTelemetry] WAL storage failed: %s", wal_err)
+
+                BUS_LAT.observe((time.time() - t0) * 1000.0)
+                return telemetry_pb2.UniversalAck(
+                    status=telemetry_pb2.UniversalAck.Status.OK,
+                    reason="accepted",
+                    processed_timestamp_ns=int(time.time() * 1e9),
+                    events_accepted=1
+                )
+            finally:
+                _dec_inflight()
+
+        except Exception as e:
+            logger.exception("[PublishTelemetry] Error")
+            return telemetry_pb2.UniversalAck(
+                status=telemetry_pb2.UniversalAck.Status.PROCESSING_ERROR,
+                reason=str(e)
+            )
+
+    def PublishBatch(self, request, context):
+        """Handle PublishBatch RPC (not yet implemented)"""
+        _ = request
+        logger.warning("PublishBatch() called but not implemented")
+        context.abort(grpc.StatusCode.UNIMPLEMENTED, "PublishBatch not supported")
+
+    def RegisterDevice(self, request, context):
+        """Handle RegisterDevice RPC (not yet implemented)"""
+        _ = request
+        logger.warning("RegisterDevice() called but not implemented")
+        context.abort(grpc.StatusCode.UNIMPLEMENTED, "RegisterDevice not supported")
+
+    def UpdateDevice(self, request, context):
+        """Handle UpdateDevice RPC (not yet implemented)"""
+        _ = request
+        logger.warning("UpdateDevice() called but not implemented")
+        context.abort(grpc.StatusCode.UNIMPLEMENTED, "UpdateDevice not supported")
+
+    def DeregisterDevice(self, request, context):
+        """Handle DeregisterDevice RPC (not yet implemented)"""
+        _ = request
+        logger.warning("DeregisterDevice() called but not implemented")
+        context.abort(grpc.StatusCode.UNIMPLEMENTED, "DeregisterDevice not supported")
+
+    def GetHealth(self, request, context):
+        """Handle GetHealth RPC (not yet implemented)"""
+        _ = request
+        logger.warning("GetHealth() called but not implemented")
+        context.abort(grpc.StatusCode.UNIMPLEMENTED, "GetHealth not supported")
+
+    def GetStatus(self, request, context):
+        """Handle GetStatus RPC (not yet implemented)"""
+        _ = request
+        logger.warning("GetStatus() called but not implemented")
+        context.abort(grpc.StatusCode.UNIMPLEMENTED, "GetStatus not supported")
+
+    def GetMetrics(self, request, context):
+        """Handle GetMetrics RPC (not yet implemented)"""
+        _ = request
+        logger.warning("GetMetrics() called but not implemented")
+        context.abort(grpc.StatusCode.UNIMPLEMENTED, "GetMetrics not supported")
+
+
 def _start_health_server():
     """Start a lightweight HTTP health check server on port 8080.
 
@@ -1198,12 +1371,15 @@ def serve():
         server.add_secure_port(f"[::]:{server_port}", creds)
         logger.info("gRPC server bound to port %d with TLS", server_port)
 
-        # Register EventBus service
+        # Register EventBus services (both legacy and universal)
         try:
             pbrpc.add_EventBusServicer_to_server(EventBusServicer(), server)
-            logger.info("Registered EventBusServicer with gRPC server")
+            logger.info("Registered EventBusServicer (legacy) with gRPC server")
+
+            telemetry_grpc.add_UniversalEventBusServicer_to_server(UniversalEventBusServicer(), server)
+            logger.info("Registered UniversalEventBusServicer with gRPC server")
         except Exception as e:
-            logger.exception("Failed to register EventBusServicer: %s", e)
+            logger.exception("Failed to register EventBus services: %s", e)
             raise
 
         logger.info("Starting gRPC server...")

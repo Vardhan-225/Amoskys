@@ -13,12 +13,14 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 # Import API routes after blueprint creation
 from .auth import auth_bp
-from .agents import agents_bp  
+from .agents import agents_bp
 from .events import events_bp
 from .system import system_bp
 from .integration import integration_bp
 from .snmp_simple import snmp_simple_bp  # Simple SNMP telemetry API
 from .process_telemetry import process_bp  # Process telemetry API
+from .peripheral_telemetry import peripheral_bp  # Peripheral telemetry API
+from .database_manager import database_manager_bp  # Database manager API
 from .docs import generate_openapi_spec
 
 # Register sub-blueprints
@@ -29,6 +31,8 @@ api_bp.register_blueprint(system_bp)
 api_bp.register_blueprint(integration_bp)
 api_bp.register_blueprint(snmp_simple_bp)  # Register simple SNMP API
 api_bp.register_blueprint(process_bp)  # Register process telemetry API
+api_bp.register_blueprint(peripheral_bp)  # Register peripheral telemetry API
+api_bp.register_blueprint(database_manager_bp)  # Register database manager API
 
 # Add API documentation endpoint
 @api_bp.route('/docs/openapi.json', methods=['GET'])

@@ -1,333 +1,399 @@
-# AMOSKYS – Neural Security Orchestration That Evolves 🧠🛡️
+# AMOSKYS – Real-time Security Intelligence Platform
 
-[![Amoskys CI](https://github.com/Vardhan-225/Amoskys/actions/workflows/ci.yml/badge.svg)](https://github.com/Vardhan-225/Amoskys/actions)
-[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)](https://github.com/Vardhan-225/Amoskys/releases)
-[![Powered by Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+**Production-grade telemetry collection and threat detection for Mac/Linux environments**
 
-> **Amoskys** is a neuro-inspired security intelligence platform designed to detect, correlate, and adapt to cyber anomalies in real time. Built for resilience, engineered for evolution.
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)]()
 
-**Amoskys** is a security-focused infrastructure monitoring system designed to collect, process, and analyze security-relevant events from distributed environments in real-time.
+---
 
-## 🎯 Overview
+## Overview
 
-Amoskys provides a foundation for building security detection and monitoring capabilities through:
+AMOSKYS is a distributed security monitoring platform that provides real-time visibility into system processes, peripheral devices, and network activity. Built with a focus on **reliability, performance, and zero data loss**.
 
-- **Event Collection**: Distributed agents collect network flows, process events, and system activities
-- **Secure Transport**: All communication secured with mTLS and Ed25519 cryptographic signatures
-- **Reliable Processing**: Write-ahead logging (WAL) ensures no event loss during network failures
-- **Backpressure Control**: Intelligent retry and rate limiting prevents system overload
-- **Real-time Analysis**: Stream processing with configurable detection rules
-- **Production Ready**: Comprehensive observability, metrics, and operational controls
+### Key Features
 
-## 🏗️ Architecture
+- **🔒 Zero-Trust Architecture** - mTLS encryption, Ed25519 signatures, immutable audit logs
+- **📊 Real-Time Monitoring** - Process telemetry, USB device tracking, system health
+- **💾 Reliable Data Pipeline** - Write-ahead logging ensures no event loss
+- **🎯 Distributed Agents** - Lightweight collectors with intelligent retry logic
+- **🌐 Modern Dashboard** - Real-time visualization with WebSocket updates
+- **⚡ High Performance** - 700+ events/minute with < 100ms latency
+
+---
+
+## Architecture
 
 ```
-┌─────────────────┐    mTLS/gRPC     ┌─────────────────┐
-│   FlowAgent     │ ───────────────▶ │   EventBus      │
-│                 │                  │                 │
-│ • Flow Monitor  │                  │ • gRPC Server   │
-│ • Process Mon   │                  │ • Validation    │
-│ • WAL Storage   │                  │ • Persistence   │
-│ • Retry Logic   │                  │ • Metrics       │
-└─────────────────┘                  └─────────────────┘
-         │                                     │
-         │                                     ▼
-         ▼                           ┌─────────────────┐
-┌─────────────────┐                  │   Storage &     │
-│   Local WAL     │                  │   Analysis      │
-│                 │                  │                 │
-│ • SQLite        │                  │ • Time Series   │
-│ • Idempotency   │                  │ • Correlation   │
-│ • Backlog Mgmt  │                  │ • Detection     │
-└─────────────────┘                  └─────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    AMOSKYS Platform                          │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐       │
+│  │ Proc Agent  │  │Periph Agent │  │  SNMP Agent  │       │
+│  │             │  │             │  │              │       │
+│  │ • Processes │  │ • USB       │  │ • Network    │       │
+│  │ • CPU/Mem   │  │ • Bluetooth │  │ • Devices    │       │
+│  │ • Users     │  │ • Risk      │  │ • Metrics    │       │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘       │
+│         │                 │                 │               │
+│         └─────────────────┼─────────────────┘               │
+│                           ▼                                 │
+│                  ┌─────────────────┐                        │
+│                  │   EventBus      │                        │
+│                  │   (gRPC/mTLS)   │                        │
+│                  └────────┬────────┘                        │
+│                           │                                 │
+│                           ▼                                 │
+│                  ┌─────────────────┐                        │
+│                  │  WAL Processor  │                        │
+│                  │  (Queue Drain)  │                        │
+│                  └────────┬────────┘                        │
+│                           │                                 │
+│                           ▼                                 │
+│                  ┌─────────────────┐                        │
+│                  │    Database     │                        │
+│                  │  (SQLite + WAL) │                        │
+│                  └────────┬────────┘                        │
+│                           │                                 │
+│                           ▼                                 │
+│                  ┌─────────────────┐                        │
+│                  │  Web Dashboard  │                        │
+│                  │  (Flask + WS)   │                        │
+│                  └─────────────────┘                        │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-## 🚀 Quick Start
+---
+
+## Quick Start
 
 ### Prerequisites
 
-- Python 3.11+
-- OpenSSL (for certificate generation)
-- macOS, Linux, or Windows
-- Docker (optional, for containerized deployment)
+- Python 3.8+ (3.11+ recommended)
+- macOS 10.15+ or Linux (Ubuntu 20.04+, Debian 11+)
+- 2GB RAM minimum
+- 1GB disk space
 
-### 1. Setup Development Environment
+### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/Vardhan-225/Amoskys.git
+# Clone repository
+git clone https://github.com/your-org/Amoskys.git
 cd Amoskys
 
-# Complete setup (creates venv, installs deps, generates certs, builds protos)
-make setup
+# Install dependencies
+pip install -r requirements.txt
+
+# Start all services
+./start_amoskys.sh
 ```
 
-### 2. Generate TLS Certificates
+### Access Dashboard
 
 ```bash
-# Generate CA and server/client certificates
-make certs
+# Open dashboard in browser
+open http://localhost:5001/dashboard/cortex
 
-# Generate Ed25519 signing keys
-make ed25519
+# Or check system status
+./quick_status.sh
 ```
 
-### 3. Start the EventBus Server
+---
 
-```bash
-# Start EventBus server (default: localhost:50051)
-make run-eventbus
+## Components
 
-# Or with custom configuration
-./amoskys-eventbus --config config/amoskys.yaml --port 50052
-```
+### Core Infrastructure
 
-### 4. Start FlowAgent
+#### EventBus
+Central message broker handling all telemetry ingestion via gRPC with mTLS.
+- **Location**: `src/amoskys/eventbus/server.py`
+- **Port**: 50051 (gRPC)
+- **Protocol**: gRPC with mTLS
+- **Features**: Message routing, deduplication, backpressure control
 
-```bash
-# In another terminal, start the flow monitoring agent
-make run-agent
+#### WAL Processor
+Asynchronous processor that drains the write-ahead log into permanent storage.
+- **Location**: `src/amoskys/storage/wal_processor.py`
+- **Throughput**: 100 events per 5 seconds
+- **Reliability**: Zero data loss, transactional processing
 
-# Or run directly
-./amoskys-agent --config config/amoskys.yaml
-```
+#### Database
+SQLite database with WAL mode for concurrent read/write access.
+- **Location**: `data/telemetry.db`
+- **Schema**: 7 tables with 18 optimized indexes
+- **Size**: ~100MB per 200k events
 
-### 5. Verify System Health
+### Agents
 
-```bash
-# Check EventBus health
-curl http://localhost:8080/healthz
+#### Process Agent
+Monitors running processes, resource usage, and user activity.
+- **Location**: `src/amoskys/agents/proc/proc_agent.py`
+- **Frequency**: Every 30 seconds
+- **Metrics**: PID, CPU%, Memory%, User type, Command line
+- **Platform**: macOS, Linux
 
-# Check Agent readiness
-curl http://localhost:8081/ready
+#### Peripheral Agent
+Tracks USB, Bluetooth, and other connected devices with risk scoring.
+- **Location**: `src/amoskys/agents/peripheral/peripheral_agent.py`
+- **Frequency**: Every 30 seconds
+- **Detection**: BadUSB, unauthorized devices, data exfiltration
+- **Platform**: macOS (Linux support planned)
 
-# View metrics
-curl http://localhost:9101/metrics
-```
+#### SNMP Agent (Optional)
+Collects telemetry from network devices via SNMP.
+- **Location**: `src/amoskys/agents/snmp/snmp_agent.py`
+- **Protocol**: SNMPv2c/v3
+- **Devices**: Routers, switches, IoT devices
+- **Status**: Requires `pysnmp` library
 
-## 📊 Monitoring & Metrics
+### Dashboard
 
-Amoskys provides observability through Prometheus metrics:
+Web-based interface for real-time monitoring and analysis.
+- **Location**: `web/app/`
+- **Port**: 5001 (HTTP)
+- **Tech Stack**: Flask + SocketIO + Chart.js
+- **Pages**:
+  - **Cortex** - Command center overview
+  - **Agents** - Agent health and network status
+  - **Processes** - Real-time process monitoring
+  - **Peripherals** - Device connection tracking
+  - **Database** - Data management and audit logs
 
-### EventBus Metrics
-- `bus_publish_total` - Total publish requests
-- `bus_inflight_requests` - Current in-flight requests
-- `bus_retry_total` - Total retry responses
-- `bus_publish_latency_ms` - Request latency distribution
+---
 
-### Agent Metrics
-- `agent_publish_ok_total` - Successful publishes
-- `agent_publish_retry_total` - Retried publishes
-- `agent_wal_backlog_bytes` - WAL backlog size
-- `agent_ready_state` - Agent readiness (0/1)
-
-### Grafana Dashboard
-```bash
-# Start monitoring stack
-make run-all
-
-# Access Grafana: http://localhost:3000 (admin/admin)
-# Prometheus: http://localhost:9090
-```
-
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BUS_SERVER_PORT` | `50051` | EventBus gRPC server port |
-| `BUS_OVERLOAD` | `false` | Enable overload simulation |
-| `BUS_MAX_INFLIGHT` | `100` | Maximum concurrent requests |
-| `IS_CERT_DIR` | `certs` | Certificate directory |
-| `IS_WAL_PATH` | `data/wal/flowagent.db` | WAL database path |
-| `LOGLEVEL` | `INFO` | Logging level |
+```bash
+# EventBus
+export EVENTBUS_PORT=50051
+export EVENTBUS_CERT_DIR=certs/
 
-### Configuration File
+# Dashboard
+export FLASK_PORT=5001
+export FLASK_DEBUG=false
 
-Create `config/amoskys.yaml`:
-
-```yaml
-eventbus:
-  host: "0.0.0.0"
-  port: 50051
-  max_inflight: 100
-  overload_mode: false
-
-agent:
-  bus_address: "localhost:50051"
-  wal_path: "data/wal/flowagent.db"
-  send_rate: 0  # unlimited
-
-crypto:
-  trust_map_path: "config/trust_map.yaml"
-  ca_cert: "certs/ca.crt"
+# Agents
+export PROC_AGENT_INTERVAL=30
+export PERIPHERAL_AGENT_INTERVAL=30
 ```
 
-## 🧪 Testing
+### Certificate Management
+
+Certificates for mTLS are located in `certs/`:
+- `ca.crt` - Certificate Authority (expires 2035)
+- `server.crt` - Server certificate (expires 2027)
+- `agent.crt` - Agent certificate
+- `agent.key` - Agent private key
+
+---
+
+## Operations
+
+### Service Management
 
 ```bash
-# Run all tests
-make test
-
-# Run specific test categories
-python -m pytest tests/unit/
-python -m pytest tests/component/
-python -m pytest tests/integration/
-
-# Run with coverage
-python -m pytest --cov=src/amoskys tests/
-
-# Validate configuration
-python src/amoskys/config.py --validate
-```
-
-## 🏭 Production Deployment
-
-### Docker Deployment
-
-```bash
-# Build containers
-docker compose -f deploy/docker-compose.dev.yml build
-
-# Start services
-docker compose -f deploy/docker-compose.dev.yml up -d
+# Start all services
+./start_amoskys.sh
 
 # Check status
-docker compose -f deploy/docker-compose.dev.yml ps
+./quick_status.sh
+
+# Stop all services
+./stop_amoskys.sh
 ```
 
-### Kubernetes Deployment
+### Health Monitoring
 
 ```bash
-# Apply manifests
-kubectl apply -f deploy/k8s/
+# View logs
+tail -f logs/proc_agent.log
+tail -f logs/eventbus.log
+tail -f logs/dashboard.log
 
-# Check deployment
-kubectl get pods -l app=amoskys
+# Check database
+sqlite3 data/telemetry.db "SELECT COUNT(*) FROM process_events;"
+
+# API health check
+curl http://localhost:5001/api/system/health
 ```
 
-### Systemd Services
+### Data Management
 
 ```bash
-# Install services
-sudo cp deploy/systemd/*.service /etc/systemd/system/
-sudo systemctl daemon-reload
+# Query recent events
+sqlite3 data/telemetry.db "SELECT * FROM process_events ORDER BY timestamp_dt DESC LIMIT 10;"
 
-# Start services
-sudo systemctl enable --now amoskys-eventbus
-sudo systemctl enable --now amoskys-agent
+# Export data
+sqlite3 data/telemetry.db ".mode csv" ".output events.csv" "SELECT * FROM process_events;"
+
+# Clear old data
+sqlite3 data/telemetry.db "DELETE FROM process_events WHERE timestamp_dt < datetime('now', '-7 days');"
 ```
 
-## 🔒 Security Features
+---
 
-### Transport Security
-- **mTLS**: Mutual TLS authentication for all gRPC communication
-- **Certificate Validation**: Common Name (CN) allowlist for agent authentication
-- **Ed25519 Signatures**: Cryptographic signatures on all message envelopes
-
-### Data Protection
-- **Idempotency**: Duplicate detection with LRU cache (5-minute TTL)
-- **Size Limits**: 128KB payload cap with validation
-- **Rate Limiting**: Configurable send rates and backpressure control
-
-### Operational Security
-- **Non-root Containers**: All containers run as unprivileged users
-- **Read-only Filesystems**: Immutable container filesystems
-- **Security Constraints**: AppArmor, seccomp, capability dropping
-
-## 🛠️ Development
+## Development
 
 ### Project Structure
 
 ```
 Amoskys/
-├── src/amoskys/                # Main source code
-│   ├── config.py               # Configuration management
-│   ├── agents/                 # Agent implementations
-│   ├── eventbus/               # EventBus server
-│   ├── common/                 # Shared utilities
-│   └── proto/                  # Protocol definitions
-├── config/                     # Configuration files
-├── requirements/               # Python dependencies
-│   ├── requirements.txt        # Base dependencies
-│   ├── requirements-clean.txt  # Production essentials
-│   ├── requirements-locked.txt # Locked versions
-│   └── environment.yaml        # Conda environment
-├── docs/                       # Comprehensive documentation
-├── tests/                      # Test suite
-├── deploy/                     # Deployment configurations
-└── data/                       # Runtime data (gitignored)
+├── src/amoskys/
+│   ├── agents/          # Data collection agents
+│   │   ├── proc/        # Process monitoring
+│   │   ├── peripheral/  # Device monitoring
+│   │   └── snmp/        # Network monitoring
+│   ├── eventbus/        # Message broker
+│   ├── storage/         # WAL processor
+│   ├── proto/           # Protocol buffers
+│   ├── common/          # Shared utilities
+│   └── config/          # Configuration
+├── web/
+│   ├── app/             # Flask application
+│   │   ├── templates/   # HTML templates
+│   │   ├── static/      # CSS/JS assets
+│   │   ├── api/         # REST API endpoints
+│   │   └── dashboard/   # Dashboard logic
+│   └── wsgi.py          # WSGI entry point
+├── data/
+│   ├── telemetry.db     # Main database
+│   └── wal/             # WAL queue
+├── certs/               # mTLS certificates
+├── logs/                # Application logs
+└── tests/               # Unit & integration tests
 ```
 
-### Adding New Agents
-
-1. Create agent directory: `src/amoskys/agents/newagent/`
-2. Implement agent interface in `main.py`
-3. Add configuration to `config/amoskys.yaml`
-4. Create tests in `tests/unit/test_newagent.py`
-5. Update documentation
-
-### Development Commands
+### Running Tests
 
 ```bash
-make fmt                    # Format code with black
-make lint                   # Lint with ruff and mypy
-make proto                  # Regenerate protocol buffers
-make clean                  # Clean generated files
-make validate-config        # Validate configuration
+# Unit tests
+pytest tests/unit/
+
+# Integration tests
+pytest tests/integration/
+
+# Component tests
+pytest tests/component/
 ```
 
-## 📚 Documentation
+### Adding a New Agent
 
-### 🏗️ Core Architecture & Design
-- [Architecture Guide](docs/ARCHITECTURE.md) - System design and components
-- [Component Detail](docs/COMPONENT_DETAIL.md) - Comprehensive technical specifications
-- [What We Built](docs/WHAT_WE_BUILT.md) - Evolution story and architectural decisions
-
-### 🛡️ Security & Infrastructure
-- [Security Model](docs/SECURITY_MODEL.md) - Defense-in-depth architecture with mTLS and Ed25519
-- [Docker Usage](docs/DOCKER_USAGE.md) - Container architecture and deployment
-- [Reproducibility](docs/REPRODUCIBILITY.md) - Environment locking and version management
-
-### 🔧 Operations & Maintenance
-- [Backpressure Runbook](docs/BACKPRESSURE_RUNBOOK.md) - Incident response and troubleshooting
-- [Technical Assessment](docs/ASSESSMENT.md) - Quality evaluation and recommendations
-- [Runbooks](docs/runbooks/) - Operational procedures
-
-### 📈 Development & Planning
-- [Phase 0 Review](docs/PHASE0_REVIEW.md) - Historical analysis and lessons learned
-- [Phase 2 Plan](docs/PHASE_2_PLAN.md) - AI detection engine roadmap
-- [Future Plan](docs/FUTURE_PLAN.md) - Strategic development timeline
-
-### 🚀 Getting Started
-- [Setup Guide](docs/SETUP.md) - Detailed installation instructions
-- [Contributing Guide](docs/CONTRIBUTING.md) - Development guidelines
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make changes and add tests
-4. Run the test suite: `make test`
-5. Commit changes: `git commit -m 'Add amazing feature'`
-6. Push to branch: `git push origin feature/amazing-feature`
-7. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙋‍♂️ Support
-
-For technical support and community engagement:
-
-- **Issue Reports**: [GitHub Issues](https://github.com/Vardhan-225/Amoskys/issues)
-- **Feature Requests**: [GitHub Issues](https://github.com/Vardhan-225/Amoskys/issues)
-- **Community Discussion**: [GitHub Discussions](https://github.com/Vardhan-225/Amoskys/discussions)
-- **Documentation**: [Project Documentation](https://github.com/Vardhan-225/Amoskys/tree/main/docs)
+1. Create agent directory: `src/amoskys/agents/myagent/`
+2. Implement collection logic
+3. Use UniversalEnvelope for publishing
+4. Add agent to dashboard registry
+5. Update `start_amoskys.sh`
 
 ---
 
-**Amoskys** - *Neural security orchestration that evolves* 🧠🛡️
+## Security
+
+### Threat Model
+
+AMOSKYS is designed to detect:
+- ✅ Unauthorized processes (privilege escalation)
+- ✅ Suspicious peripheral devices (BadUSB, data exfiltration)
+- ✅ Abnormal resource usage (cryptomining, DoS)
+- ✅ Process injection and code execution
+- ⏳ Network anomalies (C2 communication) - Planned
+- ⏳ Lateral movement - Planned
+
+### Security Best Practices
+
+1. **Rotate Certificates**: Update mTLS certificates annually
+2. **Secure Database**: Set proper file permissions on `data/telemetry.db`
+3. **Audit Logs**: Review dashboard audit logs regularly
+4. **Network Isolation**: Run EventBus on isolated network
+5. **Update Dependencies**: Keep Python packages up-to-date
+
+---
+
+## Performance
+
+### Benchmarks (macOS M2, 8GB RAM)
+
+| Metric | Value |
+|--------|-------|
+| Events/second | 11-12 |
+| EventBus CPU | < 0.1% |
+| Agent CPU | < 0.5% each |
+| Memory (total) | < 200MB |
+| Disk I/O | 1-2 MB/s |
+| Database size | 100MB / 200k events |
+| Query latency (p99) | < 50ms |
+
+---
+
+## Roadmap
+
+### Completed ✅
+- Core infrastructure (EventBus, WAL, Database)
+- Process and peripheral monitoring agents
+- Real-time dashboard with 8 pages
+- mTLS security with Ed25519 signing
+- Mac/Linux compatibility
+
+### In Progress ⏳
+- Linux peripheral agent implementation
+- Real-time alerting engine
+- Data export functionality
+
+### Planned 📋
+- Flow Agent (network monitoring)
+- Discovery Agent (network scanning)
+- Machine learning anomaly detection
+- OT device adapters (Modbus, OPC UA)
+- Windows support
+
+---
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Development Setup
+
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Run linters
+flake8 src/
+black src/
+mypy src/
+
+# Run tests
+pytest tests/
+```
+
+---
+
+## Documentation
+
+- **Architecture**: See [MAC_LINUX_ARCHITECTURE_ASSESSMENT.md](MAC_LINUX_ARCHITECTURE_ASSESSMENT.md)
+- **Recent Fixes**: See [SNMP_AGENT_TODO_FIX_REPORT.md](SNMP_AGENT_TODO_FIX_REPORT.md)
+- **Cleanup Plan**: See [CLEANUP_AND_AUDIT_PLAN.md](CLEANUP_AND_AUDIT_PLAN.md)
+- **TODO Status**: See [TODO_STATUS_UPDATE.md](TODO_STATUS_UPDATE.md)
+
+---
+
+## License
+
+MIT License - See [LICENSE](LICENSE) for details.
+
+---
+
+## Support
+
+- **Issues**: https://github.com/your-org/Amoskys/issues
+- **Documentation**: https://docs.amoskys.io
+- **Email**: support@amoskys.io
+
+---
+
+**Built with 🧠 for security professionals by security professionals**

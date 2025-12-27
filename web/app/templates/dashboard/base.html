@@ -8,12 +8,12 @@
     <!-- Neural Security Styling -->
     <style>
         :root {
-            /* Neural Color Palette */
-            --neural-primary: #00ff88;
-            --neural-secondary: #0088ff;
-            --neural-warning: #ffaa00;
-            --neural-danger: #ff3366;
-            --neural-critical: #ff0000;
+            /* Neural Color Palette - Softer, professional colors */
+            --neural-primary: #5cb85c;
+            --neural-secondary: #5bc0de;
+            --neural-warning: #f0ad4e;
+            --neural-danger: #d9534f;
+            --neural-critical: #c9302c;
             
             /* Dark Neural Theme */
             --bg-primary: #0a0a0a;
@@ -560,8 +560,10 @@
     <header class="neural-header">
         <div class="header-content">
             <div class="neural-logo">
-                <h1>🧠 AMOSKYS</h1>
-                <span style="color: var(--text-secondary);">Neural Security Command Platform</span>
+                <a href="/dashboard/cortex" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 1rem;">
+                    <h1>🧠 AMOSKYS</h1>
+                    <span style="color: var(--text-secondary);">Neural Security Command Platform</span>
+                </a>
             </div>
             <div class="neural-status">
                 <div class="status-indicator">
@@ -582,13 +584,14 @@
     <!-- Neural Navigation -->
     <nav class="neural-nav">
         <div class="nav-content">
-            <a href="/dashboard/" class="nav-link">🏠 Command Center</a>
+            <a href="/dashboard/cortex" class="nav-link">🏠 Command Center</a>
             <a href="/dashboard/soc" class="nav-link">🛡️ SOC Operations</a>
             <a href="/dashboard/agents" class="nav-link">🤖 Agent Network</a>
             <a href="/dashboard/processes" class="nav-link">🔬 Process Telemetry</a>
+            <a href="/dashboard/peripherals" class="nav-link">🔌 Peripherals</a>
+            <a href="/dashboard/database" class="nav-link">🗄️ Database</a>
             <a href="/dashboard/system" class="nav-link">📊 System Health</a>
             <a href="/dashboard/neural" class="nav-link">🧠 Neural Insights</a>
-            <a href="/api-access" class="nav-link">🔌 API Gateway</a>
         </div>
     </nav>
     

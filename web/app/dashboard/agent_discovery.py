@@ -22,8 +22,8 @@ AGENT_CATALOG = {
         'platform': ['linux', 'darwin', 'windows'],
         'capabilities': ['message-routing', 'grpc-server', 'tls-auth', 'deduplication', 'backpressure'],
         'monitors': ['FlowEvents', 'ProcessEvents', 'NetworkEvents', 'SNMPEvents'],
-        'path': 'amoskys-eventbus',
-        'process_patterns': ['amoskys-eventbus', 'eventbus'],
+        'path': 'src/amoskys/eventbus/server.py',
+        'process_patterns': ['eventbus/server.py', 'amoskys-eventbus', 'eventbus'],
         'protocol': 'gRPC/mTLS',
         'neurons': ['Ingestion Layer', 'Message Bus', 'Event Router'],
         'guarded_resources': {
@@ -55,20 +55,20 @@ AGENT_CATALOG = {
     },
     'mac_telemetry': {
         'id': 'mac_telemetry',
-        'name': 'Mac Telemetry Generator',
-        'description': 'Continuous macOS process telemetry generator for validation and system testing',
-        'type': 'Generator',
+        'name': 'Mac Process Collector',
+        'description': 'Production telemetry collector for macOS - captures REAL process data from running system',
+        'type': 'Collector',
         'port': None,
         'platform': ['darwin'],
-        'capabilities': ['process-scanning', 'telemetry-generation', 'grpc-publish', 'continuous-monitoring'],
-        'monitors': ['Mac Processes', 'System State'],
+        'capabilities': ['process-scanning', 'real-time-collection', 'grpc-publish', 'continuous-monitoring'],
+        'monitors': ['Mac Processes', 'System State', 'Live Process Activity'],
         'path': 'generate_mac_telemetry.py',
         'process_patterns': ['generate_mac_telemetry', 'mac_telemetry'],
         'protocol': 'gRPC Client → EventBus',
-        'neurons': ['Data Generator', 'Test Harness'],
+        'neurons': ['Process Collector', 'System Scanner', 'Real-time Monitor'],
         'guarded_resources': {
             'operating_systems': ['macOS'],
-            'purpose': ['Testing', 'Validation']
+            'data_types': ['Live Process Telemetry', 'System Metrics']
         },
         'critical': False,
         'color': '#95E1D3'
@@ -133,6 +133,26 @@ AGENT_CATALOG = {
         },
         'critical': False,
         'color': '#FCBAD3'
+    },
+    'peripheral_agent': {
+        'id': 'peripheral_agent',
+        'name': 'Peripheral Monitoring Agent',
+        'description': 'USB/Bluetooth device monitoring with BadUSB detection, unauthorized device tracking, and data exfiltration prevention',
+        'type': 'Collector',
+        'port': None,
+        'platform': ['darwin', 'linux'],
+        'capabilities': ['usb-monitoring', 'device-fingerprinting', 'risk-scoring', 'unauthorized-detection', 'hid-tracking', 'badusb-detection'],
+        'monitors': ['USB Devices', 'Bluetooth Devices', 'HID Devices', 'Storage Devices', 'Peripheral Connections'],
+        'path': 'src/amoskys/agents/peripheral/peripheral_agent.py',
+        'process_patterns': ['peripheral_agent', 'PeripheralAgent'],
+        'protocol': 'gRPC Client → EventBus',
+        'neurons': ['Physical Security Sensor', 'Device Fingerprinter', 'Risk Analyzer'],
+        'guarded_resources': {
+            'attack_vectors': ['BadUSB', 'HID Injection', 'Data Exfiltration', 'Unauthorized Devices'],
+            'data_types': ['Device Events', 'Connection States', 'Risk Scores']
+        },
+        'critical': False,
+        'color': '#FF6B9D'
     }
 }
 

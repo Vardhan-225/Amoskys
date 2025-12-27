@@ -26,8 +26,8 @@ from prometheus_client import start_http_server, Counter, Histogram, Gauge
 from typing import Dict, List, Optional
 
 # AMOSKYS imports
-from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
+from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
 from amoskys.common.crypto.canonical import canonical_bytes
 from amoskys.common.crypto.signing import load_private_key, sign
 from amoskys.config import get_config
@@ -313,43 +313,22 @@ def publish_telemetry(envelope: telemetry_pb2.UniversalEnvelope) -> bool:
     t0 = time.time()
 
     try:
-        # TODO: Once EventBus supports UniversalEnvelope, use that directly
-        # For now, wrap in a FlowEvent as a temporary bridge
-        from amoskys.proto import messaging_schema_pb2_grpc as pb_grpc
-        
+        # Publish directly via UniversalEventBus.PublishTelemetry
         device_id = envelope.device_telemetry.device_id
-        
-        # Create a FlowEvent wrapper (temporary solution)
-        flow = pb.FlowEvent(
-            src_ip=device_id,
-            dst_ip="eventbus",
-            protocol="SNMP-TELEMETRY",
-            bytes_sent=len(serialized),
-            start_time=envelope.ts_ns
-        )
-        
-        # Wrap in Envelope
-        flow_envelope = pb.Envelope(
-            version="1",
-            ts_ns=envelope.ts_ns,
-            idempotency_key=envelope.idempotency_key,
-            flow=flow,
-            sig=envelope.sig  # Use sig field
-        )
-        
+
         with grpc_channel() as ch:
-            stub = pb_grpc.EventBusStub(ch)
-            ack = stub.Publish(flow_envelope, timeout=5.0)
+            stub = universal_pbrpc.UniversalEventBusStub(ch)
+            ack = stub.PublishTelemetry(envelope, timeout=5.0)
 
         latency_ms = (time.time() - t0) * 1000
         SNMP_PUBLISH_LATENCY.observe(latency_ms)
 
-        if ack.status == pb.PublishAck.OK:
+        if ack.status == telemetry_pb2.UniversalAck.OK:
             SNMP_PUBLISH_OK.inc()
             logger.info(f"✅ Published telemetry: {device_id} "
                        f"({len(serialized)} bytes, {latency_ms:.1f}ms)")
             return True
-        elif ack.status == pb.PublishAck.RETRY:
+        elif ack.status == telemetry_pb2.UniversalAck.RETRY:
             SNMP_PUBLISH_RETRY.inc()
             logger.warning(f"⚠️  EventBus requested retry: {ack.reason}")
             return False

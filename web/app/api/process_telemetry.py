@@ -1,6 +1,6 @@
 """
 AMOSKYS Process Telemetry API
-Fetches and displays Mac process telemetry from EventBus WAL
+Fetches and displays process telemetry from permanent storage
 """
 
 from flask import Blueprint, jsonify, request
@@ -8,19 +8,11 @@ from datetime import datetime, timedelta
 from .rate_limiter import require_rate_limit
 import sqlite3
 import os
-import sys
-from pathlib import Path
 
 process_bp = Blueprint('process_telemetry', __name__, url_prefix='/process-telemetry')
 
-# Path to EventBus WAL database
-WAL_DB_PATH = os.path.join(os.path.dirname(__file__), '../../../data/wal/flowagent.db')
-
-# Add project root to import protobuf schemas
-project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root / "src"))
-
-from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
+# Path to permanent telemetry database
+TELEMETRY_DB_PATH = os.path.join(os.path.dirname(__file__), '../../../data/telemetry.db')
 
 
 def safe_int(value, default=0, min_val=None, max_val=None):
@@ -37,80 +29,43 @@ def safe_int(value, default=0, min_val=None, max_val=None):
 
 
 def get_db_connection():
-    """Create connection to WAL database"""
-    if not os.path.exists(WAL_DB_PATH):
+    """Create connection to telemetry database"""
+    if not os.path.exists(TELEMETRY_DB_PATH):
         return None
-    conn = sqlite3.connect(WAL_DB_PATH)
+    conn = sqlite3.connect(TELEMETRY_DB_PATH, timeout=5.0)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 @process_bp.route('/recent', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
 def get_recent_processes():
-    """Get recent ProcessEvents from WAL"""
+    """Get recent process events from permanent storage"""
     limit = safe_int(request.args.get('limit', 100), default=100, min_val=1, max_val=500)
 
     conn = get_db_connection()
     if not conn:
-        return jsonify({'processes': [], 'message': 'No data available'}), 200
+        return jsonify({'processes': [], 'message': 'No data available yet'}), 200
 
     try:
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, bytes, ts_ns FROM wal ORDER BY id DESC LIMIT ?', (limit * 2,))
+        cursor = conn.execute("""
+            SELECT *,
+                   CAST((julianday('now') - julianday(timestamp_dt)) * 86400 AS INTEGER) as age_seconds,
+                   process_category as process_class
+            FROM process_events
+            ORDER BY timestamp_ns DESC
+            LIMIT ?
+        """, (limit,))
 
         processes = []
         for row in cursor.fetchall():
-            env = telemetry_pb2.UniversalEnvelope()
-            try:
-                env.ParseFromString(row['bytes'])
-            except Exception:
-                continue
-
-            if env.HasField('process'):
-                p = env.process
-
-                # Classify user type
-                if p.uid == 0:
-                    user_type = "root"
-                elif p.uid < 500:
-                    user_type = "system"
-                else:
-                    user_type = "user"
-
-                # Classify process by path
-                if p.exe:
-                    if "/System/" in p.exe:
-                        process_class = "system"
-                    elif "/Applications/" in p.exe:
-                        process_class = "application"
-                    elif "/usr/libexec/" in p.exe or "/usr/sbin/" in p.exe:
-                        process_class = "daemon"
-                    elif "/opt/" in p.exe or ".venv" in p.exe:
-                        process_class = "third_party"
-                    else:
-                        process_class = "other"
-                else:
-                    process_class = "unknown"
-
-                exe_basename = os.path.basename(p.exe) if p.exe else ""
-
-                processes.append({
-                    'wal_id': row['id'],
-                    'timestamp': datetime.fromtimestamp(row['ts_ns'] / 1e9).isoformat(),
-                    'pid': p.pid,
-                    'ppid': p.ppid,
-                    'exe': p.exe,
-                    'exe_basename': exe_basename,
-                    'args_count': len(p.args),
-                    'uid': p.uid,
-                    'gid': p.gid,
-                    'user_type': user_type,
-                    'process_class': process_class,
-                    'age_seconds': int(datetime.now().timestamp() - row['ts_ns'] / 1e9)
-                })
-
-                if len(processes) >= limit:
-                    break
+            proc = dict(row)
+            # Add exe_basename for display
+            if proc.get('exe'):
+                proc['exe_basename'] = proc['exe'].split('/')[-1]
+            else:
+                proc['exe_basename'] = 'unknown'
+            processes.append(proc)
 
         return jsonify({
             'processes': processes,
@@ -126,98 +81,70 @@ def get_recent_processes():
 @process_bp.route('/stats', methods=['GET'])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_process_stats():
-    """Get aggregated process statistics for dashboard"""
+    """Get aggregated process statistics"""
     conn = get_db_connection()
     if not conn:
-        return jsonify({
-            'total_process_events': 0,
-            'unique_pids': 0,
-            'unique_executables': 0,
-            'user_type_distribution': {'root': 0, 'system': 0, 'user': 0},
-            'process_class_distribution': {'system': 0, 'application': 0, 'daemon': 0, 'third_party': 0, 'other': 0},
-            'top_executables': [],
-            'collection_period': {'duration_hours': 0}
-        }), 200
+        return jsonify({'error': 'Database not available'}), 500
 
     try:
-        cursor = conn.cursor()
-        
-        # Get all process events
-        cursor.execute('SELECT bytes, ts_ns FROM wal ORDER BY id DESC')
-        all_rows = cursor.fetchall()
-        
-        pids = set()
-        exes = set()
-        user_dist = {'root': 0, 'system': 0, 'user': 0}
-        class_dist = {'system': 0, 'application': 0, 'daemon': 0, 'third_party': 0, 'other': 0}
-        exe_freq = {}
-        timestamps = []
-        
-        for row in all_rows:
-            env = telemetry_pb2.UniversalEnvelope()
-            try:
-                env.ParseFromString(row['bytes'])
-            except Exception:
-                continue
-            
-            if env.HasField('process'):
-                p = env.process
-                pids.add(p.pid)
-                if p.exe:
-                    exes.add(p.exe)
-                    exe_basename = os.path.basename(p.exe)
-                    exe_freq[exe_basename] = exe_freq.get(exe_basename, 0) + 1
-                
-                timestamps.append(row['ts_ns'])
-                
-                # User type
-                if p.uid == 0:
-                    user_dist['root'] += 1
-                elif p.uid < 500:
-                    user_dist['system'] += 1
-                else:
-                    user_dist['user'] += 1
-                
-                # Process class
-                if p.exe:
-                    if "/System/" in p.exe:
-                        class_dist['system'] += 1
-                    elif "/Applications/" in p.exe:
-                        class_dist['application'] += 1
-                    elif "/usr/libexec/" in p.exe or "/usr/sbin/" in p.exe:
-                        class_dist['daemon'] += 1
-                    elif "/opt/" in p.exe or ".venv" in p.exe:
-                        class_dist['third_party'] += 1
-                    else:
-                        class_dist['other'] += 1
-                else:
-                    class_dist['other'] += 1
-        
-        # Calculate duration
-        duration_hours = 0
-        if timestamps:
-            min_ts = min(timestamps)
-            max_ts = max(timestamps)
-            duration_hours = (max_ts - min_ts) / (1e9 * 3600)
-        
+        # Total events
+        cursor = conn.execute("SELECT COUNT(*) as count FROM process_events")
+        total_events = cursor.fetchone()['count']
+
+        # Unique PIDs
+        cursor = conn.execute("SELECT COUNT(DISTINCT pid) as count FROM process_events")
+        unique_pids = cursor.fetchone()['count']
+
+        # Unique executables
+        cursor = conn.execute("SELECT COUNT(DISTINCT exe) as count FROM process_events WHERE exe IS NOT NULL")
+        unique_exes = cursor.fetchone()['count']
+
+        # User type distribution
+        cursor = conn.execute("""
+            SELECT user_type, COUNT(*) as count
+            FROM process_events
+            WHERE user_type IS NOT NULL
+            GROUP BY user_type
+        """)
+        user_dist = {row['user_type']: row['count'] for row in cursor.fetchall()}
+
+        # Process class distribution
+        cursor = conn.execute("""
+            SELECT process_category, COUNT(*) as count
+            FROM process_events
+            WHERE process_category IS NOT NULL
+            GROUP BY process_category
+        """)
+        class_dist = {row['process_category']: row['count'] for row in cursor.fetchall()}
+
         # Top executables
-        top_exes = sorted(exe_freq.items(), key=lambda x: x[1], reverse=True)[:10]
-        top_exes_list = [
-            {'name': name, 'count': count}
-            for name, count in top_exes
-        ]
-        
+        cursor = conn.execute("""
+            SELECT exe, COUNT(*) as count
+            FROM process_events
+            WHERE exe IS NOT NULL
+            GROUP BY exe
+            ORDER BY count DESC
+            LIMIT 10
+        """)
+        top_exes = [{'name': os.path.basename(row['exe']), 'count': row['count']} for row in cursor.fetchall()]
+
+        # Time range
+        cursor = conn.execute("""
+            SELECT MIN(timestamp_dt) as start, MAX(timestamp_dt) as end
+            FROM process_events
+        """)
+        time_range = cursor.fetchone()
+
         return jsonify({
-            'total_process_events': len(all_rows),
-            'unique_pids': len(pids),
-            'unique_executables': len(exes),
+            'total_process_events': total_events,
+            'unique_pids': unique_pids,
+            'unique_executables': unique_exes,
             'user_type_distribution': user_dist,
             'process_class_distribution': class_dist,
-            'top_executables': top_exes_list,
+            'top_executables': top_exes,
             'collection_period': {
-                'duration_hours': round(duration_hours, 1),
-                'start': datetime.fromtimestamp(min(timestamps) / 1e9).isoformat() if timestamps else None,
-                'end': datetime.fromtimestamp(max(timestamps) / 1e9).isoformat() if timestamps else None
+                'start': time_range['start'],
+                'end': time_range['end']
             },
             'timestamp': datetime.now().isoformat()
         })
@@ -228,6 +155,7 @@ def get_process_stats():
 
 
 @process_bp.route('/top-executables', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
 def get_top_executables():
     """Get most frequently seen executables"""
     limit = safe_int(request.args.get('limit', 20), default=20, min_val=1, max_val=100)
@@ -237,36 +165,32 @@ def get_top_executables():
         return jsonify({'executables': [], 'message': 'No data available'}), 200
 
     try:
-        cursor = conn.cursor()
-        cursor.execute('SELECT bytes FROM wal ORDER BY id ASC')
+        cursor = conn.execute("""
+            SELECT exe, COUNT(*) as count
+            FROM process_events
+            WHERE exe IS NOT NULL
+            GROUP BY exe
+            ORDER BY count DESC
+            LIMIT ?
+        """, (limit,))
 
-        exe_counts = {}
-
-        for row in cursor.fetchall():
-            env = telemetry_pb2.UniversalEnvelope()
-            try:
-                env.ParseFromString(row['bytes'])
-            except Exception:
-                continue
-
-            if env.HasField('process'):
-                p = env.process
-                if p.exe:
-                    exe_basename = os.path.basename(p.exe)
-                    exe_counts[exe_basename] = exe_counts.get(exe_basename, 0) + 1
-
-        # Sort by count
-        top_exes = sorted(exe_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
+        total_cursor = conn.execute("SELECT COUNT(*) as total FROM process_events WHERE exe IS NOT NULL")
+        total = total_cursor.fetchone()['total']
 
         executables = [
-            {'name': name, 'count': count, 'percentage': round(count / sum(exe_counts.values()) * 100, 2)}
-            for name, count in top_exes
+            {
+                'name': os.path.basename(row['exe']),
+                'full_path': row['exe'],
+                'count': row['count'],
+                'percentage': round(row['count'] / total * 100, 2) if total > 0 else 0
+            }
+            for row in cursor.fetchall()
         ]
 
         return jsonify({
             'executables': executables,
             'count': len(executables),
-            'total_unique': len(exe_counts),
+            'total_events': total,
             'timestamp': datetime.now().isoformat()
         })
     except Exception as e:
@@ -276,11 +200,12 @@ def get_top_executables():
 
 
 @process_bp.route('/search', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
 def search_processes():
-    """Search processes by executable name, PID, or user type"""
-    exe_filter = request.args.get('exe', '').lower()
-    user_type_filter = request.args.get('user_type', '').lower()
-    process_class_filter = request.args.get('process_class', '').lower()
+    """Search processes by executable, user type, or process category"""
+    exe_filter = request.args.get('exe', '')
+    user_type = request.args.get('user_type', '')
+    category = request.args.get('category', '')
     limit = safe_int(request.args.get('limit', 100), default=100, min_val=1, max_val=500)
 
     conn = get_db_connection()
@@ -288,77 +213,34 @@ def search_processes():
         return jsonify({'processes': [], 'message': 'No data available'}), 200
 
     try:
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, bytes, ts_ns FROM wal ORDER BY id DESC LIMIT 10000')
+        query = "SELECT * FROM process_events WHERE 1=1"
+        params = []
 
-        processes = []
+        if exe_filter:
+            query += " AND exe LIKE ?"
+            params.append(f"%{exe_filter}%")
 
-        for row in cursor.fetchall():
-            env = telemetry_pb2.UniversalEnvelope()
-            try:
-                env.ParseFromString(row['bytes'])
-            except Exception:
-                continue
+        if user_type:
+            query += " AND user_type = ?"
+            params.append(user_type)
 
-            if env.HasField('process'):
-                p = env.process
+        if category:
+            query += " AND process_category = ?"
+            params.append(category)
 
-                # Classify
-                if p.uid == 0:
-                    user_type = "root"
-                elif p.uid < 500:
-                    user_type = "system"
-                else:
-                    user_type = "user"
+        query += " ORDER BY timestamp_ns DESC LIMIT ?"
+        params.append(limit)
 
-                if p.exe:
-                    if "/System/" in p.exe:
-                        process_class = "system"
-                    elif "/Applications/" in p.exe:
-                        process_class = "application"
-                    elif "/usr/libexec/" in p.exe or "/usr/sbin/" in p.exe:
-                        process_class = "daemon"
-                    elif "/opt/" in p.exe or ".venv" in p.exe:
-                        process_class = "third_party"
-                    else:
-                        process_class = "other"
-                else:
-                    process_class = "unknown"
-
-                # Apply filters
-                if exe_filter and exe_filter not in p.exe.lower():
-                    continue
-                if user_type_filter and user_type_filter != user_type:
-                    continue
-                if process_class_filter and process_class_filter != process_class:
-                    continue
-
-                exe_basename = os.path.basename(p.exe) if p.exe else ""
-
-                processes.append({
-                    'wal_id': row['id'],
-                    'timestamp': datetime.fromtimestamp(row['ts_ns'] / 1e9).isoformat(),
-                    'pid': p.pid,
-                    'ppid': p.ppid,
-                    'exe': p.exe,
-                    'exe_basename': exe_basename,
-                    'args_count': len(p.args),
-                    'uid': p.uid,
-                    'gid': p.gid,
-                    'user_type': user_type,
-                    'process_class': process_class
-                })
-
-                if len(processes) >= limit:
-                    break
+        cursor = conn.execute(query, params)
+        processes = [dict(row) for row in cursor.fetchall()]
 
         return jsonify({
             'processes': processes,
             'count': len(processes),
             'filters_applied': {
                 'exe': exe_filter or None,
-                'user_type': user_type_filter or None,
-                'process_class': process_class_filter or None
+                'user_type': user_type or None,
+                'category': category or None
             },
             'timestamp': datetime.now().isoformat()
         })
@@ -368,71 +250,63 @@ def search_processes():
         conn.close()
 
 
-@process_bp.route('/canonical-summary', methods=['GET'])
-def get_canonical_summary():
-    """Get summary from canonical parquet table if it exists"""
-    import pandas as pd
+@process_bp.route('/device-telemetry', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
+def get_device_telemetry():
+    """Get device-level aggregated telemetry"""
+    limit = safe_int(request.args.get('limit', 100), default=100, min_val=1, max_val=500)
 
-    canonical_path = os.path.join(os.path.dirname(__file__), '../../../data/ml_pipeline/process_canonical_full.parquet')
-
-    if not os.path.exists(canonical_path):
-        return jsonify({'message': 'Canonical table not yet generated. Run build_process_canonical.py first.'}), 404
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'telemetry': [], 'message': 'No data available'}), 200
 
     try:
-        df = pd.read_parquet(canonical_path)
+        cursor = conn.execute("""
+            SELECT *
+            FROM device_telemetry
+            ORDER BY timestamp_ns DESC
+            LIMIT ?
+        """, (limit,))
+
+        telemetry = [dict(row) for row in cursor.fetchall()]
 
         return jsonify({
-            'total_rows': len(df),
-            'unique_pids': int(df['pid'].nunique()),
-            'unique_executables': int(df['exe_basename'].nunique()),
-            'time_range': {
-                'start': df['timestamp'].min().isoformat(),
-                'end': df['timestamp'].max().isoformat()
-            },
-            'user_type_distribution': df['user_type'].value_counts().to_dict(),
-            'process_class_distribution': df['process_class'].value_counts().to_dict(),
-            'top_executables': df['exe_basename'].value_counts().head(10).to_dict(),
+            'telemetry': telemetry,
+            'count': len(telemetry),
             'timestamp': datetime.now().isoformat()
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 
-@process_bp.route('/features-summary', methods=['GET'])
-def get_features_summary():
-    """Get summary from ML feature tables if they exist"""
-    import pandas as pd
-
-    features_path = os.path.join(os.path.dirname(__file__), '../../../data/ml_pipeline/process_features_full.parquet')
-
-    if not os.path.exists(features_path):
-        return jsonify({'message': 'Feature table not yet generated. Run build_process_features.py first.'}), 404
+@process_bp.route('/database-stats', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
+def get_database_stats():
+    """Get overall database statistics"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not available'}), 500
 
     try:
-        df = pd.read_parquet(features_path)
+        stats = {}
 
-        # Get feature statistics
-        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-        feature_stats = {}
+        # Get counts for all tables
+        for table in ['process_events', 'device_telemetry', 'flow_events', 'security_events']:
+            cursor = conn.execute(f"SELECT COUNT(*) as count FROM {table}")
+            stats[f'{table}_count'] = cursor.fetchone()['count']
 
-        for col in numeric_cols[:10]:  # First 10 features
-            feature_stats[col] = {
-                'mean': float(df[col].mean()),
-                'std': float(df[col].std()),
-                'min': float(df[col].min()),
-                'max': float(df[col].max())
-            }
+        # Get database size
+        cursor = conn.execute("SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()")
+        stats['database_size_bytes'] = cursor.fetchone()['size']
+        stats['database_size_mb'] = round(stats['database_size_bytes'] / (1024 * 1024), 2)
 
         return jsonify({
-            'total_windows': len(df),
-            'total_features': len(df.columns),
-            'window_sizes': df['window_size'].unique().tolist() if 'window_size' in df.columns else [],
-            'time_range': {
-                'start': df['window_start'].min().isoformat() if 'window_start' in df.columns else None,
-                'end': df['window_end'].max().isoformat() if 'window_end' in df.columns else None
-            },
-            'feature_statistics': feature_stats,
+            'statistics': stats,
             'timestamp': datetime.now().isoformat()
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()

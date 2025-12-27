@@ -1,199 +1,131 @@
 #!/bin/bash
-#
-# AMOSKYS Flask Dashboard Startup Script
-# Ensures single-instance operation on port 5000
-#
+
+# AMOSKYS System Startup Script
+# Platform: macOS/Linux
+# Purpose: Start all agents and dashboard in proper order
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-PORT=5000
-LOG_DIR="$SCRIPT_DIR/logs"
-FLASK_LOG="$LOG_DIR/flask.log"
-PID_FILE="$LOG_DIR/flask.pid"
-
-# Colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
-echo -e "${GREEN}╔════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║   AMOSKYS Neural Security Platform v2.4   ║${NC}"
-echo -e "${GREEN}║        Starting Dashboard Server...        ║${NC}"
-echo -e "${GREEN}╚════════════════════════════════════════════╝${NC}"
+echo "🧠⚡ AMOSKYS Neural Security Platform - Startup"
+echo "=============================================="
 echo ""
 
-# Create logs directory if it doesn't exist
-mkdir -p "$LOG_DIR"
+# Change to project root
+cd "$(dirname "$0")"
+PROJECT_ROOT=$(pwd)
 
-# Function to check if port is in use
-port_in_use() {
-    lsof -i :$PORT >/dev/null 2>&1
-}
+# Export PYTHONPATH
+export PYTHONPATH="$PROJECT_ROOT/src:$PYTHONPATH"
 
-# Function to kill existing Flask processes
-kill_existing_flask() {
-    echo -e "${YELLOW}[1/5] Checking for existing Flask instances...${NC}"
+# Create logs directory
+mkdir -p logs
 
-    # Kill by PID file if it exists
-    if [ -f "$PID_FILE" ]; then
-        OLD_PID=$(cat "$PID_FILE")
-        if kill -0 "$OLD_PID" 2>/dev/null; then
-            echo -e "  → Stopping Flask process (PID: $OLD_PID)"
-            kill "$OLD_PID" 2>/dev/null || true
-            sleep 1
-        fi
-        rm -f "$PID_FILE"
-    fi
+echo "📋 Checking existing services..."
+echo ""
 
-    # Kill any Flask processes on our port
-    if port_in_use; then
-        echo -e "  → Port $PORT is in use, terminating existing process"
-        lsof -ti :$PORT | xargs kill -9 2>/dev/null || true
-        sleep 2
-    fi
+# Check EventBus
+if pgrep -f "eventbus/server.py" > /dev/null; then
+    echo "✅ EventBus already running (PID: $(pgrep -f 'eventbus/server.py'))"
+else
+    echo "⚠️  EventBus not running - starting..."
+    cd "$PROJECT_ROOT"
+    nohup python src/amoskys/eventbus/server.py > logs/eventbus.log 2>&1 &
+    echo "✅ EventBus started (PID: $!)"
+    sleep 2
+fi
 
-    # Kill any stray Flask processes
-    pkill -f "flask run" 2>/dev/null || true
+# Check WAL Processor
+if pgrep -f "wal_processor" > /dev/null; then
+    echo "✅ WAL Processor already running (PID: $(pgrep -f 'wal_processor'))"
+else
+    echo "⚠️  WAL Processor not running - starting..."
+    cd "$PROJECT_ROOT"
+    nohup python -m amoskys.storage.wal_processor > logs/wal_processor.log 2>&1 &
+    echo "✅ WAL Processor started (PID: $!)"
+    sleep 2
+fi
+
+echo ""
+echo "📡 Starting Agents..."
+echo ""
+
+# Start Proc Agent
+if pgrep -f "proc_agent.py" > /dev/null; then
+    echo "✅ Proc Agent already running (PID: $(pgrep -f 'proc_agent.py'))"
+else
+    echo "🔄 Starting Proc Agent..."
+    cd "$PROJECT_ROOT"
+    nohup python -m amoskys.agents.proc.proc_agent > logs/proc_agent.log 2>&1 &
+    PROC_PID=$!
+    echo "✅ Proc Agent started (PID: $PROC_PID)"
     sleep 1
+fi
 
-    echo -e "  ✓ Cleanup complete"
-}
+# Start Peripheral Agent
+if pgrep -f "peripheral_agent.py" > /dev/null; then
+    echo "✅ Peripheral Agent already running (PID: $(pgrep -f 'peripheral_agent.py'))"
+else
+    echo "🔄 Starting Peripheral Agent..."
+    cd "$PROJECT_ROOT"
+    nohup python -m amoskys.agents.peripheral.peripheral_agent > logs/peripheral_agent.log 2>&1 &
+    PERIPH_PID=$!
+    echo "✅ Peripheral Agent started (PID: $PERIPH_PID)"
+    sleep 1
+fi
 
-# Function to verify Python environment
-check_environment() {
-    echo -e "${YELLOW}[2/5] Verifying Python environment...${NC}"
+# Start SNMP Agent (newly fixed)
+if pgrep -f "snmp_agent.py" > /dev/null; then
+    echo "✅ SNMP Agent already running (PID: $(pgrep -f 'snmp_agent.py'))"
+else
+    echo "🔄 Starting SNMP Agent (NEWLY FIXED)..."
+    cd "$PROJECT_ROOT"
+    nohup python -m amoskys.agents.snmp.snmp_agent > logs/snmp_agent.log 2>&1 &
+    SNMP_PID=$!
+    echo "✅ SNMP Agent started (PID: $SNMP_PID)"
+    sleep 1
+fi
 
-    if [ ! -d ".venv" ]; then
-        echo -e "${RED}  ✗ Virtual environment not found at .venv${NC}"
-        exit 1
-    fi
-
-    # Activate virtual environment
-    source .venv/bin/activate
-
-    # Check required packages
-    if ! python -c "import flask" 2>/dev/null; then
-        echo -e "${RED}  ✗ Flask not installed${NC}"
-        exit 1
-    fi
-
-    echo -e "  ✓ Python environment ready"
-}
-
-# Function to verify application structure
-check_app_structure() {
-    echo -e "${YELLOW}[3/5] Verifying application structure...${NC}"
-
-    if [ ! -f "web/wsgi.py" ]; then
-        echo -e "${RED}  ✗ web/wsgi.py not found${NC}"
-        exit 1
-    fi
-
-    if [ ! -d "web/app" ]; then
-        echo -e "${RED}  ✗ web/app directory not found${NC}"
-        exit 1
-    fi
-
-    echo -e "  ✓ Application structure valid"
-}
-
-# Function to start Flask
-start_flask() {
-    echo -e "${YELLOW}[4/5] Starting Flask development server...${NC}"
-
-    # Set environment variables
-    export PYTHONPATH="$SCRIPT_DIR/src"
-    export FLASK_APP="wsgi:app"
-    export FLASK_DEBUG="True"
-
-    # Start Flask in background
-    cd web
-    nohup ../.venv/bin/python -m flask run --host=127.0.0.1 --port=$PORT > "$FLASK_LOG" 2>&1 &
-    FLASK_PID=$!
-    cd ..
-
-    # Save PID
-    echo "$FLASK_PID" > "$PID_FILE"
-
-    # Wait for Flask to start
-    echo -e "  → Waiting for server to initialize..."
-    sleep 3
-
-    # Check if process is still running
-    if ! kill -0 "$FLASK_PID" 2>/dev/null; then
-        echo -e "${RED}  ✗ Flask failed to start. Check logs: $FLASK_LOG${NC}"
-        exit 1
-    fi
-
-    echo -e "  ✓ Flask started (PID: $FLASK_PID)"
-}
-
-# Function to verify server is responding
-verify_server() {
-    echo -e "${YELLOW}[5/5] Verifying server health...${NC}"
-
-    MAX_RETRIES=10
-    RETRY_COUNT=0
-
-    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-        if curl -s http://127.0.0.1:$PORT/ >/dev/null 2>&1; then
-            echo -e "  ✓ Server is responding"
-            return 0
-        fi
-        RETRY_COUNT=$((RETRY_COUNT + 1))
-        sleep 1
-    done
-
-    echo -e "${RED}  ✗ Server not responding after $MAX_RETRIES attempts${NC}"
-    echo -e "${RED}  Check logs: $FLASK_LOG${NC}"
-    exit 1
-}
-
-# Function to display server info
-show_server_info() {
-    echo ""
-    echo -e "${GREEN}╔════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║         Server Started Successfully!       ║${NC}"
-    echo -e "${GREEN}╚════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "📍 Dashboard URL:  ${GREEN}http://127.0.0.1:$PORT/${NC}"
-    echo -e "🧠 Cortex Center:  ${GREEN}http://127.0.0.1:$PORT/dashboard/cortex${NC}"
-    echo -e "📊 System Monitor: ${GREEN}http://127.0.0.1:$PORT/dashboard/system${NC}"
-    echo -e "🔬 Processes:      ${GREEN}http://127.0.0.1:$PORT/dashboard/processes${NC}"
-    echo -e "🤖 Agents:         ${GREEN}http://127.0.0.1:$PORT/dashboard/agents${NC}"
-    echo -e "📖 API Docs:       ${GREEN}http://127.0.0.1:$PORT/api/docs${NC}"
-    echo ""
-    echo -e "📝 Logs:           $FLASK_LOG"
-    echo -e "🔢 PID:            $(cat $PID_FILE)"
-    echo ""
-    echo -e "${YELLOW}Press Ctrl+C to view logs, or use:${NC}"
-    echo -e "  tail -f $FLASK_LOG"
-    echo ""
-}
-
-# Main execution
-main() {
-    kill_existing_flask
-    check_environment
-    check_app_structure
-    start_flask
-    verify_server
-    show_server_info
-}
-
-# Run main function
-main
-
-# Keep script running to show it's active
-echo -e "${GREEN}Server is running. Press Ctrl+C to stop monitoring.${NC}"
+echo ""
+echo "🌐 Starting Dashboard..."
 echo ""
 
-# Trap Ctrl+C to show cleanup message
-trap 'echo -e "\n${YELLOW}Server is still running in background (PID: $(cat $PID_FILE))${NC}\nTo stop: kill $(cat $PID_FILE)"; exit 0' INT
+# Start Flask Dashboard
+if pgrep -f "wsgi.py" > /dev/null; then
+    echo "✅ Dashboard already running (PID: $(pgrep -f 'wsgi.py'))"
+else
+    echo "🔄 Starting Flask Dashboard..."
+    cd "$PROJECT_ROOT/web"
+    nohup python wsgi.py --dev > ../logs/dashboard.log 2>&1 &
+    DASH_PID=$!
+    echo "✅ Dashboard started (PID: $DASH_PID)"
+    sleep 2
+fi
 
-# Monitor logs in real-time
-tail -f "$FLASK_LOG" 2>/dev/null || sleep infinity
+echo ""
+echo "=============================================="
+echo "✅ AMOSKYS System Startup Complete"
+echo "=============================================="
+echo ""
+
+# Display running services
+echo "📊 Running Services:"
+echo ""
+ps aux | grep -E "(eventbus|wal_processor|proc_agent|peripheral_agent|snmp_agent|flask)" | grep -v grep | awk '{print "   " $2 "\t" $11 " " $12 " " $13}'
+
+echo ""
+echo "🔗 Dashboard URL: http://localhost:5001/dashboard/cortex"
+echo ""
+echo "📝 Logs location: $PROJECT_ROOT/logs/"
+echo "   - EventBus:       logs/eventbus.log"
+echo "   - WAL Processor:  logs/wal_processor.log"
+echo "   - Proc Agent:     logs/proc_agent.log"
+echo "   - Peripheral:     logs/peripheral_agent.log"
+echo "   - SNMP Agent:     logs/snmp_agent.log"
+echo "   - Dashboard:      logs/dashboard.log"
+echo ""
+echo "🔍 Validate data flow:"
+echo "   sqlite3 data/telemetry.db \"SELECT COUNT(*), MAX(timestamp_dt) FROM process_events;\""
+echo ""
+echo "🛑 To stop all services:"
+echo "   ./stop_amoskys.sh"
+echo ""

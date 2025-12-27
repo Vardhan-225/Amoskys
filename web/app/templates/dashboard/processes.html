@@ -523,17 +523,26 @@ class ProcessDashboard {
                 return;
             }
 
-            const processRows = data.processes.map(proc => `
+            const processRows = data.processes.map(proc => {
+                // Format timestamp properly
+                const timestamp = proc.timestamp_dt ? new Date(proc.timestamp_dt).toLocaleTimeString() : 'N/A';
+
+                // Handle null/undefined values
+                const userType = proc.user_type || 'unknown';
+                const processClass = proc.process_class || 'unknown';
+                const ageSeconds = proc.age_seconds !== null && proc.age_seconds !== undefined ? proc.age_seconds : '?';
+
+                return `
                 <tr>
-                    <td>${new Date(proc.timestamp).toLocaleTimeString()}</td>
-                    <td>${proc.pid}</td>
-                    <td>${proc.ppid}</td>
-                    <td class="exe-truncate" title="${proc.exe}">${proc.exe_basename || proc.exe}</td>
-                    <td class="user-type-${proc.user_type}">${proc.user_type}</td>
-                    <td class="process-class-${proc.process_class}">${proc.process_class}</td>
-                    <td>${proc.age_seconds}s ago</td>
+                    <td>${timestamp}</td>
+                    <td>${proc.pid || 'N/A'}</td>
+                    <td>${proc.ppid || 'N/A'}</td>
+                    <td class="exe-truncate" title="${proc.exe || 'unknown'}">${proc.exe_basename || proc.exe || 'unknown'}</td>
+                    <td class="user-type-${userType}">${userType}</td>
+                    <td class="process-class-${processClass}">${processClass}</td>
+                    <td>${ageSeconds}s ago</td>
                 </tr>
-            `).join('');
+            `}).join('');
 
             tbody.innerHTML = processRows;
 

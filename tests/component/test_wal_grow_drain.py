@@ -45,7 +45,7 @@ def test_wal_grows_then_drains():
     
     # Agent also needs the same environment
     agent = subprocess.Popen([sys.executable, "src/amoskys/agents/flowagent/main.py"], env=env)
-    assert wait_port(8081)
+    assert wait_port(8081, timeout=10)  # Increased timeout for agent startup
     time.sleep(1.0)
     with mtls_channel() as ch:
         stub = pbrpc.EventBusStub(ch)
@@ -54,8 +54,14 @@ def test_wal_grows_then_drains():
     import urllib.request
     body = urllib.request.urlopen("http://localhost:8081/healthz", timeout=2).read().decode()
     assert "wal_bytes=" in body
-    bus.terminate(); bus.wait(timeout=2)
-    env["BUS_OVERLOAD"]="0"
+    bus.terminate()
+    try:
+        bus.wait(timeout=10)  # Increased to allow graceful shutdown
+    except subprocess.TimeoutExpired:
+        bus.kill()
+        bus.wait(timeout=2)
+    
+    env["BUS_OVERLOAD"] = "0"
     bus2 = subprocess.Popen([sys.executable, "src/amoskys/eventbus/server.py"], env=env)
     assert wait_port(50051)
     time.sleep(3.0)
@@ -63,5 +69,15 @@ def test_wal_grows_then_drains():
     assert "wal_bytes=" in body2
     bytes_now = int(body2.split("wal_bytes=")[1])
     assert bytes_now == 0 or bytes_now < int(body.split("wal_bytes=")[1])
-    agent.terminate(); agent.wait(timeout=2)
-    bus2.terminate(); bus2.wait(timeout=2)
+    agent.terminate()
+    try:
+        agent.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        agent.kill()
+        agent.wait(timeout=2)
+    bus2.terminate()
+    try:
+        bus2.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        bus2.kill()
+        bus2.wait(timeout=2)

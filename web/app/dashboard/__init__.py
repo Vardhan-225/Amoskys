@@ -63,6 +63,16 @@ def process_telemetry():
     """Process Telemetry Dashboard - Mac Process Monitoring"""
     return render_template('dashboard/processes.html')
 
+@dashboard_bp.route('/peripherals')
+def peripheral_monitoring():
+    """Peripheral Monitoring Dashboard - USB/Bluetooth Device Tracking"""
+    return render_template('dashboard/peripherals.html')
+
+@dashboard_bp.route('/database')
+def database_manager():
+    """Database Manager - Zero-Trust Data Management"""
+    return render_template('dashboard/database_manager.html')
+
 # Real-time Data Endpoints
 @dashboard_bp.route('/api/live/threats')
 @require_rate_limit(max_requests=100, window_seconds=60)
