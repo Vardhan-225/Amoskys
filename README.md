@@ -81,11 +81,21 @@ AMOSKYS is a distributed security monitoring platform that provides real-time vi
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/Amoskys.git
+git clone https://github.com/Vardhan-225/Amoskys.git
 cd Amoskys
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (choose one based on your needs)
+# Core only (EventBus + basic agents):
+pip install -e .
+
+# With web dashboard (recommended):
+pip install -e .[web]
+
+# Full development setup (all tools):
+pip install -e .[all]
+
+# Or install specific groups:
+# pip install -e .[web,agents,dev]
 
 # Start all services
 ./start_amoskys.sh

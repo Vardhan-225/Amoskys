@@ -1,0 +1,13 @@
+# AMOSKYS Dependencies
+# This file is auto-generated from pyproject.toml for pip compatibility
+# For development: pip install -e .[dev,web]
+# For production: pip install -e .[web,agents]
+
+# To regenerate this file: pip freeze > requirements.txt
+
+# Installation:
+# Core only:       pip install -e .
+# With web:        pip install -e .[web]
+# With agents:     pip install -e .[agents]
+# Full dev setup:  pip install -e .[all]
+
