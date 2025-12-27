@@ -20,9 +20,11 @@ Design:
     is durable and crash-resistant.
 """
 
-import sqlite3, time, os
+import sqlite3, time, os, logging
 from typing import Callable
 from amoskys.proto import messaging_schema_pb2 as pb
+
+logger = logging.getLogger(__name__)
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -51,7 +53,7 @@ class SQLiteWAL:
         db (sqlite3.Connection): Database connection with auto-commit
     """
 
-    def __init__(self, path="wal.db", max_bytes=200*1024*1024):
+    def __init__(self, path="wal.db", max_bytes=200*1024*1024, vacuum_threshold=0.3):
         """Initialize SQLite WAL with durability guarantees.
 
         Creates database file and schema if not exists. Sets up WAL mode
@@ -60,15 +62,20 @@ class SQLiteWAL:
         Args:
             path: Filesystem path for WAL database (default: "wal.db")
             max_bytes: Maximum backlog size in bytes (default: 200MB)
+            vacuum_threshold: Fraction of database to reclaim before VACUUM (default: 0.3 = 30%)
 
         Notes:
             - Parent directories are created automatically
             - Timeout is set to 5 seconds for lock contention
             - isolation_level=None enables auto-commit mode
+            - VACUUM runs automatically to reclaim disk space
         """
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         self.path = path
         self.max_bytes = max_bytes
+        self.vacuum_threshold = vacuum_threshold
+        self.last_vacuum_time = 0
+        self.deleted_since_vacuum = 0
         self.db = sqlite3.connect(self.path, timeout=5.0, isolation_level=None)
         self.db.executescript(SCHEMA)
 
@@ -112,6 +119,19 @@ class SQLiteWAL:
         """
         row = self.db.execute("SELECT IFNULL(SUM(length(bytes)),0) FROM wal").fetchone()
         return int(row[0] or 0)
+
+    def file_size_bytes(self) -> int:
+        """Get actual file size on disk (including WAL journal files).
+
+        Returns:
+            int: Total size in bytes of database files on disk
+        """
+        total = 0
+        for suffix in ['', '-wal', '-shm']:
+            file_path = self.path + suffix
+            if os.path.exists(file_path):
+                total += os.path.getsize(file_path)
+        return total
 
     def drain(self, publish_fn: Callable[[pb.Envelope], object], limit: int = 1000) -> int:
         """Drain pending envelopes by publishing them via callback.
@@ -164,16 +184,94 @@ class SQLiteWAL:
         deletes oldest events (lowest id) until under limit. This implements
         tail-drop backpressure - recent events are preserved.
 
+        Also triggers VACUUM when enough space has been freed to reclaim
+        disk space from deleted records.
+
         Note:
-            This is a silent operation - dropped events do not generate
-            errors or metrics. They are simply deleted from the WAL.
+            Dropped events are logged at WARNING level for monitoring.
         """
         total = self.backlog_bytes()
-        if total <= self.max_bytes: return
+        if total <= self.max_bytes:
+            return
+
         to_free = total - self.max_bytes
         freed = 0
-        cur = self.db.execute("SELECT id, length(bytes) FROM wal ORDER BY id")
-        for rowid, sz in cur:
+        dropped_count = 0
+
+        cur = self.db.execute("SELECT id, length(bytes), idem FROM wal ORDER BY id")
+        for rowid, sz, idem in cur:
             self.db.execute("DELETE FROM wal WHERE id=?", (rowid,))
             freed += sz
-            if freed >= to_free: break
+            dropped_count += 1
+            self.deleted_since_vacuum += 1
+            if freed >= to_free:
+                break
+
+        if dropped_count > 0:
+            logger.warning(
+                f"Backpressure: dropped {dropped_count} events "
+                f"({freed} bytes) to stay under {self.max_bytes} limit"
+            )
+
+        # Trigger VACUUM if we've freed significant space
+        self._maybe_vacuum()
+
+    def _maybe_vacuum(self):
+        """Run VACUUM if enough space has been freed to warrant it.
+
+        VACUUM rebuilds the database file to reclaim disk space from
+        deleted records. It's expensive, so only run when:
+        1. Enough deletions have occurred (> vacuum_threshold * file size)
+        2. Enough time has passed (> 5 minutes since last VACUUM)
+        """
+        current_time = time.time()
+
+        # Don't vacuum more than once per 5 minutes
+        if current_time - self.last_vacuum_time < 300:
+            return
+
+        # Only vacuum if we've deleted a significant amount
+        file_size = self.file_size_bytes()
+        if file_size == 0:
+            return
+
+        deleted_fraction = self.deleted_since_vacuum / file_size
+        if deleted_fraction < self.vacuum_threshold:
+            return
+
+        # Run VACUUM
+        logger.info(
+            f"Running VACUUM to reclaim disk space "
+            f"(deleted {self.deleted_since_vacuum} bytes, {deleted_fraction:.1%} of file)"
+        )
+
+        try:
+            # VACUUM requires regular connection (not isolation_level=None)
+            self.db.execute("VACUUM")
+            self.last_vacuum_time = current_time
+            self.deleted_since_vacuum = 0
+
+            new_size = self.file_size_bytes()
+            logger.info(f"VACUUM complete: {file_size} -> {new_size} bytes")
+
+        except Exception as e:
+            logger.error(f"VACUUM failed: {e}")
+
+    def vacuum(self):
+        """Manually trigger VACUUM to reclaim disk space.
+
+        Call this during maintenance windows or when WAL is empty.
+        VACUUM rebuilds the database file, which can take time for large files.
+        """
+        logger.info("Manual VACUUM requested")
+        try:
+            start_size = self.file_size_bytes()
+            self.db.execute("VACUUM")
+            end_size = self.file_size_bytes()
+            self.last_vacuum_time = time.time()
+            self.deleted_since_vacuum = 0
+            logger.info(f"VACUUM complete: {start_size} -> {end_size} bytes "
+                       f"({start_size - end_size} bytes reclaimed)")
+        except Exception as e:
+            logger.error(f"VACUUM failed: {e}")
+            raise
