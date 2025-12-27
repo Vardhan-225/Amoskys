@@ -241,6 +241,8 @@ data/storage/
 data/wal/
 data/metrics/
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
@@ -254,6 +256,7 @@ certs/ca.srl
 # Backup directories
 backup_before_cleanup/
 backup_*/
+backups/
 
 # Test artifacts and temporary files
 .pytest_cache/
