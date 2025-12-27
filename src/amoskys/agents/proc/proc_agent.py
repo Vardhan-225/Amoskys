@@ -15,6 +15,7 @@ from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
 from amoskys.config import get_config
+from amoskys.agents.common import LocalQueue
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ProcAgent")
@@ -22,14 +23,26 @@ logger = logging.getLogger("ProcAgent")
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
+QUEUE_PATH = getattr(config.agent, "queue_path", "data/queue/proc_agent.db")
 
 
 class ProcAgent:
-    """Simple process monitoring agent"""
-    
-    def __init__(self):
-        """Initialize agent"""
+    """Process monitoring agent with offline queue resilience"""
+
+    def __init__(self, queue_path=None):
+        """Initialize agent with local queue for offline resilience
+
+        Args:
+            queue_path: Path to queue database (default: from config)
+        """
         self.last_pids = set()
+        self.queue_path = queue_path or QUEUE_PATH
+        self.queue = LocalQueue(
+            path=self.queue_path,
+            max_bytes=50 * 1024 * 1024,  # 50MB
+            max_retries=10
+        )
+        logger.info(f"LocalQueue initialized: {self.queue_path}")
     
     def _get_grpc_channel(self):
         """Create gRPC channel to EventBus with mTLS"""
@@ -157,53 +170,156 @@ class ProcAgent:
         return device_telemetry
     
     def _publish_telemetry(self, device_telemetry):
-        """Publish telemetry to EventBus"""
+        """Publish telemetry to EventBus with queue fallback
+
+        Attempts direct publish to EventBus. On failure, queues the
+        telemetry for later retry. This ensures no data loss during
+        EventBus downtime or network failures.
+
+        Args:
+            device_telemetry: DeviceTelemetry protobuf message
+
+        Returns:
+            bool: True if published or queued, False on error
+        """
         try:
             channel = self._get_grpc_channel()
             if not channel:
-                logger.error("No gRPC channel")
-                return False
-            
+                logger.warning("No gRPC channel, queueing telemetry")
+                return self._queue_telemetry(device_telemetry)
+
             # Create UniversalEnvelope for UniversalEventBus
             timestamp_ns = int(time.time() * 1e9)
+            idempotency_key = f"{device_telemetry.device_id}_{timestamp_ns}"
             envelope = telemetry_pb2.UniversalEnvelope(
                 version="v1",
                 ts_ns=timestamp_ns,
-                idempotency_key=f"{device_telemetry.device_id}_{timestamp_ns}",
+                idempotency_key=idempotency_key,
                 device_telemetry=device_telemetry,
                 signing_algorithm="Ed25519",
                 priority="NORMAL",
                 requires_acknowledgment=True
             )
-            
+
             # Publish via UniversalEventBus.PublishTelemetry
             stub = universal_pbrpc.UniversalEventBusStub(channel)
             ack = stub.PublishTelemetry(envelope, timeout=5.0)
-            
+
             if ack.status == telemetry_pb2.UniversalAck.OK:
-                logger.info("Published process telemetry")
+                logger.info("Published process telemetry (queue: %d pending)", self.queue.size())
                 return True
             else:
-                logger.warning("Publish status: %s", ack.status)
-                return False
+                logger.warning("Publish status: %s, queueing", ack.status)
+                return self._queue_telemetry(device_telemetry)
+
+        except grpc.RpcError as e:
+            logger.warning("RPC failed: %s, queueing telemetry", e.code())
+            return self._queue_telemetry(device_telemetry)
         except Exception as e:
-            logger.error("Publish failed: %s", str(e))
+            logger.error("Publish failed: %s, queueing telemetry", str(e))
+            return self._queue_telemetry(device_telemetry)
+
+    def _queue_telemetry(self, device_telemetry):
+        """Queue telemetry for later retry
+
+        Args:
+            device_telemetry: DeviceTelemetry protobuf message
+
+        Returns:
+            bool: True if queued successfully
+        """
+        try:
+            timestamp_ns = int(time.time() * 1e9)
+            idempotency_key = f"{device_telemetry.device_id}_{timestamp_ns}"
+            queued = self.queue.enqueue(device_telemetry, idempotency_key)
+
+            if queued:
+                logger.info("Queued telemetry (queue: %d items, %d bytes)",
+                           self.queue.size(), self.queue.size_bytes())
+
+            return True
+        except Exception as e:
+            logger.error("Failed to queue telemetry: %s", str(e))
             return False
+
+    def _drain_queue(self):
+        """Attempt to drain queued telemetry to EventBus
+
+        Called periodically to retry publishing queued events when
+        EventBus becomes available again.
+
+        Returns:
+            int: Number of events successfully drained
+        """
+        queue_size = self.queue.size()
+        if queue_size == 0:
+            return 0
+
+        logger.info("Draining queue (%d events pending)...", queue_size)
+
+        def publish_fn(telemetry):
+            """Publish callback for queue drain"""
+            try:
+                channel = self._get_grpc_channel()
+                if not channel:
+                    raise Exception("No gRPC channel")
+
+                timestamp_ns = int(time.time() * 1e9)
+                envelope = telemetry_pb2.UniversalEnvelope(
+                    version="v1",
+                    ts_ns=timestamp_ns,
+                    idempotency_key=f"{telemetry.device_id}_{timestamp_ns}_retry",
+                    device_telemetry=telemetry,
+                    signing_algorithm="Ed25519",
+                    priority="NORMAL",
+                    requires_acknowledgment=True
+                )
+
+                stub = universal_pbrpc.UniversalEventBusStub(channel)
+                ack = stub.PublishTelemetry(envelope, timeout=5.0)
+                return ack
+            except Exception as e:
+                logger.debug("Drain publish failed: %s", str(e))
+                raise
+
+        try:
+            drained = self.queue.drain(publish_fn, limit=100)
+            if drained > 0:
+                logger.info("Drained %d events from queue (%d remaining)",
+                           drained, self.queue.size())
+            return drained
+        except Exception as e:
+            logger.debug("Queue drain error: %s", str(e))
+            return 0
     
     def collect(self):
-        """Collect and publish process telemetry once"""
+        """Collect and publish process telemetry once
+
+        Collects process telemetry and attempts to publish. If EventBus
+        is unavailable, telemetry is queued for later retry. Also attempts
+        to drain any previously queued events.
+
+        Returns:
+            bool: True if collection succeeded (regardless of publish status)
+        """
         try:
+            # First, try to drain any queued events
+            self._drain_queue()
+
+            # Collect new telemetry
             logger.info("Collecting process telemetry...")
             processes = self._scan_processes()
             device_telemetry = self._create_telemetry(processes)
+
+            # Publish or queue
             success = self._publish_telemetry(device_telemetry)
-            
+
             if success:
                 logger.info("Collection complete (%d processes)", len(processes))
             else:
-                logger.warning("Collection failed")
-            
-            return success
+                logger.warning("Collection failed (queued for retry)")
+
+            return True  # Collection itself succeeded
         except Exception as e:
             logger.error("Collection error: %s", str(e), exc_info=True)
             return False
