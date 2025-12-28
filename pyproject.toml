@@ -105,6 +105,20 @@ all = [
     "amoskys[web,agents,dev,docs,ml]"
 ]
 
+[project.scripts]
+# Agent console entrypoints
+amoskys-flowagent = "amoskys.agents.flowagent.main:main"
+amoskys-procagent = "amoskys.agents.proc.proc_agent:main"
+amoskys-authguard = "amoskys.agents.auth.auth_agent:main"
+amoskys-persistguard = "amoskys.agents.persistence.persistence_agent:main"
+
+# EventBus & Intelligence
+amoskys-eventbus = "amoskys.eventbus.server:main"
+amoskys-fusion = "amoskys.intel.fusion_engine:main"
+
+# Dashboard
+amoskys-dashboard = "web.app:main"
+
 [project.urls]
 Homepage = "https://github.com/Vardhan-225/Amoskys"
 Documentation = "https://github.com/Vardhan-225/Amoskys/tree/main/docs"
