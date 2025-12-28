@@ -247,6 +247,55 @@ sqlite3 data/telemetry.db "DELETE FROM process_events WHERE timestamp_dt < datet
 
 ---
 
+## Production Deployment
+
+### DNS & Domain Setup
+
+AMOSKYS can be deployed to production with Cloudflare DNS and CDN:
+
+```bash
+# 1. Configure DNS records in Cloudflare
+# See: docs/DNS_DEPLOYMENT_GUIDE.md for complete instructions
+
+# 2. Automated DNS setup (optional)
+export CLOUDFLARE_API_TOKEN="your_token"
+export VPS_IP="your.vps.ip.address"
+./deploy/dns/setup-cloudflare-dns.sh
+
+# 3. Configure VPS firewall for Cloudflare
+sudo ./deploy/dns/configure-vps-firewall.sh
+```
+
+**Resources:**
+- **DNS Guide**: [docs/DNS_DEPLOYMENT_GUIDE.md](docs/DNS_DEPLOYMENT_GUIDE.md)
+- **VPS Guide**: [docs/VPS_DEPLOYMENT_GUIDE.md](docs/VPS_DEPLOYMENT_GUIDE.md)
+- **Cloudflare Setup**: [docs/CLOUDFLARE_SETUP.md](docs/CLOUDFLARE_SETUP.md)
+- **DNS Scripts**: [deploy/dns/](deploy/dns/)
+
+### Docker Deployment
+
+```bash
+# Development environment
+docker-compose -f deploy/docker-compose.dev.yml up -d
+
+# See: docs/DOCKER_DEPLOY.md for production setup
+```
+
+### VPS Deployment
+
+```bash
+# Deploy to production VPS
+# 1. Clone repository to /opt/amoskys
+# 2. Install dependencies
+# 3. Configure NGINX (deploy/nginx/amoskys.conf)
+# 4. Install SSL certificates
+# 5. Start services
+
+# See: docs/VPS_DEPLOYMENT_GUIDE.md
+```
+
+---
+
 ## Development
 
 ### Project Structure
