@@ -247,7 +247,7 @@ main() {
     list_dns_records
     echo ""
     
-    read -p "Do you want to proceed with DNS configuration? (yes/no) " -n 3 -r
+    read -p "Do you want to proceed with DNS configuration? (yes/no) " -r
     echo ""
     if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
         print_warning "Operation cancelled by user"

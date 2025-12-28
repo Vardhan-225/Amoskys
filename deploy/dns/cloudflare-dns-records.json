@@ -6,7 +6,7 @@
     {
       "type": "A",
       "name": "@",
-      "content": "YOUR_VPS_IP_ADDRESS",
+      "content": "YOUR_VPS_IP",
       "ttl": 1,
       "proxied": true,
       "comment": "Main domain - points to VPS running NGINX"
@@ -14,7 +14,7 @@
     {
       "type": "A",
       "name": "www",
-      "content": "YOUR_VPS_IP_ADDRESS",
+      "content": "YOUR_VPS_IP",
       "ttl": 1,
       "proxied": true,
       "comment": "WWW subdomain - points to VPS"
