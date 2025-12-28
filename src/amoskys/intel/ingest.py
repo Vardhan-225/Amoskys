@@ -80,7 +80,7 @@ class TelemetryIngestor:
                 id INTEGER PRIMARY KEY,
                 idem TEXT UNIQUE,
                 ts_ns INTEGER,
-                blob BLOB,
+                bytes BLOB,
                 retries INTEGER
             )
 
@@ -102,12 +102,12 @@ class TelemetryIngestor:
             cutoff = int((datetime.now() - timedelta(minutes=30)).timestamp() * 1e9)
 
             rows = db.execute(
-                "SELECT id, idem, blob FROM queue WHERE ts_ns > ? ORDER BY ts_ns DESC LIMIT ?",
+                "SELECT id, idem, bytes FROM queue WHERE ts_ns > ? ORDER BY ts_ns DESC LIMIT ?",
                 (cutoff, limit)
             ).fetchall()
 
             events = []
-            for row_id, idem, blob in rows:
+            for row_id, idem, bytes_col in rows:
                 # Skip if already processed
                 if idem in self.last_seen_ids[db_path]:
                     continue
@@ -115,7 +115,7 @@ class TelemetryIngestor:
                 try:
                     # Deserialize DeviceTelemetry
                     device_telem = telemetry_pb2.DeviceTelemetry()
-                    device_telem.ParseFromString(bytes(blob))
+                    device_telem.ParseFromString(bytes(bytes_col))
                     events.append(device_telem)
 
                     # Mark as seen
