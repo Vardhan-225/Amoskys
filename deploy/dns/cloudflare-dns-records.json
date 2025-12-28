@@ -1,0 +1,133 @@
+{
+  "comment": "AMOSKYS DNS Records Configuration for Cloudflare",
+  "zone": "amoskys.com",
+  "zone_id": "3f214ea5270b99e93c2a1460000e7a00",
+  "records": [
+    {
+      "type": "A",
+      "name": "@",
+      "content": "YOUR_VPS_IP_ADDRESS",
+      "ttl": 1,
+      "proxied": true,
+      "comment": "Main domain - points to VPS running NGINX"
+    },
+    {
+      "type": "A",
+      "name": "www",
+      "content": "YOUR_VPS_IP_ADDRESS",
+      "ttl": 1,
+      "proxied": true,
+      "comment": "WWW subdomain - points to VPS"
+    },
+    {
+      "type": "CNAME",
+      "name": "app",
+      "content": "amoskys.com",
+      "ttl": 1,
+      "proxied": true,
+      "comment": "Application dashboard subdomain"
+    },
+    {
+      "type": "CNAME",
+      "name": "api",
+      "content": "amoskys.com",
+      "ttl": 1,
+      "proxied": true,
+      "comment": "API endpoint subdomain"
+    },
+    {
+      "type": "CNAME",
+      "name": "docs",
+      "content": "amoskys.com",
+      "ttl": 1,
+      "proxied": true,
+      "comment": "Documentation subdomain"
+    },
+    {
+      "type": "CNAME",
+      "name": "status",
+      "content": "amoskys.com",
+      "ttl": 1,
+      "proxied": true,
+      "comment": "Status page subdomain (future)"
+    },
+    {
+      "type": "CNAME",
+      "name": "metrics",
+      "content": "amoskys.com",
+      "ttl": 1,
+      "proxied": true,
+      "comment": "Metrics/monitoring subdomain (future)"
+    },
+    {
+      "type": "TXT",
+      "name": "@",
+      "content": "v=spf1 -all",
+      "ttl": 1,
+      "proxied": false,
+      "comment": "SPF record - no mail servers authorized (adjust if using email)"
+    }
+  ],
+  "ssl_settings": {
+    "mode": "full_strict",
+    "min_tls_version": "1.2",
+    "automatic_https_rewrites": true,
+    "always_use_https": true,
+    "hsts": {
+      "enabled": true,
+      "max_age": 31536000,
+      "include_subdomains": true,
+      "nosniff": true
+    }
+  },
+  "security_settings": {
+    "security_level": "medium",
+    "challenge_passage": 30,
+    "browser_integrity_check": true,
+    "hotlink_protection": false
+  },
+  "performance_settings": {
+    "cache_level": "standard",
+    "browser_cache_ttl": 14400,
+    "development_mode": false,
+    "minify": {
+      "css": true,
+      "html": true,
+      "js": true
+    },
+    "brotli": true,
+    "early_hints": true,
+    "http2": true,
+    "http3": true
+  },
+  "firewall_rules": [
+    {
+      "description": "Block bad bots",
+      "expression": "(cf.bot_management.score lt 30) and not (cf.bot_management.verified_bot)",
+      "action": "block"
+    },
+    {
+      "description": "Rate limit API endpoints",
+      "expression": "(http.request.uri.path contains \"/api/\") and (rate(1m) > 100)",
+      "action": "block"
+    }
+  ],
+  "page_rules": [
+    {
+      "targets": ["api.amoskys.com/*"],
+      "actions": {
+        "security_level": "high",
+        "cache_level": "bypass",
+        "disable_apps": true
+      }
+    },
+    {
+      "targets": ["amoskys.com/static/*", "*.amoskys.com/static/*"],
+      "actions": {
+        "cache_level": "cache_everything",
+        "edge_cache_ttl": 2592000,
+        "browser_cache_ttl": 2592000
+      }
+    }
+  ]
+}
