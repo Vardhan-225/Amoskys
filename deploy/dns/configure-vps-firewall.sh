@@ -6,6 +6,10 @@
 # This script should be run on your VPS after deploying the application
 # It ensures that all traffic comes through Cloudflare's proxy
 #
+# NOTE: Cloudflare IP ranges are current as of December 2024
+#       For latest ranges, visit: https://www.cloudflare.com/ips/
+#       See also: docs/CLOUDFLARE_SETUP.md for complete IP range list
+#
 # Usage:
 #   sudo ./configure-vps-firewall.sh
 #
@@ -181,10 +185,18 @@ configure_iptables() {
     
     print_warning "Note: iptables rules are not persistent by default"
     print_info "Consider installing iptables-persistent package"
+    echo ""
+    print_warning "IMPORTANT: Flushing iptables rules may disconnect your SSH session!"
+    print_warning "Make sure you have console access to your server before proceeding."
+    print_warning "Consider backing up your current rules first with: iptables-save > /tmp/iptables.backup"
+    echo ""
     
     # Flush existing rules (careful!)
     read -p "Do you want to flush existing iptables rules? (yes/no) " -r
     if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        print_info "Backing up current rules to /tmp/iptables.backup..."
+        iptables-save > /tmp/iptables.backup 2>/dev/null || true
+        print_info "Flushing iptables rules..."
         iptables -F
         iptables -X
     fi
