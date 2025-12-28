@@ -20,6 +20,7 @@ Usage:
 """
 
 from amoskys.intel.fusion_engine import FusionEngine
+from amoskys.intel.ingest import TelemetryIngestor
 from amoskys.intel.models import (
     DeviceRiskSnapshot,
     Incident,
@@ -32,6 +33,7 @@ from amoskys.intel.rules import evaluate_rules, ALL_RULES
 
 __all__ = [
     'FusionEngine',
+    'TelemetryIngestor',
     'DeviceRiskSnapshot',
     'Incident',
     'TelemetryEventView',

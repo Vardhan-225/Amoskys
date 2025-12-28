@@ -115,6 +115,7 @@ amoskys-persistguard = "amoskys.agents.persistence.persistence_agent:main"
 # EventBus & Intelligence
 amoskys-eventbus = "amoskys.eventbus.server:main"
 amoskys-fusion = "amoskys.intel.fusion_engine:main"
+amoskys-ingest = "amoskys.intel.ingest:main"
 
 # Dashboard
 amoskys-dashboard = "web.app:main"

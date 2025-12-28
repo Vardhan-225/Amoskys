@@ -67,6 +67,17 @@ class FusionEngine:
             'incident_count': 0
         })
 
+        # Metrics tracking
+        self.metrics = {
+            'total_events_processed': 0,
+            'total_incidents_created': 0,
+            'total_evaluations': 0,
+            'incidents_by_severity': defaultdict(int),
+            'incidents_by_rule': defaultdict(int),
+            'devices_tracked': 0,
+            'last_eval_duration_ms': 0
+        }
+
         # Initialize database
         self._init_db()
 
@@ -151,6 +162,9 @@ class FusionEngine:
 
         # Add to event buffer
         state['events'].append(event)
+
+        # Update metrics
+        self.metrics['total_events_processed'] += 1
 
         # Trim events outside window
         cutoff = datetime.now() - timedelta(minutes=self.window_minutes)
@@ -430,7 +444,13 @@ class FusionEngine:
         """Evaluate all devices with pending events
 
         Runs correlation rules for each device and persists results.
+        Logs structured metrics for observability.
         """
+        start_time = time.time()
+
+        total_incidents_this_cycle = 0
+        devices_evaluated = 0
+
         for device_id in list(self.device_state.keys()):
             try:
                 incidents, risk_snapshot = self.evaluate_device(device_id)
@@ -439,11 +459,46 @@ class FusionEngine:
                 for incident in incidents:
                     self.persist_incident(incident)
 
+                    # Update metrics
+                    self.metrics['total_incidents_created'] += 1
+                    self.metrics['incidents_by_severity'][incident.severity.value] += 1
+                    self.metrics['incidents_by_rule'][incident.rule_name] += 1
+
+                    # Structured log for each incident
+                    logger.warning(
+                        f"INCIDENT_CREATED | "
+                        f"device_id={device_id} | "
+                        f"incident_id={incident.incident_id} | "
+                        f"rule={incident.rule_name} | "
+                        f"severity={incident.severity.value} | "
+                        f"tactics={','.join(incident.tactics)} | "
+                        f"techniques={','.join(incident.techniques)}"
+                    )
+
                 # Persist risk snapshot
                 self.persist_risk_snapshot(risk_snapshot)
 
+                devices_evaluated += 1
+                total_incidents_this_cycle += len(incidents)
+
             except Exception as e:
                 logger.error(f"Failed to evaluate {device_id}: {e}", exc_info=True)
+
+        # Update global metrics
+        self.metrics['total_evaluations'] += 1
+        self.metrics['devices_tracked'] = len(self.device_state)
+
+        duration_ms = int((time.time() - start_time) * 1000)
+        self.metrics['last_eval_duration_ms'] = duration_ms
+
+        # Structured evaluation summary
+        logger.info(
+            f"EVALUATION_COMPLETE | "
+            f"devices={devices_evaluated} | "
+            f"incidents={total_incidents_this_cycle} | "
+            f"duration_ms={duration_ms} | "
+            f"avg_events_per_device={sum(len(s['events']) for s in self.device_state.values()) / max(1, len(self.device_state)):.1f}"
+        )
 
     def get_recent_incidents(self, device_id: Optional[str] = None, limit: int = 100) -> List[Dict]:
         """Retrieve recent incidents from database
@@ -578,17 +633,54 @@ def main():
     """CLI entrypoint"""
     import argparse
 
-    parser = argparse.ArgumentParser(description="AMOSKYS Fusion Intelligence Engine")
-    parser.add_argument('--once', action='store_true', help='Run single evaluation pass and exit')
-    parser.add_argument('--interval', type=int, default=60, help='Evaluation interval in seconds')
-    parser.add_argument('--window', type=int, default=30, help='Correlation window in minutes')
-    parser.add_argument('--db', type=str, default='data/intel/fusion.db', help='Intelligence database path')
+    parser = argparse.ArgumentParser(
+        description="AMOSKYS Fusion Intelligence Engine",
+        epilog="Examples:\n"
+               "  amoskys-fusion --once                    # Single evaluation pass\n"
+               "  amoskys-fusion --interval 60             # Continuous evaluation\n"
+               "  amoskys-fusion --list-incidents          # Show recent incidents\n"
+               "  amoskys-fusion --risk macbook-pro        # Show device risk\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
+    # Operational modes
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument('--once', action='store_true',
+                            help='Run single evaluation pass and exit')
+    mode_group.add_argument('--list-incidents', action='store_true',
+                            help='List recent incidents and exit')
+    mode_group.add_argument('--risk', type=str, metavar='DEVICE_ID',
+                            help='Show device risk snapshot and exit')
+
+    # Query filters
+    parser.add_argument('--device', type=str, metavar='DEVICE_ID',
+                        help='Filter incidents by device ID')
+    parser.add_argument('--limit', type=int, default=20,
+                        help='Limit number of incidents to show (default: 20)')
+    parser.add_argument('--severity', type=str,
+                        choices=['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'],
+                        help='Filter incidents by severity')
+
+    # Engine configuration
+    parser.add_argument('--interval', type=int, default=60,
+                        help='Evaluation interval in seconds (default: 60)')
+    parser.add_argument('--window', type=int, default=30,
+                        help='Correlation window in minutes (default: 30)')
+    parser.add_argument('--db', type=str, default='data/intel/fusion.db',
+                        help='Intelligence database path')
+
+    # Output formatting
+    parser.add_argument('--json', action='store_true',
+                        help='Output in JSON format')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Show detailed information')
 
     args = parser.parse_args()
 
     # Configure logging
+    log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
-        level=logging.INFO,
+        level=log_level,
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
     )
 
@@ -598,10 +690,117 @@ def main():
         eval_interval=args.interval
     )
 
+    # Query modes (read-only)
+    if args.list_incidents:
+        _list_incidents_cli(engine, args)
+        return
+
+    if args.risk:
+        _show_device_risk_cli(engine, args.risk, args)
+        return
+
+    # Operational modes (evaluation)
     if args.once:
         engine.run_once()
     else:
         engine.run(interval=args.interval)
+
+
+def _list_incidents_cli(engine: FusionEngine, args):
+    """CLI handler for --list-incidents"""
+    import json as jsonlib
+
+    incidents = engine.get_recent_incidents(
+        device_id=args.device,
+        limit=args.limit
+    )
+
+    # Apply severity filter if specified
+    if args.severity:
+        incidents = [inc for inc in incidents if inc['severity'] == args.severity]
+
+    if args.json:
+        print(jsonlib.dumps(incidents, indent=2))
+        return
+
+    # Pretty print
+    if not incidents:
+        print("No incidents found.")
+        return
+
+    print("=" * 80)
+    print(f"Recent Incidents ({len(incidents)} total)")
+    print("=" * 80)
+    print()
+
+    for inc in incidents:
+        severity_icon = {
+            'CRITICAL': '🔴',
+            'HIGH': '🟠',
+            'MEDIUM': '🟡',
+            'LOW': '🟢',
+            'INFO': '🔵'
+        }.get(inc['severity'], '⚪')
+
+        print(f"{severity_icon} [{inc['severity']}] {inc['rule_name']}")
+        print(f"   Device: {inc['device_id']}")
+        print(f"   Summary: {inc['summary']}")
+        print(f"   Tactics: {', '.join(inc['tactics'])}")
+        print(f"   Techniques: {', '.join(inc['techniques'])}")
+        print(f"   Created: {inc['created_at']}")
+
+        if args.verbose:
+            print(f"   Event IDs: {', '.join(inc['event_ids'][:5])}")
+            if len(inc['event_ids']) > 5:
+                print(f"              ... and {len(inc['event_ids']) - 5} more")
+            print(f"   Metadata: {inc['metadata']}")
+
+        print()
+
+
+def _show_device_risk_cli(engine: FusionEngine, device_id: str, args):
+    """CLI handler for --risk DEVICE_ID"""
+    import json as jsonlib
+
+    risk = engine.get_device_risk(device_id)
+
+    if not risk:
+        print(f"No risk data found for device: {device_id}")
+        return
+
+    if args.json:
+        print(jsonlib.dumps(risk, indent=2))
+        return
+
+    # Pretty print
+    level_icon = {
+        'CRITICAL': '🔴',
+        'HIGH': '🟠',
+        'MEDIUM': '🟡',
+        'LOW': '🟢'
+    }.get(risk['level'], '⚪')
+
+    print("=" * 80)
+    print(f"Device Risk Snapshot: {device_id}")
+    print("=" * 80)
+    print()
+    print(f"{level_icon} Risk Level: {risk['level']}")
+    print(f"   Score: {risk['score']}/100")
+    print(f"   Updated: {risk['updated_at']}")
+    print()
+    print("Contributing Factors:")
+    for tag in risk['reason_tags']:
+        print(f"  • {tag}")
+
+    if args.verbose and risk['supporting_events']:
+        print()
+        print(f"Supporting Events ({len(risk['supporting_events'])}):")
+        for event_id in risk['supporting_events'][:10]:
+            print(f"  - {event_id}")
+        if len(risk['supporting_events']) > 10:
+            print(f"  ... and {len(risk['supporting_events']) - 10} more")
+
+    print()
 
 
 if __name__ == '__main__':
