@@ -777,3 +777,331 @@ def test_empty_device_state_does_not_crash(fusion, device_id):
 
     rows = fetch_incidents(fusion.db_path)
     assert len(rows) == 0, "No incidents should be created for empty state"
+
+
+# =============================================================================
+# Rule 5: SSH Lateral Movement
+# =============================================================================
+
+def test_ssh_lateral_movement_fires(fusion, device_id):
+    """
+    POSITIVE: Inbound SSH followed by outbound SSH to different IP should create incident.
+
+    Pattern:
+        - Inbound SSH success from 203.0.113.42
+        - Outbound SSH (port 22) to 10.0.0.50 within 5 minutes
+        - Indicates pivot behavior
+
+    Expected:
+        - Incident: ssh_lateral_movement
+        - Severity: HIGH
+        - Technique: T1021.004
+    """
+    events = [
+        make_ssh_event("ssh_inbound", device_id, "SUCCESS", src_ip="203.0.113.42", offset_seconds=0),
+        make_flow_event("ssh_outbound", device_id, dst_ip="10.0.0.50", dst_port=22, offset_seconds=120),
+    ]
+
+    # Need to add direction attribute to flow event
+    events[1].flow_event['direction'] = 'OUTBOUND'
+
+    for ev in events:
+        fusion.add_event(ev)
+
+    fusion.evaluate_all_devices()
+
+    rows = fetch_incidents(fusion.db_path)
+    rules = {r[1] for r in rows}
+
+    assert "ssh_lateral_movement" in rules, f"Expected ssh_lateral_movement incident, got: {rows}"
+
+    # Verify severity
+    incident = [r for r in rows if r[1] == "ssh_lateral_movement"][0]
+    assert incident[2] == "HIGH", "SSH lateral movement should be HIGH severity"
+
+
+def test_ssh_lateral_movement_not_fired_without_outbound(fusion, device_id):
+    """
+    NEGATIVE: Inbound SSH without outbound SSH should NOT fire rule.
+
+    Pattern:
+        - Inbound SSH success
+        - No outbound SSH connection
+
+    Expected:
+        - No ssh_lateral_movement incident
+    """
+    events = [
+        make_ssh_event("ssh_inbound", device_id, "SUCCESS", src_ip="203.0.113.42", offset_seconds=0),
+    ]
+
+    for ev in events:
+        fusion.add_event(ev)
+
+    fusion.evaluate_all_devices()
+
+    rows = fetch_incidents(fusion.db_path)
+    rules = {r[1] for r in rows}
+
+    assert "ssh_lateral_movement" not in rules, "Rule should not fire without outbound SSH"
+
+
+def test_ssh_lateral_movement_not_fired_to_same_ip(fusion, device_id):
+    """
+    NEGATIVE: Outbound SSH to same IP that logged in should NOT fire (not lateral).
+
+    Pattern:
+        - Inbound SSH from 203.0.113.42
+        - Outbound SSH to 203.0.113.42 (same IP)
+
+    Expected:
+        - No ssh_lateral_movement incident (same IP not lateral)
+    """
+    events = [
+        make_ssh_event("ssh_inbound", device_id, "SUCCESS", src_ip="203.0.113.42", offset_seconds=0),
+        make_flow_event("ssh_outbound", device_id, dst_ip="203.0.113.42", dst_port=22, offset_seconds=120),
+    ]
+
+    events[1].flow_event['direction'] = 'OUTBOUND'
+
+    for ev in events:
+        fusion.add_event(ev)
+
+    fusion.evaluate_all_devices()
+
+    rows = fetch_incidents(fusion.db_path)
+    rules = {r[1] for r in rows}
+
+    assert "ssh_lateral_movement" not in rules, "Rule should not fire for SSH to same IP"
+
+
+# =============================================================================
+# Rule 6: Data Exfiltration Spike
+# =============================================================================
+
+def test_data_exfiltration_spike_fires(fusion, device_id):
+    """
+    POSITIVE: Large data transfer (>10MB) to external IP in short time should create incident.
+
+    Pattern:
+        - 12MB outbound to 198.51.100.99 within 5 minutes
+        - Indicates data exfiltration
+
+    Expected:
+        - Incident: data_exfiltration_spike
+        - Severity: CRITICAL
+        - Technique: T1041
+    """
+    # Create multiple flows totaling >10MB
+    events = [
+        make_flow_event("flow_1", device_id, dst_ip="198.51.100.99", offset_seconds=0),
+        make_flow_event("flow_2", device_id, dst_ip="198.51.100.99", offset_seconds=60),
+        make_flow_event("flow_3", device_id, dst_ip="198.51.100.99", offset_seconds=120),
+    ]
+
+    # Add bytes_out to each flow (4MB each = 12MB total)
+    for ev in events:
+        ev.flow_event['bytes_out'] = 4 * 1024 * 1024  # 4MB
+        ev.flow_event['direction'] = 'OUTBOUND'
+
+    for ev in events:
+        fusion.add_event(ev)
+
+    fusion.evaluate_all_devices()
+
+    rows = fetch_incidents(fusion.db_path)
+    rules = {r[1] for r in rows}
+
+    assert "data_exfiltration_spike" in rules, f"Expected data_exfiltration_spike incident, got: {rows}"
+
+    # Verify severity
+    incident = [r for r in rows if r[1] == "data_exfiltration_spike"][0]
+    assert incident[2] == "CRITICAL", "Data exfiltration should be CRITICAL severity"
+
+
+def test_data_exfiltration_not_fired_below_threshold(fusion, device_id):
+    """
+    NEGATIVE: Small data transfer (<10MB) should NOT fire rule.
+
+    Pattern:
+        - Only 2MB outbound (below 10MB threshold)
+
+    Expected:
+        - No data_exfiltration_spike incident
+    """
+    events = [
+        make_flow_event("flow_1", device_id, dst_ip="198.51.100.99", offset_seconds=0),
+    ]
+
+    # Only 2MB transferred
+    events[0].flow_event['bytes_out'] = 2 * 1024 * 1024
+    events[0].flow_event['direction'] = 'OUTBOUND'
+
+    for ev in events:
+        fusion.add_event(ev)
+
+    fusion.evaluate_all_devices()
+
+    rows = fetch_incidents(fusion.db_path)
+    rules = {r[1] for r in rows}
+
+    assert "data_exfiltration_spike" not in rules, "Rule should not fire below 10MB threshold"
+
+
+def test_data_exfiltration_not_fired_without_bytes_out(fusion, device_id):
+    """
+    NEGATIVE: Flows without bytes_out data should NOT fire rule.
+
+    Expected:
+        - No data_exfiltration_spike incident
+    """
+    events = [
+        make_flow_event("flow_1", device_id, dst_ip="198.51.100.99", offset_seconds=0),
+    ]
+
+    # Flow event without bytes_out field
+    events[0].flow_event['direction'] = 'OUTBOUND'
+    # Don't add bytes_out
+
+    for ev in events:
+        fusion.add_event(ev)
+
+    fusion.evaluate_all_devices()
+
+    rows = fetch_incidents(fusion.db_path)
+    rules = {r[1] for r in rows}
+
+    assert "data_exfiltration_spike" not in rules, "Rule should not fire without bytes_out data"
+
+
+# =============================================================================
+# Rule 7: Suspicious Process Tree
+# =============================================================================
+
+def test_suspicious_process_tree_fires(fusion, device_id):
+    """
+    POSITIVE: Interactive shell spawning process in /tmp should create incident.
+
+    Pattern:
+        - Parent: Terminal/sshd
+        - Child: /tmp/malware
+        - Indicates potential malware execution
+
+    Expected:
+        - Incident: suspicious_process_tree
+        - Severity: HIGH or CRITICAL (if network activity)
+        - Technique: T1059
+    """
+    events = [
+        make_process_event("proc_suspicious", device_id, executable_path="/tmp/.evil", offset_seconds=0),
+    ]
+
+    # Add parent process information
+    events[0].process_event['parent_executable_name'] = 'Terminal'
+
+    for ev in events:
+        fusion.add_event(ev)
+
+    fusion.evaluate_all_devices()
+
+    rows = fetch_incidents(fusion.db_path)
+    rules = {r[1] for r in rows}
+
+    assert "suspicious_process_tree" in rules, f"Expected suspicious_process_tree incident, got: {rows}"
+
+    # Verify severity (HIGH without network, CRITICAL with network)
+    incident = [r for r in rows if r[1] == "suspicious_process_tree"][0]
+    assert incident[2] in ["HIGH", "CRITICAL"], "Suspicious process tree should be HIGH or CRITICAL"
+
+
+def test_suspicious_process_tree_critical_with_network(fusion, device_id):
+    """
+    POSITIVE: Suspicious process with network activity should be CRITICAL.
+
+    Pattern:
+        - Parent: sshd
+        - Child: /tmp/backdoor
+        - Network connection within 60s
+
+    Expected:
+        - Incident: suspicious_process_tree
+        - Severity: CRITICAL (network activity detected)
+    """
+    events = [
+        make_process_event("proc_suspicious", device_id, executable_path="/tmp/backdoor", offset_seconds=0),
+        make_flow_event("network_conn", device_id, dst_ip="198.51.100.99", offset_seconds=30),
+    ]
+
+    # Add parent process and network direction
+    events[0].process_event['parent_executable_name'] = 'sshd'
+    events[1].flow_event['direction'] = 'OUTBOUND'
+
+    for ev in events:
+        fusion.add_event(ev)
+
+    fusion.evaluate_all_devices()
+
+    rows = fetch_incidents(fusion.db_path)
+    rules = {r[1] for r in rows}
+
+    assert "suspicious_process_tree" in rules, "Expected suspicious_process_tree incident"
+
+    # Verify CRITICAL severity due to network activity
+    incident = [r for r in rows if r[1] == "suspicious_process_tree"][0]
+    assert incident[2] == "CRITICAL", "Suspicious process with network should be CRITICAL"
+
+
+def test_suspicious_process_tree_not_fired_for_safe_paths(fusion, device_id):
+    """
+    NEGATIVE: Process in safe location (e.g., /usr/bin) should NOT fire rule.
+
+    Pattern:
+        - Parent: Terminal
+        - Child: /usr/bin/python (safe location)
+
+    Expected:
+        - No suspicious_process_tree incident
+    """
+    events = [
+        make_process_event("proc_safe", device_id, executable_path="/usr/bin/python3", offset_seconds=0),
+    ]
+
+    events[0].process_event['parent_executable_name'] = 'Terminal'
+
+    for ev in events:
+        fusion.add_event(ev)
+
+    fusion.evaluate_all_devices()
+
+    rows = fetch_incidents(fusion.db_path)
+    rules = {r[1] for r in rows}
+
+    assert "suspicious_process_tree" not in rules, "Rule should not fire for processes in /usr/bin"
+
+
+def test_suspicious_process_tree_not_fired_without_suspicious_parent(fusion, device_id):
+    """
+    NEGATIVE: Process in /tmp but spawned by non-interactive parent should NOT fire.
+
+    Pattern:
+        - Parent: launchd (system process, not interactive)
+        - Child: /tmp/file
+
+    Expected:
+        - No suspicious_process_tree incident
+    """
+    events = [
+        make_process_event("proc_tmp", device_id, executable_path="/tmp/test", offset_seconds=0),
+    ]
+
+    events[0].process_event['parent_executable_name'] = 'launchd'  # Not suspicious parent
+
+    for ev in events:
+        fusion.add_event(ev)
+
+    fusion.evaluate_all_devices()
+
+    rows = fetch_incidents(fusion.db_path)
+    rules = {r[1] for r in rows}
+
+    assert "suspicious_process_tree" not in rules, "Rule should not fire without suspicious parent"

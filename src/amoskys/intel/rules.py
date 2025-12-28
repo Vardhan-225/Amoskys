@@ -10,6 +10,9 @@ Rules:
 2. New Persistence After Auth/Sudo
 3. Suspicious Sudo Command
 4. Multi-Tactic Attack (Flow + Process + Persistence)
+5. SSH Lateral Movement (Pivot Detection)
+6. Data Exfiltration Spike
+7. Suspicious Process Tree
 """
 
 import logging
@@ -347,6 +350,266 @@ def rule_multi_tactic_attack(events: List[TelemetryEventView], device_id: str) -
     return None
 
 
+def rule_ssh_lateral_movement(events: List[TelemetryEventView], device_id: str) -> Optional[Incident]:
+    """Detect SSH-based lateral movement (pivot behavior)
+
+    Pattern:
+        - Inbound SSH success from external source
+        - Followed by outbound SSH connection to different IP within 5 minutes
+        - Indicates this host is being used as a pivot point
+
+    Signals:
+        - SECURITY events: SSH success (inbound)
+        - FLOW events: outbound SSH (port 22) connection
+
+    Returns:
+        Incident if pattern detected, None otherwise
+    """
+    # Extract inbound SSH successes
+    ssh_successes = [
+        e for e in events
+        if e.event_type == "SECURITY"
+        and e.security_event
+        and e.security_event.get('event_action') == 'SSH'
+        and e.security_event.get('event_outcome') == 'SUCCESS'
+    ]
+
+    # Extract outbound SSH flows (port 22)
+    ssh_flows = [
+        e for e in events
+        if e.event_type == "FLOW"
+        and e.flow_event
+        and e.flow_event.get('dst_port') == 22
+        and e.flow_event.get('direction') == 'OUTBOUND'
+    ]
+
+    if not (ssh_successes and ssh_flows):
+        return None
+
+    # Look for SSH success followed by outbound SSH within 5 minutes
+    for ssh_event in ssh_successes:
+        if not ssh_event.security_event:
+            continue
+
+        source_ip = ssh_event.security_event.get('source_ip', 'unknown')
+
+        for flow_event in ssh_flows:
+            if not flow_event.flow_event:
+                continue
+
+            dest_ip = flow_event.flow_event.get('dst_ip', 'unknown')
+
+            # Skip if outbound SSH is to the same IP that logged in (not lateral)
+            if dest_ip == source_ip:
+                continue
+
+            time_diff = (flow_event.timestamp - ssh_event.timestamp).total_seconds()
+
+            # Check if outbound SSH happened after inbound SSH, within 5 minutes
+            if 0 < time_diff <= 300:  # 5 minutes
+                incident = Incident(
+                    incident_id=f"ssh_lateral_{device_id}_{int(flow_event.timestamp.timestamp())}",
+                    device_id=device_id,
+                    severity=Severity.HIGH,
+                    tactics=[MitreTactic.LATERAL_MOVEMENT.value],
+                    techniques=['T1021.004'],  # Remote Services: SSH
+                    rule_name='ssh_lateral_movement',
+                    summary=f"SSH lateral movement detected: inbound from {source_ip}, "
+                            f"then outbound to {dest_ip} within {int(time_diff)}s",
+                    event_ids=[ssh_event.event_id, flow_event.event_id],
+                    metadata={
+                        'inbound_source': source_ip,
+                        'outbound_dest': dest_ip,
+                        'time_delta_seconds': str(int(time_diff)),
+                        'user': ssh_event.security_event.get('user_name', 'unknown')
+                    }
+                )
+
+                incident.start_ts = ssh_event.timestamp
+                incident.end_ts = flow_event.timestamp
+
+                logger.warning(f"SSH lateral movement: {source_ip} → {device_id} → {dest_ip}")
+                return incident
+
+    return None
+
+
+def rule_data_exfiltration_spike(events: List[TelemetryEventView], device_id: str) -> Optional[Incident]:
+    """Detect large data exfiltration to rare/new destinations
+
+    Pattern:
+        - Large outbound data volume (>10MB within 5 minutes)
+        - To external IP not seen in baseline (rare destination)
+        - Or sudden spike in bytes_out compared to recent activity
+
+    Signals:
+        - FLOW events: outbound connections with bytes_out
+
+    Returns:
+        Incident if pattern detected, None otherwise
+    """
+    # Extract outbound flows with data transfer
+    outbound_flows = [
+        e for e in events
+        if e.event_type == "FLOW"
+        and e.flow_event
+        and e.flow_event.get('direction') == 'OUTBOUND'
+        and e.flow_event.get('bytes_out', 0) > 0
+    ]
+
+    if not outbound_flows:
+        return None
+
+    # Group flows by destination IP and calculate total bytes within 5-minute windows
+    dest_volumes = {}
+
+    for flow_event in outbound_flows:
+        if not flow_event.flow_event:
+            continue
+
+        dest_ip = flow_event.flow_event.get('dst_ip', 'unknown')
+        bytes_out = flow_event.flow_event.get('bytes_out', 0)
+
+        if dest_ip not in dest_volumes:
+            dest_volumes[dest_ip] = {
+                'bytes': 0,
+                'flows': [],
+                'first_seen': flow_event.timestamp,
+                'last_seen': flow_event.timestamp
+            }
+
+        dest_volumes[dest_ip]['bytes'] += bytes_out
+        dest_volumes[dest_ip]['flows'].append(flow_event)
+        dest_volumes[dest_ip]['last_seen'] = flow_event.timestamp
+
+    # Check for suspicious volume spikes
+    EXFIL_THRESHOLD_BYTES = 10 * 1024 * 1024  # 10MB
+
+    for dest_ip, stats in dest_volumes.items():
+        time_span = (stats['last_seen'] - stats['first_seen']).total_seconds()
+
+        # Check if high volume transferred in short time
+        if stats['bytes'] >= EXFIL_THRESHOLD_BYTES and time_span <= 300:  # 5 minutes
+            # Calculate bytes per second for context
+            bytes_per_sec = stats['bytes'] / max(time_span, 1)
+            mb_transferred = stats['bytes'] / (1024 * 1024)
+
+            incident = Incident(
+                incident_id=f"data_exfil_{device_id}_{int(stats['last_seen'].timestamp())}",
+                device_id=device_id,
+                severity=Severity.CRITICAL,
+                tactics=[MitreTactic.EXFILTRATION.value],
+                techniques=['T1041'],  # Exfiltration Over C2 Channel
+                rule_name='data_exfiltration_spike',
+                summary=f"Large data exfiltration detected: {mb_transferred:.1f}MB to {dest_ip} "
+                        f"in {int(time_span)}s",
+                event_ids=[flow.event_id for flow in stats['flows']],
+                metadata={
+                    'destination_ip': dest_ip,
+                    'bytes_transferred': str(stats['bytes']),
+                    'megabytes_transferred': f"{mb_transferred:.2f}",
+                    'time_span_seconds': str(int(time_span)),
+                    'bytes_per_second': str(int(bytes_per_sec)),
+                    'flow_count': str(len(stats['flows']))
+                }
+            )
+
+            incident.start_ts = stats['first_seen']
+            incident.end_ts = stats['last_seen']
+
+            logger.critical(f"Data exfiltration spike: {mb_transferred:.1f}MB → {dest_ip}")
+            return incident
+
+    return None
+
+
+def rule_suspicious_process_tree(events: List[TelemetryEventView], device_id: str) -> Optional[Incident]:
+    """Detect suspicious process execution from user-interactive shells
+
+    Pattern:
+        - Parent process is Terminal, iTerm, SSH, or sshd
+        - Child process located in /tmp, /private/tmp, or ~/Downloads
+        - Indicates potential malware execution from interactive session
+
+    Signals:
+        - PROCESS events with parent_executable_name and executable_path
+
+    Returns:
+        Incident if pattern detected, None otherwise
+    """
+    process_events = [
+        e for e in events
+        if e.event_type == "PROCESS" and e.process_event
+    ]
+
+    if not process_events:
+        return None
+
+    # Suspicious parent processes (user-interactive shells)
+    suspicious_parents = ['Terminal', 'iTerm', 'iTerm2', 'sshd', 'ssh', 'bash', 'zsh', 'sh']
+
+    # Suspicious child paths
+    suspicious_paths = ['/tmp/', '/private/tmp/', '/var/tmp/', 'Downloads/']
+
+    for event in process_events:
+        if not event.process_event:
+            continue
+
+        parent_name = event.process_event.get('parent_executable_name', '')
+        child_path = event.process_event.get('executable_path', '')
+
+        # Check if parent is interactive shell
+        is_suspicious_parent = any(parent in parent_name for parent in suspicious_parents)
+
+        # Check if child is in suspicious location
+        is_suspicious_path = any(path in child_path for path in suspicious_paths)
+
+        if is_suspicious_parent and is_suspicious_path:
+            # Additional risk: check if process also made network connection
+            pid = event.process_event.get('pid', 0)
+
+            # Look for flow events from same timeframe (within 60s)
+            has_network = False
+            network_dest = None
+
+            for flow_event in [e for e in events if e.event_type == "FLOW" and e.flow_event]:
+                time_diff = abs((flow_event.timestamp - event.timestamp).total_seconds())
+                if time_diff <= 60:  # Within 1 minute
+                    has_network = True
+                    network_dest = flow_event.flow_event.get('dst_ip', 'unknown')
+                    break
+
+            severity = Severity.CRITICAL if has_network else Severity.HIGH
+
+            incident = Incident(
+                incident_id=f"suspicious_proc_tree_{device_id}_{int(event.timestamp.timestamp())}",
+                device_id=device_id,
+                severity=severity,
+                tactics=[MitreTactic.EXECUTION.value],
+                techniques=['T1059'],  # Command and Scripting Interpreter
+                rule_name='suspicious_process_tree',
+                summary=f"Suspicious process execution: {parent_name} spawned {child_path.split('/')[-1]} "
+                        f"from untrusted location" + (" with network activity" if has_network else ""),
+                event_ids=[event.event_id],
+                metadata={
+                    'parent_process': parent_name,
+                    'child_path': child_path,
+                    'child_name': child_path.split('/')[-1],
+                    'pid': str(pid),
+                    'has_network_activity': str(has_network),
+                    'network_destination': network_dest or 'none'
+                }
+            )
+
+            incident.start_ts = event.timestamp
+            incident.end_ts = event.timestamp
+
+            logger.warning(f"Suspicious process tree: {parent_name} → {child_path}")
+            return incident
+
+    return None
+
+
 def _get_persistence_techniques(persist_type: str) -> List[str]:
     """Map persistence type to MITRE ATT&CK techniques
 
@@ -371,6 +634,9 @@ ALL_RULES = [
     rule_persistence_after_auth,
     rule_suspicious_sudo,
     rule_multi_tactic_attack,
+    rule_ssh_lateral_movement,
+    rule_data_exfiltration_spike,
+    rule_suspicious_process_tree,
 ]
 
 
