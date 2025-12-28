@@ -226,7 +226,7 @@ class PersistenceGuardAgent:
         return metadata
 
     def _scan_crontabs(self) -> Dict[str, Dict]:
-        """Scan cron jobs for all users
+        """Scan cron jobs for current user
 
         Returns:
             Dictionary mapping "cron:user" to metadata
@@ -457,7 +457,8 @@ class PersistenceGuardAgent:
             # Build attributes
             attributes = {
                 'persistence_type': change['type'],
-                'file_path': change['path']
+                'file_path': change['path'],
+                'risk_score': str(risk_score)  # Include for Intelligence layer
             }
 
             if change['type'] in ['LAUNCH_DAEMON', 'LAUNCH_AGENT']:

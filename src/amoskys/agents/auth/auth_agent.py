@@ -239,7 +239,7 @@ class AuthGuardAgent:
 
         # Convert auth events to SecurityEvent protobuf
         telemetry_events = []
-        for auth_event in auth_events:
+        for idx, auth_event in enumerate(auth_events):
             # Map auth_type to MITRE techniques
             mitre_techniques = []
             if auth_event['auth_type'] == 'SSH':
@@ -275,7 +275,7 @@ class AuthGuardAgent:
                 attributes['auth_method'] = auth_event['method']
 
             telemetry_event = telemetry_pb2.TelemetryEvent(
-                event_id=f"auth_{device_id}_{timestamp_ns}",
+                event_id=f"auth_{device_id}_{timestamp_ns}_{idx}",
                 event_type="SECURITY",
                 severity="WARN" if risk_score > 0.5 else "INFO",
                 event_timestamp_ns=timestamp_ns,
