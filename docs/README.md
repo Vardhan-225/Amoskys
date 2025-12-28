@@ -24,6 +24,13 @@ Deployment, monitoring, and operations guides.
 - [Deployment Guide](operations/deployment.md) - Production deployment instructions
 - [Monitoring](operations/monitoring.md) - System health and metrics
 - [Troubleshooting](operations/troubleshooting.md) - Common issues and solutions
+- [E2E Validation Guide](operations/E2E_VALIDATION_GUIDE.md) - End-to-end validation procedures
+- [Validation Quick Reference](operations/VALIDATION_QUICK_REF.md) - Quick validation commands
+
+### [Sessions](sessions/)
+Development session reports and validation documentation.
+
+- [2025-12-28: Detection Pack v1 Validation](sessions/2025-12-28-detection-pack-v1/) - Intelligence layer validation
 
 ### [API Reference](api/)
 Auto-generated API documentation from source code docstrings.

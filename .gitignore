@@ -302,6 +302,11 @@ config/*.local.*
 *.lock
 activate_env.sh
 
+# Agent runtime state files
+data/persistence_snapshot.json
+data/queue/*.db
+data/intel/*.db
+
 # Security scan reports (generated artifacts)
 bandit-report.json
 safety-report.json
