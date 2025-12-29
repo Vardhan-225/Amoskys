@@ -18,6 +18,11 @@ VENV_DIR := .venv
 VENV_PYTHON := $(VENV_DIR)/bin/python
 VENV_PIP := $(VENV_DIR)/bin/pip
 
+# Proto compilation Python (allow override for CI)
+# Local: uses .venv/bin/python
+# CI: override with PROTO_PYTHON=python
+PROTO_PYTHON ?= $(VENV_PYTHON)
+
 # Entry points
 EVENTBUS_ENTRY := ./amoskys-eventbus
 AGENT_ENTRY := ./amoskys-agent
@@ -214,7 +219,7 @@ proto: ## Generate protocol buffer stubs
 	@echo "🔧 Compiling Protocol Buffers (messaging_schema + universal_telemetry)..."
 	@mkdir -p $(STUBS_DIR)
 	@touch $(STUBS_DIR)/__init__.py
-	$(VENV_PYTHON) -m grpc_tools.protoc \
+	$(PROTO_PYTHON) -m grpc_tools.protoc \
 		-I $(PROTO_DIR) \
 		--python_out=$(STUBS_DIR) \
 		--grpc_python_out=$(STUBS_DIR) \
