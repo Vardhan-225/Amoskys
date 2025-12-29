@@ -457,7 +457,6 @@ def start_health():
                 self.end_headers()
                 self.wfile.write(body)
             elif self.path == "/ready":
-                global READY
                 READINESS_HITS.inc()
                 body = b"ready" if READY else b"not-ready"
                 self.send_response(200 if READY else 503)
