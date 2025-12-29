@@ -19,7 +19,7 @@ Usage:
     fim = FIMAgent()
 """
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 # Endpoint Agents (class-based)
 from amoskys.agents.auth.auth_agent import AuthGuardAgent
@@ -76,7 +76,7 @@ __all__ = [
 ]
 
 # Agent type metadata for dynamic discovery
-AGENT_REGISTRY = {
+AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "auth": {
         "class": AuthGuardAgent,
         "name": "AuthGuard Agent",
@@ -135,7 +135,7 @@ AGENT_REGISTRY = {
 }
 
 
-def get_available_agents(platform: Optional[str] = None) -> Dict:
+def get_available_agents(platform: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     """Get agents available for a given platform
 
     Args:
