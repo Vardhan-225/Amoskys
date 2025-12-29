@@ -28,9 +28,9 @@ jobs:
 
     - name: Generate protocol buffers
       run: make proto PROTO_PYTHON=python
-    
+
     - name: Run tests
-      run: make test
+      run: make test PYTHON=python
     
     - name: Run linting
       run: |

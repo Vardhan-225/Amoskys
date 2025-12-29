@@ -23,6 +23,12 @@ VENV_PIP := $(VENV_DIR)/bin/pip
 # CI: override with PROTO_PYTHON=python
 PROTO_PYTHON ?= $(VENV_PYTHON)
 
+# Python interpreter for running tests, linting, and applications
+# Local: uses .venv/bin/python (default)
+# CI: override with PYTHON=python
+# Docker: override with PYTHON=python3
+PYTHON ?= $(VENV_PYTHON)
+
 # Entry points
 EVENTBUS_ENTRY := ./amoskys-eventbus
 AGENT_ENTRY := ./amoskys-agent
@@ -171,10 +177,10 @@ assess-save: ## Save detailed assessment report
 
 health-check: ## Quick health check
 	@echo "🏥 Running system health check..."
-	@$(VENV_PYTHON) -c "import sys; print(f'Python: {sys.version}')"
-	@$(VENV_PYTHON) -c "import flask; print(f'Flask: {flask.__version__}')"
-	@$(VENV_PYTHON) -c "import grpc; print(f'gRPC: Available')"
-	@$(VENV_PYTHON) -c "import yaml; print(f'YAML: Available')"
+	@$(PYTHON) -c "import sys; print(f'Python: {sys.version}')"
+	@$(PYTHON) -c "import flask; print(f'Flask: {flask.__version__}')"
+	@$(PYTHON) -c "import grpc; print(f'gRPC: Available')"
+	@$(PYTHON) -c "import yaml; print(f'YAML: Available')"
 	@echo "✅ Core dependencies healthy"
 
 requirements-consolidate: ## Consolidate requirements files
@@ -249,7 +255,7 @@ run-agent: ## Start FlowAgent (gRPC client)
 		echo "❌ Virtual environment not found. Run 'make setup' first."; \
 		exit 1; \
 	fi
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) $(AGENT_ENTRY)
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) $(AGENT_ENTRY)
 
 run-snmp-agent: ## Start SNMP Agent (real telemetry collector)
 	@echo "🧠⚡ Starting AMOSKYS SNMP Agent..."
@@ -259,7 +265,7 @@ run-snmp-agent: ## Start SNMP Agent (real telemetry collector)
 		echo "❌ Virtual environment not found. Run 'make setup' first."; \
 		exit 1; \
 	fi
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) ./amoskys-snmp-agent
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) ./amoskys-snmp-agent
 
 run-web: ## Start Web Platform (Flask dev server)
 	@echo "Starting AMOSKYS Web Platform..."
@@ -270,7 +276,7 @@ run-web: ## Start Web Platform (Flask dev server)
 		echo "❌ Virtual environment not found. Run 'make setup' first."; \
 		exit 1; \
 	fi
-	@cd $(WEB_DIR) && PYTHONPATH=$$PWD/../src:$$PYTHONPATH $(VENV_PYTHON) -m flask --app app run --debug --host=0.0.0.0 --port=5000
+	@cd $(WEB_DIR) && PYTHONPATH=$$PWD/../src:$$PYTHONPATH $(PYTHON) -m flask --app app run --debug --host=0.0.0.0 --port=5000
 
 run-web-prod: ## Start Web Platform in production mode (Gunicorn)
 	@echo "Starting AMOSKYS Web Platform (Production Mode)..."
@@ -282,7 +288,7 @@ run-web-prod: ## Start Web Platform in production mode (Gunicorn)
 		exit 1; \
 	fi
 	@cd $(WEB_DIR) && PYTHONPATH=$$PWD/../src:$$PYTHONPATH \
-		$(VENV_PYTHON) -m gunicorn \
+		$(PYTHON) -m gunicorn \
 		--worker-class eventlet \
 		--workers 4 \
 		--bind 0.0.0.0:8000 \
@@ -319,16 +325,16 @@ tail-metrics: ## Show specific metrics
 # Testing
 test: ## Run all tests
 	@echo "Running tests..."
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m pytest tests/ -v
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) -m pytest tests/ -v
 
 test-unit: ## Run unit tests only
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m pytest tests/unit/ -v
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) -m pytest tests/unit/ -v
 
 test-integration: ## Run integration tests only
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m pytest tests/integration/ -v
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) -m pytest tests/integration/ -v
 
 test-component: ## Run component tests only
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m pytest tests/component/ -v
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) -m pytest tests/component/ -v
 
 check: ## Run full test suite with dependencies
 	@echo "Running full test suite..."
@@ -337,17 +343,17 @@ check: ## Run full test suite with dependencies
 	@i=0; until curl -sf http://localhost:9090/-/ready >/dev/null 2>&1; do \
 		i=$$((i+1)); [ $$i -ge 60 ] && echo 'Prometheus not ready' && exit 1; sleep 1; \
 	done
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m pytest tests/ -v
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) -m pytest tests/ -v
 	@curl -sf http://localhost:8081/healthz >/dev/null || echo "Warning: Agent health check failed"
 	@echo "✅ Full test suite completed"
 
 # Code Quality
 fmt: ## Format code with black
-	$(VENV_PYTHON) -m black $(SRC_DIR)/
+	$(PYTHON) -m black $(SRC_DIR)/
 
 lint: venv ## Run linting checks
-	$(VENV_PYTHON) -m flake8 $(SRC_DIR) tests/ --max-line-length=88 --extend-ignore=E203,W503
-	$(VENV_PYTHON) -m mypy $(SRC_DIR)/amoskys/ --ignore-missing-imports
+	$(PYTHON) -m flake8 $(SRC_DIR) tests/ --max-line-length=88 --extend-ignore=E203,W503
+	$(PYTHON) -m mypy $(SRC_DIR)/amoskys/ --ignore-missing-imports
 	@echo "✅ Linting passed"
 
 # Security and Certificates
@@ -369,15 +375,15 @@ ed25519: ## Generate Ed25519 signing keys
 # Configuration
 validate-config: ## Validate configuration
 	@echo "Validating configuration..."
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m amoskys.config --validate
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) -m amoskys.config --validate
 	@echo "✅ Configuration is valid"
 
 dump-config: ## Show current configuration
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m amoskys.config --dump
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) -m amoskys.config --dump
 
 # Tools and Utilities
 loadgen: ## Run load generator
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) tools/loadgen.py --rate 300 --secs 60
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) tools/loadgen.py --rate 300 --secs 60
 
 chaos: ## Run chaos testing
 	@bash tools/chaos.sh 8
@@ -413,21 +419,21 @@ setup-dev: setup ## Setup development environment with additional tools
 	@echo "✅ Development tools installed"
 
 format: venv ## Format code with black and isort
-	$(VENV_PYTHON) -m black $(SRC_DIR) tests/
-	$(VENV_PYTHON) -m isort $(SRC_DIR) tests/
+	$(PYTHON) -m black $(SRC_DIR) tests/
+	$(PYTHON) -m isort $(SRC_DIR) tests/
 	@echo "✅ Code formatted"
 
 test-coverage: venv proto ## Run tests with coverage report
-	$(VENV_PYTHON) -m pytest tests/ --cov=$(SRC_DIR)/amoskys --cov-report=html --cov-report=term
+	$(PYTHON) -m pytest tests/ --cov=$(SRC_DIR)/amoskys --cov-report=html --cov-report=term
 	@echo "✅ Coverage report generated in htmlcov/"
 
 security-scan: venv ## Run security scans
-	$(VENV_PYTHON) -m safety check
-	$(VENV_PYTHON) -m bandit -r $(SRC_DIR)/ -f json -o bandit-report.json
+	$(PYTHON) -m safety check
+	$(PYTHON) -m bandit -r $(SRC_DIR)/ -f json -o bandit-report.json
 	@echo "✅ Security scan completed"
 
 benchmark: venv proto ## Run performance benchmarks
-	$(VENV_PYTHON) tools/loadgen.py --benchmark
+	$(PYTHON) tools/loadgen.py --benchmark
 	@echo "✅ Benchmarks completed"
 
 ci-check: venv proto format lint test security-scan ## Full CI check locally
@@ -448,8 +454,8 @@ dev-setup: ## Setup development environment with proper Python paths
 
 dev-verify: ## Verify development environment setup
 	@echo "🔍 Verifying development environment..."
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -c "import amoskys.proto.messaging_schema_pb2; print('✅ Imports working')"
-	@PYTHONPATH=$(SRC_DIR) $(VENV_PYTHON) -m pytest tests/test_proto_imports.py -v
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) -c "import amoskys.proto.messaging_schema_pb2; print('✅ Imports working')"
+	@PYTHONPATH=$(SRC_DIR) $(PYTHON) -m pytest tests/test_proto_imports.py -v
 	@echo "✅ Environment verification complete!"
 
 dev-clean: ## Clean development artifacts
@@ -478,9 +484,9 @@ check-env: ## Check if virtual environment is activated
 
 validate: venv ## Validate environment and dependencies
 	@echo "🔍 Validating AMOSKYS installation..."
-	@$(VENV_PYTHON) -c 'import flask; print("✅ Flask:", flask.__version__)' || echo "❌ Flask missing"
-	@$(VENV_PYTHON) -c 'import psutil; print("✅ psutil:", psutil.__version__)' || echo "❌ psutil missing"
-	@$(VENV_PYTHON) -c 'import flask_socketio; print("✅ Flask-SocketIO: OK")' || echo "⚠️  Flask-SocketIO missing"
+	@$(PYTHON) -c 'import flask; print("✅ Flask:", flask.__version__)' || echo "❌ Flask missing"
+	@$(PYTHON) -c 'import psutil; print("✅ psutil:", psutil.__version__)' || echo "❌ psutil missing"
+	@$(PYTHON) -c 'import flask_socketio; print("✅ Flask-SocketIO: OK")' || echo "⚠️  Flask-SocketIO missing"
 	@test -f web/wsgi.py && echo "✅ web/wsgi.py" || echo "❌ web/wsgi.py missing"
 	@test -d web/app && echo "✅ web/app/" || echo "❌ web/app/ missing"
 	@test -d logs && echo "✅ logs/" || mkdir -p logs && echo "⚠️  logs/ created"
