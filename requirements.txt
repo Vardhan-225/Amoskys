@@ -2,7 +2,6 @@ absl-py==2.3.1
 aiohappyeyeballs==2.6.1
 aiohttp==3.11.11
 aiosignal==1.4.0
--e git+https://github.com/Vardhan-225/Amoskys@641a65f5c56f626ad9588f51c7ad554cf82ccdbc#egg=amoskys
 annotated-types==0.7.0
 anyio==4.11.0
 appnope==0.1.4
