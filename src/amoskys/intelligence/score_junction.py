@@ -4,7 +4,7 @@ Neural synapse for correlating multi-agent telemetry and computing unified threa
 
 Architecture:
     Multiple Agents → DeviceTelemetry → ScoreJunction → ThreatScore → Intelligence Layer
-    
+
 Agents feed in:
 - SNMPAgent: Device health, network stats
 - ProcAgent: Process behavior, resource usage

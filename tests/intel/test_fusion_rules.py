@@ -789,7 +789,8 @@ def test_empty_device_state_does_not_crash(fusion, device_id):
 
 def test_ssh_lateral_movement_fires(fusion, device_id):
     """
-    POSITIVE: Inbound SSH followed by outbound SSH to different IP should create incident.
+    POSITIVE: Inbound SSH followed by outbound SSH to different IP should
+    create incident.
 
     Pattern:
         - Inbound SSH success from 203.0.113.42
@@ -910,7 +911,8 @@ def test_ssh_lateral_movement_not_fired_to_same_ip(fusion, device_id):
 
 def test_data_exfiltration_spike_fires(fusion, device_id):
     """
-    POSITIVE: Large data transfer (>10MB) to external IP in short time should create incident.
+    POSITIVE: Large data transfer (>10MB) to external IP in short time
+    should create incident.
 
     Pattern:
         - 12MB outbound to 198.51.100.99 within 5 minutes

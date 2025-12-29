@@ -4,12 +4,9 @@ Tests all components and integration scenarios.
 """
 
 import unittest
-import asyncio
 import time
 import json
-from unittest.mock import Mock, patch, MagicMock
-from dataclasses import dataclass
-from typing import Dict, List, Any
+from unittest.mock import Mock, patch
 import sys
 import os
 
@@ -22,7 +19,6 @@ try:
         IntelligenceFusionEngine,
         TelemetryEvent,
         DeviceType,
-        ThreatLevel,
     )
     from src.amoskys.agents.discovery.device_scanner import DeviceDiscoveryEngine
     from src.amoskys.agents.protocols.universal_collector import (
@@ -299,12 +295,6 @@ class TestUniversalTelemetryCollector(unittest.TestCase):
         mock_subprocess.return_value.returncode = 0
 
         # Test SNMP collection
-        snmp_config = {
-            "host": "192.168.1.1",
-            "community": "public",
-            "oids": ["1.3.6.1.2.1.1.1.0"],
-        }
-
         # This would normally test actual SNMP collection
         # For now, just verify the collector can be configured
         self.assertIsNotNone(self.collector)
