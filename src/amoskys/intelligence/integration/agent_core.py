@@ -1,19 +1,9 @@
 """
-Microproce# Import our new components
-try:
-    from ..pcap.ingestion import PacketProcessor, PacketMetadata
-    from ..features.network_features import NetworkFeatureExtractor, NetworkFeatures
-    from ..fusion.threat_correlator import IntelligenceFusionEngine, TelemetryEvent, DeviceType, ThreatDetection
-    from ...agents.discovery.device_scanner import DeviceDiscoveryEngine
-    from ...agents.protocols.universal_collector import UniversalTelemetryCollector
-    from ...edge.edge_optimizer import EdgeOptimizer
-except ImportError as e:
-    logging.warning(f"Import error: {e}. Some components may not be available.")
-    # Define minimal stubs to prevent collection errors
-    TelemetryEvent = None
-    DeviceType = None Integration Layer
+Microprocessor Integration Layer
 Connects all intelligence components with the existing EventBus infrastructure.
 """
+
+from __future__ import annotations
 
 import asyncio
 import logging
