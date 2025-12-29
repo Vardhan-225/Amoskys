@@ -23,7 +23,7 @@ try:
     )
     from src.amoskys.agents.discovery.device_scanner import DeviceDiscoveryEngine
     from src.amoskys.agents.protocols.universal_collector import UniversalTelemetryCollector
-    from src.amoskys.edge.edge_optimizer import EdgeOptimizer
+    from amoskys.edge import EdgeOptimizer  # Use package import for CI compatibility
 except ImportError as e:
     print(f"Import warning: {e}")
 

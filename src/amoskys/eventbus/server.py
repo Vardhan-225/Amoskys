@@ -1356,12 +1356,15 @@ def serve():
             with open("certs/server.crt", "rb") as f: crt = f.read()
             with open("certs/ca.crt", "rb") as f: ca = f.read()
 
+            # Support optional client auth for CI/test environments
+            require_client_auth = os.getenv("EVENTBUS_REQUIRE_CLIENT_AUTH", "false").lower() == "true"
+
             creds = grpc.ssl_server_credentials(
                 [(key, crt)],
                 root_certificates=ca,
-                require_client_auth=True,
+                require_client_auth=require_client_auth,
             )
-            logger.info("Loaded TLS certificates successfully")
+            logger.info("Loaded TLS certificates successfully (mTLS: %s)", require_client_auth)
         except Exception as e:
             logger.exception("Failed to load TLS certificates: %s", e)
             raise
