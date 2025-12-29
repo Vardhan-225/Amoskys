@@ -8,7 +8,6 @@ import logging
 import psutil
 import json
 import gzip
-import lz4.frame
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
@@ -17,6 +16,13 @@ from collections import deque
 from pathlib import Path
 import queue
 import time
+
+# Optional lz4 compression support
+try:
+    import lz4.frame
+    HAS_LZ4 = True
+except ImportError:
+    HAS_LZ4 = False
 
 logger = logging.getLogger(__name__)
 
@@ -94,15 +100,15 @@ class CompressionEngine:
     def _select_optimal_algorithm(self, data: bytes) -> str:
         """Select optimal compression algorithm based on data characteristics"""
         data_size = len(data)
-        
+
         # For small data, compression overhead might not be worth it
         if data_size < 100:
             return 'none'
-        
-        # For medium data, use fast compression
+
+        # For medium data, use fast compression (lz4 if available, otherwise gzip)
         if data_size < 10000:
-            return 'lz4'
-            
+            return 'lz4' if HAS_LZ4 else 'gzip'
+
         # For large data, use better compression ratio
         return 'gzip'
         
@@ -113,9 +119,15 @@ class CompressionEngine:
         return gzip.decompress(data)
         
     def _lz4_compress(self, data: bytes) -> bytes:
+        if not HAS_LZ4:
+            # Fall back to gzip if lz4 is not available
+            return self._gzip_compress(data)
         return lz4.frame.compress(data)
-        
+
     def _lz4_decompress(self, data: bytes) -> bytes:
+        if not HAS_LZ4:
+            # Fall back to gzip if lz4 is not available
+            return self._gzip_decompress(data)
         return lz4.frame.decompress(data)
         
     def _no_compression(self, data: bytes) -> bytes:
