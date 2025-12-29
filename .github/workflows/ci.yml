@@ -34,7 +34,7 @@ jobs:
     
     - name: Run linting
       run: |
-        pip install flake8 black
+        pip install flake8
         black --check src/ tests/
         flake8 src/ tests/ --max-line-length=88 --extend-ignore=E203,W503
 
