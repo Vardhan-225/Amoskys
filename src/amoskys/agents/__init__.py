@@ -21,34 +21,34 @@ Usage:
 
 from typing import Dict, Optional
 
-# Common base classes
-from amoskys.agents.common.hardened_base import (
-    HardenedAgentBase,
-    AgentOperationalMode,
-    EvasionTechnique,
-)
-
 # Endpoint Agents (class-based)
 from amoskys.agents.auth.auth_agent import AuthGuardAgent
-from amoskys.agents.proc.proc_agent import ProcAgent
-from amoskys.agents.persistence.persistence_agent import PersistenceGuardAgent
-from amoskys.agents.file_integrity.file_integrity_agent import FIMAgent
+
+# Common base classes
+from amoskys.agents.common.hardened_base import (
+    AgentOperationalMode,
+    EvasionTechnique,
+    HardenedAgentBase,
+)
+
+# Discovery Engine
+from amoskys.agents.discovery.device_scanner import DeviceDiscoveryEngine
 from amoskys.agents.dns.dns_agent import DNSAgent
+from amoskys.agents.file_integrity.file_integrity_agent import FIMAgent
 from amoskys.agents.kernel_audit.kernel_audit_agent import KernelAuditAgent
 
 # Peripheral Agents
 from amoskys.agents.peripheral.peripheral_agent import PeripheralAgent
-
-# Discovery Engine
-from amoskys.agents.discovery.device_scanner import DeviceDiscoveryEngine
+from amoskys.agents.persistence.persistence_agent import PersistenceGuardAgent
+from amoskys.agents.proc.proc_agent import ProcAgent
 
 # Protocol Collectors
 from amoskys.agents.protocols.universal_collector import (
-    UniversalTelemetryCollector,
-    MQTTCollector,
-    ModbusCollector,
     HL7FHIRCollector,
+    ModbusCollector,
+    MQTTCollector,
     SyslogCollector,
+    UniversalTelemetryCollector,
 )
 
 __all__ = [

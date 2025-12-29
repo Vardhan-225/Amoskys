@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amoskys.agents.file_integrity import FIMAgent, FileChange, FileState
+from amoskys.agents.file_integrity import FileChange, FileState, FIMAgent
 
 
 class TestFileState:

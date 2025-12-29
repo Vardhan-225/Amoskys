@@ -8,27 +8,27 @@ This package provides shared functionality used across all agent implementations
 - Advanced threat detection primitives
 """
 
-from amoskys.agents.common.local_queue import LocalQueue
 from amoskys.agents.common.hardened_base import (
-    HardenedAgentBase,
-    ThreatLevel,
     EvasionTechnique,
+    HardenedAgentBase,
     IntegrityState,
     ThreatContext,
+    ThreatLevel,
 )
+from amoskys.agents.common.local_queue import LocalQueue
 from amoskys.agents.common.threat_detection import (
-    ThreatAnalyzer,
-    ThreatIndicator,
-    ProcessContext,
-    NetworkContext,
     AttackPhase,
-    SuspiciousPathDetector,
-    LOLBinDetector,
-    ReverseShellDetector,
-    PersistenceDetector,
     C2Detector,
     CredentialAccessDetector,
     ExfiltrationDetector,
+    LOLBinDetector,
+    NetworkContext,
+    PersistenceDetector,
+    ProcessContext,
+    ReverseShellDetector,
+    SuspiciousPathDetector,
+    ThreatAnalyzer,
+    ThreatIndicator,
 )
 
 __all__ = [

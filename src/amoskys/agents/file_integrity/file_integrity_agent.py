@@ -34,9 +34,7 @@ from typing import Dict, List, Optional
 import grpc
 
 from amoskys.agents.common import LocalQueue
-from amoskys.agents.common.hardened_base import (
-    HardenedAgentBase,
-)
+from amoskys.agents.common.hardened_base import HardenedAgentBase
 from amoskys.config import get_config
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc

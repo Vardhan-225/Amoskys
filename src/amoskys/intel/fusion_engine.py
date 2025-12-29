@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from amoskys.intel.advanced_rules import evaluate_advanced_rules
 from amoskys.intel.models import (
     DeviceRiskSnapshot,
     Incident,
@@ -34,7 +35,6 @@ from amoskys.intel.models import (
     TelemetryEventView,
 )
 from amoskys.intel.rules import evaluate_rules
-from amoskys.intel.advanced_rules import evaluate_advanced_rules
 
 logger = logging.getLogger(__name__)
 

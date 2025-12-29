@@ -5,22 +5,23 @@ Tests the sophisticated attack detection rules that identify
 complex multi-stage attacks.
 """
 
-import pytest
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
-from amoskys.intel.models import TelemetryEventView, Severity
+import pytest
+
 from amoskys.intel.advanced_rules import (
+    evaluate_advanced_rules,
     rule_apt_initial_access_chain,
+    rule_credential_dumping_chain,
     rule_fileless_attack,
+    rule_internal_reconnaissance,
     rule_log_tampering,
     rule_security_tool_disable,
-    rule_credential_dumping_chain,
     rule_ssh_key_theft_and_pivot,
-    rule_internal_reconnaissance,
     rule_staged_exfiltration,
-    evaluate_advanced_rules,
 )
+from amoskys.intel.models import Severity, TelemetryEventView
 
 
 def make_event(
