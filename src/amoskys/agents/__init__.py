@@ -13,7 +13,7 @@ Agent Categories:
 
 Usage:
     from amoskys.agents import AuthGuardAgent, ProcAgent, FIMAgent
-    
+
     # Initialize agents
     proc = ProcAgent()
     fim = FIMAgent()

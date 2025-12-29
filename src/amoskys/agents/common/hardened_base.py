@@ -405,7 +405,9 @@ class HardenedAgentBase(ABC):
             ps_result = subprocess.run(
                 ["ps", "-A", "-o", "pid="], capture_output=True, text=True, timeout=10
             )
-            ps_pids = [l for l in ps_result.stdout.strip().split("\n") if l.strip()]
+            ps_pids = [
+                line for line in ps_result.stdout.strip().split("\n") if line.strip()
+            ]
 
             # Use sysctl to get max process count for comparison baseline
             sysctl_result = subprocess.run(
