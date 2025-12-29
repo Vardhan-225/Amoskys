@@ -232,8 +232,14 @@ proto: ## Generate protocol buffer stubs
 		--pyi_out=$(STUBS_DIR) \
 		$(PROTO_DIR)/messaging_schema.proto \
 		$(PROTO_DIR)/universal_telemetry.proto
-	@# Fix import paths in generated files
-	@sed -i '' 's/^import \([a-zA-Z0-9_]*_pb2\)/from . import \1/' $(STUBS_DIR)/*_pb2_grpc.py 2>/dev/null || true
+	@# Fix import paths in generated protobuf files (portable: macOS + Linux)
+	@$(PROTO_PYTHON) -c 'import pathlib, re; \
+		stubs = pathlib.Path("$(STUBS_DIR)"); \
+		pattern = re.compile(r"^import (.+_pb2) as (.+)$$", re.MULTILINE); \
+		[print(f"Patched {p.name} ({n} imports)") for p in stubs.glob("*_pb2*.py") \
+		for text in [p.read_text()] \
+		for new_text, n in [pattern.subn(r"from . import \1 as \2", text)] \
+		if n and p.write_text(new_text) is None]'
 	@echo "✅ Protocol buffers generated (both schemas compiled)"
 
 clean: ## Clean generated files and caches
