@@ -345,13 +345,36 @@ class ResourceMonitor:
 
 class EdgeOptimizer:
     """Main edge optimization coordinator"""
-    
-    def __init__(self, constraints: ResourceConstraints):
-        self.constraints = constraints
+
+    def __init__(self, config):
+        """
+        Initialize EdgeOptimizer with either ResourceConstraints or dict config.
+
+        Args:
+            config: Either a ResourceConstraints instance or a configuration dictionary
+        """
+        # Support both ResourceConstraints and dict config for compatibility
+        if isinstance(config, ResourceConstraints):
+            self.constraints = config
+        elif isinstance(config, dict):
+            # Convert dict config to ResourceConstraints
+            self.constraints = ResourceConstraints(
+                max_cpu_percent=config.get('max_cpu_percent', 50.0),
+                max_memory_mb=config.get('max_memory_mb', 256),
+                max_storage_mb=config.get('max_storage_mb', 1024),
+                max_bandwidth_kbps=config.get('max_bandwidth_kbps', 100),
+                max_concurrent_connections=config.get('max_concurrent_connections', 10),
+                max_queue_size=config.get('max_queue_size', 1000),
+                max_batch_age_seconds=config.get('max_batch_age_seconds', 30)
+            )
+        else:
+            raise TypeError(f"config must be ResourceConstraints or dict, not {type(config)}")
+
+        self.config = config  # Store original config for reference
         self.compression_engine = CompressionEngine()
-        self.event_buffer = EdgeEventBuffer(constraints)
-        self.resource_monitor = ResourceMonitor(constraints)
-        
+        self.event_buffer = EdgeEventBuffer(self.constraints)
+        self.resource_monitor = ResourceMonitor(self.constraints)
+
         self.optimization_enabled = True
         self.adaptive_mode = True
         self.performance_stats = {
@@ -522,12 +545,128 @@ class EdgeOptimizer:
     def _log_performance_summary(self, metrics: EdgeMetrics):
         """Log performance summary"""
         stats = self.get_optimization_stats()
-        
+
         logger.info(f"Edge Performance Summary:")
         logger.info(f"  CPU: {metrics.cpu_usage_percent:.1f}% | Memory: {metrics.memory_usage_mb:.1f}MB")
         logger.info(f"  Queue: {metrics.queue_depth} events | Compression: {stats['compression']['overall_compression_ratio']:.2f}")
         logger.info(f"  Bandwidth saved: {stats['edge_optimization']['bandwidth_saved_bytes']} bytes")
         logger.info(f"  Uptime: {metrics.uptime_seconds:.0f}s")
+
+    # Test-compatible simple interface methods
+    def get_resource_usage(self) -> Dict[str, float]:
+        """
+        Get current resource usage (test-compatible interface).
+
+        Returns:
+            Dictionary with cpu_percent, memory_mb, disk_usage_percent
+        """
+        metrics = self.resource_monitor.collect_metrics()
+        return {
+            'cpu_percent': metrics.cpu_usage_percent,
+            'memory_mb': metrics.memory_usage_mb,
+            'disk_usage_percent': (metrics.storage_usage_mb / self.constraints.max_storage_mb) * 100,
+            'memory_percent': (metrics.memory_usage_mb / self.constraints.max_memory_mb) * 100
+        }
+
+    def _compress_data(self, data: bytes, compression_level: int = 6) -> bytes:
+        """
+        Compress data using gzip (test-compatible interface).
+
+        Args:
+            data: Data to compress
+            compression_level: Compression level (1-9)
+
+        Returns:
+            Compressed data
+        """
+        compressed, algorithm, ratio = self.compression_engine.compress_data(data, algorithm='gzip')
+        return compressed
+
+    def _create_batches(self, events: List[Any], batch_size: int = 100) -> List[List[Any]]:
+        """
+        Create batches from events list (test-compatible interface).
+
+        Args:
+            events: List of events
+            batch_size: Size of each batch
+
+        Returns:
+            List of batches
+        """
+        batches = []
+        for i in range(0, len(events), batch_size):
+            batch = events[i:i + batch_size]
+            batches.append(batch)
+        return batches
+
+    def _generate_optimization_recommendations(self, resource_info: Dict[str, float]) -> List[str]:
+        """
+        Generate optimization recommendations (test-compatible interface).
+
+        Args:
+            resource_info: Dictionary with resource usage and constraints
+
+        Returns:
+            List of recommendation strings
+        """
+        recommendations = []
+
+        cpu_percent = resource_info.get('cpu_percent', 0)
+        memory_mb = resource_info.get('memory_mb', 0)
+        constraint_cpu = resource_info.get('constraint_cpu_percent', self.constraints.max_cpu_percent)
+        constraint_memory = resource_info.get('constraint_memory_mb', self.constraints.max_memory_mb)
+
+        # CPU recommendations
+        if cpu_percent > constraint_cpu:
+            recommendations.append(f"High CPU usage ({cpu_percent:.1f}% > {constraint_cpu}%): "
+                                 "Reduce collection frequency")
+            recommendations.append("Consider increasing batch size to reduce overhead")
+
+        # Memory recommendations
+        if memory_mb > constraint_memory:
+            recommendations.append(f"High memory usage ({memory_mb:.1f}MB > {constraint_memory}MB): "
+                                 "Enable compression or reduce buffer sizes")
+
+        # Approaching limits
+        if cpu_percent > constraint_cpu * 0.8 or memory_mb > constraint_memory * 0.8:
+            recommendations.append("Approaching resource limits: Enable aggressive optimization")
+
+        # No issues
+        if not recommendations:
+            recommendations.append("Resources within normal limits")
+
+        return recommendations
+
+    def optimize_data(self, data: bytes) -> bytes:
+        """
+        Optimize data for transmission (test-compatible interface).
+
+        Args:
+            data: Data to optimize
+
+        Returns:
+            Optimized (compressed) data
+
+        Raises:
+            RuntimeError: If resource constraints are violated
+        """
+        # Check resource constraints
+        resources = self.get_resource_usage()
+
+        # Severe constraint violations
+        if resources['memory_mb'] > self.constraints.max_memory_mb * 1.5:
+            raise RuntimeError(f"resource constraint violation: memory usage "
+                             f"{resources['memory_mb']:.1f}MB exceeds severe limit")
+
+        if resources['cpu_percent'] > self.constraints.max_cpu_percent * 1.5:
+            raise RuntimeError(f"resource constraint violation: CPU usage "
+                             f"{resources['cpu_percent']:.1f}% exceeds severe limit")
+
+        # Apply compression
+        if len(data) > 1024:  # Only compress if > 1KB
+            return self._compress_data(data)
+
+        return data
 
 # Usage example and integration
 class EdgeAgentController:

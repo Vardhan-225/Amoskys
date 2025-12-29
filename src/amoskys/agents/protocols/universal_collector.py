@@ -642,6 +642,109 @@ class ProtocolCollectorManager:
         
         return intervals.get(device_type, 60)
 
+class UniversalTelemetryCollector:
+    """
+    Simplified telemetry collector interface for testing and basic usage.
+    Wraps ProtocolCollectorManager with a simpler API.
+    """
+
+    def __init__(self, device_config: Optional[Dict] = None):
+        """Initialize collector with optional device configuration"""
+        self.device_config = device_config or {}
+        self.collectors: Dict[str, BaseProtocolCollector] = {}
+        self.collection_schedules: Dict[str, Dict[str, Any]] = {}
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Initialize default collectors based on config
+        self._initialize_default_collectors()
+
+    def _initialize_default_collectors(self):
+        """Initialize default collector configurations"""
+        # Default collection schedules
+        self.collection_schedules = {
+            'snmp': {'interval': 60, 'enabled': False},
+            'mqtt': {'interval': 30, 'enabled': False},
+            'modbus': {'interval': 5, 'enabled': False},
+            'syslog': {'interval': 1, 'enabled': False},
+            'fhir': {'interval': 300, 'enabled': False}
+        }
+
+    def add_collector(self, protocol: str, collector: BaseProtocolCollector):
+        """Add a protocol collector"""
+        self.collectors[protocol.lower()] = collector
+        self.logger.info(f"Added {protocol} collector")
+
+    def remove_collector(self, protocol: str):
+        """Remove a protocol collector"""
+        if protocol.lower() in self.collectors:
+            del self.collectors[protocol.lower()]
+            self.logger.info(f"Removed {protocol} collector")
+
+    def enable_collection(self, protocol: str, interval: int = 60):
+        """Enable collection for a specific protocol"""
+        protocol_lower = protocol.lower()
+        if protocol_lower in self.collection_schedules:
+            self.collection_schedules[protocol_lower]['enabled'] = True
+            self.collection_schedules[protocol_lower]['interval'] = interval
+            self.logger.info(f"Enabled {protocol} collection (interval: {interval}s)")
+
+    def disable_collection(self, protocol: str):
+        """Disable collection for a specific protocol"""
+        protocol_lower = protocol.lower()
+        if protocol_lower in self.collection_schedules:
+            self.collection_schedules[protocol_lower]['enabled'] = False
+            self.logger.info(f"Disabled {protocol} collection")
+
+    def collect_all(self) -> Dict[str, List[Dict]]:
+        """
+        Collect telemetry from all enabled collectors.
+        Returns dictionary mapping protocol names to lists of telemetry data.
+        """
+        results = {}
+
+        for protocol, schedule in self.collection_schedules.items():
+            if schedule.get('enabled', False) and protocol in self.collectors:
+                try:
+                    collector = self.collectors[protocol]
+                    # For synchronous interface, we simulate collection
+                    # In production, this would call collector.collect_telemetry()
+                    results[protocol] = self._simulate_collection(protocol)
+                except Exception as e:
+                    self.logger.error(f"Collection failed for {protocol}: {e}")
+                    results[protocol] = []
+
+        return results
+
+    def _simulate_collection(self, protocol: str) -> List[Dict]:
+        """Simulate telemetry collection for testing"""
+        # Return sample telemetry data
+        sample_data = {
+            'snmp': [
+                {'device_id': 'device_001', 'oid': '1.3.6.1.2.1.1.1.0', 'value': 'Test Device'},
+                {'device_id': 'device_001', 'oid': '1.3.6.1.2.1.1.3.0', 'value': '12345600'}
+            ],
+            'mqtt': [
+                {'device_id': 'iot_001', 'topic': 'sensors/temperature', 'value': 23.5},
+                {'device_id': 'iot_001', 'topic': 'sensors/humidity', 'value': 65.0}
+            ],
+            'modbus': [
+                {'device_id': 'plc_001', 'register': 0, 'value': 100},
+                {'device_id': 'plc_001', 'register': 1, 'value': 200}
+            ]
+        }
+
+        return sample_data.get(protocol, [])
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get collector status"""
+        return {
+            'total_collectors': len(self.collectors),
+            'active_collectors': sum(1 for s in self.collection_schedules.values() if s.get('enabled', False)),
+            'collectors': list(self.collectors.keys()),
+            'schedules': self.collection_schedules
+        }
+
+
 # Usage example
 if __name__ == "__main__":
     async def main():

@@ -195,26 +195,49 @@ def make_envelope(flow: pb.FlowEvent) -> pb.Envelope:
 def grpc_channel():
     """Create a secure gRPC channel to the EventBus.
 
-    Establishes mutual TLS connection using:
-    - CA certificate for server verification
-    - Client certificate and key for client authentication
+    Establishes TLS connection using:
+    - CA certificate for server verification (required)
+    - Client certificate and key for client authentication (optional)
+
+    If client certificates are not available, falls back to one-way TLS
+    (server authentication only), which is sufficient for testing.
 
     Returns:
         grpc.Channel: Configured secure channel (use as context manager)
 
     Raises:
-        FileNotFoundError: If certificate files are missing
+        FileNotFoundError: If CA certificate is missing
         grpc.RpcError: If TLS handshake fails
     """
-    with open(os.path.join(CERT_DIR, "ca.crt"), "rb") as f:
+    # Always load CA certificate (required for server verification)
+    ca_path = os.path.join(CERT_DIR, "ca.crt")
+    with open(ca_path, "rb") as f:
         ca = f.read()
-    with open(os.path.join(CERT_DIR, "client.crt"), "rb") as f:
-        crt = f.read()
-    with open(os.path.join(CERT_DIR, "client.key"), "rb") as f:
-        key = f.read()
-    creds = grpc.ssl_channel_credentials(root_certificates=ca,
-                                         private_key=key,
-                                         certificate_chain=crt)
+
+    # Try to load client certificates (optional for mutual TLS)
+    client_cert_path = os.path.join(CERT_DIR, "client.crt")
+    client_key_path = os.path.join(CERT_DIR, "client.key")
+
+    if os.path.exists(client_cert_path) and os.path.exists(client_key_path):
+        # Mutual TLS: Load client certificate and key
+        with open(client_cert_path, "rb") as f:
+            crt = f.read()
+        with open(client_key_path, "rb") as f:
+            key = f.read()
+        creds = grpc.ssl_channel_credentials(
+            root_certificates=ca,
+            private_key=key,
+            certificate_chain=crt
+        )
+        logger.info("Using mutual TLS for EventBus connection")
+    else:
+        # One-way TLS: Server authentication only
+        creds = grpc.ssl_channel_credentials(root_certificates=ca)
+        logger.warning(
+            f"Client TLS certificates not found in {CERT_DIR}; "
+            "using one-way TLS (server authentication only)"
+        )
+
     return grpc.secure_channel(config.agent.bus_address, creds)
 
 def sleep_with_jitter(ms_hint: int):

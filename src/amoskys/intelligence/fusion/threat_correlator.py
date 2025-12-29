@@ -312,7 +312,8 @@ class IntelligenceFusionEngine:
             
             # Quick threat assessment
             threat_score = self._quick_threat_assessment(event)
-            event.risk_score = threat_score
+            # Don't downgrade an already-high risk score
+            event.risk_score = max(event.risk_score, threat_score)
             
             # Update metrics
             self.metrics['events_processed'] += 1
