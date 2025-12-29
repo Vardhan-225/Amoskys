@@ -8,16 +8,12 @@ RUN useradd -r -u 10001 -s /usr/sbin/nologin amoskys
 WORKDIR /app
 
 # Copy requirements and install dependencies
-COPY requirements/requirements.txt /app/requirements.txt
+COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy source code and configuration
 COPY src/ /app/src/
 COPY config/ /app/config/
-COPY amoskys-eventbus /app/amoskys-eventbus
-
-# Make entry point executable
-RUN chmod +x /app/amoskys-eventbus
 
 VOLUME ["/certs"]
 EXPOSE 50051 9100 8080
@@ -25,4 +21,4 @@ EXPOSE 50051 9100 8080
 USER amoskys:amoskys
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
-CMD ["/app/amoskys-eventbus"]
+CMD ["python", "-m", "amoskys.eventbus.server"]

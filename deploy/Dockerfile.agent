@@ -8,16 +8,12 @@ RUN useradd -r -u 10002 -s /usr/sbin/nologin amoskys
 WORKDIR /app
 
 # Copy requirements and install dependencies
-COPY requirements/requirements.txt /app/requirements.txt
+COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy source code and configuration
 COPY src/ /app/src/
 COPY config/ /app/config/
-COPY amoskys-agent /app/amoskys-agent
-
-# Make entry point executable
-RUN chmod +x /app/amoskys-agent
 
 VOLUME ["/certs", "/wal"]
 EXPOSE 9101 8081
@@ -27,4 +23,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
 ENV IS_WAL_PATH=/wal/wal.db
 ENV IS_CERT_DIR=/certs
-CMD ["/app/amoskys-agent"]
+CMD ["python", "-m", "amoskys.agents.flowagent.main"]
