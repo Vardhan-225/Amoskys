@@ -75,7 +75,7 @@ dev = [
     "pytest-cov>=6.0.0",
 
     # Code quality
-    "black>=24.10.0",
+    "black==24.10.0",  # Pin exact version for consistent formatting
     "isort>=5.13.0",
     "ruff>=0.8.0",
 
