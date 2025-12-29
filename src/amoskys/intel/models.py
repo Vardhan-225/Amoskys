@@ -15,10 +15,10 @@ from typing import Any, Dict, List, Optional
 
 class ThreatLevel(Enum):
     """Canonical threat severity levels - single source of truth
-    
+
     Used across all agents and intelligence modules for consistent
     threat classification.
-    
+
     Values:
         BENIGN (0): No threat detected
         LOW (1): Minor concern, routine monitoring
@@ -27,6 +27,7 @@ class ThreatLevel(Enum):
         CRITICAL (4): Active attack, immediate response required
         UNDER_ATTACK (5): Confirmed breach, incident response active
     """
+
     BENIGN = 0
     LOW = 1
     MEDIUM = 2

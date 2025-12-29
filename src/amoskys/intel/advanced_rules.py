@@ -693,7 +693,6 @@ def rule_internal_reconnaissance(
         "smbclient -L",
     ]
 
-
     recon_process_events = []
     for proc_event in process_events:
         cmdline = proc_event.process_event.get("cmdline", "")

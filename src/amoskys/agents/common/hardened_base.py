@@ -40,15 +40,15 @@ logger = logging.getLogger(__name__)
 
 class AgentOperationalMode(Enum):
     """Agent operational mode based on threat assessment
-    
+
     Different from ThreatLevel (event severity) - this represents
     the agent's current defensive posture and behavior mode.
     """
 
-    NORMAL = "normal"           # Standard monitoring
-    ELEVATED = "elevated"       # Increased sensitivity
-    HIGH = "high"               # Active threat hunting
-    CRITICAL = "critical"       # Defense mode, full collection
+    NORMAL = "normal"  # Standard monitoring
+    ELEVATED = "elevated"  # Increased sensitivity
+    HIGH = "high"  # Active threat hunting
+    CRITICAL = "critical"  # Defense mode, full collection
     UNDER_ATTACK = "under_attack"  # Incident response mode
 
 
@@ -414,7 +414,7 @@ class HardenedAgentBase(ABC):
                 text=True,
                 timeout=5,
             )
-            
+
             # Log for debugging - actual hidden process detection would compare
             # ps output against /proc or other kernel interfaces
             _ = (len(ps_pids), sysctl_result.stdout.strip())

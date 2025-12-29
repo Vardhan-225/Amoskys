@@ -34,14 +34,12 @@ from amoskys.agents.common.threat_detection import (
 __all__ = [
     # Queue
     "LocalQueue",
-    
     # Hardened base
     "HardenedAgentBase",
     "ThreatLevel",
     "EvasionTechnique",
     "IntegrityState",
     "ThreatContext",
-    
     # Threat detection
     "ThreatAnalyzer",
     "ThreatIndicator",

@@ -137,17 +137,18 @@ AGENT_REGISTRY = {
 
 def get_available_agents(platform: Optional[str] = None) -> Dict:
     """Get agents available for a given platform
-    
+
     Args:
         platform: Target platform (darwin/linux/windows). If None, uses current.
-        
+
     Returns:
         Dictionary of available agents with metadata
     """
     import sys
+
     if platform is None:
         platform = sys.platform
-    
+
     return {
         name: meta
         for name, meta in AGENT_REGISTRY.items()
