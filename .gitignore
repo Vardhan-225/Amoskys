@@ -3,6 +3,12 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# AMOSKYS runtime data (should not be in version control)
+data/
+!data/.gitkeep
+logs/
+!logs/.gitkeep
+
 # C extensions
 *.so
 
