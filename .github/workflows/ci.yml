@@ -97,6 +97,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, security, docker-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@v4
       with:
