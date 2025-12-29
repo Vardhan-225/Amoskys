@@ -2,7 +2,8 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "web"))
+# Add the web app to the path (go up from tests/web to project root, then into web)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "web"))
 
 from app import create_app
 
