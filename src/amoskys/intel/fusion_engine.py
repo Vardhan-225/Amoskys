@@ -8,6 +8,14 @@ time windows, and emits higher-level intelligence objects:
 
 Architecture:
     Agents → EventBus → WAL/DB → FusionEngine → Incidents + Risk DB
+
+Enhanced with Advanced Rules:
+    - APT detection patterns
+    - Fileless attack detection
+    - Defense evasion detection
+    - Credential theft chains
+    - Lateral movement patterns
+    - Data exfiltration detection
 """
 
 import json
@@ -17,17 +25,16 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from amoskys.intel.models import (
     DeviceRiskSnapshot,
     Incident,
-    RiskLevel,
     Severity,
     TelemetryEventView,
 )
 from amoskys.intel.rules import evaluate_rules
-from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
+from amoskys.intel.advanced_rules import evaluate_advanced_rules
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +70,7 @@ class FusionEngine:
         self.eval_interval = eval_interval
 
         # Per-device state: event buffers + risk scores
-        self.device_state: Dict[str, Dict] = defaultdict(
+        self.device_state: Dict[str, Dict[str, Any]] = defaultdict(
             lambda: {
                 "events": [],
                 "risk_score": 10,  # Base score
@@ -74,7 +81,7 @@ class FusionEngine:
         )
 
         # Metrics tracking
-        self.metrics = {
+        self.metrics: Dict[str, Any] = {
             "total_events_processed": 0,
             "total_incidents_created": 0,
             "total_evaluations": 0,
@@ -214,6 +221,10 @@ class FusionEngine:
 
         # Run correlation rules
         incidents = evaluate_rules(events, device_id)
+
+        # Run advanced correlation rules
+        advanced_incidents = evaluate_advanced_rules(events, device_id)
+        incidents.extend(advanced_incidents)
 
         # Update device risk score based on recent events + incidents
         risk_snapshot = self._calculate_device_risk(device_id, events, incidents)
@@ -548,7 +559,7 @@ class FusionEngine:
             List of incident dictionaries
         """
         query = "SELECT * FROM incidents"
-        params = []
+        params: List[Any] = []
 
         if device_id:
             query += " WHERE device_id = ?"

@@ -14,7 +14,6 @@ import psutil
 
 from amoskys.agents.common import LocalQueue
 from amoskys.config import get_config
-from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
 

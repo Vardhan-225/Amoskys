@@ -13,6 +13,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -113,7 +114,7 @@ class WALProcessor:
 
     def _process_device_telemetry(
         self, dt: telemetry_pb2.DeviceTelemetry, ts_ns: int, idem: str
-    ):
+    ) -> None:
         """Process DeviceTelemetry message"""
         timestamp_dt = datetime.fromtimestamp(ts_ns / 1e9).isoformat()
 
@@ -181,13 +182,13 @@ class WALProcessor:
 
     def _process_peripheral_event(
         self,
-        event: any,
+        event: Any,
         device_id: str,
         ts_ns: int,
         timestamp_dt: str,
         agent: str,
         version: str,
-    ):
+    ) -> None:
         """Process peripheral connection/disconnection event"""
         try:
             attrs = event.attributes
@@ -231,7 +232,7 @@ class WALProcessor:
         except Exception as e:
             logger.error(f"Failed to insert peripheral event: {e}")
 
-    def _process_process_event(self, proc: any, ts_ns: int, idem: str):
+    def _process_process_event(self, proc: Any, ts_ns: int, idem: str) -> None:
         """Process ProcessEvent message"""
         timestamp_dt = datetime.fromtimestamp(ts_ns / 1e9).isoformat()
 
@@ -313,7 +314,7 @@ class WALProcessor:
         except Exception as e:
             logger.error(f"Failed to insert process event: {e}")
 
-    def _process_flow_event(self, flow: any, ts_ns: int):
+    def _process_flow_event(self, flow: Any, ts_ns: int) -> None:
         """Process FlowEvent message"""
         timestamp_dt = datetime.fromtimestamp(ts_ns / 1e9).isoformat()
 
@@ -344,7 +345,7 @@ class WALProcessor:
         except Exception as e:
             logger.error(f"Failed to insert flow event: {e}")
 
-    def run(self, interval: int = 5):
+    def run(self, interval: int = 5) -> None:
         """Run processor in continuous loop
 
         Args:

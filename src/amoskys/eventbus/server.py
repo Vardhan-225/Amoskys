@@ -71,7 +71,6 @@ import logging
 import os
 import signal
 import sqlite3
-import ssl
 import sys
 import threading
 import time
@@ -89,8 +88,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
 
 # Clean imports for new structure
-from amoskys.common.crypto.canonical import canonical_bytes
-from amoskys.common.crypto.signing import load_public_key, verify
+from amoskys.common.crypto.signing import load_public_key
 from amoskys.config import get_config
 from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
@@ -203,7 +201,7 @@ _inflight = 0
 
 DEDUPE_TTL_SEC = int(os.getenv("BUS_DEDUPE_TTL_SEC", "300"))
 DEDUPE_MAX = int(os.getenv("BUS_DEDUPE_MAX", "50000"))
-_dedupe = OrderedDict()
+_dedupe: "OrderedDict[str, float]" = OrderedDict()
 
 MAX_ENV_BYTES = int(os.getenv("BUS_MAX_ENV_BYTES", "131072"))
 

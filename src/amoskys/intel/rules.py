@@ -17,7 +17,6 @@ Rules:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta
 from typing import List, Optional
 
 from amoskys.intel.models import Incident, MitreTactic, Severity, TelemetryEventView
@@ -55,14 +54,16 @@ def rule_ssh_brute_force(
     # Group by source IP
     ip_timeline = defaultdict(list)
     for event in ssh_events:
-        source_ip = event.security_event.get("source_ip", "unknown")
-        outcome = event.security_event.get("event_outcome")
+        sec_event = event.security_event
+        assert sec_event is not None  # Guaranteed by filter above
+        source_ip = sec_event.get("source_ip", "unknown")
+        outcome = sec_event.get("event_outcome")
         ip_timeline[source_ip].append(
             {
                 "event": event,
                 "outcome": outcome,
                 "timestamp": event.timestamp,
-                "user": event.security_event.get("user_name", "unknown"),
+                "user": sec_event.get("user_name", "unknown"),
             }
         )
 
@@ -355,7 +356,7 @@ def rule_multi_tactic_attack(
                             "T1543.001",  # Launch Agent
                         ],
                         rule_name="multi_tactic_attack",
-                        summary=f"Multi-stage attack detected: suspicious process + network connection + persistence",
+                        summary="Multi-stage attack detected: suspicious process + network connection + persistence",
                         event_ids=[e.event_id for e in all_events],
                         metadata={
                             "dst_ip": flow_event.flow_event.get("dst_ip", "unknown"),

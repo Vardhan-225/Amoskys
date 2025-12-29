@@ -3,14 +3,11 @@ Advanced Network Feature Extraction Engine for Microprocessor Agent
 Provides comprehensive network behavior analysis and feature engineering.
 """
 
-import hashlib
-import ipaddress
 import logging
 import time
-from collections import defaultdict, deque
+from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
 import pandas as pd

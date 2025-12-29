@@ -359,5 +359,56 @@ class TestSecurity:
         assert response.status_code == 403
 
 
+class TestHealthAPI:
+    """Test Health API v1 endpoints"""
+
+    def test_health_system_endpoint(self, client):
+        """Test /api/v1/health/system returns comprehensive status"""
+        response = client.get("/api/v1/health/system")
+        assert response.status_code == 200
+        
+        data = json.loads(response.data)
+        assert data["status"] == "success"
+        
+        # Required fields
+        assert "agents" in data
+        assert "infrastructure" in data
+        assert "threat_level" in data
+        assert "events_last_24h" in data
+        assert "health_score" in data
+        assert "empty_state" in data
+        
+        # Infrastructure should have core components
+        infra = data["infrastructure"]
+        assert "eventbus" in infra
+        assert "web_dashboard" in infra
+        
+        # Health score should be 0-100
+        assert 0 <= data["health_score"] <= 100
+        
+        # Threat level should be valid
+        valid_levels = ["BENIGN", "LOW", "MEDIUM", "HIGH", "CRITICAL", "UNDER_ATTACK"]
+        assert data["threat_level"] in valid_levels
+
+    def test_health_agents_endpoint(self, client):
+        """Test /api/v1/health/agents returns agent details"""
+        response = client.get("/api/v1/health/agents")
+        assert response.status_code == 200
+        
+        data = json.loads(response.data)
+        assert "agents" in data
+        assert "summary" in data
+        assert "platform" in data
+
+    def test_health_ping_endpoint(self, client):
+        """Test /api/v1/health/ping for load balancer health checks"""
+        response = client.get("/api/v1/health/ping")
+        assert response.status_code == 200
+        
+        data = json.loads(response.data)
+        assert data["status"] == "ok"
+        assert "timestamp" in data
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

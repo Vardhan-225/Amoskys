@@ -21,26 +21,17 @@ ScoreJunction performs:
 
 import asyncio
 import logging
-import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from enum import Enum
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 
+# Use canonical ThreatLevel from intel.models
+from amoskys.intel.models import ThreatLevel
+
 logger = logging.getLogger("ScoreJunction")
-
-
-class ThreatLevel(Enum):
-    """Threat severity levels"""
-
-    BENIGN = 0
-    LOW = 1
-    MEDIUM = 2
-    HIGH = 3
-    CRITICAL = 4
 
 
 @dataclass

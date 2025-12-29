@@ -19,9 +19,8 @@ Supports the 3-layer ML architecture:
 
 import logging
 import sqlite3
-import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger("TelemetryStore")
 
@@ -277,14 +276,14 @@ class TelemetryStore:
 
         logger.info(f"Initialized TelemetryStore at {db_path}")
 
-    def insert_process_event(self, event_data: dict) -> int:
+    def insert_process_event(self, event_data: dict[str, Any]) -> Optional[int]:
         """Insert a process event
 
         Args:
             event_data: Dictionary with process event fields
 
         Returns:
-            Row ID of inserted event
+            Row ID of inserted event, or None if failed
         """
         cursor = self.db.execute(
             """
@@ -320,7 +319,9 @@ class TelemetryStore:
         self.db.commit()
         return cursor.lastrowid
 
-    def get_recent_processes(self, limit: int = 100, device_id: Optional[str] = None):
+    def get_recent_processes(
+        self, limit: int = 100, device_id: Optional[str] = None
+    ) -> list[dict[str, Any]]:
         """Get recent process events
 
         Args:
@@ -348,7 +349,7 @@ class TelemetryStore:
 
         return [dict(row) for row in cursor.fetchall()]
 
-    def get_statistics(self):
+    def get_statistics(self) -> dict[str, Any]:
         """Get database statistics
 
         Returns:
@@ -381,6 +382,6 @@ class TelemetryStore:
 
         return stats
 
-    def close(self):
+    def close(self) -> None:
         """Close database connection"""
         self.db.close()

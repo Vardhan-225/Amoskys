@@ -29,7 +29,7 @@ import logging
 import os
 import sqlite3
 import time
-from typing import Callable, Optional
+from typing import Callable
 
 from amoskys.proto import universal_telemetry_pb2 as pb
 

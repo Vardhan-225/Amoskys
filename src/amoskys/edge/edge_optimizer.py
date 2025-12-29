@@ -7,14 +7,12 @@ import asyncio
 import gzip
 import json
 import logging
-import queue
 import threading
 import time
 from collections import deque
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Tuple
 
 import psutil
 
@@ -611,7 +609,7 @@ class EdgeOptimizer:
         """Log performance summary"""
         stats = self.get_optimization_stats()
 
-        logger.info(f"Edge Performance Summary:")
+        logger.info("Edge Performance Summary:")
         logger.info(
             f"  CPU: {metrics.cpu_usage_percent:.1f}% | Memory: {metrics.memory_usage_mb:.1f}MB"
         )

@@ -17,7 +17,7 @@ import socket
 import subprocess
 import time
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import grpc
 
@@ -85,7 +85,7 @@ class AuthGuardAgent:
         Returns:
             List of auth event dictionaries
         """
-        events = []
+        events: List[Dict[str, Any]] = []
 
         # Calculate time window
         if self.last_check_time:

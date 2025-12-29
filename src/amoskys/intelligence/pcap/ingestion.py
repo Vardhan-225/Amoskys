@@ -3,15 +3,13 @@ Real-time PCAP Ingestion Engine for Microprocessor Agent
 Provides comprehensive packet capture and analysis capabilities for all device types.
 """
 
-import asyncio
 import json
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from queue import Full, Queue
-from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Set
 
 try:
     import scapy.all as scapy

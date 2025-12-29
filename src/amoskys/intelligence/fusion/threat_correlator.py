@@ -3,26 +3,18 @@ Advanced Intelligence Fusion Engine for Microprocessor Agent
 Integrates multi-source telemetry for comprehensive threat detection and analysis.
 """
 
-import asyncio
 import ipaddress
-import json
 import logging
 import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional
 
-
-class ThreatLevel(Enum):
-    """Threat severity levels."""
-
-    LOW = 1
-    MEDIUM = 2
-    HIGH = 3
-    CRITICAL = 4
+# Use canonical ThreatLevel from intel.models
+from amoskys.intel.models import ThreatLevel
 
 
 class DeviceType(Enum):

@@ -26,6 +26,8 @@ Security Note:
     to field selection or serialization order requires re-signing all data.
 """
 
+from typing import cast
+
 from amoskys.proto import messaging_schema_pb2 as pb
 
 
@@ -64,4 +66,4 @@ def canonical_bytes(env: pb.Envelope) -> bytes:
     # Only handle flow field as per current protobuf schema
     if hasattr(env, "flow") and env.flow.ByteSize() > 0:
         clone.flow.CopyFrom(env.flow)
-    return clone.SerializeToString()
+    return cast(bytes, clone.SerializeToString())

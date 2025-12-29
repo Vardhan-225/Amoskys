@@ -259,9 +259,9 @@ class CortexDashboardV2 {
         this.charts = {};
         this.updateInterval = 5000; // 5 seconds
         this.updateTimer = null;
-        this.failureCount = { metrics: 0, threats: 0, agents: 0 };
+        this.failureCount = { metrics: 0, threats: 0, agents: 0, health: 0 };
         this.maxRetries = 3;
-        this.lastUpdateTime = { metrics: null, threats: null, agents: null };
+        this.lastUpdateTime = { metrics: null, threats: null, agents: null, health: null };
         this.init();
     }
 
@@ -429,12 +429,107 @@ class CortexDashboardV2 {
     async updateAll() {
         try {
             await Promise.all([
+                this.updateHealthStatus(),
                 this.updateMetrics(),
                 this.updateThreats(),
                 this.updateAgents()
             ]);
         } catch (error) {
             console.error('Update error:', error);
+        }
+    }
+
+    /**
+     * Fetch from Health API v1 for Command Center metrics
+     * This provides real threat level, health score, and agent coverage
+     */
+    async updateHealthStatus() {
+        try {
+            const response = await fetch('/api/v1/health/system', { timeout: 5000 });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const data = await response.json();
+            if (data.status !== 'success') throw new Error('API error: ' + data.status);
+
+            // Update Threat Level card
+            const threatLevel = data.threat_level || 'BENIGN';
+            document.getElementById('threat-score').textContent = 
+                threatLevel === 'BENIGN' ? '0' :
+                threatLevel === 'LOW' ? '1' :
+                threatLevel === 'MEDIUM' ? '2' :
+                threatLevel === 'HIGH' ? '3' :
+                threatLevel === 'CRITICAL' ? '4' : '5';
+            document.getElementById('threat-status').textContent = threatLevel;
+            document.getElementById('threat-status').style.color = this.getThreatColor(threatLevel);
+
+            // Update Health Score card (from Health API)
+            const healthScore = data.health_score || 0;
+            document.getElementById('health-score').textContent = healthScore + '%';
+            document.getElementById('health-status').textContent = data.health_status?.toUpperCase() || 'UNKNOWN';
+            document.getElementById('health-status').style.color = 
+                healthScore >= 70 ? '#00ff88' : healthScore >= 40 ? '#ffaa00' : '#ff3366';
+
+            // Update Events (24h) card
+            const events24h = data.events_last_24h || 0;
+            document.getElementById('event-count').textContent = events24h;
+            document.getElementById('event-status').textContent = events24h > 0 ? 'ACTIVE' : 'MONITORING';
+
+            // Update Agent count from health API
+            const agentsSummary = data.agents_summary || {};
+            const online = agentsSummary.online || 0;
+            const total = agentsSummary.total || 0;
+            document.getElementById('agent-count').textContent = `${online}/${total}`;
+            document.getElementById('agent-status').textContent = 
+                online === total && total > 0 ? 'ALL ONLINE' : 
+                online > 0 ? 'PARTIAL' : 'OFFLINE';
+
+            // Handle empty state
+            if (data.empty_state) {
+                this.showEmptyState(data.empty_state_message);
+            }
+
+            // Update timestamp
+            this.lastUpdateTime.health = Date.now();
+            this.failureCount.health = 0;
+
+        } catch (error) {
+            console.error('Health status update failed:', error);
+            this.failureCount.health++;
+            
+            // Fall back to old method if health API fails
+            if (this.failureCount.health >= this.maxRetries) {
+                console.warn('Health API unavailable, using fallback metrics');
+            }
+        }
+    }
+
+    getThreatColor(level) {
+        const colors = {
+            'BENIGN': '#00ff88',
+            'LOW': '#00ff88',
+            'MEDIUM': '#ffaa00',
+            'HIGH': '#ff6600',
+            'CRITICAL': '#ff3366',
+            'UNDER_ATTACK': '#ff0000'
+        };
+        return colors[level] || '#ffffff';
+    }
+
+    showEmptyState(message) {
+        // Update containers with empty state message
+        const threatsContainer = document.getElementById('threats-container');
+        const agentsContainer = document.getElementById('agents-container');
+        
+        const emptyHtml = `
+            <div style="color: var(--text-secondary); text-align: center; padding: 2rem; border: 1px dashed rgba(0, 255, 136, 0.3); border-radius: 8px; margin: 1rem 0;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🚀</div>
+                <div style="font-weight: 700; margin-bottom: 0.5rem;">Fresh Install</div>
+                <div style="font-size: 0.9rem;">${message || 'Deploy agents to start monitoring.'}</div>
+            </div>
+        `;
+        
+        if (threatsContainer && !this.hasRealData) {
+            threatsContainer.innerHTML = emptyHtml.replace('Deploy agents', 'No threats detected yet');
         }
     }
 

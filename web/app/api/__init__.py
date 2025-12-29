@@ -21,6 +21,7 @@ from .snmp_simple import snmp_simple_bp  # Simple SNMP telemetry API
 from .process_telemetry import process_bp  # Process telemetry API
 from .peripheral_telemetry import peripheral_bp  # Peripheral telemetry API
 from .database_manager import database_manager_bp  # Database manager API
+from .health import health_bp  # Health API v1 for Command Center
 from .docs import generate_openapi_spec
 
 # Register sub-blueprints
@@ -33,6 +34,7 @@ api_bp.register_blueprint(snmp_simple_bp)  # Register simple SNMP API
 api_bp.register_blueprint(process_bp)  # Register process telemetry API
 api_bp.register_blueprint(peripheral_bp)  # Register peripheral telemetry API
 api_bp.register_blueprint(database_manager_bp)  # Register database manager API
+api_bp.register_blueprint(health_bp)  # Register health API v1
 
 # Add API documentation endpoint
 @api_bp.route('/docs/openapi.json', methods=['GET'])

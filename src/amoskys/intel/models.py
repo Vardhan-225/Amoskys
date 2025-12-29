@@ -4,12 +4,35 @@ Intelligence Layer Data Models
 Defines core objects emitted by the Fusion correlation engine:
 - DeviceRiskSnapshot: Current security posture of a device
 - Incident: Correlated attack chain detected across multiple events
+- ThreatLevel: Canonical threat severity levels (used across all agents)
 """
 
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+
+class ThreatLevel(Enum):
+    """Canonical threat severity levels - single source of truth
+    
+    Used across all agents and intelligence modules for consistent
+    threat classification.
+    
+    Values:
+        BENIGN (0): No threat detected
+        LOW (1): Minor concern, routine monitoring
+        MEDIUM (2): Notable activity, enhanced monitoring
+        HIGH (3): Significant threat, investigation needed
+        CRITICAL (4): Active attack, immediate response required
+        UNDER_ATTACK (5): Confirmed breach, incident response active
+    """
+    BENIGN = 0
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+    CRITICAL = 4
+    UNDER_ATTACK = 5
 
 
 class RiskLevel(Enum):
@@ -157,7 +180,7 @@ class Incident:
             "created_at": self.created_at.isoformat(),
         }
 
-    def add_event(self, event_id: str, event_ts: datetime):
+    def add_event(self, event_id: str, event_ts: datetime) -> None:
         """Add event to this incident and update time bounds
 
         Args:
@@ -210,7 +233,7 @@ class TelemetryEventView:
     flow_event: Optional[Dict] = None  # src_ip, dst_ip, dst_port, protocol, etc.
 
     @classmethod
-    def from_protobuf(cls, pb_event, device_id: str):
+    def from_protobuf(cls, pb_event: Any, device_id: str) -> "TelemetryEventView":
         """Create TelemetryEventView from protobuf TelemetryEvent
 
         Args:

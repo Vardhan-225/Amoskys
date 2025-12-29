@@ -9,7 +9,7 @@ It loads configuration from environment variables, YAML files, and provides vali
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import yaml
 
@@ -227,7 +227,7 @@ class AmoskysConfig:
 
         return True
 
-    def setup_logging(self):
+    def setup_logging(self) -> None:
         """Configure logging based on configuration"""
         import logging
 
@@ -264,7 +264,7 @@ def get_config() -> AmoskysConfig:
     return _config
 
 
-def init_config(config: AmoskysConfig):
+def init_config(config: AmoskysConfig) -> None:
     """Initialize global configuration"""
     global _config
     _config = config

@@ -28,6 +28,7 @@ from amoskys.intel.models import (
     RiskLevel,
     Severity,
     TelemetryEventView,
+    ThreatLevel,
 )
 from amoskys.intel.rules import ALL_RULES, evaluate_rules
 
@@ -40,6 +41,7 @@ __all__ = [
     "RiskLevel",
     "Severity",
     "MitreTactic",
+    "ThreatLevel",
     "evaluate_rules",
     "ALL_RULES",
 ]

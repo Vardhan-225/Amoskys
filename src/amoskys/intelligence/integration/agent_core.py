@@ -5,12 +5,10 @@ Connects all intelligence components with the existing EventBus infrastructure.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import threading
 import time
-from dataclasses import asdict
 from queue import Empty, Queue
 from typing import Any, Callable, Dict, List, Optional
 
@@ -34,25 +32,25 @@ except ImportError as e:
 class MicroprocessorAgentCore:
     """Core integration engine for the microprocessor agent."""
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.logger = logging.getLogger(__name__)
         self.config = config or {}
 
-        # Initialize components
-        self.packet_processor = None
-        self.feature_extractor = None
-        self.fusion_engine = None
-        self.device_scanner = None
-        self.telemetry_collector = None
-        self.edge_optimizer = None
+        # Initialize components (will be set in initialize())
+        self.packet_processor: Optional[Any] = None
+        self.feature_extractor: Optional[Any] = None
+        self.fusion_engine: Optional[Any] = None
+        self.device_scanner: Optional[Any] = None
+        self.telemetry_collector: Optional[Any] = None
+        self.edge_optimizer: Optional[Any] = None
 
         # Integration state
         self.running = False
-        self.event_queue = Queue(maxsize=10000)
-        self.integration_threads = []
+        self.event_queue: Queue[Any] = Queue(maxsize=10000)
+        self.integration_threads: List[threading.Thread] = []
 
         # Callbacks for external systems
-        self.external_callbacks = {
+        self.external_callbacks: Dict[str, List[Callable[..., Any]]] = {
             "threat_detected": [],
             "device_discovered": [],
             "anomaly_detected": [],
@@ -296,10 +294,10 @@ class MicroprocessorAgentCore:
         """Handle extracted network features."""
         try:
             # Create telemetry event from features
+            device_id = str(features.src_port) if features.src_port else "unknown"
             feature_event = TelemetryEvent(
                 timestamp=time.time(),
-                device_id=features.src_port
-                or "unknown",  # Use a better device ID scheme
+                device_id=device_id,  # Use a better device ID scheme
                 device_type=self._determine_device_type(features.device_type),
                 source="network_features",
                 event_type="behavioral_analysis",

@@ -68,7 +68,7 @@ class TelemetryIngestor:
 
         # Metrics
         self.events_ingested = 0
-        self.last_ingest_time = None
+        self.last_ingest_time: Optional[datetime] = None
 
         logger.info(
             f"TelemetryIngestor initialized with {len(self.agent_sources)} sources"

@@ -7,7 +7,6 @@ import asyncio
 import json
 import logging
 import socket
-import struct
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional

@@ -21,12 +21,14 @@ import signal
 import sys
 import time
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import grpc
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
-from amoskys.common.crypto.canonical import canonical_bytes
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
 from amoskys.common.crypto.signing import load_private_key, sign
 from amoskys.config import get_config
 
@@ -129,10 +131,10 @@ async def collect_snmp_data(
     try:
         for name, oid in SYSTEM_OIDS.items():
             try:
-                error_indication, error_status, error_index, var_binds = await get_cmd(
-                    SnmpDispatcher(),
-                    CommunityData(community),
-                    await UdpTransportTarget.create((host, 161)),
+                error_indication, error_status, error_index, var_binds = await get_cmd(  # type: ignore[name-defined]
+                    SnmpDispatcher(),  # type: ignore[name-defined]
+                    CommunityData(community),  # type: ignore[name-defined]
+                    await UdpTransportTarget.create((host, 161)),  # type: ignore[name-defined]
                     ObjectType(ObjectIdentity(oid)),
                 )
 
