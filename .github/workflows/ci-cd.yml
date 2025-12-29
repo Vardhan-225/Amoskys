@@ -33,10 +33,12 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles("**/requirements.txt") }}
+        key: ${{ runner.os }}-pip-${{ hashFiles("**/pyproject.toml") }}
         restore-keys: ${{ runner.os }}-pip-
-    - name: Professional Environment Setup
-      run: python setup_environment_pro.py --mode testing
+    - name: Install project with dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,web,agents]"
     - name: Run comprehensive tests
       run: make check
     - name: Upload test results
@@ -73,8 +75,11 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-    - name: Install quality tools
-      run: pip install black isort flake8 mypy
+    - name: Install project and quality tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+        pip install black isort flake8 mypy
     - name: Check code formatting
       run: black --check src/ tests/
     - name: Check import sorting
