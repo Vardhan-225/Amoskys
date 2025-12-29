@@ -40,6 +40,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS wal_idem ON wal(idem);
 CREATE INDEX IF NOT EXISTS wal_ts ON wal(ts_ns);
 """
 
+
 class SQLiteWAL:
     """Write-ahead log for durable envelope storage.
 
@@ -53,7 +54,9 @@ class SQLiteWAL:
         db (sqlite3.Connection): Database connection with auto-commit
     """
 
-    def __init__(self, path="wal.db", max_bytes=200*1024*1024, vacuum_threshold=0.3):
+    def __init__(
+        self, path="wal.db", max_bytes=200 * 1024 * 1024, vacuum_threshold=0.3
+    ):
         """Initialize SQLite WAL with durability guarantees.
 
         Creates database file and schema if not exists. Sets up WAL mode
@@ -102,7 +105,7 @@ class SQLiteWAL:
         try:
             self.db.execute(
                 "INSERT INTO wal(idem, ts_ns, bytes, checksum) VALUES(?,?,?,?)",
-                (env.idempotency_key, env.ts_ns, sqlite3.Binary(data), checksum)
+                (env.idempotency_key, env.ts_ns, sqlite3.Binary(data), checksum),
             )
         except sqlite3.IntegrityError:
             return
@@ -127,13 +130,15 @@ class SQLiteWAL:
             int: Total size in bytes of database files on disk
         """
         total = 0
-        for suffix in ['', '-wal', '-shm']:
+        for suffix in ["", "-wal", "-shm"]:
             file_path = self.path + suffix
             if os.path.exists(file_path):
                 total += os.path.getsize(file_path)
         return total
 
-    def drain(self, publish_fn: Callable[[pb.Envelope], object], limit: int = 1000) -> int:
+    def drain(
+        self, publish_fn: Callable[[pb.Envelope], object], limit: int = 1000
+    ) -> int:
         """Drain pending envelopes by publishing them via callback.
 
         Fetches up to `limit` envelopes in FIFO order and attempts to publish
@@ -270,8 +275,10 @@ class SQLiteWAL:
             end_size = self.file_size_bytes()
             self.last_vacuum_time = time.time()
             self.deleted_since_vacuum = 0
-            logger.info(f"VACUUM complete: {start_size} -> {end_size} bytes "
-                       f"({start_size - end_size} bytes reclaimed)")
+            logger.info(
+                f"VACUUM complete: {start_size} -> {end_size} bytes "
+                f"({start_size - end_size} bytes reclaimed)"
+            )
         except Exception as e:
             logger.error(f"VACUUM failed: {e}")
             raise

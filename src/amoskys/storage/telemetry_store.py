@@ -286,34 +286,37 @@ class TelemetryStore:
         Returns:
             Row ID of inserted event
         """
-        cursor = self.db.execute("""
+        cursor = self.db.execute(
+            """
             INSERT OR REPLACE INTO process_events (
                 timestamp_ns, timestamp_dt, device_id, pid, ppid, exe, cmdline,
                 username, cpu_percent, memory_percent, num_threads, num_fds,
                 user_type, process_category, is_suspicious, anomaly_score,
                 confidence_score, collection_agent, agent_version
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            event_data.get('timestamp_ns'),
-            event_data.get('timestamp_dt'),
-            event_data.get('device_id'),
-            event_data.get('pid'),
-            event_data.get('ppid'),
-            event_data.get('exe'),
-            event_data.get('cmdline'),
-            event_data.get('username'),
-            event_data.get('cpu_percent'),
-            event_data.get('memory_percent'),
-            event_data.get('num_threads'),
-            event_data.get('num_fds'),
-            event_data.get('user_type'),
-            event_data.get('process_category'),
-            event_data.get('is_suspicious', False),
-            event_data.get('anomaly_score'),
-            event_data.get('confidence_score'),
-            event_data.get('collection_agent'),
-            event_data.get('agent_version')
-        ))
+        """,
+            (
+                event_data.get("timestamp_ns"),
+                event_data.get("timestamp_dt"),
+                event_data.get("device_id"),
+                event_data.get("pid"),
+                event_data.get("ppid"),
+                event_data.get("exe"),
+                event_data.get("cmdline"),
+                event_data.get("username"),
+                event_data.get("cpu_percent"),
+                event_data.get("memory_percent"),
+                event_data.get("num_threads"),
+                event_data.get("num_fds"),
+                event_data.get("user_type"),
+                event_data.get("process_category"),
+                event_data.get("is_suspicious", False),
+                event_data.get("anomaly_score"),
+                event_data.get("confidence_score"),
+                event_data.get("collection_agent"),
+                event_data.get("agent_version"),
+            ),
+        )
         self.db.commit()
         return cursor.lastrowid
 
@@ -354,25 +357,27 @@ class TelemetryStore:
         stats = {}
 
         cursor = self.db.execute("SELECT COUNT(*) FROM process_events")
-        stats['process_events_count'] = cursor.fetchone()[0]
+        stats["process_events_count"] = cursor.fetchone()[0]
 
         cursor = self.db.execute("SELECT COUNT(*) FROM device_telemetry")
-        stats['device_telemetry_count'] = cursor.fetchone()[0]
+        stats["device_telemetry_count"] = cursor.fetchone()[0]
 
         cursor = self.db.execute("SELECT COUNT(*) FROM flow_events")
-        stats['flow_events_count'] = cursor.fetchone()[0]
+        stats["flow_events_count"] = cursor.fetchone()[0]
 
         cursor = self.db.execute("SELECT COUNT(*) FROM security_events")
-        stats['security_events_count'] = cursor.fetchone()[0]
+        stats["security_events_count"] = cursor.fetchone()[0]
 
-        cursor = self.db.execute("""
+        cursor = self.db.execute(
+            """
             SELECT
                 MIN(timestamp_dt) as oldest,
                 MAX(timestamp_dt) as newest
             FROM process_events
-        """)
+        """
+        )
         row = cursor.fetchone()
-        stats['time_range'] = {'oldest': row[0], 'newest': row[1]}
+        stats["time_range"] = {"oldest": row[0], "newest": row[1]}
 
         return stats
 

@@ -3,7 +3,7 @@ import grpc, pytest
 import threading
 
 # Add src to path for clean imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
@@ -12,8 +12,10 @@ BUS_ADDR = "localhost:50052"
 SERVER_SCRIPT = "src/amoskys/eventbus/server.py"
 SERVER_ARGS = ["--overload", "on"]
 
+
 def wait_for_port(port: int, timeout=10.0):
     import time, socket
+
     deadline = time.time() + timeout
     while time.time() < deadline:
         with socket.socket() as s:
@@ -27,21 +29,31 @@ def wait_for_port(port: int, timeout=10.0):
                 time.sleep(0.2)
     return False
 
+
 @pytest.fixture(scope="session")
 def certs():
     import pathlib
+
     p = pathlib.Path("certs")
     need = ["ca.crt", "agent.crt", "agent.key"]
-    if not all((p/f).exists() for f in need):
+    if not all((p / f).exists() for f in need):
         pytest.skip("certs missing; run `make certs`")
+
 
 def mtls_channel():
     from pathlib import Path
-    with open(Path("certs")/"ca.crt","rb") as f: ca=f.read()
-    with open(Path("certs")/"agent.crt","rb") as f: crt=f.read()
-    with open(Path("certs")/"agent.key","rb") as f: key=f.read()
-    creds = grpc.ssl_channel_credentials(root_certificates=ca, private_key=key, certificate_chain=crt)
+
+    with open(Path("certs") / "ca.crt", "rb") as f:
+        ca = f.read()
+    with open(Path("certs") / "agent.crt", "rb") as f:
+        crt = f.read()
+    with open(Path("certs") / "agent.key", "rb") as f:
+        key = f.read()
+    creds = grpc.ssl_channel_credentials(
+        root_certificates=ca, private_key=key, certificate_chain=crt
+    )
     return grpc.secure_channel(BUS_ADDR, creds)
+
 
 @pytest.fixture
 def bus_overloaded(certs):
@@ -49,10 +61,10 @@ def bus_overloaded(certs):
     env["BUS_SERVER_PORT"] = "50052"  # Use different port to avoid conflicts
     env["BUS_METRICS_DISABLE"] = "1"  # Disable metrics to avoid port contention
     # Set up environment to ensure the subprocess can find imports
-    if 'PYTHONPATH' in env:
-        env['PYTHONPATH'] = f"src:{env['PYTHONPATH']}"
+    if "PYTHONPATH" in env:
+        env["PYTHONPATH"] = f"src:{env['PYTHONPATH']}"
     else:
-        env['PYTHONPATH'] = 'src'
+        env["PYTHONPATH"] = "src"
 
     repo_root = os.path.abspath(os.path.dirname(__file__) + "/../..")
     python_path = sys.executable
@@ -72,7 +84,7 @@ def bus_overloaded(certs):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        bufsize=1  # Line buffered
+        bufsize=1,  # Line buffered
     )
 
     try:
@@ -95,10 +107,28 @@ def bus_overloaded(certs):
             if err:
                 print("[SERVER] Final errors:", err)
 
+
 def make_valid_env():
-    flow = pb.FlowEvent(src_ip="1.1.1.1", dst_ip="8.8.8.8", src_port=1, dst_port=53, proto="UDP", bytes_tx=1, bytes_rx=2, duration_ms=3)
-    env = pb.Envelope(version="v1", ts_ns=int(time.time_ns()), idempotency_key="z1", flow=flow, sig=b"", prev_sig=b"")
+    flow = pb.FlowEvent(
+        src_ip="1.1.1.1",
+        dst_ip="8.8.8.8",
+        src_port=1,
+        dst_port=53,
+        proto="UDP",
+        bytes_tx=1,
+        bytes_rx=2,
+        duration_ms=3,
+    )
+    env = pb.Envelope(
+        version="v1",
+        ts_ns=int(time.time_ns()),
+        idempotency_key="z1",
+        flow=flow,
+        sig=b"",
+        prev_sig=b"",
+    )
     return env
+
 
 def test_retry_ack_when_overloaded(bus_overloaded):
     with mtls_channel() as ch:

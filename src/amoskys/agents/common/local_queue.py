@@ -48,6 +48,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS queue_idem ON queue(idem);
 CREATE INDEX IF NOT EXISTS queue_ts ON queue(ts_ns);
 """
 
+
 class LocalQueue:
     """SQLite-backed queue for agent telemetry during EventBus downtime.
 
@@ -66,7 +67,7 @@ class LocalQueue:
         self,
         path: str = "agent_queue.db",
         max_bytes: int = 50 * 1024 * 1024,  # 50MB default
-        max_retries: int = 10
+        max_retries: int = 10,
     ):
         """Initialize local queue with SQLite backend.
 
@@ -105,7 +106,7 @@ class LocalQueue:
         try:
             self.db.execute(
                 "INSERT INTO queue(idem, ts_ns, bytes) VALUES(?,?,?)",
-                (idempotency_key, ts_ns, sqlite3.Binary(data))
+                (idempotency_key, ts_ns, sqlite3.Binary(data)),
             )
             logger.debug(f"Enqueued: {idempotency_key}")
             self._enforce_backlog()
@@ -115,9 +116,7 @@ class LocalQueue:
             return False
 
     def drain(
-        self,
-        publish_fn: Callable[[pb.DeviceTelemetry], object],
-        limit: int = 100
+        self, publish_fn: Callable[[pb.DeviceTelemetry], object], limit: int = 100
     ) -> int:
         """Drain queued telemetry by publishing via callback.
 
@@ -138,8 +137,7 @@ class LocalQueue:
             - Max retries exceeded: Delete from queue (drop event)
         """
         cur = self.db.execute(
-            "SELECT id, bytes, retries, idem FROM queue ORDER BY id LIMIT ?",
-            (limit,)
+            "SELECT id, bytes, retries, idem FROM queue ORDER BY id LIMIT ?", (limit,)
         )
         rows = cur.fetchall()
         drained = 0
@@ -152,7 +150,7 @@ class LocalQueue:
                 ack = publish_fn(telemetry)
 
                 # Check if publish was successful
-                if hasattr(ack, 'status'):
+                if hasattr(ack, "status"):
                     if ack.status == 0:  # OK
                         self.db.execute("DELETE FROM queue WHERE id = ?", (rowid,))
                         drained += 1
@@ -179,7 +177,7 @@ class LocalQueue:
                 else:
                     self.db.execute(
                         "UPDATE queue SET retries = ? WHERE id = ?",
-                        (new_retries, rowid)
+                        (new_retries, rowid),
                     )
 
                 # Stop draining on first failure
@@ -202,7 +200,9 @@ class LocalQueue:
         Returns:
             int: Total bytes of all pending events
         """
-        row = self.db.execute("SELECT IFNULL(SUM(length(bytes)),0) FROM queue").fetchone()
+        row = self.db.execute(
+            "SELECT IFNULL(SUM(length(bytes)),0) FROM queue"
+        ).fetchone()
         return int(row[0] or 0)
 
     def clear(self) -> int:

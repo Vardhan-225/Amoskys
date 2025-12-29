@@ -2,4 +2,4 @@
 
 from amoskys.agents.persistence.persistence_agent import PersistenceGuardAgent
 
-__all__ = ['PersistenceGuardAgent']
+__all__ = ["PersistenceGuardAgent"]

@@ -14,6 +14,7 @@ from enum import Enum
 
 class RiskLevel(Enum):
     """Device risk classification levels"""
+
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -22,6 +23,7 @@ class RiskLevel(Enum):
 
 class Severity(Enum):
     """Incident severity levels"""
+
     INFO = "INFO"
     LOW = "LOW"
     MEDIUM = "MEDIUM"
@@ -31,6 +33,7 @@ class Severity(Enum):
 
 class MitreTactic(Enum):
     """MITRE ATT&CK Tactics (high-level attack stages)"""
+
     INITIAL_ACCESS = "TA0001"
     EXECUTION = "TA0002"
     PERSISTENCE = "TA0003"
@@ -61,6 +64,7 @@ class DeviceRiskSnapshot:
         updated_at: Timestamp of last update
         metadata: Additional context (event counts, source IPs, etc.)
     """
+
     device_id: str
     score: int
     level: RiskLevel
@@ -72,13 +76,13 @@ class DeviceRiskSnapshot:
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization"""
         return {
-            'device_id': self.device_id,
-            'score': self.score,
-            'level': self.level.value,
-            'reason_tags': self.reason_tags,
-            'supporting_events': self.supporting_events,
-            'updated_at': self.updated_at.isoformat(),
-            'metadata': self.metadata
+            "device_id": self.device_id,
+            "score": self.score,
+            "level": self.level.value,
+            "reason_tags": self.reason_tags,
+            "supporting_events": self.supporting_events,
+            "updated_at": self.updated_at.isoformat(),
+            "metadata": self.metadata,
         }
 
     @classmethod
@@ -122,6 +126,7 @@ class Incident:
         metadata: Additional context (user, source IP, commands, etc.)
         created_at: When this incident was first detected
     """
+
     incident_id: str
     device_id: str
     severity: Severity
@@ -138,18 +143,18 @@ class Incident:
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization"""
         return {
-            'incident_id': self.incident_id,
-            'device_id': self.device_id,
-            'severity': self.severity.value,
-            'tactics': self.tactics,
-            'techniques': self.techniques,
-            'rule_name': self.rule_name,
-            'summary': self.summary,
-            'start_ts': self.start_ts.isoformat() if self.start_ts else None,
-            'end_ts': self.end_ts.isoformat() if self.end_ts else None,
-            'event_ids': self.event_ids,
-            'metadata': self.metadata,
-            'created_at': self.created_at.isoformat()
+            "incident_id": self.incident_id,
+            "device_id": self.device_id,
+            "severity": self.severity.value,
+            "tactics": self.tactics,
+            "techniques": self.techniques,
+            "rule_name": self.rule_name,
+            "summary": self.summary,
+            "start_ts": self.start_ts.isoformat() if self.start_ts else None,
+            "end_ts": self.end_ts.isoformat() if self.end_ts else None,
+            "event_ids": self.event_ids,
+            "metadata": self.metadata,
+            "created_at": self.created_at.isoformat(),
         }
 
     def add_event(self, event_id: str, event_ts: datetime):
@@ -190,6 +195,7 @@ class TelemetryEventView:
         process_event: ProcessEvent details (new processes)
         flow_event: FlowEvent details (network connections)
     """
+
     event_id: str
     device_id: str
     event_type: str  # SECURITY, AUDIT, PROCESS, FLOW, METRIC
@@ -228,48 +234,48 @@ class TelemetryEventView:
         if pb_event.event_type == "SECURITY" and pb_event.HasField("security_event"):
             se = pb_event.security_event
             security_event = {
-                'event_category': se.event_category,
-                'event_action': se.event_action,
-                'event_outcome': se.event_outcome,
-                'user_name': se.user_name,
-                'source_ip': se.source_ip,
-                'risk_score': se.risk_score,
-                'mitre_techniques': list(se.mitre_techniques),
-                'requires_investigation': se.requires_investigation
+                "event_category": se.event_category,
+                "event_action": se.event_action,
+                "event_outcome": se.event_outcome,
+                "user_name": se.user_name,
+                "source_ip": se.source_ip,
+                "risk_score": se.risk_score,
+                "mitre_techniques": list(se.mitre_techniques),
+                "requires_investigation": se.requires_investigation,
             }
 
         elif pb_event.event_type == "AUDIT" and pb_event.HasField("audit_event"):
             ae = pb_event.audit_event
             audit_event = {
-                'audit_category': ae.audit_category,
-                'action_performed': ae.action_performed,
-                'object_type': ae.object_type,
-                'object_id': ae.object_id,
-                'before_value': ae.before_value,
-                'after_value': ae.after_value
+                "audit_category": ae.audit_category,
+                "action_performed": ae.action_performed,
+                "object_type": ae.object_type,
+                "object_id": ae.object_id,
+                "before_value": ae.before_value,
+                "after_value": ae.after_value,
             }
 
         elif pb_event.event_type == "PROCESS" and pb_event.HasField("process_event"):
             pe = pb_event.process_event
             process_event = {
-                'process_name': pe.process_name,
-                'pid': pe.pid,
-                'ppid': pe.ppid,
-                'uid': pe.uid,
-                'command_line': pe.command_line,
-                'executable_path': pe.executable_path
+                "process_name": pe.process_name,
+                "pid": pe.pid,
+                "ppid": pe.ppid,
+                "uid": pe.uid,
+                "command_line": pe.command_line,
+                "executable_path": pe.executable_path,
             }
 
         elif pb_event.event_type == "FLOW" and pb_event.HasField("flow_event"):
             fe = pb_event.flow_event
             flow_event = {
-                'src_ip': fe.src_ip,
-                'src_port': fe.src_port,
-                'dst_ip': fe.dst_ip,
-                'dst_port': fe.dst_port,
-                'protocol': fe.protocol,
-                'bytes_sent': fe.bytes_sent,
-                'bytes_received': fe.bytes_received
+                "src_ip": fe.src_ip,
+                "src_port": fe.src_port,
+                "dst_ip": fe.dst_ip,
+                "dst_port": fe.dst_port,
+                "protocol": fe.protocol,
+                "bytes_sent": fe.bytes_sent,
+                "bytes_received": fe.bytes_received,
             }
 
         return cls(
@@ -282,5 +288,5 @@ class TelemetryEventView:
             security_event=security_event,
             audit_event=audit_event,
             process_event=process_event,
-            flow_event=flow_event
+            flow_event=flow_event,
         )

@@ -8,11 +8,12 @@ import os
 import time
 import grpc
 
-sys.path.insert(0, 'src')
+sys.path.insert(0, "src")
 
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as telemetry_grpc
 from amoskys.proto import messaging_schema_pb2 as msg_pb2
+
 
 def publish_device_telemetry():
     """Test publishing DeviceTelemetry (SNMP data)"""
@@ -85,9 +86,7 @@ def publish_device_telemetry():
             key = f.read()
 
         creds = grpc.ssl_channel_credentials(
-            root_certificates=ca,
-            private_key=key,
-            certificate_chain=crt
+            root_certificates=ca, private_key=key, certificate_chain=crt
         )
 
         with grpc.secure_channel("localhost:50051", creds) as channel:
@@ -105,6 +104,7 @@ def publish_device_telemetry():
     except Exception as e:
         print(f"  ❌ Exception: {e}")
         return False
+
 
 def publish_process_telemetry():
     """Test publishing ProcessEvent (Process monitoring data)"""
@@ -128,7 +128,9 @@ def publish_process_telemetry():
 
     # Set envelope metadata
     envelope.ts_ns = process_event.start_ts_ns
-    envelope.idempotency_key = f"test-process-{process_event.pid}-{process_event.start_ts_ns}"
+    envelope.idempotency_key = (
+        f"test-process-{process_event.pid}-{process_event.start_ts_ns}"
+    )
     envelope.sig = b"mock_signature_bytes_for_testing"
 
     print(f"  Created ProcessEvent envelope: {envelope.ByteSize()} bytes")
@@ -146,9 +148,7 @@ def publish_process_telemetry():
             key = f.read()
 
         creds = grpc.ssl_channel_credentials(
-            root_certificates=ca,
-            private_key=key,
-            certificate_chain=crt
+            root_certificates=ca, private_key=key, certificate_chain=crt
         )
 
         with grpc.secure_channel("localhost:50051", creds) as channel:
@@ -167,6 +167,7 @@ def publish_process_telemetry():
         print(f"  ❌ Exception: {e}")
         return False
 
+
 def main():
     print("Testing Telemetry Publishing Pipeline")
     print("=" * 50)
@@ -184,6 +185,7 @@ def main():
     print(f"  ProcessEvent: {'✅ PASS' if process_ok else '❌ FAIL'}")
 
     return 0 if (device_ok and process_ok) else 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

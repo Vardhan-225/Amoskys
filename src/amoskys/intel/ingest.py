@@ -41,7 +41,7 @@ class TelemetryIngestor:
         self,
         fusion_engine: FusionEngine,
         agent_sources: Optional[List[str]] = None,
-        poll_interval: int = 10
+        poll_interval: int = 10,
     ):
         """Initialize telemetry ingestor
 
@@ -70,9 +70,13 @@ class TelemetryIngestor:
         self.events_ingested = 0
         self.last_ingest_time = None
 
-        logger.info(f"TelemetryIngestor initialized with {len(self.agent_sources)} sources")
+        logger.info(
+            f"TelemetryIngestor initialized with {len(self.agent_sources)} sources"
+        )
 
-    def _read_events_from_queue(self, db_path: str, limit: int = 1000) -> List[telemetry_pb2.DeviceTelemetry]:
+    def _read_events_from_queue(
+        self, db_path: str, limit: int = 1000
+    ) -> List[telemetry_pb2.DeviceTelemetry]:
         """Read telemetry from agent LocalQueue database
 
         LocalQueue schema:
@@ -103,7 +107,7 @@ class TelemetryIngestor:
 
             rows = db.execute(
                 "SELECT id, idem, bytes FROM queue WHERE ts_ns > ? ORDER BY ts_ns DESC LIMIT ?",
-                (cutoff, limit)
+                (cutoff, limit),
             ).fetchall()
 
             events = []
@@ -122,7 +126,9 @@ class TelemetryIngestor:
                     self.last_seen_ids[db_path].add(idem)
 
                 except Exception as e:
-                    logger.error(f"Failed to parse telemetry from {db_path} (idem={idem}): {e}")
+                    logger.error(
+                        f"Failed to parse telemetry from {db_path} (idem={idem}): {e}"
+                    )
 
             db.close()
 
@@ -138,7 +144,9 @@ class TelemetryIngestor:
             logger.error(f"Failed to read from {db_path}: {e}")
             return []
 
-    def _read_events_from_wal(self, db_path: str, limit: int = 1000) -> List[telemetry_pb2.DeviceTelemetry]:
+    def _read_events_from_wal(
+        self, db_path: str, limit: int = 1000
+    ) -> List[telemetry_pb2.DeviceTelemetry]:
         """Read telemetry from FlowAgent WAL database
 
         FlowAgent WAL schema:
@@ -169,7 +177,7 @@ class TelemetryIngestor:
 
             rows = db.execute(
                 "SELECT id, idem, bytes FROM wal WHERE ts_ns > ? ORDER BY ts_ns DESC LIMIT ?",
-                (cutoff, limit)
+                (cutoff, limit),
             ).fetchall()
 
             events = []
@@ -187,12 +195,14 @@ class TelemetryIngestor:
                     envelope = telemetry_pb2.UniversalEnvelope()
                     envelope.ParseFromString(bytes(blob))
 
-                    if envelope.HasField('device_telemetry'):
+                    if envelope.HasField("device_telemetry"):
                         events.append(envelope.device_telemetry)
                         self.last_seen_ids[db_path].add(idem)
 
                 except Exception as e:
-                    logger.debug(f"Failed to parse WAL entry from {db_path} (idem={idem}): {e}")
+                    logger.debug(
+                        f"Failed to parse WAL entry from {db_path} (idem={idem}): {e}"
+                    )
 
             db.close()
 
@@ -208,7 +218,9 @@ class TelemetryIngestor:
             logger.error(f"Failed to read from WAL {db_path}: {e}")
             return []
 
-    def _convert_to_event_views(self, device_telem: telemetry_pb2.DeviceTelemetry) -> List[TelemetryEventView]:
+    def _convert_to_event_views(
+        self, device_telem: telemetry_pb2.DeviceTelemetry
+    ) -> List[TelemetryEventView]:
         """Convert DeviceTelemetry protobuf to TelemetryEventView objects
 
         Args:
@@ -225,7 +237,9 @@ class TelemetryIngestor:
                 view = TelemetryEventView.from_protobuf(pb_event, device_id)
                 views.append(view)
             except Exception as e:
-                logger.error(f"Failed to convert event {pb_event.event_id} to view: {e}")
+                logger.error(
+                    f"Failed to convert event {pb_event.event_id} to view: {e}"
+                )
 
         return views
 
@@ -241,7 +255,7 @@ class TelemetryIngestor:
         for source in self.agent_sources:
             try:
                 # Determine source type by path convention
-                if 'wal' in source.lower():
+                if "wal" in source.lower():
                     device_telems = self._read_events_from_wal(source)
                 else:
                     device_telems = self._read_events_from_queue(source)
@@ -265,12 +279,16 @@ class TelemetryIngestor:
         for source in self.last_seen_ids:
             if len(self.last_seen_ids[source]) > 10000:
                 # Clear half to prevent unbounded growth
-                self.last_seen_ids[source] = set(list(self.last_seen_ids[source])[-5000:])
+                self.last_seen_ids[source] = set(
+                    list(self.last_seen_ids[source])[-5000:]
+                )
 
         duration = time.time() - start
 
         if total_events > 0:
-            logger.info(f"Ingested {total_events} events from {len(self.agent_sources)} sources in {duration:.2f}s")
+            logger.info(
+                f"Ingested {total_events} events from {len(self.agent_sources)} sources in {duration:.2f}s"
+            )
         else:
             logger.debug(f"No new events in poll cycle ({duration:.2f}s)")
 
@@ -310,7 +328,9 @@ class TelemetryIngestor:
 
                     # Print summary
                     logger.info(f"Total events ingested: {self.events_ingested}")
-                    logger.info(f"Devices tracked: {len(self.fusion_engine.device_state)}")
+                    logger.info(
+                        f"Devices tracked: {len(self.fusion_engine.device_state)}"
+                    )
 
             except KeyboardInterrupt:
                 logger.info("Shutting down ingestor...")
@@ -327,35 +347,46 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="AMOSKYS Telemetry Ingestor")
-    parser.add_argument('--poll-interval', type=int, default=10,
-                        help='Seconds between polling agent sources')
-    parser.add_argument('--fusion-db', type=str, default='data/intel/fusion.db',
-                        help='FusionEngine database path')
-    parser.add_argument('--fusion-window', type=int, default=30,
-                        help='FusionEngine correlation window in minutes')
-    parser.add_argument('--sources', nargs='+',
-                        help='Agent data source paths (overrides defaults)')
+    parser.add_argument(
+        "--poll-interval",
+        type=int,
+        default=10,
+        help="Seconds between polling agent sources",
+    )
+    parser.add_argument(
+        "--fusion-db",
+        type=str,
+        default="data/intel/fusion.db",
+        help="FusionEngine database path",
+    )
+    parser.add_argument(
+        "--fusion-window",
+        type=int,
+        default=30,
+        help="FusionEngine correlation window in minutes",
+    )
+    parser.add_argument(
+        "--sources", nargs="+", help="Agent data source paths (overrides defaults)"
+    )
 
     args = parser.parse_args()
 
     # Configure logging
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
 
     # Initialize FusionEngine
     logger.info("Initializing FusionEngine...")
     fusion_engine = FusionEngine(
-        db_path=args.fusion_db,
-        window_minutes=args.fusion_window
+        db_path=args.fusion_db, window_minutes=args.fusion_window
     )
 
     # Initialize Ingestor
     ingestor = TelemetryIngestor(
         fusion_engine=fusion_engine,
         agent_sources=args.sources,
-        poll_interval=args.poll_interval
+        poll_interval=args.poll_interval,
     )
 
     # Run
@@ -365,5 +396,5 @@ def main():
         logger.info("Ingestor stopped by user")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

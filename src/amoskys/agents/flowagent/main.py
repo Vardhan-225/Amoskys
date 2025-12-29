@@ -48,18 +48,27 @@ RETRY_TIMEOUT = config.agent.retry_timeout
 
 # ---- Metrics (with collision handling for repeated instantiation in tests)
 try:
-    AGENT_DROPPED_OVERSIZE = Counter("agent_dropped_oversize_total", "Dropped locally due to oversize payload")
+    AGENT_DROPPED_OVERSIZE = Counter(
+        "agent_dropped_oversize_total", "Dropped locally due to oversize payload"
+    )
 except ValueError:
-    AGENT_DROPPED_OVERSIZE = Counter("_dummy", "dummy")  # Placeholder if already registered
-    
+    AGENT_DROPPED_OVERSIZE = Counter(
+        "_dummy", "dummy"
+    )  # Placeholder if already registered
+
 try:
-    AGENT_RATE_LIMITED = Counter("agent_rate_limited_total", "Publish attempts rate-limited")
+    AGENT_RATE_LIMITED = Counter(
+        "agent_rate_limited_total", "Publish attempts rate-limited"
+    )
 except ValueError:
     AGENT_RATE_LIMITED = Counter("_dummy2", "dummy")
-    
+
 try:
-    AGENT_SEND_LAT_MS = Histogram("agent_send_latency_ms", "Client-side publish latency (ms)",
-                                       buckets=(1,2,5,10,20,50,100,200,500,1000,2000,5000))
+    AGENT_SEND_LAT_MS = Histogram(
+        "agent_send_latency_ms",
+        "Client-side publish latency (ms)",
+        buckets=(1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000),
+    )
 except ValueError:
     AGENT_SEND_LAT_MS = Histogram("_dummy3", "dummy")
 
@@ -67,37 +76,37 @@ try:
     AG_PUB_OK = Counter("agent_publish_ok_total", "OK acks")
 except ValueError:
     AG_PUB_OK = Counter("_dummy4", "dummy")
-    
+
 try:
     AG_PUB_RETRY = Counter("agent_publish_retry_total", "Retry acks")
 except ValueError:
     AG_PUB_RETRY = Counter("_dummy5", "dummy")
-    
+
 try:
     AG_PUB_FAIL = Counter("agent_publish_fail_total", "RPC failures")
 except ValueError:
     AG_PUB_FAIL = Counter("_dummy6", "dummy")
-    
+
 try:
     AG_WAL_BYTES = Gauge("agent_wal_backlog_bytes", "Bytes in WAL")
 except ValueError:
     AG_WAL_BYTES = Gauge("_dummy7", "dummy")
-    
+
 try:
     AG_PUB_LAT = Histogram("agent_publish_latency_ms", "Publish latency (ms)")
 except ValueError:
     AG_PUB_LAT = Histogram("_dummy8", "dummy")
-    
+
 try:
     HEALTH_HITS = Counter("agent_health_hits_total", "Count of /healthz requests")
 except ValueError:
     HEALTH_HITS = Counter("_dummy9", "dummy")
-    
+
 try:
     READINESS_HITS = Counter("agent_ready_hits_total", "Count of /ready requests")
 except ValueError:
     READINESS_HITS = Counter("_dummy10", "dummy")
-    
+
 try:
     READY_STATE = Gauge("agent_ready_state", "1=ready, 0=not-ready")
 except ValueError:
@@ -108,6 +117,7 @@ stop = False
 READY = False  # set to True after WAL/gRPC init completes
 
 _last_send_ts = 0.0
+
 
 def _on_hup(signum, frame):
     """Signal handler for SIGHUP - triggers graceful restart.
@@ -121,6 +131,7 @@ def _on_hup(signum, frame):
     """
     global _SHOULD_EXIT
     _SHOULD_EXIT = True
+
 
 def _graceful(signum, frame):
     """Signal handler for SIGINT/SIGTERM - triggers graceful shutdown.
@@ -138,9 +149,11 @@ def _graceful(signum, frame):
     READY_STATE.set(0)
     logging.info("Shutting down… signal=%s", signum)
 
+
 signal.signal(signal.SIGHUP, _on_hup)
 signal.signal(signal.SIGINT, _graceful)
 signal.signal(signal.SIGTERM, _graceful)
+
 
 def idem_key(flow: pb.FlowEvent, ts_ns: int) -> str:
     """Generate idempotency key for a flow event.
@@ -164,6 +177,7 @@ def idem_key(flow: pb.FlowEvent, ts_ns: int) -> str:
     h.update(str(flow.dst_port).encode())
     h.update(flow.protocol.encode())
     return h.hexdigest()
+
 
 def make_envelope(flow: pb.FlowEvent) -> pb.Envelope:
     """Wrap a flow event in a signed envelope.
@@ -191,6 +205,7 @@ def make_envelope(flow: pb.FlowEvent) -> pb.Envelope:
     sk = load_private_key(ED25519_SK_PATH)
     env.sig = sign(sk, canonical_bytes(env))
     return env
+
 
 def grpc_channel():
     """Create a secure gRPC channel to the EventBus.
@@ -225,9 +240,7 @@ def grpc_channel():
         with open(client_key_path, "rb") as f:
             key = f.read()
         creds = grpc.ssl_channel_credentials(
-            root_certificates=ca,
-            private_key=key,
-            certificate_chain=crt
+            root_certificates=ca, private_key=key, certificate_chain=crt
         )
         logger.info("Using mutual TLS for EventBus connection")
     else:
@@ -239,6 +252,7 @@ def grpc_channel():
         )
 
     return grpc.secure_channel(config.agent.bus_address, creds)
+
 
 def sleep_with_jitter(ms_hint: int):
     """Sleep with randomized jitter to avoid thundering herd.
@@ -253,6 +267,7 @@ def sleep_with_jitter(ms_hint: int):
     jitter = base * random.uniform(0.2, 0.6)
     time.sleep(base + jitter)
 
+
 def _size_ok(env) -> bool:
     """Check if envelope size is within limits.
 
@@ -266,6 +281,7 @@ def _size_ok(env) -> bool:
         return len(env.SerializeToString()) <= MAX_ENV_BYTES
     except Exception:
         return False
+
 
 def _rate_limit():
     """Enforce send rate limit to prevent overwhelming the EventBus.
@@ -288,6 +304,7 @@ def _rate_limit():
         time.sleep(wait)
     _last_send_ts = time.time()
 
+
 def _backoff_delay(attempt: int) -> float:
     """Calculate exponential backoff delay with jitter.
 
@@ -300,8 +317,9 @@ def _backoff_delay(attempt: int) -> float:
     Returns:
         float: Delay in seconds before next retry
     """
-    base = min(2.0, 0.05 * (2 ** attempt))
+    base = min(2.0, 0.05 * (2**attempt))
     return base * (0.5 + random.random())
+
 
 def publish_with_safety(stub: pbrpc.EventBusStub, envelope: pb.Envelope):
     """Publish envelope with automatic retry on transient failures.
@@ -340,6 +358,7 @@ def publish_with_safety(stub: pbrpc.EventBusStub, envelope: pb.Envelope):
             continue
         return False, getattr(ack, "reason", "fail")
 
+
 def publish_with_wal(env: pb.Envelope, wal: SQLiteWAL):
     """Publish envelope with WAL-backed reliability guarantees.
 
@@ -362,7 +381,9 @@ def publish_with_wal(env: pb.Envelope, wal: SQLiteWAL):
     """
     if not _size_ok(env):
         AGENT_DROPPED_OVERSIZE.inc()
-        logging.warning(f"Envelope oversize: {len(env.SerializeToString())} bytes, dropped")
+        logging.warning(
+            f"Envelope oversize: {len(env.SerializeToString())} bytes, dropped"
+        )
         return
     try:
         with grpc_channel() as ch:
@@ -372,7 +393,8 @@ def publish_with_wal(env: pb.Envelope, wal: SQLiteWAL):
     except grpc.RpcError as e:
         AG_PUB_FAIL.inc()
         logging.warning("bus error: %s; WAL append", e.code())
-        wal.append(env); AG_WAL_BYTES.set(wal.backlog_bytes())
+        wal.append(env)
+        AG_WAL_BYTES.set(wal.backlog_bytes())
         sleep_with_jitter(200)
         return
 
@@ -387,6 +409,7 @@ def publish_with_wal(env: pb.Envelope, wal: SQLiteWAL):
         AG_PUB_FAIL.inc()
     AG_WAL_BYTES.set(wal.backlog_bytes())
 
+
 def drain_once(wal: SQLiteWAL) -> int:
     """Drain up to 500 envelopes from WAL to EventBus.
 
@@ -399,12 +422,15 @@ def drain_once(wal: SQLiteWAL) -> int:
     Returns:
         int: Number of envelopes successfully drained from WAL
     """
+
     def _pub(e: pb.Envelope):
         with grpc_channel() as ch:
             stub = pbrpc.EventBusStub(ch)
             return stub.Publish(e, timeout=2.0)
+
     drained = wal.drain(_pub, limit=500)
     return drained
+
 
 def start_health():
     """Start HTTP health check server in background thread.
@@ -419,6 +445,7 @@ def start_health():
     Updates metrics:
         HEALTH_HITS, READINESS_HITS, READY_STATE
     """
+
     class H(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path == "/healthz":
@@ -432,7 +459,7 @@ def start_health():
             elif self.path == "/ready":
                 global READY
                 READINESS_HITS.inc()
-                body = (b"ready" if READY else b"not-ready")
+                body = b"ready" if READY else b"not-ready"
                 self.send_response(200 if READY else 503)
                 self.send_header("Content-Type", "text/plain; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
@@ -441,13 +468,18 @@ def start_health():
             else:
                 self.send_response(404)
                 self.end_headers()
+
         def log_message(self, format, *args):
             return
+
     threading.Thread(
-        target=lambda: HTTPServer(("0.0.0.0", config.agent.health_port), H).serve_forever(),
+        target=lambda: HTTPServer(
+            ("0.0.0.0", config.agent.health_port), H
+        ).serve_forever(),
         daemon=True,
     ).start()
     logger.info("Agent health on :%d  (GET /healthz)", config.agent.health_port)
+
 
 def main():
     """Main agent loop - WAL drain and health management.
@@ -489,13 +521,15 @@ def main():
         drained = drain_once(wal)
         if SEND_RATE > 0:
             now = time.time()
-            wait = max(0, 1.0/SEND_RATE - (now - last_sent))
-            if wait > 0: time.sleep(wait)
+            wait = max(0, 1.0 / SEND_RATE - (now - last_sent))
+            if wait > 0:
+                time.sleep(wait)
             last_sent = time.time()
         elif drained == 0:
             time.sleep(2)
         time.sleep(0.2)
     # clean up servers/threads/resources here
+
 
 if __name__ == "__main__":
     start_http_server(config.agent.metrics_port)

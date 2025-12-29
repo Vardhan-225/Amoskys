@@ -23,6 +23,7 @@ Usage:
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 
+
 def load_private_key(path: str) -> ed25519.Ed25519PrivateKey:
     """Load Ed25519 private key from raw 32-byte file.
 
@@ -38,6 +39,7 @@ def load_private_key(path: str) -> ed25519.Ed25519PrivateKey:
     """
     with open(path, "rb") as f:
         return ed25519.Ed25519PrivateKey.from_private_bytes(f.read())
+
 
 def load_public_key(path: str) -> ed25519.Ed25519PublicKey:
     """Load Ed25519 public key from PEM-encoded file.
@@ -58,6 +60,7 @@ def load_public_key(path: str) -> ed25519.Ed25519PublicKey:
             raise ValueError(f"Expected Ed25519 public key, got {type(key)}")
         return key
 
+
 def sign(sk: ed25519.Ed25519PrivateKey, data: bytes) -> bytes:
     """Create Ed25519 signature over data.
 
@@ -72,6 +75,7 @@ def sign(sk: ed25519.Ed25519PrivateKey, data: bytes) -> bytes:
         bytes: 64-byte Ed25519 signature
     """
     return sk.sign(data)
+
 
 def verify(pk, data: bytes, sig: bytes) -> bool:
     """Verify Ed25519 signature over data.

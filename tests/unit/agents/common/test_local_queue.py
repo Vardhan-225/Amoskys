@@ -25,7 +25,7 @@ class TestQueueBasics:
             device_id="test-device",
             device_type="HOST",
             protocol="TEST",
-            timestamp_ns=1234567890
+            timestamp_ns=1234567890,
         )
 
         # Enqueue
@@ -43,7 +43,7 @@ class TestQueueBasics:
                 device_id=f"device-{i}",
                 device_type="HOST",
                 protocol="TEST",
-                timestamp_ns=1234567890 + i
+                timestamp_ns=1234567890 + i,
             )
             queue.enqueue(telemetry, f"key-{i}")
 
@@ -57,14 +57,14 @@ class TestQueueBasics:
             device_id="device-1",
             device_type="HOST",
             protocol="TEST",
-            timestamp_ns=1234567890
+            timestamp_ns=1234567890,
         )
 
         telemetry2 = telemetry_pb2.DeviceTelemetry(
             device_id="device-2",
             device_type="HOST",
             protocol="TEST",
-            timestamp_ns=9999999999
+            timestamp_ns=9999999999,
         )
 
         # First enqueue succeeds
@@ -84,9 +84,7 @@ class TestQueueBasics:
         # Add events
         for i in range(5):
             telemetry = telemetry_pb2.DeviceTelemetry(
-                device_id=f"device-{i}",
-                device_type="HOST",
-                protocol="TEST"
+                device_id=f"device-{i}", device_type="HOST", protocol="TEST"
             )
             queue.enqueue(telemetry, f"key-{i}")
 
@@ -108,9 +106,7 @@ class TestDrain:
         # Enqueue 3 events
         for i in range(3):
             telemetry = telemetry_pb2.DeviceTelemetry(
-                device_id=f"device-{i}",
-                device_type="HOST",
-                protocol="TEST"
+                device_id=f"device-{i}", device_type="HOST", protocol="TEST"
             )
             queue.enqueue(telemetry, f"key-{i}")
 
@@ -137,9 +133,7 @@ class TestDrain:
         # Enqueue 5 events
         for i in range(5):
             telemetry = telemetry_pb2.DeviceTelemetry(
-                device_id=f"device-{i}",
-                device_type="HOST",
-                protocol="TEST"
+                device_id=f"device-{i}", device_type="HOST", protocol="TEST"
             )
             queue.enqueue(telemetry, f"key-{i}")
 
@@ -151,13 +145,18 @@ class TestDrain:
             if len(published) == 1:
                 return telemetry_pb2.UniversalAck(status=telemetry_pb2.UniversalAck.OK)
             else:
-                return telemetry_pb2.UniversalAck(status=telemetry_pb2.UniversalAck.RETRY)
+                return telemetry_pb2.UniversalAck(
+                    status=telemetry_pb2.UniversalAck.RETRY
+                )
 
         # Drain
         drained = queue.drain(publish_fn, limit=10)
         assert drained == 1  # Only first event drained
         assert queue.size() == 4  # 4 events remain
-        assert published == ["device-0", "device-1"]  # Both attempted, only first succeeded
+        assert published == [
+            "device-0",
+            "device-1",
+        ]  # Both attempted, only first succeeded
 
     def test_drain_with_exception(self, tmp_path):
         """Verify drain stops on publish exception"""
@@ -166,9 +165,7 @@ class TestDrain:
         # Enqueue 5 events
         for i in range(5):
             telemetry = telemetry_pb2.DeviceTelemetry(
-                device_id=f"device-{i}",
-                device_type="HOST",
-                protocol="TEST"
+                device_id=f"device-{i}", device_type="HOST", protocol="TEST"
             )
             queue.enqueue(telemetry, f"key-{i}")
 
@@ -185,7 +182,9 @@ class TestDrain:
         # Drain
         drained = queue.drain(publish_fn, limit=10)
         assert drained == 1  # Only first event drained
-        assert queue.size() == 4  # Second event still in queue with retry counter incremented
+        assert (
+            queue.size() == 4
+        )  # Second event still in queue with retry counter incremented
 
     def test_drain_limit(self, tmp_path):
         """Verify drain respects limit parameter"""
@@ -194,9 +193,7 @@ class TestDrain:
         # Enqueue 10 events
         for i in range(10):
             telemetry = telemetry_pb2.DeviceTelemetry(
-                device_id=f"device-{i}",
-                device_type="HOST",
-                protocol="TEST"
+                device_id=f"device-{i}", device_type="HOST", protocol="TEST"
             )
             queue.enqueue(telemetry, f"key-{i}")
 
@@ -232,9 +229,7 @@ class TestRetryLogic:
 
         # Enqueue event
         telemetry = telemetry_pb2.DeviceTelemetry(
-            device_id="test-device",
-            device_type="HOST",
-            protocol="TEST"
+            device_id="test-device", device_type="HOST", protocol="TEST"
         )
         queue.enqueue(telemetry, "retry-test")
         assert queue.size() == 1
@@ -273,9 +268,9 @@ class TestBackpressure:
                         event_id=f"event-{i}",
                         event_type="METRIC",
                         severity="INFO",
-                        event_timestamp_ns=1234567890 + i
+                        event_timestamp_ns=1234567890 + i,
                     )
-                ]
+                ],
             )
             queue.enqueue(telemetry, f"key-{i}")
 
@@ -291,9 +286,7 @@ class TestBackpressure:
 
         # Enqueue known-size event
         telemetry = telemetry_pb2.DeviceTelemetry(
-            device_id="test",
-            device_type="HOST",
-            protocol="TEST"
+            device_id="test", device_type="HOST", protocol="TEST"
         )
         serialized_size = len(telemetry.SerializeToString())
 
@@ -312,9 +305,7 @@ class TestPersistence:
         queue1 = LocalQueue(path=db_path)
         for i in range(5):
             telemetry = telemetry_pb2.DeviceTelemetry(
-                device_id=f"device-{i}",
-                device_type="HOST",
-                protocol="TEST"
+                device_id=f"device-{i}", device_type="HOST", protocol="TEST"
             )
             queue1.enqueue(telemetry, f"key-{i}")
 
@@ -335,9 +326,7 @@ class TestPersistence:
         # Enqueue events in order
         for i in range(5):
             telemetry = telemetry_pb2.DeviceTelemetry(
-                device_id=f"device-{i}",
-                device_type="HOST",
-                protocol="TEST"
+                device_id=f"device-{i}", device_type="HOST", protocol="TEST"
             )
             queue.enqueue(telemetry, f"key-{i}")
 
@@ -351,7 +340,13 @@ class TestPersistence:
         queue.drain(publish_fn, limit=10)
 
         # Should be in FIFO order
-        assert drained_order == ["device-0", "device-1", "device-2", "device-3", "device-4"]
+        assert drained_order == [
+            "device-0",
+            "device-1",
+            "device-2",
+            "device-3",
+            "device-4",
+        ]
 
 
 if __name__ == "__main__":

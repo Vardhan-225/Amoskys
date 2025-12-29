@@ -27,19 +27,19 @@ from amoskys.intel.models import (
     TelemetryEventView,
     RiskLevel,
     Severity,
-    MitreTactic
+    MitreTactic,
 )
 from amoskys.intel.rules import evaluate_rules, ALL_RULES
 
 __all__ = [
-    'FusionEngine',
-    'TelemetryIngestor',
-    'DeviceRiskSnapshot',
-    'Incident',
-    'TelemetryEventView',
-    'RiskLevel',
-    'Severity',
-    'MitreTactic',
-    'evaluate_rules',
-    'ALL_RULES'
+    "FusionEngine",
+    "TelemetryIngestor",
+    "DeviceRiskSnapshot",
+    "Incident",
+    "TelemetryEventView",
+    "RiskLevel",
+    "Severity",
+    "MitreTactic",
+    "evaluate_rules",
+    "ALL_RULES",
 ]

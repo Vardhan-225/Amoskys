@@ -8,4 +8,4 @@ This package provides shared functionality used across all agent implementations
 
 from amoskys.agents.common.local_queue import LocalQueue
 
-__all__ = ['LocalQueue']
+__all__ = ["LocalQueue"]

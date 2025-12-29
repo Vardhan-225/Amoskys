@@ -36,8 +36,12 @@ logger = logging.getLogger("PersistenceGuardAgent")
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
-QUEUE_PATH = getattr(config.agent, "persistence_queue_path", "data/queue/persistence_agent.db")
-SNAPSHOT_PATH = getattr(config.agent, "persistence_snapshot_path", "data/persistence_snapshot.json")
+QUEUE_PATH = getattr(
+    config.agent, "persistence_queue_path", "data/queue/persistence_agent.db"
+)
+SNAPSHOT_PATH = getattr(
+    config.agent, "persistence_snapshot_path", "data/persistence_snapshot.json"
+)
 
 
 class PersistenceGuardAgent:
@@ -66,9 +70,7 @@ class PersistenceGuardAgent:
         self.snapshot_path = snapshot_path or SNAPSHOT_PATH
 
         self.queue = LocalQueue(
-            path=self.queue_path,
-            max_bytes=50 * 1024 * 1024,  # 50MB
-            max_retries=10
+            path=self.queue_path, max_bytes=50 * 1024 * 1024, max_retries=10  # 50MB
         )
 
         # Load existing snapshot or create new
@@ -89,7 +91,7 @@ class PersistenceGuardAgent:
             credentials = grpc.ssl_channel_credentials(
                 root_certificates=ca_cert,
                 private_key=client_key,
-                certificate_chain=client_cert
+                certificate_chain=client_cert,
             )
             channel = grpc.secure_channel(EVENTBUS_ADDRESS, credentials)
             logger.debug("Created secure gRPC channel with mTLS")
@@ -109,7 +111,7 @@ class PersistenceGuardAgent:
         """
         if os.path.exists(self.snapshot_path):
             try:
-                with open(self.snapshot_path, 'r') as f:
+                with open(self.snapshot_path, "r") as f:
                     snapshot = json.load(f)
                 logger.info(f"Loaded snapshot with {len(snapshot)} entries")
                 return snapshot
@@ -126,7 +128,7 @@ class PersistenceGuardAgent:
         """
         try:
             os.makedirs(os.path.dirname(self.snapshot_path) or ".", exist_ok=True)
-            with open(self.snapshot_path, 'w') as f:
+            with open(self.snapshot_path, "w") as f:
                 json.dump(snapshot, f, indent=2)
             logger.debug(f"Saved snapshot with {len(snapshot)} entries")
         except Exception as e:
@@ -142,7 +144,7 @@ class PersistenceGuardAgent:
             Hex digest of SHA256 hash or None if error
         """
         try:
-            with open(path, 'rb') as f:
+            with open(path, "rb") as f:
                 return hashlib.sha256(f.read()).hexdigest()
         except Exception as e:
             logger.debug(f"Failed to hash {path}: {e}")
@@ -163,7 +165,7 @@ class PersistenceGuardAgent:
 
             try:
                 for filename in os.listdir(base_path):
-                    if not filename.endswith('.plist'):
+                    if not filename.endswith(".plist"):
                         continue
 
                     full_path = os.path.join(base_path, filename)
@@ -177,11 +179,11 @@ class PersistenceGuardAgent:
         try:
             users = self._get_users()
             for user in users:
-                user_path = self.USER_LAUNCHD_TEMPLATE.format(home=user['home'])
+                user_path = self.USER_LAUNCHD_TEMPLATE.format(home=user["home"])
                 if os.path.exists(user_path):
                     try:
                         for filename in os.listdir(user_path):
-                            if not filename.endswith('.plist'):
+                            if not filename.endswith(".plist"):
                                 continue
 
                             full_path = os.path.join(user_path, filename)
@@ -203,23 +205,23 @@ class PersistenceGuardAgent:
             Metadata dictionary
         """
         metadata = {
-            'type': 'LAUNCH_DAEMON' if '/LaunchDaemons/' in path else 'LAUNCH_AGENT',
-            'mtime': os.path.getmtime(path),
-            'hash': self._get_file_hash(path),
-            'program': None,
-            'program_arguments': None,
-            'run_at_load': False,
-            'keep_alive': False
+            "type": "LAUNCH_DAEMON" if "/LaunchDaemons/" in path else "LAUNCH_AGENT",
+            "mtime": os.path.getmtime(path),
+            "hash": self._get_file_hash(path),
+            "program": None,
+            "program_arguments": None,
+            "run_at_load": False,
+            "keep_alive": False,
         }
 
         try:
-            with open(path, 'rb') as f:
+            with open(path, "rb") as f:
                 plist = plistlib.load(f)
 
-            metadata['program'] = plist.get('Program')
-            metadata['program_arguments'] = plist.get('ProgramArguments', [])
-            metadata['run_at_load'] = plist.get('RunAtLoad', False)
-            metadata['keep_alive'] = plist.get('KeepAlive', False)
+            metadata["program"] = plist.get("Program")
+            metadata["program_arguments"] = plist.get("ProgramArguments", [])
+            metadata["run_at_load"] = plist.get("RunAtLoad", False)
+            metadata["keep_alive"] = plist.get("KeepAlive", False)
         except Exception as e:
             logger.debug(f"Failed to parse plist {path}: {e}")
 
@@ -236,22 +238,23 @@ class PersistenceGuardAgent:
         try:
             # Get current user's crontab
             result = subprocess.run(
-                ['crontab', '-l'],
-                capture_output=True,
-                text=True,
-                timeout=5
+                ["crontab", "-l"], capture_output=True, text=True, timeout=5
             )
 
             if result.returncode == 0:
-                current_user = os.getenv('USER', 'unknown')
-                cron_lines = [line for line in result.stdout.splitlines() if line.strip() and not line.startswith('#')]
+                current_user = os.getenv("USER", "unknown")
+                cron_lines = [
+                    line
+                    for line in result.stdout.splitlines()
+                    if line.strip() and not line.startswith("#")
+                ]
 
                 if cron_lines:
                     entries[f"cron:{current_user}"] = {
-                        'type': 'CRON',
-                        'user': current_user,
-                        'entries': cron_lines,
-                        'hash': hashlib.sha256(result.stdout.encode()).hexdigest()
+                        "type": "CRON",
+                        "user": current_user,
+                        "entries": cron_lines,
+                        "hash": hashlib.sha256(result.stdout.encode()).hexdigest(),
                     }
         except subprocess.TimeoutExpired:
             logger.warning("crontab command timed out")
@@ -271,23 +274,27 @@ class PersistenceGuardAgent:
         try:
             users = self._get_users()
             for user in users:
-                keys_path = self.USER_SSH_KEYS_TEMPLATE.format(home=user['home'])
+                keys_path = self.USER_SSH_KEYS_TEMPLATE.format(home=user["home"])
 
                 if os.path.exists(keys_path):
                     try:
-                        with open(keys_path, 'r') as f:
+                        with open(keys_path, "r") as f:
                             content = f.read()
 
                         # Parse keys
-                        keys = [line.strip() for line in content.splitlines() if line.strip() and not line.startswith('#')]
+                        keys = [
+                            line.strip()
+                            for line in content.splitlines()
+                            if line.strip() and not line.startswith("#")
+                        ]
 
                         entries[keys_path] = {
-                            'type': 'SSH_KEYS',
-                            'user': user['name'],
-                            'mtime': os.path.getmtime(keys_path),
-                            'hash': hashlib.sha256(content.encode()).hexdigest(),
-                            'key_count': len(keys),
-                            'keys': keys[:10]  # Store first 10 for reference
+                            "type": "SSH_KEYS",
+                            "user": user["name"],
+                            "mtime": os.path.getmtime(keys_path),
+                            "hash": hashlib.sha256(content.encode()).hexdigest(),
+                            "key_count": len(keys),
+                            "keys": keys[:10],  # Store first 10 for reference
                         }
                     except Exception as e:
                         logger.debug(f"Failed to read SSH keys {keys_path}: {e}")
@@ -307,10 +314,10 @@ class PersistenceGuardAgent:
         try:
             # On macOS, use dscl to list users
             result = subprocess.run(
-                ['dscl', '.', 'list', '/Users'],
+                ["dscl", ".", "list", "/Users"],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
             )
 
             if result.returncode == 0:
@@ -318,30 +325,34 @@ class PersistenceGuardAgent:
                     username = username.strip()
 
                     # Skip system users
-                    if username.startswith('_') or username in ['daemon', 'nobody', 'root']:
+                    if username.startswith("_") or username in [
+                        "daemon",
+                        "nobody",
+                        "root",
+                    ]:
                         continue
 
                     # Get home directory
                     home_result = subprocess.run(
-                        ['dscl', '.', 'read', f'/Users/{username}', 'NFSHomeDirectory'],
+                        ["dscl", ".", "read", f"/Users/{username}", "NFSHomeDirectory"],
                         capture_output=True,
                         text=True,
-                        timeout=5
+                        timeout=5,
                     )
 
                     if home_result.returncode == 0:
                         # Parse output: "NFSHomeDirectory: /Users/username"
-                        home = home_result.stdout.split(':', 1)[1].strip()
-                        users.append({'name': username, 'home': home})
+                        home = home_result.stdout.split(":", 1)[1].strip()
+                        users.append({"name": username, "home": home})
         except Exception as e:
             logger.debug(f"Failed to get users: {e}")
 
         # Fallback: at least get current user
         if not users:
-            current_user = os.getenv('USER')
-            home = os.path.expanduser('~')
+            current_user = os.getenv("USER")
+            home = os.path.expanduser("~")
             if current_user:
-                users.append({'name': current_user, 'home': home})
+                users.append({"name": current_user, "home": home})
 
         return users
 
@@ -375,12 +386,14 @@ class PersistenceGuardAgent:
         # Detect additions
         for path, metadata in new_snapshot.items():
             if path not in old_snapshot:
-                changes.append({
-                    'operation': 'CREATED',
-                    'path': path,
-                    'type': metadata['type'],
-                    'metadata': metadata
-                })
+                changes.append(
+                    {
+                        "operation": "CREATED",
+                        "path": path,
+                        "type": metadata["type"],
+                        "metadata": metadata,
+                    }
+                )
 
         # Detect modifications
         for path, new_meta in new_snapshot.items():
@@ -388,24 +401,28 @@ class PersistenceGuardAgent:
                 old_meta = old_snapshot[path]
 
                 # Check if hash changed
-                if new_meta.get('hash') != old_meta.get('hash'):
-                    changes.append({
-                        'operation': 'MODIFIED',
-                        'path': path,
-                        'type': new_meta['type'],
-                        'metadata': new_meta,
-                        'old_metadata': old_meta
-                    })
+                if new_meta.get("hash") != old_meta.get("hash"):
+                    changes.append(
+                        {
+                            "operation": "MODIFIED",
+                            "path": path,
+                            "type": new_meta["type"],
+                            "metadata": new_meta,
+                            "old_metadata": old_meta,
+                        }
+                    )
 
         # Detect deletions
         for path in old_snapshot:
             if path not in new_snapshot:
-                changes.append({
-                    'operation': 'DELETED',
-                    'path': path,
-                    'type': old_snapshot[path]['type'],
-                    'metadata': old_snapshot[path]
-                })
+                changes.append(
+                    {
+                        "operation": "DELETED",
+                        "path": path,
+                        "type": old_snapshot[path]["type"],
+                        "metadata": old_snapshot[path],
+                    }
+                )
 
         return changes
 
@@ -426,46 +443,52 @@ class PersistenceGuardAgent:
         for change in changes:
             # Map operation to severity
             severity = "INFO"
-            if change['operation'] == 'CREATED':
+            if change["operation"] == "CREATED":
                 severity = "WARN"  # New persistence is suspicious
-            elif change['operation'] == 'MODIFIED':
+            elif change["operation"] == "MODIFIED":
                 severity = "WARN"  # Modification is suspicious
-            elif change['operation'] == 'DELETED':
+            elif change["operation"] == "DELETED":
                 severity = "INFO"  # Deletion might be cleanup
 
             # Calculate risk
             risk_score = 0.3  # Default moderate risk for any persistence change
-            if change['type'] == 'SSH_KEYS':
+            if change["type"] == "SSH_KEYS":
                 risk_score = 0.8  # SSH keys are high risk
-            elif change['type'] in ['LAUNCH_DAEMON', 'LAUNCH_AGENT']:
+            elif change["type"] in ["LAUNCH_DAEMON", "LAUNCH_AGENT"]:
                 # Check if it's a suspicious location
-                if '/Users/' in change['path']:
+                if "/Users/" in change["path"]:
                     risk_score = 0.7  # User launch agents are more suspicious
 
             audit_event = telemetry_pb2.AuditEvent(
                 audit_category="CHANGE",
-                action_performed=change['operation'],
-                object_type=change['type'],
-                object_id=change['path'],
+                action_performed=change["operation"],
+                object_type=change["type"],
+                object_id=change["path"],
                 actor_type="SYSTEM",
-                before_value=json.dumps(change.get('old_metadata', {})) if change.get('old_metadata') else None,
-                after_value=json.dumps(change['metadata']),
+                before_value=(
+                    json.dumps(change.get("old_metadata", {}))
+                    if change.get("old_metadata")
+                    else None
+                ),
+                after_value=json.dumps(change["metadata"]),
                 retention_required=True,
-                retention_days=90  # Keep persistence changes for 90 days
+                retention_days=90,  # Keep persistence changes for 90 days
             )
 
             # Build attributes
             attributes = {
-                'persistence_type': change['type'],
-                'file_path': change['path'],
-                'risk_score': str(risk_score)  # Include for Intelligence layer
+                "persistence_type": change["type"],
+                "file_path": change["path"],
+                "risk_score": str(risk_score),  # Include for Intelligence layer
             }
 
-            if change['type'] in ['LAUNCH_DAEMON', 'LAUNCH_AGENT']:
-                if change['metadata'].get('program'):
-                    attributes['target_program'] = str(change['metadata']['program'])
-                if change['metadata'].get('program_arguments'):
-                    attributes['program_args'] = str(change['metadata']['program_arguments'])
+            if change["type"] in ["LAUNCH_DAEMON", "LAUNCH_AGENT"]:
+                if change["metadata"].get("program"):
+                    attributes["target_program"] = str(change["metadata"]["program"])
+                if change["metadata"].get("program_arguments"):
+                    attributes["program_args"] = str(
+                        change["metadata"]["program_arguments"]
+                    )
 
             telemetry_event = telemetry_pb2.TelemetryEvent(
                 event_id=f"persist_{device_id}_{timestamp_ns}_{len(telemetry_events)}",
@@ -475,7 +498,7 @@ class PersistenceGuardAgent:
                 audit_event=audit_event,
                 source_component="persistence_agent",
                 attributes=attributes,
-                confidence_score=0.95
+                confidence_score=0.95,
             )
             telemetry_events.append(telemetry_event)
 
@@ -489,7 +512,7 @@ class PersistenceGuardAgent:
             manufacturer="Apple",
             model=socket.gethostname(),
             ip_address=ip_addr,
-            protocols=["PERSISTENCE"]
+            protocols=["PERSISTENCE"],
         )
 
         # Build DeviceTelemetry
@@ -501,7 +524,7 @@ class PersistenceGuardAgent:
             events=telemetry_events,
             timestamp_ns=timestamp_ns,
             collection_agent="persistence-agent",
-            agent_version="1.0.0"
+            agent_version="1.0.0",
         )
 
         return device_telemetry
@@ -523,14 +546,17 @@ class PersistenceGuardAgent:
                 device_telemetry=device_telemetry,
                 signing_algorithm="Ed25519",
                 priority="HIGH",  # Persistence changes are high priority
-                requires_acknowledgment=True
+                requires_acknowledgment=True,
             )
 
             stub = universal_pbrpc.UniversalEventBusStub(channel)
             ack = stub.PublishTelemetry(envelope, timeout=5.0)
 
             if ack.status == telemetry_pb2.UniversalAck.OK:
-                logger.info("Published persistence telemetry (queue: %d pending)", self.queue.size())
+                logger.info(
+                    "Published persistence telemetry (queue: %d pending)",
+                    self.queue.size(),
+                )
                 return True
             else:
                 logger.warning("Publish status: %s, queueing", ack.status)
@@ -551,8 +577,11 @@ class PersistenceGuardAgent:
             queued = self.queue.enqueue(device_telemetry, idempotency_key)
 
             if queued:
-                logger.info("Queued persistence telemetry (queue: %d items, %d bytes)",
-                           self.queue.size(), self.queue.size_bytes())
+                logger.info(
+                    "Queued persistence telemetry (queue: %d items, %d bytes)",
+                    self.queue.size(),
+                    self.queue.size_bytes(),
+                )
 
             return True
         except Exception as e:
@@ -581,7 +610,7 @@ class PersistenceGuardAgent:
                     device_telemetry=telemetry,
                     signing_algorithm="Ed25519",
                     priority="HIGH",
-                    requires_acknowledgment=True
+                    requires_acknowledgment=True,
                 )
 
                 stub = universal_pbrpc.UniversalEventBusStub(channel)
@@ -594,8 +623,11 @@ class PersistenceGuardAgent:
         try:
             drained = self.queue.drain(publish_fn, limit=100)
             if drained > 0:
-                logger.info("Drained %d persistence events from queue (%d remaining)",
-                           drained, self.queue.size())
+                logger.info(
+                    "Drained %d persistence events from queue (%d remaining)",
+                    drained,
+                    self.queue.size(),
+                )
             return drained
         except Exception as e:
             logger.debug("Persistence queue drain error: %s", str(e))
@@ -623,7 +655,9 @@ class PersistenceGuardAgent:
 
             logger.info(f"Found {len(changes)} persistence changes")
             for change in changes:
-                logger.info(f"  {change['operation']}: {change['path']} ({change['type']})")
+                logger.info(
+                    f"  {change['operation']}: {change['path']} ({change['type']})"
+                )
 
             # Create telemetry
             device_telemetry = self._create_telemetry(changes)
@@ -636,7 +670,9 @@ class PersistenceGuardAgent:
             self._save_snapshot(new_snapshot)
 
             if success:
-                logger.info("Persistence collection complete (%d changes)", len(changes))
+                logger.info(
+                    "Persistence collection complete (%d changes)", len(changes)
+                )
             else:
                 logger.warning("Persistence collection failed (queued for retry)")
 
@@ -675,5 +711,5 @@ def main():
     agent.run(interval=300)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

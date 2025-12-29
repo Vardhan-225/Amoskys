@@ -83,7 +83,7 @@ import yaml
 from collections import OrderedDict
 
 # Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 # Clean imports for new structure
 from amoskys.common.crypto.canonical import canonical_bytes
@@ -109,22 +109,22 @@ try:
     BUS_REQS = Counter("bus_publish_total", "Total Publish RPCs")
 except ValueError:
     BUS_REQS = Counter("_bus_dummy1", "dummy")
-    
+
 try:
     BUS_INVALID = Counter("bus_invalid_total", "Invalid envelopes")
 except ValueError:
     BUS_INVALID = Counter("_bus_dummy2", "dummy")
-    
+
 try:
     BUS_LAT = Histogram("bus_publish_latency_ms", "Publish latency (ms)")
 except ValueError:
     BUS_LAT = Histogram("_bus_dummy3", "dummy")
-    
+
 try:
     BUS_INFLIGHT = Gauge("bus_inflight_requests", "Current in-flight Publish RPCs")
 except ValueError:
     BUS_INFLIGHT = Gauge("_bus_dummy4", "dummy")
-    
+
 try:
     BUS_RETRY_TOTAL = Counter("bus_retry_total", "Total Publish RETRY acks issued")
 except ValueError:
@@ -140,6 +140,7 @@ BUS_OVERLOAD_SOURCE = "env"
 BUS_IS_OVERLOADED = False
 
 _OVERLOAD = None  # Global variable to store overload state
+
 
 def set_overload_setting(val):
     """Set the overload mode for the EventBus server.
@@ -173,6 +174,7 @@ def set_overload_setting(val):
         BUS_OVERLOAD_SETTING = "auto"
         BUS_OVERLOAD_SOURCE = "cli"
 
+
 def is_overloaded() -> bool:
     """Check if the server is in overload mode.
 
@@ -188,6 +190,7 @@ def is_overloaded() -> bool:
     """
     return bool(_OVERLOAD)
 
+
 AGENT_PUBKEY = None
 TRUST = {}
 
@@ -196,11 +199,12 @@ _SHOULD_EXIT = False
 _inflight_lock = threading.Lock()
 _inflight = 0
 
-DEDUPE_TTL_SEC = int(os.getenv("BUS_DEDUPE_TTL_SEC","300"))
-DEDUPE_MAX = int(os.getenv("BUS_DEDUPE_MAX","50000"))
+DEDUPE_TTL_SEC = int(os.getenv("BUS_DEDUPE_TTL_SEC", "300"))
+DEDUPE_MAX = int(os.getenv("BUS_DEDUPE_MAX", "50000"))
 _dedupe = OrderedDict()
 
-MAX_ENV_BYTES = int(os.getenv("BUS_MAX_ENV_BYTES","131072"))
+MAX_ENV_BYTES = int(os.getenv("BUS_MAX_ENV_BYTES", "131072"))
+
 
 def _sizeof_env(env):
     """Calculate the serialized size of an Envelope message in bytes.
@@ -220,8 +224,11 @@ def _sizeof_env(env):
         exceeding MAX_ENV_BYTES are rejected with INVALID status to protect server
         resources.
     """
-    try: return len(env.SerializeToString())
-    except Exception: return 0
+    try:
+        return len(env.SerializeToString())
+    except Exception:
+        return 0
+
 
 def _seen(idem):
     """Check if an idempotency key has been seen before.
@@ -272,6 +279,7 @@ def _seen(idem):
         _dedupe.popitem(last=False)
     return False
 
+
 def _on_hup(signum, frame):
     """Signal handler for SIGHUP to trigger graceful shutdown.
 
@@ -302,7 +310,9 @@ def _on_hup(signum, frame):
     global _SHOULD_EXIT
     _SHOULD_EXIT = True
 
+
 signal.signal(signal.SIGHUP, _on_hup)
+
 
 def _load_keys():
     """Load the Ed25519 public key for signature verification.
@@ -332,6 +342,7 @@ def _load_keys():
     """
     global AGENT_PUBKEY
     AGENT_PUBKEY = load_public_key("certs/agent.ed25519.pub")
+
 
 def _load_trust():
     """Load the trust map of authorized agent public keys.
@@ -377,6 +388,7 @@ def _load_trust():
         data = yaml.safe_load(f)
     TRUST = {cn: load_public_key(path) for cn, path in data.get("agents", {}).items()}
 
+
 def _peer_cn_from_context(context):
     """Extract the client's Common Name from the gRPC authentication context.
 
@@ -419,12 +431,13 @@ def _peer_cn_from_context(context):
     """
     ac = context.auth_context()
     for k, v in ac.items():
-        if k == 'x509_common_name' and v and v[0]:
+        if k == "x509_common_name" and v and v[0]:
             return v[0].decode()
     for k, v in ac.items():
-        if k == 'x509_subject_alternative_name' and v and v[0]:
+        if k == "x509_subject_alternative_name" and v and v[0]:
             return v[0].decode()
     return None
+
 
 def _inc_inflight():
     """Increment the in-flight request counter atomically.
@@ -462,6 +475,7 @@ def _inc_inflight():
         _inflight += 1
         BUS_INFLIGHT.set(_inflight)
     return _inflight
+
 
 def _dec_inflight():
     """Decrement the in-flight request counter atomically.
@@ -501,6 +515,7 @@ def _dec_inflight():
     with _inflight_lock:
         _inflight = max(0, _inflight - 1)
         BUS_INFLIGHT.set(_inflight)
+
 
 def _flow_from_envelope(env: "pb.Envelope") -> "pb.FlowEvent":
     """Extract a FlowEvent message from an Envelope.
@@ -560,6 +575,7 @@ def _flow_from_envelope(env: "pb.Envelope") -> "pb.FlowEvent":
         return msg
     raise ValueError("Envelope missing flow/payload")
 
+
 def _ack_with_status(name: str, reason: str = "") -> "pb.PublishAck":
     """Build a PublishAck response with the specified status and reason.
 
@@ -608,9 +624,10 @@ def _ack_with_status(name: str, reason: str = "") -> "pb.PublishAck":
         # Default to INVALID for unknown status
         ack.status = pb.PublishAck.Status.INVALID
 
-    if hasattr(ack, 'reason'):
-        ack.reason = reason or ''
+    if hasattr(ack, "reason"):
+        ack.reason = reason or ""
     return ack
+
 
 def _ack_ok(msg: str = "OK") -> "pb.PublishAck":
     """Build a successful PublishAck response.
@@ -642,6 +659,7 @@ def _ack_ok(msg: str = "OK") -> "pb.PublishAck":
     ack.status = pb.PublishAck.Status.OK
     ack.reason = msg
     return ack
+
 
 def _ack_retry(msg: str = "RETRY", backoff_ms: int = 1000) -> "pb.PublishAck":
     """Build a RETRY PublishAck response with backoff hint.
@@ -693,6 +711,7 @@ def _ack_retry(msg: str = "RETRY", backoff_ms: int = 1000) -> "pb.PublishAck":
     ack.backoff_hint_ms = backoff_ms
     return ack
 
+
 def _ack_invalid(msg: str = "INVALID") -> "pb.PublishAck":
     """Build an INVALID PublishAck response for malformed requests.
 
@@ -741,6 +760,7 @@ def _ack_invalid(msg: str = "INVALID") -> "pb.PublishAck":
     ack.reason = msg
     return ack
 
+
 def _ack_err(msg: str = "ERROR") -> "pb.PublishAck":
     """Build an ERROR PublishAck response for internal server errors.
 
@@ -785,9 +805,11 @@ def _ack_err(msg: str = "ERROR") -> "pb.PublishAck":
     """
     return _ack_with_status("ERROR", msg)
 
+
 # Define constants for repeated literals
 OVERLOAD_REASON = "Server is overloaded"
 OVERLOAD_LOG = "[Publish] Server is overloaded"
+
 
 class EventBusServicer(pbrpc.EventBusServicer):
     """Implements the EventBus gRPC service for message routing.
@@ -901,7 +923,9 @@ class EventBusServicer(pbrpc.EventBusServicer):
 
             # Size check
             if _sizeof_env(request) > MAX_ENV_BYTES:
-                logger.info(f"[Publish] Envelope too large: {_sizeof_env(request)} bytes")
+                logger.info(
+                    f"[Publish] Envelope too large: {_sizeof_env(request)} bytes"
+                )
                 BUS_INVALID.inc()
                 response = pb.PublishAck()
                 response.status = pb.PublishAck.Status.INVALID
@@ -913,46 +937,63 @@ class EventBusServicer(pbrpc.EventBusServicer):
             try:
                 # Check if we're over inflight limit
                 if inflight > BUS_MAX_INFLIGHT:
-                    logger.info(f"[Publish] Server at capacity: {inflight} requests inflight")
+                    logger.info(
+                        f"[Publish] Server at capacity: {inflight} requests inflight"
+                    )
                     BUS_RETRY_TOTAL.inc()
-                    return _ack_retry(f"Server at capacity ({inflight} requests inflight)", 1000)
+                    return _ack_retry(
+                        f"Server at capacity ({inflight} requests inflight)", 1000
+                    )
 
                 # Process the request
                 flow = _flow_from_envelope(request)
-                logger.info(f"[Publish] src_ip={flow.src_ip} dst_ip={flow.dst_ip} bytes_tx={flow.bytes_tx}")
-                
+                logger.info(
+                    f"[Publish] src_ip={flow.src_ip} dst_ip={flow.dst_ip} bytes_tx={flow.bytes_tx}"
+                )
+
                 # Store in WAL for dashboard visibility
                 if wal_storage:
                     try:
                         with _wal_lock:
                             # Create a new connection for this thread if needed
-                            conn = sqlite3.connect(WAL_PATH, timeout=5.0, isolation_level=None, check_same_thread=False)
-                            
+                            conn = sqlite3.connect(
+                                WAL_PATH,
+                                timeout=5.0,
+                                isolation_level=None,
+                                check_same_thread=False,
+                            )
+
                             # Handle both UniversalEnvelope (idempotency_key) and Envelope (idem)
-                            if hasattr(request, 'idempotency_key'):
+                            if hasattr(request, "idempotency_key"):
                                 idem = request.idempotency_key
-                            elif hasattr(request, 'idem'):
+                            elif hasattr(request, "idem"):
                                 idem = request.idem
                             else:
                                 idem = f"unknown_{request.ts_ns}"
-                            
+
                             ts_ns = request.ts_ns
                             env_bytes = request.SerializeToString()
-                            checksum = hashlib.blake2b(env_bytes, digest_size=32).digest()
-                            
+                            checksum = hashlib.blake2b(
+                                env_bytes, digest_size=32
+                            ).digest()
+
                             try:
                                 conn.execute(
                                     "INSERT INTO wal (idem, ts_ns, bytes, checksum) VALUES (?, ?, ?, ?)",
-                                    (idem, ts_ns, env_bytes, checksum)
+                                    (idem, ts_ns, env_bytes, checksum),
                                 )
-                                logger.debug("[Publish] Stored event in WAL (idem=%s)", idem)
+                                logger.debug(
+                                    "[Publish] Stored event in WAL (idem=%s)", idem
+                                )
                             except sqlite3.IntegrityError:
-                                logger.debug("[Publish] Duplicate event (idem=%s), skipped", idem)
+                                logger.debug(
+                                    "[Publish] Duplicate event (idem=%s), skipped", idem
+                                )
                             finally:
                                 conn.close()
                     except Exception as wal_err:
                         logger.error("[Publish] Failed to store in WAL: %s", wal_err)
-                
+
                 return _ack_ok("accepted")
             finally:
                 _dec_inflight()
@@ -1034,42 +1075,52 @@ class UniversalEventBusServicer(telemetry_grpc.UniversalEventBusServicer):
             return telemetry_pb2.UniversalAck(
                 status=telemetry_pb2.UniversalAck.Status.RETRY,
                 reason=OVERLOAD_REASON,
-                backoff_hint_ms=2000
+                backoff_hint_ms=2000,
             )
 
         try:
             # Size check
             envelope_size = request.ByteSize()
             if envelope_size > MAX_ENV_BYTES:
-                logger.info(f"[PublishTelemetry] Envelope too large: {envelope_size} bytes")
+                logger.info(
+                    f"[PublishTelemetry] Envelope too large: {envelope_size} bytes"
+                )
                 BUS_INVALID.inc()
                 return telemetry_pb2.UniversalAck(
                     status=telemetry_pb2.UniversalAck.Status.INVALID,
-                    reason=f"Envelope too large ({envelope_size} > {MAX_ENV_BYTES} bytes)"
+                    reason=f"Envelope too large ({envelope_size} > {MAX_ENV_BYTES} bytes)",
                 )
 
             # Track inflight
             inflight = _inc_inflight()
             try:
                 if inflight > BUS_MAX_INFLIGHT:
-                    logger.info(f"[PublishTelemetry] Server at capacity: {inflight} inflight")
+                    logger.info(
+                        f"[PublishTelemetry] Server at capacity: {inflight} inflight"
+                    )
                     BUS_RETRY_TOTAL.inc()
                     return telemetry_pb2.UniversalAck(
                         status=telemetry_pb2.UniversalAck.Status.RETRY,
                         reason=f"Server at capacity ({inflight} inflight)",
-                        backoff_hint_ms=1000
+                        backoff_hint_ms=1000,
                     )
 
                 # Process the telemetry
-                if request.HasField('device_telemetry'):
+                if request.HasField("device_telemetry"):
                     dt = request.device_telemetry
-                    logger.info(f"[PublishTelemetry] device_id={dt.device_id} device_type={dt.device_type} events={len(dt.events)}")
-                elif request.HasField('process'):
+                    logger.info(
+                        f"[PublishTelemetry] device_id={dt.device_id} device_type={dt.device_type} events={len(dt.events)}"
+                    )
+                elif request.HasField("process"):
                     p = request.process
-                    logger.info(f"[PublishTelemetry] process: pid={p.pid} exe={p.exe[:50] if p.exe else 'N/A'}")
-                elif request.HasField('flow'):
+                    logger.info(
+                        f"[PublishTelemetry] process: pid={p.pid} exe={p.exe[:50] if p.exe else 'N/A'}"
+                    )
+                elif request.HasField("flow"):
                     f = request.flow
-                    logger.info(f"[PublishTelemetry] flow: src={f.src_ip} dst={f.dst_ip}")
+                    logger.info(
+                        f"[PublishTelemetry] flow: src={f.src_ip} dst={f.dst_ip}"
+                    )
                 else:
                     logger.warning("[PublishTelemetry] Empty envelope received")
 
@@ -1077,32 +1128,46 @@ class UniversalEventBusServicer(telemetry_grpc.UniversalEventBusServicer):
                 if wal_storage:
                     try:
                         with _wal_lock:
-                            conn = sqlite3.connect(WAL_PATH, timeout=5.0, isolation_level=None, check_same_thread=False)
+                            conn = sqlite3.connect(
+                                WAL_PATH,
+                                timeout=5.0,
+                                isolation_level=None,
+                                check_same_thread=False,
+                            )
 
                             idem = request.idempotency_key or f"unknown_{request.ts_ns}"
                             ts_ns = request.ts_ns
                             env_bytes = request.SerializeToString()
-                            checksum = hashlib.blake2b(env_bytes, digest_size=32).digest()
+                            checksum = hashlib.blake2b(
+                                env_bytes, digest_size=32
+                            ).digest()
 
                             try:
                                 conn.execute(
                                     "INSERT INTO wal (idem, ts_ns, bytes, checksum) VALUES (?, ?, ?, ?)",
-                                    (idem, ts_ns, env_bytes, checksum)
+                                    (idem, ts_ns, env_bytes, checksum),
                                 )
-                                logger.debug("[PublishTelemetry] Stored in WAL (idem=%s)", idem)
+                                logger.debug(
+                                    "[PublishTelemetry] Stored in WAL (idem=%s)", idem
+                                )
                             except sqlite3.IntegrityError:
-                                logger.debug("[PublishTelemetry] Duplicate (idem=%s), skipped", idem)
+                                logger.debug(
+                                    "[PublishTelemetry] Duplicate (idem=%s), skipped",
+                                    idem,
+                                )
                             finally:
                                 conn.close()
                     except Exception as wal_err:
-                        logger.error("[PublishTelemetry] WAL storage failed: %s", wal_err)
+                        logger.error(
+                            "[PublishTelemetry] WAL storage failed: %s", wal_err
+                        )
 
                 BUS_LAT.observe((time.time() - t0) * 1000.0)
                 return telemetry_pb2.UniversalAck(
                     status=telemetry_pb2.UniversalAck.Status.OK,
                     reason="accepted",
                     processed_timestamp_ns=int(time.time() * 1e9),
-                    events_accepted=1
+                    events_accepted=1,
                 )
             finally:
                 _dec_inflight()
@@ -1110,8 +1175,7 @@ class UniversalEventBusServicer(telemetry_grpc.UniversalEventBusServicer):
         except Exception as e:
             logger.exception("[PublishTelemetry] Error")
             return telemetry_pb2.UniversalAck(
-                status=telemetry_pb2.UniversalAck.Status.PROCESSING_ERROR,
-                reason=str(e)
+                status=telemetry_pb2.UniversalAck.Status.PROCESSING_ERROR, reason=str(e)
             )
 
     def PublishBatch(self, request, context):
@@ -1207,13 +1271,20 @@ def _start_health_server():
         container orchestrators. In production, consider restricting to
         localhost or using network policies.
     """
+
     class H(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path != "/healthz":
-                self.send_response(404); self.end_headers(); return
-            self.send_response(200); self.end_headers()
+                self.send_response(404)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.end_headers()
             self.wfile.write(b"OK bus")
-    t = threading.Thread(target=lambda: HTTPServer(("0.0.0.0", 8080), H).serve_forever(), daemon=True)
+
+    t = threading.Thread(
+        target=lambda: HTTPServer(("0.0.0.0", 8080), H).serve_forever(), daemon=True
+    )
     t.start()
 
 
@@ -1306,7 +1377,9 @@ def serve():
     try:
         # Initialize WAL storage for persistent event storage
         try:
-            wal_storage = SQLiteWAL(path=WAL_PATH, max_bytes=config.storage.max_wal_bytes)
+            wal_storage = SQLiteWAL(
+                path=WAL_PATH, max_bytes=config.storage.max_wal_bytes
+            )
             logger.info(f"Initialized WAL storage at {WAL_PATH}")
         except Exception as e:
             logger.error(f"Failed to initialize WAL storage: {e}")
@@ -1352,19 +1425,26 @@ def serve():
 
         # Load TLS certs
         try:
-            with open("certs/server.key", "rb") as f: key = f.read()
-            with open("certs/server.crt", "rb") as f: crt = f.read()
-            with open("certs/ca.crt", "rb") as f: ca = f.read()
+            with open("certs/server.key", "rb") as f:
+                key = f.read()
+            with open("certs/server.crt", "rb") as f:
+                crt = f.read()
+            with open("certs/ca.crt", "rb") as f:
+                ca = f.read()
 
             # Support optional client auth for CI/test environments
-            require_client_auth = os.getenv("EVENTBUS_REQUIRE_CLIENT_AUTH", "false").lower() == "true"
+            require_client_auth = (
+                os.getenv("EVENTBUS_REQUIRE_CLIENT_AUTH", "false").lower() == "true"
+            )
 
             creds = grpc.ssl_server_credentials(
                 [(key, crt)],
                 root_certificates=ca,
                 require_client_auth=require_client_auth,
             )
-            logger.info("Loaded TLS certificates successfully (mTLS: %s)", require_client_auth)
+            logger.info(
+                "Loaded TLS certificates successfully (mTLS: %s)", require_client_auth
+            )
         except Exception as e:
             logger.exception("Failed to load TLS certificates: %s", e)
             raise
@@ -1379,7 +1459,9 @@ def serve():
             pbrpc.add_EventBusServicer_to_server(EventBusServicer(), server)
             logger.info("Registered EventBusServicer (legacy) with gRPC server")
 
-            telemetry_grpc.add_UniversalEventBusServicer_to_server(UniversalEventBusServicer(), server)
+            telemetry_grpc.add_UniversalEventBusServicer_to_server(
+                UniversalEventBusServicer(), server
+            )
             logger.info("Registered UniversalEventBusServicer with gRPC server")
         except Exception as e:
             logger.exception("Failed to register EventBus services: %s", e)
@@ -1399,21 +1481,26 @@ def serve():
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--overload', choices=['on', 'off', 'auto'], default=None,
-                        help="Override overload behavior: on/off/auto (default: use BUS_OVERLOAD env)")
+    parser.add_argument(
+        "--overload",
+        choices=["on", "off", "auto"],
+        default=None,
+        help="Override overload behavior: on/off/auto (default: use BUS_OVERLOAD env)",
+    )
     args = parser.parse_args()
 
     # Initialize _OVERLOAD based on CLI argument or environment
-    if args.overload == 'on':
+    if args.overload == "on":
         _OVERLOAD = True
         logger.info("Overload mode ENABLED via CLI argument")
-    elif args.overload == 'off':
+    elif args.overload == "off":
         _OVERLOAD = False
         logger.info("Overload mode DISABLED via CLI argument")
     else:
         # Default to environment variable
-        _OVERLOAD = os.getenv('BUS_OVERLOAD', 'false').lower() == 'true'
+        _OVERLOAD = os.getenv("BUS_OVERLOAD", "false").lower() == "true"
         logger.info(f"Overload mode set to {_OVERLOAD} via environment variable")
 
     serve()

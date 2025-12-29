@@ -49,9 +49,7 @@ class AuthGuardAgent:
         self.last_check_time = None
 
         self.queue = LocalQueue(
-            path=self.queue_path,
-            max_bytes=50 * 1024 * 1024,  # 50MB
-            max_retries=10
+            path=self.queue_path, max_bytes=50 * 1024 * 1024, max_retries=10  # 50MB
         )
         logger.info(f"AuthGuardAgent initialized: {self.queue_path}")
 
@@ -68,7 +66,7 @@ class AuthGuardAgent:
             credentials = grpc.ssl_channel_credentials(
                 root_certificates=ca_cert,
                 private_key=client_key,
-                certificate_chain=client_cert
+                certificate_chain=client_cert,
             )
             channel = grpc.secure_channel(EVENTBUS_ADDRESS, credentials)
             logger.debug("Created secure gRPC channel with mTLS")
@@ -103,19 +101,18 @@ class AuthGuardAgent:
             # Query unified log for auth-related events
             # Covers: login, ssh, sudo, screen unlock, etc.
             cmd = [
-                'log', 'show',
-                '--style', 'syslog',
-                '--predicate', '(process == "sshd" OR process == "sudo" OR process == "loginwindow" OR process == "screensharingd")',
-                '--start', time_str,
-                '--info'
+                "log",
+                "show",
+                "--style",
+                "syslog",
+                "--predicate",
+                '(process == "sshd" OR process == "sudo" OR process == "loginwindow" OR process == "screensharingd")',
+                "--start",
+                time_str,
+                "--info",
             ]
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
             if result.returncode != 0:
                 logger.warning(f"log show command failed: {result.stderr}")
@@ -145,87 +142,81 @@ class AuthGuardAgent:
         """
         # SSH login patterns
         ssh_accepted = re.search(
-            r'sshd.*Accepted\s+(\w+)\s+for\s+(\S+)\s+from\s+(\S+)',
-            line
+            r"sshd.*Accepted\s+(\w+)\s+for\s+(\S+)\s+from\s+(\S+)", line
         )
         if ssh_accepted:
             return {
-                'auth_type': 'SSH',
-                'result': 'SUCCESS',
-                'user': ssh_accepted.group(2),
-                'source_ip': ssh_accepted.group(3),
-                'method': ssh_accepted.group(1),
-                'command': None,
-                'raw_line': line
+                "auth_type": "SSH",
+                "result": "SUCCESS",
+                "user": ssh_accepted.group(2),
+                "source_ip": ssh_accepted.group(3),
+                "method": ssh_accepted.group(1),
+                "command": None,
+                "raw_line": line,
             }
 
         # SSH failed login
         ssh_failed = re.search(
-            r'sshd.*Failed\s+(\w+)\s+for\s+(?:invalid user\s+)?(\S+)\s+from\s+(\S+)',
-            line
+            r"sshd.*Failed\s+(\w+)\s+for\s+(?:invalid user\s+)?(\S+)\s+from\s+(\S+)",
+            line,
         )
         if ssh_failed:
             return {
-                'auth_type': 'SSH',
-                'result': 'FAILURE',
-                'user': ssh_failed.group(2),
-                'source_ip': ssh_failed.group(3),
-                'method': ssh_failed.group(1),
-                'command': None,
-                'raw_line': line
+                "auth_type": "SSH",
+                "result": "FAILURE",
+                "user": ssh_failed.group(2),
+                "source_ip": ssh_failed.group(3),
+                "method": ssh_failed.group(1),
+                "command": None,
+                "raw_line": line,
             }
 
         # Sudo command execution
-        sudo_match = re.search(
-            r'sudo.*USER=(\S+).*COMMAND=(.*)',
-            line
-        )
+        sudo_match = re.search(r"sudo.*USER=(\S+).*COMMAND=(.*)", line)
         if sudo_match:
             return {
-                'auth_type': 'SUDO',
-                'result': 'SUCCESS',
-                'user': sudo_match.group(1),
-                'source_ip': '127.0.0.1',  # Local
-                'method': 'password',
-                'command': sudo_match.group(2).strip(),
-                'raw_line': line
+                "auth_type": "SUDO",
+                "result": "SUCCESS",
+                "user": sudo_match.group(1),
+                "source_ip": "127.0.0.1",  # Local
+                "method": "password",
+                "command": sudo_match.group(2).strip(),
+                "raw_line": line,
             }
 
         # Console login (loginwindow)
-        login_match = re.search(
-            r'loginwindow.*Login\s+Window.*User\s+(\S+)',
-            line
-        )
+        login_match = re.search(r"loginwindow.*Login\s+Window.*User\s+(\S+)", line)
         if login_match:
             return {
-                'auth_type': 'LOGIN',
-                'result': 'SUCCESS',
-                'user': login_match.group(1),
-                'source_ip': '127.0.0.1',  # Local console
-                'method': 'password',
-                'command': None,
-                'raw_line': line
+                "auth_type": "LOGIN",
+                "result": "SUCCESS",
+                "user": login_match.group(1),
+                "source_ip": "127.0.0.1",  # Local console
+                "method": "password",
+                "command": None,
+                "raw_line": line,
             }
 
         # Screen sharing
         screenshare_match = re.search(
-            r'screensharingd.*Authentication.*user\s+(\S+)',
-            line
+            r"screensharingd.*Authentication.*user\s+(\S+)", line
         )
         if screenshare_match:
             return {
-                'auth_type': 'SCREEN_SHARE',
-                'result': 'SUCCESS',
-                'user': screenshare_match.group(1),
-                'source_ip': '0.0.0.0',  # Unknown without deeper parsing
-                'method': 'vnc',
-                'command': None,
-                'raw_line': line
+                "auth_type": "SCREEN_SHARE",
+                "result": "SUCCESS",
+                "user": screenshare_match.group(1),
+                "source_ip": "0.0.0.0",  # Unknown without deeper parsing
+                "method": "vnc",
+                "command": None,
+                "raw_line": line,
             }
 
         return None
 
-    def _create_telemetry(self, auth_events: List[Dict]) -> telemetry_pb2.DeviceTelemetry:
+    def _create_telemetry(
+        self, auth_events: List[Dict]
+    ) -> telemetry_pb2.DeviceTelemetry:
         """Create DeviceTelemetry protobuf from auth events
 
         Args:
@@ -242,37 +233,41 @@ class AuthGuardAgent:
         for idx, auth_event in enumerate(auth_events):
             # Map auth_type to MITRE techniques
             mitre_techniques = []
-            if auth_event['auth_type'] == 'SSH':
-                mitre_techniques = ['T1021.004']  # Remote Services: SSH
-            elif auth_event['auth_type'] == 'SUDO':
-                mitre_techniques = ['T1548.003']  # Abuse Elevation Control Mechanism: Sudo
-            elif auth_event['auth_type'] == 'SCREEN_SHARE':
-                mitre_techniques = ['T1021.005']  # Remote Services: VNC
+            if auth_event["auth_type"] == "SSH":
+                mitre_techniques = ["T1021.004"]  # Remote Services: SSH
+            elif auth_event["auth_type"] == "SUDO":
+                mitre_techniques = [
+                    "T1548.003"
+                ]  # Abuse Elevation Control Mechanism: Sudo
+            elif auth_event["auth_type"] == "SCREEN_SHARE":
+                mitre_techniques = ["T1021.005"]  # Remote Services: VNC
 
             # Calculate risk score based on event
             risk_score = 0.1  # Default low
-            if auth_event['result'] == 'FAILURE':
+            if auth_event["result"] == "FAILURE":
                 risk_score = 0.6  # Failed auth is suspicious
-            elif auth_event['auth_type'] == 'SUDO' and 'rm -rf' in (auth_event.get('command') or ''):
+            elif auth_event["auth_type"] == "SUDO" and "rm -rf" in (
+                auth_event.get("command") or ""
+            ):
                 risk_score = 0.8  # Dangerous sudo command
 
             security_event = telemetry_pb2.SecurityEvent(
                 event_category="AUTHENTICATION",
-                event_action=auth_event['auth_type'],
-                event_outcome=auth_event['result'],
-                user_name=auth_event['user'],
-                source_ip=auth_event['source_ip'],
+                event_action=auth_event["auth_type"],
+                event_outcome=auth_event["result"],
+                user_name=auth_event["user"],
+                source_ip=auth_event["source_ip"],
                 risk_score=risk_score,
                 mitre_techniques=mitre_techniques,
-                requires_investigation=(risk_score > 0.5)
+                requires_investigation=(risk_score > 0.5),
             )
 
             # Add command to attributes if present
             attributes = {}
-            if auth_event.get('command'):
-                attributes['sudo_command'] = auth_event['command']
-            if auth_event.get('method'):
-                attributes['auth_method'] = auth_event['method']
+            if auth_event.get("command"):
+                attributes["sudo_command"] = auth_event["command"]
+            if auth_event.get("method"):
+                attributes["auth_method"] = auth_event["method"]
 
             telemetry_event = telemetry_pb2.TelemetryEvent(
                 event_id=f"auth_{device_id}_{timestamp_ns}_{idx}",
@@ -282,7 +277,7 @@ class AuthGuardAgent:
                 security_event=security_event,
                 source_component="auth_agent",
                 attributes=attributes,
-                confidence_score=0.95
+                confidence_score=0.95,
             )
             telemetry_events.append(telemetry_event)
 
@@ -296,7 +291,7 @@ class AuthGuardAgent:
             manufacturer="Apple",
             model=socket.gethostname(),
             ip_address=ip_addr,
-            protocols=["AUTH"]
+            protocols=["AUTH"],
         )
 
         # Build DeviceTelemetry
@@ -308,7 +303,7 @@ class AuthGuardAgent:
             events=telemetry_events,
             timestamp_ns=timestamp_ns,
             collection_agent="auth-agent",
-            agent_version="1.0.0"
+            agent_version="1.0.0",
         )
 
         return device_telemetry
@@ -330,14 +325,16 @@ class AuthGuardAgent:
                 device_telemetry=device_telemetry,
                 signing_algorithm="Ed25519",
                 priority="HIGH",  # Auth events are high priority
-                requires_acknowledgment=True
+                requires_acknowledgment=True,
             )
 
             stub = universal_pbrpc.UniversalEventBusStub(channel)
             ack = stub.PublishTelemetry(envelope, timeout=5.0)
 
             if ack.status == telemetry_pb2.UniversalAck.OK:
-                logger.info("Published auth telemetry (queue: %d pending)", self.queue.size())
+                logger.info(
+                    "Published auth telemetry (queue: %d pending)", self.queue.size()
+                )
                 return True
             else:
                 logger.warning("Publish status: %s, queueing", ack.status)
@@ -358,8 +355,11 @@ class AuthGuardAgent:
             queued = self.queue.enqueue(device_telemetry, idempotency_key)
 
             if queued:
-                logger.info("Queued auth telemetry (queue: %d items, %d bytes)",
-                           self.queue.size(), self.queue.size_bytes())
+                logger.info(
+                    "Queued auth telemetry (queue: %d items, %d bytes)",
+                    self.queue.size(),
+                    self.queue.size_bytes(),
+                )
 
             return True
         except Exception as e:
@@ -388,7 +388,7 @@ class AuthGuardAgent:
                     device_telemetry=telemetry,
                     signing_algorithm="Ed25519",
                     priority="HIGH",
-                    requires_acknowledgment=True
+                    requires_acknowledgment=True,
                 )
 
                 stub = universal_pbrpc.UniversalEventBusStub(channel)
@@ -401,8 +401,11 @@ class AuthGuardAgent:
         try:
             drained = self.queue.drain(publish_fn, limit=100)
             if drained > 0:
-                logger.info("Drained %d auth events from queue (%d remaining)",
-                           drained, self.queue.size())
+                logger.info(
+                    "Drained %d auth events from queue (%d remaining)",
+                    drained,
+                    self.queue.size(),
+                )
             return drained
         except Exception as e:
             logger.debug("Auth queue drain error: %s", str(e))
@@ -474,5 +477,5 @@ def main():
     agent.run(interval=60)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

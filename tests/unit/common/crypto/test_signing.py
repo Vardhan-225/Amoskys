@@ -25,7 +25,7 @@ class TestPrivateKeyLoading:
         private_bytes = sk.private_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PrivateFormat.Raw,
-            encryption_algorithm=serialization.NoEncryption()
+            encryption_algorithm=serialization.NoEncryption(),
         )
 
         # Write to temporary file
@@ -38,12 +38,10 @@ class TestPrivateKeyLoading:
 
         # Verify it's the same key by comparing public keys
         original_pk = sk.public_key().public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
+            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
         )
         loaded_pk = loaded_sk.public_key().public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
+            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
         )
         assert original_pk == loaded_pk
 
@@ -82,7 +80,7 @@ class TestPublicKeyLoading:
         # Serialize public key to PEM
         pem_bytes = pk.public_bytes(
             encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
 
         # Write to temporary file
@@ -95,12 +93,10 @@ class TestPublicKeyLoading:
 
         # Verify it's the same key
         original_bytes = pk.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
+            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
         )
         loaded_bytes = loaded_pk.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
+            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
         )
         assert original_bytes == loaded_bytes
 

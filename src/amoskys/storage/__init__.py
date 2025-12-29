@@ -3,4 +3,4 @@
 from .telemetry_store import TelemetryStore
 from .wal_processor import WALProcessor
 
-__all__ = ['TelemetryStore', 'WALProcessor']
+__all__ = ["TelemetryStore", "WALProcessor"]

@@ -64,13 +64,14 @@ def fetch_incidents(db_path: str):
 # Test Helpers - Event Creation
 # =============================================================================
 
+
 def make_ssh_event(
     event_id: str,
     device_id: str,
     outcome: str,
     src_ip: str = "203.0.113.42",
     username: str = "admin",
-    offset_seconds: int = 0
+    offset_seconds: int = 0,
 ) -> TelemetryEventView:
     """
     Create SSH authentication event.
@@ -95,15 +96,15 @@ def make_ssh_event(
         severity="INFO",
         timestamp=timestamp,
         security_event={
-            'event_category': 'AUTHENTICATION',
-            'event_action': 'SSH',
-            'event_outcome': outcome,
-            'user_name': username,
-            'source_ip': src_ip,
-            'risk_score': 0.3 if outcome == 'SUCCESS' else 0.6,
-            'mitre_techniques': ['T1021.004'],
-            'requires_investigation': (outcome == 'FAILURE')
-        }
+            "event_category": "AUTHENTICATION",
+            "event_action": "SSH",
+            "event_outcome": outcome,
+            "user_name": username,
+            "source_ip": src_ip,
+            "risk_score": 0.3 if outcome == "SUCCESS" else 0.6,
+            "mitre_techniques": ["T1021.004"],
+            "requires_investigation": (outcome == "FAILURE"),
+        },
     )
 
 
@@ -112,7 +113,7 @@ def make_sudo_event(
     device_id: str,
     command: str,
     username: str = "admin",
-    offset_seconds: int = 0
+    offset_seconds: int = 0,
 ) -> TelemetryEventView:
     """
     Create sudo command execution event.
@@ -130,7 +131,9 @@ def make_sudo_event(
     timestamp = datetime.now() + timedelta(seconds=offset_seconds)
 
     # Detect dangerous patterns for risk scoring
-    dangerous = any(pattern in command for pattern in ['rm -rf', '/etc/sudoers', 'kext'])
+    dangerous = any(
+        pattern in command for pattern in ["rm -rf", "/etc/sudoers", "kext"]
+    )
     risk_score = 0.8 if dangerous else 0.3
 
     return TelemetryEventView(
@@ -139,20 +142,17 @@ def make_sudo_event(
         event_type="SECURITY",
         severity="CRITICAL" if dangerous else "INFO",
         timestamp=timestamp,
-        attributes={
-            'sudo_command': command,
-            'auth_method': 'password'
-        },
+        attributes={"sudo_command": command, "auth_method": "password"},
         security_event={
-            'event_category': 'AUTHENTICATION',
-            'event_action': 'SUDO',
-            'event_outcome': 'SUCCESS',
-            'user_name': username,
-            'source_ip': '127.0.0.1',
-            'risk_score': risk_score,
-            'mitre_techniques': ['T1548.003'],
-            'requires_investigation': dangerous
-        }
+            "event_category": "AUTHENTICATION",
+            "event_action": "SUDO",
+            "event_outcome": "SUCCESS",
+            "user_name": username,
+            "source_ip": "127.0.0.1",
+            "risk_score": risk_score,
+            "mitre_techniques": ["T1548.003"],
+            "requires_investigation": dangerous,
+        },
     )
 
 
@@ -161,7 +161,7 @@ def make_persistence_event(
     device_id: str,
     persist_type: str = "LAUNCH_AGENT",
     file_path: str = "/Users/admin/Library/LaunchAgents/com.evil.backdoor.plist",
-    offset_seconds: int = 120
+    offset_seconds: int = 120,
 ) -> TelemetryEventView:
     """
     Create persistence mechanism creation event.
@@ -179,7 +179,7 @@ def make_persistence_event(
     timestamp = datetime.now() + timedelta(seconds=offset_seconds)
 
     # Higher risk for user-level persistence
-    in_user_dir = '/Users/' in file_path
+    in_user_dir = "/Users/" in file_path
     risk_score = 0.7 if in_user_dir else 0.5
 
     return TelemetryEventView(
@@ -189,18 +189,18 @@ def make_persistence_event(
         severity="WARN",
         timestamp=timestamp,
         attributes={
-            'persistence_type': persist_type,
-            'file_path': file_path,
-            'risk_score': str(risk_score)
+            "persistence_type": persist_type,
+            "file_path": file_path,
+            "risk_score": str(risk_score),
         },
         audit_event={
-            'audit_category': 'CHANGE',
-            'action_performed': 'CREATED',
-            'object_type': persist_type,
-            'object_id': file_path,
-            'before_value': '',
-            'after_value': '{"Program": "/tmp/backdoor", "RunAtLoad": true}'
-        }
+            "audit_category": "CHANGE",
+            "action_performed": "CREATED",
+            "object_type": persist_type,
+            "object_id": file_path,
+            "before_value": "",
+            "after_value": '{"Program": "/tmp/backdoor", "RunAtLoad": true}',
+        },
     )
 
 
@@ -208,7 +208,7 @@ def make_process_event(
     event_id: str,
     device_id: str,
     executable_path: str = "/tmp/.evil",
-    offset_seconds: int = 30
+    offset_seconds: int = 30,
 ) -> TelemetryEventView:
     """
     Create suspicious process execution event.
@@ -231,13 +231,13 @@ def make_process_event(
         severity="WARN",
         timestamp=timestamp,
         process_event={
-            'process_name': Path(executable_path).name,
-            'pid': 12345,
-            'ppid': 1,
-            'uid': 501,
-            'command_line': f'{executable_path} --connect 198.51.100.99',
-            'executable_path': executable_path
-        }
+            "process_name": Path(executable_path).name,
+            "pid": 12345,
+            "ppid": 1,
+            "uid": 501,
+            "command_line": f"{executable_path} --connect 198.51.100.99",
+            "executable_path": executable_path,
+        },
     )
 
 
@@ -246,7 +246,7 @@ def make_flow_event(
     device_id: str,
     dst_ip: str = "198.51.100.99",
     dst_port: int = 443,
-    offset_seconds: int = 60
+    offset_seconds: int = 60,
 ) -> TelemetryEventView:
     """
     Create network flow event.
@@ -270,20 +270,21 @@ def make_flow_event(
         severity="INFO",
         timestamp=timestamp,
         flow_event={
-            'src_ip': '192.168.1.100',
-            'src_port': 54321,
-            'dst_ip': dst_ip,
-            'dst_port': dst_port,
-            'protocol': 'TCP',
-            'bytes_sent': 1024,
-            'bytes_received': 4096
-        }
+            "src_ip": "192.168.1.100",
+            "src_port": 54321,
+            "dst_ip": dst_ip,
+            "dst_port": dst_port,
+            "protocol": "TCP",
+            "bytes_sent": 1024,
+            "bytes_received": 4096,
+        },
     )
 
 
 # =============================================================================
 # Rule 1: SSH Brute Force
 # =============================================================================
+
 
 def test_ssh_brute_force_fires(fusion, device_id):
     """
@@ -345,7 +346,9 @@ def test_ssh_brute_force_not_fired_without_success(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "ssh_brute_force" not in rules, f"Unexpected ssh_brute_force incident: {rows}"
+    assert (
+        "ssh_brute_force" not in rules
+    ), f"Unexpected ssh_brute_force incident: {rows}"
 
 
 def test_ssh_brute_force_not_fired_with_only_two_failures(fusion, device_id):
@@ -380,6 +383,7 @@ def test_ssh_brute_force_not_fired_with_only_two_failures(fusion, device_id):
 # Rule 2: Persistence After Authentication
 # =============================================================================
 
+
 def test_persistence_after_auth_fires(fusion, device_id):
     """
     POSITIVE: SSH success + LaunchAgent creation within 10min should fire.
@@ -406,7 +410,9 @@ def test_persistence_after_auth_fires(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "persistence_after_auth" in rules, f"Expected persistence_after_auth, got: {rows}"
+    assert (
+        "persistence_after_auth" in rules
+    ), f"Expected persistence_after_auth, got: {rows}"
 
     incident = [r for r in rows if r[1] == "persistence_after_auth"][0]
     assert incident[2] == "CRITICAL", "User-dir persistence should be CRITICAL"
@@ -464,6 +470,7 @@ def test_persistence_after_auth_not_fired_without_auth(fusion, device_id):
 # Rule 3: Suspicious Sudo
 # =============================================================================
 
+
 def test_suspicious_sudo_fires_for_sudoers_edit(fusion, device_id):
     """
     POSITIVE: Editing /etc/sudoers should trigger rule.
@@ -477,10 +484,7 @@ def test_suspicious_sudo_fires_for_sudoers_edit(fusion, device_id):
         - Technique: T1548.003
     """
     ev = make_sudo_event(
-        "sudo_edit_sudoers",
-        device_id,
-        "vim /etc/sudoers",
-        offset_seconds=0
+        "sudo_edit_sudoers", device_id, "vim /etc/sudoers", offset_seconds=0
     )
 
     fusion.add_event(ev)
@@ -506,12 +510,7 @@ def test_suspicious_sudo_fires_for_rm_rf(fusion, device_id):
         - Incident: suspicious_sudo
         - Severity: CRITICAL
     """
-    ev = make_sudo_event(
-        "sudo_rm_rf",
-        device_id,
-        "sudo rm -rf /var",
-        offset_seconds=0
-    )
+    ev = make_sudo_event("sudo_rm_rf", device_id, "sudo rm -rf /var", offset_seconds=0)
 
     fusion.add_event(ev)
     fusion.evaluate_all_devices()
@@ -532,12 +531,7 @@ def test_suspicious_sudo_not_fired_for_benign_command(fusion, device_id):
     Expected:
         - No suspicious_sudo incident
     """
-    ev = make_sudo_event(
-        "sudo_ls",
-        device_id,
-        "sudo ls /tmp",
-        offset_seconds=0
-    )
+    ev = make_sudo_event("sudo_ls", device_id, "sudo ls /tmp", offset_seconds=0)
 
     fusion.add_event(ev)
     fusion.evaluate_all_devices()
@@ -551,6 +545,7 @@ def test_suspicious_sudo_not_fired_for_benign_command(fusion, device_id):
 # =============================================================================
 # Rule 4: Multi-Tactic Attack
 # =============================================================================
+
 
 def test_multi_tactic_attack_fires(fusion, device_id):
     """
@@ -642,12 +637,15 @@ def test_multi_tactic_attack_not_fired_without_process(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "multi_tactic_attack" not in rules, "Should not fire without process execution"
+    assert (
+        "multi_tactic_attack" not in rules
+    ), "Should not fire without process execution"
 
 
 # =============================================================================
 # Integration Tests - Multiple Rules Firing
 # =============================================================================
+
 
 def test_multiple_rules_can_fire_simultaneously(fusion, device_id):
     """
@@ -669,10 +667,10 @@ def test_multiple_rules_can_fire_simultaneously(fusion, device_id):
         make_ssh_event("ssh_fail_2", device_id, "FAILURE", offset_seconds=5),
         make_ssh_event("ssh_fail_3", device_id, "FAILURE", offset_seconds=10),
         make_ssh_event("ssh_success", device_id, "SUCCESS", offset_seconds=15),
-
         # Suspicious sudo
-        make_sudo_event("sudo_sudoers", device_id, "vim /etc/sudoers", offset_seconds=60),
-
+        make_sudo_event(
+            "sudo_sudoers", device_id, "vim /etc/sudoers", offset_seconds=60
+        ),
         # Persistence after auth
         make_persistence_event("la_create", device_id, offset_seconds=120),
     ]
@@ -712,10 +710,8 @@ def test_device_risk_increases_with_incidents(fusion, device_id):
         make_ssh_event("ssh_fail_2", device_id, "FAILURE", offset_seconds=5),
         make_ssh_event("ssh_fail_3", device_id, "FAILURE", offset_seconds=10),
         make_ssh_event("ssh_success", device_id, "SUCCESS", offset_seconds=15),
-
         # Persistence
         make_persistence_event("la_create", device_id, offset_seconds=120),
-
         # Sudo abuse
         make_sudo_event("sudo_rm", device_id, "sudo rm -rf /var", offset_seconds=180),
     ]
@@ -729,13 +725,16 @@ def test_device_risk_increases_with_incidents(fusion, device_id):
     risk = fusion.get_device_risk(device_id)
 
     assert risk is not None, "Device risk should be calculated"
-    assert risk['score'] >= 80, f"Device risk should be CRITICAL (>=80), got {risk['score']}"
-    assert risk['level'] == "CRITICAL", "Device should be at CRITICAL risk level"
+    assert (
+        risk["score"] >= 80
+    ), f"Device risk should be CRITICAL (>=80), got {risk['score']}"
+    assert risk["level"] == "CRITICAL", "Device should be at CRITICAL risk level"
 
 
 # =============================================================================
 # Edge Cases
 # =============================================================================
+
 
 def test_events_outside_correlation_window_ignored(fusion, device_id):
     """
@@ -750,7 +749,9 @@ def test_events_outside_correlation_window_ignored(fusion, device_id):
     """
     events = [
         make_ssh_event("ssh_success", device_id, "SUCCESS", offset_seconds=0),
-        make_persistence_event("la_create", device_id, offset_seconds=31 * 60),  # 31 min
+        make_persistence_event(
+            "la_create", device_id, offset_seconds=31 * 60
+        ),  # 31 min
     ]
 
     for ev in events:
@@ -761,7 +762,9 @@ def test_events_outside_correlation_window_ignored(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "persistence_after_auth" not in rules, "Events outside window should not correlate"
+    assert (
+        "persistence_after_auth" not in rules
+    ), "Events outside window should not correlate"
 
 
 def test_empty_device_state_does_not_crash(fusion, device_id):
@@ -783,6 +786,7 @@ def test_empty_device_state_does_not_crash(fusion, device_id):
 # Rule 5: SSH Lateral Movement
 # =============================================================================
 
+
 def test_ssh_lateral_movement_fires(fusion, device_id):
     """
     POSITIVE: Inbound SSH followed by outbound SSH to different IP should create incident.
@@ -798,12 +802,20 @@ def test_ssh_lateral_movement_fires(fusion, device_id):
         - Technique: T1021.004
     """
     events = [
-        make_ssh_event("ssh_inbound", device_id, "SUCCESS", src_ip="203.0.113.42", offset_seconds=0),
-        make_flow_event("ssh_outbound", device_id, dst_ip="10.0.0.50", dst_port=22, offset_seconds=120),
+        make_ssh_event(
+            "ssh_inbound", device_id, "SUCCESS", src_ip="203.0.113.42", offset_seconds=0
+        ),
+        make_flow_event(
+            "ssh_outbound",
+            device_id,
+            dst_ip="10.0.0.50",
+            dst_port=22,
+            offset_seconds=120,
+        ),
     ]
 
     # Need to add direction attribute to flow event
-    events[1].flow_event['direction'] = 'OUTBOUND'
+    events[1].flow_event["direction"] = "OUTBOUND"
 
     for ev in events:
         fusion.add_event(ev)
@@ -813,7 +825,9 @@ def test_ssh_lateral_movement_fires(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "ssh_lateral_movement" in rules, f"Expected ssh_lateral_movement incident, got: {rows}"
+    assert (
+        "ssh_lateral_movement" in rules
+    ), f"Expected ssh_lateral_movement incident, got: {rows}"
 
     # Verify severity
     incident = [r for r in rows if r[1] == "ssh_lateral_movement"][0]
@@ -832,7 +846,9 @@ def test_ssh_lateral_movement_not_fired_without_outbound(fusion, device_id):
         - No ssh_lateral_movement incident
     """
     events = [
-        make_ssh_event("ssh_inbound", device_id, "SUCCESS", src_ip="203.0.113.42", offset_seconds=0),
+        make_ssh_event(
+            "ssh_inbound", device_id, "SUCCESS", src_ip="203.0.113.42", offset_seconds=0
+        ),
     ]
 
     for ev in events:
@@ -843,7 +859,9 @@ def test_ssh_lateral_movement_not_fired_without_outbound(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "ssh_lateral_movement" not in rules, "Rule should not fire without outbound SSH"
+    assert (
+        "ssh_lateral_movement" not in rules
+    ), "Rule should not fire without outbound SSH"
 
 
 def test_ssh_lateral_movement_not_fired_to_same_ip(fusion, device_id):
@@ -858,11 +876,19 @@ def test_ssh_lateral_movement_not_fired_to_same_ip(fusion, device_id):
         - No ssh_lateral_movement incident (same IP not lateral)
     """
     events = [
-        make_ssh_event("ssh_inbound", device_id, "SUCCESS", src_ip="203.0.113.42", offset_seconds=0),
-        make_flow_event("ssh_outbound", device_id, dst_ip="203.0.113.42", dst_port=22, offset_seconds=120),
+        make_ssh_event(
+            "ssh_inbound", device_id, "SUCCESS", src_ip="203.0.113.42", offset_seconds=0
+        ),
+        make_flow_event(
+            "ssh_outbound",
+            device_id,
+            dst_ip="203.0.113.42",
+            dst_port=22,
+            offset_seconds=120,
+        ),
     ]
 
-    events[1].flow_event['direction'] = 'OUTBOUND'
+    events[1].flow_event["direction"] = "OUTBOUND"
 
     for ev in events:
         fusion.add_event(ev)
@@ -872,12 +898,15 @@ def test_ssh_lateral_movement_not_fired_to_same_ip(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "ssh_lateral_movement" not in rules, "Rule should not fire for SSH to same IP"
+    assert (
+        "ssh_lateral_movement" not in rules
+    ), "Rule should not fire for SSH to same IP"
 
 
 # =============================================================================
 # Rule 6: Data Exfiltration Spike
 # =============================================================================
+
 
 def test_data_exfiltration_spike_fires(fusion, device_id):
     """
@@ -896,13 +925,15 @@ def test_data_exfiltration_spike_fires(fusion, device_id):
     events = [
         make_flow_event("flow_1", device_id, dst_ip="198.51.100.99", offset_seconds=0),
         make_flow_event("flow_2", device_id, dst_ip="198.51.100.99", offset_seconds=60),
-        make_flow_event("flow_3", device_id, dst_ip="198.51.100.99", offset_seconds=120),
+        make_flow_event(
+            "flow_3", device_id, dst_ip="198.51.100.99", offset_seconds=120
+        ),
     ]
 
     # Add bytes_out to each flow (4MB each = 12MB total)
     for ev in events:
-        ev.flow_event['bytes_out'] = 4 * 1024 * 1024  # 4MB
-        ev.flow_event['direction'] = 'OUTBOUND'
+        ev.flow_event["bytes_out"] = 4 * 1024 * 1024  # 4MB
+        ev.flow_event["direction"] = "OUTBOUND"
 
     for ev in events:
         fusion.add_event(ev)
@@ -912,7 +943,9 @@ def test_data_exfiltration_spike_fires(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "data_exfiltration_spike" in rules, f"Expected data_exfiltration_spike incident, got: {rows}"
+    assert (
+        "data_exfiltration_spike" in rules
+    ), f"Expected data_exfiltration_spike incident, got: {rows}"
 
     # Verify severity
     incident = [r for r in rows if r[1] == "data_exfiltration_spike"][0]
@@ -934,8 +967,8 @@ def test_data_exfiltration_not_fired_below_threshold(fusion, device_id):
     ]
 
     # Only 2MB transferred
-    events[0].flow_event['bytes_out'] = 2 * 1024 * 1024
-    events[0].flow_event['direction'] = 'OUTBOUND'
+    events[0].flow_event["bytes_out"] = 2 * 1024 * 1024
+    events[0].flow_event["direction"] = "OUTBOUND"
 
     for ev in events:
         fusion.add_event(ev)
@@ -945,7 +978,9 @@ def test_data_exfiltration_not_fired_below_threshold(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "data_exfiltration_spike" not in rules, "Rule should not fire below 10MB threshold"
+    assert (
+        "data_exfiltration_spike" not in rules
+    ), "Rule should not fire below 10MB threshold"
 
 
 def test_data_exfiltration_not_fired_without_bytes_out(fusion, device_id):
@@ -960,7 +995,7 @@ def test_data_exfiltration_not_fired_without_bytes_out(fusion, device_id):
     ]
 
     # Flow event without bytes_out field
-    events[0].flow_event['direction'] = 'OUTBOUND'
+    events[0].flow_event["direction"] = "OUTBOUND"
     # Don't add bytes_out
 
     for ev in events:
@@ -971,12 +1006,15 @@ def test_data_exfiltration_not_fired_without_bytes_out(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "data_exfiltration_spike" not in rules, "Rule should not fire without bytes_out data"
+    assert (
+        "data_exfiltration_spike" not in rules
+    ), "Rule should not fire without bytes_out data"
 
 
 # =============================================================================
 # Rule 7: Suspicious Process Tree
 # =============================================================================
+
 
 def test_suspicious_process_tree_fires(fusion, device_id):
     """
@@ -993,11 +1031,13 @@ def test_suspicious_process_tree_fires(fusion, device_id):
         - Technique: T1059
     """
     events = [
-        make_process_event("proc_suspicious", device_id, executable_path="/tmp/.evil", offset_seconds=0),
+        make_process_event(
+            "proc_suspicious", device_id, executable_path="/tmp/.evil", offset_seconds=0
+        ),
     ]
 
     # Add parent process information
-    events[0].process_event['parent_executable_name'] = 'Terminal'
+    events[0].process_event["parent_executable_name"] = "Terminal"
 
     for ev in events:
         fusion.add_event(ev)
@@ -1007,11 +1047,16 @@ def test_suspicious_process_tree_fires(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "suspicious_process_tree" in rules, f"Expected suspicious_process_tree incident, got: {rows}"
+    assert (
+        "suspicious_process_tree" in rules
+    ), f"Expected suspicious_process_tree incident, got: {rows}"
 
     # Verify severity (HIGH without network, CRITICAL with network)
     incident = [r for r in rows if r[1] == "suspicious_process_tree"][0]
-    assert incident[2] in ["HIGH", "CRITICAL"], "Suspicious process tree should be HIGH or CRITICAL"
+    assert incident[2] in [
+        "HIGH",
+        "CRITICAL",
+    ], "Suspicious process tree should be HIGH or CRITICAL"
 
 
 def test_suspicious_process_tree_critical_with_network(fusion, device_id):
@@ -1028,13 +1073,20 @@ def test_suspicious_process_tree_critical_with_network(fusion, device_id):
         - Severity: CRITICAL (network activity detected)
     """
     events = [
-        make_process_event("proc_suspicious", device_id, executable_path="/tmp/backdoor", offset_seconds=0),
-        make_flow_event("network_conn", device_id, dst_ip="198.51.100.99", offset_seconds=30),
+        make_process_event(
+            "proc_suspicious",
+            device_id,
+            executable_path="/tmp/backdoor",
+            offset_seconds=0,
+        ),
+        make_flow_event(
+            "network_conn", device_id, dst_ip="198.51.100.99", offset_seconds=30
+        ),
     ]
 
     # Add parent process and network direction
-    events[0].process_event['parent_executable_name'] = 'sshd'
-    events[1].flow_event['direction'] = 'OUTBOUND'
+    events[0].process_event["parent_executable_name"] = "sshd"
+    events[1].flow_event["direction"] = "OUTBOUND"
 
     for ev in events:
         fusion.add_event(ev)
@@ -1044,11 +1096,15 @@ def test_suspicious_process_tree_critical_with_network(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "suspicious_process_tree" in rules, "Expected suspicious_process_tree incident"
+    assert (
+        "suspicious_process_tree" in rules
+    ), "Expected suspicious_process_tree incident"
 
     # Verify CRITICAL severity due to network activity
     incident = [r for r in rows if r[1] == "suspicious_process_tree"][0]
-    assert incident[2] == "CRITICAL", "Suspicious process with network should be CRITICAL"
+    assert (
+        incident[2] == "CRITICAL"
+    ), "Suspicious process with network should be CRITICAL"
 
 
 def test_suspicious_process_tree_not_fired_for_safe_paths(fusion, device_id):
@@ -1063,10 +1119,12 @@ def test_suspicious_process_tree_not_fired_for_safe_paths(fusion, device_id):
         - No suspicious_process_tree incident
     """
     events = [
-        make_process_event("proc_safe", device_id, executable_path="/usr/bin/python3", offset_seconds=0),
+        make_process_event(
+            "proc_safe", device_id, executable_path="/usr/bin/python3", offset_seconds=0
+        ),
     ]
 
-    events[0].process_event['parent_executable_name'] = 'Terminal'
+    events[0].process_event["parent_executable_name"] = "Terminal"
 
     for ev in events:
         fusion.add_event(ev)
@@ -1076,7 +1134,9 @@ def test_suspicious_process_tree_not_fired_for_safe_paths(fusion, device_id):
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "suspicious_process_tree" not in rules, "Rule should not fire for processes in /usr/bin"
+    assert (
+        "suspicious_process_tree" not in rules
+    ), "Rule should not fire for processes in /usr/bin"
 
 
 def test_suspicious_process_tree_not_fired_without_suspicious_parent(fusion, device_id):
@@ -1091,10 +1151,14 @@ def test_suspicious_process_tree_not_fired_without_suspicious_parent(fusion, dev
         - No suspicious_process_tree incident
     """
     events = [
-        make_process_event("proc_tmp", device_id, executable_path="/tmp/test", offset_seconds=0),
+        make_process_event(
+            "proc_tmp", device_id, executable_path="/tmp/test", offset_seconds=0
+        ),
     ]
 
-    events[0].process_event['parent_executable_name'] = 'launchd'  # Not suspicious parent
+    events[0].process_event[
+        "parent_executable_name"
+    ] = "launchd"  # Not suspicious parent
 
     for ev in events:
         fusion.add_event(ev)
@@ -1104,4 +1168,6 @@ def test_suspicious_process_tree_not_fired_without_suspicious_parent(fusion, dev
     rows = fetch_incidents(fusion.db_path)
     rules = {r[1] for r in rows}
 
-    assert "suspicious_process_tree" not in rules, "Rule should not fire without suspicious parent"
+    assert (
+        "suspicious_process_tree" not in rules
+    ), "Rule should not fire without suspicious parent"

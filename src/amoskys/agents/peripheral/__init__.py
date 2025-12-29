@@ -2,4 +2,4 @@
 
 from .peripheral_agent import PeripheralAgent
 
-__all__ = ['PeripheralAgent']
+__all__ = ["PeripheralAgent"]

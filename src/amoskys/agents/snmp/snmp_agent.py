@@ -36,6 +36,7 @@ from amoskys.config import get_config
 try:
     from pysnmp.hlapi.v1arch.asyncio import *
     from pysnmp.smi.rfc1902 import ObjectType, ObjectIdentity
+
     PYSNMP_AVAILABLE = True
 except ImportError:
     PYSNMP_AVAILABLE = False
@@ -53,15 +54,29 @@ MAX_ENV_BYTES = config.agent.max_env_bytes
 
 # Metrics
 SNMP_COLLECTIONS = Counter("snmp_collections_total", "Total SNMP collections attempted")
-SNMP_COLLECTION_SUCCESS = Counter("snmp_collection_success_total", "Successful SNMP collections")
-SNMP_COLLECTION_ERRORS = Counter("snmp_collection_errors_total", "Failed SNMP collections")
+SNMP_COLLECTION_SUCCESS = Counter(
+    "snmp_collection_success_total", "Successful SNMP collections"
+)
+SNMP_COLLECTION_ERRORS = Counter(
+    "snmp_collection_errors_total", "Failed SNMP collections"
+)
 SNMP_PUBLISH_OK = Counter("snmp_publish_ok_total", "Successful telemetry publishes")
-SNMP_PUBLISH_RETRY = Counter("snmp_publish_retry_total", "Retry responses from EventBus")
+SNMP_PUBLISH_RETRY = Counter(
+    "snmp_publish_retry_total", "Retry responses from EventBus"
+)
 SNMP_PUBLISH_FAIL = Counter("snmp_publish_fail_total", "Failed telemetry publishes")
-SNMP_COLLECTION_LATENCY = Histogram("snmp_collection_latency_ms", "SNMP collection latency (ms)")
-SNMP_PUBLISH_LATENCY = Histogram("snmp_publish_latency_ms", "Telemetry publish latency (ms)")
-SNMP_DEVICES_MONITORED = Gauge("snmp_devices_monitored", "Number of devices being monitored")
-SNMP_METRICS_COLLECTED = Counter("snmp_metrics_collected_total", "Total metrics collected")
+SNMP_COLLECTION_LATENCY = Histogram(
+    "snmp_collection_latency_ms", "SNMP collection latency (ms)"
+)
+SNMP_PUBLISH_LATENCY = Histogram(
+    "snmp_publish_latency_ms", "Telemetry publish latency (ms)"
+)
+SNMP_DEVICES_MONITORED = Gauge(
+    "snmp_devices_monitored", "Number of devices being monitored"
+)
+SNMP_METRICS_COLLECTED = Counter(
+    "snmp_metrics_collected_total", "Total metrics collected"
+)
 
 # Global state
 stop = False
@@ -82,15 +97,17 @@ signal.signal(signal.SIGTERM, _graceful)
 
 # SNMP Collection OIDs
 SYSTEM_OIDS = {
-    'sysDescr': '1.3.6.1.2.1.1.1.0',      # System description
-    'sysUpTime': '1.3.6.1.2.1.1.3.0',    # Uptime
-    'sysContact': '1.3.6.1.2.1.1.4.0',   # Contact
-    'sysName': '1.3.6.1.2.1.1.5.0',      # Hostname
-    'sysLocation': '1.3.6.1.2.1.1.6.0',  # Location
+    "sysDescr": "1.3.6.1.2.1.1.1.0",  # System description
+    "sysUpTime": "1.3.6.1.2.1.1.3.0",  # Uptime
+    "sysContact": "1.3.6.1.2.1.1.4.0",  # Contact
+    "sysName": "1.3.6.1.2.1.1.5.0",  # Hostname
+    "sysLocation": "1.3.6.1.2.1.1.6.0",  # Location
 }
 
 
-async def collect_snmp_data(host: str, community: str = 'public') -> Optional[Dict[str, str]]:
+async def collect_snmp_data(
+    host: str, community: str = "public"
+) -> Optional[Dict[str, str]]:
     """Collect SNMP data from a device.
 
     Args:
@@ -114,11 +131,13 @@ async def collect_snmp_data(host: str, community: str = 'public') -> Optional[Di
                     SnmpDispatcher(),
                     CommunityData(community),
                     await UdpTransportTarget.create((host, 161)),
-                    ObjectType(ObjectIdentity(oid))
+                    ObjectType(ObjectIdentity(oid)),
                 )
 
                 if error_indication:
-                    logger.warning(f"SNMP error for {name} on {host}: {error_indication}")
+                    logger.warning(
+                        f"SNMP error for {name} on {host}: {error_indication}"
+                    )
                     continue
 
                 if error_status:
@@ -148,7 +167,9 @@ async def collect_snmp_data(host: str, community: str = 'public') -> Optional[Di
         return None
 
 
-def create_device_telemetry(host: str, snmp_data: Dict[str, str]) -> telemetry_pb2.DeviceTelemetry:
+def create_device_telemetry(
+    host: str, snmp_data: Dict[str, str]
+) -> telemetry_pb2.DeviceTelemetry:
     """Convert SNMP data to DeviceTelemetry protobuf.
 
     Args:
@@ -165,27 +186,27 @@ def create_device_telemetry(host: str, snmp_data: Dict[str, str]) -> telemetry_p
     )
 
     # Populate metadata from SNMP data if available
-    if 'sysDescr' in snmp_data:
+    if "sysDescr" in snmp_data:
         # Try to extract manufacturer/model from sysDescr
-        sys_descr = snmp_data['sysDescr']
-        if 'Darwin' in sys_descr:
+        sys_descr = snmp_data["sysDescr"]
+        if "Darwin" in sys_descr:
             metadata.manufacturer = "Apple"
             metadata.model = "macOS"
-        elif 'Linux' in sys_descr:
+        elif "Linux" in sys_descr:
             metadata.manufacturer = "Linux"
-        elif 'Cisco' in sys_descr:
+        elif "Cisco" in sys_descr:
             metadata.manufacturer = "Cisco"
-        elif 'Juniper' in sys_descr:
+        elif "Juniper" in sys_descr:
             metadata.manufacturer = "Juniper"
 
-    if 'sysName' in snmp_data:
+    if "sysName" in snmp_data:
         # Use sysName as part of device identification
         pass
 
-    if 'sysLocation' in snmp_data:
-        metadata.physical_location = snmp_data['sysLocation']
+    if "sysLocation" in snmp_data:
+        metadata.physical_location = snmp_data["sysLocation"]
 
-    if 'sysContact' in snmp_data:
+    if "sysContact" in snmp_data:
         # Could use this for contact info
         pass
 
@@ -201,7 +222,7 @@ def create_device_telemetry(host: str, snmp_data: Dict[str, str]) -> telemetry_p
                 metric_name=f"snmp_{metric_name}",
                 metric_type="GAUGE",
                 numeric_value=numeric_value,
-                unit="counter" if metric_name == "sysUpTime" else "string"
+                unit="counter" if metric_name == "sysUpTime" else "string",
             )
         except ValueError:
             # Non-numeric value
@@ -209,7 +230,7 @@ def create_device_telemetry(host: str, snmp_data: Dict[str, str]) -> telemetry_p
                 metric_name=f"snmp_{metric_name}",
                 metric_type="GAUGE",
                 string_value=value,
-                unit="string"
+                unit="string",
             )
 
         event = telemetry_pb2.TelemetryEvent(
@@ -219,7 +240,7 @@ def create_device_telemetry(host: str, snmp_data: Dict[str, str]) -> telemetry_p
             event_timestamp_ns=timestamp_ns,
             metric_data=metric_data,
             tags=["snmp", "system_info", "amoskys"],
-            source_component="snmp_agent"
+            source_component="snmp_agent",
         )
         events.append(event)
 
@@ -232,14 +253,15 @@ def create_device_telemetry(host: str, snmp_data: Dict[str, str]) -> telemetry_p
         events=events,
         timestamp_ns=timestamp_ns,
         collection_agent="amoskys-snmp-agent",
-        agent_version="0.1.0"
+        agent_version="0.1.0",
     )
 
     return device_telemetry
 
 
-def create_universal_envelope(device_telemetry: telemetry_pb2.DeviceTelemetry,
-                             sk: 'Ed25519PrivateKey') -> telemetry_pb2.UniversalEnvelope:
+def create_universal_envelope(
+    device_telemetry: telemetry_pb2.DeviceTelemetry, sk: "Ed25519PrivateKey"
+) -> telemetry_pb2.UniversalEnvelope:
     """Wrap DeviceTelemetry in a signed UniversalEnvelope.
 
     Args:
@@ -262,7 +284,7 @@ def create_universal_envelope(device_telemetry: telemetry_pb2.DeviceTelemetry,
         device_telemetry=device_telemetry,
         signing_algorithm="Ed25519",
         priority="NORMAL",
-        requires_acknowledgment=True
+        requires_acknowledgment=True,
     )
 
     # Sign the envelope using SerializeToString (since canonical_bytes only works with old Envelope)
@@ -287,9 +309,7 @@ def grpc_channel():
         key = f.read()
 
     creds = grpc.ssl_channel_credentials(
-        root_certificates=ca,
-        private_key=key,
-        certificate_chain=crt
+        root_certificates=ca, private_key=key, certificate_chain=crt
     )
 
     return grpc.secure_channel(config.agent.bus_address, creds)
@@ -325,8 +345,10 @@ def publish_telemetry(envelope: telemetry_pb2.UniversalEnvelope) -> bool:
 
         if ack.status == telemetry_pb2.UniversalAck.OK:
             SNMP_PUBLISH_OK.inc()
-            logger.info(f"✅ Published telemetry: {device_id} "
-                       f"({len(serialized)} bytes, {latency_ms:.1f}ms)")
+            logger.info(
+                f"✅ Published telemetry: {device_id} "
+                f"({len(serialized)} bytes, {latency_ms:.1f}ms)"
+            )
             return True
         elif ack.status == telemetry_pb2.UniversalAck.RETRY:
             SNMP_PUBLISH_RETRY.inc()
@@ -347,15 +369,15 @@ def publish_telemetry(envelope: telemetry_pb2.UniversalEnvelope) -> bool:
         return False
 
 
-async def collect_and_publish(device_config: Dict[str, str], sk: 'Ed25519PrivateKey'):
+async def collect_and_publish(device_config: Dict[str, str], sk: "Ed25519PrivateKey"):
     """Collect SNMP data from a device and publish to EventBus.
 
     Args:
         device_config: Dict with 'host' and optional 'community'
         sk: Ed25519 private key for signing
     """
-    host = device_config['host']
-    community = device_config.get('community', 'public')
+    host = device_config["host"]
+    community = device_config.get("community", "public")
 
     logger.info(f"📡 Collecting from {host}...")
     SNMP_COLLECTIONS.inc()
@@ -379,7 +401,7 @@ async def collect_and_publish(device_config: Dict[str, str], sk: 'Ed25519Private
     publish_telemetry(envelope)
 
 
-async def collection_loop(devices: List[Dict[str, str]], sk: 'Ed25519PrivateKey'):
+async def collection_loop(devices: List[Dict[str, str]], sk: "Ed25519PrivateKey"):
     """Main collection loop - collects from all devices at regular intervals.
 
     Args:
@@ -398,7 +420,9 @@ async def collection_loop(devices: List[Dict[str, str]], sk: 'Ed25519PrivateKey'
     while not stop:
         iteration += 1
         logger.info(f"\n{'='*70}")
-        logger.info(f"🔄 Collection cycle #{iteration} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(
+            f"🔄 Collection cycle #{iteration} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
         logger.info(f"{'='*70}")
 
         # Collect from all devices in parallel
@@ -420,15 +444,17 @@ def main():
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     logger.info("🧠⚡ AMOSKYS SNMP Agent Starting...")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     # Check if pysnmp is available
     if not PYSNMP_AVAILABLE:
-        logger.error("❌ pysnmp not available. Install with: pip install pysnmp==7.1.21")
+        logger.error(
+            "❌ pysnmp not available. Install with: pip install pysnmp==7.1.21"
+        )
         sys.exit(1)
 
     # Load private key for signing
@@ -442,17 +468,16 @@ def main():
     # Configure devices to monitor
     # TODO: Load from configuration file
     devices = [
-        {
-            'host': 'localhost',
-            'community': 'public'
-        },
+        {"host": "localhost", "community": "public"},
         # Add more devices here
         # {'host': '192.168.1.1', 'community': 'public'},
     ]
 
     logger.info(f"📋 Configured devices: {len(devices)}")
     for i, device in enumerate(devices, 1):
-        logger.info(f"   {i}. {device['host']} (community: {device.get('community', 'public')})")
+        logger.info(
+            f"   {i}. {device['host']} (community: {device.get('community', 'public')})"
+        )
 
     # Start Prometheus metrics server
     try:
@@ -462,9 +487,9 @@ def main():
     except Exception as e:
         logger.warning(f"⚠️  Failed to start metrics server: {e}")
 
-    logger.info("="*70)
+    logger.info("=" * 70)
     logger.info("🚀 SNMP Agent operational - starting collection loop")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     # Run collection loop
     try:
