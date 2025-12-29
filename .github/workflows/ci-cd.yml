@@ -134,12 +134,35 @@ jobs:
             "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
             "echo 'SSH to AMOSKYS VPS OK:' && hostname && date"
 
-    - name: Run remote deploy script on AMOSKYS VPS
+    - name: Deploy to AMOSKYS VPS
+      env:
+        GIT_REF: ${{ github.sha }}
+        GITHUB_ACTOR: ${{ github.actor }}
       run: |
         ssh -o StrictHostKeyChecking=yes \
             -i ~/.ssh/amoskys_deploy \
             "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
-            "cd /opt/amoskys && ./deploy_remote.sh"
+            "cd /opt/amoskys && GIT_REF=${GIT_REF} GITHUB_ACTOR=${GITHUB_ACTOR} bash deploy_remote.sh"
+
+    - name: External health check
+      run: |
+        echo "Waiting for service to stabilize..."
+        sleep 10
+        echo "Running external health check..."
+        curl -fsS --retry 5 --retry-delay 5 --retry-all-errors \
+            "https://${{ secrets.AMOSKYS_DOMAIN }}/api/v1/health/ping" || \
+        curl -fsS --retry 3 --retry-delay 5 \
+            "http://${{ secrets.EC2_HOST }}:5001/api/v1/health/ping"
+        echo ""
+        echo "✅ External health check passed!"
+
+    - name: Notify deployment success
+      if: success()
+      run: |
+        echo "🧠 AMOSKYS deployed successfully!"
+        echo "   Commit: ${{ github.sha }}"
+        echo "   Actor: ${{ github.actor }}"
+        echo "   Time: $(date -u)"
 
   release:
     name: Create GitHub Release

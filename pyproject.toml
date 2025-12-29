@@ -236,7 +236,8 @@ markers = [
     "unit: Unit tests",
     "component: Component integration tests",
     "integration: Full integration tests",
-    "golden: Golden reference tests"
+    "golden: Golden reference tests",
+    "smoke: Smoke tests for deployment verification (quick, critical path)",
 ]
 
 [tool.coverage.run]
