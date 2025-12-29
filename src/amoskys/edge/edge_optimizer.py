@@ -4,18 +4,19 @@ Resource-constrained deployment for microprocessor agents
 """
 
 import asyncio
-import logging
-import psutil
-import json
 import gzip
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
-import threading
-from collections import deque
-from pathlib import Path
+import json
+import logging
 import queue
+import threading
 import time
+from collections import deque
+from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import psutil
 
 # Optional lz4 compression support
 try:

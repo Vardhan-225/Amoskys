@@ -20,8 +20,8 @@ Usage:
     >>> assert verify(pk, b"message", signature)
 """
 
-from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
 
 def load_private_key(path: str) -> ed25519.Ed25519PrivateKey:

@@ -20,8 +20,12 @@ Design:
     is durable and crash-resistant.
 """
 
-import sqlite3, time, os, logging
+import logging
+import os
+import sqlite3
+import time
 from typing import Callable
+
 from amoskys.proto import messaging_schema_pb2 as pb
 
 logger = logging.getLogger(__name__)

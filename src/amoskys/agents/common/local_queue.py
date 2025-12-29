@@ -25,11 +25,12 @@ Usage:
     >>> drained = queue.drain(publish, limit=100)
 """
 
+import logging
+import os
 import sqlite3
 import time
-import os
-import logging
 from typing import Callable, Optional
+
 from amoskys.proto import universal_telemetry_pb2 as pb
 
 logger = logging.getLogger(__name__)

@@ -95,30 +95,13 @@ jobs:
         pip install -e ".[dev]"
         pip install flake8
     - name: Check code formatting
-      run: black --check src/ tests/
+      run: black --check src/ tests/ --exclude="src/amoskys/proto"
     - name: Check import sorting
-      run: isort --check-only src/ tests/
+      run: isort --check-only src/ tests/ --skip-glob="**/proto/*"
     - name: Lint with flake8
       run: flake8 src/ tests/ --max-line-length=88 --extend-ignore=E203,W503,F401,F841,F541,E501,E722,F403,F405,E128,E401,E402,F811 --exclude=src/amoskys/proto
     - name: Type check with mypy
-      run: mypy src/
-  repository-assessment:
-    name: Repository Health Check
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    - name: Run repository assessment
-      run: python assess_repository.py --output assessment-report.json
-    - name: Upload assessment report
-      uses: actions/upload-artifact@v4
-      with:
-        name: assessment-report
-        path: assessment-report.json
+      run: mypy src/ --exclude="src/amoskys/proto"
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest

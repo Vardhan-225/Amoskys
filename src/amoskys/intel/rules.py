@@ -16,11 +16,11 @@ Rules:
 """
 
 import logging
-from typing import List, Optional
-from datetime import datetime, timedelta
 from collections import defaultdict
+from datetime import datetime, timedelta
+from typing import List, Optional
 
-from amoskys.intel.models import Incident, Severity, MitreTactic, TelemetryEventView
+from amoskys.intel.models import Incident, MitreTactic, Severity, TelemetryEventView
 
 logger = logging.getLogger(__name__)
 

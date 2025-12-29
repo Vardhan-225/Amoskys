@@ -17,11 +17,11 @@ Supports the 3-layer ML architecture:
 - Behavioral features: Anomaly scores, confidence metrics
 """
 
-import sqlite3
 import logging
+import sqlite3
+import time
 from pathlib import Path
 from typing import Optional
-import time
 
 logger = logging.getLogger("TelemetryStore")
 

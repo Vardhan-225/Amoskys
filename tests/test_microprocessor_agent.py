@@ -3,28 +3,28 @@ Comprehensive Test Suite for Microprocessor Agent
 Tests all components and integration scenarios.
 """
 
-import unittest
-import time
 import json
-from unittest.mock import Mock, patch
-import sys
 import os
+import sys
+import time
+import unittest
+from unittest.mock import Mock, patch
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 try:
-    from src.amoskys.intelligence.integration.agent_core import MicroprocessorAgentCore
-    from src.amoskys.intelligence.fusion.threat_correlator import (
-        IntelligenceFusionEngine,
-        TelemetryEvent,
-        DeviceType,
-    )
+    from amoskys.edge import EdgeOptimizer  # Use package import for CI compatibility
     from src.amoskys.agents.discovery.device_scanner import DeviceDiscoveryEngine
     from src.amoskys.agents.protocols.universal_collector import (
         UniversalTelemetryCollector,
     )
-    from amoskys.edge import EdgeOptimizer  # Use package import for CI compatibility
+    from src.amoskys.intelligence.fusion.threat_correlator import (
+        DeviceType,
+        IntelligenceFusionEngine,
+        TelemetryEvent,
+    )
+    from src.amoskys.intelligence.integration.agent_core import MicroprocessorAgentCore
 except ImportError as e:
     print(f"Import warning: {e}")
 

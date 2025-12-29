@@ -15,7 +15,7 @@ from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 
 try:
     from pysnmp.hlapi.v1arch.asyncio import *
-    from pysnmp.smi.rfc1902 import ObjectType, ObjectIdentity
+    from pysnmp.smi.rfc1902 import ObjectIdentity, ObjectType
 
     PYSNMP_AVAILABLE = True
 except ImportError:

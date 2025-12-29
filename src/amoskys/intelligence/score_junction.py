@@ -20,13 +20,13 @@ ScoreJunction performs:
 """
 
 import asyncio
-import time
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, field
+import time
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import Enum
+from typing import Dict, List, Optional, Tuple
 
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 

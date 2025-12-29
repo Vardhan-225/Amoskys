@@ -12,23 +12,24 @@ Monitors persistence mechanisms for backdoors and malware:
 Purpose: Detect persistence implants, backdoors, and unauthorized changes
 """
 
-import os
+import hashlib
 import json
+import logging
+import os
 import plistlib
+import socket
 import subprocess
 import time
-import logging
-import hashlib
-import grpc
-import socket
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Set
+from typing import Dict, List, Optional, Set
 
+import grpc
+
+from amoskys.agents.common import LocalQueue
+from amoskys.config import get_config
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
-from amoskys.config import get_config
-from amoskys.agents.common import LocalQueue
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("PersistenceGuardAgent")

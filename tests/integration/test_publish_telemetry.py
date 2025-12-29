@@ -3,16 +3,17 @@
 Test script to publish telemetry data to EventBus
 Tests both DeviceTelemetry (SNMP) and ProcessEvent publishing
 """
-import sys
 import os
+import sys
 import time
+
 import grpc
 
 sys.path.insert(0, "src")
 
+from amoskys.proto import messaging_schema_pb2 as msg_pb2
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as telemetry_grpc
-from amoskys.proto import messaging_schema_pb2 as msg_pb2
 
 
 def publish_device_telemetry():

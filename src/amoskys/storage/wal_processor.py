@@ -6,11 +6,11 @@ This processor runs continuously, draining events from the EventBus WAL
 and storing them in the permanent telemetry database for dashboard queries.
 """
 
-import sqlite3
 import logging
-import time
-import sys
 import socket
+import sqlite3
+import sys
+import time
 from datetime import datetime
 from pathlib import Path
 

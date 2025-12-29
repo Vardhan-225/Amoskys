@@ -4,10 +4,11 @@ Tests the offline resilience queue that prevents data loss when
 EventBus is unavailable. Critical for production deployments.
 """
 
-import pytest
-import tempfile
 import os
+import tempfile
 from pathlib import Path
+
+import pytest
 
 from amoskys.agents.common import LocalQueue
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2

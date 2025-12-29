@@ -4,13 +4,14 @@ AMOSKYS Process Agent - Simplified Working Version
 Collects process information without protobuf dependencies for testing
 """
 
-import psutil
 import asyncio
-import time
 import logging
+import time
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Set
-from dataclasses import dataclass, asdict
+
+import psutil
 
 logger = logging.getLogger("ProcAgent")
 

@@ -1,5 +1,12 @@
-import os, time, subprocess, socket, pathlib
-import grpc, pytest
+import os
+import pathlib
+import socket
+import subprocess
+import time
+
+import grpc
+import pytest
+
 from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
 

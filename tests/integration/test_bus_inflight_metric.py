@@ -1,11 +1,18 @@
-import os, time, requests, subprocess, socket
+import os
+import socket
+import subprocess
+import time
+
+import grpc
+import requests
+
 from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
-import grpc
 
 
 def wait_port(port, t=6.0):
-    import time, socket
+    import socket
+    import time
 
     d = time.time() + t
     while time.time() < d:

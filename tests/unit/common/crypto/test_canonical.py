@@ -6,8 +6,9 @@ These tests ensure signature consistency and prevent signature bypass attacks.
 """
 
 import pytest
-from amoskys.proto import messaging_schema_pb2 as pb
+
 from amoskys.common.crypto import canonical
+from amoskys.proto import messaging_schema_pb2 as pb
 
 
 class TestCanonicalSerialization:

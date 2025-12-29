@@ -1,6 +1,12 @@
-import os, sys, time, socket, subprocess
-import grpc, pytest
+import os
+import socket
+import subprocess
+import sys
 import threading
+import time
+
+import grpc
+import pytest
 
 # Add src to path for clean imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
@@ -14,7 +20,8 @@ SERVER_ARGS = ["--overload", "on"]
 
 
 def wait_for_port(port: int, timeout=10.0):
-    import time, socket
+    import socket
+    import time
 
     deadline = time.time() + timeout
     while time.time() < deadline:

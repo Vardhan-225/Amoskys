@@ -14,28 +14,30 @@ The agent collects metrics from configured devices at regular intervals and
 publishes them to the EventBus using the universal telemetry schema.
 """
 
-import os
-import time
-import logging
-import grpc
-import signal
 import asyncio
+import logging
+import os
+import signal
 import sys
+import time
 from datetime import datetime
-from prometheus_client import start_http_server, Counter, Histogram, Gauge
 from typing import Dict, List, Optional
 
-# AMOSKYS imports
-from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
-from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
+import grpc
+from prometheus_client import Counter, Gauge, Histogram, start_http_server
+
 from amoskys.common.crypto.canonical import canonical_bytes
 from amoskys.common.crypto.signing import load_private_key, sign
 from amoskys.config import get_config
 
+# AMOSKYS imports
+from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
+from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
+
 # pysnmp imports (conditional)
 try:
     from pysnmp.hlapi.v1arch.asyncio import *
-    from pysnmp.smi.rfc1902 import ObjectType, ObjectIdentity
+    from pysnmp.smi.rfc1902 import ObjectIdentity, ObjectType
 
     PYSNMP_AVAILABLE = True
 except ImportError:

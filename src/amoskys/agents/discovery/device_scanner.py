@@ -4,15 +4,15 @@ Multi-protocol device enumeration and telemetry collection
 """
 
 import asyncio
+import ipaddress
+import json
 import logging
 import socket
 import subprocess
-from typing import Dict, List, Optional, Tuple, Set
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
-import json
-import ipaddress
-from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 

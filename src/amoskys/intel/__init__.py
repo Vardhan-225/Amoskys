@@ -24,12 +24,12 @@ from amoskys.intel.ingest import TelemetryIngestor
 from amoskys.intel.models import (
     DeviceRiskSnapshot,
     Incident,
-    TelemetryEventView,
+    MitreTactic,
     RiskLevel,
     Severity,
-    MitreTactic,
+    TelemetryEventView,
 )
-from amoskys.intel.rules import evaluate_rules, ALL_RULES
+from amoskys.intel.rules import ALL_RULES, evaluate_rules
 
 __all__ = [
     "FusionEngine",

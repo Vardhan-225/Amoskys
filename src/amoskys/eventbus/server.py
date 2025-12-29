@@ -66,34 +66,36 @@ Security Considerations:
     - TLS 1.2+ required with strong cipher suites
     - SIGHUP signal triggers graceful shutdown
 """
-import os
-import sys
-import grpc
-import time
+import hashlib
 import logging
-import ssl
-import threading
+import os
 import signal
 import sqlite3
-import hashlib
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from concurrent import futures
-from prometheus_client import start_http_server, Counter, Histogram, Gauge
-import yaml
+import ssl
+import sys
+import threading
+import time
 from collections import OrderedDict
+from concurrent import futures
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+import grpc
+import yaml
+from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
+from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
+
 # Clean imports for new structure
 from amoskys.common.crypto.canonical import canonical_bytes
 from amoskys.common.crypto.signing import load_public_key, verify
+from amoskys.config import get_config
 from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as telemetry_grpc
-from amoskys.config import get_config
-from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
 
 # Load configuration
 config = get_config()

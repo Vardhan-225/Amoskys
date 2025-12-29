@@ -10,21 +10,21 @@ Architecture:
     Agents → EventBus → WAL/DB → FusionEngine → Incidents + Risk DB
 """
 
+import json
 import logging
 import sqlite3
 import time
-import json
-from typing import List, Dict, Optional
-from datetime import datetime, timedelta
 from collections import defaultdict
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Dict, List, Optional
 
 from amoskys.intel.models import (
     DeviceRiskSnapshot,
     Incident,
-    TelemetryEventView,
     RiskLevel,
     Severity,
+    TelemetryEventView,
 )
 from amoskys.intel.rules import evaluate_rules
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2

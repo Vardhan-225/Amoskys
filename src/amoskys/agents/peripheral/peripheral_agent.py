@@ -15,21 +15,22 @@ This agent is critical for detecting USB-based attacks:
 - Malicious charging cables
 """
 
+import hashlib
+import json
+import logging
+import os
+import platform
+import socket
 import subprocess
 import time
-import logging
-import grpc
-import json
-import socket
-import hashlib
 from datetime import datetime
-from typing import Dict, List, Set, Optional
-import platform
-import os
+from typing import Dict, List, Optional, Set
 
+import grpc
+
+from amoskys.config import get_config
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
-from amoskys.config import get_config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("PeripheralAgent")

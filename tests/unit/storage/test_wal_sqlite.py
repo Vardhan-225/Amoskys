@@ -1,7 +1,9 @@
-import tempfile, os
+import os
+import tempfile
 from types import SimpleNamespace
-from amoskys.proto import messaging_schema_pb2 as pb
+
 from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
+from amoskys.proto import messaging_schema_pb2 as pb
 
 
 def make_env(idem="k1", ts=1):

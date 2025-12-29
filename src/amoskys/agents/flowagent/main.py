@@ -18,19 +18,28 @@ The WAL provides durability, allowing the agent to recover from crashes
 and retry failed publishes without data loss.
 """
 
-import os, time, hashlib, logging, grpc, signal, sys, random
-from datetime import datetime, timezone
-from prometheus_client import start_http_server, Counter, Histogram, Gauge
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import hashlib
+import logging
+import os
+import random
+import signal
+import sys
 import threading
+import time
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
-# Clean imports for new structure
-from amoskys.proto import messaging_schema_pb2 as pb
-from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
+import grpc
+from prometheus_client import Counter, Gauge, Histogram, start_http_server
+
 from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
 from amoskys.common.crypto.canonical import canonical_bytes
 from amoskys.common.crypto.signing import load_private_key, sign
 from amoskys.config import get_config
+
+# Clean imports for new structure
+from amoskys.proto import messaging_schema_pb2 as pb
+from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
 
 # Load configuration
 config = get_config()

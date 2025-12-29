@@ -11,19 +11,20 @@ Monitors authentication and privilege escalation events:
 Purpose: Detect credential attacks, brute force, privilege escalation
 """
 
-import subprocess
-import time
 import logging
 import re
-import grpc
 import socket
+import subprocess
+import time
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
+import grpc
+
+from amoskys.agents.common import LocalQueue
+from amoskys.config import get_config
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
-from amoskys.config import get_config
-from amoskys.agents.common import LocalQueue
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AuthGuardAgent")

@@ -1,4 +1,6 @@
-import pathlib, hashlib
+import hashlib
+import pathlib
+
 from amoskys.proto import messaging_schema_pb2 as pb
 
 GOLD = pathlib.Path("tests/golden/envelope_v1.bin")

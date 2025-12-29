@@ -11,10 +11,11 @@ Rules tested:
 4. multi_tactic_attack - Full kill chain (process + network + persistence)
 """
 
-import pytest
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 from amoskys.intel.fusion_engine import FusionEngine
 from amoskys.intel.models import TelemetryEventView

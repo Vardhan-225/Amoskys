@@ -6,12 +6,13 @@ This module contains comprehensive tests for the AMOSKYS API Gateway,
 covering authentication, agent management, event ingestion, and system endpoints.
 """
 
-import pytest
 import json
-import jwt
-from datetime import datetime, timezone, timedelta
-import sys
 import os
+import sys
+from datetime import datetime, timedelta, timezone
+
+import jwt
+import pytest
 
 # Add the web app to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "web"))

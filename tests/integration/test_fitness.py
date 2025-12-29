@@ -1,6 +1,7 @@
-import requests
 import time
+
 import pytest
+import requests
 
 
 def test_latency_budget():

@@ -4,12 +4,13 @@ Test Data Population Script for AMOSKYS Dashboard Testing
 Populates the system with sample agents, events, and metrics
 """
 
-import requests
 import json
-import time
-from datetime import datetime, timedelta, timezone
 import random
 import sys
+import time
+from datetime import datetime, timedelta, timezone
+
+import requests
 
 # Configuration
 API_BASE_URL = "http://127.0.0.1:5001"

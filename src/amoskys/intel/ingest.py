@@ -12,12 +12,12 @@ Architecture:
 import logging
 import sqlite3
 import time
-from typing import List, Optional, Dict, Set
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Dict, List, Optional, Set
 
-from amoskys.intel.models import TelemetryEventView
 from amoskys.intel.fusion_engine import FusionEngine
+from amoskys.intel.models import TelemetryEventView
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 
 logger = logging.getLogger(__name__)

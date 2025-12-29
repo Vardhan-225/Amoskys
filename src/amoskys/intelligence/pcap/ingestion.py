@@ -4,21 +4,21 @@ Provides comprehensive packet capture and analysis capabilities for all device t
 """
 
 import asyncio
+import json
 import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Callable, Any, Set, Union
-from queue import Queue, Full
-import json
+from queue import Full, Queue
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 try:
     import scapy.all as scapy
-    from scapy.layers.inet import IP, TCP, UDP, ICMP
-    from scapy.layers.l2 import Ether, ARP
-    from scapy.layers.dns import DNS
     from scapy.layers.dhcp import DHCP
+    from scapy.layers.dns import DNS
+    from scapy.layers.inet import ICMP, IP, TCP, UDP
+    from scapy.layers.l2 import ARP, Ether
 
     SCAPY_AVAILABLE = True
 except ImportError:

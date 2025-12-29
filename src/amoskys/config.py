@@ -7,10 +7,11 @@ It loads configuration from environment variables, YAML files, and provides vali
 """
 
 import os
-import yaml
-from pathlib import Path
-from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import yaml
 
 
 @dataclass

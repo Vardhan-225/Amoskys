@@ -3,11 +3,12 @@ AMOSKYS Enhanced SNMP Metrics Collector
 Config-driven SNMP agent with support for tables, profiles, and thresholds
 """
 
-import yaml
 import asyncio
-from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
+import yaml
 
 logger = logging.getLogger("SNMPMetricsCollector")
 
@@ -213,12 +214,12 @@ class EnhancedSNMPCollector:
         """
         # Import here to avoid circular dependency
         from pysnmp.hlapi.v1arch.asyncio import (
-            get_cmd,
             CommunityData,
-            UdpTransportTarget,
             ContextData,
-            ObjectType,
             ObjectIdentity,
+            ObjectType,
+            UdpTransportTarget,
+            get_cmd,
         )
 
         results = {}
@@ -289,12 +290,12 @@ class EnhancedSNMPCollector:
         """
         # Import here
         from pysnmp.hlapi.v1arch.asyncio import (
-            next_cmd,
             CommunityData,
-            UdpTransportTarget,
             ContextData,
-            ObjectType,
             ObjectIdentity,
+            ObjectType,
+            UdpTransportTarget,
+            next_cmd,
         )
 
         table_data = []
