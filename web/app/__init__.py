@@ -53,7 +53,11 @@ def create_app():
     # Register Dashboard blueprints (Phase 2.4)
     from .dashboard import dashboard_bp
     app.register_blueprint(dashboard_bp)
-    
+
+    # Register Auth API blueprint (Phase 3)
+    from amoskys.api.auth import auth_bp
+    app.register_blueprint(auth_bp)
+
     # Initialize SocketIO for real-time updates
     from .websocket import init_socketio
     socketio = init_socketio(app)
