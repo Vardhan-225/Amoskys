@@ -23,7 +23,18 @@ import sys
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional, Set, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Literal,
+    MutableMapping,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 # Context variable for request correlation ID
 correlation_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
@@ -229,7 +240,7 @@ class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON string."""
         # Build base log entry
-        log_entry = {
+        log_entry: Dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(
                 record.created, tz=timezone.utc
             ).isoformat(),
@@ -323,10 +334,15 @@ class StructuredLogger(logging.LoggerAdapter):
     def __init__(self, logger: logging.Logger, extra: Optional[Dict[str, Any]] = None):
         super().__init__(logger, extra or {})
 
-    def process(self, msg: str, kwargs: Dict[str, Any]) -> tuple:
+    def process(
+        self, msg: str, kwargs: MutableMapping[str, Any]
+    ) -> Tuple[str, MutableMapping[str, Any]]:
         """Process log call to add structured context."""
         # Merge adapter extra with call extra
-        extra = {**self.extra, **kwargs.pop("extra", {})}
+        extra: Dict[str, Any] = {
+            **(self.extra if self.extra else {}),
+            **kwargs.pop("extra", {}),
+        }
 
         # Add any keyword arguments as extra data
         for key in list(kwargs.keys()):
@@ -346,14 +362,17 @@ class StructuredLogger(logging.LoggerAdapter):
         """
         return TimingContext(self, operation, level)
 
-    def with_context(self, **kwargs) -> "StructuredLogger":
+    def with_context(self, **kwargs: Any) -> "StructuredLogger":
         """Create a new logger with additional context.
 
         Usage:
             request_logger = logger.with_context(user_id="123", request_id="abc")
             request_logger.info("Processing request")  # includes user_id and request_id
         """
-        merged_extra = {**self.extra, **kwargs}
+        merged_extra: Dict[str, Any] = {
+            **(self.extra if self.extra else {}),
+            **kwargs,
+        }
         return StructuredLogger(self.logger, merged_extra)
 
 
@@ -371,7 +390,12 @@ class TimingContext:
         self.start_time = time.perf_counter()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc_val: Optional[BaseException],
+        exc_tb: Any,
+    ) -> Literal[False]:
         self.elapsed = time.perf_counter() - self.start_time
 
         if exc_type:
@@ -456,6 +480,7 @@ def configure_logging(
     root_logger.handlers.clear()
 
     # Create formatter
+    formatter: logging.Formatter
     if json_format:
         formatter = JSONFormatter(
             filter_sensitive=filter_sensitive,

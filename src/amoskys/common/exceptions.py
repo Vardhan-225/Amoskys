@@ -165,7 +165,7 @@ class AmoskysError(Exception):
             "pin",
         }
 
-        filtered = {}
+        filtered: Dict[str, Any] = {}
         for key, value in data.items():
             key_lower = key.lower()
             if any(sensitive in key_lower for sensitive in sensitive_keys):
@@ -178,24 +178,22 @@ class AmoskysError(Exception):
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert exception to dictionary for JSON serialization."""
-        result = {
-            "error": {
-                "type": self.__class__.__name__,
-                "code": self.code.name,
-                "code_number": self.code.value,
-                "message": self.message,
-                "timestamp": self.timestamp.isoformat(),
-            }
+        error_info: Dict[str, Any] = {
+            "type": self.__class__.__name__,
+            "code": self.code.name,
+            "code_number": self.code.value,
+            "message": self.message,
+            "timestamp": self.timestamp.isoformat(),
         }
 
         if self.details:
-            result["error"]["details"] = self.details
+            error_info["details"] = self.details
         if self.hints:
-            result["error"]["hints"] = self.hints
+            error_info["hints"] = self.hints
         if self.correlation_id:
-            result["error"]["correlation_id"] = self.correlation_id
+            error_info["correlation_id"] = self.correlation_id
 
-        return result
+        return {"error": error_info}
 
     def __repr__(self) -> str:
         return (
