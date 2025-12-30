@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}AMOSKYS Security Alert{% endblock %}
+
+{% block content %}
+<h2>Security Alert: {{ alert_type }}</h2>
+
+<div class="alert-box">
+    <strong>Important:</strong> We detected an activity on your AMOSKYS account that requires your attention.
+</div>
+
+<p>The following event was detected:</p>
+
+<table class="details-table">
+    <tr>
+        <td>Event Type</td>
+        <td>{{ alert_type }}</td>
+    </tr>
+    {% for key, value in details.items() %}
+    <tr>
+        <td>{{ key | replace('_', ' ') | title }}</td>
+        <td>{{ value }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<p><strong>If this was you:</strong> No further action is required. This is just a notification to keep you informed about your account security.</p>
+
+<p><strong>If this wasn't you:</strong> Your account may be compromised. We recommend you:</p>
+<ol>
+    <li>Change your password immediately</li>
+    <li>Enable multi-factor authentication (MFA)</li>
+    <li>Review your recent account activity</li>
+    <li>Contact our support team if you notice any unauthorized changes</li>
+</ol>
+
+<div class="security-note">
+    <strong>Security Note:</strong> This alert was sent to {{ email }}. We send these notifications to help you monitor your account security. You cannot unsubscribe from security alerts.
+</div>
+{% endblock %}

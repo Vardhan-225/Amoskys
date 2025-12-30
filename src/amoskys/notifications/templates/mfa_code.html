@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Your AMOSKYS verification code{% endblock %}
+
+{% block content %}
+<h2>Your Verification Code</h2>
+
+<p>Use the code below to complete your sign-in to AMOSKYS:</p>
+
+<div class="code-box">
+    <div class="code">{{ code }}</div>
+    <p style="margin-bottom: 0; color: #6b7280; font-size: 14px;">
+        Valid for {{ expires_minutes }} minutes
+    </p>
+</div>
+
+<div class="alert-box warning">
+    <strong>Do not share this code.</strong> AMOSKYS will never call or text you asking for this code. If someone is asking for this code, it may be a phishing attempt.
+</div>
+
+<p>If you did not attempt to sign in, someone may be trying to access your account. We recommend:</p>
+<ul>
+    <li>Change your password immediately</li>
+    <li>Review your account's recent login activity</li>
+    <li>Contact support if you see any suspicious activity</li>
+</ul>
+
+<div class="security-note">
+    <strong>Security Note:</strong> This code was requested for {{ email }}. Each code can only be used once and expires after {{ expires_minutes }} minutes.
+</div>
+{% endblock %}

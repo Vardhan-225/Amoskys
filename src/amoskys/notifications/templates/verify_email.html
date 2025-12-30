@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Verify your AMOSKYS account{% endblock %}
+
+{% block content %}
+<h2>Welcome to AMOSKYS!</h2>
+
+<p>Thank you for creating an account. To complete your registration and secure your account, please verify your email address.</p>
+
+<p style="text-align: center;">
+    <a href="{{ verify_url }}" class="btn">Verify Email Address</a>
+</p>
+
+<p>Or copy and paste this link into your browser:</p>
+<p style="word-break: break-all; color: #6b7280; font-size: 14px;">
+    {{ verify_url }}
+</p>
+
+<div class="alert-box info">
+    <strong>Note:</strong> This verification link will expire in 24 hours for security purposes.
+</div>
+
+<div class="security-note">
+    <strong>Security Tip:</strong> This email was sent to {{ email }}. If you did not create an AMOSKYS account, no action is required and you can safely ignore this email.
+</div>
+{% endblock %}
