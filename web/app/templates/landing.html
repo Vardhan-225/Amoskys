@@ -3,454 +3,935 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMOSKYS - Neural Security Command Platform</title>
+    <title>AMOSKYS | Enterprise Security Command Platform</title>
+    <meta name="description" content="Deploy intelligent security agents across your infrastructure. 50+ monitoring perspectives from a single platform. AI-powered threat correlation and automated remediation.">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --navy-dark: #0a0e27;
+            --navy-medium: #1a1f3a;
+            --navy-light: #2a2f4a;
+            --cyan-bright: #00d9ff;
+            --cyan-glow: #00b8d4;
+            --green-secure: #00ff88;
+            --red-alert: #ff3366;
+            --text-primary: #ffffff;
+            --text-secondary: #b4bcd0;
+            --text-muted: #6b7a99;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
-            background: linear-gradient(135deg, #0a0a0a, #1a1a2e, #16213e);
-            color: #00ff88;
-            min-height: 100vh;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--navy-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
             overflow-x: hidden;
-            position: relative;
         }
-        
-        .matrix-bg {
+
+        /* Navigation */
+        nav {
             position: fixed;
             top: 0;
-            left: 0;
             width: 100%;
-            height: 100%;
-            pointer-events: none;
-            opacity: 0.05;
-            z-index: -1;
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 217, 255, 0.1);
+            z-index: 1000;
+            padding: 1rem 0;
         }
-        
-        .container {
-            max-width: 1200px;
+
+        .nav-container {
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: var(--cyan-bright);
+        }
+
+        .nav-badge {
+            background: linear-gradient(135deg, var(--cyan-glow), var(--green-secure));
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--navy-dark);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--cyan-bright);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+            font-size: 0.95rem;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--cyan-bright), var(--cyan-glow));
+            color: var(--navy-dark);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 217, 255, 0.3);
+        }
+
+        .btn-outline {
+            border: 2px solid var(--cyan-bright);
+            color: var(--cyan-bright);
+            background: transparent;
+        }
+
+        .btn-outline:hover {
+            background: var(--cyan-bright);
+            color: var(--navy-dark);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding-top: 80px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 30% 50%, rgba(0, 217, 255, 0.1), transparent 50%),
+                        radial-gradient(circle at 70% 50%, rgba(0, 255, 136, 0.05), transparent 50%);
+            pointer-events: none;
+        }
+
+        .hero-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
             position: relative;
             z-index: 1;
         }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 60px;
-            padding: 40px 0;
-        }
-        
-        .logo {
-            font-size: 4rem;
-            font-weight: bold;
-            color: #00ff88;
-            text-shadow: 0 0 30px #00ff88;
-            margin-bottom: 20px;
-            animation: glow 2s ease-in-out infinite alternate;
-            letter-spacing: 8px;
-        }
-        
-        .version {
-            font-size: 1.2rem;
-            color: #88ccff;
-            opacity: 0.8;
-            margin-bottom: 10px;
-        }
-        
-        .tagline {
-            font-size: 1.5rem;
-            color: #ffffff;
-            opacity: 0.9;
-            margin-bottom: 40px;
-            font-weight: 300;
-        }
-        
-        .subtitle {
-            font-size: 1rem;
-            color: #00aaff;
-            opacity: 0.7;
+
+        .hero-content {
             max-width: 800px;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid var(--cyan-bright);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+            color: var(--cyan-bright);
+            font-weight: 600;
+        }
+
+        .hero-title {
+            font-size: 4.5rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, var(--text-primary), var(--cyan-bright));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            font-weight: 400;
+        }
+
+        .hero-description {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            line-height: 1.8;
+            margin-bottom: 3rem;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin-top: 4rem;
+            padding-top: 3rem;
+            border-top: 1px solid rgba(0, 217, 255, 0.1);
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--cyan-bright);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        /* How It Works Section */
+        .how-it-works {
+            padding: 8rem 2rem;
+            background: linear-gradient(180deg, var(--navy-dark) 0%, var(--navy-medium) 100%);
+        }
+
+        .section-container {
+            max-width: 1400px;
             margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 5rem;
+        }
+
+        .section-badge {
+            display: inline-block;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid var(--green-secure);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            color: var(--green-secure);
+            font-weight: 600;
+        }
+
+        .section-title {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+
+        .section-subtitle {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .step-card {
+            background: rgba(26, 31, 58, 0.5);
+            border: 1px solid rgba(0, 217, 255, 0.1);
+            border-radius: 16px;
+            padding: 2.5rem 2rem;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .step-card:hover {
+            border-color: var(--cyan-bright);
+            transform: translateY(-5px);
+            background: rgba(26, 31, 58, 0.8);
+        }
+
+        .step-number {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--cyan-bright), var(--cyan-glow));
+            color: var(--navy-dark);
+            font-weight: 700;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+        }
+
+        .step-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .step-description {
+            color: var(--text-muted);
             line-height: 1.6;
         }
-        
+
+        /* Agent Architecture */
+        .architecture-visual {
+            background: rgba(10, 14, 39, 0.8);
+            border: 2px solid rgba(0, 217, 255, 0.2);
+            border-radius: 20px;
+            padding: 3rem;
+            margin-top: 3rem;
+        }
+
+        .arch-title {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            color: var(--cyan-bright);
+        }
+
+        .arch-diagram {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .arch-block {
+            flex: 1;
+            text-align: center;
+            min-width: 200px;
+        }
+
+        .arch-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--cyan-bright), var(--cyan-glow));
+            margin: 0 auto 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+        }
+
+        .arch-label {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .arch-value {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--green-secure);
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .arch-arrow {
+            font-size: 2rem;
+            color: var(--cyan-bright);
+        }
+
+        /* Features Grid */
+        .features {
+            padding: 8rem 2rem;
+            background: var(--navy-dark);
+        }
+
         .features-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 30px;
-            margin: 60px 0;
+            gap: 2rem;
+            margin-top: 4rem;
         }
-        
+
         .feature-card {
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid #00ff88;
-            border-radius: 12px;
-            padding: 30px;
-            text-align: center;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
+            background: rgba(26, 31, 58, 0.5);
+            border: 1px solid rgba(0, 217, 255, 0.1);
+            border-radius: 16px;
+            padding: 2.5rem;
+            transition: all 0.3s;
         }
-        
+
         .feature-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 20px 40px rgba(0, 255, 136, 0.3);
-            border-color: #00aaff;
+            border-color: var(--cyan-bright);
+            transform: translateY(-5px);
         }
-        
+
         .feature-icon {
-            font-size: 3rem;
-            margin-bottom: 20px;
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
         }
-        
+
         .feature-title {
-            color: #00aaff;
-            font-size: 1.4rem;
-            margin-bottom: 15px;
-            font-weight: bold;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
         }
-        
+
         .feature-description {
-            color: #cccccc;
-            line-height: 1.6;
-            font-size: 0.95rem;
+            color: var(--text-muted);
+            line-height: 1.7;
         }
-        
-        .cta-section {
+
+        /* Trust Signals */
+        .trust-section {
+            padding: 6rem 2rem;
+            background: var(--navy-medium);
             text-align: center;
-            margin: 80px 0 60px 0;
         }
-        
-        .cta-title {
-            font-size: 2rem;
-            color: #ffffff;
-            margin-bottom: 30px;
-        }
-        
-        .btn-group {
+
+        .trust-badges {
             display: flex;
-            gap: 20px;
             justify-content: center;
+            gap: 3rem;
             flex-wrap: wrap;
+            margin-top: 3rem;
         }
-        
-        .btn {
-            display: inline-block;
-            padding: 15px 40px;
-            background: transparent;
-            border: 2px solid #00ff88;
-            color: #00ff88;
-            text-decoration: none;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            font-family: 'Courier New', monospace;
-            font-size: 1.1rem;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .btn:hover {
-            background: #00ff88;
-            color: #000;
-            box-shadow: 0 0 30px #00ff88;
-            transform: translateY(-2px);
-        }
-        
-        .btn-primary {
-            background: #00ff88;
-            color: #000;
-        }
-        
-        .btn-primary:hover {
-            background: #00aaff;
-            border-color: #00aaff;
-        }
-        
-        .status-bar {
-            background: rgba(0, 0, 0, 0.8);
-            border: 1px solid #00ff88;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 40px auto;
-            max-width: 600px;
-            font-family: 'Courier New', monospace;
-        }
-        
-        .status-line {
+
+        .trust-badge {
             display: flex;
-            justify-content: space-between;
-            margin: 8px 0;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .trust-icon {
+            font-size: 3rem;
+        }
+
+        .trust-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        /* CTA Section */
+        .cta-section {
+            padding: 8rem 2rem;
+            background: linear-gradient(135deg, var(--navy-dark) 0%, #0f1329 100%);
+            text-align: center;
+        }
+
+        .cta-content {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .cta-title {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+        }
+
+        .cta-subtitle {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            margin-bottom: 3rem;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--navy-dark);
+            border-top: 1px solid rgba(0, 217, 255, 0.1);
+            padding: 4rem 2rem 2rem;
+        }
+
+        .footer-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 3rem;
+            margin-bottom: 3rem;
+        }
+
+        .footer-brand {
+            max-width: 300px;
+        }
+
+        .footer-logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--cyan-bright);
+            margin-bottom: 1rem;
+        }
+
+        .footer-description {
+            color: var(--text-muted);
+            line-height: 1.7;
+            margin-bottom: 1.5rem;
+        }
+
+        .footer-section h4 {
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .footer-section ul {
+            list-style: none;
+        }
+
+        .footer-section a {
+            color: var(--text-muted);
+            text-decoration: none;
+            display: block;
+            margin-bottom: 0.75rem;
+            transition: color 0.3s;
+        }
+
+        .footer-section a:hover {
+            color: var(--cyan-bright);
+        }
+
+        .footer-bottom {
+            padding-top: 2rem;
+            border-top: 1px solid rgba(0, 217, 255, 0.1);
+            text-align: center;
+            color: var(--text-muted);
             font-size: 0.9rem;
         }
-        
-        .status-key {
-            color: #00aaff;
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .steps-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .footer-grid {
+                grid-template-columns: 1fr 1fr;
+            }
         }
-        
-        .status-value {
-            color: #00ff88;
-            font-weight: bold;
-        }
-        
-        .footer {
-            text-align: center;
-            padding: 40px 20px;
-            border-top: 1px solid rgba(0, 255, 136, 0.3);
-            margin-top: 60px;
-            color: #888;
-        }
-        
-        .footer-links {
-            margin-bottom: 20px;
-        }
-        
-        .footer-links a {
-            color: #00aaff;
-            text-decoration: none;
-            margin: 0 15px;
-            transition: color 0.3s ease;
-        }
-        
-        .footer-links a:hover {
-            color: #00ff88;
-        }
-        
-        @keyframes glow {
-            0% { text-shadow: 0 0 30px #00ff88; }
-            100% { text-shadow: 0 0 40px #00ff88, 0 0 60px #00ff88; }
-        }
-        
+
         @media (max-width: 768px) {
-            .logo {
-                font-size: 2.5rem;
-                letter-spacing: 4px;
+            .hero-title {
+                font-size: 3rem;
             }
-            
-            .tagline {
-                font-size: 1.2rem;
+
+            .hero-subtitle {
+                font-size: 1.25rem;
             }
-            
-            .features-grid {
+
+            .hero-stats {
                 grid-template-columns: 1fr;
-                gap: 20px;
+                gap: 1.5rem;
             }
-            
-            .btn-group {
+
+            .steps-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .cta-buttons {
                 flex-direction: column;
-                align-items: center;
             }
-            
+
             .btn {
                 width: 100%;
-                max-width: 300px;
+                text-align: center;
+                display: block;
             }
+
+            .nav-links {
+                display: none;
+            }
+
+            .footer-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in-up {
+            animation: fadeInUp 0.8s ease-out;
         }
     </style>
 </head>
 <body>
-    <div class="matrix-bg" id="matrix-canvas"></div>
-    
-    <div class="container">
-        <div class="header">
-            <div class="logo">AMOSKYS</div>
-            <div class="version">v1.0.0</div>
-            <div class="tagline">Neural Security Command Platform</div>
-            <div class="subtitle">
-                Advanced neural security orchestration that evolves with emerging threats.
-                Real-time anomaly detection, intelligent agent coordination, and adaptive defense protocols.
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-container">
+            <div class="logo-section">
+                <div class="logo-text">AMOSKYS</div>
+                <span class="nav-badge">Enterprise</span>
+            </div>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="/about">About</a>
+                <a href="/docs">Docs</a>
+                <a href="/auth/login">Login</a>
+                <a href="/auth/signup" class="btn btn-primary">Start Free Trial</a>
             </div>
         </div>
-        
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon">🧠</div>
-                <div class="feature-title">Neural Core Engine</div>
-                <div class="feature-description">
-                    AI-powered threat detection using advanced machine learning algorithms.
-                    Continuous learning from network patterns and behavioral analysis.
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-container">
+            <div class="hero-content fade-in-up">
+                <span class="hero-badge">🛡️ AI-Powered Defense Network</span>
+                <h1 class="hero-title">One Agent.<br>Every Device.<br>Total Defense.</h1>
+                <p class="hero-subtitle">Deploy intelligent security agents across your infrastructure</p>
+                <p class="hero-description">
+                    Download a single agent package. Deploy to unlimited devices. Get 50+ monitoring perspectives
+                    from 10 specialized security agents. AI automatically correlates threats across your entire network
+                    and remediates before damage occurs.
+                </p>
+                <div class="cta-buttons">
+                    <a href="/auth/signup" class="btn btn-primary">Download Agent Package</a>
+                    <a href="/command" class="btn btn-outline">View Live Demo</a>
+                </div>
+
+                <div class="hero-stats">
+                    <div class="stat">
+                        <div class="stat-number">10+</div>
+                        <div class="stat-label">Security Agents</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">50+</div>
+                        <div class="stat-label">Monitoring Perspectives</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-number">&lt;1s</div>
+                        <div class="stat-label">Threat Detection</div>
+                    </div>
                 </div>
             </div>
-            
-            <div class="feature-card">
-                <div class="feature-icon">🛡️</div>
-                <div class="feature-title">Adaptive Defense</div>
-                <div class="feature-description">
-                    Dynamic security policies that evolve in real-time based on threat intelligence.
-                    Automated response coordination across distributed security agents.
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works" id="how-it-works">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-badge">🚀 From Zero to Protected in Minutes</span>
+                <h2 class="section-title">How AMOSKYS Works</h2>
+                <p class="section-subtitle">
+                    Enterprise-grade security that deploys in minutes, not months. No complex configuration required.
+                </p>
+            </div>
+
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h3 class="step-title">Sign Up</h3>
+                    <p class="step-description">
+                        Create your account with enterprise-grade encryption. Your credentials are hashed with Argon2id.
+                    </p>
+                </div>
+
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <h3 class="step-title">Download Agents</h3>
+                    <p class="step-description">
+                        Get a pre-configured package with 10+ security agents. One download for Windows, Linux, macOS, Docker.
+                    </p>
+                </div>
+
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h3 class="step-title">Deploy</h3>
+                    <p class="step-description">
+                        Deploy agents across your devices. They auto-configure and start monitoring within 60 seconds.
+                    </p>
+                </div>
+
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <h3 class="step-title">Defend</h3>
+                    <p class="step-description">
+                        AI correlates threats across all perspectives. ReAct framework auto-remediates. You get alerts with explanations.
+                    </p>
                 </div>
             </div>
-            
-            <div class="feature-card">
-                <div class="feature-icon">📡</div>
-                <div class="feature-title">Event Bus Architecture</div>
-                <div class="feature-description">
-                    High-performance message routing with gRPC and protocol buffers.
-                    Secure inter-agent communication with mTLS encryption.
+
+            <!-- Architecture Visual -->
+            <div class="architecture-visual">
+                <h3 class="arch-title">The Power of Distributed Intelligence</h3>
+                <div class="arch-diagram">
+                    <div class="arch-block">
+                        <div class="arch-icon">💻</div>
+                        <div class="arch-label">5 Devices</div>
+                        <div class="arch-value">Monitored</div>
+                    </div>
+                    <div class="arch-arrow">×</div>
+                    <div class="arch-block">
+                        <div class="arch-icon">🤖</div>
+                        <div class="arch-label">10 Agents Each</div>
+                        <div class="arch-value">Per Device</div>
+                    </div>
+                    <div class="arch-arrow">=</div>
+                    <div class="arch-block">
+                        <div class="arch-icon">🧠</div>
+                        <div class="arch-label">50 Perspectives</div>
+                        <div class="arch-value">Total Defense</div>
+                    </div>
                 </div>
             </div>
-            
-            <div class="feature-card">
-                <div class="feature-icon">⚡</div>
-                <div class="feature-title">Real-Time Analytics</div>
-                <div class="feature-description">
-                    Live threat monitoring with Prometheus metrics and Grafana dashboards.
-                    Intelligent alerting and incident response automation.
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-badge">⚡ Enterprise Capabilities</span>
+                <h2 class="section-title">Compete with the Giants</h2>
+                <p class="section-subtitle">
+                    Everything you expect from CrowdStrike, SentinelOne, or Palo Alto - but smarter, faster, and more transparent.
+                </p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🧠</div>
+                    <h3 class="feature-title">AI-Powered Correlation</h3>
+                    <p class="feature-description">
+                        Our correlation engine doesn't just detect threats - it correlates the correlations.
+                        Vector graphs show you exactly how threats spread across your network.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🔄</div>
+                    <h3 class="feature-title">ReAct Remediation</h3>
+                    <p class="feature-description">
+                        Reasoning + Acting frameworks automatically remediate threats. No waiting for human approval.
+                        Alert → Analyze → Remediate → Report - all in milliseconds.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">💬</div>
+                    <h3 class="feature-title">ChatBot Explainability</h3>
+                    <p class="feature-description">
+                        Every alert comes with an AI-powered explanation. Ask "Why is this a threat?" or
+                        "What should I do?" - get instant, context-aware answers.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3 class="feature-title">Command Center</h3>
+                    <p class="feature-description">
+                        Single pane of glass for your entire security posture. Real-time dashboards,
+                        threat timelines, and incident response workflows.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🌐</div>
+                    <h3 class="feature-title">Threat Intelligence</h3>
+                    <p class="feature-description">
+                        Global threat feeds integrated with your local telemetry. See how threats
+                        evolve worldwide and how they might affect your infrastructure.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🔐</div>
+                    <h3 class="feature-title">Zero-Trust Security</h3>
+                    <p class="feature-description">
+                        End-to-end encryption. Argon2id password hashing. mTLS agent communication.
+                        SOC 2, ISO 27001 compliant. Your data stays yours.
+                    </p>
                 </div>
             </div>
         </div>
-        
-        <div class="status-bar">
-            <div class="status-line">
-                <span class="status-key">System Status:</span>
-                <span class="status-value" id="system-status">OPERATIONAL</span>
-            </div>
-            <div class="status-line">
-                <span class="status-key">Neural Core:</span>
-                <span class="status-value" id="neural-core">ACTIVE</span>
-            </div>
-            <div class="status-line">
-                <span class="status-key">Security Level:</span>
-                <span class="status-value" id="security-level">MAXIMUM</span>
-            </div>
-            <div class="status-line">
-                <span class="status-key">Threat Level:</span>
-                <span class="status-value" id="threat-level">GREEN</span>
-            </div>
-            <div class="status-line">
-                <span class="status-key">Last Updated:</span>
-                <span class="status-value" id="last-updated">--</span>
-            </div>
-        </div>
-        
-        <div class="cta-section">
-            <div class="cta-title">Enter Neural Command Interface</div>
-            <div class="btn-group">
-                <a href="/dashboard" class="btn btn-primary">Launch Command Center</a>
-                <a href="/api/v1/health/system" class="btn">API Health</a>
-                <a href="/dashboard/agents" class="btn">Agent Network</a>
+    </section>
+
+    <!-- Trust Signals -->
+    <section class="trust-section">
+        <div class="section-container">
+            <h2 class="section-title">Enterprise-Grade Security</h2>
+            <p class="section-subtitle">
+                Built for organizations that can't afford to compromise on security
+            </p>
+
+            <div class="trust-badges">
+                <div class="trust-badge">
+                    <div class="trust-icon">🔒</div>
+                    <div class="trust-label">AES-256 Encryption</div>
+                </div>
+                <div class="trust-badge">
+                    <div class="trust-icon">✅</div>
+                    <div class="trust-label">SOC 2 Compliant</div>
+                </div>
+                <div class="trust-badge">
+                    <div class="trust-icon">🛡️</div>
+                    <div class="trust-label">ISO 27001</div>
+                </div>
+                <div class="trust-badge">
+                    <div class="trust-icon">🔐</div>
+                    <div class="trust-label">Zero-Trust Architecture</div>
+                </div>
             </div>
         </div>
-        
-        <div class="footer">
-            <div class="footer-links">
-                <a href="/docs">Documentation</a>
-                <a href="/api/docs">API Reference</a>
-                <a href="mailto:admin@amoskys.com">Contact</a>
-                <a href="/privacy">Privacy</a>
-            </div>
-            <div>
-                © 2025 AMOSKYS Neural Security Command Platform<br>
-                Developed by <strong>Akash Thanneeru</strong> | 
-                🧠 Neural Security Orchestration That Evolves
+    </section>
+
+    <!-- Final CTA -->
+    <section class="cta-section">
+        <div class="cta-content">
+            <h2 class="cta-title">Ready to Join the Front Lines?</h2>
+            <p class="cta-subtitle">
+                Download your agent package today. Start protecting your infrastructure in the next 5 minutes.
+            </p>
+            <div class="cta-buttons" style="justify-content: center;">
+                <a href="/auth/signup" class="btn btn-primary" style="font-size: 1.1rem; padding: 1rem 2.5rem;">
+                    Start Free 30-Day Trial
+                </a>
             </div>
         </div>
-    </div>
-    
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <div class="footer-logo">AMOSKYS</div>
+                    <p class="footer-description">
+                        Enterprise security platform that grows with every device.
+                        AI-powered threat detection and automated remediation for the cyber warfare era.
+                    </p>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Product</h4>
+                    <ul>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="/command">Command Center</a></li>
+                        <li><a href="/docs">Documentation</a></li>
+                        <li><a href="/api/docs">API Reference</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Company</h4>
+                    <ul>
+                        <li><a href="/about">About</a></li>
+                        <li><a href="/terms">Terms of Service</a></li>
+                        <li><a href="/privacy">Privacy Policy</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Security</h4>
+                    <ul>
+                        <li><a href="/security">Security Overview</a></li>
+                        <li><a href="/compliance">Compliance</a></li>
+                        <li><a href="/status">System Status</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>© 2025 AMOSKYS Neural Security Command Platform</p>
+                <p style="margin-top: 0.5rem;">
+                    Built with 🔥 by <strong>Akash Thanneeru</strong> | Forefront of Cyber Warfare
+                </p>
+            </div>
+        </div>
+    </footer>
+
     <script>
-        // Matrix rain effect
-        function createMatrixRain() {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const container = document.getElementById('matrix-canvas');
-            container.appendChild(canvas);
-            
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            
-            const chars = '01AMOSKYSNEURAL{}[]()<>!@#$%^&*';
-            const drops = [];
-            const fontSize = 14;
-            const columns = canvas.width / fontSize;
-            
-            for (let i = 0; i < columns; i++) {
-                drops[i] = 1;
-            }
-            
-            function draw() {
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                ctx.fillStyle = '#00ff88';
-                ctx.font = fontSize + 'px Courier New';
-                
-                for (let i = 0; i < drops.length; i++) {
-                    const text = chars[Math.floor(Math.random() * chars.length)];
-                    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-                    
-                    if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-                        drops[i] = 0;
-                    }
-                    drops[i]++;
+        // Smooth scrolling
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
-            }
-            
-            setInterval(draw, 50);
-            
-            // Resize handler
-            window.addEventListener('resize', () => {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-            });
-        }
-        
-        // Update system status
-        function updateStatus() {
-            fetch('/status')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('system-status').textContent = data.status || 'OPERATIONAL';
-                    document.getElementById('neural-core').textContent = 
-                        data.components?.neural_core || 'ACTIVE';
-                    document.getElementById('last-updated').textContent = 
-                        new Date().toLocaleTimeString();
-                })
-                .catch(err => {
-                    console.log('Status update failed:', err);
-                    document.getElementById('system-status').textContent = 'OFFLINE';
-                });
-        }
-        
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            createMatrixRain();
-            updateStatus();
-            
-            // Update status every 30 seconds
-            setInterval(updateStatus, 30000);
-            
-            // Add subtle animation to feature cards
-            const cards = document.querySelectorAll('.feature-card');
-            cards.forEach((card, index) => {
-                card.style.animationDelay = `${index * 0.2}s`;
             });
         });
-        
-        // Easter egg: Konami code
-        let konamiCode = [];
-        const konami = [38, 38, 40, 40, 37, 39, 37, 39, 66, 65]; // ↑↑↓↓←→←→BA
-        
-        document.addEventListener('keydown', (e) => {
-            konamiCode.push(e.keyCode);
-            if (konamiCode.length > konami.length) {
-                konamiCode.shift();
-            }
-            
-            if (konamiCode.length === konami.length && 
-                konamiCode.every((code, index) => code === konami[index])) {
-                
-                // Easter egg activation
-                document.body.style.animation = 'glow 0.5s ease-in-out 3';
-                setTimeout(() => {
-                    alert('🧠🛡️ NEURAL CORES ACTIVATED - COMMANDER ACCESS GRANTED');
-                    window.location.href = '/command';
-                }, 1000);
-            }
+
+        // Fade in on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -100px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.step-card, .feature-card').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'all 0.6s ease-out';
+            observer.observe(el);
         });
     </script>
 </body>
