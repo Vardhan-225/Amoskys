@@ -1,4 +1,3 @@
-# filepath: /Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/auth/__init__.py
 """
 AMOSKYS Authentication & Authorization Module
 
@@ -9,6 +8,7 @@ Enterprise-grade security infrastructure providing:
 - SQLAlchemy data models for auth (P3-001)
 - Server-side session management (P3-005)
 - Email notifications for auth workflows (P3-006)
+- High-level auth service (P3-007+)
 
 Design Philosophy (Akash Thanneeru + Claude Supremacy):
     Security is not a feature, it's the foundation. Every auth
@@ -16,13 +16,17 @@ Design Philosophy (Akash Thanneeru + Claude Supremacy):
     and actively trying to compromise the system.
 
 Usage:
-    # Password hashing
+    # High-level auth service (recommended)
+    from amoskys.auth import AuthService
+    from amoskys.db import get_session_context
+    
+    with get_session_context() as db:
+        auth = AuthService(db)
+        result = auth.signup(email="user@example.com", password="SecurePass123!")
+
+    # Low-level utilities
     from amoskys.auth import hash_password, verify_password
-
-    # Token generation
     from amoskys.auth import generate_token, hash_token
-
-    # Session management
     from amoskys.auth import create_session, validate_session
 
     # Models
@@ -82,7 +86,24 @@ from amoskys.auth.sessions import (
     validate_session,
 )
 
+# Auth Service (P3-007+)
+from amoskys.auth.service import (
+    AuthResult,
+    AuthService,
+    AuthServiceConfig,
+    LoginResult,
+    PasswordResetResult,
+    SignupResult,
+)
+
 __all__ = [
+    # Auth Service
+    "AuthService",
+    "AuthServiceConfig",
+    "AuthResult",
+    "SignupResult",
+    "LoginResult",
+    "PasswordResetResult",
     # Tokens
     "generate_token",
     "generate_numeric_code",

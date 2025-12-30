@@ -57,7 +57,11 @@ web = [
     "eventlet>=0.36.0",
     "websocket-client>=1.8.0",
     "pyjwt>=2.10.0",
-    "bcrypt>=4.3.0"
+    "bcrypt>=4.3.0",
+    # Phase 3: Authentication infrastructure
+    "sqlalchemy>=2.0.0",
+    "argon2-cffi>=23.1.0",
+    "jinja2>=3.1.0"
 ]
 
 # Agent-specific dependencies
