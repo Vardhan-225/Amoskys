@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AMOSKYS{% endblock %} | Neural Security</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/css/auth.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Neural Grid Background -->
+    <div class="neural-grid"></div>
+    
+    <!-- Floating particles -->
+    <div class="particles" id="particles"></div>
+    
+    <div class="auth-container">
+        <!-- Logo Section -->
+        <div class="auth-logo">
+            <a href="/" class="logo-link">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 100 100" class="neural-icon">
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="var(--neural-primary)" stroke-width="2" opacity="0.3"/>
+                        <circle cx="50" cy="50" r="30" fill="none" stroke="var(--neural-primary)" stroke-width="2" opacity="0.5"/>
+                        <circle cx="50" cy="50" r="15" fill="var(--neural-primary)" opacity="0.8"/>
+                        <line x1="50" y1="5" x2="50" y2="20" stroke="var(--neural-primary)" stroke-width="2"/>
+                        <line x1="50" y1="80" x2="50" y2="95" stroke="var(--neural-primary)" stroke-width="2"/>
+                        <line x1="5" y1="50" x2="20" y2="50" stroke="var(--neural-primary)" stroke-width="2"/>
+                        <line x1="80" y1="50" x2="95" y2="50" stroke="var(--neural-primary)" stroke-width="2"/>
+                    </svg>
+                </div>
+                <h1 class="logo-text">AMOSKYS</h1>
+            </a>
+            <p class="logo-tagline">Neural Security Command Platform</p>
+        </div>
+        
+        <!-- Auth Card -->
+        <div class="auth-card">
+            <div class="auth-card-header">
+                <h2>{% block header_title %}Welcome{% endblock %}</h2>
+                <p class="header-subtitle">{% block header_subtitle %}{% endblock %}</p>
+            </div>
+            
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            <span class="alert-icon">
+                                {% if category == 'success' %}✓{% elif category == 'error' %}✕{% else %}ℹ{% endif %}
+                            </span>
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <!-- Dynamic Error Message (for JS) -->
+            <div id="error-message" class="alert alert-error" style="display: none;">
+                <span class="alert-icon">✕</span>
+                <span id="error-text"></span>
+            </div>
+            
+            <!-- Success Message (for JS) -->
+            <div id="success-message" class="alert alert-success" style="display: none;">
+                <span class="alert-icon">✓</span>
+                <span id="success-text"></span>
+            </div>
+            
+            <div class="auth-card-body">
+                {% block content %}{% endblock %}
+            </div>
+            
+            <div class="auth-card-footer">
+                {% block footer %}{% endblock %}
+            </div>
+        </div>
+        
+        <!-- Footer Links -->
+        <div class="auth-footer">
+            <a href="/">← Back to Home</a>
+            <span class="divider">|</span>
+            <a href="/api-access">API Documentation</a>
+        </div>
+    </div>
+    
+    <script src="/static/js/auth.js"></script>
+    {% block extra_js %}{% endblock %}
+    
+    <script>
+        // Particle animation
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 20 + 's';
+                particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+                container.appendChild(particle);
+            }
+        }
+        createParticles();
+    </script>
+</body>
+</html>

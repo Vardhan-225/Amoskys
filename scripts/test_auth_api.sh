@@ -12,7 +12,7 @@
 
 set -e
 
-API_URL="${API_URL:-http://localhost:5000/api/auth}"
+API_URL="${API_URL:-http://localhost:5001/api/user/auth}"
 COOKIES_FILE="/tmp/amoskys_cookies.txt"
 TEST_EMAIL="test-$(date +%s)@amoskys.local"
 TEST_PASSWORD="SecureTestPass123!"
@@ -40,7 +40,7 @@ SIGNUP_RESPONSE=$(curl -s -X POST "$API_URL/signup" \
   }")
 
 echo "Response: $SIGNUP_RESPONSE"
-USER_ID=$(echo "$SIGNUP_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('user_id', ''))")
+USER_ID=$(echo "$SIGNUP_RESPONSE" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('user', {}).get('id', ''))")
 
 if [ -z "$USER_ID" ]; then
   echo "❌ FAILED: No user_id in response"

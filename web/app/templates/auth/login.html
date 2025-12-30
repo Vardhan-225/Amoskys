@@ -1,0 +1,214 @@
+{% extends "auth/base.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block header_title %}Welcome Back{% endblock %}
+{% block header_subtitle %}Sign in to access your Neural Security Dashboard{% endblock %}
+
+{% block content %}
+<form id="login-form" method="POST" novalidate>
+    <div class="form-group">
+        <label for="email" class="form-label">Email Address</label>
+        <input 
+            type="email" 
+            id="email" 
+            name="email" 
+            class="form-input" 
+            placeholder="operator@example.com"
+            autocomplete="email"
+            required
+        >
+        <p class="form-error" id="email-error">Please enter a valid email address</p>
+    </div>
+    
+    <div class="form-group">
+        <label for="password" class="form-label">Password</label>
+        <div class="input-wrapper">
+            <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                class="form-input" 
+                placeholder="Enter your password"
+                autocomplete="current-password"
+                required
+            >
+            <button type="button" class="toggle-password" aria-label="Toggle password visibility">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" class="eye-open"/>
+                    <circle cx="12" cy="12" r="3" class="eye-open"/>
+                    <line x1="1" y1="1" x2="23" y2="23" class="eye-closed" style="display:none"/>
+                </svg>
+            </button>
+        </div>
+        <p class="form-error" id="password-error">Password is required</p>
+    </div>
+    
+    <div class="form-group" style="display: flex; justify-content: space-between; align-items: center;">
+        <label class="form-checkbox">
+            <input type="checkbox" id="remember" name="remember">
+            <span>Remember me</span>
+        </label>
+        <a href="/auth/forgot-password" class="form-link">Forgot password?</a>
+    </div>
+    
+    <button type="submit" class="btn btn-primary btn-block" id="submit-btn">
+        <span class="btn-text">Sign In</span>
+    </button>
+</form>
+{% endblock %}
+
+{% block footer %}
+<p class="text-muted">
+    Don't have an account? 
+    <a href="/auth/signup" class="form-link">Create one</a>
+</p>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('login-form');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const submitBtn = document.getElementById('submit-btn');
+    
+    // Password visibility toggle
+    const toggleBtn = document.querySelector('.toggle-password');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function() {
+            const type = passwordInput.type === 'password' ? 'text' : 'password';
+            passwordInput.type = type;
+            this.querySelector('.eye-open').style.display = type === 'password' ? 'block' : 'none';
+            this.querySelector('.eye-closed').style.display = type === 'password' ? 'none' : 'block';
+        });
+    }
+    
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Clear previous errors
+        hideError();
+        clearFieldErrors();
+        
+        // Validate
+        let isValid = true;
+        
+        if (!emailInput.value || !isValidEmail(emailInput.value)) {
+            showFieldError('email', 'Please enter a valid email address');
+            isValid = false;
+        }
+        
+        if (!passwordInput.value) {
+            showFieldError('password', 'Password is required');
+            isValid = false;
+        }
+        
+        if (!isValid) return;
+        
+        // Submit
+        setLoading(true);
+        
+        try {
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: emailInput.value,
+                    password: passwordInput.value,
+                }),
+                credentials: 'same-origin',
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+                // Check if MFA is required
+                if (data.requires_mfa) {
+                    window.location.href = '/auth/mfa?methods=' + data.mfa_methods.join(',');
+                } else {
+                    // Success - redirect to dashboard
+                    showSuccess('Login successful! Redirecting...');
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 500);
+                }
+            } else {
+                // Handle specific error codes
+                switch (data.error_code) {
+                    case 'EMAIL_NOT_VERIFIED':
+                        showError('Please verify your email before logging in. <a href="/auth/resend-verification?email=' + encodeURIComponent(emailInput.value) + '">Resend verification email</a>');
+                        break;
+                    case 'ACCOUNT_LOCKED':
+                        showError(data.error);
+                        break;
+                    case 'INVALID_CREDENTIALS':
+                        showError('Invalid email or password. Please try again.');
+                        break;
+                    default:
+                        showError(data.error || 'An error occurred. Please try again.');
+                }
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            showError('Network error. Please check your connection and try again.');
+        } finally {
+            setLoading(false);
+        }
+    });
+    
+    // Helper functions
+    function isValidEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+    
+    function showFieldError(field, message) {
+        const group = document.getElementById(field).closest('.form-group');
+        const errorEl = document.getElementById(field + '-error');
+        group.classList.add('has-error');
+        document.getElementById(field).classList.add('error');
+        if (errorEl) errorEl.textContent = message;
+    }
+    
+    function clearFieldErrors() {
+        document.querySelectorAll('.form-group.has-error').forEach(el => {
+            el.classList.remove('has-error');
+        });
+        document.querySelectorAll('.form-input.error').forEach(el => {
+            el.classList.remove('error');
+        });
+    }
+    
+    function showError(message) {
+        const errorDiv = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+        errorText.innerHTML = message;
+        errorDiv.style.display = 'flex';
+    }
+    
+    function hideError() {
+        document.getElementById('error-message').style.display = 'none';
+    }
+    
+    function showSuccess(message) {
+        const successDiv = document.getElementById('success-message');
+        const successText = document.getElementById('success-text');
+        successText.textContent = message;
+        successDiv.style.display = 'flex';
+    }
+    
+    function setLoading(loading) {
+        if (loading) {
+            submitBtn.classList.add('btn-loading');
+            submitBtn.disabled = true;
+        } else {
+            submitBtn.classList.remove('btn-loading');
+            submitBtn.disabled = false;
+        }
+    }
+});
+</script>
+{% endblock %}

@@ -26,13 +26,16 @@ from amoskys.api.security import rate_limit_auth, rate_limit_strict
 from amoskys.auth import AuthService
 from amoskys.common.logging import get_logger
 from amoskys.db import get_session_context
-from amoskys.notifications.email import EmailService
+from amoskys.notifications.email import (
+    send_verification_email,
+    send_password_reset_email,
+)
 
 __all__ = ["auth_bp"]
 
 logger = get_logger(__name__)
 
-auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
+auth_bp = Blueprint("user_auth", __name__, url_prefix="/api/user/auth")
 
 # Cookie settings
 SESSION_COOKIE_NAME = "amoskys_session"
@@ -127,12 +130,10 @@ def signup():
         if result.success and result.verification_token:
             # Send verification email
             try:
-                email_service = EmailService()
-                email_service.send_verification_email(
-                    to_email=email,
-                    token=result.verification_token,
-                    user_name=full_name or email.split("@")[0],
-                )
+                # Construct verification URL
+                # TODO: Get base URL from config
+                verify_url = f"http://localhost:5001/api/user/auth/verify-email?token={result.verification_token}"
+                send_verification_email(email=email, verify_url=verify_url)
             except Exception as e:
                 # Log but don't fail signup if email fails
                 logger.warning(f"Failed to send verification email: {e}")
@@ -223,11 +224,8 @@ def resend_verification():
 
         if result.success and result.verification_token:
             try:
-                email_service = EmailService()
-                email_service.send_verification_email(
-                    to_email=email,
-                    token=result.verification_token,
-                )
+                verify_url = f"http://localhost:5001/api/user/auth/verify-email?token={result.verification_token}"
+                send_verification_email(email=email, verify_url=verify_url)
             except Exception as e:
                 logger.warning(f"Failed to send verification email: {e}")
 
@@ -254,11 +252,8 @@ def forgot_password():
 
         if result.success and result.reset_token:
             try:
-                email_service = EmailService()
-                email_service.send_password_reset_email(
-                    to_email=email,
-                    token=result.reset_token,
-                )
+                reset_url = f"http://localhost:5001/api/user/auth/reset-password?token={result.reset_token}"
+                send_password_reset_email(email=email, reset_url=reset_url)
             except Exception as e:
                 logger.warning(f"Failed to send password reset email: {e}")
 

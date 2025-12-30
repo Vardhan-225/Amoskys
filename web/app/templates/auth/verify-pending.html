@@ -1,0 +1,125 @@
+{% extends "auth/base.html" %}
+
+{% block title %}Verify Your Email{% endblock %}
+
+{% block header_title %}Check Your Inbox{% endblock %}
+{% block header_subtitle %}We've sent a verification email{% endblock %}
+
+{% block content %}
+<div class="text-center">
+    <div style="font-size: 4rem; margin-bottom: 1.5rem;">📬</div>
+    
+    <p style="color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.8;">
+        We've sent a verification link to:<br>
+        <strong style="color: var(--neural-primary);">{{ request.args.get('email', 'your email') }}</strong>
+    </p>
+    
+    <div style="background: rgba(0, 170, 255, 0.1); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h4 style="color: var(--neural-secondary); margin-bottom: 0.75rem;">Next Steps</h4>
+        <ol style="text-align: left; color: var(--text-secondary); padding-left: 1.5rem; line-height: 1.8;">
+            <li>Check your email inbox</li>
+            <li>Click the verification link</li>
+            <li>Start using AMOSKYS!</li>
+        </ol>
+    </div>
+    
+    <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">
+        Didn't receive the email? Check your spam folder.
+    </p>
+    
+    <button id="resend-btn" class="btn btn-secondary btn-block">
+        <span class="btn-text">Resend Verification Email</span>
+    </button>
+    
+    <div id="resend-success" style="display: none; margin-top: 1rem;">
+        <p style="color: var(--neural-success);">✓ Verification email sent!</p>
+    </div>
+    
+    <div id="resend-cooldown" style="display: none; margin-top: 1rem;">
+        <p class="text-muted">Please wait <span id="cooldown-timer">60</span> seconds before resending.</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block footer %}
+<p class="text-muted">
+    Wrong email? 
+    <a href="/auth/signup" class="form-link">Sign up again</a>
+</p>
+<p class="text-muted mt-2">
+    Already verified? 
+    <a href="/auth/login" class="form-link">Sign in</a>
+</p>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const resendBtn = document.getElementById('resend-btn');
+    const resendSuccess = document.getElementById('resend-success');
+    const resendCooldown = document.getElementById('resend-cooldown');
+    const cooldownTimer = document.getElementById('cooldown-timer');
+    
+    // Get email from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const email = urlParams.get('email');
+    
+    let cooldownSeconds = 0;
+    
+    resendBtn.addEventListener('click', async function() {
+        if (cooldownSeconds > 0) return;
+        
+        resendBtn.classList.add('btn-loading');
+        resendBtn.disabled = true;
+        resendSuccess.style.display = 'none';
+        
+        try {
+            const response = await fetch('/api/auth/resend-verification', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email: email }),
+                credentials: 'same-origin',
+            });
+            
+            const data = await response.json();
+            
+            // Always show success to prevent enumeration
+            resendSuccess.style.display = 'block';
+            startCooldown(60);
+            
+        } catch (error) {
+            console.error('Resend error:', error);
+            showError('Network error. Please try again.');
+        } finally {
+            resendBtn.classList.remove('btn-loading');
+        }
+    });
+    
+    function startCooldown(seconds) {
+        cooldownSeconds = seconds;
+        resendBtn.disabled = true;
+        resendCooldown.style.display = 'block';
+        
+        const interval = setInterval(() => {
+            cooldownSeconds--;
+            cooldownTimer.textContent = cooldownSeconds;
+            
+            if (cooldownSeconds <= 0) {
+                clearInterval(interval);
+                resendBtn.disabled = false;
+                resendCooldown.style.display = 'none';
+            }
+        }, 1000);
+    }
+    
+    function showError(message) {
+        const errorDiv = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+        errorText.textContent = message;
+        errorDiv.style.display = 'flex';
+    }
+});
+</script>
+{% endblock %}

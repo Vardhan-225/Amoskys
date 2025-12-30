@@ -1,0 +1,705 @@
+/**
+ * AMOSKYS Authentication Styles
+ * Neural Security Command Platform
+ * Phase 3.4 - UI Integration
+ */
+
+/* =============================================================================
+   CSS Variables - Neural Theme
+   ============================================================================= */
+
+:root {
+    /* Primary Neural Colors */
+    --neural-primary: #00ff88;
+    --neural-primary-dim: rgba(0, 255, 136, 0.3);
+    --neural-primary-glow: rgba(0, 255, 136, 0.5);
+    --neural-secondary: #00aaff;
+    --neural-secondary-dim: rgba(0, 170, 255, 0.3);
+    --neural-accent: #ff6b35;
+    --neural-danger: #ff3366;
+    --neural-danger-dim: rgba(255, 51, 102, 0.2);
+    --neural-success: #00ff88;
+    --neural-warning: #ffaa00;
+    
+    /* Background Hierarchy */
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #1a1a1a;
+    --bg-tertiary: #2a2a2a;
+    --bg-elevated: #333333;
+    --bg-glass: rgba(26, 26, 26, 0.9);
+    
+    /* Text Hierarchy */
+    --text-primary: #ffffff;
+    --text-secondary: #cccccc;
+    --text-muted: #888888;
+    --text-link: #00aaff;
+    
+    /* Input States */
+    --input-bg: rgba(20, 20, 20, 0.8);
+    --input-border: rgba(0, 255, 136, 0.3);
+    --input-focus: rgba(0, 255, 136, 0.6);
+    --input-error: rgba(255, 51, 102, 0.6);
+    
+    /* Shadows */
+    --shadow-glow: 0 0 30px rgba(0, 255, 136, 0.3);
+    --shadow-card: 0 10px 40px rgba(0, 0, 0, 0.5);
+    
+    /* Animation */
+    --transition-fast: 0.2s ease;
+    --transition-normal: 0.3s ease;
+    --transition-slow: 0.5s ease;
+}
+
+/* =============================================================================
+   Reset & Base
+   ============================================================================= */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    line-height: 1.6;
+}
+
+a {
+    color: var(--text-link);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+a:hover {
+    color: var(--neural-primary);
+}
+
+/* =============================================================================
+   Neural Grid Background
+   ============================================================================= */
+
+.neural-grid {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        linear-gradient(rgba(0, 255, 136, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 136, 0.05) 1px, transparent 1px);
+    background-size: 50px 50px;
+    z-index: -2;
+    animation: grid-pulse 10s ease-in-out infinite;
+}
+
+@keyframes grid-pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+}
+
+/* Particles */
+.particles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    overflow: hidden;
+}
+
+.particle {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background: var(--neural-primary);
+    border-radius: 50%;
+    opacity: 0;
+    animation: float-up 20s linear infinite;
+}
+
+@keyframes float-up {
+    0% {
+        transform: translateY(100vh) scale(0);
+        opacity: 0;
+    }
+    10% {
+        opacity: 0.8;
+    }
+    90% {
+        opacity: 0.8;
+    }
+    100% {
+        transform: translateY(-100vh) scale(1);
+        opacity: 0;
+    }
+}
+
+/* =============================================================================
+   Auth Container
+   ============================================================================= */
+
+.auth-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+/* =============================================================================
+   Logo Section
+   ============================================================================= */
+
+.auth-logo {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.logo-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+}
+
+.logo-icon {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 1rem;
+    animation: logo-pulse 3s ease-in-out infinite;
+}
+
+.neural-icon {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 0 10px var(--neural-primary-glow));
+}
+
+@keyframes logo-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.logo-text {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--neural-primary);
+    letter-spacing: 8px;
+    text-shadow: 0 0 20px var(--neural-primary-glow);
+}
+
+.logo-tagline {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+    letter-spacing: 2px;
+}
+
+/* =============================================================================
+   Auth Card
+   ============================================================================= */
+
+.auth-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--input-border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-card), var(--shadow-glow);
+    overflow: hidden;
+}
+
+.auth-card-header {
+    padding: 2rem 2rem 0;
+    text-align: center;
+}
+
+.auth-card-header h2 {
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.header-subtitle {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.auth-card-body {
+    padding: 2rem;
+}
+
+.auth-card-footer {
+    padding: 0 2rem 2rem;
+    text-align: center;
+}
+
+/* =============================================================================
+   Alerts
+   ============================================================================= */
+
+.alert {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    margin: 1rem 2rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    animation: slide-in 0.3s ease;
+}
+
+@keyframes slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.alert-icon {
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.alert-error {
+    background: var(--neural-danger-dim);
+    border: 1px solid var(--neural-danger);
+    color: var(--neural-danger);
+}
+
+.alert-success {
+    background: rgba(0, 255, 136, 0.15);
+    border: 1px solid var(--neural-success);
+    color: var(--neural-success);
+}
+
+.alert-info {
+    background: var(--neural-secondary-dim);
+    border: 1px solid var(--neural-secondary);
+    color: var(--neural-secondary);
+}
+
+.alert-warning {
+    background: rgba(255, 170, 0, 0.15);
+    border: 1px solid var(--neural-warning);
+    color: var(--neural-warning);
+}
+
+/* =============================================================================
+   Form Elements
+   ============================================================================= */
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: all var(--transition-fast);
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
+}
+
+.form-input::placeholder {
+    color: var(--text-muted);
+}
+
+.form-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.form-input.error {
+    border-color: var(--input-error);
+    box-shadow: 0 0 0 3px var(--neural-danger-dim);
+}
+
+.form-error {
+    color: var(--neural-danger);
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+    display: none;
+}
+
+.form-group.has-error .form-error {
+    display: block;
+}
+
+/* Password visibility toggle */
+.input-wrapper {
+    position: relative;
+}
+
+.input-wrapper .form-input {
+    padding-right: 3rem;
+}
+
+.toggle-password {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: color var(--transition-fast);
+}
+
+.toggle-password:hover {
+    color: var(--neural-primary);
+}
+
+/* Password strength indicator */
+.password-strength {
+    margin-top: 0.5rem;
+}
+
+.strength-bar {
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 0.25rem;
+}
+
+.strength-fill {
+    height: 100%;
+    width: 0;
+    transition: all var(--transition-normal);
+    border-radius: 2px;
+}
+
+.strength-fill.weak { width: 25%; background: var(--neural-danger); }
+.strength-fill.fair { width: 50%; background: var(--neural-warning); }
+.strength-fill.good { width: 75%; background: var(--neural-secondary); }
+.strength-fill.strong { width: 100%; background: var(--neural-success); }
+
+.strength-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* =============================================================================
+   Buttons
+   ============================================================================= */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.875rem 1.5rem;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: transparent;
+    border-color: var(--neural-primary);
+    color: var(--neural-primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--neural-primary);
+    color: var(--bg-primary);
+    box-shadow: 0 0 20px var(--neural-primary-glow);
+}
+
+.btn-primary:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+.btn-block {
+    width: 100%;
+}
+
+.btn-loading {
+    pointer-events: none;
+}
+
+.btn-loading .btn-text {
+    visibility: hidden;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.btn-secondary {
+    background: transparent;
+    border-color: var(--neural-secondary);
+    color: var(--neural-secondary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--neural-secondary);
+    color: var(--bg-primary);
+}
+
+.btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+    color: var(--neural-primary);
+    background: rgba(0, 255, 136, 0.1);
+}
+
+/* =============================================================================
+   Links & Text
+   ============================================================================= */
+
+.form-link {
+    color: var(--text-link);
+    font-size: 0.9rem;
+    transition: color var(--transition-fast);
+}
+
+.form-link:hover {
+    color: var(--neural-primary);
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
+
+.divider-text {
+    display: flex;
+    align-items: center;
+    margin: 1.5rem 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.divider-text::before,
+.divider-text::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--input-border);
+}
+
+.divider-text::before {
+    margin-right: 1rem;
+}
+
+.divider-text::after {
+    margin-left: 1rem;
+}
+
+/* =============================================================================
+   Auth Footer
+   ============================================================================= */
+
+.auth-footer {
+    margin-top: 2rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.auth-footer .divider {
+    margin: 0 0.75rem;
+    opacity: 0.5;
+}
+
+/* =============================================================================
+   Password Requirements
+   ============================================================================= */
+
+.password-requirements {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: rgba(0, 170, 255, 0.1);
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.password-requirements h4 {
+    color: var(--neural-secondary);
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.password-requirements ul {
+    list-style: none;
+    color: var(--text-secondary);
+}
+
+.password-requirements li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.password-requirements li::before {
+    content: '○';
+    color: var(--text-muted);
+}
+
+.password-requirements li.valid::before {
+    content: '●';
+    color: var(--neural-success);
+}
+
+/* =============================================================================
+   Checkbox
+   ============================================================================= */
+
+.form-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    cursor: pointer;
+}
+
+.form-checkbox input {
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    accent-color: var(--neural-primary);
+    cursor: pointer;
+}
+
+.form-checkbox span {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.form-checkbox a {
+    color: var(--text-link);
+}
+
+/* =============================================================================
+   Social Login
+   ============================================================================= */
+
+.social-login {
+    display: flex;
+    gap: 1rem;
+}
+
+.btn-social {
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.btn-social:hover {
+    background: var(--bg-elevated);
+    border-color: var(--neural-primary);
+    color: var(--text-primary);
+}
+
+/* =============================================================================
+   Responsive
+   ============================================================================= */
+
+@media (max-width: 480px) {
+    .auth-container {
+        padding: 1rem;
+    }
+    
+    .auth-card {
+        border-radius: 12px;
+    }
+    
+    .auth-card-header,
+    .auth-card-body,
+    .auth-card-footer {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }
+    
+    .logo-text {
+        font-size: 2rem;
+        letter-spacing: 4px;
+    }
+    
+    .logo-icon {
+        width: 60px;
+        height: 60px;
+    }
+}
+
+/* =============================================================================
+   Utility Classes
+   ============================================================================= */
+
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mt-3 { margin-top: 1.5rem; }
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+.mb-3 { margin-bottom: 1.5rem; }

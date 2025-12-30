@@ -46,6 +46,10 @@ def create_app():
     from .routes import main_bp
     app.register_blueprint(main_bp)
     
+    # Register Auth View routes (Phase 3.4 - UI)
+    from .routes import auth_views_bp
+    app.register_blueprint(auth_views_bp)
+    
     # Register API blueprints (Phase 2.3)
     from .api import api_bp
     app.register_blueprint(api_bp)

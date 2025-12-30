@@ -1,0 +1,332 @@
+{% extends "auth/base.html" %}
+
+{% block title %}Sign Up{% endblock %}
+
+{% block header_title %}Create Account{% endblock %}
+{% block header_subtitle %}Join the Neural Security Command Platform{% endblock %}
+
+{% block content %}
+<form id="signup-form" method="POST" novalidate>
+    <div class="form-group">
+        <label for="full_name" class="form-label">Full Name <span class="text-muted">(optional)</span></label>
+        <input 
+            type="text" 
+            id="full_name" 
+            name="full_name" 
+            class="form-input" 
+            placeholder="John Doe"
+            autocomplete="name"
+        >
+    </div>
+    
+    <div class="form-group">
+        <label for="email" class="form-label">Email Address</label>
+        <input 
+            type="email" 
+            id="email" 
+            name="email" 
+            class="form-input" 
+            placeholder="operator@example.com"
+            autocomplete="email"
+            required
+        >
+        <p class="form-error" id="email-error">Please enter a valid email address</p>
+    </div>
+    
+    <div class="form-group">
+        <label for="password" class="form-label">Password</label>
+        <div class="input-wrapper">
+            <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                class="form-input" 
+                placeholder="Create a strong password"
+                autocomplete="new-password"
+                required
+            >
+            <button type="button" class="toggle-password" aria-label="Toggle password visibility">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" class="eye-open"/>
+                    <circle cx="12" cy="12" r="3" class="eye-open"/>
+                    <line x1="1" y1="1" x2="23" y2="23" class="eye-closed" style="display:none"/>
+                </svg>
+            </button>
+        </div>
+        <p class="form-error" id="password-error">Password is required</p>
+        
+        <!-- Password strength indicator -->
+        <div class="password-strength" id="password-strength" style="display: none;">
+            <div class="strength-bar">
+                <div class="strength-fill" id="strength-fill"></div>
+            </div>
+            <p class="strength-text" id="strength-text"></p>
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label for="confirm_password" class="form-label">Confirm Password</label>
+        <div class="input-wrapper">
+            <input 
+                type="password" 
+                id="confirm_password" 
+                name="confirm_password" 
+                class="form-input" 
+                placeholder="Confirm your password"
+                autocomplete="new-password"
+                required
+            >
+        </div>
+        <p class="form-error" id="confirm_password-error">Passwords do not match</p>
+    </div>
+    
+    <!-- Password Requirements -->
+    <div class="password-requirements" id="password-requirements">
+        <h4>Password Requirements</h4>
+        <ul>
+            <li id="req-length">At least 12 characters</li>
+            <li id="req-upper">One uppercase letter</li>
+            <li id="req-lower">One lowercase letter</li>
+            <li id="req-number">One number</li>
+            <li id="req-special">One special character (!@#$%^&*...)</li>
+        </ul>
+    </div>
+    
+    <div class="form-group mt-3">
+        <label class="form-checkbox">
+            <input type="checkbox" id="terms" name="terms" required>
+            <span>I agree to the <a href="/terms" target="_blank">Terms of Service</a> and <a href="/privacy" target="_blank">Privacy Policy</a></span>
+        </label>
+        <p class="form-error" id="terms-error">You must accept the terms to continue</p>
+    </div>
+    
+    <button type="submit" class="btn btn-primary btn-block mt-3" id="submit-btn">
+        <span class="btn-text">Create Account</span>
+    </button>
+</form>
+{% endblock %}
+
+{% block footer %}
+<p class="text-muted">
+    Already have an account? 
+    <a href="/auth/login" class="form-link">Sign in</a>
+</p>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('signup-form');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const confirmPasswordInput = document.getElementById('confirm_password');
+    const termsCheckbox = document.getElementById('terms');
+    const submitBtn = document.getElementById('submit-btn');
+    
+    // Password visibility toggle
+    document.querySelectorAll('.toggle-password').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const input = this.previousElementSibling;
+            const type = input.type === 'password' ? 'text' : 'password';
+            input.type = type;
+        });
+    });
+    
+    // Password strength checker
+    passwordInput.addEventListener('input', function() {
+        const password = this.value;
+        const strengthDiv = document.getElementById('password-strength');
+        const strengthFill = document.getElementById('strength-fill');
+        const strengthText = document.getElementById('strength-text');
+        
+        if (password.length === 0) {
+            strengthDiv.style.display = 'none';
+            return;
+        }
+        
+        strengthDiv.style.display = 'block';
+        
+        // Check requirements
+        const requirements = {
+            length: password.length >= 12,
+            upper: /[A-Z]/.test(password),
+            lower: /[a-z]/.test(password),
+            number: /[0-9]/.test(password),
+            special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+        };
+        
+        // Update requirement indicators
+        Object.keys(requirements).forEach(req => {
+            const el = document.getElementById('req-' + req);
+            if (el) {
+                el.classList.toggle('valid', requirements[req]);
+            }
+        });
+        
+        // Calculate strength
+        const score = Object.values(requirements).filter(Boolean).length;
+        
+        strengthFill.className = 'strength-fill';
+        if (score <= 1) {
+            strengthFill.classList.add('weak');
+            strengthText.textContent = 'Weak password';
+        } else if (score <= 2) {
+            strengthFill.classList.add('fair');
+            strengthText.textContent = 'Fair password';
+        } else if (score <= 4) {
+            strengthFill.classList.add('good');
+            strengthText.textContent = 'Good password';
+        } else {
+            strengthFill.classList.add('strong');
+            strengthText.textContent = 'Strong password';
+        }
+    });
+    
+    // Confirm password validation
+    confirmPasswordInput.addEventListener('input', function() {
+        if (this.value && this.value !== passwordInput.value) {
+            showFieldError('confirm_password', 'Passwords do not match');
+        } else {
+            clearFieldError('confirm_password');
+        }
+    });
+    
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Clear previous errors
+        hideError();
+        clearFieldErrors();
+        
+        // Validate
+        let isValid = true;
+        
+        if (!emailInput.value || !isValidEmail(emailInput.value)) {
+            showFieldError('email', 'Please enter a valid email address');
+            isValid = false;
+        }
+        
+        if (!passwordInput.value || passwordInput.value.length < 12) {
+            showFieldError('password', 'Password must be at least 12 characters');
+            isValid = false;
+        }
+        
+        if (passwordInput.value !== confirmPasswordInput.value) {
+            showFieldError('confirm_password', 'Passwords do not match');
+            isValid = false;
+        }
+        
+        if (!termsCheckbox.checked) {
+            showFieldError('terms', 'You must accept the terms to continue');
+            isValid = false;
+        }
+        
+        if (!isValid) return;
+        
+        // Submit
+        setLoading(true);
+        
+        try {
+            const response = await fetch('/api/auth/signup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: emailInput.value,
+                    password: passwordInput.value,
+                    full_name: document.getElementById('full_name').value || null,
+                }),
+                credentials: 'same-origin',
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+                // Success - redirect to verification pending page
+                showSuccess('Account created! Redirecting...');
+                setTimeout(() => {
+                    window.location.href = '/auth/verify-pending?email=' + encodeURIComponent(emailInput.value);
+                }, 1000);
+            } else {
+                // Handle specific error codes
+                switch (data.error_code) {
+                    case 'EMAIL_EXISTS':
+                        showFieldError('email', 'An account with this email already exists');
+                        break;
+                    case 'INVALID_PASSWORD':
+                        showFieldError('password', data.error);
+                        break;
+                    default:
+                        showError(data.error || 'An error occurred. Please try again.');
+                }
+            }
+        } catch (error) {
+            console.error('Signup error:', error);
+            showError('Network error. Please check your connection and try again.');
+        } finally {
+            setLoading(false);
+        }
+    });
+    
+    // Helper functions
+    function isValidEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+    
+    function showFieldError(field, message) {
+        const input = document.getElementById(field);
+        const group = input.closest('.form-group');
+        const errorEl = document.getElementById(field + '-error');
+        group.classList.add('has-error');
+        input.classList.add('error');
+        if (errorEl) errorEl.textContent = message;
+    }
+    
+    function clearFieldError(field) {
+        const input = document.getElementById(field);
+        const group = input.closest('.form-group');
+        group.classList.remove('has-error');
+        input.classList.remove('error');
+    }
+    
+    function clearFieldErrors() {
+        document.querySelectorAll('.form-group.has-error').forEach(el => {
+            el.classList.remove('has-error');
+        });
+        document.querySelectorAll('.form-input.error').forEach(el => {
+            el.classList.remove('error');
+        });
+    }
+    
+    function showError(message) {
+        const errorDiv = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+        errorText.innerHTML = message;
+        errorDiv.style.display = 'flex';
+    }
+    
+    function hideError() {
+        document.getElementById('error-message').style.display = 'none';
+    }
+    
+    function showSuccess(message) {
+        const successDiv = document.getElementById('success-message');
+        const successText = document.getElementById('success-text');
+        successText.textContent = message;
+        successDiv.style.display = 'flex';
+    }
+    
+    function setLoading(loading) {
+        if (loading) {
+            submitBtn.classList.add('btn-loading');
+            submitBtn.disabled = true;
+        } else {
+            submitBtn.classList.remove('btn-loading');
+            submitBtn.disabled = false;
+        }
+    }
+});
+</script>
+{% endblock %}
