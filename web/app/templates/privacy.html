@@ -1,0 +1,59 @@
+{% extends "auth/base.html" %}
+
+{% block title %}Privacy Policy{% endblock %}
+
+{% block header_title %}Privacy Policy{% endblock %}
+{% block header_subtitle %}Last updated: December 30, 2025{% endblock %}
+
+{% block content %}
+<div style="text-align: left; line-height: 1.8; max-height: 400px; overflow-y: auto; padding-right: 1rem;">
+    <h3 style="color: var(--neural-primary); margin-bottom: 1rem;">Information We Collect</h3>
+    <p class="text-muted" style="margin-bottom: 1.5rem;">
+        We collect information you provide directly to us, such as when you create an 
+        account, use our services, or communicate with us. This includes:
+    </p>
+    <ul style="color: var(--text-secondary); padding-left: 1.5rem; margin-bottom: 1.5rem;">
+        <li>Email address</li>
+        <li>Password (securely hashed)</li>
+        <li>Optional display name</li>
+        <li>Usage data and session information</li>
+    </ul>
+    
+    <h3 style="color: var(--neural-primary); margin-bottom: 1rem;">How We Use Your Information</h3>
+    <p class="text-muted" style="margin-bottom: 1.5rem;">
+        We use the information we collect to provide, maintain, and improve our services, 
+        including to:
+    </p>
+    <ul style="color: var(--text-secondary); padding-left: 1.5rem; margin-bottom: 1.5rem;">
+        <li>Authenticate your identity and manage your account</li>
+        <li>Send you technical notices and security alerts</li>
+        <li>Respond to your comments and questions</li>
+        <li>Monitor and analyze usage trends</li>
+    </ul>
+    
+    <h3 style="color: var(--neural-primary); margin-bottom: 1rem;">Data Security</h3>
+    <p class="text-muted" style="margin-bottom: 1.5rem;">
+        We implement industry-standard security measures to protect your personal 
+        information, including:
+    </p>
+    <ul style="color: var(--text-secondary); padding-left: 1.5rem; margin-bottom: 1.5rem;">
+        <li>Argon2id password hashing</li>
+        <li>Secure session management</li>
+        <li>HTTPS encryption in transit</li>
+        <li>Rate limiting and brute-force protection</li>
+    </ul>
+    
+    <h3 style="color: var(--neural-primary); margin-bottom: 1rem;">Your Rights</h3>
+    <p class="text-muted">
+        You may update, correct, or delete your account information at any time by 
+        logging into your account settings. You may also request complete deletion 
+        of your account and associated data.
+    </p>
+</div>
+{% endblock %}
+
+{% block footer %}
+<p class="text-muted">
+    <a href="/auth/signup" class="form-link">← Back to Sign Up</a>
+</p>
+{% endblock %}

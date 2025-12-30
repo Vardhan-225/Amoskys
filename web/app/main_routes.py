@@ -14,6 +14,24 @@ def landing():
     return render_template('landing.html')
 
 
+@main_bp.route('/about')
+def about():
+    """About AMOSKYS page"""
+    return render_template('about.html')
+
+
+@main_bp.route('/terms')
+def terms():
+    """Terms of Service page"""
+    return render_template('terms.html')
+
+
+@main_bp.route('/privacy')
+def privacy():
+    """Privacy Policy page"""
+    return render_template('privacy.html')
+
+
 @main_bp.route('/command')
 def command():
     """AMOSKYS Neural Security Command Interface"""

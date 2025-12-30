@@ -12,7 +12,7 @@ from flask import Blueprint, jsonify
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 # Import API routes after blueprint creation
-from .auth import auth_bp
+from .agent_auth import auth_bp as agent_auth_bp
 from .agents import agents_bp
 from .events import events_bp
 from .system import system_bp
@@ -25,7 +25,7 @@ from .health import health_bp  # Health API v1 for Command Center
 from .docs import generate_openapi_spec
 
 # Register sub-blueprints
-api_bp.register_blueprint(auth_bp)
+api_bp.register_blueprint(agent_auth_bp)  # Agent authentication (/api/agent-auth)
 api_bp.register_blueprint(agents_bp)
 api_bp.register_blueprint(events_bp)
 api_bp.register_blueprint(system_bp)

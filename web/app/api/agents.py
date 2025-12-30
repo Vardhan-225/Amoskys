@@ -5,7 +5,7 @@ Agent registration, heartbeat, and status management
 
 from flask import Blueprint, request, jsonify, g
 from datetime import datetime, timezone
-from .auth import require_auth
+from .agent_auth import require_auth
 from .rate_limiter import require_rate_limit
 import psutil
 import platform

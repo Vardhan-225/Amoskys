@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 import secrets
 from typing import Optional, Dict, Any
 
-auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+auth_bp = Blueprint('agent_auth', __name__, url_prefix='/agent-auth')
 
 # In-memory token store (replace with Redis in production)
 VALID_TOKENS = set()

@@ -18,12 +18,13 @@ Design: Thin JSON wrappers around AuthService business logic.
 
 from __future__ import annotations
 
+import os
 from functools import wraps
 
 from flask import Blueprint, jsonify, make_response, request
 
 from amoskys.api.security import rate_limit_auth, rate_limit_strict
-from amoskys.auth import AuthService
+from amoskys.auth import AuthService, AuthServiceConfig
 from amoskys.common.logging import get_logger
 from amoskys.db import get_session_context
 from amoskys.notifications.email import (
@@ -35,14 +36,29 @@ __all__ = ["auth_bp"]
 
 logger = get_logger(__name__)
 
-auth_bp = Blueprint("user_auth", __name__, url_prefix="/api/user/auth")
+# Check if email verification should be disabled for dev
+DEV_MODE = os.environ.get("FLASK_DEBUG", "").lower() == "true"
+REQUIRE_EMAIL_VERIFICATION = os.environ.get(
+    "AMOSKYS_REQUIRE_EMAIL_VERIFICATION", "true"
+).lower() != "false"
+
+# In dev mode, default to no email verification unless explicitly set
+if DEV_MODE and "AMOSKYS_REQUIRE_EMAIL_VERIFICATION" not in os.environ:
+    REQUIRE_EMAIL_VERIFICATION = False
+
+auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 # Cookie settings
 SESSION_COOKIE_NAME = "amoskys_session"
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = True  # Set to False for local dev without HTTPS
+SESSION_COOKIE_SECURE = not DEV_MODE  # False for local dev without HTTPS
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_MAX_AGE = 86400  # 24 hours
+
+
+def get_auth_config() -> AuthServiceConfig:
+    """Get AuthService configuration based on environment."""
+    return AuthServiceConfig(require_email_verification=REQUIRE_EMAIL_VERIFICATION)
 
 
 def get_client_info():
@@ -122,7 +138,7 @@ def signup():
         )
 
     with get_session_context() as db:
-        auth = AuthService(db)
+        auth = AuthService(db, config=get_auth_config())
         result = auth.signup(
             email=email, password=password, full_name=full_name, **get_client_info()
         )
@@ -130,9 +146,9 @@ def signup():
         if result.success and result.verification_token:
             # Send verification email
             try:
-                # Construct verification URL
-                # TODO: Get base URL from config
-                verify_url = f"http://localhost:5001/api/user/auth/verify-email?token={result.verification_token}"
+                # Construct verification URL based on request host
+                base_url = request.host_url.rstrip('/')
+                verify_url = f"{base_url}/api/auth/verify-email?token={result.verification_token}"
                 send_verification_email(email=email, verify_url=verify_url)
             except Exception as e:
                 # Log but don't fail signup if email fails
@@ -168,7 +184,7 @@ def login():
         )
 
     with get_session_context() as db:
-        auth = AuthService(db)
+        auth = AuthService(db, config=get_auth_config())
         result = auth.login(email=email, password=password, **get_client_info())
 
         if result.success and result.session_token:
