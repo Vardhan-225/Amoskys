@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     
     try {
-        const response = await fetch('/api/auth/verify-email?token=' + encodeURIComponent(token), {
+        const response = await fetch('/api/user/auth/verify-email?token=' + encodeURIComponent(token), {
             method: 'GET',
             credentials: 'same-origin',
         });

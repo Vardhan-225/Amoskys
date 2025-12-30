@@ -144,17 +144,17 @@
             
             <div class="endpoint">
                 <span class="method post">POST</span>
-                <strong>/api/auth/login</strong> - Authenticate and get JWT token
+                <strong>/api/agent-auth/login</strong> - Authenticate and get JWT token (for agents)
             </div>
-            
+
             <div class="auth-info">
                 <strong>Test Credentials:</strong><br>
                 Agent ID: <code>flowagent-001</code><br>
                 Secret: <code>amoskys-neural-flow-secure-key-2025</code>
             </div>
-            
+
             <div class="code">
-curl -X POST http://localhost:8000/api/auth/login \
+curl -X POST http://localhost:8000/api/agent-auth/login \
   -H "Content-Type: application/json" \
   -d '{"agent_id": "flowagent-001", "secret": "amoskys-neural-flow-secure-key-2025"}'
             </div>

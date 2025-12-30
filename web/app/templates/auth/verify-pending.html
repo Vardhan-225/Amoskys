@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', function() {
         resendSuccess.style.display = 'none';
         
         try {
-            const response = await fetch('/api/auth/resend-verification', {
+            const response = await fetch('/api/user/auth/resend-verification', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
