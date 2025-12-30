@@ -1,59 +1,690 @@
-{% extends "auth/base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy | AMOSKYS</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy-dark: #0a0e27;
+            --navy-medium: #1a1f3a;
+            --cyan-bright: #00d9ff;
+            --text-primary: #ffffff;
+            --text-secondary: #b4bcd0;
+            --text-muted: #6b7a99;
+        }
 
-{% block title %}Privacy Policy{% endblock %}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-{% block header_title %}Privacy Policy{% endblock %}
-{% block header_subtitle %}Last updated: December 30, 2025{% endblock %}
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--navy-dark);
+            color: var(--text-primary);
+            line-height: 1.7;
+        }
 
-{% block content %}
-<div style="text-align: left; line-height: 1.8; max-height: 400px; overflow-y: auto; padding-right: 1rem;">
-    <h3 style="color: var(--neural-primary); margin-bottom: 1rem;">Information We Collect</h3>
-    <p class="text-muted" style="margin-bottom: 1.5rem;">
-        We collect information you provide directly to us, such as when you create an 
-        account, use our services, or communicate with us. This includes:
-    </p>
-    <ul style="color: var(--text-secondary); padding-left: 1.5rem; margin-bottom: 1.5rem;">
-        <li>Email address</li>
-        <li>Password (securely hashed)</li>
-        <li>Optional display name</li>
-        <li>Usage data and session information</li>
-    </ul>
-    
-    <h3 style="color: var(--neural-primary); margin-bottom: 1rem;">How We Use Your Information</h3>
-    <p class="text-muted" style="margin-bottom: 1.5rem;">
-        We use the information we collect to provide, maintain, and improve our services, 
-        including to:
-    </p>
-    <ul style="color: var(--text-secondary); padding-left: 1.5rem; margin-bottom: 1.5rem;">
-        <li>Authenticate your identity and manage your account</li>
-        <li>Send you technical notices and security alerts</li>
-        <li>Respond to your comments and questions</li>
-        <li>Monitor and analyze usage trends</li>
-    </ul>
-    
-    <h3 style="color: var(--neural-primary); margin-bottom: 1rem;">Data Security</h3>
-    <p class="text-muted" style="margin-bottom: 1.5rem;">
-        We implement industry-standard security measures to protect your personal 
-        information, including:
-    </p>
-    <ul style="color: var(--text-secondary); padding-left: 1.5rem; margin-bottom: 1.5rem;">
-        <li>Argon2id password hashing</li>
-        <li>Secure session management</li>
-        <li>HTTPS encryption in transit</li>
-        <li>Rate limiting and brute-force protection</li>
-    </ul>
-    
-    <h3 style="color: var(--neural-primary); margin-bottom: 1rem;">Your Rights</h3>
-    <p class="text-muted">
-        You may update, correct, or delete your account information at any time by 
-        logging into your account settings. You may also request complete deletion 
-        of your account and associated data.
-    </p>
-</div>
-{% endblock %}
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 217, 255, 0.1);
+            z-index: 1000;
+            padding: 1rem 0;
+        }
 
-{% block footer %}
-<p class="text-muted">
-    <a href="/auth/signup" class="form-link">← Back to Sign Up</a>
-</p>
-{% endblock %}
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--cyan-bright);
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--cyan-bright);
+        }
+
+        .header {
+            padding: 120px 2rem 60px;
+            text-align: center;
+            background: linear-gradient(180deg, var(--navy-dark) 0%, var(--navy-medium) 100%);
+        }
+
+        .title {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .content {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 2rem 80px;
+        }
+
+        .section {
+            margin-bottom: 3rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--cyan-bright);
+            margin-bottom: 1rem;
+        }
+
+        .section-text {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 1rem;
+        }
+
+        .subsection {
+            margin: 1.5rem 0 1.5rem 1.5rem;
+        }
+
+        .subsection-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        ul {
+            margin-left: 2rem;
+            color: var(--text-secondary);
+        }
+
+        ul li {
+            margin-bottom: 0.75rem;
+        }
+
+        .highlight {
+            color: var(--cyan-bright);
+            font-weight: 500;
+        }
+
+        .data-table {
+            width: 100%;
+            margin: 1.5rem 0;
+            border-collapse: collapse;
+            background: rgba(26, 31, 58, 0.5);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .data-table th {
+            background: rgba(0, 217, 255, 0.1);
+            color: var(--cyan-bright);
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .data-table td {
+            padding: 1rem;
+            border-top: 1px solid rgba(0, 217, 255, 0.05);
+            color: var(--text-secondary);
+        }
+
+        .info-box {
+            background: rgba(0, 217, 255, 0.05);
+            border-left: 3px solid var(--cyan-bright);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 4px;
+        }
+
+        .info-box-title {
+            color: var(--cyan-bright);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        footer {
+            background: var(--navy-dark);
+            border-top: 1px solid rgba(0, 217, 255, 0.1);
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        footer a {
+            color: var(--cyan-bright);
+            text-decoration: none;
+        }
+
+        @media (max-width: 768px) {
+            .title {
+                font-size: 2rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .subsection {
+                margin-left: 0.5rem;
+            }
+
+            .data-table {
+                font-size: 0.9rem;
+            }
+
+            .data-table th,
+            .data-table td {
+                padding: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <a href="/" class="logo-text">AMOSKYS</a>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/about">About</a>
+                <a href="/terms">Terms</a>
+                <a href="/auth/login">Login</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="header">
+        <h1 class="title">Privacy Policy</h1>
+        <p class="subtitle">Last Updated: December 30, 2025</p>
+    </div>
+
+    <div class="content">
+        <div class="section">
+            <p class="section-text">
+                At AMOSKYS, we take your privacy seriously. This Privacy Policy explains how we collect, use, protect,
+                and share your personal information when you use our Neural Security Command Platform.
+            </p>
+            <p class="section-text">
+                <strong>By using AMOSKYS, you consent to the data practices described in this policy.</strong>
+            </p>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">1. Information We Collect</h2>
+
+            <div class="subsection">
+                <h3 class="subsection-title">1.1 Account Information</h3>
+                <p class="section-text">
+                    When you create an account, we collect:
+                </p>
+                <ul>
+                    <li>Email address</li>
+                    <li>Password (stored as an <span class="highlight">Argon2id hash</span>)</li>
+                    <li>Account creation timestamp</li>
+                    <li>Email verification status</li>
+                    <li>Last login timestamp</li>
+                </ul>
+            </div>
+
+            <div class="subsection">
+                <h3 class="subsection-title">1.2 Agent Telemetry Data</h3>
+                <p class="section-text">
+                    Our security agents collect system telemetry from devices you authorize:
+                </p>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Data Type</th>
+                            <th>Purpose</th>
+                            <th>Retention</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Process Information</td>
+                            <td>Detect malicious processes</td>
+                            <td>90 days</td>
+                        </tr>
+                        <tr>
+                            <td>Network Activity</td>
+                            <td>Identify suspicious connections</td>
+                            <td>90 days</td>
+                        </tr>
+                        <tr>
+                            <td>File Integrity Hashes</td>
+                            <td>Monitor unauthorized changes</td>
+                            <td>90 days</td>
+                        </tr>
+                        <tr>
+                            <td>System Performance</td>
+                            <td>Detect resource abuse</td>
+                            <td>90 days</td>
+                        </tr>
+                        <tr>
+                            <td>SNMP Metrics</td>
+                            <td>Network device monitoring</td>
+                            <td>90 days</td>
+                        </tr>
+                        <tr>
+                            <td>Security Events</td>
+                            <td>Threat correlation</td>
+                            <td>1 year</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="subsection">
+                <h3 class="subsection-title">1.3 Usage Information</h3>
+                <p class="section-text">
+                    We automatically collect:
+                </p>
+                <ul>
+                    <li>IP addresses (for rate limiting and security)</li>
+                    <li>Browser type and version</li>
+                    <li>API endpoint usage patterns</li>
+                    <li>Session activity timestamps</li>
+                    <li>Error logs and debugging information</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">2. How We Use Your Information</h2>
+            <p class="section-text">
+                We use collected data to:
+            </p>
+            <ul>
+                <li><strong>Provide Security Services:</strong> Monitor deployed agents, detect threats, correlate events</li>
+                <li><strong>Authenticate Users:</strong> Verify identity and manage sessions</li>
+                <li><strong>Send Notifications:</strong> Email alerts for security events and account activities</li>
+                <li><strong>Improve Our Platform:</strong> Enhance threat detection algorithms and AI models</li>
+                <li><strong>Prevent Abuse:</strong> Rate limiting, fraud detection, and security monitoring</li>
+                <li><strong>Comply with Legal Obligations:</strong> Respond to lawful requests and protect rights</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">3. Data Security and Encryption</h2>
+
+            <div class="info-box">
+                <div class="info-box-title">Zero-Trust Security Architecture</div>
+                <p class="section-text">
+                    AMOSKYS employs enterprise-grade security measures to protect your data at every layer.
+                </p>
+            </div>
+
+            <div class="subsection">
+                <h3 class="subsection-title">3.1 Encryption</h3>
+                <ul>
+                    <li><strong>Data in Transit:</strong> TLS 1.3 with perfect forward secrecy</li>
+                    <li><strong>Data at Rest:</strong> AES-256 encryption for all stored telemetry</li>
+                    <li><strong>Password Storage:</strong> Argon2id hashing (OWASP 2024 recommended)</li>
+                    <li><strong>Agent Communication:</strong> Mutual TLS (mTLS) authentication</li>
+                    <li><strong>Session Tokens:</strong> SHA-256 hashed, HTTPOnly cookies</li>
+                </ul>
+            </div>
+
+            <div class="subsection">
+                <h3 class="subsection-title">3.2 Access Controls</h3>
+                <ul>
+                    <li>Role-based access control (RBAC) for all data</li>
+                    <li>Multi-factor authentication (when enabled)</li>
+                    <li>IP-based rate limiting to prevent brute-force attacks</li>
+                    <li>Automated session expiration after inactivity</li>
+                    <li>Audit logging of all administrative actions</li>
+                </ul>
+            </div>
+
+            <div class="subsection">
+                <h3 class="subsection-title">3.3 Infrastructure Security</h3>
+                <ul>
+                    <li>Regular security audits and penetration testing</li>
+                    <li>Isolated database environments with encrypted backups</li>
+                    <li>Network segmentation and firewall protection</li>
+                    <li>Real-time intrusion detection systems</li>
+                    <li>Automated vulnerability scanning</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">4. Data Retention and Deletion</h2>
+
+            <div class="subsection">
+                <h3 class="subsection-title">4.1 Retention Periods</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Data Category</th>
+                            <th>Default Retention</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Account Information</td>
+                            <td>Until account deletion</td>
+                            <td>Required for service operation</td>
+                        </tr>
+                        <tr>
+                            <td>Telemetry Data</td>
+                            <td>90 days</td>
+                            <td>Configurable per organization</td>
+                        </tr>
+                        <tr>
+                            <td>Security Events</td>
+                            <td>1 year</td>
+                            <td>Required for threat intelligence</td>
+                        </tr>
+                        <tr>
+                            <td>Audit Logs</td>
+                            <td>2 years</td>
+                            <td>Compliance requirement</td>
+                        </tr>
+                        <tr>
+                            <td>Session Data</td>
+                            <td>30 days after session ends</td>
+                            <td>Automatically purged</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="subsection">
+                <h3 class="subsection-title">4.2 Data Deletion</h3>
+                <p class="section-text">
+                    You have the right to request deletion of your data:
+                </p>
+                <ul>
+                    <li><strong>Account Deletion:</strong> Request via email to privacy@amoskys.com</li>
+                    <li><strong>Processing Time:</strong> Complete within 30 days</li>
+                    <li><strong>Scope:</strong> All personal data and telemetry permanently deleted</li>
+                    <li><strong>Exceptions:</strong> Data required for legal compliance (audit logs) retained separately</li>
+                    <li><strong>Backups:</strong> Deleted from active systems; backup retention follows industry standards</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">5. Data Sharing and Third Parties</h2>
+
+            <div class="subsection">
+                <h3 class="subsection-title">5.1 We Do NOT Sell Your Data</h3>
+                <p class="section-text">
+                    <span class="highlight">AMOSKYS will never sell, rent, or trade your personal information or telemetry data.</span>
+                </p>
+            </div>
+
+            <div class="subsection">
+                <h3 class="subsection-title">5.2 Limited Sharing</h3>
+                <p class="section-text">
+                    We only share data in these specific circumstances:
+                </p>
+                <ul>
+                    <li><strong>Service Providers:</strong> Cloud hosting, email delivery (under strict DPAs)</li>
+                    <li><strong>Threat Intelligence:</strong> Anonymous threat indicators shared with security community</li>
+                    <li><strong>Legal Requirements:</strong> Court orders, subpoenas, or lawful government requests</li>
+                    <li><strong>Business Transfers:</strong> In the event of a merger or acquisition (with user notification)</li>
+                    <li><strong>With Your Consent:</strong> When you explicitly authorize sharing</li>
+                </ul>
+            </div>
+
+            <div class="subsection">
+                <h3 class="subsection-title">5.3 Third-Party Services</h3>
+                <p class="section-text">
+                    AMOSKYS integrates with the following third-party services:
+                </p>
+                <ul>
+                    <li>Cloud infrastructure providers (AWS, GCP, or Azure)</li>
+                    <li>Email delivery services (for account verification and alerts)</li>
+                    <li>Analytics tools (anonymized usage data only)</li>
+                    <li>CDN providers (for static content delivery)</li>
+                </ul>
+                <p class="section-text">
+                    All third-party integrations are bound by Data Processing Agreements (DPAs) that ensure GDPR compliance.
+                </p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">6. Your Privacy Rights</h2>
+
+            <p class="section-text">
+                Depending on your jurisdiction, you may have the following rights:
+            </p>
+
+            <div class="subsection">
+                <h3 class="subsection-title">6.1 GDPR Rights (EU/EEA Users)</h3>
+                <ul>
+                    <li><strong>Right to Access:</strong> Request a copy of all data we hold about you</li>
+                    <li><strong>Right to Rectification:</strong> Correct inaccurate or incomplete information</li>
+                    <li><strong>Right to Erasure:</strong> Request deletion of your personal data</li>
+                    <li><strong>Right to Restriction:</strong> Limit how we process your data</li>
+                    <li><strong>Right to Portability:</strong> Receive your data in a machine-readable format</li>
+                    <li><strong>Right to Object:</strong> Object to processing based on legitimate interests</li>
+                    <li><strong>Right to Withdraw Consent:</strong> Revoke consent at any time</li>
+                </ul>
+            </div>
+
+            <div class="subsection">
+                <h3 class="subsection-title">6.2 CCPA Rights (California Users)</h3>
+                <ul>
+                    <li>Right to know what personal information is collected</li>
+                    <li>Right to know if personal information is sold or disclosed</li>
+                    <li>Right to say no to the sale of personal information</li>
+                    <li>Right to access your personal information</li>
+                    <li>Right to equal service and price</li>
+                </ul>
+            </div>
+
+            <div class="subsection">
+                <h3 class="subsection-title">6.3 Exercising Your Rights</h3>
+                <p class="section-text">
+                    To exercise any of these rights, contact us at:
+                </p>
+                <p class="section-text">
+                    <strong>Email:</strong> <span class="highlight">privacy@amoskys.com</span><br>
+                    <strong>Subject Line:</strong> "Privacy Rights Request - [Your Right]"<br>
+                    <strong>Response Time:</strong> Within 30 days
+                </p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">7. Cookies and Tracking</h2>
+
+            <div class="subsection">
+                <h3 class="subsection-title">7.1 Cookies We Use</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Cookie Name</th>
+                            <th>Purpose</th>
+                            <th>Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>session_token</td>
+                            <td>User authentication</td>
+                            <td>Session (HTTPOnly, Secure)</td>
+                        </tr>
+                        <tr>
+                            <td>csrf_token</td>
+                            <td>CSRF protection</td>
+                            <td>Session</td>
+                        </tr>
+                        <tr>
+                            <td>preferences</td>
+                            <td>UI settings</td>
+                            <td>1 year</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="subsection">
+                <h3 class="subsection-title">7.2 Tracking Prevention</h3>
+                <p class="section-text">
+                    AMOSKYS does NOT use:
+                </p>
+                <ul>
+                    <li>Third-party advertising cookies</li>
+                    <li>Cross-site tracking pixels</li>
+                    <li>Social media tracking widgets</li>
+                    <li>Browser fingerprinting techniques</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">8. International Data Transfers</h2>
+            <p class="section-text">
+                AMOSKYS operates globally. Your data may be transferred to and processed in countries other than
+                your country of residence.
+            </p>
+            <p class="section-text">
+                We ensure adequate protection through:
+            </p>
+            <ul>
+                <li>Standard Contractual Clauses (SCCs) approved by the European Commission</li>
+                <li>Data Processing Agreements with all service providers</li>
+                <li>Compliance with EU-U.S. Data Privacy Framework (if applicable)</li>
+                <li>Encryption of all data in transit and at rest</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">9. Children's Privacy</h2>
+            <p class="section-text">
+                AMOSKYS is not intended for use by individuals under the age of 18. We do not knowingly collect
+                personal information from children.
+            </p>
+            <p class="section-text">
+                If we become aware that we have collected data from a child under 18, we will delete it immediately.
+                Parents or guardians who believe we have collected such information should contact us at
+                <span class="highlight">privacy@amoskys.com</span>.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">10. Data Breach Notification</h2>
+            <p class="section-text">
+                In the unlikely event of a data breach that affects your personal information:
+            </p>
+            <ul>
+                <li><strong>Notification Time:</strong> Within 72 hours of discovery</li>
+                <li><strong>Method:</strong> Email notification to registered address</li>
+                <li><strong>Information Provided:</strong> Nature of breach, data affected, steps taken, recommended actions</li>
+                <li><strong>Regulatory Reporting:</strong> As required by applicable law</li>
+            </ul>
+            <div class="info-box">
+                <div class="info-box-title">Our Commitment</div>
+                <p class="section-text">
+                    We employ continuous security monitoring, automated threat detection, and incident response
+                    procedures to prevent breaches before they occur.
+                </p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">11. Compliance and Certifications</h2>
+            <p class="section-text">
+                AMOSKYS is committed to maintaining compliance with:
+            </p>
+            <ul>
+                <li><strong>GDPR:</strong> General Data Protection Regulation (EU)</li>
+                <li><strong>CCPA:</strong> California Consumer Privacy Act</li>
+                <li><strong>SOC 2 Type II:</strong> Security and availability controls (in progress)</li>
+                <li><strong>ISO 27001:</strong> Information security management (planned)</li>
+                <li><strong>NIST Cybersecurity Framework:</strong> Security best practices</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">12. Changes to This Privacy Policy</h2>
+            <p class="section-text">
+                We may update this Privacy Policy from time to time to reflect:
+            </p>
+            <ul>
+                <li>Changes in our data practices</li>
+                <li>New features or services</li>
+                <li>Legal or regulatory requirements</li>
+                <li>Industry best practices</li>
+            </ul>
+            <p class="section-text">
+                <strong>Notification:</strong> We will notify you of significant changes via email at least 30 days
+                before they take effect. Continued use of AMOSKYS after changes constitutes acceptance.
+            </p>
+            <p class="section-text">
+                <strong>Version History:</strong> Previous versions available upon request.
+            </p>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">13. Contact Information</h2>
+            <p class="section-text">
+                For questions, concerns, or requests regarding your privacy:
+            </p>
+            <p class="section-text">
+                <strong>Privacy Team:</strong> <span class="highlight">privacy@amoskys.com</span><br>
+                <strong>Legal Inquiries:</strong> <span class="highlight">legal@amoskys.com</span><br>
+                <strong>Security Issues:</strong> <span class="highlight">security@amoskys.com</span><br>
+                <strong>General Support:</strong> <span class="highlight">support@amoskys.com</span>
+            </p>
+            <p class="section-text">
+                <strong>Response Time:</strong> We aim to respond to all privacy inquiries within 48 hours.
+            </p>
+        </div>
+
+        <div class="section" style="border-top: 1px solid rgba(0, 217, 255, 0.1); padding-top: 2rem; margin-top: 3rem;">
+            <p class="section-text" style="text-align: center;">
+                By using AMOSKYS, you acknowledge that you have read and understood this Privacy Policy and
+                agree to its terms.
+            </p>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 AMOSKYS Neural Security Command Platform</p>
+        <p style="margin-top: 1rem;">
+            <a href="/">Home</a> |
+            <a href="/about">About</a> |
+            <a href="/terms">Terms</a> |
+            <a href="/privacy">Privacy</a>
+        </p>
+    </footer>
+</body>
+</html>
