@@ -73,7 +73,7 @@ if [ "$SUCCESS" = "True" ]; then
   echo "   Session token: ${SESSION_TOKEN:0:20}..."
 else
   ERROR_CODE=$(echo "$LOGIN_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('error_code', 'UNKNOWN'))")
-  if [ "$ERROR_CODE" = "UNVERIFIED_EMAIL" ]; then
+  if [ "$ERROR_CODE" = "EMAIL_NOT_VERIFIED" ] || [ "$ERROR_CODE" = "UNVERIFIED_EMAIL" ]; then
     echo "⚠️  Email verification required (expected for new accounts)"
     echo "   Skipping authenticated endpoint tests"
     echo ""
