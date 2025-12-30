@@ -12,7 +12,7 @@
 // Constants
 // =============================================================================
 
-const AUTH_API_BASE = '/api/auth';
+const AUTH_API_BASE = '/api/user/auth';
 const SESSION_COOKIE_NAME = 'amoskys_session';
 
 // =============================================================================
