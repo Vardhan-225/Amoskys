@@ -112,8 +112,10 @@ python -m amoskys.eventbus.server &
 # Start Flask dashboard
 cd web && gunicorn --bind 0.0.0.0:5001 wsgi:app &
 
-# Start specific agent
-python -m amoskys.agents.proc.proc_agent &
+# Start specific agent (new unified CLI)
+python -m amoskys.agents.proc &
+# Or with options:
+python -m amoskys.agents.proc --interval 30 --log-level INFO &
 ```
 
 ---

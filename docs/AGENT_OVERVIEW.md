@@ -82,7 +82,11 @@ This document describes all agents in the AMOSKYS security platform, their purpo
 
 **CLI Usage**:
 ```bash
-python -m amoskys.agents.auth.auth_agent --config config/amoskys.yaml
+# Standard invocation (recommended)
+python -m amoskys.agents.auth --config config/amoskys.yaml
+
+# Or with options
+python -m amoskys.agents.auth --interval 60 --log-level DEBUG --once
 ```
 
 ---
@@ -115,7 +119,11 @@ python -m amoskys.agents.auth.auth_agent --config config/amoskys.yaml
 
 **CLI Usage**:
 ```bash
-python -m amoskys.agents.proc.proc_agent --interval 30
+# Standard invocation (recommended)
+python -m amoskys.agents.proc --interval 30
+
+# All standard options available
+python -m amoskys.agents.proc --help
 ```
 
 ---
@@ -148,7 +156,7 @@ python -m amoskys.agents.proc.proc_agent --interval 30
 
 **CLI Usage**:
 ```bash
-python -m amoskys.agents.persistence.persistence_agent --scan-interval 300
+python -m amoskys.agents.persistence --interval 300
 ```
 
 ---
@@ -187,7 +195,7 @@ python -m amoskys.agents.persistence.persistence_agent --scan-interval 300
 
 **CLI Usage**:
 ```bash
-python -m amoskys.agents.file_integrity.file_integrity_agent --watch-paths /etc /bin
+python -m amoskys.agents.file_integrity --interval 60
 ```
 
 ---
@@ -220,7 +228,7 @@ python -m amoskys.agents.file_integrity.file_integrity_agent --watch-paths /etc 
 
 **CLI Usage**:
 ```bash
-python -m amoskys.agents.dns.dns_agent --interface en0
+python -m amoskys.agents.dns --interval 30
 ```
 
 ---
@@ -253,7 +261,7 @@ python -m amoskys.agents.dns.dns_agent --interface en0
 
 **CLI Usage**:
 ```bash
-sudo python -m amoskys.agents.kernel_audit.kernel_audit_agent
+sudo python -m amoskys.agents.kernel_audit --interval 60
 ```
 
 ---
@@ -285,7 +293,7 @@ sudo python -m amoskys.agents.kernel_audit.kernel_audit_agent
 
 **CLI Usage**:
 ```bash
-python -m amoskys.agents.peripheral.peripheral_agent
+python -m amoskys.agents.peripheral --interval 30
 ```
 
 ---
@@ -316,7 +324,7 @@ python -m amoskys.agents.peripheral.peripheral_agent
 
 **CLI Usage**:
 ```bash
-python -m amoskys.agents.snmp.snmp_agent --config config/snmp_agent.yaml
+python -m amoskys.agents.snmp
 ```
 
 ---
@@ -339,7 +347,7 @@ python -m amoskys.agents.snmp.snmp_agent --config config/snmp_agent.yaml
 
 **CLI Usage**:
 ```bash
-python -m amoskys.agents.flowagent.main
+python -m amoskys.agents.flowagent
 ```
 
 ---

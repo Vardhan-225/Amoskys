@@ -6,8 +6,17 @@ This package provides shared functionality used across all agent implementations
 - Common metrics
 - Hardened agent base with tamper detection
 - Advanced threat detection primitives
+- Standardized CLI framework
 """
 
+# CLI Framework
+from amoskys.agents.common.cli import (
+    agent_main,
+    build_agent_parser,
+    configure_logging,
+    run_agent,
+    write_heartbeat,
+)
 from amoskys.agents.common.hardened_base import (
     EvasionTechnique,
     HardenedAgentBase,
@@ -32,6 +41,12 @@ from amoskys.agents.common.threat_detection import (
 )
 
 __all__ = [
+    # CLI Framework
+    "build_agent_parser",
+    "run_agent",
+    "agent_main",
+    "configure_logging",
+    "write_heartbeat",
     # Queue
     "LocalQueue",
     # Hardened base
