@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About | AMOSKYS</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy-dark: #0a0e27;
+            --navy-medium: #1a1f3a;
+            --navy-light: #2a2f4a;
+            --cyan-bright: #00d9ff;
+            --cyan-glow: #00b8d4;
+            --green-secure: #00ff88;
+            --text-primary: #ffffff;
+            --text-secondary: #b4bcd0;
+            --text-muted: #6b7a99;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--navy-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 217, 255, 0.1);
+            z-index: 1000;
+            padding: 1rem 0;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--cyan-bright);
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--cyan-bright);
+        }
+
+        .hero-section {
+            padding: 140px 2rem 80px;
+            text-align: center;
+            background: linear-gradient(180deg, var(--navy-dark) 0%, var(--navy-medium) 100%);
+        }
+
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, var(--text-primary), var(--cyan-bright));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-subtitle {
+            font-size: 1.3rem;
+            color: var(--text-secondary);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .content-section {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 80px 2rem;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .section-subtitle {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            text-align: center;
+            max-width: 700px;
+            margin: 0 auto 4rem;
+        }
+
+        .mission-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 3rem;
+            margin-bottom: 4rem;
+        }
+
+        .mission-card {
+            background: rgba(26, 31, 58, 0.5);
+            border: 1px solid rgba(0, 217, 255, 0.1);
+            border-radius: 16px;
+            padding: 2.5rem;
+        }
+
+        .mission-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .mission-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--cyan-bright);
+        }
+
+        .mission-text {
+            color: var(--text-muted);
+            line-height: 1.8;
+        }
+
+        .story-section {
+            background: rgba(10, 14, 39, 0.8);
+            border: 1px solid rgba(0, 217, 255, 0.1);
+            border-radius: 20px;
+            padding: 4rem;
+            margin: 4rem 0;
+        }
+
+        .story-text {
+            font-size: 1.15rem;
+            line-height: 1.9;
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+        }
+
+        .highlight {
+            color: var(--cyan-bright);
+            font-weight: 600;
+        }
+
+        .team-section {
+            text-align: center;
+            padding: 4rem 0;
+        }
+
+        .founder-card {
+            max-width: 500px;
+            margin: 0 auto;
+            background: rgba(26, 31, 58, 0.5);
+            border: 2px solid var(--cyan-bright);
+            border-radius: 20px;
+            padding: 3rem;
+        }
+
+        .founder-name {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--cyan-bright);
+            margin-bottom: 0.5rem;
+        }
+
+        .founder-title {
+            font-size: 1.2rem;
+            color: var(--green-secure);
+            margin-bottom: 2rem;
+        }
+
+        .founder-bio {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            text-align: left;
+        }
+
+        .values-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+        }
+
+        .value-item {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .value-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .value-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.75rem;
+        }
+
+        .value-text {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        footer {
+            background: var(--navy-dark);
+            border-top: 1px solid rgba(0, 217, 255, 0.1);
+            padding: 3rem 2rem 2rem;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        footer a {
+            color: var(--cyan-bright);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.5rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .story-section {
+                padding: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-container">
+            <a href="/" class="logo-text">AMOSKYS</a>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/about">About</a>
+                <a href="/auth/login">Login</a>
+                <a href="/auth/signup">Sign Up</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero-section">
+        <h1 class="hero-title">Building the Future of Cybersecurity</h1>
+        <p class="hero-subtitle">
+            We're on a mission to democratize enterprise-grade security and empower organizations
+            to defend against evolving cyber threats with AI-powered intelligence.
+        </p>
+    </section>
+
+    <!-- Content -->
+    <div class="content-section">
+        <!-- Mission -->
+        <h2 class="section-title">Our Mission</h2>
+        <p class="section-subtitle">
+            To create a security platform that grows smarter with every deployment,
+            making enterprise-grade defense accessible to organizations of all sizes.
+        </p>
+
+        <div class="mission-grid">
+            <div class="mission-card">
+                <div class="mission-icon">🎯</div>
+                <h3 class="mission-title">Distributed Intelligence</h3>
+                <p class="mission-text">
+                    Every agent deployment adds a new perspective to your defense network.
+                    5 devices with 10 agents each = 50 unique viewpoints monitoring your infrastructure.
+                </p>
+            </div>
+
+            <div class="mission-card">
+                <div class="mission-icon">🧠</div>
+                <h3 class="mission-title">AI-Powered Defense</h3>
+                <p class="mission-text">
+                    Our correlation engine doesn't just detect threats—it understands them.
+                    ReAct frameworks automatically analyze and remediate before damage occurs.
+                </p>
+            </div>
+
+            <div class="mission-card">
+                <div class="mission-icon">🔐</div>
+                <h3 class="mission-title">Zero-Trust Architecture</h3>
+                <p class="mission-text">
+                    End-to-end encryption, Argon2id hashing, mTLS communication.
+                    Your data stays yours, always encrypted, always protected.
+                </p>
+            </div>
+        </div>
+
+        <!-- Story -->
+        <div class="story-section">
+            <h2 class="section-title" style="text-align: left; margin-bottom: 2rem;">The Vision</h2>
+
+            <p class="story-text">
+                In the current cybersecurity landscape, <span class="highlight">enterprise-grade protection is often out of reach</span>
+                for small to medium organizations. The tools exist—CrowdStrike, SentinelOne, Palo Alto Networks—but they come
+                with enterprise price tags and complexity.
+            </p>
+
+            <p class="story-text">
+                We saw a gap. <span class="highlight">What if security could scale like a microprocessor?</span> Each agent
+                you deploy adds processing power to your defense network. Each device monitored adds perspective. Each threat
+                detected makes the entire network smarter.
+            </p>
+
+            <p class="story-text">
+                AMOSKYS was born from this idea: <span class="highlight">distributed security that grows organically</span>.
+                Sign up. Download an agent package. Deploy across your infrastructure. Within minutes, you have
+                enterprise-grade monitoring, correlation, and automated remediation.
+            </p>
+
+            <p class="story-text">
+                We're not just building software—we're building <span class="highlight">the defense network of tomorrow</span>.
+                A network where every deployment strengthens every other deployment. Where AI doesn't just alert you
+                to threats—it explains them, correlates them, and remediates them.
+            </p>
+
+            <p class="story-text">
+                This is our fight. This is <span class="highlight">the forefront of cyber warfare</span>.
+            </p>
+        </div>
+
+        <!-- Team -->
+        <div class="team-section">
+            <h2 class="section-title">The Team</h2>
+            <p class="section-subtitle">Built by security engineers who understand the battlefield</p>
+
+            <div class="founder-card">
+                <div class="founder-name">Akash Thanneeru</div>
+                <div class="founder-title">Founder & Chief Architect</div>
+                <p class="founder-bio">
+                    Akash brings a unique perspective to cybersecurity—combining deep technical expertise
+                    in distributed systems, AI/ML, and security architecture. With a background in building
+                    scalable platforms and a passion for democratizing enterprise-grade security, he's on a
+                    mission to make the cyber battlefield more equitable.
+                    <br><br>
+                    "I'm standing strong with fire in my soul and thirst to be at the forefront of this
+                    cyberwarfare. Every line of code is a defense mechanism. Every agent deployed is a sentinel."
+                </p>
+            </div>
+        </div>
+
+        <!-- Values -->
+        <h2 class="section-title">Our Values</h2>
+        <div class="values-grid">
+            <div class="value-item">
+                <div class="value-icon">⚡</div>
+                <h3 class="value-title">Speed</h3>
+                <p class="value-text">Deploy in minutes, not months. Detect threats in milliseconds, not hours.</p>
+            </div>
+
+            <div class="value-item">
+                <div class="value-icon">🔍</div>
+                <h3 class="value-title">Transparency</h3>
+                <p class="value-text">Every alert explained. Every threat visualized. No black boxes.</p>
+            </div>
+
+            <div class="value-item">
+                <div class="value-icon">🛡️</div>
+                <h3 class="value-title">Security First</h3>
+                <p class="value-text">Zero-trust architecture. Military-grade encryption. Compliance-ready.</p>
+            </div>
+
+            <div class="value-item">
+                <div class="value-icon">🚀</div>
+                <h3 class="value-title">Innovation</h3>
+                <p class="value-text">AI-powered correlation. ReAct frameworks. Vector graph intelligence.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2025 AMOSKYS Neural Security Command Platform</p>
+        <p style="margin-top: 1rem;">
+            <a href="/">Home</a> |
+            <a href="/about">About</a> |
+            <a href="/terms">Terms</a> |
+            <a href="/privacy">Privacy</a> |
+            <a href="/auth/login">Login</a>
+        </p>
+        <p style="margin-top: 1rem;">
+            Built with 🔥 by <strong>Akash Thanneeru</strong> | Forefront of Cyber Warfare
+        </p>
+    </footer>
+</body>
+</html>
