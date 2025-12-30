@@ -1,5 +1,5 @@
 # AMOSKYS Phase 2 Progress Summary
-## Date: December 29, 2025
+## Date: December 29, 2025 (Updated)
 
 ### Overview
 Phase 2 focuses on **Complete Agent Coverage & Runtime Guarantees** - ensuring every agent is discoverable, startable, monitored, and properly displayed in the UI.
@@ -7,6 +7,82 @@ Phase 2 focuses on **Complete Agent Coverage & Runtime Guarantees** - ensuring e
 ---
 
 ## Completed Tasks
+
+### ✅ P2-001: Normalize Agent Entrypoints (COMPLETED Dec 29)
+
+**Location:** `src/amoskys/agents/*/\__main__.py`
+
+All agents now support unified `python -m` invocation:
+```bash
+python -m amoskys.agents.proc [options]
+python -m amoskys.agents.auth [options]
+python -m amoskys.agents.dns [options]
+python -m amoskys.agents.file_integrity [options]
+python -m amoskys.agents.persistence [options]
+python -m amoskys.agents.kernel_audit [options]
+python -m amoskys.agents.peripheral [options]
+python -m amoskys.agents.snmp
+python -m amoskys.agents.flowagent
+```
+
+**Files Created:**
+- `src/amoskys/agents/proc/__main__.py`
+- `src/amoskys/agents/auth/__main__.py`
+- `src/amoskys/agents/dns/__main__.py`
+- `src/amoskys/agents/file_integrity/__main__.py`
+- `src/amoskys/agents/persistence/__main__.py`
+- `src/amoskys/agents/kernel_audit/__main__.py`
+- `src/amoskys/agents/peripheral/__main__.py`
+- `src/amoskys/agents/snmp/__main__.py`
+- `src/amoskys/agents/flowagent/__main__.py`
+
+---
+
+### ✅ P2-002: Shared CLI Framework (COMPLETED Dec 29)
+
+**Location:** `src/amoskys/agents/common/cli.py`
+
+Created standardized CLI for all agents with:
+- `--config`: Path to configuration file
+- `--interval`: Collection interval in seconds
+- `--once`: Run single collection cycle then exit
+- `--log-level`: DEBUG/INFO/WARNING/ERROR/CRITICAL
+- `--heartbeat-dir`: Directory for heartbeat status files
+- `--no-heartbeat`: Disable heartbeat writing
+
+**Features:**
+- Graceful shutdown on SIGTERM/SIGINT
+- Automatic heartbeat file writing
+- Consistent logging configuration
+- Signal handling for clean container lifecycle
+
+**Exported Functions:**
+```python
+from amoskys.agents.common import (
+    build_agent_parser,
+    run_agent,
+    agent_main,
+    configure_logging,
+    write_heartbeat,
+)
+```
+
+---
+
+### ✅ P2-003: Heartbeat Logging (PARTIAL - Dec 29)
+
+**Location:** `src/amoskys/agents/common/cli.py`
+
+Heartbeat writing is now built into the CLI framework:
+- Writes JSON heartbeat after each collection cycle
+- Stored in `/opt/amoskys/data/heartbeats/{agent_name}.json`
+- Contains: agent_name, pid, timestamp, cycle count, duration, status
+
+Remaining work:
+- [ ] Wire heartbeat files into Health API agent detection
+- [ ] Add Prometheus metrics exposure
+
+---
 
 ### ✅ P2-006: Health API v1 (`/api/v1/health/system`)
 
@@ -101,10 +177,10 @@ Created detailed agent documentation including:
 
 | Metric | Before Phase 2 | After Phase 2 |
 |--------|----------------|---------------|
-| Total Tests | 188 | 191 |
-| Passed | 188 | 191 |
+| Total Tests | 188 | **233** |
+| Passed | 188 | **233** |
 | Failed | 0 | 0 |
-| New Tests | - | 3 (Health API) |
+| New Tests | - | 45 (Health API, Smoke, Entrypoints) |
 
 ---
 
@@ -113,6 +189,10 @@ Created detailed agent documentation including:
 | File | Purpose |
 |------|---------|
 | `web/app/api/health.py` | Health API v1 blueprint |
+| `src/amoskys/agents/common/cli.py` | Shared CLI framework |
+| `src/amoskys/agents/*/\__main__.py` | 9 module entrypoints |
+| `tests/agents/test_entrypoints.py` | 23 entrypoint tests |
+| `tests/integration/test_smoke_deploy.py` | 16 smoke tests |
 | `docs/OPS_RUNBOOK.md` | Operations runbook |
 | `docs/AGENT_OVERVIEW.md` | Agent documentation |
 
@@ -122,28 +202,32 @@ Created detailed agent documentation including:
 |------|---------|
 | `web/app/api/__init__.py` | Registered health_bp blueprint |
 | `web/app/templates/dashboard/cortex.html` | Added Health API integration |
-| `tests/web/test_api_gateway.py` | Added 3 health API tests |
+| `src/amoskys/agents/common/__init__.py` | Exported CLI functions |
+| `docs/AGENT_OVERVIEW.md` | Updated CLI examples |
+| `docs/OPS_RUNBOOK.md` | Updated agent invocation |
+| `.github/workflows/ci-cd.yml` | Enhanced deploy job |
+| `deploy_remote.sh` | 8-step deployment with health checks |
 
 ---
 
 ## Remaining Phase 2 Tasks
 
-### Agent Lifecycle (P2-001 to P2-003)
-- [ ] P2-001: Normalize all agent entrypoints to `python -m` style
-- [ ] P2-002: Implement shared CLI/argparse base in hardened_base.py
-- [ ] P2-003: Add periodic heartbeat logging/metrics to all agents
+### Agent Lifecycle
+- [x] P2-001: Normalize all agent entrypoints to `python -m` style ✅
+- [x] P2-002: Implement shared CLI/argparse base ✅
+- [~] P2-003: Heartbeat logging (partial - built into CLI, needs Health API wire-up)
 
-### Smoke Tests (P2-004 to P2-005)
-- [ ] P2-004: Add agent startup smoke tests using AGENT_REGISTRY
-- [ ] P2-005: Integrate smoke tests into CI pipeline
+### Smoke Tests
+- [x] P2-004: Add agent startup smoke tests using AGENT_REGISTRY ✅
+- [x] P2-005: Integrate smoke tests into CI pipeline ✅
 
-### Empty State UX (P2-008)
+### Empty State UX
 - [ ] P2-008: Implement proper empty-state UX for zero-data environments
 
-### CI/CD (P2-009 to P2-011)
-- [ ] P2-009: Finalize deploy_remote.sh for idempotent VPS deployment
-- [ ] P2-010: Wire GitHub Actions deploy job to use deploy_remote.sh with SSH
-- [ ] P2-011: Add post-deploy health check and .last_deploy marker
+### CI/CD
+- [x] P2-009: Finalize deploy_remote.sh for idempotent VPS deployment ✅
+- [x] P2-010: Wire GitHub Actions deploy job with SSH ✅
+- [x] P2-011: Add post-deploy health check and .last_deploy marker ✅
 
 ---
 
