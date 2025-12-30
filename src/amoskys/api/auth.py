@@ -57,17 +57,22 @@ def require_auth(f):
         session_token = request.cookies.get(SESSION_COOKIE_NAME)
         if not session_token:
             return (
-                jsonify({"error": "Authentication required", "error_code": "NO_SESSION"}),
+                jsonify(
+                    {"error": "Authentication required", "error_code": "NO_SESSION"}
+                ),
                 401,
             )
 
         with get_session_context() as db:
             auth = AuthService(db)
-            result = auth.validate_and_refresh_session(token=session_token, **get_client_info())
+            result = auth.validate_and_refresh_session(
+                token=session_token, **get_client_info()
+            )
 
             if not result.is_valid:
                 response = make_response(
-                    jsonify({"error": result.error, "error_code": result.error_code}), 401
+                    jsonify({"error": result.error, "error_code": result.error_code}),
+                    401,
                 )
                 response.delete_cookie(SESSION_COOKIE_NAME)
                 return response
@@ -93,7 +98,9 @@ def signup():
 
     if not data:
         return (
-            jsonify({"error": "Request body required", "error_code": "INVALID_REQUEST"}),
+            jsonify(
+                {"error": "Request body required", "error_code": "INVALID_REQUEST"}
+            ),
             400,
         )
 
@@ -103,7 +110,9 @@ def signup():
 
     if not email or not password:
         return (
-            jsonify({"error": "Email and password required", "error_code": "MISSING_FIELDS"}),
+            jsonify(
+                {"error": "Email and password required", "error_code": "MISSING_FIELDS"}
+            ),
             400,
         )
 
@@ -137,7 +146,9 @@ def login():
 
     if not data:
         return (
-            jsonify({"error": "Request body required", "error_code": "INVALID_REQUEST"}),
+            jsonify(
+                {"error": "Request body required", "error_code": "INVALID_REQUEST"}
+            ),
             400,
         )
 
@@ -146,7 +157,9 @@ def login():
 
     if not email or not password:
         return (
-            jsonify({"error": "Email and password required", "error_code": "MISSING_FIELDS"}),
+            jsonify(
+                {"error": "Email and password required", "error_code": "MISSING_FIELDS"}
+            ),
             400,
         )
 
@@ -256,7 +269,9 @@ def reset_password():
 
     if not data:
         return (
-            jsonify({"error": "Request body required", "error_code": "INVALID_REQUEST"}),
+            jsonify(
+                {"error": "Request body required", "error_code": "INVALID_REQUEST"}
+            ),
             400,
         )
 
@@ -266,14 +281,19 @@ def reset_password():
     if not token or not new_password:
         return (
             jsonify(
-                {"error": "Token and new_password required", "error_code": "MISSING_FIELDS"}
+                {
+                    "error": "Token and new_password required",
+                    "error_code": "MISSING_FIELDS",
+                }
             ),
             400,
         )
 
     with get_session_context() as db:
         auth = AuthService(db)
-        result = auth.reset_password(token=token, new_password=new_password, **get_client_info())
+        result = auth.reset_password(
+            token=token, new_password=new_password, **get_client_info()
+        )
 
         status_code = 200 if result.success else 400
         return jsonify(result.to_dict()), status_code
@@ -320,7 +340,9 @@ def change_password():
 
     if not data:
         return (
-            jsonify({"error": "Request body required", "error_code": "INVALID_REQUEST"}),
+            jsonify(
+                {"error": "Request body required", "error_code": "INVALID_REQUEST"}
+            ),
             400,
         )
 
@@ -367,7 +389,9 @@ def get_current_user():
                 "is_verified": user.is_verified,
                 "mfa_enabled": user.mfa_enabled,
                 "created_at": user.created_at.isoformat() if user.created_at else None,
-                "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+                "last_login_at": (
+                    user.last_login_at.isoformat() if user.last_login_at else None
+                ),
             },
         }
     )

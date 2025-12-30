@@ -216,7 +216,9 @@ class AuthService:
         """
         self.db = db
         self.config = config or AuthServiceConfig()
-        self.session_config = session_config or self.config.session_config or get_session_config()
+        self.session_config = (
+            session_config or self.config.session_config or get_session_config()
+        )
 
     # =========================================================================
     # Signup
@@ -269,7 +271,11 @@ class AuthService:
         if not password_result.is_valid:
             return SignupResult(
                 success=False,
-                error=password_result.errors[0] if password_result.errors else "Invalid password",
+                error=(
+                    password_result.errors[0]
+                    if password_result.errors
+                    else "Invalid password"
+                ),
                 error_code="INVALID_PASSWORD",
             )
 
@@ -293,7 +299,8 @@ class AuthService:
             token_record = EmailVerificationToken(
                 user_id=user.id,
                 token_hash=hash_token(verification_token),
-                expires_at=_utcnow() + timedelta(hours=self.config.email_verification_hours),
+                expires_at=_utcnow()
+                + timedelta(hours=self.config.email_verification_hours),
             )
             self.db.add(token_record)
 
@@ -443,7 +450,8 @@ class AuthService:
         token_record = EmailVerificationToken(
             user_id=user.id,
             token_hash=hash_token(verification_token),
-            expires_at=_utcnow() + timedelta(hours=self.config.email_verification_hours),
+            expires_at=_utcnow()
+            + timedelta(hours=self.config.email_verification_hours),
         )
         self.db.add(token_record)
 
@@ -530,7 +538,9 @@ class AuthService:
 
             # Check if we should lock the account
             if user.failed_login_count >= self.config.max_login_attempts:
-                user.locked_until = _utcnow() + timedelta(minutes=self.config.lockout_minutes)
+                user.locked_until = _utcnow() + timedelta(
+                    minutes=self.config.lockout_minutes
+                )
                 self._log_audit(
                     event_type=AuditEventType.ACCOUNT_LOCKED,
                     user_id=user.id,
@@ -839,7 +849,11 @@ class AuthService:
         if not password_result.is_valid:
             return AuthResult(
                 success=False,
-                error=password_result.errors[0] if password_result.errors else "Invalid password",
+                error=(
+                    password_result.errors[0]
+                    if password_result.errors
+                    else "Invalid password"
+                ),
                 error_code="INVALID_PASSWORD",
             )
 
@@ -923,7 +937,11 @@ class AuthService:
         if not password_result.is_valid:
             return AuthResult(
                 success=False,
-                error=password_result.errors[0] if password_result.errors else "Invalid password",
+                error=(
+                    password_result.errors[0]
+                    if password_result.errors
+                    else "Invalid password"
+                ),
                 error_code="INVALID_NEW_PASSWORD",
             )
 
