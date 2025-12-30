@@ -58,6 +58,10 @@ def create_app():
     from amoskys.api.auth import auth_bp
     app.register_blueprint(auth_bp)
 
+    # Initialize security features (Phase 3)
+    from amoskys.api.security import init_security
+    init_security(app)
+
     # Initialize SocketIO for real-time updates
     from .websocket import init_socketio
     socketio = init_socketio(app)

@@ -22,6 +22,7 @@ from functools import wraps
 
 from flask import Blueprint, jsonify, make_response, request
 
+from amoskys.api.security import rate_limit_auth, rate_limit_strict
 from amoskys.auth import AuthService
 from amoskys.common.logging import get_logger
 from amoskys.db import get_session_context
@@ -92,6 +93,7 @@ def require_auth(f):
 
 
 @auth_bp.route("/signup", methods=["POST"])
+@rate_limit_auth("10 per hour")  # Prevent spam account creation
 def signup():
     """Register a new user account."""
     data = request.get_json()
@@ -140,6 +142,7 @@ def signup():
 
 
 @auth_bp.route("/login", methods=["POST"])
+@rate_limit_auth("5 per minute")  # Prevent brute-force attacks
 def login():
     """Authenticate user with email and password."""
     data = request.get_json()
@@ -233,6 +236,7 @@ def resend_verification():
 
 
 @auth_bp.route("/forgot-password", methods=["POST"])
+@rate_limit_strict("1 per minute")  # Prevent email enumeration
 def forgot_password():
     """Request password reset email."""
     data = request.get_json()
