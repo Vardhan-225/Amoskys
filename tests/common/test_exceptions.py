@@ -13,8 +13,7 @@ from datetime import datetime
 
 import pytest  # noqa: F401 - used for fixtures
 
-from amoskys.common.exceptions import (
-    # Base classes
+from amoskys.common.exceptions import (  # Base classes
     AgentConnectionError,
     AgentError,
     AgentNotFoundError,

@@ -7,8 +7,7 @@ Shared utilities used across all AMOSKYS components including:
 - Cryptographic utilities
 """
 
-from .exceptions import (
-    # Base classes
+from .exceptions import (  # Base classes
     AgentConnectionError,
     AgentError,
     AgentNotFoundError,
