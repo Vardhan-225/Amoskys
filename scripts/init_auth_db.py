@@ -30,6 +30,12 @@ from amoskys.auth.models import (  # noqa: F401
     User,
 )
 
+# Import agent models (Phase 3 - Agent Distribution)
+from amoskys.agents.models import (  # noqa: F401
+    AgentToken,
+    DeployedAgent,
+)
+
 
 def init_db():
     """Create all authentication database tables."""
@@ -57,6 +63,8 @@ def init_db():
         "email_verification_tokens",
         "password_reset_tokens",
         "auth_audit_log",
+        "agent_tokens",
+        "deployed_agents",
     ]
 
     for table in expected_tables:

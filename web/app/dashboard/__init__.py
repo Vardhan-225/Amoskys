@@ -73,6 +73,16 @@ def database_manager():
     """Database Manager - Zero-Trust Data Management"""
     return render_template('dashboard/database_manager.html')
 
+@dashboard_bp.route('/my-agents')
+def my_agents():
+    """User Agent Management - Deploy and Monitor Your Agents"""
+    return render_template('dashboard/my-agents.html')
+
+@dashboard_bp.route('/deploy')
+def deploy_agent():
+    """Agent Deployment Portal - Download and Deploy"""
+    return render_template('dashboard/deploy.html')
+
 # Real-time Data Endpoints
 @dashboard_bp.route('/api/live/threats')
 @require_rate_limit(max_requests=100, window_seconds=60)

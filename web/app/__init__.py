@@ -62,6 +62,10 @@ def create_app():
     from amoskys.api.auth import auth_bp
     app.register_blueprint(auth_bp)
 
+    # Register User Agent Management API blueprint (Phase 3 - Agent Distribution)
+    from amoskys.api.agents_user import agents_user_bp
+    app.register_blueprint(agents_user_bp)
+
     # Initialize security features (Phase 3)
     from amoskys.api.security import init_security
     init_security(app)
