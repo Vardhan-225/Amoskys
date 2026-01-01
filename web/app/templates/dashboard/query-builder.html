@@ -228,7 +228,7 @@
 .result-row.severity-low { border-left-color: #00ff88; }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 class QueryBuilder {
     constructor() {
         this.conditions = [];

@@ -272,7 +272,7 @@
 }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 class PerspectiveSelector {
     constructor() {
         this.selectedPerspectives = new Set();

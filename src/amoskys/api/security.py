@@ -107,15 +107,20 @@ CSP = {
     "default-src": ["'self'"],
     "script-src": [
         "'self'",
-        "'unsafe-inline'",  # For inline scripts (SocketIO, etc.)
+        "'unsafe-inline'",  # For inline scripts (SocketIO, etc.) - ignored when nonce is present
         "cdn.jsdelivr.net",  # If using CDN
     ],
     "style-src": [
         "'self'",
         "'unsafe-inline'",  # For inline styles
+        "https://fonts.googleapis.com",  # Google Fonts stylesheets
     ],
     "img-src": ["'self'", "data:", "https:"],
-    "font-src": ["'self'", "data:"],
+    "font-src": [
+        "'self'",
+        "data:",
+        "https://fonts.gstatic.com",  # Google Fonts font files
+    ],
     "connect-src": ["'self'", "ws:", "wss:"],  # For WebSocket
     "frame-ancestors": ["'none'"],
     "base-uri": ["'self'"],

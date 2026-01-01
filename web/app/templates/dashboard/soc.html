@@ -313,7 +313,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 class SOCDashboard {
     constructor() {
         this.updateInterval = 3000; // 3 seconds for SOC

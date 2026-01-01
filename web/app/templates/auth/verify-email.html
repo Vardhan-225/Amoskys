@@ -57,7 +57,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 document.addEventListener('DOMContentLoaded', async function() {
     const loadingState = document.getElementById('loading-state');
     const successState = document.getElementById('success-state');

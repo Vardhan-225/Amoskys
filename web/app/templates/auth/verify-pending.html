@@ -53,7 +53,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 document.addEventListener('DOMContentLoaded', function() {
     const resendBtn = document.getElementById('resend-btn');
     const resendSuccess = document.getElementById('resend-success');

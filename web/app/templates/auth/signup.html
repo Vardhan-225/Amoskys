@@ -120,7 +120,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('signup-form');
     const emailInput = document.getElementById('email');

@@ -429,7 +429,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 class AgentDashboard {
     constructor() {
         this.updateInterval = 5000;

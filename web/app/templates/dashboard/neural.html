@@ -614,7 +614,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 class NeuralDashboard {
     constructor() {
         this.updateInterval = 8000; // 8 seconds for neural analysis

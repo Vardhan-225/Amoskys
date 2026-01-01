@@ -444,7 +444,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 class SystemDashboard {
     constructor() {
         this.updateInterval = 2000; // 2 seconds for system monitoring

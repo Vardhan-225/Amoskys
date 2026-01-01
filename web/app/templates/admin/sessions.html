@@ -79,7 +79,7 @@
     }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 class SessionManager {
     constructor() {
         this.loadStats();

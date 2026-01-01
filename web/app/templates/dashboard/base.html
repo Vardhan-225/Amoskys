@@ -1015,7 +1015,7 @@
     </main>
     
     <!-- Real-time Update Script -->
-    <script>
+    <script nonce="{{ csp_nonce() }}">
         // Real-time dashboard updates
         class NeuralDashboard {
             constructor() {
@@ -1116,7 +1116,7 @@
     </script>
     
     <!-- Real-time WebSocket Connection -->
-    <script>
+    <script nonce="{{ csp_nonce() }}">
         class RealTimeConnection {
             constructor() {
                 this.socket = null;
@@ -1250,7 +1250,7 @@
     </script>
     
     <!-- Hamburger Navigation Functions -->
-    <script>
+    <script nonce="{{ csp_nonce() }}">
         /**
          * Toggle sidebar navigation menu
          */

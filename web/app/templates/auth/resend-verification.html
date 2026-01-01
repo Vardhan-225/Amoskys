@@ -40,7 +40,7 @@
     </p>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 document.getElementById('resend-btn').addEventListener('click', async (e) => {
     e.preventDefault();
 

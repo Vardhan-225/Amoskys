@@ -1192,7 +1192,7 @@
         </div>
     </footer>
 
-    <script>
+    <script nonce="{{ csp_nonce() }}">
         // Smooth scrolling
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
