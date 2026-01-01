@@ -104,8 +104,12 @@ def handle_connect():
     emit('initial_data', initial_data)
 
 @socketio.on('disconnect', namespace='/dashboard')
-def handle_disconnect():
-    """Handle client disconnection"""
+def handle_disconnect(reason=None):
+    """Handle client disconnection
+    
+    Args:
+        reason: Optional disconnect reason (may be passed by some SocketIO implementations)
+    """
     client_id = str(uuid.uuid4())  # Note: In real implementation, track this per session
     
     if client_id in active_connections:
