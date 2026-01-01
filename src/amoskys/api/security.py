@@ -107,8 +107,9 @@ CSP = {
     "default-src": ["'self'"],
     "script-src": [
         "'self'",
-        "'unsafe-inline'",  # For inline scripts (SocketIO, etc.) - ignored when nonce is present
-        "cdn.jsdelivr.net",  # If using CDN
+        "'unsafe-inline'",  # For inline scripts - ignored when nonce is present
+        "cdn.jsdelivr.net",  # Chart.js CDN
+        "cdn.socket.io",  # Socket.IO CDN
     ],
     "style-src": [
         "'self'",
@@ -121,7 +122,12 @@ CSP = {
         "data:",
         "https://fonts.gstatic.com",  # Google Fonts font files
     ],
-    "connect-src": ["'self'", "ws:", "wss:"],  # For WebSocket
+    "connect-src": [
+        "'self'",
+        "ws:",
+        "wss:",
+        "https://cdn.jsdelivr.net",  # For source maps
+    ],
     "frame-ancestors": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],

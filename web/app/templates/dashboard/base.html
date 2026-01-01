@@ -895,7 +895,7 @@
     </div>
 
     <!-- Sidebar Overlay -->
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()" onkeydown="if(event.key==='Enter'||event.key===' ')toggleSidebar()" role="button" tabindex="0" aria-label="Close sidebar"></div>
+    <div class="sidebar-overlay" id="sidebarOverlay" role="button" tabindex="0" aria-label="Close sidebar"></div>
 
     <!-- Sidebar Navigation -->
     <nav class="sidebar-nav" id="sidebarNav">
@@ -904,7 +904,7 @@
                 <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS" style="width: 30px; height: 30px;">
                 <span class="sidebar-title">AMOSKYS</span>
             </a>
-            <button class="sidebar-close" onclick="toggleSidebar()" aria-label="Close sidebar">✕</button>
+            <button class="sidebar-close" id="sidebarCloseBtn" aria-label="Close sidebar">✕</button>
         </div>
         <div class="sidebar-search">
             <input type="text" class="sidebar-search-input" id="sidebarSearch" placeholder="Filter navigation..." aria-label="Filter navigation">
@@ -969,7 +969,7 @@
             <div class="sidebar-divider"></div>
             {% endif %}
 
-            <button class="logout-btn" onclick="logout()">
+            <button class="logout-btn" id="logoutBtn">
                 <span>🚪</span>
                 <span>Logout</span>
             </button>
@@ -980,7 +980,7 @@
     <header class="neural-header">
         <div class="header-content">
             <div style="display: flex; align-items: center; gap: 1rem;">
-                <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
+                <button class="hamburger-btn" id="hamburgerBtn">☰</button>
                 <a href="/dashboard/cortex" class="neural-logo">
                     <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS Logo" class="neural-logo-image">
                     <h1>AMOSKYS</h1>
@@ -1327,6 +1327,30 @@
                     link.classList.add('active');
                 }
             });
+
+            // Attach event listeners for sidebar toggle (CSP compliant - no inline handlers)
+            const hamburgerBtn = document.getElementById('hamburgerBtn');
+            const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            const logoutBtn = document.getElementById('logoutBtn');
+
+            if (hamburgerBtn) {
+                hamburgerBtn.addEventListener('click', toggleSidebar);
+            }
+            if (sidebarCloseBtn) {
+                sidebarCloseBtn.addEventListener('click', toggleSidebar);
+            }
+            if (sidebarOverlay) {
+                sidebarOverlay.addEventListener('click', toggleSidebar);
+                sidebarOverlay.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        toggleSidebar();
+                    }
+                });
+            }
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', logout);
+            }
         });
 
         /**
