@@ -659,32 +659,37 @@ class CortexDashboardV2 {
 
             const metrics = data.metrics;
             
+            // Helper function for safe element updates
+            const setElementText = (id, text) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = text;
+            };
+            
             // Update CPU
             const cpu = Math.round(metrics.cpu.percent);
-            document.getElementById('cpu-value').textContent = cpu + '%';
+            setElementText('cpu-value', cpu + '%');
             this.updateChart('cpu', cpu);
 
             // Update Memory
             const mem = Math.round(metrics.memory.percent);
-            document.getElementById('memory-value').textContent = mem + '%';
+            setElementText('memory-value', mem + '%');
             this.updateChart('memory', mem);
 
             // Update Disk
             const disk = Math.round(metrics.disk.percent);
-            document.getElementById('disk-value').textContent = disk + '%';
+            setElementText('disk-value', disk + '%');
             this.updateChart('disk', disk);
 
             // Calculate network activity (synthetic)
             const netTotal = metrics.network.bytes_sent + metrics.network.bytes_recv;
             const netPercent = Math.min(100, Math.round((netTotal / (1024 * 1024 * 1024)) % 100));
-            document.getElementById('network-value').textContent = netPercent + '%';
+            setElementText('network-value', netPercent + '%');
             this.updateChart('network', netPercent);
 
             // Update health score
             const health = Math.round((100 - cpu + 100 - mem + 100 - disk) / 3);
-            document.getElementById('health-score').textContent = health + '%';
-            document.getElementById('health-status').textContent = 
-                health > 80 ? 'OPTIMAL' : health > 60 ? 'GOOD' : 'WARNING';
+            setElementText('health-score', health + '%');
+            setElementText('health-status', health > 80 ? 'OPTIMAL' : health > 60 ? 'GOOD' : 'WARNING');
 
             // Update timestamp with freshness indicator
             this.lastUpdateTime.metrics = Date.now();
@@ -701,7 +706,8 @@ class CortexDashboardV2 {
                 this.showErrorState('metrics-error', 
                     `Failed to fetch metrics: ${error.message}. Retrying...`,
                     () => this.updateMetrics());
-                document.getElementById('health-status').textContent = 'Connection Error';
+                const statusEl = document.getElementById('health-status');
+                if (statusEl) statusEl.textContent = 'Connection Error';
             }
         }
     }

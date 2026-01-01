@@ -85,7 +85,8 @@ WorkingDirectory=/opt/amoskys
 Environment=FLASK_ENV=production
 Environment=PYTHONPATH=/opt/amoskys
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/amoskys/venv/bin/gunicorn --bind 127.0.0.1:5001 --workers 2 --timeout 120 --access-logfile /var/log/amoskys/access.log --error-logfile /var/log/amoskys/error.log web.wsgi:app
+# Use eventlet worker for Socket.IO WebSocket support (single worker required)
+ExecStart=/opt/amoskys/venv/bin/gunicorn --worker-class eventlet -w 1 --bind 127.0.0.1:5001 --timeout 120 --access-logfile /var/log/amoskys/access.log --error-logfile /var/log/amoskys/error.log web.wsgi:app
 Restart=always
 RestartSec=10
 

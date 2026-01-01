@@ -127,6 +127,7 @@ CSP = {
         "ws:",
         "wss:",
         "https://cdn.jsdelivr.net",  # For source maps
+        "https://cdn.socket.io",  # For Socket.IO source maps
     ],
     "frame-ancestors": ["'none'"],
     "base-uri": ["'self'"],

@@ -1105,7 +1105,10 @@
             updateTime() {
                 const now = new Date();
                 const timeString = now.toLocaleTimeString() + ' UTC';
-                document.getElementById('current-time').textContent = timeString;
+                const timeEl = document.getElementById('current-time');
+                if (timeEl) {
+                    timeEl.textContent = timeString;
+                }
             }
         }
         
@@ -1227,7 +1230,8 @@
                         }
                     }, delay);
                 } else {
-                    console.error('❌ Max reconnection attempts reached');
+                    // Silently give up after max attempts - dashboard will still work with polling
+                    console.warn('⚠️ Real-time updates unavailable. Dashboard will use polling instead.');
                     this.updateConnectionStatus(false);
                 }
             }
