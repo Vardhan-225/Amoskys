@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMOSKYS Documentation - Intelligence Platform Guide</title>
+    <meta name="description" content="Complete documentation for AMOSKYS Intelligence Platform. Learn how to deploy agents, configure perspectives, integrate with SIEM/EDR, and leverage explainable intelligence.">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="48x48" href="{{ url_for('static', filename='images/favicon-48x48.png') }}">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='images/favicon-192x192.png') }}">
+    <link rel="apple-touch-icon" sizes="512x512" href="{{ url_for('static', filename='images/favicon-512x512.png') }}">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy-dark: #0a0e27;
+            --navy-medium: #1a1f3a;
+            --cyan-primary: #00d9ff;
+            --cyan-bright: #00ffff;
+            --green-secure: #00ff88;
+            --amber-warning: #ffaa00;
+            --red-critical: #ff3366;
+            --text-primary: #ffffff;
+            --text-secondary: #b4bcd0;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--navy-dark);
+            color: var(--text-primary);
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        nav {
+            position: fixed; top: 0; width: 100%;
+            background: rgba(10, 14, 39, 0.98);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 217, 255, 0.15);
+            z-index: 1000; padding: 1.2rem 0;
+        }
+
+        .nav-container {
+            max-width: 1400px; margin: 0 auto; padding: 0 2rem;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .logo-section { display: flex; align-items: center; gap: 1rem; }
+
+        .logo-link {
+            display: flex; align-items: center; gap: 0.75rem;
+            text-decoration: none; transition: all 0.3s ease;
+        }
+
+        .logo-link:hover { transform: translateY(-2px); }
+
+        .logo-image {
+            width: 36px; height: 36px;
+            filter: drop-shadow(0 0 10px rgba(0, 217, 255, 0.5));
+        }
+
+        .logo-text {
+            font-size: 1.6rem; font-weight: 800;
+            color: var(--cyan-primary); letter-spacing: 0.5px;
+            text-decoration: none;
+        }
+
+        .logo-badge {
+            background: rgba(0, 217, 255, 0.1); color: var(--cyan-primary);
+            padding: 0.25rem 0.75rem; border-radius: 4px;
+            font-size: 0.75rem; font-weight: 600; letter-spacing: 1px;
+        }
+
+        .nav-links { display: flex; gap: 2.5rem; align-items: center; }
+
+        .nav-links a {
+            color: var(--text-secondary); text-decoration: none;
+            font-weight: 500; transition: color 0.3s; font-size: 0.95rem;
+        }
+
+        .nav-links a:hover, .nav-links a.active { color: var(--cyan-primary); }
+
+        .btn {
+            display: inline-block; padding: 0.85rem 1.75rem;
+            background: transparent; border: 2px solid var(--cyan-primary);
+            color: var(--cyan-primary); text-decoration: none;
+            border-radius: 8px; font-weight: 600; transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: var(--cyan-primary); color: var(--navy-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 217, 255, 0.3);
+        }
+
+        .btn-primary { background: var(--cyan-primary); color: var(--navy-dark); }
+
+        .hero {
+            min-height: 50vh; display: flex; align-items: center;
+            justify-content: center; padding: 10rem 2rem 4rem;
+            background: linear-gradient(135deg, rgba(10, 14, 39, 1) 0%, rgba(26, 31, 58, 0.8) 100%);
+            text-align: center;
+        }
+
+        .hero-content { max-width: 900px; }
+
+        .hero-badge {
+            display: inline-block; background: rgba(0, 217, 255, 0.1);
+            border: 1px solid var(--cyan-primary); color: var(--cyan-primary);
+            padding: 0.5rem 1.5rem; border-radius: 50px;
+            font-size: 0.9rem; font-weight: 600;
+            margin-bottom: 2rem; letter-spacing: 0.5px;
+        }
+
+        .hero-title {
+            font-size: 3rem; font-weight: 800; margin-bottom: 1.5rem;
+            line-height: 1.2; letter-spacing: -1px;
+        }
+
+        .hero-title span { color: var(--cyan-primary); }
+
+        .hero-subtitle {
+            font-size: 1.3rem; color: var(--text-secondary);
+            line-height: 1.8;
+        }
+
+        .section { padding: 6rem 2rem; max-width: 1400px; margin: 0 auto; }
+
+        .section-title {
+            font-size: 2.5rem; font-weight: 700; margin-bottom: 3rem;
+            text-align: center;
+        }
+
+        .docs-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .doc-card {
+            background: rgba(26, 31, 58, 0.6);
+            border: 2px solid rgba(0, 217, 255, 0.2);
+            border-radius: 16px;
+            padding: 2.5rem;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: block;
+        }
+
+        .doc-card:hover {
+            border-color: var(--cyan-primary);
+            transform: translateY(-8px);
+            box-shadow: 0 15px 40px rgba(0, 217, 255, 0.2);
+        }
+
+        .doc-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+            display: block;
+        }
+
+        .doc-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--cyan-primary);
+            margin-bottom: 1rem;
+        }
+
+        .doc-desc {
+            color: var(--text-secondary);
+            line-height: 1.7;
+            margin-bottom: 1.5rem;
+        }
+
+        .doc-topics {
+            list-style: none;
+            padding: 0;
+        }
+
+        .doc-topics li {
+            color: var(--text-secondary);
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+            font-size: 0.9rem;
+        }
+
+        .doc-topics li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--green-secure);
+        }
+
+        .quickstart-box {
+            background: linear-gradient(135deg, rgba(0, 217, 255, 0.1) 0%, rgba(0, 255, 136, 0.05) 100%);
+            border: 2px solid rgba(0, 217, 255, 0.3);
+            border-radius: 20px;
+            padding: 3rem;
+            margin: 4rem 0;
+            text-align: center;
+        }
+
+        .quickstart-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .quickstart-desc {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+
+        .code-block {
+            background: rgba(10, 14, 39, 0.9);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 8px;
+            padding: 1.5rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: var(--green-secure);
+            text-align: left;
+            margin: 2rem auto;
+            max-width: 600px;
+        }
+
+        footer {
+            background: rgba(10, 14, 39, 0.98);
+            border-top: 2px solid rgba(0, 217, 255, 0.1);
+            padding: 3rem 2rem 2rem; text-align: center;
+        }
+
+        .footer-content { max-width: 1400px; margin: 0 auto; color: var(--text-secondary); }
+
+        .footer-logo {
+            font-size: 1.6rem; font-weight: 800; color: var(--cyan-primary);
+            margin-bottom: 1rem;
+        }
+
+        .footer-links { display: flex; justify-content: center; gap: 2rem; margin: 2rem 0; }
+
+        .footer-links a {
+            color: var(--text-secondary); text-decoration: none; transition: color 0.3s;
+        }
+
+        .footer-links a:hover { color: var(--cyan-primary); }
+
+        @media (max-width: 1200px) {
+            .docs-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+            .docs-grid { grid-template-columns: 1fr; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <div class="logo-section">
+                <a href="/" class="logo-link">
+                    <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS Logo" class="logo-image">
+                    <span class="logo-text">AMOSKYS</span>
+                </a>
+                <div class="logo-badge">INTELLIGENCE PLATFORM</div>
+            </div>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/about">About</a>
+                <a href="/how-it-works">How It Works</a>
+                <a href="/docs" class="active">Documentation</a>
+                <a href="/auth/login">Login</a>
+                <a href="/auth/signup" class="btn btn-primary" style="color: #0a0e27; font-weight: 700;">Coming Soon</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-badge">DOCUMENTATION</div>
+            <h1 class="hero-title"><span>Intelligence Platform</span> Documentation</h1>
+            <p class="hero-subtitle">
+                Complete guides for deploying agents, configuring perspectives, and leveraging explainable intelligence.
+            </p>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2 class="section-title">Getting Started</h2>
+
+        <div class="docs-grid">
+            <a href="#" class="doc-card">
+                <span class="doc-icon">🚀</span>
+                <h3 class="doc-title">Quick Start</h3>
+                <p class="doc-desc">Get your first agent deployed and collecting perspectives in 15 minutes.</p>
+                <ul class="doc-topics">
+                    <li>Account setup</li>
+                    <li>Agent deployment</li>
+                    <li>First perspective collection</li>
+                    <li>Dashboard overview</li>
+                </ul>
+            </a>
+
+            <a href="#" class="doc-card">
+                <span class="doc-icon">⚡</span>
+                <h3 class="doc-title">Agent Deployment</h3>
+                <p class="doc-desc">Deploy AMOSKYS agents across your infrastructure using multiple methods.</p>
+                <ul class="doc-topics">
+                    <li>Installation methods</li>
+                    <li>Configuration files</li>
+                    <li>Network requirements</li>
+                    <li>Health monitoring</li>
+                </ul>
+            </a>
+
+            <a href="#" class="doc-card">
+                <span class="doc-icon">🎯</span>
+                <h3 class="doc-title">Perspective Selection</h3>
+                <p class="doc-desc">Choose which perspectives to deploy based on your monitoring needs.</p>
+                <ul class="doc-topics">
+                    <li>Available perspectives</li>
+                    <li>Composition strategies</li>
+                    <li>Resource requirements</li>
+                    <li>Best practices</li>
+                </ul>
+            </a>
+        </div>
+
+        <h2 class="section-title" style="margin-top: 6rem;">Core Capabilities</h2>
+
+        <div class="docs-grid">
+            <a href="#" class="doc-card">
+                <span class="doc-icon">🔍</span>
+                <h3 class="doc-title">Threat Detection</h3>
+                <p class="doc-desc">Understand how AMOSKYS correlates signals and identifies threats.</p>
+                <ul class="doc-topics">
+                    <li>Evidence chain construction</li>
+                    <li>Cross-system correlation</li>
+                    <li>MITRE ATT&CK mapping</li>
+                    <li>Confidence scoring</li>
+                </ul>
+            </a>
+
+            <a href="#" class="doc-card">
+                <span class="doc-icon">💡</span>
+                <h3 class="doc-title">Explainability</h3>
+                <p class="doc-desc">Every detection comes with full context, timeline, and reasoning.</p>
+                <ul class="doc-topics">
+                    <li>Natural language explanations</li>
+                    <li>Evidence visualization</li>
+                    <li>Timeline reconstruction</li>
+                    <li>Related signal tracking</li>
+                </ul>
+            </a>
+
+            <a href="#" class="doc-card">
+                <span class="doc-icon">🔗</span>
+                <h3 class="doc-title">Integrations</h3>
+                <p class="doc-desc">Connect AMOSKYS perspectives to your existing security stack.</p>
+                <ul class="doc-topics">
+                    <li>SIEM integration</li>
+                    <li>EDR consumption</li>
+                    <li>API endpoints</li>
+                    <li>Webhook configuration</li>
+                </ul>
+            </a>
+        </div>
+
+        <h2 class="section-title" style="margin-top: 6rem;">Advanced Topics</h2>
+
+        <div class="docs-grid">
+            <a href="#" class="doc-card">
+                <span class="doc-icon">🧠</span>
+                <h3 class="doc-title">Query Language</h3>
+                <p class="doc-desc">Search and hunt across your telemetry with precision.</p>
+                <ul class="doc-topics">
+                    <li>Query syntax</li>
+                    <li>Behavioral search</li>
+                    <li>Timeline queries</li>
+                    <li>Advanced filters</li>
+                </ul>
+            </a>
+
+            <a href="#" class="doc-card">
+                <span class="doc-icon">📊</span>
+                <h3 class="doc-title">Custom Dashboards</h3>
+                <p class="doc-desc">Build custom views for your security operations team.</p>
+                <ul class="doc-topics">
+                    <li>Dashboard builder</li>
+                    <li>Widget library</li>
+                    <li>Data visualization</li>
+                    <li>Team sharing</li>
+                </ul>
+            </a>
+
+            <a href="#" class="doc-card">
+                <span class="doc-icon">🛡️</span>
+                <h3 class="doc-title">Custom Agents</h3>
+                <p class="doc-desc">Build proprietary perspective agents for your specific needs.</p>
+                <ul class="doc-topics">
+                    <li>Agent SDK</li>
+                    <li>Perspective schema</li>
+                    <li>Testing framework</li>
+                    <li>Submission process</li>
+                </ul>
+            </a>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="quickstart-box">
+            <h2 class="quickstart-title">Deploy Your First Agent</h2>
+            <p class="quickstart-desc">Get started with the AMOSKYS Intelligence Platform in minutes</p>
+            <div class="code-block">
+# Download agent installer<br>
+curl -O https://get.amoskys.com/install.sh<br>
+<br>
+# Run installation<br>
+sudo bash install.sh --token YOUR_API_TOKEN<br>
+<br>
+# Select perspectives<br>
+amoskys-agent enable process network file<br>
+<br>
+# Start collecting<br>
+amoskys-agent start
+            </div>
+            <a href="/auth/signup" class="btn btn-primary" style="font-size: 1.1rem; padding: 1.2rem 2.5rem;">Get Your API Token</a>
+        </div>
+    </section>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-logo">🧠 AMOSKYS</div>
+            <p style="margin-bottom: 1.5rem; max-width: 600px; margin-left: auto; margin-right: auto;">Intelligence-First Security Platform. Built to understand threats, not just react to them.</p>
+            <div class="footer-links">
+                <a href="/">Home</a>
+                <a href="/about">About</a>
+                <a href="/how-it-works">How It Works</a>
+                <a href="/docs">Documentation</a>
+                <a href="/auth/login">Login</a>
+                <a href="/auth/signup">Sign Up</a>
+            </div>
+            <p style="margin-top: 2rem; font-size: 0.9rem;">© 2025 AMOSKYS. Curated Security Perspectives. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

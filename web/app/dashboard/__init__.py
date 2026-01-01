@@ -10,6 +10,7 @@ an intelligent neural interface.
 from flask import Blueprint, render_template, jsonify, request
 from datetime import datetime, timezone, timedelta
 from ..api.rate_limiter import require_rate_limit
+from ..middleware import require_login, get_current_user
 import json
 import time
 
@@ -29,59 +30,116 @@ from .utils import (
 )
 
 @dashboard_bp.route('/')
+@require_login
 def cortex_home():
     """AMOSKYS Cortex Dashboard - Main Neural Interface"""
-    return render_template('dashboard/cortex.html')
+    user = get_current_user()
+    return render_template('dashboard/cortex.html', user=user)
 
 @dashboard_bp.route('/cortex')
+@require_login
 def cortex_dashboard():
     """AMOSKYS Cortex Dashboard - Command Center"""
-    return render_template('dashboard/cortex.html')
+    user = get_current_user()
+    return render_template('dashboard/cortex.html', user=user)
+
+@dashboard_bp.route('/marketplace')
+@require_login
+def agent_marketplace():
+    """Agent Marketplace - Perspective Selection and Deployment"""
+    user = get_current_user()
+    return render_template('dashboard/marketplace.html', user=user)
+
+@dashboard_bp.route('/evidence-chain')
+@require_login
+def evidence_chain_viewer():
+    """Evidence Chain Viewer - Attack Reconstruction and Correlation"""
+    user = get_current_user()
+    return render_template('dashboard/evidence-chain.html', user=user)
+
+@dashboard_bp.route('/timeline-replay')
+@require_login
+def timeline_replay():
+    """Threat Timeline Replay - Step-by-step Attack Reconstruction"""
+    user = get_current_user()
+    return render_template('dashboard/timeline-replay.html', user=user)
+
+@dashboard_bp.route('/query-builder')
+@require_login
+def query_builder():
+    """Query Builder - Complex Security Event Query Interface"""
+    user = get_current_user()
+    return render_template('dashboard/query-builder.html', user=user)
+
+@dashboard_bp.route('/perspective-selector')
+@require_login
+def perspective_selector():
+    """Agent Perspective Selector - Multi-viewpoint Analysis Configuration"""
+    user = get_current_user()
+    return render_template('dashboard/perspective-selector.html', user=user)
 
 @dashboard_bp.route('/soc')
+@require_login
 def security_operations_center():
     """Security Operations Center - Live Threat Monitoring"""
-    return render_template('dashboard/soc.html')
+    user = get_current_user()
+    return render_template('dashboard/soc.html', user=user)
 
 @dashboard_bp.route('/agents')
+@require_login
 def agent_management():
     """Agent Management Dashboard - Neural Network Status"""
-    return render_template('dashboard/agents.html')
+    user = get_current_user()
+    return render_template('dashboard/agents.html', user=user)
 
 @dashboard_bp.route('/system')
+@require_login
 def system_monitoring():
     """System Health Monitoring - Platform Vitals"""
-    return render_template('dashboard/system.html')
+    user = get_current_user()
+    return render_template('dashboard/system.html', user=user)
 
 @dashboard_bp.route('/neural')
+@require_login
 def neural_insights():
     """Neural Insights Dashboard - AI Detection Visualization"""
-    return render_template('dashboard/neural.html')
+    user = get_current_user()
+    return render_template('dashboard/neural.html', user=user)
 
 @dashboard_bp.route('/processes')
+@require_login
 def process_telemetry():
     """Process Telemetry Dashboard - Mac Process Monitoring"""
-    return render_template('dashboard/processes.html')
+    user = get_current_user()
+    return render_template('dashboard/processes.html', user=user)
 
 @dashboard_bp.route('/peripherals')
+@require_login
 def peripheral_monitoring():
     """Peripheral Monitoring Dashboard - USB/Bluetooth Device Tracking"""
-    return render_template('dashboard/peripherals.html')
+    user = get_current_user()
+    return render_template('dashboard/peripherals.html', user=user)
 
 @dashboard_bp.route('/database')
+@require_login
 def database_manager():
     """Database Manager - Zero-Trust Data Management"""
-    return render_template('dashboard/database_manager.html')
+    user = get_current_user()
+    return render_template('dashboard/database_manager.html', user=user)
 
 @dashboard_bp.route('/my-agents')
+@require_login
 def my_agents():
     """User Agent Management - Deploy and Monitor Your Agents"""
-    return render_template('dashboard/my-agents.html')
+    user = get_current_user()
+    return render_template('dashboard/my-agents.html', user=user)
 
 @dashboard_bp.route('/deploy')
+@require_login
 def deploy_agent():
     """Agent Deployment Portal - Download and Deploy"""
-    return render_template('dashboard/deploy.html')
+    user = get_current_user()
+    return render_template('dashboard/deploy.html', user=user)
 
 # Real-time Data Endpoints
 @dashboard_bp.route('/api/live/threats')

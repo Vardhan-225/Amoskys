@@ -1,0 +1,687 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Threat Timeline Replay - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <div>
+        <h2 style="margin: 0; display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 1.8rem;">⏱️</span>
+            Threat Timeline Replay
+        </h2>
+        <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);">
+            Step-by-step reconstruction of attack progression with multi-perspective analysis
+        </p>
+    </div>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <div class="status-badge" id="scenario-badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 0.5rem 1rem;">
+            <strong>SCENARIO:</strong> APT Lateral Movement
+        </div>
+    </div>
+</div>
+
+<!-- Playback Controls -->
+<div class="neural-card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <button id="play-pause-btn" class="neural-button" onclick="timelineReplay.togglePlayback()" style="min-width: 100px;">
+                ▶ Play
+            </button>
+            <button class="neural-button" onclick="timelineReplay.stepBackward()" style="min-width: 50px;">
+                ⏮
+            </button>
+            <button class="neural-button" onclick="timelineReplay.stepForward()" style="min-width: 50px;">
+                ⏭
+            </button>
+            <button class="neural-button" onclick="timelineReplay.reset()">
+                🔄 Reset
+            </button>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 1.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <label style="color: var(--text-secondary); font-size: 0.9rem;">Speed:</label>
+                <select id="speed-control" onchange="timelineReplay.setSpeed(this.value)" class="neural-select">
+                    <option value="2000">0.5x</option>
+                    <option value="1000" selected>1x</option>
+                    <option value="500">2x</option>
+                    <option value="250">4x</option>
+                </select>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="color: var(--text-secondary); font-size: 0.9rem;">Event:</span>
+                <span id="current-event" style="color: #00d9ff; font-weight: bold;">0 / 12</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div style="margin-top: 1rem;">
+        <div style="background: rgba(255,255,255,0.1); height: 8px; border-radius: 4px; overflow: hidden;">
+            <div id="progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #00d9ff 0%, #00ff88 100%); transition: width 0.3s ease;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Timeline Visualization -->
+<div style="display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+    <!-- Attack Phases -->
+    <div class="neural-card">
+        <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">Attack Phases</h3>
+        <div id="attack-phases">
+            <!-- Phases will be populated dynamically -->
+        </div>
+    </div>
+
+    <!-- Timeline Graph -->
+    <div class="neural-card">
+        <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">Event Timeline</h3>
+        <canvas id="timeline-chart" style="max-height: 300px;"></canvas>
+    </div>
+</div>
+
+<!-- Current Event Details -->
+<div class="neural-card" style="margin-bottom: 1.5rem;">
+    <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">Current Event</h3>
+    <div id="current-event-details" style="min-height: 150px;">
+        <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">⏸️</div>
+            <p>Press Play to start timeline replay</p>
+        </div>
+    </div>
+</div>
+
+<!-- Event History -->
+<div class="neural-card">
+    <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">Event History</h3>
+    <div id="event-history" style="max-height: 400px; overflow-y: auto;">
+        <!-- Events will be added as timeline progresses -->
+    </div>
+</div>
+
+<style>
+.neural-button {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.1) 0%, rgba(0, 184, 212, 0.1) 100%);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.neural-button:hover {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.2) 0%, rgba(0, 184, 212, 0.2) 100%);
+    border-color: rgba(0, 217, 255, 0.5);
+    transform: translateY(-2px);
+}
+
+.neural-button:active {
+    transform: translateY(0);
+}
+
+.neural-select {
+    background: rgba(26, 31, 58, 0.8);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.phase-item {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    border-radius: 6px;
+    border-left: 4px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.phase-item.pending {
+    background: rgba(255, 255, 255, 0.05);
+    border-left-color: rgba(255, 255, 255, 0.2);
+}
+
+.phase-item.active {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.15) 0%, rgba(0, 184, 212, 0.15) 100%);
+    border-left-color: #00d9ff;
+    box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+}
+
+.phase-item.completed {
+    background: rgba(0, 255, 136, 0.1);
+    border-left-color: #00ff88;
+}
+
+.event-card {
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(26, 31, 58, 0.5);
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.severity-critical { border-left: 4px solid #ff0000; }
+.severity-high { border-left: 4px solid #ff6600; }
+.severity-medium { border-left: 4px solid #ffaa00; }
+.severity-low { border-left: 4px solid #00ff88; }
+
+.agent-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    background: rgba(0, 217, 255, 0.1);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+class TimelineReplay {
+    constructor() {
+        this.currentEventIndex = -1;
+        this.isPlaying = false;
+        this.playbackSpeed = 1000;
+        this.playbackInterval = null;
+        this.timelineChart = null;
+
+        // Synthetic attack scenario data
+        this.scenario = {
+            name: "APT-28 Lateral Movement Campaign",
+            description: "Advanced persistent threat demonstrating lateral movement from initial compromise to domain admin escalation",
+            phases: [
+                { id: 1, name: "Initial Compromise", eventRange: [0, 2] },
+                { id: 2, name: "Reconnaissance", eventRange: [3, 5] },
+                { id: 3, name: "Credential Harvesting", eventRange: [6, 8] },
+                { id: 4, name: "Lateral Movement", eventRange: [9, 10] },
+                { id: 5, name: "Privilege Escalation", eventRange: [11, 11] }
+            ],
+            events: [
+                {
+                    timestamp: "2024-01-15 08:23:14",
+                    phase: 1,
+                    severity: "medium",
+                    title: "Suspicious Email Attachment Opened",
+                    description: "User alice@corp.local opened weaponized document 'Q4_Report.docx' with embedded macro",
+                    detectedBy: ["Email Guardian", "Endpoint Monitor"],
+                    indicators: [
+                        "Macro execution detected: VBA_AutoOpen()",
+                        "Outbound connection to 185.220.101.42:443",
+                        "Process: WINWORD.EXE spawned powershell.exe"
+                    ],
+                    mitre: "T1566.001 - Phishing: Spearphishing Attachment"
+                },
+                {
+                    timestamp: "2024-01-15 08:23:47",
+                    phase: 1,
+                    severity: "high",
+                    title: "PowerShell Encoded Command Execution",
+                    description: "Base64-encoded PowerShell command executed from Office process context",
+                    detectedBy: ["Process Monitor", "Script Analyzer"],
+                    indicators: [
+                        "Command: powershell.exe -enc JABzAD0ATgBlAHcALQBPAGIAagBlAGMAdAA...",
+                        "Parent: WINWORD.EXE (PID: 3472)",
+                        "Network: Downloaded payload from hxxps://cdn.updates-secure[.]com/update.dat"
+                    ],
+                    mitre: "T1059.001 - Command and Scripting Interpreter: PowerShell"
+                },
+                {
+                    timestamp: "2024-01-15 08:24:15",
+                    phase: 1,
+                    severity: "critical",
+                    title: "Malicious Payload Downloaded and Executed",
+                    description: "Stage 2 payload (Cobalt Strike beacon) downloaded and established C2 connection",
+                    detectedBy: ["Network Monitor", "Memory Scanner"],
+                    indicators: [
+                        "File: C:\\Users\\alice\\AppData\\Local\\Temp\\svchost.exe",
+                        "C2 Server: 185.220.101.42:8443",
+                        "Traffic: HTTPS with certificate mismatch",
+                        "Beacon interval: 60s with 20% jitter"
+                    ],
+                    mitre: "T1071.001 - Application Layer Protocol: Web Protocols"
+                },
+                {
+                    timestamp: "2024-01-15 08:26:33",
+                    phase: 2,
+                    severity: "medium",
+                    title: "Active Directory Enumeration",
+                    description: "Attacker performed AD reconnaissance using native Windows tools",
+                    detectedBy: ["Process Monitor", "Network Monitor"],
+                    indicators: [
+                        "Command: net group 'Domain Admins' /domain",
+                        "Command: nltest /dclist:corp.local",
+                        "LDAP queries to DC01.corp.local:389",
+                        "Enumerated 247 user accounts, 43 groups"
+                    ],
+                    mitre: "T1087.002 - Account Discovery: Domain Account"
+                },
+                {
+                    timestamp: "2024-01-15 08:28:19",
+                    phase: 2,
+                    severity: "medium",
+                    title: "Network Share Discovery",
+                    description: "Systematic enumeration of accessible network shares across domain",
+                    detectedBy: ["Network Monitor", "File Access Monitor"],
+                    indicators: [
+                        "SMB connections to 15 internal hosts",
+                        "Shares accessed: \\\\fileserver01\\finance, \\\\dc01\\SYSVOL, \\\\backup01\\archives",
+                        "File enumeration: 1,247 files accessed in read-only mode"
+                    ],
+                    mitre: "T1135 - Network Share Discovery"
+                },
+                {
+                    timestamp: "2024-01-15 08:31:05",
+                    phase: 2,
+                    severity: "high",
+                    title: "Process Memory Scan for Credentials",
+                    description: "Attacker scanned LSASS memory for cached credentials using Mimikatz variant",
+                    detectedBy: ["Memory Scanner", "Endpoint Monitor"],
+                    indicators: [
+                        "Suspicious memory read: lsass.exe (PID: 628)",
+                        "Pattern match: Mimikatz signature detected",
+                        "Access: SeDebugPrivilege enabled"
+                    ],
+                    mitre: "T1003.001 - OS Credential Dumping: LSASS Memory"
+                },
+                {
+                    timestamp: "2024-01-15 08:33:42",
+                    phase: 3,
+                    severity: "critical",
+                    title: "Credentials Harvested",
+                    description: "5 plaintext credentials and 12 NTLM hashes extracted from memory",
+                    detectedBy: ["Memory Scanner", "Behavior Analyzer"],
+                    indicators: [
+                        "Credentials dumped: alice@corp.local, bob@corp.local, svc_backup@corp.local",
+                        "NTLM hashes: 12 unique hashes extracted",
+                        "Output file: C:\\Users\\alice\\AppData\\Local\\Temp\\c.txt (deleted after exfil)"
+                    ],
+                    mitre: "T1003 - OS Credential Dumping"
+                },
+                {
+                    timestamp: "2024-01-15 08:35:18",
+                    phase: 3,
+                    severity: "high",
+                    title: "Credential Validation Attempts",
+                    description: "Attacker validated harvested credentials against multiple domain services",
+                    detectedBy: ["Network Monitor", "Authentication Monitor"],
+                    indicators: [
+                        "Failed logins: 23 attempts across 8 accounts",
+                        "Successful validation: svc_backup@corp.local",
+                        "Services tested: SMB, WinRM, RDP, SQL",
+                        "Source: alice-desktop.corp.local"
+                    ],
+                    mitre: "T1078 - Valid Accounts"
+                },
+                {
+                    timestamp: "2024-01-15 08:37:51",
+                    phase: 3,
+                    severity: "critical",
+                    title: "Kerberos Ticket Granting Ticket Requested",
+                    description: "Golden ticket attack preparation - TGT requested for compromised service account",
+                    detectedBy: ["Kerberos Monitor", "Authentication Monitor"],
+                    indicators: [
+                        "Account: svc_backup@corp.local",
+                        "Encryption: RC4-HMAC (weak, suspicious)",
+                        "Requesting host: alice-desktop.corp.local",
+                        "Ticket lifetime: 10 hours (maximum)"
+                    ],
+                    mitre: "T1558.003 - Steal or Forge Kerberos Tickets: Kerberoasting"
+                },
+                {
+                    timestamp: "2024-01-15 08:40:26",
+                    phase: 4,
+                    severity: "critical",
+                    title: "Lateral Movement to Domain Controller",
+                    description: "PSExec-style lateral movement to DC01 using compromised credentials",
+                    detectedBy: ["Network Monitor", "Process Monitor", "File Access Monitor"],
+                    indicators: [
+                        "SMB connection: alice-desktop → DC01.corp.local:445",
+                        "Service installed: BTOBTO (random name)",
+                        "Binary copied: \\\\DC01\\ADMIN$\\BTOBTO.exe",
+                        "Service started: Remote command execution achieved"
+                    ],
+                    mitre: "T1021.002 - Remote Services: SMB/Windows Admin Shares"
+                },
+                {
+                    timestamp: "2024-01-15 08:42:13",
+                    phase: 4,
+                    severity: "critical",
+                    title: "Beacon Established on Domain Controller",
+                    description: "Second-stage payload deployed on DC01, C2 channel established",
+                    detectedBy: ["Network Monitor", "Endpoint Monitor"],
+                    indicators: [
+                        "Host: DC01.corp.local",
+                        "Process: C:\\Windows\\Temp\\svchost.exe",
+                        "C2 Server: 185.220.101.42:8443",
+                        "Privileges: NT AUTHORITY\\SYSTEM"
+                    ],
+                    mitre: "T1071.001 - Application Layer Protocol: Web Protocols"
+                },
+                {
+                    timestamp: "2024-01-15 08:45:37",
+                    phase: 5,
+                    severity: "critical",
+                    title: "DCSync Attack - Domain Secrets Exfiltrated",
+                    description: "Attacker performed DCSync to extract all domain password hashes including KRBTGT",
+                    detectedBy: ["Replication Monitor", "Network Monitor", "Kerberos Monitor"],
+                    indicators: [
+                        "Replication request: Directory Replication Service (DRS) from non-DC",
+                        "Source: DC01.corp.local (compromised)",
+                        "Objects replicated: 1,847 including KRBTGT account",
+                        "Data exfiltrated: 23.4 MB over HTTPS to 185.220.101.42:443",
+                        "Capability achieved: Full domain compromise"
+                    ],
+                    mitre: "T1003.006 - OS Credential Dumping: DCSync"
+                }
+            ]
+        };
+
+        this.init();
+    }
+
+    init() {
+        this.renderPhases();
+        this.initTimelineChart();
+        this.updateUI();
+    }
+
+    renderPhases() {
+        const phasesContainer = document.getElementById('attack-phases');
+        phasesContainer.innerHTML = this.scenario.phases.map(phase => `
+            <div class="phase-item pending" id="phase-${phase.id}">
+                <div style="font-weight: 600; color: #00d9ff; margin-bottom: 0.25rem;">${phase.name}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                    Events ${phase.eventRange[0] + 1}-${phase.eventRange[1] + 1}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    initTimelineChart() {
+        const ctx = document.getElementById('timeline-chart').getContext('2d');
+
+        this.timelineChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: this.scenario.events.map((e, i) => `Event ${i + 1}`),
+                datasets: [{
+                    label: 'Threat Severity',
+                    data: this.scenario.events.map(e => {
+                        const severityMap = { low: 25, medium: 50, high: 75, critical: 100 };
+                        return severityMap[e.severity];
+                    }),
+                    borderColor: '#ff6600',
+                    backgroundColor: 'rgba(255, 102, 0, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
+                    pointBackgroundColor: this.scenario.events.map(e => {
+                        const colorMap = {
+                            low: '#00ff88',
+                            medium: '#ffaa00',
+                            high: '#ff6600',
+                            critical: '#ff0000'
+                        };
+                        return colorMap[e.severity];
+                    }),
+                    pointBorderColor: '#1a1f3a',
+                    pointBorderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: '#cccccc' }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const event = this.scenario.events[context.dataIndex];
+                                return [
+                                    `Severity: ${event.severity.toUpperCase()}`,
+                                    `Phase: ${this.scenario.phases.find(p => p.id === event.phase).name}`,
+                                    event.title
+                                ];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#888888' },
+                        grid: { color: 'rgba(255,255,255,0.05)' }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#888888',
+                            callback: (value) => {
+                                const labels = { 25: 'Low', 50: 'Medium', 75: 'High', 100: 'Critical' };
+                                return labels[value] || '';
+                            }
+                        },
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        min: 0,
+                        max: 100
+                    }
+                }
+            }
+        });
+    }
+
+    togglePlayback() {
+        this.isPlaying = !this.isPlaying;
+        const btn = document.getElementById('play-pause-btn');
+
+        if (this.isPlaying) {
+            btn.innerHTML = '⏸ Pause';
+            this.play();
+        } else {
+            btn.innerHTML = '▶ Play';
+            this.pause();
+        }
+    }
+
+    play() {
+        this.playbackInterval = setInterval(() => {
+            if (this.currentEventIndex < this.scenario.events.length - 1) {
+                this.stepForward();
+            } else {
+                this.pause();
+                document.getElementById('play-pause-btn').innerHTML = '▶ Play';
+            }
+        }, this.playbackSpeed);
+    }
+
+    pause() {
+        this.isPlaying = false;
+        if (this.playbackInterval) {
+            clearInterval(this.playbackInterval);
+            this.playbackInterval = null;
+        }
+    }
+
+    stepForward() {
+        if (this.currentEventIndex < this.scenario.events.length - 1) {
+            this.currentEventIndex++;
+            this.showEvent(this.currentEventIndex);
+            this.updateUI();
+        }
+    }
+
+    stepBackward() {
+        if (this.currentEventIndex > -1) {
+            this.removeLastEventFromHistory();
+            this.currentEventIndex--;
+            if (this.currentEventIndex >= 0) {
+                this.showEvent(this.currentEventIndex);
+            }
+            this.updateUI();
+        }
+    }
+
+    reset() {
+        this.pause();
+        this.currentEventIndex = -1;
+        document.getElementById('event-history').innerHTML = '';
+        document.getElementById('current-event-details').innerHTML = `
+            <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">⏸️</div>
+                <p>Press Play to start timeline replay</p>
+            </div>
+        `;
+        document.getElementById('play-pause-btn').innerHTML = '▶ Play';
+        this.updateUI();
+    }
+
+    setSpeed(speed) {
+        this.playbackSpeed = parseInt(speed);
+        if (this.isPlaying) {
+            this.pause();
+            this.isPlaying = true;
+            this.play();
+        }
+    }
+
+    showEvent(index) {
+        const event = this.scenario.events[index];
+
+        // Update current event details
+        document.getElementById('current-event-details').innerHTML = `
+            <div class="event-card severity-${event.severity}">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                    <div>
+                        <div style="font-size: 1.1rem; font-weight: 600; color: #ffffff; margin-bottom: 0.5rem;">
+                            ${event.title}
+                        </div>
+                        <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                            🕐 ${event.timestamp} | 📊 Phase: ${this.scenario.phases.find(p => p.id === event.phase).name}
+                        </div>
+                    </div>
+                    <div class="status-badge" style="background: ${this.getSeverityColor(event.severity)};">
+                        ${event.severity.toUpperCase()}
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 1rem; color: #cccccc; line-height: 1.6;">
+                    ${event.description}
+                </div>
+
+                <div style="margin-bottom: 1rem;">
+                    <strong style="color: #00d9ff;">Detected By:</strong>
+                    <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        ${event.detectedBy.map(agent => `
+                            <span class="agent-badge">${agent}</span>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 1rem;">
+                    <strong style="color: #00d9ff;">Indicators:</strong>
+                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem; color: #cccccc;">
+                        ${event.indicators.map(indicator => `<li style="margin: 0.25rem 0;">${indicator}</li>`).join('')}
+                    </ul>
+                </div>
+
+                <div style="padding: 0.75rem; background: rgba(0, 217, 255, 0.05); border-radius: 6px; border: 1px solid rgba(0, 217, 255, 0.2);">
+                    <strong style="color: #00d9ff;">MITRE ATT&CK:</strong>
+                    <span style="color: #ffffff; margin-left: 0.5rem;">${event.mitre}</span>
+                </div>
+            </div>
+        `;
+
+        // Add to history
+        this.addEventToHistory(event, index);
+    }
+
+    addEventToHistory(event, index) {
+        const historyContainer = document.getElementById('event-history');
+        const eventCard = document.createElement('div');
+        eventCard.className = `event-card severity-${event.severity}`;
+        eventCard.style.opacity = '0.7';
+        eventCard.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-weight: 600; color: #ffffff;">
+                        ${index + 1}. ${event.title}
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                        ${event.timestamp} | ${event.detectedBy.join(', ')}
+                    </div>
+                </div>
+                <div class="status-badge" style="background: ${this.getSeverityColor(event.severity)}; font-size: 0.8rem;">
+                    ${event.severity.toUpperCase()}
+                </div>
+            </div>
+        `;
+        historyContainer.insertBefore(eventCard, historyContainer.firstChild);
+    }
+
+    removeLastEventFromHistory() {
+        const historyContainer = document.getElementById('event-history');
+        if (historyContainer.firstChild) {
+            historyContainer.removeChild(historyContainer.firstChild);
+        }
+    }
+
+    updateUI() {
+        // Update event counter
+        document.getElementById('current-event').textContent =
+            `${this.currentEventIndex + 1} / ${this.scenario.events.length}`;
+
+        // Update progress bar
+        const progress = ((this.currentEventIndex + 1) / this.scenario.events.length) * 100;
+        document.getElementById('progress-bar').style.width = `${progress}%`;
+
+        // Update phase highlighting
+        this.scenario.phases.forEach(phase => {
+            const phaseElement = document.getElementById(`phase-${phase.id}`);
+            phaseElement.className = 'phase-item pending';
+
+            if (this.currentEventIndex >= phase.eventRange[0] && this.currentEventIndex <= phase.eventRange[1]) {
+                phaseElement.className = 'phase-item active';
+            } else if (this.currentEventIndex > phase.eventRange[1]) {
+                phaseElement.className = 'phase-item completed';
+            }
+        });
+    }
+
+    getSeverityColor(severity) {
+        const colors = {
+            low: '#00ff88',
+            medium: '#ffaa00',
+            high: '#ff6600',
+            critical: '#ff0000'
+        };
+        return colors[severity] || '#888888';
+    }
+}
+
+// Initialize on page load
+let timelineReplay;
+document.addEventListener('DOMContentLoaded', () => {
+    timelineReplay = new TimelineReplay();
+});
+</script>
+{% endblock %}

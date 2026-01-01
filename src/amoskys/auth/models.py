@@ -89,6 +89,8 @@ class AuditEventType(str, enum.Enum):
     SIGNUP = "signup"
     ACCOUNT_LOCKED = "account_locked"
     ACCOUNT_UNLOCKED = "account_unlocked"
+    ACCOUNT_SUSPENDED = "account_suspended"
+    ACCOUNT_DELETED = "account_deleted"
     SETTINGS_CHANGED = "settings_changed"
 
     # Authentication

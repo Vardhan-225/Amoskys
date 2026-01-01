@@ -281,14 +281,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const errorEl = document.getElementById(field + '-error');
         group.classList.add('has-error');
         input.classList.add('error');
-        if (errorEl) errorEl.textContent = message;
+        if (errorEl) {
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+            errorEl.style.display = 'block';
+        }
     }
     
     function clearFieldError(field) {
         const input = document.getElementById(field);
         const group = input.closest('.form-group');
+        const errorEl = document.getElementById(field + '-error');
         group.classList.remove('has-error');
         input.classList.remove('error');
+        if (errorEl) {
+            errorEl.classList.remove('show');
+            errorEl.style.display = 'none';
+        }
     }
     
     function clearFieldErrors() {
@@ -297,6 +306,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         document.querySelectorAll('.form-input.error').forEach(el => {
             el.classList.remove('error');
+        });
+        document.querySelectorAll('.form-error.show').forEach(el => {
+            el.classList.remove('show');
+            el.style.display = 'none';
         });
     }
     

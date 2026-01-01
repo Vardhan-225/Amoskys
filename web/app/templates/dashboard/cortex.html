@@ -24,27 +24,35 @@
     <!-- Real-time Metrics Grid -->
     <div class="metrics-grid-v2">
         <div class="metric-card">
-            <div class="metric-value" id="threat-score">0</div>
+            <div class="metric-value" style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
+                <div class="status-dot status-online" id="threat-status-dot"></div>
+                <span id="threat-score">0</span>
+            </div>
             <div class="metric-label">Threat Level</div>
-            <div class="metric-detail" id="threat-status">NORMAL</div>
         </div>
-        
+
         <div class="metric-card">
-            <div class="metric-value" id="agent-count">0</div>
+            <div class="metric-value" style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
+                <div class="status-dot status-warning" id="agent-status-dot"></div>
+                <span id="agent-count">0</span>
+            </div>
             <div class="metric-label">Active Agents</div>
-            <div class="metric-detail" id="agent-status">Initializing...</div>
         </div>
-        
+
         <div class="metric-card">
-            <div class="metric-value" id="event-count">0</div>
+            <div class="metric-value" style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
+                <div class="status-dot status-online" id="event-status-dot"></div>
+                <span id="event-count">0</span>
+            </div>
             <div class="metric-label">Events (24h)</div>
-            <div class="metric-detail" id="event-status">Monitoring...</div>
         </div>
-        
+
         <div class="metric-card">
-            <div class="metric-value" id="health-score">0%</div>
+            <div class="metric-value" style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
+                <div class="status-dot status-online" id="health-status-dot"></div>
+                <span id="health-score">0%</span>
+            </div>
             <div class="metric-label">System Health</div>
-            <div class="metric-detail" id="health-status">Checking...</div>
         </div>
     </div>
 
@@ -230,22 +238,21 @@
 }
 
 .agent-name {
-    color: #00ff88;
-    font-weight: 700;
+    color: var(--neural-primary);
+    font-weight: 600;
 }
 
 .agent-status {
-    color: #00ff88;
     font-size: 0.85rem;
     margin-top: 0.3rem;
 }
 
 .status-online {
-    color: #00ff88;
+    color: var(--text-secondary);
 }
 
 .status-offline {
-    color: #ffaa00;
+    color: var(--text-secondary);
 }
 
 .status-error {
@@ -488,35 +495,67 @@ class CortexDashboardV2 {
 
             // Update Threat Level card
             const threatLevel = data.threat_level || 'BENIGN';
-            document.getElementById('threat-score').textContent = 
+            document.getElementById('threat-score').textContent =
                 threatLevel === 'BENIGN' ? '0' :
                 threatLevel === 'LOW' ? '1' :
                 threatLevel === 'MEDIUM' ? '2' :
                 threatLevel === 'HIGH' ? '3' :
                 threatLevel === 'CRITICAL' ? '4' : '5';
-            document.getElementById('threat-status').textContent = threatLevel;
-            document.getElementById('threat-status').style.color = this.getThreatColor(threatLevel);
 
-            // Update Health Score card (from Health API)
+            // Update threat status dot
+            const threatDot = document.getElementById('threat-status-dot');
+
+            if (threatLevel === 'CRITICAL' || threatLevel === 'HIGH') {
+                threatDot.className = 'status-dot status-critical';
+            } else if (threatLevel === 'MEDIUM' || threatLevel === 'LOW') {
+                threatDot.className = 'status-dot status-warning';
+            } else {
+                threatDot.className = 'status-dot status-online';
+            }
+
+            // Update Health Score card
             const healthScore = data.health_score || 0;
+            const healthDot = document.getElementById('health-status-dot');
+
             document.getElementById('health-score').textContent = healthScore + '%';
-            document.getElementById('health-status').textContent = data.health_status?.toUpperCase() || 'UNKNOWN';
-            document.getElementById('health-status').style.color = 
-                healthScore >= 70 ? '#00ff88' : healthScore >= 40 ? '#ffaa00' : '#ff3366';
+
+            if (healthScore >= 70) {
+                healthDot.className = 'status-dot status-online';
+            } else if (healthScore >= 40) {
+                healthDot.className = 'status-dot status-warning';
+            } else {
+                healthDot.className = 'status-dot status-critical';
+            }
 
             // Update Events (24h) card
             const events24h = data.events_last_24h || 0;
-            document.getElementById('event-count').textContent = events24h;
-            document.getElementById('event-status').textContent = events24h > 0 ? 'ACTIVE' : 'MONITORING';
+            const eventDot = document.getElementById('event-status-dot');
 
-            // Update Agent count from health API
+            document.getElementById('event-count').textContent = events24h;
+
+            if (events24h > 100) {
+                eventDot.className = 'status-dot status-critical';
+            } else if (events24h > 10) {
+                eventDot.className = 'status-dot status-warning';
+            } else {
+                eventDot.className = 'status-dot status-online';
+            }
+
+            // Update Agent count
             const agentsSummary = data.agents_summary || {};
             const online = agentsSummary.online || 0;
             const total = agentsSummary.total || 0;
+            const agentDot = document.getElementById('agent-status-dot');
+
             document.getElementById('agent-count').textContent = `${online}/${total}`;
-            document.getElementById('agent-status').textContent = 
-                online === total && total > 0 ? 'ALL ONLINE' : 
-                online > 0 ? 'PARTIAL' : 'OFFLINE';
+
+            if (online === total && total > 0) {
+                agentDot.className = 'status-dot status-online';
+            } else if (online > 0) {
+                agentDot.className = 'status-dot status-warning';
+            } else {
+                agentDot.className = 'status-dot status-critical';
+            }
 
             // Handle empty state
             if (data.empty_state) {
@@ -692,7 +731,6 @@ class CortexDashboardV2 {
             }
 
             document.getElementById('event-count').textContent = data.count;
-            document.getElementById('event-status').textContent = data.count > 0 ? 'ACTIVE' : 'NORMAL';
 
             // Update timestamp with freshness indicator
             this.lastUpdateTime.threats = Date.now();
@@ -705,9 +743,8 @@ class CortexDashboardV2 {
             this.failureCount.threats++;
             
             if (this.failureCount.threats >= this.maxRetries) {
-                this.showErrorState('threats-container', 
+                this.showErrorState('threats-container',
                     `Failed to fetch threats: ${error.message}. Click Retry to try again.`);
-                document.getElementById('event-status').textContent = 'Error';
             }
         }
     }
@@ -725,13 +762,9 @@ class CortexDashboardV2 {
             if (!data.agents || data.agents.length === 0) {
                 container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">No agents registered</div>';
                 document.getElementById('agent-count').textContent = '0';
-                document.getElementById('agent-status').textContent = 'No Agents';
             } else {
                 const onlineCount = data.agents.filter(a => a.status === 'online').length;
                 document.getElementById('agent-count').textContent = onlineCount + '/' + data.agents.length;
-                document.getElementById('agent-status').textContent = 
-                    onlineCount === data.agents.length ? 'ALL ONLINE' : 
-                    onlineCount > 0 ? 'PARTIAL' : 'OFFLINE';
 
                 container.innerHTML = data.agents.slice(0, 5).map(agent => {
                     const statusClass = agent.status === 'online' ? 'status-online' : 'status-offline';
@@ -758,9 +791,8 @@ class CortexDashboardV2 {
             this.failureCount.agents++;
             
             if (this.failureCount.agents >= this.maxRetries) {
-                this.showErrorState('agents-container', 
+                this.showErrorState('agents-container',
                     `Failed to fetch agents: ${error.message}. Click Retry to try again.`);
-                document.getElementById('agent-status').textContent = 'Error';
             }
         }
     }

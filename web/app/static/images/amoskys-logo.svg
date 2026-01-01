@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="neuralGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d9ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00b8d4;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Central Brain Core -->
+  <circle cx="100" cy="100" r="35" fill="none" stroke="url(#neuralGlow)" stroke-width="3" opacity="0.3"/>
+  <circle cx="100" cy="100" r="25" fill="none" stroke="url(#neuralGlow)" stroke-width="2" opacity="0.5"/>
+  <circle cx="100" cy="100" r="15" fill="url(#neuralGlow)" opacity="0.8" filter="url(#glow)"/>
+
+  <!-- Neural Network Connections - Creating a brain-like pattern -->
+  <!-- Top nodes -->
+  <circle cx="100" cy="40" r="8" fill="#00d9ff" opacity="0.7"/>
+  <circle cx="70" cy="50" r="6" fill="#00d9ff" opacity="0.6"/>
+  <circle cx="130" cy="50" r="6" fill="#00d9ff" opacity="0.6"/>
+
+  <!-- Middle nodes -->
+  <circle cx="50" cy="80" r="7" fill="#00d9ff" opacity="0.7"/>
+  <circle cx="150" cy="80" r="7" fill="#00d9ff" opacity="0.7"/>
+  <circle cx="45" cy="120" r="6" fill="#00d9ff" opacity="0.6"/>
+  <circle cx="155" cy="120" r="6" fill="#00d9ff" opacity="0.6"/>
+
+  <!-- Bottom nodes -->
+  <circle cx="70" cy="150" r="7" fill="#00d9ff" opacity="0.7"/>
+  <circle cx="130" cy="150" r="7" fill="#00d9ff" opacity="0.7"/>
+  <circle cx="100" cy="160" r="8" fill="#00d9ff" opacity="0.7"/>
+
+  <!-- Connections to center (brain synapses) -->
+  <line x1="100" y1="40" x2="100" y2="85" stroke="#00d9ff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="70" y1="50" x2="85" y2="85" stroke="#00d9ff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="130" y1="50" x2="115" y2="85" stroke="#00d9ff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="50" y1="80" x2="75" y2="95" stroke="#00d9ff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="150" y1="80" x2="125" y2="95" stroke="#00d9ff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="45" y1="120" x2="75" y2="105" stroke="#00d9ff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="155" y1="120" x2="125" y2="105" stroke="#00d9ff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="70" y1="150" x2="85" y2="115" stroke="#00d9ff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="130" y1="150" x2="115" y2="115" stroke="#00d9ff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="100" y1="160" x2="100" y2="115" stroke="#00d9ff" stroke-width="1.5" opacity="0.4"/>
+
+  <!-- Cross connections (neural pathways) -->
+  <line x1="70" y1="50" x2="50" y2="80" stroke="#00d9ff" stroke-width="1" opacity="0.25"/>
+  <line x1="130" y1="50" x2="150" y2="80" stroke="#00d9ff" stroke-width="1" opacity="0.25"/>
+  <line x1="50" y1="80" x2="45" y2="120" stroke="#00d9ff" stroke-width="1" opacity="0.25"/>
+  <line x1="150" y1="80" x2="155" y2="120" stroke="#00d9ff" stroke-width="1" opacity="0.25"/>
+  <line x1="45" y1="120" x2="70" y2="150" stroke="#00d9ff" stroke-width="1" opacity="0.25"/>
+  <line x1="155" y1="120" x2="130" y2="150" stroke="#00d9ff" stroke-width="1" opacity="0.25"/>
+
+  <!-- Outer orbit rings (security perimeter) -->
+  <circle cx="100" cy="100" r="75" fill="none" stroke="#00d9ff" stroke-width="1" opacity="0.15" stroke-dasharray="5,5">
+    <animateTransform
+      attributeName="transform"
+      attributeType="XML"
+      type="rotate"
+      from="0 100 100"
+      to="360 100 100"
+      dur="60s"
+      repeatCount="indefinite"/>
+  </circle>
+
+  <circle cx="100" cy="100" r="85" fill="none" stroke="#00b8d4" stroke-width="1" opacity="0.1" stroke-dasharray="3,7">
+    <animateTransform
+      attributeName="transform"
+      attributeType="XML"
+      type="rotate"
+      from="360 100 100"
+      to="0 100 100"
+      dur="45s"
+      repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Pulse animation on center -->
+  <circle cx="100" cy="100" r="15" fill="none" stroke="#00ff88" stroke-width="1" opacity="0">
+    <animate attributeName="r" from="15" to="40" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" from="0.6" to="0" dur="2s" repeatCount="indefinite"/>
+  </circle>
+</svg>

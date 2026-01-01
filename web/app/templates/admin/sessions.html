@@ -1,0 +1,118 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Active Sessions - AMOSKYS Admin{% endblock %}
+
+{% block content %}
+<div class="sessions-dashboard">
+    <!-- Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">🔑 Active Sessions</h2>
+            <a href="/admin" class="neural-button neural-button-secondary">← Back to Admin</a>
+        </div>
+        <p style="color: var(--text-secondary);">
+            Monitor all active user sessions. Revoke suspicious sessions to protect accounts.
+        </p>
+    </div>
+
+    <!-- Session Stats -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-value" id="totalSessions">--</div>
+            <div class="metric-label">Active Sessions</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value" id="uniqueUsers">--</div>
+            <div class="metric-label">Unique Users</div>
+        </div>
+    </div>
+
+    <!-- Sessions info card -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">Session Management</h3>
+            <button class="neural-button neural-button-danger" onclick="sessionManager.revokeAllSessions()">⚠️ Revoke All Sessions</button>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+            Session management is available through the <a href="/admin/users" style="color: var(--neural-primary);">User Management</a> page.
+            Select a user to view their active sessions and revoke them individually or all at once.
+        </p>
+        <div class="session-actions">
+            <a href="/admin/users" class="neural-button">👥 Manage Users & Sessions</a>
+            <a href="/admin/audit" class="neural-button neural-button-secondary">📋 View Session Logs</a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .sessions-dashboard {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .session-actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .neural-button-secondary {
+        background: rgba(0, 217, 255, 0.08);
+        border: 1px solid rgba(0, 217, 255, 0.4);
+        color: var(--neural-primary);
+    }
+
+    .neural-button-secondary:hover {
+        background: rgba(0, 217, 255, 0.15);
+        border-color: var(--neural-primary);
+        transform: translateY(-1px);
+    }
+
+    .neural-button-danger {
+        background: rgba(255, 51, 102, 0.2);
+        border-color: var(--neural-danger);
+        color: var(--neural-danger);
+    }
+
+    .neural-button-danger:hover {
+        background: rgba(255, 51, 102, 0.3);
+    }
+</style>
+
+<script>
+class SessionManager {
+    constructor() {
+        this.loadStats();
+    }
+
+    async loadStats() {
+        try {
+            const response = await fetch('/admin/api/stats');
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('totalSessions').textContent = data.stats.active_sessions;
+                document.getElementById('uniqueUsers').textContent = data.stats.active_users;
+            }
+        } catch (error) {
+            console.error('Failed to load stats:', error);
+        }
+    }
+
+    async revokeAllSessions() {
+        if (!confirm('WARNING: This will log out ALL users immediately. Are you sure?')) {
+            return;
+        }
+        if (!confirm('This action cannot be undone. Confirm again to proceed.')) {
+            return;
+        }
+
+        alert('Bulk session revocation is not yet implemented. Use individual user management instead.');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.sessionManager = new SessionManager();
+});
+</script>
+{% endblock %}

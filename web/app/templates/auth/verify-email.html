@@ -76,11 +76,15 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     
     try {
-        const response = await fetch('/api/user/auth/verify-email?token=' + encodeURIComponent(token), {
-            method: 'GET',
+        const response = await fetch('/api/user/auth/verify-email', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ token: token }),
             credentials: 'same-origin',
         });
-        
+
         const data = await response.json();
         
         if (response.ok && data.success) {

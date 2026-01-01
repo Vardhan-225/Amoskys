@@ -1,0 +1,401 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Audit Logs - AMOSKYS Admin{% endblock %}
+
+{% block content %}
+<div class="audit-dashboard">
+    <!-- Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">📋 Security Audit Logs</h2>
+            <a href="/admin" class="neural-button neural-button-secondary">← Back to Admin</a>
+        </div>
+        <p style="color: var(--text-secondary);">
+            Complete security event history for compliance and forensic analysis.
+        </p>
+    </div>
+
+    <!-- Filters -->
+    <div class="neural-card">
+        <div class="filters-row">
+            <div class="filter-group">
+                <label>Event Type</label>
+                <select id="eventTypeFilter" class="filter-select">
+                    <option value="">All Events</option>
+                    <option value="login_success">Login Success</option>
+                    <option value="login_failure">Login Failure</option>
+                    <option value="logout">Logout</option>
+                    <option value="signup">Signup</option>
+                    <option value="password_reset_request">Password Reset Request</option>
+                    <option value="password_reset_complete">Password Reset Complete</option>
+                    <option value="email_verified">Email Verified</option>
+                    <option value="session_revoked">Session Revoked</option>
+                    <option value="mfa_enabled">MFA Enabled</option>
+                    <option value="mfa_disabled">MFA Disabled</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>User ID</label>
+                <input type="text" id="userIdFilter" class="filter-input" placeholder="Filter by user ID...">
+            </div>
+            <button class="neural-button" onclick="auditViewer.loadLogs()">🔍 Filter</button>
+            <button class="neural-button neural-button-secondary" onclick="auditViewer.exportLogs()">📥 Export</button>
+        </div>
+    </div>
+
+    <!-- Audit Table -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">Event History</h3>
+            <span id="logCount" class="card-badge">--</span>
+        </div>
+        <div class="table-container">
+            <table class="audit-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Event Type</th>
+                        <th>User ID</th>
+                        <th>IP Address</th>
+                        <th>User Agent</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody id="auditTableBody">
+                    <tr><td colspan="6" class="loading-cell">Loading audit logs...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+    </div>
+</div>
+
+<style>
+    .audit-dashboard {
+        max-width: 1600px;
+        margin: 0 auto;
+    }
+
+    .filters-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-end;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .filter-group label {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .filter-input {
+        padding: 0.6rem 1rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        border-radius: 6px;
+        color: var(--text-primary);
+        min-width: 250px;
+    }
+
+    .filter-select {
+        padding: 0.6rem 1rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        border-radius: 6px;
+        color: var(--text-primary);
+        min-width: 200px;
+    }
+
+    .table-container {
+        overflow-x: auto;
+    }
+
+    .audit-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+
+    .audit-table th,
+    .audit-table td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid rgba(0, 217, 255, 0.1);
+    }
+
+    .audit-table th {
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        background: rgba(0, 0, 0, 0.2);
+        white-space: nowrap;
+    }
+
+    .audit-table tr:hover {
+        background: rgba(0, 217, 255, 0.05);
+    }
+
+    .event-badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .event-badge.success { background: rgba(0, 255, 136, 0.2); color: var(--neural-success); }
+    .event-badge.failure { background: rgba(255, 51, 102, 0.2); color: var(--neural-danger); }
+    .event-badge.warning { background: rgba(240, 173, 78, 0.2); color: var(--neural-warning); }
+    .event-badge.info { background: rgba(0, 217, 255, 0.2); color: var(--neural-primary); }
+
+    .user-id-cell {
+        font-family: monospace;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    .ip-cell {
+        font-family: monospace;
+        color: var(--text-secondary);
+    }
+
+    .ua-cell {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .details-cell {
+        max-width: 250px;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+
+    .loading-cell {
+        text-align: center;
+        color: var(--text-muted);
+        padding: 2rem !important;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        padding-top: 1rem;
+    }
+
+    .page-btn {
+        padding: 0.5rem 1rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        border-radius: 4px;
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .page-btn:hover:not(:disabled) {
+        background: rgba(0, 217, 255, 0.2);
+        border-color: var(--neural-primary);
+    }
+
+    .page-btn.active {
+        background: var(--neural-primary);
+        color: var(--bg-primary);
+    }
+
+    .page-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .timestamp-cell {
+        white-space: nowrap;
+        font-size: 0.85rem;
+    }
+
+    .neural-button-secondary {
+        background: rgba(0, 217, 255, 0.08);
+        border: 1px solid rgba(0, 217, 255, 0.4);
+        color: var(--neural-primary);
+    }
+
+    .neural-button-secondary:hover {
+        background: rgba(0, 217, 255, 0.15);
+        border-color: var(--neural-primary);
+        transform: translateY(-1px);
+    }
+</style>
+
+<script>
+class AuditViewer {
+    constructor() {
+        this.currentPage = 1;
+        this.perPage = 50;
+        this.totalPages = 1;
+        this.logs = [];
+        this.init();
+    }
+
+    init() {
+        this.loadLogs();
+    }
+
+    async loadLogs() {
+        const eventType = document.getElementById('eventTypeFilter').value;
+        const userId = document.getElementById('userIdFilter').value.trim();
+
+        const params = new URLSearchParams({
+            page: this.currentPage,
+            per_page: this.perPage,
+            event_type: eventType,
+            user_id: userId
+        });
+
+        try {
+            const response = await fetch(`/admin/api/audit?${params}`);
+            const data = await response.json();
+
+            if (data.success) {
+                this.logs = data.logs;
+                this.totalPages = data.pagination.pages;
+                this.renderLogs();
+                this.renderPagination();
+                document.getElementById('logCount').textContent = `${data.pagination.total} events`;
+            }
+        } catch (error) {
+            console.error('Failed to load audit logs:', error);
+        }
+    }
+
+    renderLogs() {
+        const tbody = document.getElementById('auditTableBody');
+        
+        if (this.logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">No audit logs found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = this.logs.map(log => `
+            <tr>
+                <td class="timestamp-cell">${this.formatTimestamp(log.created_at)}</td>
+                <td><span class="event-badge ${this.getEventClass(log.event_type)}">${this.formatEventType(log.event_type)}</span></td>
+                <td class="user-id-cell">${log.user_id ? log.user_id.substring(0, 8) + '...' : 'N/A'}</td>
+                <td class="ip-cell">${log.ip_address || 'Unknown'}</td>
+                <td class="ua-cell" title="${log.user_agent || ''}">${this.formatUserAgent(log.user_agent)}</td>
+                <td class="details-cell">${this.formatDetails(log.details)}</td>
+            </tr>
+        `).join('');
+    }
+
+    formatTimestamp(ts) {
+        if (!ts) return 'N/A';
+        const date = new Date(ts);
+        return date.toLocaleString();
+    }
+
+    formatEventType(type) {
+        return type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+
+    getEventClass(type) {
+        const successEvents = ['login_success', 'signup', 'email_verified', 'password_reset_complete', 'mfa_enabled'];
+        const failureEvents = ['login_failure', 'mfa_failed'];
+        const warningEvents = ['password_reset_request', 'session_revoked', 'mfa_disabled', 'account_locked'];
+        
+        if (successEvents.includes(type)) return 'success';
+        if (failureEvents.includes(type)) return 'failure';
+        if (warningEvents.includes(type)) return 'warning';
+        return 'info';
+    }
+
+    formatUserAgent(ua) {
+        if (!ua) return 'Unknown';
+        // Extract browser/OS from user agent
+        if (ua.includes('Chrome')) return 'Chrome';
+        if (ua.includes('Firefox')) return 'Firefox';
+        if (ua.includes('Safari')) return 'Safari';
+        if (ua.includes('Edge')) return 'Edge';
+        return ua.substring(0, 30) + '...';
+    }
+
+    formatDetails(details) {
+        if (!details) return '-';
+        if (typeof details === 'object') {
+            return JSON.stringify(details).substring(0, 50) + '...';
+        }
+        return String(details).substring(0, 50);
+    }
+
+    renderPagination() {
+        const container = document.getElementById('pagination');
+        
+        if (this.totalPages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+
+        let html = '';
+        html += `<button class="page-btn" ${this.currentPage === 1 ? 'disabled' : ''} onclick="auditViewer.goToPage(${this.currentPage - 1})">← Prev</button>`;
+        
+        for (let i = 1; i <= Math.min(this.totalPages, 10); i++) {
+            html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" onclick="auditViewer.goToPage(${i})">${i}</button>`;
+        }
+        
+        if (this.totalPages > 10) {
+            html += `<span style="color: var(--text-muted);">... ${this.totalPages}</span>`;
+        }
+        
+        html += `<button class="page-btn" ${this.currentPage === this.totalPages ? 'disabled' : ''} onclick="auditViewer.goToPage(${this.currentPage + 1})">Next →</button>`;
+        
+        container.innerHTML = html;
+    }
+
+    goToPage(page) {
+        this.currentPage = page;
+        this.loadLogs();
+    }
+
+    exportLogs() {
+        // Export current filtered logs as CSV
+        const headers = ['Timestamp', 'Event Type', 'User ID', 'IP Address', 'User Agent', 'Details'];
+        const rows = this.logs.map(log => [
+            log.created_at,
+            log.event_type,
+            log.user_id || '',
+            log.ip_address || '',
+            log.user_agent || '',
+            JSON.stringify(log.details || '')
+        ]);
+        
+        const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `audit-logs-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.auditViewer = new AuditViewer();
+});
+</script>
+{% endblock %}

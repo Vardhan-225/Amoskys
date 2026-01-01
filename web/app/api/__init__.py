@@ -13,6 +13,7 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 # Import API routes after blueprint creation
 from .agent_auth import auth_bp as agent_auth_bp
+from .user_auth import user_auth_bp  # User authentication (Phase 3)
 from .agents import agents_bp
 from .events import events_bp
 from .system import system_bp
@@ -22,10 +23,12 @@ from .process_telemetry import process_bp  # Process telemetry API
 from .peripheral_telemetry import peripheral_bp  # Peripheral telemetry API
 from .database_manager import database_manager_bp  # Database manager API
 from .health import health_bp  # Health API v1 for Command Center
+from .telemetry import telemetry_bp  # Real-time telemetry from EventBus WAL
 from .docs import generate_openapi_spec
 
 # Register sub-blueprints
 api_bp.register_blueprint(agent_auth_bp)  # Agent authentication (/api/agent-auth)
+api_bp.register_blueprint(user_auth_bp)  # User authentication (/api/user/auth)
 api_bp.register_blueprint(agents_bp)
 api_bp.register_blueprint(events_bp)
 api_bp.register_blueprint(system_bp)
@@ -35,6 +38,7 @@ api_bp.register_blueprint(process_bp)  # Register process telemetry API
 api_bp.register_blueprint(peripheral_bp)  # Register peripheral telemetry API
 api_bp.register_blueprint(database_manager_bp)  # Register database manager API
 api_bp.register_blueprint(health_bp)  # Register health API v1
+api_bp.register_blueprint(telemetry_bp)  # Register telemetry API
 
 # Add API documentation endpoint
 @api_bp.route('/docs/openapi.json', methods=['GET'])

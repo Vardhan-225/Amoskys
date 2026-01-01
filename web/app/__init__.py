@@ -58,6 +58,10 @@ def create_app():
     from .dashboard import dashboard_bp
     app.register_blueprint(dashboard_bp)
 
+    # Register Admin blueprint (Phase Pre-Deploy)
+    from .admin import admin_bp
+    app.register_blueprint(admin_bp)
+
     # Register Auth API blueprint (Phase 3)
     from amoskys.api.auth import auth_bp
     app.register_blueprint(auth_bp)
@@ -90,6 +94,9 @@ def create_app():
     def internal_error(error):
         if request.path.startswith('/api/'):
             return  # Let unified handler deal with it
-        return render_template('404.html'), 500
+        # Generate error ID for tracking
+        import uuid
+        error_id = str(uuid.uuid4())[:8].upper()
+        return render_template('500.html', error_id=error_id), 500
     
     return app, socketio

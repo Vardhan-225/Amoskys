@@ -861,6 +861,17 @@ class AuthService:
         user.password_hash = hash_password(new_password)
         user.password_changed_at = _utcnow()
 
+        # Auto-verify email if not already verified
+        # Users who can reset their password clearly have access to their email
+        if not user.is_verified:
+            user.is_verified = True
+            user.verified_at = _utcnow()
+            logger.info(
+                "email_auto_verified_via_password_reset",
+                user_id=str(user.id),
+                email=user.email,
+            )
+
         # Mark token as consumed
         token_record.consumed_at = _utcnow()
 

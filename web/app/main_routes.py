@@ -20,6 +20,18 @@ def about():
     return render_template('about.html')
 
 
+@main_bp.route('/how-it-works')
+def how_it_works():
+    """How AMOSKYS Works page - Biological architecture explained"""
+    return render_template('how-it-works.html')
+
+
+@main_bp.route('/docs')
+def documentation():
+    """AMOSKYS Documentation landing page"""
+    return render_template('docs.html')
+
+
 @main_bp.route('/terms')
 def terms():
     """Terms of Service page"""

@@ -53,6 +53,12 @@ def rate_limit_exempt():
     # Exempt health check endpoints
     if request.path.startswith("/api/health") or request.path == "/health":
         return True
+
+    # Exempt dashboard live endpoints (real-time polling)
+    # These endpoints need high-frequency access for dashboard updates
+    if request.path.startswith("/dashboard/api/live/"):
+        return True
+
     return False
 
 
@@ -67,12 +73,25 @@ def rate_limit_error_handler(error):
         },
     )
 
+    # Parse the rate limit description to extract friendly message
+    description = error.description or ""
+    retry_message = "Please try again in a few moments."
+
+    # Try to extract time window from description (e.g., "50 per 1 hour")
+    if "hour" in description.lower():
+        retry_message = "Please try again in an hour."
+    elif "minute" in description.lower():
+        retry_message = "Please try again in a minute."
+    elif "second" in description.lower():
+        retry_message = "Please try again in a few seconds."
+
     return (
         jsonify(
             {
-                "error": "Rate limit exceeded. Please try again later.",
+                "success": False,
+                "error": f"Too many requests. {retry_message}",
                 "error_code": "RATE_LIMIT_EXCEEDED",
-                "retry_after": error.description,
+                "limit_description": description,
             }
         ),
         429,

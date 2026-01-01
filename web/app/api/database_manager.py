@@ -94,8 +94,8 @@ def get_statistics():
                 cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")
                 count = cursor.fetchone()[0]
                 total += count
-            except:
-                pass
+            except Exception:
+                pass  # Table may not exist
 
         stats['total_records'] = total
 
@@ -108,8 +108,8 @@ def get_statistics():
             if row and row['oldest']:
                 stats['oldest_record'] = row['oldest']
                 stats['newest_record'] = row['newest']
-        except:
-            pass
+        except Exception:
+            pass  # Table may not exist or be empty
 
         conn.close()
 
@@ -154,8 +154,8 @@ def get_table_stats():
                             time_range = oldest
                         else:
                             time_range = f"{oldest} to {newest}"
-                except:
-                    pass
+                except Exception:
+                    pass  # Table may not have timestamp column
 
                 tables.append({
                     'name': table_name,

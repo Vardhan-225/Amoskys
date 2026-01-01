@@ -1,0 +1,1138 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Agent Marketplace - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <div>
+        <h2 style="margin: 0; display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 1.8rem;">🏪</span>
+            Agent Marketplace
+        </h2>
+        <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);">
+            Select perspectives to deploy on your infrastructure
+        </p>
+    </div>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <div class="selection-badge" id="selection-badge">
+            <span id="selection-count">0</span> selected
+        </div>
+        <button class="deploy-button" id="deploy-button" onclick="marketplace.deployAgent()" disabled>
+            <span>🚀</span> Deploy Configuration
+        </button>
+    </div>
+</div>
+
+<!-- Quick Start Bundles -->
+<div class="neural-card" style="margin-bottom: 1.5rem;">
+    <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">⚡ Quick Start Bundles</h3>
+    <div class="bundles-grid">
+        <div class="bundle-card" onclick="marketplace.applyBundle('essential')">
+            <div class="bundle-badge recommended">RECOMMENDED</div>
+            <div class="bundle-icon">🎯</div>
+            <h4 class="bundle-name">Essential Security</h4>
+            <p class="bundle-desc">Core monitoring for comprehensive endpoint protection</p>
+            <div class="bundle-count">5 perspectives</div>
+            <div class="bundle-tags">
+                <span class="tag">Process</span>
+                <span class="tag">Network</span>
+                <span class="tag">Files</span>
+                <span class="tag">Auth</span>
+                <span class="tag">+1</span>
+            </div>
+        </div>
+
+        <div class="bundle-card" onclick="marketplace.applyBundle('advanced')">
+            <div class="bundle-icon">🚀</div>
+            <h4 class="bundle-name">Advanced Defense</h4>
+            <p class="bundle-desc">Extended coverage with kernel and memory analysis</p>
+            <div class="bundle-count">8 perspectives</div>
+            <div class="bundle-tags">
+                <span class="tag">Essential</span>
+                <span class="tag">Kernel</span>
+                <span class="tag">Memory</span>
+                <span class="tag">+5</span>
+            </div>
+        </div>
+
+        <div class="bundle-card" onclick="marketplace.applyBundle('cloud')">
+            <div class="bundle-icon">☁️</div>
+            <h4 class="bundle-name">Cloud Native</h4>
+            <p class="bundle-desc">Container and cloud infrastructure monitoring</p>
+            <div class="bundle-count">4 perspectives</div>
+            <div class="bundle-tags">
+                <span class="tag">Containers</span>
+                <span class="tag">Cloud</span>
+                <span class="tag">Network</span>
+                <span class="tag">+1</span>
+            </div>
+        </div>
+
+        <div class="bundle-card custom" onclick="marketplace.scrollToCatalog()">
+            <div class="bundle-icon">⚙️</div>
+            <h4 class="bundle-name">Custom Selection</h4>
+            <p class="bundle-desc">Build your own configuration from catalog</p>
+            <div class="bundle-count">Your choice</div>
+            <div style="text-align: center; margin-top: 1rem; color: #00d9ff; font-weight: 600;">
+                Browse Catalog ↓
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Catalog Controls -->
+<div class="neural-card" style="margin-bottom: 1rem; padding: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <label style="color: var(--text-secondary); font-weight: 600;">Filter:</label>
+            <select id="category-filter" class="filter-select" onchange="marketplace.filterPerspectives()">
+                <option value="all">All Categories</option>
+                <option value="endpoint">Endpoint Security</option>
+                <option value="network">Network Monitoring</option>
+                <option value="cloud">Cloud & Container</option>
+                <option value="advanced">Advanced Analysis</option>
+            </select>
+        </div>
+        <div style="display: flex; gap: 0.75rem;">
+            <button class="control-btn" onclick="marketplace.selectAll()">Select All</button>
+            <button class="control-btn" onclick="marketplace.clearAll()">Clear All</button>
+        </div>
+    </div>
+</div>
+
+<!-- Perspective Catalog -->
+<div id="perspective-catalog" class="perspectives-grid">
+    <!-- Process Monitor -->
+    <div class="perspective-card" data-category="endpoint" data-id="process">
+        <div class="card-header">
+            <div class="card-icon">⚙️</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-process" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">Process Monitor</h4>
+        <p class="card-desc">Track process execution, parent-child relationships, command lines, and execution behavior patterns.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Endpoint</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">All</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">Execution</span>
+            <span class="tag-badge">Behavioral</span>
+        </div>
+    </div>
+
+    <!-- Network Monitor -->
+    <div class="perspective-card" data-category="network" data-id="network">
+        <div class="card-header">
+            <div class="card-icon">🌐</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-network" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">Network Monitor</h4>
+        <p class="card-desc">Monitor network connections, traffic flows, communication patterns, and detect data exfiltration attempts.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Network</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">All</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">Traffic</span>
+            <span class="tag-badge">C2 Detection</span>
+        </div>
+    </div>
+
+    <!-- File System Monitor -->
+    <div class="perspective-card" data-category="endpoint" data-id="filesystem">
+        <div class="card-header">
+            <div class="card-icon">📁</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-filesystem" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">File System Monitor</h4>
+        <p class="card-desc">Track file creation, modification, deletion, and access patterns for ransomware and integrity monitoring.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Endpoint</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">All</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">Files</span>
+            <span class="tag-badge">Integrity</span>
+        </div>
+    </div>
+
+    <!-- Registry Monitor -->
+    <div class="perspective-card" data-category="endpoint" data-id="registry">
+        <div class="card-header">
+            <div class="card-icon">📋</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-registry" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">Registry Monitor</h4>
+        <p class="card-desc">Monitor Windows Registry modifications, persistence mechanisms, and system configuration changes.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Endpoint</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">Windows</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">Persistence</span>
+            <span class="tag-badge">Config</span>
+        </div>
+    </div>
+
+    <!-- Kernel Monitor -->
+    <div class="perspective-card" data-category="advanced" data-id="kernel">
+        <div class="card-header">
+            <div class="card-icon">🔧</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-kernel" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">Kernel Monitor</h4>
+        <p class="card-desc">Deep kernel-level monitoring for driver loads, system calls, and rootkit detection capabilities.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Advanced</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">Win/Linux</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">Deep</span>
+            <span class="tag-badge">Syscalls</span>
+        </div>
+    </div>
+
+    <!-- Memory Monitor -->
+    <div class="perspective-card" data-category="advanced" data-id="memory">
+        <div class="card-header">
+            <div class="card-icon">💾</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-memory" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">Memory Monitor</h4>
+        <p class="card-desc">Memory analysis for code injection, shellcode detection, and credential dumping prevention.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Advanced</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">Win/Linux</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">Injection</span>
+            <span class="tag-badge">Forensics</span>
+        </div>
+    </div>
+
+    <!-- DNS Monitor -->
+    <div class="perspective-card" data-category="network" data-id="dns">
+        <div class="card-header">
+            <div class="card-icon">🔍</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-dns" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">DNS Monitor</h4>
+        <p class="card-desc">DNS query monitoring for C2 detection, DNS tunneling, and malicious domain identification.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Network</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">All</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">DNS</span>
+            <span class="tag-badge">Tunneling</span>
+        </div>
+    </div>
+
+    <!-- Authentication Monitor -->
+    <div class="perspective-card" data-category="endpoint" data-id="auth">
+        <div class="card-header">
+            <div class="card-icon">🔐</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-auth" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">Authentication Monitor</h4>
+        <p class="card-desc">Track authentication events, credential usage, privilege escalation, and suspicious access patterns.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Endpoint</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">All</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">Credentials</span>
+            <span class="tag-badge">Privilege</span>
+        </div>
+    </div>
+
+    <!-- Cloud Monitor -->
+    <div class="perspective-card" data-category="cloud" data-id="cloud">
+        <div class="card-header">
+            <div class="card-icon">☁️</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-cloud" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">Cloud Monitor</h4>
+        <p class="card-desc">Monitor AWS, Azure, GCP infrastructure, API calls, IAM changes, and cloud configuration drift.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Cloud</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">Multi-Cloud</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">API</span>
+            <span class="tag-badge">IAM</span>
+        </div>
+    </div>
+
+    <!-- Container Monitor -->
+    <div class="perspective-card" data-category="cloud" data-id="container">
+        <div class="card-header">
+            <div class="card-icon">📦</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-container" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">Container Monitor</h4>
+        <p class="card-desc">Docker, Kubernetes runtime monitoring, pod security, and orchestration visibility for container environments.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Cloud</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">K8s/Docker</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">Runtime</span>
+            <span class="tag-badge">Pods</span>
+        </div>
+    </div>
+
+    <!-- USB/Device Monitor -->
+    <div class="perspective-card" data-category="endpoint" data-id="usb">
+        <div class="card-header">
+            <div class="card-icon">🔌</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-usb" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">USB/Device Monitor</h4>
+        <p class="card-desc">Peripheral device monitoring, USB activity tracking, and removable media threat detection.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Endpoint</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">Win/Linux</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">Peripherals</span>
+            <span class="tag-badge">Removable</span>
+        </div>
+    </div>
+
+    <!-- PowerShell Monitor -->
+    <div class="perspective-card" data-category="endpoint" data-id="powershell">
+        <div class="card-header">
+            <div class="card-icon">💻</div>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="perspective-powershell" onchange="marketplace.updateSelection()">
+                <span class="checkmark"></span>
+            </label>
+        </div>
+        <h4 class="card-title">PowerShell Monitor</h4>
+        <p class="card-desc">Script execution monitoring, command analysis, obfuscation detection, and AMSI integration.</p>
+        <div class="card-meta">
+            <span class="meta-item">
+                <span class="meta-label">Category:</span>
+                <span class="meta-value">Endpoint</span>
+            </span>
+            <span class="meta-item">
+                <span class="meta-label">Platform:</span>
+                <span class="meta-value">Windows</span>
+            </span>
+        </div>
+        <div class="card-tags">
+            <span class="tag-badge">Scripts</span>
+            <span class="tag-badge">AMSI</span>
+        </div>
+    </div>
+</div>
+
+<!-- Deployment Modal -->
+<div id="deploy-modal" class="deploy-modal" style="display: none;">
+    <div class="deploy-modal-content">
+        <div class="deploy-modal-header">
+            <h3>🚀 Deploy Agent Configuration</h3>
+            <button class="close-btn" onclick="marketplace.closeDeployModal()">✕</button>
+        </div>
+        <div class="deploy-modal-body">
+            <div class="deploy-summary">
+                <div class="summary-stat">
+                    <div class="stat-label">Selected Perspectives</div>
+                    <div class="stat-value" id="modal-count">0</div>
+                </div>
+                <div class="summary-stat">
+                    <div class="stat-label">Estimated Coverage</div>
+                    <div class="stat-value" id="modal-coverage">0%</div>
+                </div>
+            </div>
+            <div class="deploy-list" id="deploy-list">
+                <!-- Selected perspectives will be listed here -->
+            </div>
+            <div class="deploy-actions">
+                <button class="modal-deploy-btn" onclick="marketplace.confirmDeploy()">
+                    <span>⬇️</span> Download Configured Agent
+                </button>
+            </div>
+            <div class="deploy-note">
+                <strong>Note:</strong> You can modify your perspective selection anytime from the Agent Network dashboard.
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.selection-badge {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.1) 0%, rgba(0, 184, 212, 0.1) 100%);
+    border: 2px solid #00d9ff;
+    color: #00d9ff;
+    padding: 0.5rem 1.25rem;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.deploy-button {
+    background: linear-gradient(135deg, #00d9ff 0%, #00b8d4 100%);
+    border: none;
+    color: #0a0f1e;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.deploy-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 217, 255, 0.4);
+}
+
+.deploy-button:disabled {
+    background: rgba(100, 100, 100, 0.3);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* Bundles Grid */
+.bundles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.25rem;
+}
+
+.bundle-card {
+    background: linear-gradient(135deg, rgba(10, 14, 39, 0.9) 0%, rgba(26, 31, 58, 0.9) 100%);
+    border: 2px solid rgba(0, 217, 255, 0.2);
+    border-radius: 12px;
+    padding: 1.75rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.bundle-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #00d9ff 0%, #00ff88 100%);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.bundle-card:hover {
+    border-color: #00d9ff;
+    transform: translateY(-6px);
+    box-shadow: 0 12px 35px rgba(0, 217, 255, 0.25);
+}
+
+.bundle-card:hover::before {
+    transform: scaleX(1);
+}
+
+.bundle-card.custom {
+    border-style: dashed;
+}
+
+.bundle-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: #00ff88;
+    color: #0a0f1e;
+    padding: 0.35rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.bundle-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    filter: drop-shadow(0 0 15px rgba(0, 217, 255, 0.5));
+}
+
+.bundle-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #00d9ff;
+    margin-bottom: 0.75rem;
+}
+
+.bundle-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+.bundle-count {
+    color: #00ff88;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+}
+
+.bundle-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.bundle-tags .tag {
+    background: rgba(0, 136, 255, 0.15);
+    border: 1px solid rgba(0, 136, 255, 0.3);
+    color: #0088ff;
+    padding: 0.25rem 0.6rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Filter and Controls */
+.filter-select {
+    background: rgba(26, 31, 58, 0.8);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.control-btn {
+    background: rgba(0, 217, 255, 0.1);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.control-btn:hover {
+    background: rgba(0, 217, 255, 0.2);
+    border-color: #00d9ff;
+}
+
+/* Perspectives Grid */
+.perspectives-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
+}
+
+.perspective-card {
+    background: rgba(26, 31, 58, 0.6);
+    border: 2px solid rgba(0, 217, 255, 0.2);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.perspective-card:hover {
+    border-color: rgba(0, 217, 255, 0.5);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 217, 255, 0.2);
+}
+
+.perspective-card.selected {
+    border-color: #00ff88;
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.08) 0%, rgba(0, 217, 255, 0.05) 100%);
+    box-shadow: 0 0 25px rgba(0, 255, 136, 0.2);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+}
+
+.card-icon {
+    font-size: 2.5rem;
+    filter: drop-shadow(0 0 8px rgba(0, 217, 255, 0.4));
+}
+
+/* Custom Checkbox */
+.checkbox-wrapper {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.checkmark {
+    display: block;
+    width: 28px;
+    height: 28px;
+    background: rgba(26, 31, 58, 0.8);
+    border: 2px solid rgba(0, 217, 255, 0.4);
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.checkbox-wrapper:hover .checkmark {
+    border-color: #00d9ff;
+}
+
+.checkbox-wrapper input:checked ~ .checkmark {
+    background: linear-gradient(135deg, #00ff88 0%, #00d9ff 100%);
+    border-color: #00ff88;
+}
+
+.checkbox-wrapper input:checked ~ .checkmark::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #0a0f1e;
+    font-weight: 900;
+    font-size: 1.1rem;
+}
+
+.card-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #00d9ff;
+    margin-bottom: 0.75rem;
+}
+
+.card-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+.card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+}
+
+.meta-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+}
+
+.meta-label {
+    color: var(--text-muted);
+}
+
+.meta-value {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.card-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.tag-badge {
+    background: rgba(0, 255, 136, 0.12);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    color: #00ff88;
+    padding: 0.3rem 0.7rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Deploy Modal */
+.deploy-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.deploy-modal-content {
+    background: linear-gradient(135deg, rgba(10, 14, 39, 0.98) 0%, rgba(26, 31, 58, 0.98) 100%);
+    border: 2px solid #00d9ff;
+    border-radius: 16px;
+    max-width: 700px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 217, 255, 0.3);
+    animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.deploy-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem;
+    border-bottom: 1px solid rgba(0, 217, 255, 0.2);
+}
+
+.deploy-modal-header h3 {
+    font-size: 1.5rem;
+    color: #00d9ff;
+    margin: 0;
+}
+
+.close-btn {
+    background: rgba(255, 99, 102, 0.1);
+    border: 1px solid rgba(255, 99, 102, 0.3);
+    color: #ff6366;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.close-btn:hover {
+    background: rgba(255, 99, 102, 0.2);
+    transform: rotate(90deg);
+}
+
+.deploy-modal-body {
+    padding: 2rem;
+}
+
+.deploy-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.summary-stat {
+    background: rgba(0, 217, 255, 0.08);
+    border: 1px solid rgba(0, 217, 255, 0.25);
+    border-radius: 10px;
+    padding: 1.25rem;
+    text-align: center;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    color: #00d9ff;
+    font-size: 2rem;
+    font-weight: 900;
+    font-family: 'Courier New', monospace;
+}
+
+.deploy-list {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.deploy-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(0, 217, 255, 0.05);
+    border-radius: 8px;
+}
+
+.deploy-item-icon {
+    font-size: 1.5rem;
+}
+
+.deploy-item-name {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.deploy-actions {
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.modal-deploy-btn {
+    background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%);
+    border: none;
+    color: #0a0f1e;
+    padding: 1.25rem 2.5rem;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.3s ease;
+}
+
+.modal-deploy-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 35px rgba(0, 217, 255, 0.5);
+}
+
+.deploy-note {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .perspectives-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .bundles-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .deploy-summary {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+class Marketplace {
+    constructor() {
+        this.selectedPerspectives = new Set();
+        this.bundles = {
+            essential: ['process', 'network', 'filesystem', 'registry', 'auth'],
+            advanced: ['process', 'network', 'filesystem', 'registry', 'auth', 'kernel', 'memory', 'dns'],
+            cloud: ['container', 'cloud', 'network', 'auth']
+        };
+
+        this.perspectiveData = {
+            process: { name: 'Process Monitor', icon: '⚙️' },
+            network: { name: 'Network Monitor', icon: '🌐' },
+            filesystem: { name: 'File System Monitor', icon: '📁' },
+            registry: { name: 'Registry Monitor', icon: '📋' },
+            kernel: { name: 'Kernel Monitor', icon: '🔧' },
+            memory: { name: 'Memory Monitor', icon: '💾' },
+            dns: { name: 'DNS Monitor', icon: '🔍' },
+            auth: { name: 'Authentication Monitor', icon: '🔐' },
+            cloud: { name: 'Cloud Monitor', icon: '☁️' },
+            container: { name: 'Container Monitor', icon: '📦' },
+            usb: { name: 'USB/Device Monitor', icon: '🔌' },
+            powershell: { name: 'PowerShell Monitor', icon: '💻' }
+        };
+
+        this.init();
+    }
+
+    init() {
+        this.updateUI();
+    }
+
+    scrollToCatalog() {
+        document.getElementById('perspective-catalog').scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
+    }
+
+    applyBundle(bundleName) {
+        const bundle = this.bundles[bundleName];
+        if (!bundle) return;
+
+        // Clear current selection
+        this.clearAll();
+
+        // Select perspectives in bundle with animation delay
+        bundle.forEach((perspective, index) => {
+            setTimeout(() => {
+                const checkbox = document.getElementById(`perspective-${perspective}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    this.selectedPerspectives.add(perspective);
+                    this.updateUI();
+                }
+            }, index * 100);
+        });
+
+        // Scroll to catalog
+        setTimeout(() => this.scrollToCatalog(), bundle.length * 100);
+    }
+
+    selectAll() {
+        document.querySelectorAll('.perspective-card input[type="checkbox"]').forEach((checkbox, index) => {
+            setTimeout(() => {
+                checkbox.checked = true;
+                const card = checkbox.closest('.perspective-card');
+                const perspective = card.dataset.id;
+                this.selectedPerspectives.add(perspective);
+                this.updateUI();
+            }, index * 50);
+        });
+    }
+
+    clearAll() {
+        document.querySelectorAll('.perspective-card input[type="checkbox"]').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        this.selectedPerspectives.clear();
+        this.updateUI();
+    }
+
+    updateSelection() {
+        this.selectedPerspectives.clear();
+        document.querySelectorAll('.perspective-card input[type="checkbox"]:checked').forEach(checkbox => {
+            const card = checkbox.closest('.perspective-card');
+            const perspective = card.dataset.id;
+            this.selectedPerspectives.add(perspective);
+        });
+        this.updateUI();
+    }
+
+    updateUI() {
+        const count = this.selectedPerspectives.size;
+        const coverage = Math.round((count / 12) * 100);
+
+        // Update header badge
+        document.getElementById('selection-count').textContent = count;
+
+        // Update deploy button
+        const deployButton = document.getElementById('deploy-button');
+        deployButton.disabled = count === 0;
+
+        // Update card styles
+        document.querySelectorAll('.perspective-card').forEach(card => {
+            const checkbox = card.querySelector('input[type="checkbox"]');
+            if (checkbox && checkbox.checked) {
+                card.classList.add('selected');
+            } else {
+                card.classList.remove('selected');
+            }
+        });
+
+        // Update modal values
+        document.getElementById('modal-count').textContent = count;
+        document.getElementById('modal-coverage').textContent = coverage + '%';
+    }
+
+    filterPerspectives() {
+        const filter = document.getElementById('category-filter').value;
+        const cards = document.querySelectorAll('.perspective-card');
+
+        cards.forEach(card => {
+            if (filter === 'all' || card.dataset.category === filter) {
+                card.style.display = 'block';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
+    deployAgent() {
+        if (this.selectedPerspectives.size === 0) return;
+
+        // Build deploy list
+        const deployList = document.getElementById('deploy-list');
+        deployList.innerHTML = Array.from(this.selectedPerspectives).map(id => {
+            const perspective = this.perspectiveData[id];
+            return `
+                <div class="deploy-item">
+                    <div class="deploy-item-icon">${perspective.icon}</div>
+                    <div class="deploy-item-name">${perspective.name}</div>
+                </div>
+            `;
+        }).join('');
+
+        // Show modal
+        document.getElementById('deploy-modal').style.display = 'flex';
+    }
+
+    closeDeployModal() {
+        document.getElementById('deploy-modal').style.display = 'none';
+    }
+
+    confirmDeploy() {
+        const perspectives = Array.from(this.selectedPerspectives);
+        const names = perspectives.map(id => this.perspectiveData[id].name);
+
+        alert(`🚀 DEPLOYMENT INITIATED\n\nSelected Perspectives:\n${names.join('\n')}\n\nIn production, this would:\n✓ Generate custom agent installer\n✓ Pre-configure selected perspectives\n✓ Provide download link & instructions\n\nRedirecting to Agent Network dashboard...`);
+
+        this.closeDeployModal();
+
+        setTimeout(() => {
+            window.location.href = '/dashboard/agents';
+        }, 500);
+    }
+}
+
+// Initialize marketplace
+let marketplace;
+document.addEventListener('DOMContentLoaded', () => {
+    marketplace = new Marketplace();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends "auth/base.html" %}
+
+{% block title %}Resend Verification Email{% endblock %}
+
+{% block header_title %}Email Verification Required{% endblock %}
+{% block header_subtitle %}We'll send you a new verification link{% endblock %}
+
+{% block content %}
+<form id="resend-verification-form" class="auth-form">
+    <div class="form-group">
+        <label for="email">Email Address</label>
+        <input
+            type="email"
+            id="email"
+            name="email"
+            class="form-control"
+            placeholder="your@email.com"
+            value="{{ email }}"
+            required
+            autocomplete="email"
+        >
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-block" id="resend-btn">
+        <span id="btn-text">Resend Verification Email</span>
+        <span id="btn-loader" style="display: none;">
+            <svg width="20" height="20" viewBox="0 0 50 50" style="vertical-align: middle;">
+                <circle cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="4" stroke-dasharray="80" stroke-linecap="round">
+                    <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/>
+                </circle>
+            </svg>
+            Sending...
+        </span>
+    </button>
+</form>
+
+<div class="text-center mt-4">
+    <p class="text-muted">
+        Already verified? <a href="/auth/login" class="form-link">Sign in</a>
+    </p>
+</div>
+
+<script>
+document.getElementById('resend-verification-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const email = document.getElementById('email').value;
+    const submitBtn = document.getElementById('resend-btn');
+    const btnText = document.getElementById('btn-text');
+    const btnLoader = document.getElementById('btn-loader');
+    const errorDiv = document.getElementById('error-message');
+    const errorText = document.getElementById('error-text');
+    const successDiv = document.getElementById('success-message');
+    const successText = document.getElementById('success-text');
+
+    // Hide previous messages
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+
+    // Show loading state
+    submitBtn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoader.style.display = 'inline';
+
+    try {
+        const response = await fetch('/api/user/auth/resend-verification', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Show success message
+            successText.textContent = 'Verification email sent! Please check your inbox.';
+            successDiv.style.display = 'block';
+
+            // Reset form
+            setTimeout(() => {
+                window.location.href = '/auth/verify-pending?email=' + encodeURIComponent(email);
+            }, 2000);
+        } else {
+            // Show error
+            errorText.textContent = data.error || 'Failed to send verification email';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Resend verification error:', error);
+        errorText.textContent = 'Network error. Please try again.';
+        errorDiv.style.display = 'block';
+    } finally {
+        // Reset button state
+        submitBtn.disabled = false;
+        btnText.style.display = 'inline';
+        btnLoader.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}
+
+{% block footer %}
+<p class="text-center text-muted" style="font-size: 0.9rem;">
+    <a href="/" class="form-link">← Back to Home</a>
+</p>
+{% endblock %}

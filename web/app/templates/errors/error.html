@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ error_code }} - {{ error_title }} | AMOSKYS</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/amoskys-logo.svg') }}">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .error-container {
+            max-width: 600px;
+            text-align: center;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 2rem;
+            filter: drop-shadow(0 0 20px rgba(0, 217, 255, 0.5));
+        }
+
+        .error-code {
+            font-size: 8rem;
+            font-weight: 800;
+            color: #00d9ff;
+            line-height: 1;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 30px rgba(0, 217, 255, 0.5);
+        }
+
+        .error-title {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #ffffff;
+        }
+
+        .error-message {
+            font-size: 1.1rem;
+            color: #b4bcd0;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .error-details {
+            background: rgba(0, 217, 255, 0.05);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+            color: #8b95a8;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.85rem 2rem;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background: #00d9ff;
+            color: #0a0e27;
+            border: 2px solid #00d9ff;
+        }
+
+        .btn-primary:hover {
+            background: #00ffff;
+            box-shadow: 0 5px 20px rgba(0, 217, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #00d9ff;
+            border: 2px solid #00d9ff;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(0, 217, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .footer-text {
+            margin-top: 3rem;
+            font-size: 0.85rem;
+            color: #6b7585;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <svg class="logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#00d9ff;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#00ffff;stop-opacity:1" />
+                </linearGradient>
+            </defs>
+            <circle cx="50" cy="25" r="8" fill="url(#logoGradient)" opacity="0.8"/>
+            <circle cx="30" cy="50" r="8" fill="url(#logoGradient)" opacity="0.8"/>
+            <circle cx="50" cy="50" r="10" fill="url(#logoGradient)"/>
+            <circle cx="70" cy="50" r="8" fill="url(#logoGradient)" opacity="0.8"/>
+            <circle cx="35" cy="75" r="7" fill="url(#logoGradient)" opacity="0.6"/>
+            <circle cx="65" cy="75" r="7" fill="url(#logoGradient)" opacity="0.6"/>
+        </svg>
+
+        <div class="error-code">{{ error_code }}</div>
+        <h1 class="error-title">{{ error_title }}</h1>
+        <p class="error-message">{{ error_message }}</p>
+
+        {% if correlation_id %}
+        <div class="error-details">
+            <strong>Correlation ID:</strong> {{ correlation_id }}<br>
+            <small>Please reference this ID when contacting support</small>
+        </div>
+        {% endif %}
+
+        <div class="button-group">
+            <a href="/" class="btn btn-primary">🏠 Go Home</a>
+            <a href="javascript:history.back()" class="btn btn-secondary">← Go Back</a>
+            {% if show_login %}
+            <a href="/auth/login" class="btn btn-secondary">🔐 Login</a>
+            {% endif %}
+        </div>
+
+        <p class="footer-text">
+            If this problem persists, please contact <a href="mailto:support@amoskys.com" style="color: #00d9ff;">support@amoskys.com</a>
+        </p>
+    </div>
+</body>
+</html>

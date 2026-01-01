@@ -4,17 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AMOSKYS - Neural Security Command Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #0a0a0a, #1a1a2e, #16213e);
-            color: #00ff88;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a0e27, #1a1f3a, #0a0e27);
+            color: #00d9ff;
             min-height: 100vh;
             overflow-x: hidden;
         }
@@ -34,25 +35,25 @@
         .logo {
             font-size: 3.5rem;
             font-weight: bold;
-            color: #00ff88;
-            text-shadow: 0 0 20px #00ff88;
+            color: #00d9ff;
+            text-shadow: 0 0 20px #00d9ff;
             margin-bottom: 10px;
         }
-        
+
         .tagline {
             font-size: 1.2rem;
-            color: #88ccff;
+            color: #b4bcd0;
             opacity: 0.8;
         }
-        
+
         .command-interface {
             max-width: 1000px;
             margin: 0 auto;
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid #00ff88;
+            background: rgba(26, 31, 58, 0.7);
+            border: 2px solid #00d9ff;
             border-radius: 10px;
             padding: 30px;
-            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+            box-shadow: 0 0 30px rgba(0, 217, 255, 0.3);
         }
         
         .status-grid {
@@ -64,24 +65,24 @@
         
         .status-card {
             background: rgba(0, 50, 100, 0.3);
-            border: 1px solid #00aaff;
+            border: 1px solid #00b8d4;
             border-radius: 8px;
             padding: 20px;
             text-align: center;
             transition: all 0.3s ease;
         }
-        
+
         .status-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0, 170, 255, 0.4);
+            box-shadow: 0 10px 25px rgba(0, 217, 255, 0.4);
         }
-        
+
         .status-title {
-            color: #00aaff;
+            color: #00d9ff;
             font-size: 1.1rem;
             margin-bottom: 10px;
         }
-        
+
         .status-value {
             color: #00ff88;
             font-size: 1.5rem;
@@ -96,15 +97,15 @@
             font-family: 'Courier New', monospace;
             border-left: 4px solid #00ff88;
         }
-        
+
         .command-line {
             color: #00ff88;
             margin: 5px 0;
         }
-        
+
         .command-prompt::before {
             content: "amoskys@neural-command:~$ ";
-            color: #00aaff;
+            color: #00d9ff;
         }
         
         .access-controls {
@@ -117,18 +118,18 @@
             padding: 12px 30px;
             margin: 10px;
             background: transparent;
-            border: 2px solid #00ff88;
-            color: #00ff88;
+            border: 2px solid #00d9ff;
+            color: #00d9ff;
             text-decoration: none;
             border-radius: 5px;
             transition: all 0.3s ease;
-            font-family: 'Courier New', monospace;
+            font-family: 'Inter', 'Courier New', monospace;
         }
-        
+
         .btn:hover {
-            background: #00ff88;
-            color: #000;
-            box-shadow: 0 0 20px #00ff88;
+            background: #00d9ff;
+            color: #0a0e27;
+            box-shadow: 0 0 20px #00d9ff;
         }
         
         .footer {
@@ -140,8 +141,8 @@
         }
         
         @keyframes glow {
-            0% { text-shadow: 0 0 20px #00ff88; }
-            100% { text-shadow: 0 0 30px #00ff88, 0 0 40px #00ff88; }
+            0% { text-shadow: 0 0 20px #00d9ff; }
+            100% { text-shadow: 0 0 30px #00d9ff, 0 0 40px #00d9ff; }
         }
         
         .matrix-bg {
@@ -162,7 +163,7 @@
     <div class="terminal-container">
         <div class="header">
             <div class="logo">AMOSKYS</div>
-            <div class="tagline">Neural Security Command Platform · Deployed via GitHub Actions ✅</div>
+            <div class="tagline">🧠 Intelligence-First Security, Built to Understand Threats</div>
         </div>
         
         <div class="command-interface">
@@ -186,13 +187,13 @@
             </div>
             
             <div class="terminal-output">
-                <div class="command-line">🧠🛡️ AMOSKYS Neural Security Command Platform Initialized</div>
-                <div class="command-line">✅ Event Bus: READY</div>
-                <div class="command-line">✅ Agent Network: ACTIVE</div>
-                <div class="command-line">✅ Security Protocols: ENGAGED</div>
-                <div class="command-line">✅ Web Interface: ONLINE</div>
-                <div class="command-line command-prompt">system.status --all</div>
-                <div class="command-line">All systems nominal. Platform ready for neural operations.</div>
+                <div class="command-line">🧠 AMOSKYS Intelligence Platform Initialized</div>
+                <div class="command-line">✅ Telemetry Pipeline: PRESERVING TRUTH</div>
+                <div class="command-line">✅ Correlation Engine: UNDERSTANDING BEHAVIOR</div>
+                <div class="command-line">✅ Agent Network: COLLECTING SIGNALS</div>
+                <div class="command-line">✅ Fusion Engine: BUILDING CONTEXT</div>
+                <div class="command-line command-prompt">amoskys.intel --status</div>
+                <div class="command-line">Intelligence layer operational. Understanding threats, not just reacting.</div>
             </div>
             
             <div class="access-controls">
@@ -223,16 +224,16 @@
             
             const chars = '01AMOSKYS{}[]()<>!@#$%^&*';
             const drops = [];
-            
+
             for (let i = 0; i < canvas.width / 20; i++) {
                 drops[i] = 1;
             }
-            
+
             function draw() {
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                ctx.fillStyle = '#00ff88';
+
+                ctx.fillStyle = '#00d9ff';
                 ctx.font = '15px Courier New';
                 
                 for (let i = 0; i < drops.length; i++) {

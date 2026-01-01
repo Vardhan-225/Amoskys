@@ -1,0 +1,32 @@
+[Unit]
+Description=AMOSKYS Web Application
+After=network.target amoskys-eventbus.service
+Wants=amoskys-eventbus.service
+
+[Service]
+Type=notify
+User=amoskys
+Group=amoskys
+WorkingDirectory=/opt/amoskys/web
+Environment="PATH=/opt/amoskys/.venv/bin"
+EnvironmentFile=/etc/amoskys/production.env
+ExecStart=/opt/amoskys/.venv/bin/gunicorn --config /opt/amoskys/web/gunicorn_config.py wsgi:app
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=on-failure
+RestartSec=10s
+
+# Security hardening
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/amoskys/data /var/log/amoskys /var/run/amoskys
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

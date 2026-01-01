@@ -1,0 +1,605 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Agent Perspective Selector - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <div>
+        <h2 style="margin: 0; display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 1.8rem;">👁️</span>
+            Agent Perspective Selector
+        </h2>
+        <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);">
+            Choose agent perspectives to analyze security events from multiple viewpoints
+        </p>
+    </div>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <div class="status-badge" id="active-count" style="background: linear-gradient(135deg, #00d9ff 0%, #00b8d4 100%);">
+            <strong>0</strong> perspectives active
+        </div>
+        <button class="neural-button" onclick="perspectiveSelector.applyPerspectives()">
+            ✓ Apply Selection
+        </button>
+    </div>
+</div>
+
+<!-- Quick Selection Presets -->
+<div class="neural-card" style="margin-bottom: 1.5rem;">
+    <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">Quick Selection Presets</h3>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('all')">
+            🌐 All Perspectives
+        </button>
+        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('network')">
+            🌐 Network Focus
+        </button>
+        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('endpoint')">
+            💻 Endpoint Focus
+        </button>
+        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('behavioral')">
+            🧠 Behavioral Analysis
+        </button>
+        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('threat-hunting')">
+            🎯 Threat Hunting
+        </button>
+        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('none')">
+            🔄 Clear All
+        </button>
+    </div>
+</div>
+
+<!-- Agent Perspectives Grid -->
+<div style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0; color: #00d9ff; font-size: 1.1rem;">Available Perspectives</h3>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <label style="color: var(--text-secondary); font-size: 0.9rem;">Filter by category:</label>
+            <select id="category-filter" class="neural-select" onchange="perspectiveSelector.filterByCategory(this.value)">
+                <option value="all">All Categories</option>
+                <option value="network">Network</option>
+                <option value="endpoint">Endpoint</option>
+                <option value="behavioral">Behavioral</option>
+                <option value="data">Data</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="perspectives-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem;">
+        <!-- Perspectives will be populated dynamically -->
+    </div>
+</div>
+
+<!-- Active Perspectives Analysis -->
+<div class="neural-card">
+    <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">Perspective Coverage Analysis</h3>
+    <div id="coverage-analysis">
+        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            Select agent perspectives to see coverage analysis
+        </div>
+    </div>
+</div>
+
+<style>
+.neural-button {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.1) 0%, rgba(0, 184, 212, 0.1) 100%);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.neural-button:hover {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.2) 0%, rgba(0, 184, 212, 0.2) 100%);
+    border-color: rgba(0, 217, 255, 0.5);
+    transform: translateY(-2px);
+}
+
+.neural-select {
+    background: rgba(26, 31, 58, 0.8);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.preset-btn {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.05) 0%, rgba(0, 184, 212, 0.05) 100%);
+    border: 1px solid rgba(0, 217, 255, 0.2);
+    color: #00d9ff;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.preset-btn:hover {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.15) 0%, rgba(0, 184, 212, 0.15) 100%);
+    border-color: rgba(0, 217, 255, 0.4);
+}
+
+.perspective-card {
+    background: rgba(26, 31, 58, 0.5);
+    border: 2px solid rgba(0, 217, 255, 0.2);
+    border-radius: 12px;
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.perspective-card:hover {
+    border-color: rgba(0, 217, 255, 0.4);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 217, 255, 0.15);
+}
+
+.perspective-card.active {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.15) 0%, rgba(0, 184, 212, 0.15) 100%);
+    border-color: #00d9ff;
+    box-shadow: 0 0 30px rgba(0, 217, 255, 0.3);
+}
+
+.perspective-card.active::before {
+    content: '✓';
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    background: #00d9ff;
+    color: #0a0f1e;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.perspective-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.perspective-icon {
+    font-size: 2rem;
+}
+
+.perspective-title {
+    flex: 1;
+}
+
+.perspective-name {
+    font-weight: 600;
+    color: #ffffff;
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.perspective-category {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.perspective-description {
+    color: #cccccc;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+}
+
+.perspective-capabilities {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+}
+
+.capability-badge {
+    background: rgba(0, 217, 255, 0.1);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.2rem 0.6rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.perspective-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stat-item {
+    font-size: 0.85rem;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+}
+
+.stat-value {
+    color: #00ff88;
+    font-weight: 600;
+}
+
+.coverage-category {
+    margin-bottom: 1.5rem;
+}
+
+.coverage-header {
+    font-weight: 600;
+    color: #00d9ff;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.coverage-bar {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.coverage-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00d9ff 0%, #00ff88 100%);
+    transition: width 0.5s ease;
+}
+
+.coverage-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+</style>
+
+<script>
+class PerspectiveSelector {
+    constructor() {
+        this.selectedPerspectives = new Set();
+
+        // Agent perspective definitions
+        this.perspectives = [
+            {
+                id: 'network-monitor',
+                name: 'Network Monitor',
+                category: 'network',
+                icon: '🌐',
+                description: 'Deep packet inspection and network flow analysis. Detects lateral movement, C2 communications, and data exfiltration.',
+                capabilities: ['DPI', 'Flow Analysis', 'Protocol Detection', 'Anomaly Detection'],
+                detectionRate: 94,
+                falsePositiveRate: 2.1
+            },
+            {
+                id: 'endpoint-monitor',
+                name: 'Endpoint Monitor',
+                category: 'endpoint',
+                icon: '💻',
+                description: 'Real-time process, file, and registry monitoring on endpoints. Identifies malicious behavior and IOCs.',
+                capabilities: ['Process Monitoring', 'File Integrity', 'Registry Watch', 'Memory Scanning'],
+                detectionRate: 91,
+                falsePositiveRate: 3.2
+            },
+            {
+                id: 'process-monitor',
+                name: 'Process Monitor',
+                category: 'endpoint',
+                icon: '🔬',
+                description: 'Advanced process telemetry including parent-child relationships, command-line arguments, and behavioral analysis.',
+                capabilities: ['Process Tree', 'Command Analysis', 'DLL Injection', 'Code Injection'],
+                detectionRate: 88,
+                falsePositiveRate: 2.8
+            },
+            {
+                id: 'email-guardian',
+                name: 'Email Guardian',
+                category: 'network',
+                icon: '📧',
+                description: 'Email security monitoring for phishing, malicious attachments, and suspicious sender patterns.',
+                capabilities: ['Phishing Detection', 'Attachment Scanning', 'Link Analysis', 'SPF/DKIM'],
+                detectionRate: 96,
+                falsePositiveRate: 1.5
+            },
+            {
+                id: 'file-monitor',
+                name: 'File Access Monitor',
+                category: 'data',
+                icon: '📁',
+                description: 'Tracks file access patterns, identifies ransomware behavior and unauthorized data access.',
+                capabilities: ['Access Logging', 'Ransomware Detection', 'DLP', 'Shadow Copy'],
+                detectionRate: 90,
+                falsePositiveRate: 2.5
+            },
+            {
+                id: 'memory-scanner',
+                name: 'Memory Scanner',
+                category: 'endpoint',
+                icon: '🧠',
+                description: 'Scans process memory for injected code, credential dumping tools, and malicious payloads.',
+                capabilities: ['Memory Forensics', 'Credential Protection', 'Shellcode Detection', 'PE Scanning'],
+                detectionRate: 87,
+                falsePositiveRate: 4.1
+            },
+            {
+                id: 'behavior-analyzer',
+                name: 'Behavior Analyzer',
+                category: 'behavioral',
+                icon: '🎭',
+                description: 'Machine learning-based behavioral analysis to detect anomalous user and system activities.',
+                capabilities: ['ML Detection', 'Baseline Analysis', 'Anomaly Scoring', 'Pattern Recognition'],
+                detectionRate: 85,
+                falsePositiveRate: 5.3
+            },
+            {
+                id: 'kerberos-monitor',
+                name: 'Kerberos Monitor',
+                category: 'network',
+                icon: '🎫',
+                description: 'Monitors Kerberos authentication for golden tickets, silver tickets, and kerberoasting attacks.',
+                capabilities: ['Ticket Analysis', 'Encryption Check', 'PAC Validation', 'TGT Monitoring'],
+                detectionRate: 93,
+                falsePositiveRate: 1.8
+            },
+            {
+                id: 'script-analyzer',
+                name: 'Script Analyzer',
+                category: 'endpoint',
+                icon: '📜',
+                description: 'Analyzes PowerShell, batch scripts, and other scripting engines for malicious behavior.',
+                capabilities: ['PowerShell Logging', 'Obfuscation Detection', 'AMSI Integration', 'Script Blocking'],
+                detectionRate: 89,
+                falsePositiveRate: 3.5
+            },
+            {
+                id: 'authentication-monitor',
+                name: 'Authentication Monitor',
+                category: 'behavioral',
+                icon: '🔐',
+                description: 'Tracks authentication events, failed logins, privilege escalation, and credential abuse.',
+                capabilities: ['Login Tracking', 'Privilege Monitoring', 'Brute Force Detection', 'Account Lockout'],
+                detectionRate: 92,
+                falsePositiveRate: 2.3
+            },
+            {
+                id: 'replication-monitor',
+                name: 'Replication Monitor',
+                category: 'network',
+                icon: '🔄',
+                description: 'Monitors Active Directory replication for DCSync attacks and unauthorized directory access.',
+                capabilities: ['DC Monitoring', 'DRS Detection', 'Replication Analysis', 'NTDS Protection'],
+                detectionRate: 95,
+                falsePositiveRate: 1.2
+            },
+            {
+                id: 'threat-intelligence',
+                name: 'Threat Intelligence',
+                category: 'behavioral',
+                icon: '🎯',
+                description: 'Correlates events with global threat intelligence feeds for known IOCs and attack patterns.',
+                capabilities: ['IOC Matching', 'TTP Analysis', 'Feed Integration', 'MITRE Mapping'],
+                detectionRate: 86,
+                falsePositiveRate: 3.8
+            }
+        ];
+
+        // Preset configurations
+        this.presets = {
+            'all': this.perspectives.map(p => p.id),
+            'network': this.perspectives.filter(p => p.category === 'network').map(p => p.id),
+            'endpoint': this.perspectives.filter(p => p.category === 'endpoint').map(p => p.id),
+            'behavioral': this.perspectives.filter(p => p.category === 'behavioral').map(p => p.id),
+            'threat-hunting': ['network-monitor', 'process-monitor', 'behavior-analyzer', 'threat-intelligence', 'kerberos-monitor'],
+            'none': []
+        };
+
+        this.init();
+    }
+
+    init() {
+        this.renderPerspectives();
+        this.updateCoverageAnalysis();
+    }
+
+    renderPerspectives(filterCategory = 'all') {
+        const grid = document.getElementById('perspectives-grid');
+
+        let perspectivesToRender = this.perspectives;
+        if (filterCategory !== 'all') {
+            perspectivesToRender = this.perspectives.filter(p => p.category === filterCategory);
+        }
+
+        grid.innerHTML = perspectivesToRender.map(perspective => `
+            <div class="perspective-card ${this.selectedPerspectives.has(perspective.id) ? 'active' : ''}"
+                 onclick="perspectiveSelector.togglePerspective('${perspective.id}')"
+                 data-category="${perspective.category}">
+                <div class="perspective-header">
+                    <div class="perspective-icon">${perspective.icon}</div>
+                    <div class="perspective-title">
+                        <div class="perspective-name">${perspective.name}</div>
+                        <div class="perspective-category">${perspective.category}</div>
+                    </div>
+                </div>
+
+                <div class="perspective-description">
+                    ${perspective.description}
+                </div>
+
+                <div class="perspective-capabilities">
+                    ${perspective.capabilities.map(cap => `
+                        <span class="capability-badge">${cap}</span>
+                    `).join('')}
+                </div>
+
+                <div class="perspective-stats">
+                    <div class="stat-item">
+                        <div class="stat-label">Detection Rate</div>
+                        <div class="stat-value">${perspective.detectionRate}%</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">False Positive</div>
+                        <div class="stat-value">${perspective.falsePositiveRate}%</div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    togglePerspective(perspectiveId) {
+        if (this.selectedPerspectives.has(perspectiveId)) {
+            this.selectedPerspectives.delete(perspectiveId);
+        } else {
+            this.selectedPerspectives.add(perspectiveId);
+        }
+
+        this.renderPerspectives(document.getElementById('category-filter').value);
+        this.updateActiveCount();
+        this.updateCoverageAnalysis();
+    }
+
+    updateActiveCount() {
+        const badge = document.getElementById('active-count');
+        const count = this.selectedPerspectives.size;
+        badge.innerHTML = `<strong>${count}</strong> perspective${count !== 1 ? 's' : ''} active`;
+    }
+
+    filterByCategory(category) {
+        this.renderPerspectives(category);
+    }
+
+    loadPreset(presetName) {
+        this.selectedPerspectives.clear();
+        this.presets[presetName].forEach(id => this.selectedPerspectives.add(id));
+
+        this.renderPerspectives(document.getElementById('category-filter').value);
+        this.updateActiveCount();
+        this.updateCoverageAnalysis();
+    }
+
+    updateCoverageAnalysis() {
+        const container = document.getElementById('coverage-analysis');
+
+        if (this.selectedPerspectives.size === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    Select agent perspectives to see coverage analysis
+                </div>
+            `;
+            return;
+        }
+
+        const selectedPerspectiveObjs = this.perspectives.filter(p =>
+            this.selectedPerspectives.has(p.id)
+        );
+
+        // Calculate category coverage
+        const categoryGroups = {
+            'network': { name: 'Network Security', perspectives: [] },
+            'endpoint': { name: 'Endpoint Protection', perspectives: [] },
+            'behavioral': { name: 'Behavioral Analysis', perspectives: [] },
+            'data': { name: 'Data Security', perspectives: [] }
+        };
+
+        selectedPerspectiveObjs.forEach(p => {
+            categoryGroups[p.category].perspectives.push(p);
+        });
+
+        // Calculate overall metrics
+        const avgDetectionRate = selectedPerspectiveObjs.reduce((sum, p) => sum + p.detectionRate, 0) / selectedPerspectiveObjs.length;
+        const avgFalsePositive = selectedPerspectiveObjs.reduce((sum, p) => sum + p.falsePositiveRate, 0) / selectedPerspectiveObjs.length;
+
+        container.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                <div style="background: rgba(0, 255, 136, 0.1); padding: 1rem; border-radius: 8px; border: 1px solid rgba(0, 255, 136, 0.3);">
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Avg Detection Rate</div>
+                    <div style="font-size: 1.8rem; font-weight: bold; color: #00ff88;">${avgDetectionRate.toFixed(1)}%</div>
+                </div>
+                <div style="background: rgba(255, 170, 0, 0.1); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255, 170, 0, 0.3);">
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Avg False Positive</div>
+                    <div style="font-size: 1.8rem; font-weight: bold; color: #ffaa00;">${avgFalsePositive.toFixed(1)}%</div>
+                </div>
+                <div style="background: rgba(0, 217, 255, 0.1); padding: 1rem; border-radius: 8px; border: 1px solid rgba(0, 217, 255, 0.3);">
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Active Perspectives</div>
+                    <div style="font-size: 1.8rem; font-weight: bold; color: #00d9ff;">${this.selectedPerspectives.size}</div>
+                </div>
+                <div style="background: rgba(102, 126, 234, 0.1); padding: 1rem; border-radius: 8px; border: 1px solid rgba(102, 126, 234, 0.3);">
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Categories Covered</div>
+                    <div style="font-size: 1.8rem; font-weight: bold; color: #667eea;">
+                        ${Object.values(categoryGroups).filter(g => g.perspectives.length > 0).length}/4
+                    </div>
+                </div>
+            </div>
+
+            ${Object.entries(categoryGroups).map(([key, group]) => {
+                const categoryTotal = this.perspectives.filter(p => p.category === key).length;
+                const categoryActive = group.perspectives.length;
+                const coveragePercent = (categoryActive / categoryTotal) * 100;
+
+                return `
+                    <div class="coverage-category">
+                        <div class="coverage-header">
+                            ${group.name}
+                            <span style="color: var(--text-secondary); font-weight: normal; font-size: 0.85rem;">
+                                (${categoryActive}/${categoryTotal} agents)
+                            </span>
+                        </div>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill" style="width: ${coveragePercent}%;"></div>
+                        </div>
+                        <div class="coverage-details">
+                            ${group.perspectives.map(p => `
+                                <div>
+                                    <span style="color: #00d9ff;">•</span>
+                                    ${p.name}
+                                </div>
+                            `).join('')}
+                            ${categoryActive === 0 ? '<div style="color: #888;">No agents selected from this category</div>' : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        `;
+    }
+
+    applyPerspectives() {
+        const selectedNames = Array.from(this.selectedPerspectives).map(id => {
+            const perspective = this.perspectives.find(p => p.id === id);
+            return perspective ? perspective.name : id;
+        });
+
+        if (this.selectedPerspectives.size === 0) {
+            alert('Please select at least one perspective before applying.');
+            return;
+        }
+
+        const message = `Applied ${this.selectedPerspectives.size} perspective(s):\n\n${selectedNames.join('\n')}\n\nThese perspectives will now be used to analyze security events across all dashboards.\n\nThis is a mockup - in production, perspective selection would filter and correlate events across the entire AMOSKYS platform.`;
+
+        alert(message);
+    }
+}
+
+// Initialize on page load
+let perspectiveSelector;
+document.addEventListener('DOMContentLoaded', () => {
+    perspectiveSelector = new PerspectiveSelector();
+});
+</script>
+{% endblock %}

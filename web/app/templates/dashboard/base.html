@@ -4,27 +4,37 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}AMOSKYS Cortex Dashboard{% endblock %}</title>
-    
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="48x48" href="{{ url_for('static', filename='images/favicon-48x48.png') }}">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='images/favicon-192x192.png') }}">
+    <link rel="apple-touch-icon" sizes="512x512" href="{{ url_for('static', filename='images/favicon-512x512.png') }}">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     <!-- Neural Security Styling -->
     <style>
         :root {
-            /* Neural Color Palette - Softer, professional colors */
-            --neural-primary: #5cb85c;
-            --neural-secondary: #5bc0de;
+            /* Defense Room Colors - Match Landing Page */
+            --neural-primary: #00d9ff;
+            --neural-secondary: #00b8d4;
             --neural-warning: #f0ad4e;
-            --neural-danger: #d9534f;
-            --neural-critical: #c9302c;
-            
-            /* Dark Neural Theme */
-            --bg-primary: #0a0a0a;
-            --bg-secondary: #1a1a1a;
-            --bg-tertiary: #2a2a2a;
+            --neural-danger: #ff3366;
+            --neural-critical: #d9534f;
+            --neural-success: #00ff88;
+
+            /* Navy Theme Backgrounds */
+            --bg-primary: #0a0e27;
+            --bg-secondary: #1a1f3a;
+            --bg-tertiary: #242942;
             --text-primary: #ffffff;
-            --text-secondary: #cccccc;
-            --text-muted: #888888;
-            
+            --text-secondary: #b4bcd0;
+            --text-muted: #6b7a99;
+
             /* Gradients */
-            --gradient-neural: linear-gradient(135deg, #001122 0%, #002244 50%, #001133 100%);
+            --gradient-neural: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
             --gradient-threat: linear-gradient(135deg, #330011 0%, #660022 50%, #440011 100%);
             --gradient-success: linear-gradient(135deg, #003311 0%, #006622 50%, #004411 100%);
         }
@@ -36,13 +46,13 @@
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
             line-height: 1.6;
             overflow-x: hidden;
         }
-        
+
         /* Neural Grid Background */
         body::before {
             content: '';
@@ -51,9 +61,9 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: 
-                linear-gradient(rgba(0, 255, 136, 0.1) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 255, 136, 0.1) 1px, transparent 1px);
+            background-image:
+                linear-gradient(rgba(0, 217, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 217, 255, 0.05) 1px, transparent 1px);
             background-size: 50px 50px;
             z-index: -1;
             animation: neural-pulse 10s ease-in-out infinite;
@@ -69,7 +79,7 @@
             background: var(--gradient-neural);
             padding: 1rem 2rem;
             border-bottom: 2px solid var(--neural-primary);
-            box-shadow: 0 4px 20px rgba(0, 255, 136, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 217, 255, 0.3);
             position: sticky;
             top: 0;
             z-index: 1000;
@@ -87,21 +97,33 @@
             display: flex;
             align-items: center;
             gap: 1rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
         }
-        
+
+        .neural-logo:hover {
+            transform: translateY(-2px);
+        }
+
+        .neural-logo-image {
+            width: 40px;
+            height: 40px;
+            filter: drop-shadow(0 0 10px rgba(0, 217, 255, 0.5));
+        }
+
         .neural-logo h1 {
             color: var(--neural-primary);
             font-size: 1.8rem;
             font-weight: 700;
-            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+            text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
         }
-        
+
         .neural-status {
             display: flex;
             align-items: center;
             gap: 2rem;
         }
-        
+
         .status-indicator {
             display: flex;
             align-items: center;
@@ -109,7 +131,7 @@
             padding: 0.5rem 1rem;
             background: rgba(255, 255, 255, 0.1);
             border-radius: 20px;
-            border: 1px solid rgba(0, 255, 136, 0.3);
+            border: 1px solid rgba(0, 217, 255, 0.3);
         }
         
         .status-dot {
@@ -128,55 +150,166 @@
             50% { transform: scale(1.2); opacity: 0.7; }
         }
         
-        /* Navigation */
-        .neural-nav {
+        /* Hamburger Menu */
+        .hamburger-btn {
+            display: block;
+            background: none;
+            border: none;
+            color: var(--neural-primary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .hamburger-btn:hover {
+            color: var(--neural-success);
+            transform: scale(1.1);
+        }
+
+        .sidebar-nav {
+            position: fixed;
+            left: -300px;
+            top: 0;
+            width: 300px;
+            height: 100vh;
             background: var(--bg-secondary);
-            padding: 0 2rem;
-            border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+            border-right: 2px solid var(--neural-primary);
+            z-index: 2000;
+            transition: left 0.3s ease;
+            overflow-y: auto;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
         }
-        
-        .nav-content {
-            max-width: 1400px;
-            margin: 0 auto;
+
+        .sidebar-nav.open {
+            left: 0;
+        }
+
+        /* Push content when sidebar is open */
+        body.sidebar-open .dashboard-header,
+        body.sidebar-open .dashboard-main {
+            margin-left: 300px;
+            transition: margin-left 0.3s ease;
+        }
+
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1999;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.show {
+            display: block;
+            opacity: 1;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(0, 217, 255, 0.3);
             display: flex;
-            gap: 2rem;
+            justify-content: space-between;
+            align-items: center;
         }
-        
-        .nav-link {
+
+        .sidebar-title {
+            color: var(--neural-primary);
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .sidebar-close {
+            background: none;
+            border: none;
+            color: var(--neural-primary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-close:hover {
+            color: var(--neural-danger);
+            transform: rotate(90deg);
+        }
+
+        .sidebar-menu {
+            padding: 1rem 0;
+        }
+
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
             padding: 1rem 1.5rem;
             color: var(--text-secondary);
             text-decoration: none;
-            border-bottom: 3px solid transparent;
             transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
+            border-left: 3px solid transparent;
         }
-        
-        .nav-link:hover {
+
+        .sidebar-link:hover {
+            background: rgba(0, 217, 255, 0.1);
             color: var(--neural-primary);
-            border-bottom-color: var(--neural-primary);
-            background: rgba(0, 255, 136, 0.1);
+            border-left-color: var(--neural-primary);
         }
-        
-        .nav-link.active {
+
+        .sidebar-link.active {
+            background: rgba(0, 217, 255, 0.15);
             color: var(--neural-primary);
-            border-bottom-color: var(--neural-primary);
-            background: rgba(0, 255, 136, 0.15);
+            border-left-color: var(--neural-primary);
         }
-        
-        .nav-link::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
+
+        .sidebar-link-admin {
+            color: var(--neural-danger);
+        }
+
+        .sidebar-link-admin:hover {
+            background: rgba(255, 51, 102, 0.1);
+            color: var(--neural-danger);
+            border-left-color: var(--neural-danger);
+        }
+
+        .sidebar-divider {
+            height: 1px;
+            background: rgba(0, 217, 255, 0.2);
+            margin: 0.5rem 1.5rem;
+        }
+
+        .logout-btn {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            color: var(--neural-danger);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            background: none;
+            border: none;
             width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.2), transparent);
-            transition: left 0.5s ease;
+            text-align: left;
+            font-size: 1rem;
+            font-family: inherit;
         }
-        
-        .nav-link:hover::before {
-            left: 100%;
+
+        .logout-btn:hover {
+            background: rgba(255, 51, 102, 0.1);
+            border-left-color: var(--neural-danger);
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .hamburger-btn {
+                display: block;
+            }
         }
         
         /* Main Content */
@@ -190,7 +323,7 @@
         /* Cards */
         .neural-card {
             background: var(--bg-secondary);
-            border: 1px solid rgba(0, 255, 136, 0.3);
+            border: 1px solid rgba(0, 217, 255, 0.3);
             border-radius: 10px;
             padding: 1.5rem;
             margin-bottom: 1.5rem;
@@ -199,7 +332,7 @@
             position: relative;
             overflow: hidden;
         }
-        
+
         .neural-card::before {
             content: '';
             position: absolute;
@@ -209,20 +342,20 @@
             height: 3px;
             background: linear-gradient(90deg, var(--neural-primary), var(--neural-secondary));
         }
-        
+
         .neural-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 255, 136, 0.2);
+            box-shadow: 0 8px 25px rgba(0, 217, 255, 0.2);
             border-color: var(--neural-primary);
         }
-        
+
         .card-header {
             display: flex;
             justify-content: between;
             align-items: center;
             margin-bottom: 1rem;
             padding-bottom: 0.5rem;
-            border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+            border-bottom: 1px solid rgba(0, 217, 255, 0.2);
         }
         
         .card-title {
@@ -255,7 +388,7 @@
             background: var(--gradient-neural);
             padding: 1.5rem;
             border-radius: 10px;
-            border: 1px solid rgba(0, 255, 136, 0.3);
+            border: 1px solid rgba(0, 217, 255, 0.3);
             text-align: center;
             transition: all 0.3s ease;
             overflow: hidden;
@@ -264,10 +397,10 @@
             justify-content: center;
             min-height: 160px;
         }
-        
+
         .metric-card:hover {
             transform: scale(1.02);
-            box-shadow: 0 8px 20px rgba(0, 255, 136, 0.3);
+            box-shadow: 0 8px 20px rgba(0, 217, 255, 0.3);
         }
         
         .metric-value {
@@ -304,15 +437,15 @@
         
         .neural-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
+            box-shadow: 0 6px 20px rgba(0, 217, 255, 0.4);
         }
-        
+
         /* Loading Animation */
         .neural-loading {
             display: inline-block;
             width: 20px;
             height: 20px;
-            border: 3px solid rgba(0, 255, 136, 0.3);
+            border: 3px solid rgba(0, 217, 255, 0.3);
             border-radius: 50%;
             border-top: 3px solid var(--neural-primary);
             animation: spin 1s linear infinite;
@@ -339,7 +472,7 @@
         .metric-value.updating {
             animation: metric-pulse 0.5s ease-in-out;
             color: var(--neural-primary);
-            text-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
+            text-shadow: 0 0 8px rgba(0, 217, 255, 0.4);
         }
         
         /* Card Slide-In Animation */
@@ -367,14 +500,14 @@
         
         /* Status Indicator Animation */
         @keyframes status-glow {
-            0%, 100% { 
-                box-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
+            0%, 100% {
+                box-shadow: 0 0 10px rgba(0, 217, 255, 0.4);
             }
-            50% { 
-                box-shadow: 0 0 20px rgba(0, 255, 136, 0.8);
+            50% {
+                box-shadow: 0 0 20px rgba(0, 217, 255, 0.8);
             }
         }
-        
+
         .status-indicator {
             animation: status-glow 2s ease-in-out infinite;
         }
@@ -460,13 +593,13 @@
         
         .neural-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 12px 35px rgba(0, 255, 136, 0.25);
+            box-shadow: 0 12px 35px rgba(0, 217, 255, 0.25);
         }
-        
+
         .neural-button:active {
             transform: translateY(0px);
         }
-        
+
         /* Loading Skeleton */
         @keyframes skeleton-loading {
             0% {
@@ -476,13 +609,13 @@
                 background-position: 1000px 0;
             }
         }
-        
+
         .skeleton-loader {
             background: linear-gradient(
                 90deg,
-                rgba(0, 255, 136, 0.1) 25%,
-                rgba(0, 255, 136, 0.2) 50%,
-                rgba(0, 255, 136, 0.1) 75%
+                rgba(0, 217, 255, 0.1) 25%,
+                rgba(0, 217, 255, 0.2) 50%,
+                rgba(0, 217, 255, 0.1) 75%
             );
             background-size: 1000px 100%;
             animation: skeleton-loading 2s infinite;
@@ -542,6 +675,201 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--neural-secondary);
         }
+
+        /* Global Search */
+        .global-search {
+            position: relative;
+            display: flex;
+            align-items: center;
+            margin-right: 1rem;
+        }
+
+        .global-search-input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 8px;
+            padding: 0.5rem 1rem 0.5rem 2.5rem;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            width: 250px;
+            transition: all 0.3s ease;
+        }
+
+        .global-search-input:focus {
+            outline: none;
+            border-color: var(--neural-primary);
+            box-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
+            width: 300px;
+        }
+
+        .global-search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .global-search-icon {
+            position: absolute;
+            left: 0.75rem;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .global-search-shortcut {
+            position: absolute;
+            right: 0.75rem;
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 4px;
+            padding: 0.1rem 0.4rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        /* Command Palette */
+        .command-palette-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            display: none;
+            justify-content: center;
+            padding-top: 15vh;
+        }
+
+        .command-palette-overlay.open {
+            display: flex;
+        }
+
+        .command-palette {
+            background: var(--bg-secondary);
+            border: 1px solid var(--neural-primary);
+            border-radius: 12px;
+            width: 600px;
+            max-width: 90vw;
+            max-height: 500px;
+            box-shadow: 0 20px 60px rgba(0, 217, 255, 0.3);
+            overflow: hidden;
+            animation: paletteSlideIn 0.2s ease;
+        }
+
+        @keyframes paletteSlideIn {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .command-palette-input {
+            width: 100%;
+            padding: 1.25rem 1rem;
+            background: var(--bg-primary);
+            border: none;
+            border-bottom: 1px solid rgba(0, 217, 255, 0.3);
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            outline: none;
+        }
+
+        .command-palette-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .command-palette-results {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .command-palette-section {
+            padding: 0.5rem 0;
+        }
+
+        .command-palette-section-title {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .command-palette-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .command-palette-item:hover,
+        .command-palette-item.selected {
+            background: rgba(0, 217, 255, 0.1);
+        }
+
+        .command-palette-item-icon {
+            font-size: 1.2rem;
+            width: 2rem;
+            text-align: center;
+        }
+
+        .command-palette-item-content {
+            flex: 1;
+        }
+
+        .command-palette-item-title {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .command-palette-item-description {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .command-palette-item-shortcut {
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 4px;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .command-palette-empty {
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        /* Sidebar Search */
+        .sidebar-search {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(0, 217, 255, 0.2);
+        }
+
+        .sidebar-search-input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+        }
+
+        .sidebar-search-input:focus {
+            outline: none;
+            border-color: var(--neural-primary);
+        }
+
+        .sidebar-search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .sidebar-link.hidden {
+            display: none;
+        }
     </style>
     
     <!-- Chart.js for Visualizations -->
@@ -556,44 +884,130 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body>
+    <!-- Command Palette Overlay -->
+    <div class="command-palette-overlay" id="commandPalette" role="dialog" aria-modal="true" aria-label="Command palette">
+        <div class="command-palette">
+            <input type="text" class="command-palette-input" id="commandPaletteInput" placeholder="Type a command or search..." autocomplete="off">
+            <div class="command-palette-results" id="commandPaletteResults">
+                <!-- Results populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()" onkeydown="if(event.key==='Enter'||event.key===' ')toggleSidebar()" role="button" tabindex="0" aria-label="Close sidebar"></div>
+
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar-nav" id="sidebarNav">
+        <div class="sidebar-header">
+            <a href="/dashboard/cortex" style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit;">
+                <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS" style="width: 30px; height: 30px;">
+                <span class="sidebar-title">AMOSKYS</span>
+            </a>
+            <button class="sidebar-close" onclick="toggleSidebar()" aria-label="Close sidebar">✕</button>
+        </div>
+        <div class="sidebar-search">
+            <input type="text" class="sidebar-search-input" id="sidebarSearch" placeholder="Filter navigation..." aria-label="Filter navigation">
+        </div>
+        <div class="sidebar-menu">
+            <a href="/dashboard/cortex" class="sidebar-link">
+                <span>🧠</span>
+                <span>Cortex Command</span>
+            </a>
+            <a href="/dashboard/soc" class="sidebar-link">
+                <span>🛡️</span>
+                <span>SOC Operations</span>
+            </a>
+            <a href="/dashboard/agents" class="sidebar-link">
+                <span>🤖</span>
+                <span>Agent Network</span>
+            </a>
+            <a href="/dashboard/processes" class="sidebar-link">
+                <span>🔬</span>
+                <span>Process Telemetry</span>
+            </a>
+            <a href="/dashboard/system" class="sidebar-link">
+                <span>📊</span>
+                <span>System Health</span>
+            </a>
+            <a href="/dashboard/neural" class="sidebar-link">
+                <span>🧠</span>
+                <span>Neural Insights</span>
+            </a>
+
+            <div class="sidebar-divider"></div>
+
+            <a href="/dashboard/marketplace" class="sidebar-link">
+                <span>🏪</span>
+                <span>Agent Marketplace</span>
+            </a>
+            <a href="/dashboard/evidence-chain" class="sidebar-link">
+                <span>🔗</span>
+                <span>Evidence Chain</span>
+            </a>
+            <a href="/dashboard/timeline-replay" class="sidebar-link">
+                <span>⏱️</span>
+                <span>Timeline Replay</span>
+            </a>
+            <a href="/dashboard/query-builder" class="sidebar-link">
+                <span>🔍</span>
+                <span>Query Builder</span>
+            </a>
+            <a href="/dashboard/perspective-selector" class="sidebar-link">
+                <span>👁️</span>
+                <span>Perspective Selector</span>
+            </a>
+
+            <div class="sidebar-divider"></div>
+
+            {% if user and user.role.value == 'admin' %}
+            <a href="/admin" class="sidebar-link sidebar-link-admin">
+                <span>🔐</span>
+                <span>Admin Panel</span>
+            </a>
+
+            <div class="sidebar-divider"></div>
+            {% endif %}
+
+            <button class="logout-btn" onclick="logout()">
+                <span>🚪</span>
+                <span>Logout</span>
+            </button>
+        </div>
+    </nav>
+
     <!-- Neural Header -->
     <header class="neural-header">
         <div class="header-content">
-            <div class="neural-logo">
-                <a href="/dashboard/cortex" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 1rem;">
-                    <h1>🧠 AMOSKYS</h1>
-                    <span style="color: var(--text-secondary);">Neural Security Command Platform</span>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
+                <a href="/dashboard/cortex" class="neural-logo">
+                    <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS Logo" class="neural-logo-image">
+                    <h1>AMOSKYS</h1>
+                    <span style="color: var(--text-secondary); font-size: 0.9rem;">Intelligence-First Security</span>
                 </a>
+            </div>
+            <div class="global-search">
+                <span class="global-search-icon">🔍</span>
+                <input type="text" class="global-search-input" placeholder="Search..." aria-label="Global search">
+                <span class="global-search-shortcut">⌘K</span>
             </div>
             <div class="neural-status">
                 <div class="status-indicator">
+                    <span style="color: var(--text-secondary); font-size: 0.85rem; margin-right: 0.5rem;">System</span>
                     <div class="status-dot status-online" id="system-status"></div>
-                    <span id="system-status-text">System Online</span>
                 </div>
                 <div class="status-indicator">
-                    <div class="status-dot" id="threat-status"></div>
-                    <span id="threat-level-text">Threat Level: LOW</span>
+                    <span style="color: var(--text-secondary); font-size: 0.85rem; margin-right: 0.5rem;">Threat</span>
+                    <div class="status-dot status-online" id="threat-status"></div>
                 </div>
                 <div class="status-indicator">
-                    <span id="current-time"></span>
+                    <span style="color: var(--text-secondary); font-size: 0.85rem; margin-right: 0.5rem;">Connection</span>
+                    <div class="status-dot status-online" id="connection-status"></div>
                 </div>
             </div>
         </div>
     </header>
-    
-    <!-- Neural Navigation -->
-    <nav class="neural-nav">
-        <div class="nav-content">
-            <a href="/dashboard/cortex" class="nav-link">🏠 Command Center</a>
-            <a href="/dashboard/soc" class="nav-link">🛡️ SOC Operations</a>
-            <a href="/dashboard/agents" class="nav-link">🤖 Agent Network</a>
-            <a href="/dashboard/processes" class="nav-link">🔬 Process Telemetry</a>
-            <a href="/dashboard/peripherals" class="nav-link">🔌 Peripherals</a>
-            <a href="/dashboard/database" class="nav-link">🗄️ Database</a>
-            <a href="/dashboard/system" class="nav-link">📊 System Health</a>
-            <a href="/dashboard/neural" class="nav-link">🧠 Neural Insights</a>
-        </div>
-    </nav>
     
     <!-- Main Dashboard Content -->
     <main class="dashboard-main">
@@ -645,23 +1059,19 @@
                 try {
                     const response = await fetch('/dashboard/api/live/metrics');
                     const data = await response.json();
-                    
+
                     if (data.status === 'success') {
                         const statusDot = document.getElementById('system-status');
-                        const statusText = document.getElementById('system-status-text');
-                        
+
                         const cpu = data.metrics.cpu.percent;
                         const memory = data.metrics.memory.percent;
-                        
+
                         if (cpu > 85 || memory > 90) {
                             statusDot.className = 'status-dot status-critical';
-                            statusText.textContent = 'System Critical';
                         } else if (cpu > 70 || memory > 75) {
                             statusDot.className = 'status-dot status-warning';
-                            statusText.textContent = 'System Warning';
                         } else {
                             statusDot.className = 'status-dot status-online';
-                            statusText.textContent = 'System Online';
                         }
                     }
                 } catch (error) {
@@ -673,23 +1083,19 @@
                 try {
                     const response = await fetch('/dashboard/api/live/threat-score');
                     const data = await response.json();
-                    
+
                     if (data.status === 'success') {
                         const threatDot = document.getElementById('threat-status');
-                        const threatText = document.getElementById('threat-level-text');
-                        
+
                         const level = data.threat_level;
-                        const score = data.threat_score;
-                        
+
                         if (level === 'CRITICAL') {
                             threatDot.className = 'status-dot status-critical';
-                        } else if (level === 'HIGH') {
+                        } else if (level === 'HIGH' || level === 'MEDIUM') {
                             threatDot.className = 'status-dot status-warning';
                         } else {
                             threatDot.className = 'status-dot status-online';
                         }
-                        
-                        threatText.textContent = `Threat Level: ${level} (${score})`;
                     }
                 } catch (error) {
                     console.error('Threat level update failed:', error);
@@ -797,16 +1203,13 @@
             }
             
             updateConnectionStatus(connected) {
-                const statusElement = document.getElementById('system-status');
-                const statusText = document.getElementById('system-status-text');
-                
-                if (statusElement && statusText) {
+                const connectionDot = document.getElementById('connection-status');
+
+                if (connectionDot) {
                     if (connected) {
-                        statusElement.className = 'status-dot status-online';
-                        statusText.textContent = 'System Online';
+                        connectionDot.className = 'status-dot status-online';
                     } else {
-                        statusElement.className = 'status-dot status-warning';
-                        statusText.textContent = 'Connection Lost';
+                        connectionDot.className = 'status-dot status-critical';
                     }
                 }
             }
@@ -846,9 +1249,326 @@
         });
     </script>
     
+    <!-- Hamburger Navigation Functions -->
+    <script>
+        /**
+         * Toggle sidebar navigation menu
+         */
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebarNav');
+            const overlay = document.getElementById('sidebarOverlay');
+
+            const isOpen = sidebar.classList.contains('open');
+
+            if (isOpen) {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+                document.body.classList.remove('sidebar-open');
+                document.body.style.overflow = '';
+            } else {
+                sidebar.classList.add('open');
+                overlay.classList.add('active');
+                document.body.classList.add('sidebar-open');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        /**
+         * Handle user logout
+         */
+        async function logout() {
+            try {
+                const response = await fetch('/api/user/auth/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // Clear any local storage/session storage
+                    localStorage.clear();
+                    sessionStorage.clear();
+
+                    // Redirect to login page
+                    window.location.href = '/auth/login';
+                } else {
+                    console.error('Logout failed:', data.error);
+                    // Force redirect anyway
+                    window.location.href = '/auth/login';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                // Force redirect on error
+                window.location.href = '/auth/login';
+            }
+        }
+
+        // Close sidebar when pressing ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const sidebar = document.getElementById('sidebarNav');
+                if (sidebar && sidebar.classList.contains('open')) {
+                    toggleSidebar();
+                }
+            }
+        });
+
+        // Update active link in sidebar based on current page
+        document.addEventListener('DOMContentLoaded', () => {
+            const currentPath = window.location.pathname;
+            const sidebarLinks = document.querySelectorAll('.sidebar-link');
+
+            sidebarLinks.forEach(link => {
+                if (link.getAttribute('href') === currentPath) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
+        /**
+         * Command Palette / Global Search System
+         */
+        class CommandPalette {
+            constructor() {
+                this.overlay = document.getElementById('commandPalette');
+                this.input = document.getElementById('commandPaletteInput');
+                this.results = document.getElementById('commandPaletteResults');
+                this.selectedIndex = -1;
+                this.items = [];
+                
+                this.commands = [
+                    // Navigation commands
+                    { type: 'navigation', icon: '🧠', title: 'Cortex Command', description: 'Main dashboard overview', url: '/dashboard/cortex', keywords: ['home', 'main', 'overview'] },
+                    { type: 'navigation', icon: '🛡️', title: 'SOC Operations', description: 'Security operations center', url: '/dashboard/soc', keywords: ['security', 'operations', 'alerts'] },
+                    { type: 'navigation', icon: '🤖', title: 'Agent Network', description: 'Manage deployed agents', url: '/dashboard/agents', keywords: ['agents', 'network', 'deploy'] },
+                    { type: 'navigation', icon: '🔬', title: 'Process Telemetry', description: 'Monitor process activity', url: '/dashboard/processes', keywords: ['process', 'telemetry', 'monitor'] },
+                    { type: 'navigation', icon: '📊', title: 'System Health', description: 'System metrics and health', url: '/dashboard/system', keywords: ['system', 'health', 'metrics'] },
+                    { type: 'navigation', icon: '🧠', title: 'Neural Insights', description: 'AI-powered security insights', url: '/dashboard/neural', keywords: ['neural', 'ai', 'insights', 'ml'] },
+                    { type: 'navigation', icon: '🏪', title: 'Agent Marketplace', description: 'Browse and deploy agents', url: '/dashboard/marketplace', keywords: ['marketplace', 'shop', 'agents', 'buy'] },
+                    { type: 'navigation', icon: '🔗', title: 'Evidence Chain', description: 'View attack evidence chains', url: '/dashboard/evidence-chain', keywords: ['evidence', 'chain', 'forensics'] },
+                    { type: 'navigation', icon: '⏱️', title: 'Timeline Replay', description: 'Replay threat timelines', url: '/dashboard/timeline-replay', keywords: ['timeline', 'replay', 'history'] },
+                    { type: 'navigation', icon: '🔍', title: 'Query Builder', description: 'Build custom queries', url: '/dashboard/query-builder', keywords: ['query', 'search', 'filter', 'sql'] },
+                    { type: 'navigation', icon: '👁️', title: 'Perspective Selector', description: 'Configure agent perspectives', url: '/dashboard/perspective-selector', keywords: ['perspective', 'view', 'agent'] },
+                    
+                    // Actions
+                    { type: 'action', icon: '🔄', title: 'Refresh Dashboard', description: 'Reload current dashboard data', action: () => location.reload(), keywords: ['refresh', 'reload'] },
+                    { type: 'action', icon: '🚪', title: 'Logout', description: 'Sign out of AMOSKYS', action: () => logout(), keywords: ['logout', 'signout', 'exit'] },
+                    { type: 'action', icon: '☰', title: 'Toggle Sidebar', description: 'Open/close navigation sidebar', action: () => toggleSidebar(), keywords: ['sidebar', 'menu', 'nav'] },
+                    { type: 'action', icon: '🌙', title: 'Toggle Dark Mode', description: 'Switch color theme', action: () => this.toggleTheme(), keywords: ['dark', 'light', 'theme'] },
+                ];
+                
+                this.init();
+            }
+            
+            init() {
+                // Global search input click opens palette
+                const globalSearchInput = document.querySelector('.global-search-input');
+                if (globalSearchInput) {
+                    globalSearchInput.addEventListener('focus', () => this.open());
+                }
+                
+                // Keyboard shortcuts
+                document.addEventListener('keydown', (e) => this.handleGlobalKeydown(e));
+                
+                // Input handling
+                if (this.input) {
+                    this.input.addEventListener('input', () => this.search(this.input.value));
+                    this.input.addEventListener('keydown', (e) => this.handlePaletteKeydown(e));
+                }
+                
+                // Close on overlay click
+                if (this.overlay) {
+                    this.overlay.addEventListener('click', (e) => {
+                        if (e.target === this.overlay) this.close();
+                    });
+                }
+                
+                // Sidebar search
+                const sidebarSearch = document.getElementById('sidebarSearch');
+                if (sidebarSearch) {
+                    sidebarSearch.addEventListener('input', (e) => this.filterSidebar(e.target.value));
+                }
+            }
+            
+            handleGlobalKeydown(e) {
+                // Cmd/Ctrl + K to open palette
+                if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                    e.preventDefault();
+                    this.toggle();
+                }
+                
+                // Escape to close
+                if (e.key === 'Escape' && this.isOpen()) {
+                    this.close();
+                }
+            }
+            
+            handlePaletteKeydown(e) {
+                const items = this.results.querySelectorAll('.command-palette-item');
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    this.selectedIndex = Math.min(this.selectedIndex + 1, items.length - 1);
+                    this.updateSelection(items);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+                    this.updateSelection(items);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (this.selectedIndex >= 0 && items[this.selectedIndex]) {
+                        items[this.selectedIndex].click();
+                    }
+                }
+            }
+            
+            updateSelection(items) {
+                items.forEach((item, i) => {
+                    item.classList.toggle('selected', i === this.selectedIndex);
+                });
+                if (items[this.selectedIndex]) {
+                    items[this.selectedIndex].scrollIntoView({ block: 'nearest' });
+                }
+            }
+            
+            isOpen() {
+                return this.overlay && this.overlay.classList.contains('open');
+            }
+            
+            toggle() {
+                this.isOpen() ? this.close() : this.open();
+            }
+            
+            open() {
+                if (this.overlay) {
+                    this.overlay.classList.add('open');
+                    this.input.value = '';
+                    this.selectedIndex = -1;
+                    this.search('');
+                    setTimeout(() => this.input.focus(), 50);
+                }
+            }
+            
+            close() {
+                if (this.overlay) {
+                    this.overlay.classList.remove('open');
+                }
+            }
+            
+            search(query) {
+                const lowerQuery = query.toLowerCase().trim();
+                
+                let filtered = this.commands;
+                if (lowerQuery) {
+                    filtered = this.commands.filter(cmd => {
+                        const searchText = [cmd.title, cmd.description, ...cmd.keywords].join(' ').toLowerCase();
+                        return searchText.includes(lowerQuery);
+                    });
+                }
+                
+                this.renderResults(filtered, lowerQuery);
+            }
+            
+            renderResults(items, query) {
+                if (items.length === 0) {
+                    this.results.innerHTML = `
+                        <div class="command-palette-empty">
+                            <p>No results found for "${query}"</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Group by type
+                const groups = {};
+                items.forEach(item => {
+                    const type = item.type || 'other';
+                    if (!groups[type]) groups[type] = [];
+                    groups[type].push(item);
+                });
+                
+                const typeLabels = {
+                    navigation: 'Navigation',
+                    action: 'Actions',
+                    other: 'Other'
+                };
+                
+                let html = '';
+                Object.entries(groups).forEach(([type, typeItems]) => {
+                    html += `
+                        <div class="command-palette-section">
+                            <div class="command-palette-section-title">${typeLabels[type] || type}</div>
+                            ${typeItems.map((item, i) => `
+                                <div class="command-palette-item" data-index="${i}" data-type="${type}" data-url="${item.url || ''}" data-action="${item.action ? 'true' : 'false'}">
+                                    <span class="command-palette-item-icon">${item.icon}</span>
+                                    <div class="command-palette-item-content">
+                                        <div class="command-palette-item-title">${this.highlight(item.title, query)}</div>
+                                        <div class="command-palette-item-description">${item.description}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                });
+                
+                this.results.innerHTML = html;
+                this.selectedIndex = 0;
+                
+                // Add click handlers
+                const resultItems = this.results.querySelectorAll('.command-palette-item');
+                resultItems.forEach((el, i) => {
+                    el.addEventListener('click', () => this.executeItem(items[i]));
+                });
+                
+                this.updateSelection(resultItems);
+            }
+            
+            highlight(text, query) {
+                if (!query) return text;
+                const regex = new RegExp(`(${query})`, 'gi');
+                return text.replace(regex, '<mark style="background: var(--neural-primary); color: var(--bg-primary); padding: 0 2px; border-radius: 2px;">$1</mark>');
+            }
+            
+            executeItem(item) {
+                this.close();
+                
+                if (item.url) {
+                    window.location.href = item.url;
+                } else if (item.action) {
+                    item.action();
+                }
+            }
+            
+            filterSidebar(query) {
+                const links = document.querySelectorAll('.sidebar-link');
+                const lowerQuery = query.toLowerCase().trim();
+                
+                links.forEach(link => {
+                    const text = link.textContent.toLowerCase();
+                    const visible = !lowerQuery || text.includes(lowerQuery);
+                    link.classList.toggle('hidden', !visible);
+                });
+            }
+            
+            toggleTheme() {
+                // Placeholder for theme toggle
+                document.body.classList.toggle('light-mode');
+            }
+        }
+        
+        // Initialize command palette
+        document.addEventListener('DOMContentLoaded', () => {
+            window.commandPalette = new CommandPalette();
+        });
+    </script>
+
     <!-- Phase 9: Notification System -->
     <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
-    
+
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

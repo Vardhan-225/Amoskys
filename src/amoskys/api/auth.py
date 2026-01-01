@@ -26,7 +26,7 @@ from flask import Blueprint, jsonify, make_response, request
 from amoskys.api.security import rate_limit_auth, rate_limit_strict
 from amoskys.auth import AuthService, AuthServiceConfig
 from amoskys.common.logging import get_logger
-from amoskys.db import get_session_context
+from amoskys.db.web_db import get_web_session_context as get_session_context
 from amoskys.notifications.email import (
     send_verification_email,
     send_password_reset_email,

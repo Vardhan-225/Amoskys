@@ -11,7 +11,7 @@
             <div class="card-badge badge-success">Network Active</div>
         </div>
         <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-            Monitor and manage the distributed AMOSKYS agent network. Track agent health, 
+            Monitor and manage the distributed AMOSKYS agent network. Track agent health,
             performance metrics, and deployment status across your infrastructure.
         </p>
     </div>
@@ -21,38 +21,38 @@
         <div class="metric-card">
             <div class="metric-value" id="total-agents">--</div>
             <div class="metric-label">Total Agents</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="agents-status">Status: Loading...</div>
+            <div class="metric-status" id="agents-status">Status: Loading...</div>
         </div>
-        
+
         <div class="metric-card">
             <div class="metric-value" id="online-agents">--</div>
             <div class="metric-label">Online Agents</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="online-percentage">--% of network</div>
+            <div class="metric-status" id="online-percentage">--% of network</div>
         </div>
-        
+
         <div class="metric-card">
             <div class="metric-value" id="network-health">--</div>
             <div class="metric-label">Network Health</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="health-status">Calculating...</div>
+            <div class="metric-status" id="health-status">Calculating...</div>
         </div>
-        
+
         <div class="metric-card">
             <div class="metric-value" id="avg-response">--</div>
             <div class="metric-label">Avg Response Time</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;">Network latency</div>
+            <div class="metric-status">Network latency</div>
         </div>
     </div>
 
-    <!-- Agent Status Distribution -->
-    <!-- Agent Lifecycle Management Control Panel - Unified Production Version -->
+    <!-- Agent Lifecycle Management Control Panel -->
     {% include 'dashboard/agent-control-panel.html' %}
 
-    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem; margin-bottom: 2rem;">
+    <!-- Agent Status Distribution & Performance -->
+    <div class="chart-grid">
         <div class="neural-card">
             <div class="card-header">
                 <h3 class="card-title">📊 Agent Status Distribution</h3>
             </div>
-            <div style="position: relative; width: 100%; height: 300px;">
+            <div class="chart-container">
                 <canvas id="agent-status-chart"></canvas>
             </div>
         </div>
@@ -61,56 +61,54 @@
             <div class="card-header">
                 <h3 class="card-title">📈 Network Performance Timeline</h3>
             </div>
-            <div style="position: relative; width: 100%; height: 300px;">
+            <div class="chart-container">
                 <canvas id="performance-timeline"></canvas>
             </div>
         </div>
     </div>
 
-    <!-- Agent Management Panel -->
+    <!-- Available Agents -->
     <div class="neural-card">
         <div class="card-header">
             <h3 class="card-title">📋 Available Agents</h3>
         </div>
         <div id="available-agents-grid" class="agents-grid">
-            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
-                Loading available agent types...
-            </p>
+            <p class="loading-message">Loading available agent types...</p>
         </div>
     </div>
 
-    <!-- Registered Agents Management Panel -->
+    <!-- Registered Agents Management -->
     <div class="neural-card">
         <div class="card-header">
             <h3 class="card-title">🔧 Registered Agents</h3>
-            <div style="display: flex; gap: 1rem; align-items: center;">
-                <select id="status-filter" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--neural-primary); border-radius: 5px; padding: 0.5rem;">
+            <div class="card-actions">
+                <select id="status-filter" class="filter-select">
                     <option value="">All Agents</option>
                     <option value="online">Online</option>
                     <option value="active">Active</option>
                     <option value="stale">Stale</option>
                     <option value="offline">Offline</option>
                 </select>
-                <button class="neural-button" onclick="agentDashboard.refreshAgents()">🔄 Refresh</button>
+                <button class="neural-button" onclick="agentDashboard.refreshAgents()">
+                    🔄 Refresh
+                </button>
                 <span class="neural-loading" id="agents-loading" style="display: none;"></span>
             </div>
         </div>
         <div id="agents-grid" class="agents-grid">
-            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
-                Loading agent network data...
-            </p>
+            <p class="loading-message">Loading agent network data...</p>
         </div>
     </div>
 
     <!-- Agent Details Modal -->
     <div id="agent-details-modal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 900px;">
+        <div class="modal-content modal-large">
             <div class="modal-header">
                 <h3>🤖 Agent Details</h3>
                 <span class="modal-close" onclick="agentDashboard.closeAgentDetails()">&times;</span>
             </div>
             <div class="modal-body" id="agent-details-content">
-                <!-- Agent details will be populated here -->
+                <!-- Agent details populated dynamically -->
             </div>
         </div>
     </div>
@@ -126,25 +124,25 @@
                 <form id="agent-registration-form">
                     <div class="form-group">
                         <label for="agent-id">Agent ID</label>
-                        <input type="text" id="agent-id" name="agent_id" required 
-                               placeholder="e.g., flowagent-002" 
-                               style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--neural-primary); border-radius: 5px;">
+                        <input type="text" id="agent-id" name="agent_id" required
+                               placeholder="e.g., flowagent-002"
+                               class="form-input">
                     </div>
                     <div class="form-group">
                         <label for="hostname">Hostname</label>
-                        <input type="text" id="hostname" name="hostname" required 
-                               placeholder="e.g., server-002" 
-                               style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--neural-primary); border-radius: 5px;">
+                        <input type="text" id="hostname" name="hostname" required
+                               placeholder="e.g., server-002"
+                               class="form-input">
                     </div>
                     <div class="form-group">
                         <label for="capabilities">Capabilities (comma-separated)</label>
-                        <input type="text" id="capabilities" name="capabilities" 
-                               placeholder="e.g., network_monitoring, log_analysis" 
-                               style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--neural-primary); border-radius: 5px;">
+                        <input type="text" id="capabilities" name="capabilities"
+                               placeholder="e.g., network_monitoring, log_analysis"
+                               class="form-input">
                     </div>
-                    <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
-                        <button type="button" onclick="agentDashboard.closeRegistration()" 
-                                style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--neural-primary); padding: 0.5rem 1rem; border-radius: 5px;">
+                    <div class="form-actions">
+                        <button type="button" onclick="agentDashboard.closeRegistration()"
+                                class="button-secondary">
                             Cancel
                         </button>
                         <button type="submit" class="neural-button">Register Agent</button>
@@ -160,6 +158,25 @@
     max-width: 100%;
 }
 
+.metric-status {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.chart-container {
+    position: relative;
+    width: 100%;
+    height: 300px;
+}
+
 .agents-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
@@ -167,9 +184,37 @@
     margin-top: 1rem;
 }
 
+.loading-message {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 2rem;
+    grid-column: 1 / -1;
+}
+
+.card-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.filter-select {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--neural-primary);
+    border-radius: 5px;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: var(--neural-secondary);
+}
+
 .agent-card {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(0, 255, 136, 0.3);
+    background: rgba(26, 31, 58, 0.3);
+    border: 1px solid rgba(0, 217, 255, 0.15);
     border-radius: 8px;
     padding: 1.5rem;
     transition: all 0.3s ease;
@@ -183,8 +228,8 @@
     position: absolute;
     top: 0;
     left: 0;
-    right: 0;
-    height: 3px;
+    width: 3px;
+    height: 100%;
     background: var(--neural-primary);
 }
 
@@ -195,9 +240,10 @@
 .agent-card.available-agent::before { background: #5cb85c; }
 
 .agent-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(92, 184, 92, 0.2);
-    border-color: var(--neural-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 217, 255, 0.08);
+    border-color: rgba(0, 217, 255, 0.25);
+    background: rgba(26, 31, 58, 0.4);
 }
 
 .agent-header {
@@ -228,10 +274,26 @@
     letter-spacing: 0.5px;
 }
 
-.status-online { background: var(--neural-primary); color: var(--bg-primary); }
-.status-active { background: var(--neural-warning); color: var(--bg-primary); }
-.status-stale { background: #ff6600; color: white; }
-.status-offline { background: var(--neural-critical); color: white; }
+.status-online {
+    background: rgba(0, 217, 255, 0.15);
+    color: var(--neural-primary);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+}
+.status-active {
+    background: rgba(255, 170, 0, 0.15);
+    color: var(--neural-warning);
+    border: 1px solid rgba(255, 170, 0, 0.3);
+}
+.status-stale {
+    background: rgba(255, 102, 0, 0.15);
+    color: #ff6600;
+    border: 1px solid rgba(255, 102, 0, 0.3);
+}
+.status-offline {
+    background: rgba(255, 51, 102, 0.15);
+    color: var(--neural-critical);
+    border: 1px solid rgba(255, 51, 102, 0.3);
+}
 
 .agent-metrics {
     display: grid;
@@ -282,15 +344,44 @@
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.form-group {
-    margin-bottom: 1rem;
+.form-input {
+    width: 100%;
+    padding: 0.5rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--neural-primary);
+    border-radius: 5px;
+    font-size: 0.9rem;
 }
 
-.form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    color: var(--neural-primary);
-    font-weight: 600;
+.form-input:focus {
+    outline: none;
+    border-color: var(--neural-secondary);
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1rem;
+}
+
+.button-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--neural-primary);
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.button-secondary:hover {
+    background: rgba(0, 217, 255, 0.1);
+}
+
+.modal-large {
+    max-width: 900px;
 }
 
 .performance-metric {
@@ -316,10 +407,10 @@
 }
 
 @media (max-width: 1024px) {
-    .agents-dashboard > div[style*="grid-template-columns: 1fr 2fr"] {
-        grid-template-columns: 1fr !important;
+    .chart-grid {
+        grid-template-columns: 1fr;
     }
-    
+
     .agents-grid {
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     }
@@ -329,7 +420,7 @@
     .agents-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .agent-metrics {
         grid-template-columns: 1fr;
     }
@@ -341,104 +432,117 @@
 <script>
 class AgentDashboard {
     constructor() {
-        this.updateInterval = 5000; // 5 seconds
+        this.updateInterval = 5000;
         this.charts = {};
         this.agents = [];
         this.init();
     }
-    
+
     init() {
         this.initCharts();
-        this.initFilters();
-        this.initForms();
+        this.initEventListeners();
         this.startRealTimeUpdates();
     }
-    
+
     initCharts() {
-        // Agent Status Distribution Chart
-        this.charts.status = new Chart(document.getElementById('agent-status-chart'), {
-            type: 'doughnut',
-            data: {
-                labels: ['Online', 'Active', 'Stale', 'Offline'],
-                datasets: [{
-                    data: [0, 0, 0, 0],
-                    backgroundColor: ['#5cb85c', '#f0ad4e', '#ff6600', '#d9534f'],
-                    borderWidth: 2,
-                    borderColor: '#1a1a1a'
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { color: '#cccccc', font: { size: 12 } }
-                    }
+        const chartDefaults = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#cccccc', font: { size: 12 } }
                 }
             }
-        });
-        
-        // Performance Timeline Chart
-        this.charts.performance = new Chart(document.getElementById('performance-timeline'), {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Online Agents',
-                    data: [],
-                    borderColor: '#00ff88',
-                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4
-                }, {
-                    label: 'Total Agents',
-                    data: [],
-                    borderColor: '#0088ff',
-                    backgroundColor: 'rgba(0, 136, 255, 0.1)',
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        ticks: { color: '#cccccc' },
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                    },
-                    y: {
-                        ticks: { color: '#cccccc' },
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                        beginAtZero: true
-                    }
+        };
+
+        this.charts.status = new Chart(
+            document.getElementById('agent-status-chart'),
+            {
+                type: 'doughnut',
+                data: {
+                    labels: ['Online', 'Active', 'Stale', 'Offline'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: ['#5cb85c', '#f0ad4e', '#ff6600', '#d9534f'],
+                        borderWidth: 2,
+                        borderColor: '#1a1f3a'
+                    }]
                 },
-                plugins: {
-                    legend: {
-                        labels: { color: '#cccccc' }
+                options: {
+                    ...chartDefaults,
+                    plugins: {
+                        ...chartDefaults.plugins,
+                        legend: { position: 'bottom', ...chartDefaults.plugins.legend }
                     }
                 }
             }
-        });
+        );
+
+        this.charts.performance = new Chart(
+            document.getElementById('performance-timeline'),
+            {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Online Agents',
+                            data: [],
+                            borderColor: '#00ff88',
+                            backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Total Agents',
+                            data: [],
+                            borderColor: '#0088ff',
+                            backgroundColor: 'rgba(0, 136, 255, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    ...chartDefaults,
+                    scales: {
+                        x: {
+                            ticks: { color: '#cccccc' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        y: {
+                            ticks: { color: '#cccccc' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            }
+        );
     }
-    
-    initFilters() {
+
+    initEventListeners() {
         const statusFilter = document.getElementById('status-filter');
-        statusFilter.addEventListener('change', () => {
-            this.renderAgents();
-        });
-    }
-    
-    initForms() {
+        statusFilter.addEventListener('change', () => this.renderAgents());
+
         const registrationForm = document.getElementById('agent-registration-form');
         registrationForm.addEventListener('submit', (e) => {
             e.preventDefault();
             this.registerAgent();
         });
+
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'agent-details-modal') {
+                this.closeAgentDetails();
+            }
+            if (e.target.id === 'agent-registration-modal') {
+                this.closeRegistration();
+            }
+        });
     }
-    
+
     async startRealTimeUpdates() {
         try {
             await Promise.all([
@@ -450,67 +554,85 @@ class AgentDashboard {
         } catch (error) {
             console.error('Agent dashboard update error:', error);
         }
-        
+
         setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
     }
-    
+
     async updateAgentMetrics() {
         try {
             const response = await fetch('/dashboard/api/live/agents');
             const data = await response.json();
-            
-            if (data.status === 'success') {
-                const agents = data.agents;
-                const statusCounts = {
-                    online: agents.filter(a => a.status === 'online').length,
-                    active: agents.filter(a => a.status === 'active').length,
-                    stale: agents.filter(a => a.status === 'stale').length,
-                    offline: agents.filter(a => a.status === 'offline').length
-                };
-                
-                const totalAgents = agents.length;
-                const onlineAgents = statusCounts.online;
-                const healthScore = totalAgents > 0 ? Math.round((onlineAgents / totalAgents) * 100) : 0;
-                const avgResponse = agents.length > 0 ? 
-                    Math.round(agents.reduce((sum, a) => sum + a.seconds_since_ping, 0) / agents.length) : 0;
-                
-                // Update metrics
-                document.getElementById('total-agents').textContent = totalAgents;
-                document.getElementById('online-agents').textContent = onlineAgents;
-                document.getElementById('online-percentage').textContent = `${Math.round((onlineAgents/totalAgents)*100)}% of network`;
-                document.getElementById('network-health').textContent = healthScore + '%';
-                document.getElementById('avg-response').textContent = this.formatDuration(avgResponse);
-                
-                // Update status
-                document.getElementById('agents-status').textContent = 
-                    healthScore >= 80 ? 'Status: Healthy' :
-                    healthScore >= 60 ? 'Status: Warning' : 'Status: Critical';
-                
-                document.getElementById('health-status').textContent = 
-                    healthScore >= 80 ? 'Excellent' :
-                    healthScore >= 60 ? 'Good' : 'Needs Attention';
-                
-                // Update status chart
-                this.charts.status.data.datasets[0].data = [
-                    statusCounts.online,
-                    statusCounts.active,
-                    statusCounts.stale,
-                    statusCounts.offline
-                ];
-                this.charts.status.update();
-            }
+
+            if (data.status !== 'success') return;
+
+            const agents = data.agents;
+            const statusCounts = this.calculateStatusCounts(agents);
+            const metrics = this.calculateMetrics(agents, statusCounts);
+
+            this.updateMetricsUI(metrics);
+            this.updateStatusChart(statusCounts);
         } catch (error) {
             console.error('Agent metrics update failed:', error);
         }
     }
-    
+
+    calculateStatusCounts(agents) {
+        return {
+            online: agents.filter(a => a.status === 'online').length,
+            active: agents.filter(a => a.status === 'active').length,
+            stale: agents.filter(a => a.status === 'stale').length,
+            offline: agents.filter(a => a.status === 'offline').length
+        };
+    }
+
+    calculateMetrics(agents, statusCounts) {
+        const totalAgents = agents.length;
+        const onlineAgents = statusCounts.online;
+        const healthScore = totalAgents > 0 ? Math.round((onlineAgents / totalAgents) * 100) : 0;
+        const avgResponse = agents.length > 0
+            ? Math.round(agents.reduce((sum, a) => sum + a.seconds_since_ping, 0) / agents.length)
+            : 0;
+
+        return { totalAgents, onlineAgents, healthScore, avgResponse };
+    }
+
+    updateMetricsUI(metrics) {
+        const { totalAgents, onlineAgents, healthScore, avgResponse } = metrics;
+
+        document.getElementById('total-agents').textContent = totalAgents;
+        document.getElementById('online-agents').textContent = onlineAgents;
+        document.getElementById('online-percentage').textContent =
+            `${Math.round((onlineAgents / totalAgents) * 100)}% of network`;
+        document.getElementById('network-health').textContent = `${healthScore}%`;
+        document.getElementById('avg-response').textContent = this.formatDuration(avgResponse);
+
+        document.getElementById('agents-status').textContent =
+            healthScore >= 80 ? 'Status: Healthy' :
+            healthScore >= 60 ? 'Status: Warning' : 'Status: Critical';
+
+        document.getElementById('health-status').textContent =
+            healthScore >= 80 ? 'Excellent' :
+            healthScore >= 60 ? 'Good' : 'Needs Attention';
+    }
+
+    updateStatusChart(statusCounts) {
+        this.charts.status.data.datasets[0].data = [
+            statusCounts.online,
+            statusCounts.active,
+            statusCounts.stale,
+            statusCounts.offline
+        ];
+        this.charts.status.update();
+    }
+
     async updateAgentData() {
+        const loadingElement = document.getElementById('agents-loading');
         try {
-            document.getElementById('agents-loading').style.display = 'inline-block';
-            
+            loadingElement.style.display = 'inline-block';
+
             const response = await fetch('/dashboard/api/live/agents');
             const data = await response.json();
-            
+
             if (data.status === 'success') {
                 this.agents = data.agents;
                 this.renderAgents();
@@ -518,31 +640,15 @@ class AgentDashboard {
         } catch (error) {
             console.error('Agent data update failed:', error);
         } finally {
-            document.getElementById('agents-loading').style.display = 'none';
+            loadingElement.style.display = 'none';
         }
     }
-    
+
     async updatePerformanceTimeline() {
         try {
-            // Simulate performance timeline data
-            // In a real implementation, this would fetch historical data
             const now = new Date();
-            const labels = [];
-            const onlineData = [];
-            const totalData = [];
-            
-            for (let i = 11; i >= 0; i--) {
-                const time = new Date(now.getTime() - i * 5 * 60 * 1000); // 5-minute intervals
-                labels.push(time.toLocaleTimeString().slice(0, 5));
-                
-                // Simulate data with some variance
-                const totalAgents = this.agents.length;
-                const onlineAgents = Math.max(0, totalAgents - Math.floor(Math.random() * 3));
-                
-                onlineData.push(onlineAgents);
-                totalData.push(totalAgents);
-            }
-            
+            const { labels, onlineData, totalData } = this.generateTimelineData(now);
+
             this.charts.performance.data.labels = labels;
             this.charts.performance.data.datasets[0].data = onlineData;
             this.charts.performance.data.datasets[1].data = totalData;
@@ -551,12 +657,31 @@ class AgentDashboard {
             console.error('Performance timeline update failed:', error);
         }
     }
-    
+
+    generateTimelineData(now) {
+        const labels = [];
+        const onlineData = [];
+        const totalData = [];
+
+        for (let i = 11; i >= 0; i--) {
+            const time = new Date(now.getTime() - i * 5 * 60 * 1000);
+            labels.push(time.toLocaleTimeString().slice(0, 5));
+
+            const totalAgents = this.agents.length;
+            const onlineAgents = Math.max(0, totalAgents - Math.floor(Math.random() * 3));
+
+            onlineData.push(onlineAgents);
+            totalData.push(totalAgents);
+        }
+
+        return { labels, onlineData, totalData };
+    }
+
     async updateAvailableAgents() {
         try {
             const response = await fetch('/dashboard/api/available-agents');
             const data = await response.json();
-            
+
             if (data.status === 'success' && data.agents) {
                 this.renderAvailableAgents(data.agents);
             }
@@ -564,56 +689,61 @@ class AgentDashboard {
             console.error('Available agents update failed:', error);
         }
     }
-    
+
     renderAvailableAgents(agents) {
         const container = document.getElementById('available-agents-grid');
-        
+
         if (!agents || agents.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem; grid-column: 1 / -1;">No agents available</p>';
+            container.innerHTML = '<p class="loading-message">No agents available</p>';
             return;
         }
-        
-        const agentsHtml = agents.map(agent => `
+
+        container.innerHTML = agents.map(agent => this.createAvailableAgentCard(agent)).join('');
+    }
+
+    createAvailableAgentCard(agent) {
+        return `
             <div class="agent-card available-agent" onclick="agentDashboard.showAgentInfo('${agent.id}', '${agent.name}')">
                 <div class="agent-header">
-                    <div class="agent-id">${agent.name}</div>
-                    <div class="agent-status" style="background: #5cb85c; color: #000;">Available</div>
+                    <div class="agent-name">${agent.name}</div>
+                    <div class="agent-status-badge" style="background: #5cb85c; color: #000;">Available</div>
                 </div>
-                <div class="agent-details">
-                    <p style="margin: 0.5rem 0; color: var(--text-secondary); font-size: 0.85rem;">
-                        ${agent.description}
-                    </p>
-                    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
-                            <span>Type: ${agent.type}</span>
-                            <span>Port: ${agent.port}</span>
-                        </div>
-                        <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            ${agent.platform.map(p => `<span style="background: rgba(0, 255, 136, 0.2); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">${p}</span>`).join('')}
-                        </div>
+                <p style="margin: 0.5rem 0; color: var(--text-secondary); font-size: 0.85rem;">
+                    ${agent.description}
+                </p>
+                <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.5rem;">
+                        <span>Type: ${agent.type}</span>
+                        <span>Port: ${agent.port}</span>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        ${agent.platform.map(p =>
+                            `<span class="capability-tag" style="background: rgba(0, 255, 136, 0.2);">${p}</span>`
+                        ).join('')}
                     </div>
                 </div>
             </div>
-        `).join('');
-        
-        container.innerHTML = agentsHtml;
+        `;
     }
-    
+
     renderAgents() {
         const container = document.getElementById('agents-grid');
         const statusFilter = document.getElementById('status-filter').value;
-        
-        let filteredAgents = this.agents;
-        if (statusFilter) {
-            filteredAgents = this.agents.filter(agent => agent.status === statusFilter);
-        }
-        
+
+        const filteredAgents = statusFilter
+            ? this.agents.filter(agent => agent.status === statusFilter)
+            : this.agents;
+
         if (filteredAgents.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem; grid-column: 1 / -1;">No agents match current filter</p>';
+            container.innerHTML = '<p class="loading-message">No agents match current filter</p>';
             return;
         }
-        
-        const agentsHtml = filteredAgents.map(agent => `
+
+        container.innerHTML = filteredAgents.map(agent => this.createAgentCard(agent)).join('');
+    }
+
+    createAgentCard(agent) {
+        return `
             <div class="agent-card status-${agent.status}" onclick="agentDashboard.showAgentDetails('${agent.agent_id}')">
                 <div class="agent-header">
                     <div>
@@ -622,7 +752,7 @@ class AgentDashboard {
                     </div>
                     <div class="agent-status-badge status-${agent.status}">${agent.status}</div>
                 </div>
-                
+
                 <div class="agent-metrics">
                     <div class="agent-metric">
                         <div class="metric-value-small">${agent.platform}</div>
@@ -633,141 +763,134 @@ class AgentDashboard {
                         <div class="metric-label-small">Last Ping</div>
                     </div>
                 </div>
-                
+
                 <div class="agent-capabilities">
                     ${agent.capabilities.map(cap => `<span class="capability-tag">${cap}</span>`).join('')}
                 </div>
-                
+
                 <div class="agent-last-seen">
                     Last seen: ${new Date(agent.last_seen).toLocaleString()}
                 </div>
             </div>
-        `).join('');
-        
-        container.innerHTML = agentsHtml;
+        `;
     }
-    
+
     showAgentDetails(agentId) {
         const agent = this.agents.find(a => a.agent_id === agentId);
         if (!agent) return;
-        
+
         const modal = document.getElementById('agent-details-modal');
         const content = document.getElementById('agent-details-content');
-        
-        content.innerHTML = `
+
+        content.innerHTML = this.createAgentDetailsHTML(agent);
+        modal.style.display = 'flex';
+    }
+
+    createAgentDetailsHTML(agent) {
+        return `
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
                 <div>
                     <h4 style="color: var(--neural-primary); margin-bottom: 1rem;">Agent Information</h4>
-                    <div class="performance-metric">
-                        <span class="performance-label">Agent ID:</span>
-                        <span class="performance-value">${agent.agent_id}</span>
-                    </div>
-                    <div class="performance-metric">
-                        <span class="performance-label">Hostname:</span>
-                        <span class="performance-value">${agent.hostname}</span>
-                    </div>
-                    <div class="performance-metric">
-                        <span class="performance-label">Platform:</span>
-                        <span class="performance-value">${agent.platform}</span>
-                    </div>
-                    <div class="performance-metric">
-                        <span class="performance-label">Status:</span>
-                        <span class="performance-value status-${agent.status}">${agent.status}</span>
-                    </div>
+                    ${this.createPerformanceMetric('Agent ID:', agent.agent_id)}
+                    ${this.createPerformanceMetric('Hostname:', agent.hostname)}
+                    ${this.createPerformanceMetric('Platform:', agent.platform)}
+                    ${this.createPerformanceMetric('Status:', agent.status, `status-${agent.status}`)}
                 </div>
-                
+
                 <div>
                     <h4 style="color: var(--neural-primary); margin-bottom: 1rem;">Performance Metrics</h4>
-                    <div class="performance-metric">
-                        <span class="performance-label">Last Ping:</span>
-                        <span class="performance-value">${this.formatDuration(agent.seconds_since_ping)} ago</span>
-                    </div>
-                    <div class="performance-metric">
-                        <span class="performance-label">Response Time:</span>
-                        <span class="performance-value">${agent.seconds_since_ping}s</span>
-                    </div>
-                    <div class="performance-metric">
-                        <span class="performance-label">Last Seen:</span>
-                        <span class="performance-value">${new Date(agent.last_seen).toLocaleString()}</span>
-                    </div>
+                    ${this.createPerformanceMetric('Last Ping:', `${this.formatDuration(agent.seconds_since_ping)} ago`)}
+                    ${this.createPerformanceMetric('Response Time:', `${agent.seconds_since_ping}s`)}
+                    ${this.createPerformanceMetric('Last Seen:', new Date(agent.last_seen).toLocaleString())}
                 </div>
             </div>
-            
+
             <div>
                 <h4 style="color: var(--neural-primary); margin-bottom: 1rem;">Capabilities</h4>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                     ${agent.capabilities.map(cap => `<span class="capability-tag">${cap}</span>`).join('')}
                 </div>
             </div>
-            
+
             <div style="margin-top: 2rem; display: flex; gap: 1rem;">
-                <button class="neural-button" onclick="agentDashboard.pingAgent('${agent.agent_id}')">🔄 Ping Agent</button>
-                <button class="neural-button" onclick="agentDashboard.configureAgent('${agent.agent_id}')">⚙️ Configure</button>
-                <button class="neural-button" style="background: var(--neural-danger);" onclick="agentDashboard.removeAgent('${agent.agent_id}')">🗑️ Remove</button>
+                <button class="neural-button" onclick="agentDashboard.pingAgent('${agent.agent_id}')">
+                    🔄 Ping Agent
+                </button>
+                <button class="neural-button" onclick="agentDashboard.configureAgent('${agent.agent_id}')">
+                    ⚙️ Configure
+                </button>
+                <button class="neural-button" style="background: var(--neural-danger);"
+                        onclick="agentDashboard.removeAgent('${agent.agent_id}')">
+                    🗑️ Remove
+                </button>
             </div>
         `;
-        
-        modal.style.display = 'flex';
     }
-    
+
+    createPerformanceMetric(label, value, className = '') {
+        return `
+            <div class="performance-metric">
+                <span class="performance-label">${label}</span>
+                <span class="performance-value ${className}">${value}</span>
+            </div>
+        `;
+    }
+
     closeAgentDetails() {
         document.getElementById('agent-details-modal').style.display = 'none';
     }
-    
+
     showRegistration() {
         document.getElementById('agent-registration-modal').style.display = 'flex';
     }
-    
+
     closeRegistration() {
         document.getElementById('agent-registration-modal').style.display = 'none';
         document.getElementById('agent-registration-form').reset();
     }
-    
+
     async registerAgent() {
         const form = document.getElementById('agent-registration-form');
         const formData = new FormData(form);
-        
+
         const agentData = {
             agent_id: formData.get('agent_id'),
             hostname: formData.get('hostname'),
-            capabilities: formData.get('capabilities').split(',').map(c => c.trim()).filter(c => c)
+            capabilities: formData.get('capabilities')
+                .split(',')
+                .map(c => c.trim())
+                .filter(c => c)
         };
-        
+
         try {
-            // This would call the actual registration API
             console.log('Registering agent:', agentData);
-            
-            // Simulate success
             alert('Agent registration request sent. The agent will appear once it connects.');
             this.closeRegistration();
         } catch (error) {
             alert('Failed to register agent: ' + error.message);
         }
     }
-    
+
     async refreshAgents() {
         await this.updateAgentData();
     }
-    
+
     async pingAgent(agentId) {
         try {
-            // This would call the agent ping API
             console.log('Pinging agent:', agentId);
             alert('Ping request sent to ' + agentId);
         } catch (error) {
             alert('Failed to ping agent: ' + error.message);
         }
     }
-    
+
     configureAgent(agentId) {
-        // This would open an agent configuration interface
         alert('Agent configuration interface would open for: ' + agentId);
     }
-    
+
     async removeAgent(agentId) {
         if (confirm(`Are you sure you want to remove agent ${agentId}?`)) {
             try {
-                // This would call the agent removal API
                 console.log('Removing agent:', agentId);
                 alert('Agent removal request sent for ' + agentId);
                 this.closeAgentDetails();
@@ -776,11 +899,11 @@ class AgentDashboard {
             }
         }
     }
-    
+
     showAgentInfo(agentId, agentName) {
         alert(`Agent: ${agentName}\n\nID: ${agentId}\n\nThis agent can be deployed to monitor your infrastructure.`);
     }
-    
+
     formatDuration(seconds) {
         if (seconds < 60) return `${seconds}s`;
         if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
@@ -793,19 +916,6 @@ class AgentDashboard {
 let agentDashboard;
 document.addEventListener('DOMContentLoaded', () => {
     agentDashboard = new AgentDashboard();
-});
-
-// Close modals on outside click
-document.addEventListener('click', (e) => {
-    const detailsModal = document.getElementById('agent-details-modal');
-    const registrationModal = document.getElementById('agent-registration-modal');
-    
-    if (e.target === detailsModal) {
-        agentDashboard.closeAgentDetails();
-    }
-    if (e.target === registrationModal) {
-        agentDashboard.closeRegistration();
-    }
 });
 </script>
 {% endblock %}

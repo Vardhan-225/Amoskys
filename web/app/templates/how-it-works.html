@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How AMOSKYS Works - Biological Security Architecture</title>
+    <meta name="description" content="Understanding the AMOSKYS architecture: Axons collect signals, Bloodstream transports them, Soma analyzes them. Intelligence emerges from comprehensive observation.">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="48x48" href="{{ url_for('static', filename='images/favicon-48x48.png') }}">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='images/favicon-192x192.png') }}">
+    <link rel="apple-touch-icon" sizes="512x512" href="{{ url_for('static', filename='images/favicon-512x512.png') }}">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy-dark: #0a0e27;
+            --navy-medium: #1a1f3a;
+            --cyan-primary: #00d9ff;
+            --cyan-bright: #00ffff;
+            --green-secure: #00ff88;
+            --amber-warning: #ffaa00;
+            --red-critical: #ff3366;
+            --text-primary: #ffffff;
+            --text-secondary: #b4bcd0;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--navy-dark);
+            color: var(--text-primary);
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        nav {
+            position: fixed; top: 0; width: 100%;
+            background: rgba(10, 14, 39, 0.98);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 217, 255, 0.15);
+            z-index: 1000; padding: 1.2rem 0;
+        }
+
+        .nav-container {
+            max-width: 1400px; margin: 0 auto; padding: 0 2rem;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .logo-section { display: flex; align-items: center; gap: 1rem; }
+
+        .logo-link {
+            display: flex; align-items: center; gap: 0.75rem;
+            text-decoration: none; transition: all 0.3s ease;
+        }
+
+        .logo-link:hover { transform: translateY(-2px); }
+
+        .logo-image {
+            width: 36px; height: 36px;
+            filter: drop-shadow(0 0 10px rgba(0, 217, 255, 0.5));
+        }
+
+        .logo-text {
+            font-size: 1.6rem; font-weight: 800;
+            color: var(--cyan-primary); letter-spacing: 0.5px;
+            text-decoration: none;
+        }
+
+        .logo-badge {
+            background: rgba(0, 217, 255, 0.1); color: var(--cyan-primary);
+            padding: 0.25rem 0.75rem; border-radius: 4px;
+            font-size: 0.75rem; font-weight: 600; letter-spacing: 1px;
+        }
+
+        .nav-links { display: flex; gap: 2.5rem; align-items: center; }
+
+        .nav-links a {
+            color: var(--text-secondary); text-decoration: none;
+            font-weight: 500; transition: color 0.3s; font-size: 0.95rem;
+        }
+
+        .nav-links a:hover, .nav-links a.active { color: var(--cyan-primary); }
+
+        .btn {
+            display: inline-block; padding: 0.85rem 1.75rem;
+            background: transparent; border: 2px solid var(--cyan-primary);
+            color: var(--cyan-primary); text-decoration: none;
+            border-radius: 8px; font-weight: 600; transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: var(--cyan-primary); color: var(--navy-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 217, 255, 0.3);
+        }
+
+        .btn-primary { background: var(--cyan-primary); color: var(--navy-dark); }
+
+        .hero {
+            min-height: 60vh; display: flex; align-items: center;
+            justify-content: center; padding: 10rem 2rem 6rem;
+            background: linear-gradient(135deg, rgba(10, 14, 39, 1) 0%, rgba(26, 31, 58, 0.8) 100%);
+            position: relative; text-align: center;
+        }
+
+        .hero-content { max-width: 1000px; position: relative; z-index: 1; }
+
+        .hero-badge {
+            display: inline-block; background: rgba(0, 217, 255, 0.1);
+            border: 1px solid var(--cyan-primary); color: var(--cyan-primary);
+            padding: 0.5rem 1.5rem; border-radius: 50px;
+            font-size: 0.9rem; font-weight: 600;
+            margin-bottom: 2rem; letter-spacing: 0.5px;
+        }
+
+        .hero-title {
+            font-size: 3.5rem; font-weight: 800; margin-bottom: 1.5rem;
+            line-height: 1.2; letter-spacing: -1px;
+        }
+
+        .hero-title span { color: var(--cyan-primary); }
+
+        .hero-subtitle {
+            font-size: 1.4rem; color: var(--text-secondary);
+            max-width: 800px; margin: 0 auto; line-height: 1.8;
+        }
+
+        .section { padding: 8rem 2rem; max-width: 1400px; margin: 0 auto; }
+
+        .section-alt { background: linear-gradient(180deg, rgba(26, 31, 58, 0.3) 0%, transparent 100%); }
+
+        .section-header { text-align: center; margin-bottom: 5rem; }
+
+        .section-badge {
+            display: inline-block; background: rgba(0, 217, 255, 0.1);
+            color: var(--cyan-primary); padding: 0.4rem 1rem;
+            border-radius: 20px; font-size: 0.85rem; font-weight: 600;
+            margin-bottom: 1.5rem; letter-spacing: 0.5px;
+        }
+
+        .section-title {
+            font-size: 3rem; font-weight: 800; margin-bottom: 1.5rem;
+            letter-spacing: -0.5px;
+        }
+
+        .section-subtitle {
+            font-size: 1.3rem; color: var(--text-secondary);
+            max-width: 900px; margin: 0 auto; line-height: 1.8;
+        }
+
+        /* Visual Flow */
+        .flow-diagram {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+
+        .flow-step {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 3rem;
+            margin-bottom: 6rem;
+            align-items: start;
+        }
+
+        .flow-step:last-child { margin-bottom: 0; }
+
+        .flow-number {
+            background: linear-gradient(135deg, var(--cyan-primary), var(--green-secure));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 8rem;
+            font-weight: 800;
+            line-height: 1;
+            opacity: 0.15;
+        }
+
+        .flow-content {
+            background: rgba(26, 31, 58, 0.6);
+            border: 2px solid rgba(0, 217, 255, 0.2);
+            border-radius: 20px;
+            padding: 3rem;
+        }
+
+        .flow-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .flow-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--cyan-primary);
+            margin-bottom: 1rem;
+        }
+
+        .flow-subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            font-style: italic;
+        }
+
+        .flow-description {
+            color: var(--text-secondary);
+            line-height: 1.9;
+            margin-bottom: 2rem;
+        }
+
+        .flow-features {
+            list-style: none;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .flow-features li {
+            color: var(--text-primary);
+            padding: 1rem;
+            background: rgba(0, 217, 255, 0.05);
+            border-left: 3px solid var(--green-secure);
+            border-radius: 4px;
+        }
+
+        .flow-features li strong {
+            color: var(--cyan-primary);
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .example-box {
+            background: rgba(10, 14, 39, 0.8);
+            border: 2px solid var(--amber-warning);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-top: 2rem;
+        }
+
+        .example-title {
+            color: var(--amber-warning);
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .example-content {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.7;
+            color: var(--text-secondary);
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin: 4rem 0;
+        }
+
+        .comparison-box {
+            background: rgba(26, 31, 58, 0.6);
+            border-radius: 16px;
+            padding: 2.5rem;
+        }
+
+        .comparison-traditional {
+            border: 2px solid rgba(255, 170, 0, 0.3);
+        }
+
+        .comparison-amoskys {
+            border: 2px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .comparison-label {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .label-traditional { color: var(--amber-warning); }
+        .label-amoskys { color: var(--green-secure); }
+
+        .comparison-points {
+            list-style: none;
+            padding: 0;
+        }
+
+        .comparison-points li {
+            padding: 0.75rem 0;
+            padding-left: 2rem;
+            position: relative;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        .comparison-traditional .comparison-points li::before {
+            content: '⚠️';
+            position: absolute;
+            left: 0;
+        }
+
+        .comparison-amoskys .comparison-points li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--green-secure);
+            font-weight: bold;
+        }
+
+        footer {
+            background: rgba(10, 14, 39, 0.98);
+            border-top: 2px solid rgba(0, 217, 255, 0.1);
+            padding: 3rem 2rem 2rem; text-align: center;
+        }
+
+        .footer-content { max-width: 1400px; margin: 0 auto; color: var(--text-secondary); }
+
+        .footer-logo {
+            font-size: 1.6rem; font-weight: 800; color: var(--cyan-primary);
+            margin-bottom: 1rem;
+        }
+
+        .footer-links { display: flex; justify-content: center; gap: 2rem; margin: 2rem 0; }
+
+        .footer-links a {
+            color: var(--text-secondary); text-decoration: none; transition: color 0.3s;
+        }
+
+        .footer-links a:hover { color: var(--cyan-primary); }
+
+        @media (max-width: 1200px) {
+            .hero-title { font-size: 2.8rem; }
+            .flow-step { grid-template-columns: 1fr; }
+            .flow-number { font-size: 5rem; }
+            .comparison-grid { grid-template-columns: 1fr; }
+            .flow-features { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            .hero-title { font-size: 2.2rem; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <div class="logo-section">
+                <a href="/" class="logo-link">
+                    <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS Logo" class="logo-image">
+                    <span class="logo-text">AMOSKYS</span>
+                </a>
+                <div class="logo-badge">INTELLIGENCE PLATFORM</div>
+            </div>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/about">About</a>
+                <a href="/how-it-works" class="active">How It Works</a>
+                <a href="/docs">Documentation</a>
+                <a href="/auth/login">Login</a>
+                <a href="/auth/signup" class="btn btn-primary" style="color: #0a0e27; font-weight: 700;">Coming Soon</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-badge">HOW IT WORKS</div>
+            <h1 class="hero-title">Intelligence from <span>Observation</span>,<br>Not Just Alerts</h1>
+            <p class="hero-subtitle">AMOSKYS works like a biological nervous system:<br>comprehensive sensing, reliable transport, intelligent analysis.</p>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="flow-diagram">
+            <!-- Step 1: Axons -->
+            <div class="flow-step">
+                <div class="flow-number">01</div>
+                <div class="flow-content">
+                    <div class="flow-icon">⚡</div>
+                    <h2 class="flow-title">AXONS: The Sensors</h2>
+                    <p class="flow-subtitle">"Eyes everywhere, seeing everything"</p>
+                    <p class="flow-description">
+                        Specialized agents deployed across your infrastructure collect datapoints from every monitored surface. Like nerve endings in a biological system, each axon is purpose-built to observe a specific perspective.
+                    </p>
+                    <ul class="flow-features">
+                        <li><strong>Process Agent</strong> Execution behavior, parent-child relationships, command lines</li>
+                        <li><strong>Network Agent</strong> Traffic flows, connection patterns, communication timelines</li>
+                        <li><strong>File System Agent</strong> File operations, modifications, access patterns</li>
+                        <li><strong>Registry Agent</strong> Configuration changes, persistence mechanisms</li>
+                        <li><strong>Kernel Agent</strong> System calls, driver activity, kernel-level operations</li>
+                        <li><strong>Peripheral Agent</strong> USB devices, hardware interactions</li>
+                        <li><strong>Container Agent</strong> Docker, Kubernetes, runtime behavior</li>
+                        <li><strong>Cloud Agent</strong> AWS, Azure, GCP resource activity</li>
+                    </ul>
+                    <div class="example-box">
+                        <div class="example-title">Example: Process Agent Signal</div>
+                        <div class="example-content">
+{<br>
+  "type": "process_execution",<br>
+  "timestamp": "2025-01-01T14:23:45.123Z",<br>
+  "pid": 1234,<br>
+  "command": "powershell.exe -enc [base64]",<br>
+  "parent": {"pid": 5678, "name": "winword.exe"},<br>
+  "user": "jdoe@corp.com",<br>
+  "integrity_level": "medium",<br>
+  "context": "document_opened_from_email"<br>
+}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Bloodstream -->
+            <div class="flow-step">
+                <div class="flow-number">02</div>
+                <div class="flow-content">
+                    <div class="flow-icon">🩸</div>
+                    <h2 class="flow-title">BLOODSTREAM: The Transport</h2>
+                    <p class="flow-subtitle">"Every signal reaches the brain"</p>
+                    <p class="flow-description">
+                        High-throughput event bus ensures every signal from every axon reaches the central processing unit. Like a biological bloodstream distributing nutrients, our transport layer guarantees delivery with zero data loss.
+                    </p>
+                    <ul class="flow-features">
+                        <li><strong>Guaranteed Delivery</strong> No dropped signals, even under high load</li>
+                        <li><strong>Backpressure Handling</strong> Graceful degradation when downstream slows</li>
+                        <li><strong>Real-Time Streaming</strong> Sub-second latency from collection to analysis</li>
+                        <li><strong>Full Fidelity</strong> No sampling, no aggregation, complete truth preservation</li>
+                    </ul>
+                    <div class="example-box">
+                        <div class="example-title">Event Bus Throughput</div>
+                        <div class="example-content">
+→ 50,000+ events/second sustained<br>
+→ Peak: 150,000 events/second<br>
+→ 99.99% delivery guarantee<br>
+→ &lt;100ms p99 latency
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Soma -->
+            <div class="flow-step">
+                <div class="flow-number">03</div>
+                <div class="flow-content">
+                    <div class="flow-icon">🧠</div>
+                    <h2 class="flow-title">SOMA: The Brain</h2>
+                    <p class="flow-subtitle">"Where intelligence emerges"</p>
+                    <p class="flow-description">
+                        All signals converge in the central processing unit where cross-system correlation, threat analysis, evidence chain construction, and explainable reasoning happen. Like a biological brain making sense of sensory input, the soma transforms raw signals into actionable intelligence.
+                    </p>
+                    <ul class="flow-features">
+                        <li><strong>Cross-System Correlation</strong> Connect behavior across devices, users, networks</li>
+                        <li><strong>Temporal Sequencing</strong> Reconstruct attack chains with precise timelines</li>
+                        <li><strong>Evidence Chains</strong> Link related signals into complete narratives</li>
+                        <li><strong>MITRE ATT&CK Mapping</strong> Automatic technique identification</li>
+                        <li><strong>Natural Language Explanations</strong> Every detection tells its story</li>
+                        <li><strong>Confidence Scoring</strong> Probabilistic reasoning, not binary alerts</li>
+                    </ul>
+                    <div class="example-box">
+                        <div class="example-title">Correlated Threat Detection</div>
+                        <div class="example-content">
+<strong style="color: var(--red-critical)">THREAT DETECTED: Credential Theft + Persistence</strong><br>
+<br>
+<strong>Timeline:</strong><br>
+14:23:45 - Email attachment opened (winword.exe)<br>
+14:23:46 - PowerShell spawned with encoded command<br>
+14:23:47 - Network connection to external IP<br>
+14:23:48 - File written to temp directory<br>
+14:23:49 - Registry Run key modified<br>
+<br>
+<strong>Confidence:</strong> 0.92 (High)<br>
+<strong>MITRE ATT&CK:</strong> T1059.001, T1547.001<br>
+<strong>Recommendation:</strong> Isolate system, investigate jdoe@corp.com
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="section-header">
+            <div class="section-badge">THE DIFFERENCE</div>
+            <h2 class="section-title">Traditional vs AMOSKYS</h2>
+        </div>
+
+        <div class="comparison-grid">
+            <div class="comparison-box comparison-traditional">
+                <div class="comparison-label label-traditional">Traditional Security Tools</div>
+                <ul class="comparison-points">
+                    <li>Sampled data (lose context in aggregation)</li>
+                    <li>Per-endpoint analysis (miss cross-system attacks)</li>
+                    <li>Alert fatigue (thousands of unexplained signals)</li>
+                    <li>Black-box ML ("trust the algorithm")</li>
+                    <li>Hours of manual investigation</li>
+                    <li>No evidence chain, no timeline</li>
+                </ul>
+            </div>
+
+            <div class="comparison-box comparison-amoskys">
+                <div class="comparison-label label-amoskys">AMOSKYS Intelligence Platform</div>
+                <ul class="comparison-points">
+                    <li>Full-fidelity data (preserve complete truth)</li>
+                    <li>Cross-system correlation (reveal full attack chain)</li>
+                    <li>Explainable intelligence (every detection has context)</li>
+                    <li>Evidence-based reasoning (transparent logic)</li>
+                    <li>Seconds to full context</li>
+                    <li>Complete timeline with related signals</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-header">
+            <div class="section-badge">GET STARTED</div>
+            <h2 class="section-title">Ready to See It in Action?</h2>
+            <p class="section-subtitle">Deploy AMOSKYS agents and start collecting perspectives.<br>Full intelligence layer operational in under 15 minutes.</p>
+            <div style="margin-top: 3rem;">
+                <a href="/auth/signup" class="btn btn-primary" style="font-size: 1.1rem; padding: 1.2rem 2.5rem; color: #0a0e27; font-weight: 700;">Coming Soon</a>
+                <a href="/docs" class="btn" style="font-size: 1.1rem; padding: 1.2rem 2.5rem; margin-left: 1rem;">Read Documentation</a>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-logo">🧠 AMOSKYS</div>
+            <p style="margin-bottom: 1.5rem; max-width: 600px; margin-left: auto; margin-right: auto;">Intelligence-First Security Platform. Built to understand threats, not just react to them.</p>
+            <div class="footer-links">
+                <a href="/">Home</a>
+                <a href="/about">About</a>
+                <a href="/how-it-works">How It Works</a>
+                <a href="/docs">Documentation</a>
+                <a href="/auth/login">Login</a>
+                <a href="/auth/signup">Sign Up</a>
+            </div>
+            <p style="margin-top: 2rem; font-size: 0.9rem;">© 2025 AMOSKYS. Curated Security Perspectives. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -68,6 +68,14 @@ def verify_pending():
     return render_template("auth/verify-pending.html")
 
 
+@auth_views_bp.route("/resend-verification")
+def resend_verification():
+    """Render resend verification page."""
+    # Email should be in query params
+    email = request.args.get("email", "")
+    return render_template("auth/resend-verification.html", email=email)
+
+
 @auth_views_bp.route("/logout")
 def logout():
     """

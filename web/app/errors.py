@@ -14,7 +14,7 @@ Features:
 
 from typing import Tuple
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, request, render_template
 from werkzeug.exceptions import HTTPException
 
 from amoskys.common.exceptions import (
@@ -216,6 +216,66 @@ def handle_generic_exception(error: Exception) -> Tuple[Response, int]:
     return response, 500
 
 
+def render_html_error_page(error: HTTPException) -> Tuple[str, int]:
+    """Render HTML error page for browser requests.
+
+    Args:
+        error: The HTTP exception
+
+    Returns:
+        Tuple of (HTML string, status_code)
+    """
+    # Map status codes to user-friendly titles
+    error_titles = {
+        400: "Bad Request",
+        401: "Unauthorized",
+        403: "Access Forbidden",
+        404: "Page Not Found",
+        405: "Method Not Allowed",
+        408: "Request Timeout",
+        429: "Too Many Requests",
+        500: "Internal Server Error",
+        502: "Bad Gateway",
+        503: "Service Unavailable",
+        504: "Gateway Timeout",
+    }
+
+    # Map status codes to user-friendly messages
+    error_messages = {
+        400: "The request was invalid or cannot be processed. Please check your input and try again.",
+        401: "You need to be logged in to access this resource.",
+        403: "You don't have permission to access this resource.",
+        404: "The page you're looking for doesn't exist or has been moved.",
+        405: "The request method is not supported for this resource.",
+        408: "The request took too long to process. Please try again.",
+        429: "You've made too many requests. Please wait a moment and try again.",
+        500: "Something went wrong on our end. Our team has been notified.",
+        502: "The gateway received an invalid response. Please try again later.",
+        503: "The service is temporarily unavailable. We're working on bringing it back online.",
+        504: "The request timed out. Please try again.",
+    }
+
+    error_code = error.code
+    error_title = error_titles.get(error_code, "Error")
+    error_message = error_messages.get(error_code, str(error.description or "An error occurred."))
+
+    # Show login button for auth errors
+    show_login = error_code in [401, 403]
+
+    correlation_id = get_correlation_id()
+
+    html = render_template(
+        'errors/error.html',
+        error_code=error_code,
+        error_title=error_title,
+        error_message=error_message,
+        correlation_id=correlation_id,
+        show_login=show_login
+    )
+
+    return html, error_code
+
+
 def register_error_handlers(app: Flask) -> None:
     """Register all error handlers with Flask application.
 
@@ -248,8 +308,8 @@ def register_error_handlers(app: Flask) -> None:
     def http_exception_handler(error: HTTPException):
         if _is_api_request():
             return handle_http_exception(error)
-        # For non-API requests, use default HTML error pages
-        return error
+        # For non-API requests, render custom HTML error page
+        return render_html_error_page(error)
 
     # Register generic exception handler for API requests
     @app.errorhandler(Exception)
@@ -261,8 +321,23 @@ def register_error_handlers(app: Flask) -> None:
         if _is_api_request():
             return handle_generic_exception(error)
 
-        # For non-API requests, re-raise to use default error pages
-        raise error
+        # For non-API requests, render 500 error page
+        logger.exception(
+            f"Unhandled exception in web request: {type(error).__name__}: {error}",
+            error_type=type(error).__name__,
+            path=request.path,
+        )
+
+        correlation_id = get_correlation_id()
+        html = render_template(
+            'errors/error.html',
+            error_code=500,
+            error_title="Internal Server Error",
+            error_message="Something went wrong on our end. Our team has been notified and is working on it.",
+            correlation_id=correlation_id,
+            show_login=False
+        )
+        return html, 500
 
     logger.info("Registered AMOSKYS error handlers")
 

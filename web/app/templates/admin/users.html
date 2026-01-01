@@ -1,0 +1,1455 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}User Management - AMOSKYS Admin{% endblock %}
+
+{% block content %}
+<div class="users-dashboard">
+    <!-- Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">👥 User Management</h2>
+            <a href="/admin" class="neural-button neural-button-secondary">← Back to Admin</a>
+        </div>
+        <p style="color: var(--text-secondary);">
+            View and manage all registered user accounts. Edit roles, status, and security settings.
+        </p>
+    </div>
+
+    <!-- Filters -->
+    <div class="neural-card">
+        <div class="filters-row">
+            <div class="filter-group">
+                <label>Search</label>
+                <input type="text" id="searchInput" class="filter-input" placeholder="Search by email or name...">
+            </div>
+            <div class="filter-group">
+                <label>Role</label>
+                <select id="roleFilter" class="filter-select">
+                    <option value="">All Roles</option>
+                    <option value="admin">Admin</option>
+                    <option value="user">User</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Status</label>
+                <select id="statusFilter" class="filter-select">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="verified">Verified</option>
+                    <option value="unverified">Unverified</option>
+                </select>
+            </div>
+            <button class="neural-button" onclick="userManager.loadUsers()">🔍 Search</button>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">Registered Users</h3>
+            <span id="userCount" class="card-badge">--</span>
+        </div>
+        <div class="table-container">
+            <table class="users-table">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Verified</th>
+                        <th>Last Login</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <tr><td colspan="6" class="loading-cell">Loading users...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+    </div>
+</div>
+
+<!-- User Detail Modal -->
+<div class="modal-overlay" id="userModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modalTitle">User Details</h3>
+            <button class="modal-close" onclick="userManager.closeModal()">✕</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <!-- Content populated by JS -->
+        </div>
+    </div>
+</div>
+
+<!-- Suspend Confirmation Modal -->
+<div class="modal-overlay" id="suspendModal">
+    <div class="modal-content modal-confirm">
+        <div class="modal-header modal-header-warning">
+            <h3>⏸️ Suspend User Account</h3>
+            <button class="modal-close" onclick="userManager.closeSuspendModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="confirm-details">
+                <p class="confirm-label">Email:</p>
+                <p class="confirm-value" id="suspendEmail">--</p>
+                <p class="confirm-label">Name:</p>
+                <p class="confirm-value" id="suspendName">--</p>
+            </div>
+            <p class="confirm-warning">
+                The user will be immediately logged out and cannot login until reactivated.
+            </p>
+            <div class="modal-actions">
+                <button class="neural-button neural-button-secondary" onclick="userManager.closeSuspendModal()">Cancel</button>
+                <button class="neural-button neural-button-warning" id="confirmSuspendBtn">Suspend Account</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-content modal-confirm">
+        <div class="modal-header modal-header-danger">
+            <h3>🗑️ Permanent User Deletion</h3>
+            <button class="modal-close" onclick="userManager.closeDeleteModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="confirm-details">
+                <p class="confirm-label">Email:</p>
+                <p class="confirm-value" id="deleteEmail">--</p>
+                <p class="confirm-label">Name:</p>
+                <p class="confirm-value" id="deleteName">--</p>
+                <p class="confirm-label">Role:</p>
+                <p class="confirm-value" id="deleteRole">--</p>
+            </div>
+            <div class="danger-warning">
+                <p><strong>⚠️ WARNING: This action CANNOT be undone!</strong></p>
+                <p>All user data will be permanently deleted:</p>
+                <ul>
+                    <li>Account credentials</li>
+                    <li>Session history</li>
+                    <li>Associated records</li>
+                </ul>
+                <p class="audit-note">An audit log entry will be created.</p>
+            </div>
+            <div class="email-confirmation">
+                <label for="deleteEmailInput">Type the user's email to confirm:</label>
+                <input type="text" id="deleteEmailInput" class="filter-input" placeholder="user@example.com" autocomplete="off">
+                <span class="error-text" id="deleteEmailError"></span>
+            </div>
+            <div class="modal-actions">
+                <button class="neural-button neural-button-secondary" onclick="userManager.closeDeleteModal()">Cancel</button>
+                <button class="neural-button neural-button-danger" id="confirmDeleteBtn" disabled>Delete Permanently</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Revoke Sessions Confirmation Modal -->
+<div class="modal-overlay" id="revokeSessionsModal">
+    <div class="modal-content modal-confirm">
+        <div class="modal-header modal-header-warning">
+            <h3>🔑 Revoke All Sessions</h3>
+            <button class="modal-close" onclick="userManager.closeRevokeSessionsModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="confirm-details">
+                <p class="confirm-label">Email:</p>
+                <p class="confirm-value" id="revokeEmail">--</p>
+                <p class="confirm-label">Name:</p>
+                <p class="confirm-value" id="revokeName">--</p>
+            </div>
+            <p class="confirm-warning">
+                ⚠️ This will immediately log out the user from all devices and invalidate all their active sessions.
+            </p>
+            <div class="modal-actions">
+                <button class="neural-button neural-button-secondary" onclick="userManager.closeRevokeSessionsModal()">Cancel</button>
+                <button class="neural-button neural-button-warning" id="confirmRevokeBtn">Revoke All Sessions</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .users-dashboard {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .filters-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-end;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .filter-group label {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .filter-input {
+        padding: 0.6rem 1rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        border-radius: 6px;
+        color: var(--text-primary);
+        min-width: 250px;
+    }
+
+    .filter-input:focus {
+        outline: none;
+        border-color: var(--neural-primary);
+    }
+
+    .filter-select {
+        padding: 0.6rem 1rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        border-radius: 6px;
+        color: var(--text-primary);
+        min-width: 150px;
+    }
+
+    .table-container {
+        overflow-x: auto;
+    }
+
+    .users-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .users-table th,
+    .users-table td {
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 1px solid rgba(0, 217, 255, 0.1);
+    }
+
+    .users-table th {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        background: rgba(0, 0, 0, 0.2);
+    }
+
+    .users-table tr:hover {
+        background: rgba(0, 217, 255, 0.05);
+    }
+
+    .user-info {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .user-email {
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    .user-name {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .user-id {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        font-family: monospace;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .badge-admin { background: var(--neural-danger); color: white; }
+    .badge-user { background: rgba(0, 217, 255, 0.2); color: var(--neural-primary); }
+    .badge-active { background: rgba(0, 255, 136, 0.2); color: var(--neural-success); }
+    .badge-inactive { background: rgba(255, 51, 102, 0.2); color: var(--neural-danger); }
+    .badge-verified { background: rgba(0, 217, 255, 0.2); color: var(--neural-primary); }
+    .badge-unverified { background: rgba(240, 173, 78, 0.2); color: var(--neural-warning); }
+
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .action-btn {
+        padding: 0.4rem 0.6rem;
+        background: rgba(0, 217, 255, 0.1);
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        border-radius: 4px;
+        color: var(--neural-primary);
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+    }
+
+    .action-btn:hover {
+        background: rgba(0, 217, 255, 0.2);
+        border-color: var(--neural-primary);
+    }
+
+    .action-btn.danger {
+        color: var(--neural-danger);
+        border-color: rgba(255, 51, 102, 0.3);
+        background: rgba(255, 51, 102, 0.1);
+    }
+
+    .action-btn.danger:hover {
+        background: rgba(255, 51, 102, 0.2);
+    }
+
+    .action-btn.warning {
+        color: var(--neural-warning);
+        border-color: rgba(255, 170, 0, 0.3);
+        background: rgba(255, 170, 0, 0.1);
+    }
+
+    .action-btn.warning:hover {
+        background: rgba(255, 170, 0, 0.2);
+    }
+
+    .loading-cell {
+        text-align: center;
+        color: var(--text-muted);
+        padding: 2rem !important;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        padding-top: 1rem;
+    }
+
+    .page-btn {
+        padding: 0.5rem 1rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        border-radius: 4px;
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .page-btn:hover:not(:disabled) {
+        background: rgba(0, 217, 255, 0.2);
+        border-color: var(--neural-primary);
+    }
+
+    .page-btn.active {
+        background: var(--neural-primary);
+        color: var(--bg-primary);
+    }
+
+    .page-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Modal */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    }
+
+    .modal-overlay.open {
+        display: flex;
+    }
+
+    .modal-content {
+        background: var(--bg-secondary);
+        border: 1px solid var(--neural-primary);
+        border-radius: 12px;
+        width: 600px;
+        max-width: 90vw;
+        max-height: 80vh;
+        overflow: hidden;
+        animation: modalSlideIn 0.3s ease;
+    }
+
+    @keyframes modalSlideIn {
+        from { transform: translateY(-30px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem;
+        border-bottom: 1px solid rgba(0, 217, 255, 0.2);
+    }
+
+    .modal-header h3 {
+        color: var(--neural-primary);
+        margin: 0;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: color 0.2s;
+    }
+
+    .modal-close:hover {
+        color: var(--neural-danger);
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+        max-height: 60vh;
+    }
+
+    .form-group {
+        margin-bottom: 1.25rem;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 0.75rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        border-radius: 6px;
+        color: var(--text-primary);
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .toggle-switch {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .toggle-switch input[type="checkbox"] {
+        width: 40px;
+        height: 20px;
+        appearance: none;
+        background: rgba(255, 51, 102, 0.3);
+        border-radius: 10px;
+        position: relative;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+    .toggle-switch input[type="checkbox"]:checked {
+        background: rgba(0, 255, 136, 0.3);
+    }
+
+    .toggle-switch input[type="checkbox"]::before {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        background: white;
+        border-radius: 50%;
+        transition: left 0.3s;
+    }
+
+    .toggle-switch input[type="checkbox"]:checked::before {
+        left: 22px;
+    }
+
+    .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(0, 217, 255, 0.2);
+    }
+
+    .neural-button-secondary {
+        background: rgba(0, 217, 255, 0.08);
+        border: 1px solid rgba(0, 217, 255, 0.4);
+        color: var(--neural-primary);
+    }
+
+    .neural-button-secondary:hover {
+        background: rgba(0, 217, 255, 0.15);
+        border-color: var(--neural-primary);
+        transform: translateY(-1px);
+    }
+
+    .neural-button-danger {
+        background: rgba(255, 51, 102, 0.2);
+        border-color: var(--neural-danger);
+        color: var(--neural-danger);
+    }
+
+    .neural-button-danger:hover {
+        background: rgba(255, 51, 102, 0.3);
+    }
+
+    .neural-button-warning {
+        background: rgba(255, 170, 0, 0.2);
+        border-color: var(--neural-warning);
+        color: var(--neural-warning);
+    }
+
+    .neural-button-warning:hover {
+        background: rgba(255, 170, 0, 0.3);
+    }
+
+    /* Confirmation Modal Styles */
+    .modal-confirm {
+        width: 550px;
+    }
+
+    .modal-header-warning {
+        background: rgba(255, 170, 0, 0.1);
+        border-bottom-color: rgba(255, 170, 0, 0.3);
+    }
+
+    .modal-header-warning h3 {
+        color: var(--neural-warning);
+    }
+
+    .modal-header-danger {
+        background: rgba(255, 51, 102, 0.1);
+        border-bottom-color: rgba(255, 51, 102, 0.3);
+    }
+
+    .modal-header-danger h3 {
+        color: var(--neural-danger);
+    }
+
+    .confirm-details {
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(0, 217, 255, 0.2);
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .confirm-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0.5rem 0 0.25rem 0;
+    }
+
+    .confirm-label:first-child {
+        margin-top: 0;
+    }
+
+    .confirm-value {
+        font-size: 1rem;
+        color: var(--text-primary);
+        margin: 0 0 0.5rem 0;
+        font-weight: 500;
+    }
+
+    .confirm-warning {
+        background: rgba(255, 170, 0, 0.1);
+        border-left: 3px solid var(--neural-warning);
+        padding: 1rem;
+        color: var(--text-secondary);
+        margin-bottom: 1.5rem;
+    }
+
+    .danger-warning {
+        background: rgba(255, 51, 102, 0.1);
+        border-left: 3px solid var(--neural-danger);
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .danger-warning p {
+        margin: 0.5rem 0;
+        color: var(--text-secondary);
+    }
+
+    .danger-warning strong {
+        color: var(--neural-danger);
+    }
+
+    .danger-warning ul {
+        margin: 0.75rem 0 0.75rem 1.5rem;
+        color: var(--text-secondary);
+    }
+
+    .danger-warning li {
+        margin: 0.25rem 0;
+    }
+
+    .audit-note {
+        font-size: 0.85rem;
+        font-style: italic;
+        color: var(--text-muted);
+    }
+
+    .email-confirmation {
+        margin-bottom: 1rem;
+    }
+
+    .email-confirmation label {
+        display: block;
+        margin-bottom: 0.75rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    .validation-error {
+        display: block;
+        color: var(--neural-danger);
+        font-size: 0.85rem;
+        margin-top: 0.25rem;
+        min-height: 1.2rem;
+    }
+
+    .error-text {
+        display: block;
+        color: var(--neural-danger);
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+    }
+
+    /* ========== Toast Notifications ========== */
+    .neural-toast {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px 20px;
+        background: rgba(15, 23, 42, 0.95);
+        backdrop-filter: blur(12px);
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .neural-toast.toast-show {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    .neural-toast.toast-hide {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+
+    .neural-toast-success {
+        border-left: 4px solid var(--neural-secondary, #00ff88);
+    }
+
+    .neural-toast-error {
+        border-left: 4px solid var(--neural-danger, #ff3366);
+    }
+
+    .neural-toast-warning {
+        border-left: 4px solid var(--neural-warning, #ffaa00);
+    }
+
+    .neural-toast-info {
+        border-left: 4px solid var(--neural-primary, #00d9ff);
+    }
+
+    .toast-content {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        flex: 1;
+    }
+
+    .toast-icon {
+        width: 22px;
+        height: 22px;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+
+    .neural-toast-success .toast-icon {
+        color: var(--neural-secondary, #00ff88);
+    }
+
+    .neural-toast-error .toast-icon {
+        color: var(--neural-danger, #ff3366);
+    }
+
+    .neural-toast-warning .toast-icon {
+        color: var(--neural-warning, #ffaa00);
+    }
+
+    .neural-toast-info .toast-icon {
+        color: var(--neural-primary, #00d9ff);
+    }
+
+    .toast-message {
+        color: var(--text-primary, #e2e8f0);
+        font-size: 0.95rem;
+        line-height: 1.5;
+        flex: 1;
+    }
+
+    .toast-close {
+        background: none;
+        border: none;
+        padding: 4px;
+        cursor: pointer;
+        opacity: 0.5;
+        transition: opacity 0.2s;
+        flex-shrink: 0;
+    }
+
+    .toast-close:hover {
+        opacity: 1;
+    }
+
+    .toast-close svg {
+        width: 16px;
+        height: 16px;
+        color: var(--text-secondary, #94a3b8);
+    }
+
+    .toast-progress {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        height: 3px;
+        background: currentColor;
+        opacity: 0.3;
+        animation: toast-progress 5s linear forwards;
+    }
+
+    .neural-toast-success .toast-progress {
+        background: var(--neural-secondary, #00ff88);
+    }
+
+    .neural-toast-error .toast-progress {
+        background: var(--neural-danger, #ff3366);
+    }
+
+    .neural-toast-warning .toast-progress {
+        background: var(--neural-warning, #ffaa00);
+    }
+
+    .neural-toast-info .toast-progress {
+        background: var(--neural-primary, #00d9ff);
+    }
+
+    @keyframes toast-progress {
+        from { width: 100%; }
+        to { width: 0%; }
+    }
+</style>
+
+<script>
+class UserManager {
+    constructor() {
+        this.currentPage = 1;
+        this.perPage = 20;
+        this.totalPages = 1;
+        this.users = [];
+        this.init();
+    }
+
+    init() {
+        this.loadUsers();
+        
+        // Search on Enter key
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.loadUsers();
+        });
+
+        // Close modal on overlay click
+        document.getElementById('userModal').addEventListener('click', (e) => {
+            if (e.target.id === 'userModal') this.closeModal();
+        });
+    }
+
+    async loadUsers() {
+        const search = document.getElementById('searchInput').value;
+        const role = document.getElementById('roleFilter').value;
+        const status = document.getElementById('statusFilter').value;
+
+        const params = new URLSearchParams({
+            page: this.currentPage,
+            per_page: this.perPage,
+            search,
+            role,
+            status
+        });
+
+        try {
+            const response = await fetch(`/admin/api/users?${params}`);
+            const data = await response.json();
+
+            if (data.success) {
+                this.users = data.users;
+                this.totalPages = data.pagination.pages;
+                this.renderUsers();
+                this.renderPagination();
+                document.getElementById('userCount').textContent = `${data.pagination.total} users`;
+            }
+        } catch (error) {
+            console.error('Failed to load users:', error);
+        }
+    }
+
+    renderUsers() {
+        const tbody = document.getElementById('usersTableBody');
+        
+        if (this.users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">No users found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = this.users.map(user => `
+            <tr>
+                <td>
+                    <div class="user-info">
+                        <span class="user-email">${user.email}</span>
+                        <span class="user-name">${user.full_name || 'No name'}</span>
+                        <span class="user-id">${user.id.substring(0, 8)}...</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="badge badge-${user.role}">${user.role}</span>
+                </td>
+                <td>
+                    <span class="badge badge-${user.is_active ? 'active' : 'inactive'}">
+                        ${user.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                </td>
+                <td>
+                    <span class="badge badge-${user.is_verified ? 'verified' : 'unverified'}">
+                        ${user.is_verified ? '✓ Verified' : 'Pending'}
+                    </span>
+                </td>
+                <td>
+                    ${user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'Never'}
+                </td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="action-btn" onclick="userManager.viewUser('${user.id}')" title="View Details">👁️</button>
+                        <button class="action-btn" onclick="userManager.editUser('${user.id}')" title="Edit User">✏️</button>
+                        <button class="action-btn danger" onclick="userManager.revokeSession('${user.id}')" title="Revoke Sessions">🔒</button>
+                        <button class="action-btn warning" onclick="userManager.suspendUser('${user.id}')" title="Suspend User">⏸️</button>
+                        <button class="action-btn danger" onclick="userManager.deleteUser('${user.id}')" title="Delete User">🗑️</button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    renderPagination() {
+        const container = document.getElementById('pagination');
+        
+        if (this.totalPages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+
+        let html = '';
+        html += `<button class="page-btn" ${this.currentPage === 1 ? 'disabled' : ''} onclick="userManager.goToPage(${this.currentPage - 1})">← Prev</button>`;
+        
+        for (let i = 1; i <= this.totalPages; i++) {
+            if (i === 1 || i === this.totalPages || (i >= this.currentPage - 2 && i <= this.currentPage + 2)) {
+                html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" onclick="userManager.goToPage(${i})">${i}</button>`;
+            } else if (i === this.currentPage - 3 || i === this.currentPage + 3) {
+                html += `<span style="color: var(--text-muted);">...</span>`;
+            }
+        }
+        
+        html += `<button class="page-btn" ${this.currentPage === this.totalPages ? 'disabled' : ''} onclick="userManager.goToPage(${this.currentPage + 1})">Next →</button>`;
+        
+        container.innerHTML = html;
+    }
+
+    goToPage(page) {
+        this.currentPage = page;
+        this.loadUsers();
+    }
+
+    async viewUser(userId) {
+        try {
+            const response = await fetch(`/admin/api/users/${userId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                this.showUserModal(data.user, data.sessions, data.audit_logs);
+            }
+        } catch (error) {
+            console.error('Failed to load user:', error);
+        }
+    }
+
+    showUserModal(user, sessions, auditLogs) {
+        document.getElementById('modalTitle').textContent = user.email;
+        document.getElementById('modalBody').innerHTML = `
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="text" value="${user.email}" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" value="${user.full_name || 'Not set'}" readonly>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Role</label>
+                    <input type="text" value="${user.role}" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Created</label>
+                    <input type="text" value="${new Date(user.created_at).toLocaleString()}" readonly>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Status</label>
+                    <input type="text" value="${user.is_active ? 'Active' : 'Inactive'}" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Email Verified</label>
+                    <input type="text" value="${user.is_verified ? 'Yes' : 'No'}" readonly>
+                </div>
+            </div>
+            <h4 style="margin-top: 1.5rem; color: var(--text-secondary);">Active Sessions (${sessions.length})</h4>
+            <div style="max-height: 150px; overflow-y: auto;">
+                ${sessions.length > 0 ? sessions.map(s => `
+                    <div style="padding: 0.5rem; border-bottom: 1px solid rgba(0,217,255,0.1); font-size: 0.85rem;">
+                        <strong>${s.ip_address || 'Unknown'}</strong> - ${s.is_active ? '🟢 Active' : '🔴 Expired'}
+                        <br><span style="color: var(--text-muted);">${s.user_agent?.substring(0, 50) || 'Unknown device'}...</span>
+                    </div>
+                `).join('') : '<p style="color: var(--text-muted);">No active sessions</p>'}
+            </div>
+        `;
+        document.getElementById('userModal').classList.add('open');
+    }
+
+    async editUser(userId) {
+        try {
+            const response = await fetch(`/admin/api/users/${userId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                this.showEditModal(data.user);
+            }
+        } catch (error) {
+            console.error('Failed to load user:', error);
+        }
+    }
+
+    showEditModal(user) {
+        document.getElementById('modalTitle').textContent = `Edit: ${user.email}`;
+        document.getElementById('modalBody').innerHTML = `
+            <form id="editUserForm" onsubmit="userManager.saveUser(event, '${user.id}')">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input
+                        type="text"
+                        name="full_name"
+                        value="${this.escapeHtml(user.full_name || '')}"
+                        placeholder="Enter full name"
+                        maxlength="100"
+                        pattern="^[a-zA-Z0-9\\s\\-\\.,']+$"
+                        title="Only letters, numbers, spaces, hyphens, periods, commas, and apostrophes allowed"
+                    >
+                    <span class="validation-error" id="fullNameError"></span>
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select name="role" required>
+                        <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
+                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="toggle-switch">
+                        <input type="checkbox" name="is_active" ${user.is_active ? 'checked' : ''}>
+                        <span>Account Active</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="toggle-switch">
+                        <input type="checkbox" name="is_verified" ${user.is_verified ? 'checked' : ''}>
+                        <span>Email Verified</span>
+                    </label>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="neural-button neural-button-secondary" onclick="userManager.closeModal()">Cancel</button>
+                    <button type="submit" class="neural-button" id="saveUserBtn">Save Changes</button>
+                </div>
+            </form>
+        `;
+        document.getElementById('userModal').classList.add('open');
+
+        // Add real-time validation
+        const fullNameInput = document.querySelector('input[name="full_name"]');
+        fullNameInput.addEventListener('input', () => this.validateFullName(fullNameInput));
+
+        // Setup keyboard handlers for accessibility
+        this.setupKeyboardHandlers('userModal', this.closeModal);
+    }
+
+    // Input validation helpers
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    validateFullName(input) {
+        const error = document.getElementById('fullNameError');
+        const value = input.value.trim();
+
+        if (value && value.length < 2) {
+            error.textContent = 'Full name must be at least 2 characters';
+            input.setCustomValidity('Invalid name length');
+            return false;
+        }
+
+        if (value && value.length > 100) {
+            error.textContent = 'Full name must be less than 100 characters';
+            input.setCustomValidity('Name too long');
+            return false;
+        }
+
+        if (value && !/^[a-zA-Z0-9\s\-.,']+$/.test(value)) {
+            error.textContent = 'Only letters, numbers, spaces, and basic punctuation allowed';
+            input.setCustomValidity('Invalid characters');
+            return false;
+        }
+
+        error.textContent = '';
+        input.setCustomValidity('');
+        return true;
+    }
+
+    async saveUser(event, userId) {
+        event.preventDefault();
+        const form = event.target;
+
+        // Validate before submitting
+        const fullNameInput = form.full_name;
+        if (fullNameInput.value && !this.validateFullName(fullNameInput)) {
+            return;
+        }
+
+        const data = {
+            full_name: fullNameInput.value.trim(),
+            role: form.role.value,
+            is_active: form.is_active.checked,
+            is_verified: form.is_verified.checked,
+        };
+
+        // Disable submit button during save
+        const saveBtn = document.getElementById('saveUserBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        try {
+            const response = await fetch(`/admin/api/users/${userId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.closeModal();
+                this.loadUsers();
+            } else {
+                alert(result.error || 'Failed to update user');
+            }
+        } catch (error) {
+            console.error('Failed to save user:', error);
+        }
+    }
+
+    async revokeSession(userId) {
+        const user = this.users.find(u => u.id === userId);
+        if (!user) return;
+
+        // Populate revoke sessions modal
+        document.getElementById('revokeEmail').textContent = user.email;
+        document.getElementById('revokeName').textContent = user.full_name || 'N/A';
+
+        // Show modal
+        document.getElementById('revokeSessionsModal').classList.add('open');
+
+        // Setup keyboard handlers for accessibility
+        this.setupKeyboardHandlers('revokeSessionsModal', this.closeRevokeSessionsModal);
+
+        // Set up confirm button handler
+        const confirmBtn = document.getElementById('confirmRevokeBtn');
+        confirmBtn.onclick = async () => {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Revoking...';
+
+            try {
+                const response = await fetch(`/admin/api/users/${userId}/sessions`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.closeRevokeSessionsModal();
+                    this.showToast(`✅ ${result.message}`, 'success');
+                    this.loadUsers();
+                } else {
+                    this.showToast(`❌ Failed to revoke sessions: ${result.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Failed to revoke sessions:', error);
+                this.showToast('❌ Network error occurred while revoking sessions', 'error');
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Revoke All Sessions';
+            }
+        };
+    }
+
+    closeRevokeSessionsModal() {
+        document.getElementById('revokeSessionsModal').classList.remove('open');
+        this.removeKeyboardHandlers();
+    }
+
+    async suspendUser(userId) {
+        const user = this.users.find(u => u.id === userId);
+        if (!user) return;
+
+        // Populate suspend modal
+        document.getElementById('suspendEmail').textContent = user.email;
+        document.getElementById('suspendName').textContent = user.full_name || 'N/A';
+
+        // Show modal
+        document.getElementById('suspendModal').classList.add('open');
+
+        // Setup keyboard handlers for accessibility
+        this.setupKeyboardHandlers('suspendModal', this.closeSuspendModal);
+
+        // Set up confirm button handler
+        const confirmBtn = document.getElementById('confirmSuspendBtn');
+        confirmBtn.onclick = async () => {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Suspending...';
+
+            try {
+                const response = await fetch(`/admin/api/users/${userId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_active: false })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.closeSuspendModal();
+                    this.showToast(`✅ User ${user.email} has been suspended successfully`, 'success');
+                    this.loadUsers();
+                } else {
+                    this.showToast(`❌ Failed to suspend user: ${result.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Failed to suspend user:', error);
+                this.showToast('❌ Network error occurred while suspending the user', 'error');
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Suspend Account';
+            }
+        };
+    }
+
+    closeSuspendModal() {
+        document.getElementById('suspendModal').classList.remove('open');
+        this.removeKeyboardHandlers();
+    }
+
+    async deleteUser(userId) {
+        const user = this.users.find(u => u.id === userId);
+        if (!user) return;
+
+        // Populate delete modal
+        document.getElementById('deleteEmail').textContent = user.email;
+        document.getElementById('deleteName').textContent = user.full_name || 'N/A';
+        document.getElementById('deleteRole').textContent = user.role;
+
+        // Reset input
+        const emailInput = document.getElementById('deleteEmailInput');
+        emailInput.value = '';
+        document.getElementById('deleteEmailError').textContent = '';
+        document.getElementById('confirmDeleteBtn').disabled = true;
+
+        // Show modal
+        document.getElementById('deleteModal').classList.add('open');
+
+        // Setup keyboard handlers for accessibility
+        this.setupKeyboardHandlers('deleteModal', this.closeDeleteModal);
+
+        // Email validation
+        emailInput.oninput = () => {
+            const confirmBtn = document.getElementById('confirmDeleteBtn');
+            const errorSpan = document.getElementById('deleteEmailError');
+
+            if (emailInput.value === user.email) {
+                confirmBtn.disabled = false;
+                errorSpan.textContent = '';
+            } else {
+                confirmBtn.disabled = true;
+                if (emailInput.value.length > 0) {
+                    errorSpan.textContent = 'Email does not match';
+                } else {
+                    errorSpan.textContent = '';
+                }
+            }
+        };
+
+        // Set up confirm button handler
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        confirmBtn.onclick = async () => {
+            if (emailInput.value !== user.email) {
+                document.getElementById('deleteEmailError').textContent = '❌ Email does not match';
+                return;
+            }
+
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Deleting...';
+
+            try {
+                const response = await fetch(`/admin/api/users/${userId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.closeDeleteModal();
+                    this.showToast(`✅ ${result.message}. Audit log entry created.`, 'success');
+                    this.loadUsers();
+                } else {
+                    this.showToast(`❌ Deletion failed: ${result.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Failed to delete user:', error);
+                this.showToast('❌ Network error occurred while deleting the user', 'error');
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Delete Permanently';
+            }
+        };
+    }
+
+    closeDeleteModal() {
+        document.getElementById('deleteModal').classList.remove('open');
+        this.removeKeyboardHandlers();
+    }
+
+    showToast(message, type = 'info') {
+        // Create toast container if it doesn't exist
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 10001;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                max-width: 420px;
+            `;
+            document.body.appendChild(container);
+        }
+
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `neural-toast neural-toast-${type}`;
+        
+        // Icons for different types
+        const icons = {
+            success: `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>`,
+            error: `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>`,
+            warning: `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>`,
+            info: `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>`
+        };
+
+        toast.innerHTML = `
+            <div class="toast-content">
+                ${icons[type] || icons.info}
+                <div class="toast-message">${message.replace(/^[✅❌⚠️ℹ️]\s*/, '')}</div>
+            </div>
+            <button class="toast-close" onclick="this.parentElement.remove()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+            <div class="toast-progress"></div>
+        `;
+
+        container.appendChild(toast);
+
+        // Trigger animation
+        requestAnimationFrame(() => toast.classList.add('toast-show'));
+
+        // Auto remove after 5 seconds
+        const timeout = setTimeout(() => {
+            toast.classList.remove('toast-show');
+            toast.classList.add('toast-hide');
+            setTimeout(() => toast.remove(), 300);
+        }, 5000);
+
+        // Clear timeout if manually closed
+        toast.querySelector('.toast-close').addEventListener('click', () => {
+            clearTimeout(timeout);
+            toast.classList.add('toast-hide');
+            setTimeout(() => toast.remove(), 300);
+        });
+    }
+
+    closeModal() {
+        document.getElementById('userModal').classList.remove('open');
+        this.removeKeyboardHandlers();
+    }
+
+    // ===================================================================
+    // Keyboard Accessibility Handlers
+    // ===================================================================
+
+    setupKeyboardHandlers(modalId, closeCallback) {
+        // Store the handler so we can remove it later
+        this.handleKeyDown = (e) => {
+            // ESC key closes modals
+            if (e.key === 'Escape' || e.key === 'Esc') {
+                e.preventDefault();
+                closeCallback.call(this);
+                return;
+            }
+
+            // Trap focus within modal (Tab navigation)
+            if (e.key === 'Tab') {
+                this.trapFocus(e, modalId);
+            }
+        };
+
+        document.addEventListener('keydown', this.handleKeyDown);
+
+        // Auto-focus first interactive element
+        setTimeout(() => this.focusFirstElement(modalId), 100);
+    }
+
+    removeKeyboardHandlers() {
+        if (this.handleKeyDown) {
+            document.removeEventListener('keydown', this.handleKeyDown);
+            this.handleKeyDown = null;
+        }
+    }
+
+    trapFocus(e, modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal || !modal.classList.contains('open')) return;
+
+        const focusableElements = modal.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+
+        if (focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        // Shift+Tab on first element -> focus last
+        if (e.shiftKey && document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+        }
+        // Tab on last element -> focus first
+        else if (!e.shiftKey && document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+        }
+    }
+
+    focusFirstElement(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+
+        const firstFocusable = modal.querySelector(
+            'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+        );
+
+        if (firstFocusable) {
+            firstFocusable.focus();
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.userManager = new UserManager();
+});
+</script>
+{% endblock %}

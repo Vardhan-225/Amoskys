@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMOSKYS - Maintenance</title>
+    <style>
+        :root {
+            --neural-primary: #0a0a0f;
+            --neural-secondary: #00ff88;
+            --neural-accent: #00d4ff;
+            --neural-danger: #ff4757;
+            --neural-surface: #12121a;
+            --neural-text: #e4e4e7;
+            --neural-text-dim: #71717a;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--neural-primary);
+            color: var(--neural-text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        /* Animated background grid */
+        .grid-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: grid-pulse 4s ease-in-out infinite;
+            z-index: 0;
+        }
+        
+        @keyframes grid-pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+        
+        /* Scanning line effect */
+        .scan-line {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neural-secondary), transparent);
+            animation: scan 3s linear infinite;
+            z-index: 1;
+        }
+        
+        @keyframes scan {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        
+        .container {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            padding: 2rem;
+            max-width: 600px;
+        }
+        
+        .logo-container {
+            margin-bottom: 2rem;
+        }
+        
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--neural-secondary);
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+        }
+        
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255, 71, 87, 0.1);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            color: var(--neural-danger);
+            margin-bottom: 2rem;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--neural-danger);
+            border-radius: 50%;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+        
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--neural-text);
+        }
+        
+        .message {
+            color: var(--neural-text-dim);
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+        
+        .neural-box {
+            background: var(--neural-surface);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .neural-box h3 {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--neural-secondary);
+            margin-bottom: 1rem;
+        }
+        
+        .progress-bar {
+            height: 4px;
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            width: 60%;
+            background: linear-gradient(90deg, var(--neural-secondary), var(--neural-accent));
+            border-radius: 2px;
+            animation: progress-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes progress-pulse {
+            0%, 100% { width: 40%; }
+            50% { width: 80%; }
+        }
+        
+        .eta {
+            font-size: 0.875rem;
+            color: var(--neural-text-dim);
+            margin-top: 0.75rem;
+        }
+        
+        .contact-link {
+            color: var(--neural-accent);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .contact-link:hover {
+            color: var(--neural-secondary);
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+        
+        .footer {
+            margin-top: 3rem;
+            font-size: 0.75rem;
+            color: var(--neural-text-dim);
+        }
+        
+        /* Glitch effect on error */
+        .glitch {
+            position: relative;
+        }
+        
+        .glitch::before,
+        .glitch::after {
+            content: attr(data-text);
+            position: absolute;
+            left: 0;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .glitch::before {
+            animation: glitch-1 2s infinite linear alternate-reverse;
+            color: var(--neural-accent);
+            left: 2px;
+            text-shadow: -2px 0 var(--neural-danger);
+            clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%);
+        }
+        
+        .glitch::after {
+            animation: glitch-2 3s infinite linear alternate-reverse;
+            color: var(--neural-danger);
+            left: -2px;
+            text-shadow: 2px 0 var(--neural-accent);
+            clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%);
+        }
+        
+        @keyframes glitch-1 {
+            0%, 100% { opacity: 0; }
+            10%, 30%, 50%, 70%, 90% { opacity: 0; }
+            11%, 31%, 51%, 71%, 91% { opacity: 1; }
+            12%, 32%, 52%, 72%, 92% { opacity: 0; }
+        }
+        
+        @keyframes glitch-2 {
+            0%, 100% { opacity: 0; }
+            15%, 35%, 55%, 75%, 95% { opacity: 0; }
+            16%, 36%, 56%, 76%, 96% { opacity: 1; }
+            17%, 37%, 57%, 77%, 97% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-bg"></div>
+    <div class="scan-line"></div>
+    
+    <div class="container">
+        <div class="logo-container">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="2" fill="none"/>
+                    <circle cx="24" cy="24" r="8" fill="currentColor"/>
+                    <path d="M24 4 L24 12 M24 36 L24 44 M4 24 L12 24 M36 24 L44 24" stroke="currentColor" stroke-width="2"/>
+                    <circle cx="24" cy="24" r="14" stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" fill="none">
+                        <animateTransform attributeName="transform" type="rotate" from="0 24 24" to="360 24 24" dur="20s" repeatCount="indefinite"/>
+                    </circle>
+                </svg>
+                <span>AMOSKYS</span>
+            </div>
+        </div>
+        
+        <div class="status-badge">
+            <span class="status-dot"></span>
+            <span>System Maintenance</span>
+        </div>
+        
+        <h1 class="glitch" data-text="Neural Systems Recalibrating">Neural Systems Recalibrating</h1>
+        
+        <p class="message">
+            Our security command platform is currently undergoing scheduled maintenance 
+            to enhance neural processing capabilities. We'll be back online shortly.
+        </p>
+        
+        <div class="neural-box">
+            <h3>🧠 System Recovery in Progress</h3>
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+            <p class="eta">Estimated restoration: A few minutes</p>
+        </div>
+        
+        <p class="message">
+            If this persists, please contact <a href="mailto:support@amoskys.com" class="contact-link">support@amoskys.com</a>
+        </p>
+        
+        <div class="footer">
+            <p>AMOSKYS Neural Security Command Platform</p>
+            <p>Error Reference: 502 | Gateway Timeout</p>
+        </div>
+    </div>
+</body>
+</html>

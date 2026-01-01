@@ -1,0 +1,654 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Query Builder - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <div>
+        <h2 style="margin: 0; display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 1.8rem;">🔍</span>
+            Query Builder
+        </h2>
+        <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);">
+            Build complex queries to search security events, telemetry, and agent data
+        </p>
+    </div>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <button class="neural-button" onclick="queryBuilder.executeQuery()">
+            ▶ Execute Query
+        </button>
+        <button class="neural-button" onclick="queryBuilder.saveQuery()">
+            💾 Save Query
+        </button>
+    </div>
+</div>
+
+<!-- Query Templates -->
+<div class="neural-card" style="margin-bottom: 1.5rem;">
+    <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">Quick Start Templates</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+        <div class="template-card" onclick="queryBuilder.loadTemplate('critical-events')">
+            <div class="template-icon">🚨</div>
+            <div class="template-name">Critical Events</div>
+            <div class="template-desc">All critical severity events in last 24h</div>
+        </div>
+        <div class="template-card" onclick="queryBuilder.loadTemplate('failed-auth')">
+            <div class="template-icon">🔐</div>
+            <div class="template-name">Failed Authentication</div>
+            <div class="template-desc">Failed login attempts from external IPs</div>
+        </div>
+        <div class="template-card" onclick="queryBuilder.loadTemplate('lateral-movement')">
+            <div class="template-icon">↔️</div>
+            <div class="template-name">Lateral Movement</div>
+            <div class="template-desc">Suspicious internal network connections</div>
+        </div>
+        <div class="template-card" onclick="queryBuilder.loadTemplate('data-exfil')">
+            <div class="template-icon">📤</div>
+            <div class="template-name">Data Exfiltration</div>
+            <div class="template-desc">Large outbound transfers to unknown hosts</div>
+        </div>
+    </div>
+</div>
+
+<!-- Query Builder Interface -->
+<div style="display: grid; grid-template-columns: 1fr 400px; gap: 1.5rem; margin-bottom: 1.5rem;">
+    <!-- Query Conditions -->
+    <div class="neural-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="margin: 0; color: #00d9ff; font-size: 1.1rem;">Query Conditions</h3>
+            <button class="neural-button-small" onclick="queryBuilder.addCondition()">
+                + Add Condition
+            </button>
+        </div>
+
+        <div id="query-conditions">
+            <!-- Conditions will be added dynamically -->
+        </div>
+
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+            <label style="color: var(--text-secondary); font-size: 0.9rem; margin-right: 1rem;">
+                Logical Operator:
+            </label>
+            <select id="logical-operator" class="neural-select" onchange="queryBuilder.updatePreview()">
+                <option value="AND">AND (all conditions must match)</option>
+                <option value="OR">OR (any condition can match)</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Query Preview -->
+    <div class="neural-card">
+        <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">Query Preview</h3>
+
+        <div style="margin-bottom: 1.5rem;">
+            <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem;">SQL Query:</div>
+            <pre id="sql-preview" style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 6px; font-size: 0.85rem; color: #00ff88; overflow-x: auto; border: 1px solid rgba(0,255,136,0.2);">SELECT * FROM events WHERE 1=1</pre>
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem;">JSON Query:</div>
+            <pre id="json-preview" style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 6px; font-size: 0.85rem; color: #00d9ff; overflow-x: auto; border: 1px solid rgba(0,217,255,0.2);">{
+  "filters": []
+}</pre>
+        </div>
+
+        <div>
+            <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem;">Estimated Results:</div>
+            <div style="background: rgba(255,170,0,0.1); padding: 1rem; border-radius: 6px; border: 1px solid rgba(255,170,0,0.3);">
+                <div style="font-size: 2rem; font-weight: bold; color: #ffaa00;" id="estimated-count">~0</div>
+                <div style="color: var(--text-secondary); font-size: 0.85rem;">matching events</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Query Results -->
+<div class="neural-card">
+    <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">Query Results</h3>
+    <div id="query-results">
+        <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+            <p>Build a query and click "Execute Query" to see results</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.neural-button {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.1) 0%, rgba(0, 184, 212, 0.1) 100%);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.neural-button:hover {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.2) 0%, rgba(0, 184, 212, 0.2) 100%);
+    border-color: rgba(0, 217, 255, 0.5);
+    transform: translateY(-2px);
+}
+
+.neural-button-small {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.1) 0%, rgba(0, 184, 212, 0.1) 100%);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+}
+
+.neural-button-small:hover {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.2) 0%, rgba(0, 184, 212, 0.2) 100%);
+}
+
+.neural-select {
+    background: rgba(26, 31, 58, 0.8);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.template-card {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.05) 0%, rgba(0, 184, 212, 0.05) 100%);
+    border: 1px solid rgba(0, 217, 255, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.template-card:hover {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.15) 0%, rgba(0, 184, 212, 0.15) 100%);
+    border-color: rgba(0, 217, 255, 0.4);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 217, 255, 0.2);
+}
+
+.template-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.template-name {
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 0.25rem;
+}
+
+.template-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.condition-row {
+    background: rgba(26, 31, 58, 0.5);
+    border: 1px solid rgba(0, 217, 255, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    display: grid;
+    grid-template-columns: 200px 150px 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.result-row {
+    background: rgba(26, 31, 58, 0.5);
+    border: 1px solid rgba(0, 217, 255, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    border-left: 4px solid transparent;
+}
+
+.result-row.severity-critical { border-left-color: #ff0000; }
+.result-row.severity-high { border-left-color: #ff6600; }
+.result-row.severity-medium { border-left-color: #ffaa00; }
+.result-row.severity-low { border-left-color: #00ff88; }
+</style>
+
+<script>
+class QueryBuilder {
+    constructor() {
+        this.conditions = [];
+        this.conditionIdCounter = 0;
+
+        // Field definitions
+        this.fields = [
+            { value: 'event_type', label: 'Event Type', type: 'string' },
+            { value: 'severity', label: 'Severity', type: 'enum', options: ['low', 'medium', 'high', 'critical'] },
+            { value: 'timestamp', label: 'Timestamp', type: 'datetime' },
+            { value: 'source_ip', label: 'Source IP', type: 'string' },
+            { value: 'destination_ip', label: 'Destination IP', type: 'string' },
+            { value: 'agent_id', label: 'Agent ID', type: 'string' },
+            { value: 'user', label: 'Username', type: 'string' },
+            { value: 'process_name', label: 'Process Name', type: 'string' },
+            { value: 'file_path', label: 'File Path', type: 'string' },
+            { value: 'registry_key', label: 'Registry Key', type: 'string' },
+            { value: 'command_line', label: 'Command Line', type: 'string' },
+            { value: 'port', label: 'Port', type: 'number' }
+        ];
+
+        // Operators by field type
+        this.operators = {
+            string: [
+                { value: 'equals', label: '=' },
+                { value: 'not_equals', label: '!=' },
+                { value: 'contains', label: 'contains' },
+                { value: 'starts_with', label: 'starts with' },
+                { value: 'ends_with', label: 'ends with' },
+                { value: 'regex', label: 'matches regex' }
+            ],
+            number: [
+                { value: 'equals', label: '=' },
+                { value: 'not_equals', label: '!=' },
+                { value: 'greater_than', label: '>' },
+                { value: 'less_than', label: '<' },
+                { value: 'greater_equal', label: '>=' },
+                { value: 'less_equal', label: '<=' }
+            ],
+            datetime: [
+                { value: 'after', label: 'after' },
+                { value: 'before', label: 'before' },
+                { value: 'last_n_hours', label: 'last N hours' },
+                { value: 'last_n_days', label: 'last N days' }
+            ],
+            enum: [
+                { value: 'equals', label: '=' },
+                { value: 'not_equals', label: '!=' }
+            ]
+        };
+
+        // Query templates
+        this.templates = {
+            'critical-events': {
+                name: 'Critical Events',
+                conditions: [
+                    { field: 'severity', operator: 'equals', value: 'critical' },
+                    { field: 'timestamp', operator: 'last_n_hours', value: '24' }
+                ],
+                logical: 'AND'
+            },
+            'failed-auth': {
+                name: 'Failed Authentication',
+                conditions: [
+                    { field: 'event_type', operator: 'contains', value: 'authentication' },
+                    { field: 'event_type', operator: 'contains', value: 'failed' }
+                ],
+                logical: 'AND'
+            },
+            'lateral-movement': {
+                name: 'Lateral Movement',
+                conditions: [
+                    { field: 'event_type', operator: 'contains', value: 'lateral' },
+                    { field: 'severity', operator: 'equals', value: 'high' }
+                ],
+                logical: 'OR'
+            },
+            'data-exfil': {
+                name: 'Data Exfiltration',
+                conditions: [
+                    { field: 'event_type', operator: 'contains', value: 'exfiltration' },
+                    { field: 'severity', operator: 'equals', value: 'critical' }
+                ],
+                logical: 'AND'
+            }
+        };
+
+        this.init();
+    }
+
+    init() {
+        // Add initial condition
+        this.addCondition();
+    }
+
+    addCondition() {
+        const conditionId = this.conditionIdCounter++;
+        const condition = {
+            id: conditionId,
+            field: 'event_type',
+            operator: 'contains',
+            value: ''
+        };
+
+        this.conditions.push(condition);
+        this.renderConditions();
+        this.updatePreview();
+    }
+
+    removeCondition(conditionId) {
+        this.conditions = this.conditions.filter(c => c.id !== conditionId);
+        this.renderConditions();
+        this.updatePreview();
+    }
+
+    renderConditions() {
+        const container = document.getElementById('query-conditions');
+
+        if (this.conditions.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    No conditions defined. Click "Add Condition" to start building your query.
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = this.conditions.map(condition => {
+            const field = this.fields.find(f => f.value === condition.field);
+            const operators = this.operators[field.type];
+
+            return `
+                <div class="condition-row">
+                    <select class="neural-select" onchange="queryBuilder.updateConditionField(${condition.id}, this.value)">
+                        ${this.fields.map(f => `
+                            <option value="${f.value}" ${f.value === condition.field ? 'selected' : ''}>
+                                ${f.label}
+                            </option>
+                        `).join('')}
+                    </select>
+
+                    <select class="neural-select" onchange="queryBuilder.updateConditionOperator(${condition.id}, this.value)">
+                        ${operators.map(op => `
+                            <option value="${op.value}" ${op.value === condition.operator ? 'selected' : ''}>
+                                ${op.label}
+                            </option>
+                        `).join('')}
+                    </select>
+
+                    ${this.renderValueInput(condition, field)}
+
+                    <button class="neural-button-small" onclick="queryBuilder.removeCondition(${condition.id})" style="color: #ff6600; border-color: rgba(255, 102, 0, 0.3);">
+                        ✕
+                    </button>
+                </div>
+            `;
+        }).join('');
+    }
+
+    renderValueInput(condition, field) {
+        if (field.type === 'enum') {
+            return `
+                <select class="neural-select" onchange="queryBuilder.updateConditionValue(${condition.id}, this.value)">
+                    ${field.options.map(opt => `
+                        <option value="${opt}" ${opt === condition.value ? 'selected' : ''}>
+                            ${opt}
+                        </option>
+                    `).join('')}
+                </select>
+            `;
+        } else {
+            const placeholder = field.type === 'datetime' ? 'e.g., 24' : `Enter ${field.label.toLowerCase()}`;
+            return `
+                <input type="text" class="neural-select" placeholder="${placeholder}" value="${condition.value}"
+                    onchange="queryBuilder.updateConditionValue(${condition.id}, this.value)"
+                    style="width: 100%;">
+            `;
+        }
+    }
+
+    updateConditionField(conditionId, field) {
+        const condition = this.conditions.find(c => c.id === conditionId);
+        condition.field = field;
+
+        // Reset operator to first available for new field type
+        const fieldDef = this.fields.find(f => f.value === field);
+        condition.operator = this.operators[fieldDef.type][0].value;
+        condition.value = '';
+
+        this.renderConditions();
+        this.updatePreview();
+    }
+
+    updateConditionOperator(conditionId, operator) {
+        const condition = this.conditions.find(c => c.id === conditionId);
+        condition.operator = operator;
+        this.updatePreview();
+    }
+
+    updateConditionValue(conditionId, value) {
+        const condition = this.conditions.find(c => c.id === conditionId);
+        condition.value = value;
+        this.updatePreview();
+    }
+
+    updatePreview() {
+        // Generate SQL preview
+        const logicalOp = document.getElementById('logical-operator').value;
+        let sqlQuery = 'SELECT * FROM events WHERE ';
+
+        if (this.conditions.length === 0) {
+            sqlQuery += '1=1';
+        } else {
+            const sqlConditions = this.conditions.map(c => {
+                const operatorMap = {
+                    'equals': '=',
+                    'not_equals': '!=',
+                    'contains': 'LIKE',
+                    'starts_with': 'LIKE',
+                    'ends_with': 'LIKE',
+                    'regex': 'REGEXP',
+                    'greater_than': '>',
+                    'less_than': '<',
+                    'greater_equal': '>=',
+                    'less_equal': '<=',
+                    'after': '>',
+                    'before': '<',
+                    'last_n_hours': '>',
+                    'last_n_days': '>'
+                };
+
+                let value = c.value;
+                if (c.operator === 'contains') value = `'%${value}%'`;
+                else if (c.operator === 'starts_with') value = `'${value}%'`;
+                else if (c.operator === 'ends_with') value = `'%${value}'`;
+                else if (c.operator === 'last_n_hours') value = `NOW() - INTERVAL ${value} HOUR`;
+                else if (c.operator === 'last_n_days') value = `NOW() - INTERVAL ${value} DAY`;
+                else value = `'${value}'`;
+
+                return `${c.field} ${operatorMap[c.operator]} ${value}`;
+            });
+
+            sqlQuery += sqlConditions.join(` ${logicalOp} `);
+        }
+
+        sqlQuery += '\nORDER BY timestamp DESC\nLIMIT 100';
+        document.getElementById('sql-preview').textContent = sqlQuery;
+
+        // Generate JSON preview
+        const jsonQuery = {
+            filters: this.conditions.map(c => ({
+                field: c.field,
+                operator: c.operator,
+                value: c.value
+            })),
+            logical_operator: logicalOp.toLowerCase(),
+            order_by: 'timestamp',
+            order: 'desc',
+            limit: 100
+        };
+        document.getElementById('json-preview').textContent = JSON.stringify(jsonQuery, null, 2);
+
+        // Update estimated count
+        const estimatedCount = Math.floor(Math.random() * 500) + 50;
+        document.getElementById('estimated-count').textContent = `~${estimatedCount}`;
+    }
+
+    loadTemplate(templateKey) {
+        const template = this.templates[templateKey];
+
+        // Clear existing conditions
+        this.conditions = [];
+        this.conditionIdCounter = 0;
+
+        // Load template conditions
+        template.conditions.forEach(c => {
+            const conditionId = this.conditionIdCounter++;
+            this.conditions.push({
+                id: conditionId,
+                field: c.field,
+                operator: c.operator,
+                value: c.value
+            });
+        });
+
+        // Set logical operator
+        document.getElementById('logical-operator').value = template.logical;
+
+        this.renderConditions();
+        this.updatePreview();
+    }
+
+    executeQuery() {
+        const resultsContainer = document.getElementById('query-results');
+
+        // Simulate query execution with synthetic results
+        const syntheticResults = [
+            {
+                timestamp: '2024-01-15 14:23:45',
+                event_type: 'authentication_failed',
+                severity: 'medium',
+                source_ip: '192.168.1.105',
+                user: 'admin',
+                agent_id: 'endpoint-monitor-001',
+                description: 'Failed SSH login attempt from internal network'
+            },
+            {
+                timestamp: '2024-01-15 14:18:32',
+                event_type: 'lateral_movement_detected',
+                severity: 'high',
+                source_ip: '10.0.2.15',
+                destination_ip: '10.0.2.20',
+                agent_id: 'network-monitor-003',
+                description: 'Suspicious SMB connection to domain controller'
+            },
+            {
+                timestamp: '2024-01-15 14:12:17',
+                event_type: 'privilege_escalation',
+                severity: 'critical',
+                source_ip: '10.0.1.42',
+                user: 'svc_backup',
+                process_name: 'powershell.exe',
+                agent_id: 'process-monitor-002',
+                description: 'Attempt to enable SeDebugPrivilege detected'
+            },
+            {
+                timestamp: '2024-01-15 14:05:51',
+                event_type: 'suspicious_network_traffic',
+                severity: 'high',
+                source_ip: '10.0.1.42',
+                destination_ip: '185.220.101.42',
+                port: 8443,
+                agent_id: 'network-monitor-001',
+                description: 'Outbound HTTPS connection with certificate mismatch'
+            },
+            {
+                timestamp: '2024-01-15 13:58:23',
+                event_type: 'file_access_anomaly',
+                severity: 'medium',
+                source_ip: '10.0.1.42',
+                file_path: '\\\\fileserver01\\finance\\sensitive_data.xlsx',
+                user: 'alice',
+                agent_id: 'file-monitor-001',
+                description: 'Unusual file access pattern detected'
+            }
+        ];
+
+        resultsContainer.innerHTML = `
+            <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(0, 255, 136, 0.1); border-radius: 6px; border: 1px solid rgba(0, 255, 136, 0.3);">
+                <strong style="color: #00ff88;">Query executed successfully</strong>
+                <span style="color: var(--text-secondary); margin-left: 1rem;">
+                    Found ${syntheticResults.length} matching events in 0.127s
+                </span>
+            </div>
+
+            ${syntheticResults.map(result => `
+                <div class="result-row severity-${result.severity}">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                        <div>
+                            <div style="font-weight: 600; color: #ffffff; margin-bottom: 0.25rem;">
+                                ${result.event_type.replace(/_/g, ' ').toUpperCase()}
+                            </div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">
+                                🕐 ${result.timestamp} | 🤖 ${result.agent_id}
+                            </div>
+                        </div>
+                        <div class="status-badge" style="background: ${this.getSeverityColor(result.severity)};">
+                            ${result.severity.toUpperCase()}
+                        </div>
+                    </div>
+
+                    <div style="color: #cccccc; margin-bottom: 0.75rem;">
+                        ${result.description}
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.5rem; font-size: 0.85rem;">
+                        ${result.source_ip ? `<div><span style="color: var(--text-secondary);">Source IP:</span> <span style="color: #00d9ff;">${result.source_ip}</span></div>` : ''}
+                        ${result.destination_ip ? `<div><span style="color: var(--text-secondary);">Dest IP:</span> <span style="color: #00d9ff;">${result.destination_ip}</span></div>` : ''}
+                        ${result.user ? `<div><span style="color: var(--text-secondary);">User:</span> <span style="color: #00d9ff;">${result.user}</span></div>` : ''}
+                        ${result.process_name ? `<div><span style="color: var(--text-secondary);">Process:</span> <span style="color: #00d9ff;">${result.process_name}</span></div>` : ''}
+                        ${result.port ? `<div><span style="color: var(--text-secondary);">Port:</span> <span style="color: #00d9ff;">${result.port}</span></div>` : ''}
+                        ${result.file_path ? `<div><span style="color: var(--text-secondary);">File:</span> <span style="color: #00d9ff; word-break: break-all;">${result.file_path}</span></div>` : ''}
+                    </div>
+                </div>
+            `).join('')}
+        `;
+    }
+
+    saveQuery() {
+        const queryName = prompt('Enter a name for this query:');
+        if (queryName) {
+            const query = {
+                name: queryName,
+                conditions: this.conditions,
+                logical_operator: document.getElementById('logical-operator').value,
+                created_at: new Date().toISOString()
+            };
+
+            // In a real implementation, this would save to backend
+            console.log('Saved query:', query);
+
+            alert(`Query "${queryName}" saved successfully!\n\nThis is a mockup - in production, queries would be saved to your profile.`);
+        }
+    }
+
+    getSeverityColor(severity) {
+        const colors = {
+            low: '#00ff88',
+            medium: '#ffaa00',
+            high: '#ff6600',
+            critical: '#ff0000'
+        };
+        return colors[severity] || '#888888';
+    }
+}
+
+// Initialize on page load
+let queryBuilder;
+document.addEventListener('DOMContentLoaded', () => {
+    queryBuilder = new QueryBuilder();
+});
+</script>
+{% endblock %}

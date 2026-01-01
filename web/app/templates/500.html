@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>500 - System Error | AMOSKYS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neural-primary: #00d9ff;
+            --neural-secondary: #00ff88;
+            --neural-warning: #ffaa00;
+            --neural-danger: #ff3366;
+            --bg-primary: #0a0e27;
+            --bg-secondary: #1a1f3a;
+            --text-primary: #ffffff;
+            --text-secondary: #b4bcd0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Animated warning grid */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 50% 50%, rgba(255, 51, 102, 0.15) 0%, transparent 60%),
+                linear-gradient(0deg, transparent 24%, rgba(255, 51, 102, 0.03) 25%, rgba(255, 51, 102, 0.03) 26%, transparent 27%, transparent 74%, rgba(255, 51, 102, 0.03) 75%, rgba(255, 51, 102, 0.03) 76%, transparent 77%, transparent),
+                linear-gradient(90deg, transparent 24%, rgba(255, 51, 102, 0.03) 25%, rgba(255, 51, 102, 0.03) 26%, transparent 27%, transparent 74%, rgba(255, 51, 102, 0.03) 75%, rgba(255, 51, 102, 0.03) 76%, transparent 77%, transparent);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: -1;
+            animation: gridPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes gridPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .error-container {
+            text-align: center;
+            max-width: 700px;
+            padding: 50px 40px;
+            background: rgba(26, 31, 58, 0.95);
+            border: 2px solid var(--neural-danger);
+            border-radius: 20px;
+            box-shadow: 
+                0 0 40px rgba(255, 51, 102, 0.3),
+                inset 0 0 60px rgba(255, 51, 102, 0.05);
+            backdrop-filter: blur(12px);
+            position: relative;
+        }
+
+        .error-container::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, var(--neural-danger), transparent, var(--neural-danger));
+            border-radius: 22px;
+            z-index: -1;
+            opacity: 0.5;
+            animation: borderGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes borderGlow {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+        }
+
+        .error-icon {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 30px;
+            position: relative;
+        }
+
+        .error-icon svg {
+            width: 100%;
+            height: 100%;
+            color: var(--neural-danger);
+            animation: shake 0.5s ease-in-out infinite;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px); }
+            75% { transform: translateX(3px); }
+        }
+        
+        .error-code {
+            font-size: 6rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--neural-danger), #ff6b8a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 15px;
+            text-shadow: 0 0 30px rgba(255, 51, 102, 0.5);
+            animation: pulseCode 2s ease-in-out infinite;
+        }
+
+        @keyframes pulseCode {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.2); }
+        }
+        
+        .error-title {
+            font-size: 2rem;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        .error-message {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-bottom: 35px;
+            line-height: 1.7;
+        }
+
+        .error-details {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 51, 102, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 35px;
+            text-align: left;
+        }
+
+        .error-details-title {
+            color: var(--neural-danger);
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+        }
+
+        .error-details-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .error-details-list li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .error-details-list li:last-child {
+            border-bottom: none;
+        }
+
+        .error-details-list li svg {
+            width: 18px;
+            height: 18px;
+            color: var(--neural-primary);
+            flex-shrink: 0;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .action-btn-primary {
+            background: linear-gradient(135deg, var(--neural-primary), var(--neural-secondary));
+            color: var(--bg-primary);
+        }
+        
+        .action-btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(0, 217, 255, 0.4);
+        }
+
+        .action-btn-secondary {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--neural-primary);
+            color: var(--neural-primary);
+        }
+
+        .action-btn-secondary:hover {
+            background: rgba(0, 217, 255, 0.1);
+            transform: translateY(-3px);
+        }
+
+        .action-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 40px;
+            padding-top: 25px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--neural-warning);
+            animation: statusBlink 1.5s ease-in-out infinite;
+        }
+
+        @keyframes statusBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .status-text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .error-container {
+                margin: 20px;
+                padding: 30px 25px;
+            }
+
+            .error-code {
+                font-size: 4rem;
+            }
+            
+            .error-title {
+                font-size: 1.5rem;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            .action-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+        </div>
+        
+        <div class="error-code">500</div>
+        <h1 class="error-title">Neural System Error</h1>
+        <p class="error-message">
+            Our neural network encountered an unexpected disruption. The AMOSKYS engineering team 
+            has been automatically notified and is investigating the issue.
+        </p>
+
+        <div class="error-details">
+            <div class="error-details-title">What you can do</div>
+            <ul class="error-details-list">
+                <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 4v6h-6M1 20v-6h6"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                    Refresh the page to retry the operation
+                </li>
+                <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    Wait a few moments and try again
+                </li>
+                <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                        <polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                    Return to the dashboard and navigate back
+                </li>
+                <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                        <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    Contact support if the issue persists
+                </li>
+            </ul>
+        </div>
+
+        <div class="action-buttons">
+            <a href="javascript:location.reload()" class="action-btn action-btn-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 4v6h-6M1 20v-6h6"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                Retry
+            </a>
+            <a href="/dashboard/cortex" class="action-btn action-btn-secondary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+                Go to Dashboard
+            </a>
+        </div>
+
+        <div class="status-indicator">
+            <span class="status-dot"></span>
+            <span class="status-text">Systems are being monitored • Error ID: {{ error_id or 'N/A' }}</span>
+        </div>
+    </div>
+</body>
+</html>

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AMOSKYS API Access - Neural Security Command Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,9 +13,9 @@
         }
         
         body {
-            font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #0a0a0a, #1a1a2e, #16213e);
-            color: #00ff88;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a0e27, #1a1f3a, #0a0e27);
+            color: #00d9ff;
             min-height: 100vh;
             overflow-x: hidden;
         }
@@ -33,36 +34,36 @@
         .logo {
             font-size: 3rem;
             font-weight: bold;
-            color: #00ff88;
-            text-shadow: 0 0 20px #00ff88;
+            color: #00d9ff;
+            text-shadow: 0 0 20px #00d9ff;
             margin-bottom: 10px;
         }
-        
+
         .subtitle {
             font-size: 1.2rem;
-            color: #88ccff;
+            color: #b4bcd0;
             opacity: 0.8;
         }
         
         .api-section {
-            background: rgba(0, 0, 0, 0.7);
-            border: 1px solid #00ff88;
+            background: rgba(26, 31, 58, 0.7);
+            border: 1px solid #00d9ff;
             border-radius: 10px;
             padding: 30px;
             margin-bottom: 30px;
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+            box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
         }
-        
+
         .api-section h2 {
-            color: #00ff88;
-            border-bottom: 2px solid #00ff88;
+            color: #00d9ff;
+            border-bottom: 2px solid #00d9ff;
             padding-bottom: 10px;
             margin-bottom: 20px;
         }
         
         .endpoint {
-            background: rgba(0, 255, 136, 0.1);
-            border-left: 4px solid #00ff88;
+            background: rgba(0, 217, 255, 0.1);
+            border-left: 4px solid #00d9ff;
             padding: 15px;
             margin: 15px 0;
             border-radius: 5px;
@@ -75,19 +76,20 @@
             font-weight: bold;
             margin-right: 10px;
         }
-        
-        .method.post { background: #ff6b35; color: white; }
-        .method.get { background: #4CAF50; color: white; }
-        .method.put { background: #2196F3; color: white; }
+
+        .method.post { background: #ffaa00; color: #0a0e27; }
+        .method.get { background: #00d9ff; color: #0a0e27; }
+        .method.put { background: #00b8d4; color: #0a0e27; }
+        .method.delete { background: #ff6600; color: white; }
         
         .code {
-            background: #0a0a0a;
-            border: 1px solid #333;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #00b8d4;
             border-radius: 5px;
             padding: 15px;
             margin: 15px 0;
             font-family: 'Courier New', monospace;
-            color: #00ff88;
+            color: #00d9ff;
             overflow-x: auto;
         }
         
@@ -106,19 +108,19 @@
         }
         
         .nav-links a {
-            color: #00ff88;
+            color: #00d9ff;
             text-decoration: none;
             margin: 0 20px;
             padding: 10px 20px;
-            border: 1px solid #00ff88;
+            border: 1px solid #00d9ff;
             border-radius: 5px;
             transition: all 0.3s ease;
         }
-        
+
         .nav-links a:hover {
-            background: #00ff88;
-            color: #0a0a0a;
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            background: #00d9ff;
+            color: #0a0e27;
+            box-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
         }
         
         .glow {
@@ -126,8 +128,8 @@
         }
         
         @keyframes glow {
-            from { text-shadow: 0 0 20px #00ff88; }
-            to { text-shadow: 0 0 30px #00ff88, 0 0 40px #00ff88; }
+            from { text-shadow: 0 0 20px #00d9ff; }
+            to { text-shadow: 0 0 30px #00d9ff, 0 0 40px #00d9ff; }
         }
     </style>
 </head>

@@ -149,7 +149,7 @@ class ProcAgent:
         # Device metadata
         try:
             ip_addr = socket.gethostbyname(socket.gethostname())
-        except:
+        except OSError:
             ip_addr = "127.0.0.1"
 
         metadata = telemetry_pb2.DeviceMetadata(

@@ -1,0 +1,297 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Admin Dashboard - AMOSKYS{% endblock %}
+
+{% block content %}
+<div class="admin-dashboard">
+    <!-- Admin Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">🔐 Admin Control Panel</h2>
+            <div class="card-badge badge-danger">Admin Only</div>
+        </div>
+        <p style="color: var(--text-secondary);">
+            Manage users, monitor system security, and review audit logs.
+        </p>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="metrics-grid" id="adminStats">
+        <div class="metric-card">
+            <div class="metric-value" id="totalUsers">--</div>
+            <div class="metric-label">Total Users</div>
+            <div class="metric-status">All registered accounts</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value" id="activeUsers">--</div>
+            <div class="metric-label">Active Users</div>
+            <div class="metric-status">Enabled accounts</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value" id="activeSessions">--</div>
+            <div class="metric-label">Active Sessions</div>
+            <div class="metric-status">Current connections</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value" id="recentLogins">--</div>
+            <div class="metric-label">Recent Logins</div>
+            <div class="metric-status">Last 24 hours</div>
+        </div>
+    </div>
+
+    <!-- Admin Navigation -->
+    <div class="admin-nav-grid">
+        <a href="/admin/users" class="admin-nav-card">
+            <div class="admin-nav-icon">👥</div>
+            <div class="admin-nav-content">
+                <h3>User Management</h3>
+                <p>View, edit, and manage user accounts</p>
+            </div>
+            <div class="admin-nav-arrow">→</div>
+        </a>
+        <a href="/admin/sessions" class="admin-nav-card">
+            <div class="admin-nav-icon">🔑</div>
+            <div class="admin-nav-content">
+                <h3>Active Sessions</h3>
+                <p>Monitor and revoke user sessions</p>
+            </div>
+            <div class="admin-nav-arrow">→</div>
+        </a>
+        <a href="/admin/audit" class="admin-nav-card">
+            <div class="admin-nav-icon">📋</div>
+            <div class="admin-nav-content">
+                <h3>Audit Logs</h3>
+                <p>Security event history and forensics</p>
+            </div>
+            <div class="admin-nav-arrow">→</div>
+        </a>
+        <a href="/dashboard/system" class="admin-nav-card">
+            <div class="admin-nav-icon">📊</div>
+            <div class="admin-nav-content">
+                <h3>System Health</h3>
+                <p>Server metrics and performance</p>
+            </div>
+            <div class="admin-nav-arrow">→</div>
+        </a>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">📋 Recent Security Events</h3>
+            <a href="/admin/audit" class="neural-button neural-button-sm">View All</a>
+        </div>
+        <div id="recentAuditLogs" class="audit-logs-container">
+            <p class="loading-message">Loading recent activity...</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .admin-dashboard {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .admin-nav-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .admin-nav-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.5rem;
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        border-radius: 10px;
+        text-decoration: none;
+        transition: all 0.3s ease;
+    }
+
+    .admin-nav-card:hover {
+        transform: translateY(-3px);
+        border-color: var(--neural-primary);
+        box-shadow: 0 8px 25px rgba(0, 217, 255, 0.2);
+    }
+
+    .admin-nav-icon {
+        font-size: 2.5rem;
+        flex-shrink: 0;
+    }
+
+    .admin-nav-content {
+        flex: 1;
+    }
+
+    .admin-nav-content h3 {
+        color: var(--text-primary);
+        font-size: 1.1rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .admin-nav-content p {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        margin: 0;
+    }
+
+    .admin-nav-arrow {
+        color: var(--neural-primary);
+        font-size: 1.5rem;
+        opacity: 0;
+        transform: translateX(-10px);
+        transition: all 0.3s ease;
+    }
+
+    .admin-nav-card:hover .admin-nav-arrow {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    .audit-logs-container {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .audit-log-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.75rem;
+        border-bottom: 1px solid rgba(0, 217, 255, 0.1);
+        transition: background 0.2s ease;
+    }
+
+    .audit-log-item:hover {
+        background: rgba(0, 217, 255, 0.05);
+    }
+
+    .audit-log-item:last-child {
+        border-bottom: none;
+    }
+
+    .audit-log-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .audit-log-icon.success { background: rgba(0, 255, 136, 0.2); }
+    .audit-log-icon.warning { background: rgba(240, 173, 78, 0.2); }
+    .audit-log-icon.danger { background: rgba(255, 51, 102, 0.2); }
+    .audit-log-icon.info { background: rgba(0, 217, 255, 0.2); }
+
+    .audit-log-content {
+        flex: 1;
+    }
+
+    .audit-log-event {
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    .audit-log-details {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .audit-log-time {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    .neural-button-sm {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+    }
+</style>
+
+<script>
+class AdminDashboard {
+    constructor() {
+        this.init();
+    }
+
+    async init() {
+        await this.loadStats();
+        await this.loadRecentAuditLogs();
+    }
+
+    async loadStats() {
+        try {
+            const response = await fetch('/admin/api/stats');
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('totalUsers').textContent = data.stats.total_users;
+                document.getElementById('activeUsers').textContent = data.stats.active_users;
+                document.getElementById('activeSessions').textContent = data.stats.active_sessions;
+                document.getElementById('recentLogins').textContent = data.stats.recent_logins;
+            }
+        } catch (error) {
+            console.error('Failed to load stats:', error);
+        }
+    }
+
+    async loadRecentAuditLogs() {
+        try {
+            const response = await fetch('/admin/api/audit?per_page=10');
+            const data = await response.json();
+            const container = document.getElementById('recentAuditLogs');
+
+            if (data.success && data.logs.length > 0) {
+                container.innerHTML = data.logs.map(log => this.renderAuditLog(log)).join('');
+            } else {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No recent activity</p>';
+            }
+        } catch (error) {
+            console.error('Failed to load audit logs:', error);
+        }
+    }
+
+    renderAuditLog(log) {
+        const icons = {
+            'login_success': { icon: '✅', class: 'success' },
+            'login_failure': { icon: '❌', class: 'danger' },
+            'logout': { icon: '🚪', class: 'info' },
+            'signup': { icon: '👤', class: 'success' },
+            'password_reset_request': { icon: '🔑', class: 'warning' },
+            'password_reset_complete': { icon: '✅', class: 'success' },
+            'email_verified': { icon: '📧', class: 'success' },
+            'session_revoked': { icon: '🔒', class: 'warning' },
+        };
+
+        const config = icons[log.event_type] || { icon: '📋', class: 'info' };
+        const time = new Date(log.created_at).toLocaleString();
+
+        return `
+            <div class="audit-log-item">
+                <div class="audit-log-icon ${config.class}">${config.icon}</div>
+                <div class="audit-log-content">
+                    <div class="audit-log-event">${this.formatEventType(log.event_type)}</div>
+                    <div class="audit-log-details">${log.ip_address || 'Unknown IP'}</div>
+                </div>
+                <div class="audit-log-time">${time}</div>
+            </div>
+        `;
+    }
+
+    formatEventType(type) {
+        return type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.adminDashboard = new AdminDashboard();
+});
+</script>
+{% endblock %}

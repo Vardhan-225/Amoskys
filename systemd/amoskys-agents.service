@@ -1,0 +1,29 @@
+[Unit]
+Description=AMOSKYS Monitoring Agents
+After=network.target amoskys-eventbus.service
+Wants=amoskys-eventbus.service
+
+[Service]
+Type=forking
+User=amoskys
+Group=amoskys
+WorkingDirectory=/opt/amoskys
+Environment="PATH=/opt/amoskys/.venv/bin"
+EnvironmentFile=/etc/amoskys/production.env
+ExecStart=/opt/amoskys/scripts/start_agents.sh
+ExecStop=/opt/amoskys/scripts/stop_agents.sh
+PIDFile=/var/run/amoskys/agents.pid
+Restart=on-failure
+RestartSec=10s
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/amoskys/data /var/log/amoskys /var/run/amoskys
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target
