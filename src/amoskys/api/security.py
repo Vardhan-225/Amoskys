@@ -248,13 +248,18 @@ def init_security(app: Flask) -> None:
         logger.info("✅ Security headers enabled (development mode)")
     else:
         # Strict settings for production
+        # NOTE: We disable nonces (content_security_policy_nonce_in=None) to allow
+        # 'unsafe-inline' to work. Many templates use inline onclick handlers which
+        # would be blocked if nonces are enabled (CSP spec ignores 'unsafe-inline' 
+        # when nonces are present). This is a pragmatic trade-off until all handlers
+        # are converted to event listeners.
         Talisman(
             app,
             force_https=force_https,
             strict_transport_security=True,
             strict_transport_security_max_age=31536000,  # 1 year
             content_security_policy=CSP,
-            content_security_policy_nonce_in=["script-src"],
+            content_security_policy_nonce_in=None,  # Disabled - allows 'unsafe-inline' to work
             referrer_policy="strict-origin-when-cross-origin",
             feature_policy={
                 "geolocation": "'none'",
