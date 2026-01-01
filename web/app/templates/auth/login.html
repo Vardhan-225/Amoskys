@@ -12,7 +12,7 @@
         JavaScript is required to log in. Please enable JavaScript in your browser settings.
     </div>
 </noscript>
-<form id="login-form" onsubmit="return false;" novalidate>
+<form id="login-form" novalidate>
     <div class="form-group">
         <label for="email" class="form-label">Email Address</label>
         <input 
@@ -58,7 +58,7 @@
         <a href="/auth/forgot-password" class="form-link">Forgot password?</a>
     </div>
     
-    <button type="submit" class="btn btn-primary btn-block" id="submit-btn">
+    <button type="button" class="btn btn-primary btn-block" id="submit-btn">
         <span class="btn-text">Sign In</span>
     </button>
 </form>
@@ -90,8 +90,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Form submission
-    form.addEventListener('submit', async function(e) {
+    // Form submission - using button click instead of form submit
+    submitBtn.addEventListener('click', async function(e) {
         e.preventDefault();
         
         // Clear previous errors

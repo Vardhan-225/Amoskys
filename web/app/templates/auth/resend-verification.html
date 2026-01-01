@@ -21,7 +21,7 @@
         >
     </div>
 
-    <button type="submit" class="btn btn-primary btn-block" id="resend-btn">
+    <button type="button" class="btn btn-primary btn-block" id="resend-btn">
         <span id="btn-text">Resend Verification Email</span>
         <span id="btn-loader" style="display: none;">
             <svg width="20" height="20" viewBox="0 0 50 50" style="vertical-align: middle;">
@@ -41,7 +41,7 @@
 </div>
 
 <script>
-document.getElementById('resend-verification-form').addEventListener('submit', async (e) => {
+document.getElementById('resend-btn').addEventListener('click', async (e) => {
     e.preventDefault();
 
     const email = document.getElementById('email').value;

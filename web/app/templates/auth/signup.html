@@ -12,7 +12,7 @@
         JavaScript is required to sign up. Please enable JavaScript in your browser settings.
     </div>
 </noscript>
-<form id="signup-form" onsubmit="return false;" novalidate>
+<form id="signup-form" novalidate>
     <div class="form-group">
         <label for="full_name" class="form-label">Full Name <span class="text-muted">(optional)</span></label>
         <input 
@@ -106,7 +106,7 @@
         <p class="form-error" id="terms-error">You must accept the terms to continue</p>
     </div>
     
-    <button type="submit" class="btn btn-primary btn-block mt-3" id="submit-btn">
+    <button type="button" class="btn btn-primary btn-block mt-3" id="submit-btn">
         <span class="btn-text">Create Account</span>
     </button>
 </form>
@@ -197,8 +197,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Form submission
-    form.addEventListener('submit', async function(e) {
+    // Form submission - using button click instead of form submit
+    submitBtn.addEventListener('click', async function(e) {
         e.preventDefault();
         
         // Clear previous errors
