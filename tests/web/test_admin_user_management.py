@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from app import create_app
 from amoskys.auth.models import User, UserRole, AuditEventType, AuthAuditLog
+from amoskys.auth.password import hash_password
 from amoskys.db import get_session_context
 
 
@@ -56,12 +57,13 @@ def admin_user(app):
         if not admin:
             admin = User(
                 email="test-admin@amoskys.local",
+                email_normalized="test-admin@amoskys.local",
                 full_name="Test Admin",
                 role=UserRole.ADMIN,
                 is_active=True,
-                is_verified=True
+                is_verified=True,
+                password_hash=hash_password("TestAdminPass123!")
             )
-            admin.set_password("TestAdminPass123!")
             db.add(admin)
             db.commit()
         return admin.id
@@ -71,14 +73,16 @@ def admin_user(app):
 def regular_user(app):
     """Create regular user for testing"""
     with get_session_context() as db:
+        test_email = f"test-user-{datetime.now().timestamp()}@amoskys.local"
         user = User(
-            email=f"test-user-{datetime.now().timestamp()}@amoskys.local",
+            email=test_email,
+            email_normalized=test_email.lower(),
             full_name="Test User",
             role=UserRole.USER,
             is_active=True,
-            is_verified=True
+            is_verified=True,
+            password_hash=hash_password("TestUserPass123!")
         )
-        user.set_password("TestUserPass123!")
         db.add(user)
         db.commit()
         user_id = user.id
@@ -195,7 +199,7 @@ class TestAuditLogging:
         assert AuditEventType.ACCOUNT_SUSPENDED.value == 'account_suspended'
         assert AuditEventType.ACCOUNT_DELETED.value == 'account_deleted'
         assert AuditEventType.LOGIN_SUCCESS.value == 'login_success'
-        assert AuditEventType.LOGIN_FAILED.value == 'login_failed'
+        assert AuditEventType.LOGIN_FAILURE.value == 'login_failure'
 
     def test_audit_log_stores_metadata(self):
         """Test that audit logs can store JSON metadata"""

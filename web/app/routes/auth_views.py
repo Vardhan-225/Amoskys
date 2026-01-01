@@ -9,14 +9,19 @@ The actual authentication logic is handled by:
 - AuthService in amoskys.auth.service
 """
 
-from flask import Blueprint, redirect, render_template, request, url_for
+from flask import Blueprint, redirect, render_template, request, url_for, flash
 
 auth_views_bp = Blueprint("auth_views", __name__, url_prefix="/auth")
 
 
-@auth_views_bp.route("/login")
+@auth_views_bp.route("/login", methods=["GET", "POST"])
 def login():
     """Render login page."""
+    # If POST without JavaScript, show error message
+    if request.method == "POST":
+        flash("Please enable JavaScript to log in.", "error")
+        return render_template("auth/login.html"), 200
+    
     # If user is already authenticated, redirect to dashboard
     session_token = request.cookies.get("amoskys_session")
     if session_token:
@@ -27,9 +32,14 @@ def login():
     return render_template("auth/login.html")
 
 
-@auth_views_bp.route("/signup")
+@auth_views_bp.route("/signup", methods=["GET", "POST"])
 def signup():
     """Render signup page."""
+    # If POST without JavaScript, show error message
+    if request.method == "POST":
+        flash("Please enable JavaScript to sign up.", "error")
+        return render_template("auth/signup.html"), 200
+    
     session_token = request.cookies.get("amoskys_session")
     if session_token:
         return redirect("/dashboard")
@@ -37,15 +47,22 @@ def signup():
     return render_template("auth/signup.html")
 
 
-@auth_views_bp.route("/forgot-password")
+@auth_views_bp.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
     """Render forgot password page."""
+    if request.method == "POST":
+        flash("Please enable JavaScript to reset your password.", "error")
+        return render_template("auth/forgot-password.html"), 200
     return render_template("auth/forgot-password.html")
 
 
-@auth_views_bp.route("/reset-password")
+@auth_views_bp.route("/reset-password", methods=["GET", "POST"])
 def reset_password():
     """Render reset password page."""
+    if request.method == "POST":
+        flash("Please enable JavaScript to reset your password.", "error")
+        token = request.args.get("token", "")
+        return render_template("auth/reset-password.html"), 200
     # Token should be in query params
     token = request.args.get("token")
     if not token:
