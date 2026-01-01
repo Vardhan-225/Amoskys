@@ -62,6 +62,10 @@ def create_app():
     from .admin import admin_bp
     app.register_blueprint(admin_bp)
 
+    # Register User Auth API blueprint (Phase 3 - Web Auth)
+    from .api.user_auth import user_auth_bp
+    app.register_blueprint(user_auth_bp, url_prefix='/api')
+
     # Register Auth API blueprint (Phase 3)
     from amoskys.api.auth import auth_bp
     app.register_blueprint(auth_bp)
