@@ -6,6 +6,7 @@ Phase 1.1 - Unified Error Handling & Structured Logging
 """
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO
+from werkzeug.middleware.proxy_fix import ProxyFix
 import logging
 import os
 
@@ -28,6 +29,14 @@ def create_app():
         )
     app.config['SECRET_KEY'] = secret_key
     app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    
+    # Apply ProxyFix middleware for nginx/Cloudflare reverse proxy
+    # This tells Flask to trust X-Forwarded-* headers for:
+    # - x_for: Number of proxy servers (X-Forwarded-For) 
+    # - x_proto: HTTPS detection (X-Forwarded-Proto)
+    # - x_host: Original host header (X-Forwarded-Host)
+    # - x_prefix: URL prefix (X-Forwarded-Prefix)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
     
     # Configure structured logging (P1-004)
     from amoskys.common.logging import configure_logging, init_flask_logging
