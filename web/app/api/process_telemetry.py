@@ -310,3 +310,118 @@ def get_database_stats():
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
+
+
+@process_bp.route('/canonical-summary', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
+def get_canonical_summary():
+    """Get summary of canonical process table (ML pipeline stage 1)"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({
+            'total_rows': 0,
+            'status': 'no_data',
+            'message': 'Database not available'
+        })
+
+    try:
+        # Check if canonical table exists
+        cursor = conn.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='canonical_processes'
+        """)
+        
+        if not cursor.fetchone():
+            return jsonify({
+                'total_rows': 0,
+                'status': 'not_generated',
+                'message': 'Canonical table not yet generated'
+            })
+        
+        # Get row count
+        cursor = conn.execute("SELECT COUNT(*) as count FROM canonical_processes")
+        total_rows = cursor.fetchone()['count']
+        
+        # Get time range if available
+        time_range = {'start': None, 'end': None}
+        try:
+            cursor = conn.execute("""
+                SELECT MIN(timestamp) as start, MAX(timestamp) as end
+                FROM canonical_processes
+            """)
+            row = cursor.fetchone()
+            if row:
+                time_range = {'start': row['start'], 'end': row['end']}
+        except sqlite3.OperationalError:
+            pass  # Column may not exist
+        
+        return jsonify({
+            'total_rows': total_rows,
+            'status': 'ready' if total_rows > 0 else 'empty',
+            'time_range': time_range,
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'total_rows': 0,
+            'status': 'error',
+            'error': str(e)
+        }), 500
+    finally:
+        conn.close()
+
+
+@process_bp.route('/features-summary', methods=['GET'])
+@require_rate_limit(max_requests=100, window_seconds=60)
+def get_features_summary():
+    """Get summary of ML features table (ML pipeline stage 2)"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({
+            'total_windows': 0,
+            'total_features': 0,
+            'status': 'no_data',
+            'message': 'Database not available'
+        })
+
+    try:
+        # Check if features table exists
+        cursor = conn.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='ml_features'
+        """)
+        
+        if not cursor.fetchone():
+            return jsonify({
+                'total_windows': 0,
+                'total_features': 0,
+                'status': 'not_generated',
+                'message': 'ML features table not yet generated'
+            })
+        
+        # Get window count (rows in features table)
+        cursor = conn.execute("SELECT COUNT(*) as count FROM ml_features")
+        total_windows = cursor.fetchone()['count']
+        
+        # Get feature count (columns minus metadata columns)
+        cursor = conn.execute("PRAGMA table_info(ml_features)")
+        columns = cursor.fetchall()
+        # Assume metadata columns are: id, timestamp, window_start, window_end
+        metadata_cols = {'id', 'timestamp', 'window_start', 'window_end', 'created_at'}
+        total_features = len([c for c in columns if c['name'] not in metadata_cols])
+        
+        return jsonify({
+            'total_windows': total_windows,
+            'total_features': total_features,
+            'status': 'ready' if total_windows > 0 else 'empty',
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'total_windows': 0,
+            'total_features': 0,
+            'status': 'error',
+            'error': str(e)
+        }), 500
+    finally:
+        conn.close()
