@@ -6,7 +6,13 @@
 {% block header_subtitle %}Join the Neural Security Command Platform{% endblock %}
 
 {% block content %}
-<form id="signup-form" method="POST" novalidate>
+<noscript>
+    <div class="alert alert-error">
+        <span class="alert-icon">✕</span>
+        JavaScript is required to sign up. Please enable JavaScript in your browser settings.
+    </div>
+</noscript>
+<form id="signup-form" action="javascript:void(0)" method="POST" novalidate>
     <div class="form-group">
         <label for="full_name" class="form-label">Full Name <span class="text-muted">(optional)</span></label>
         <input 

@@ -6,7 +6,13 @@
 {% block header_subtitle %}Sign in to access your Neural Security Dashboard{% endblock %}
 
 {% block content %}
-<form id="login-form" method="POST" novalidate>
+<noscript>
+    <div class="alert alert-error">
+        <span class="alert-icon">✕</span>
+        JavaScript is required to log in. Please enable JavaScript in your browser settings.
+    </div>
+</noscript>
+<form id="login-form" action="javascript:void(0)" method="POST" novalidate>
     <div class="form-group">
         <label for="email" class="form-label">Email Address</label>
         <input 
