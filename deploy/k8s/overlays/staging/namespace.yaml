@@ -1,0 +1,8 @@
+# AMOSKYS Staging Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: amoskys-staging
+  labels:
+    app.kubernetes.io/name: amoskys
+    app.kubernetes.io/environment: staging

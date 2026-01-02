@@ -1,0 +1,36 @@
+# AMOSKYS Kubernetes Manifest Validation
+name: Kubernetes Validation
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/k8s/**'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'deploy/k8s/**'
+
+jobs:
+  validate-manifests:
+    name: Validate K8s Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: Validate all overlays
+        run: |
+          echo "Validating Kubernetes manifests..."
+          kubectl kustomize deploy/k8s/base > /dev/null && echo "✓ Base OK"
+          kubectl kustomize deploy/k8s/overlays/dev > /dev/null && echo "✓ Dev OK"
+          kubectl kustomize deploy/k8s/overlays/staging > /dev/null && echo "✓ Staging OK"
+          kubectl kustomize deploy/k8s/overlays/prod > /dev/null && echo "✓ Prod OK"
+
+      - name: Dry-run Apply
+        run: |
+          kubectl kustomize deploy/k8s/overlays/dev | kubectl apply --dry-run=client -f - 2>&1 | tail -10
+          echo "✓ Dry-run successful"

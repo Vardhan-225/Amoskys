@@ -1,0 +1,8 @@
+# AMOSKYS Dev Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: amoskys-dev
+  labels:
+    app.kubernetes.io/name: amoskys
+    app.kubernetes.io/environment: development
