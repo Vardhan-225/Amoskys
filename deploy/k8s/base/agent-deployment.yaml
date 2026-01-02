@@ -3,7 +3,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: amoskys-agent
-  namespace: amoskys
   labels:
     app: amoskys-agent
     app.kubernetes.io/name: amoskys
@@ -153,7 +152,6 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: amoskys-agent-pdb
-  namespace: amoskys
   labels:
     app.kubernetes.io/name: amoskys
     app.kubernetes.io/component: agent

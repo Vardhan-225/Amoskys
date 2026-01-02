@@ -9,7 +9,7 @@ secure endpoints for agent communication, event ingestion, and system monitoring
 from flask import Blueprint, jsonify
 
 # API Blueprint registration
-api_bp = Blueprint('api', __name__, url_prefix='/api')
+api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 # Import API routes after blueprint creation
 from .agent_auth import auth_bp as agent_auth_bp
@@ -40,13 +40,15 @@ api_bp.register_blueprint(database_manager_bp)  # Register database manager API
 api_bp.register_blueprint(health_bp)  # Register health API v1
 api_bp.register_blueprint(telemetry_bp)  # Register telemetry API
 
+
 # Add API documentation endpoint
-@api_bp.route('/docs/openapi.json', methods=['GET'])
+@api_bp.route("/docs/openapi.json", methods=["GET"])
 def openapi_spec():
     """OpenAPI 3.0 specification endpoint"""
     return jsonify(generate_openapi_spec())
 
-@api_bp.route('/docs', methods=['GET'])
+
+@api_bp.route("/docs", methods=["GET"])
 def api_docs():
     """API documentation landing page"""
     return """

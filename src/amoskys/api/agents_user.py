@@ -18,17 +18,13 @@ from __future__ import annotations
 import os
 from dataclasses import asdict
 from functools import wraps
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 from flask import Blueprint, g, jsonify, make_response, request
 
 from amoskys.api.security import rate_limit_auth
 from amoskys.common.logging import get_logger
 from amoskys.db import get_session_context
-
-# Lazy import to avoid triggering agents/__init__.py
-if TYPE_CHECKING:
-    from amoskys.agents.distribution import AgentDistributionService
 
 __all__ = ["agents_user_bp"]
 
@@ -38,6 +34,7 @@ logger = get_logger(__name__)
 def get_distribution_service(db):
     """Lazy import of AgentDistributionService to avoid circular imports."""
     from amoskys.agents.distribution import AgentDistributionService
+
     return AgentDistributionService(db)
 
 
@@ -117,12 +114,14 @@ def list_agents():
         if not result.success:
             return jsonify({"error": result.error}), 500
 
-        return jsonify({
-            "success": True,
-            "agents": [asdict(a) for a in result.agents],
-            "total": result.total,
-            "by_status": result.by_status,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "agents": [asdict(a) for a in result.agents],
+                "total": result.total,
+                "by_status": result.by_status,
+            }
+        )
 
 
 @agents_user_bp.route("/api/user/agents/tokens", methods=["GET"])
@@ -139,13 +138,15 @@ def list_tokens():
         if not result.success:
             return jsonify({"error": result.error}), 500
 
-        return jsonify({
-            "success": True,
-            "tokens": [asdict(t) for t in result.tokens],
-            "total": result.total,
-            "active_count": result.active_count,
-            "consumed_count": result.consumed_count,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "tokens": [asdict(t) for t in result.tokens],
+                "total": result.total,
+                "active_count": result.active_count,
+                "consumed_count": result.consumed_count,
+            }
+        )
 
 
 @agents_user_bp.route("/api/user/agents/token", methods=["POST"])
@@ -164,9 +165,17 @@ def create_token():
     platform = data.get("platform")
 
     if not label:
-        return jsonify({"error": "Label is required", "error_code": "MISSING_LABEL"}), 400
+        return (
+            jsonify({"error": "Label is required", "error_code": "MISSING_LABEL"}),
+            400,
+        )
     if not platform:
-        return jsonify({"error": "Platform is required", "error_code": "MISSING_PLATFORM"}), 400
+        return (
+            jsonify(
+                {"error": "Platform is required", "error_code": "MISSING_PLATFORM"}
+            ),
+            400,
+        )
 
     with get_session_context() as db:
         service = get_distribution_service(db)
@@ -179,18 +188,28 @@ def create_token():
         )
 
         if not result.success:
-            return jsonify({
-                "error": result.error,
-                "error_code": result.error_code,
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "error": result.error,
+                        "error_code": result.error_code,
+                    }
+                ),
+                400,
+            )
 
         # IMPORTANT: Token is shown ONCE
-        return jsonify({
-            "success": True,
-            "token": result.token,  # Plaintext - show once!
-            "token_id": result.token_id,
-            "message": "Save this token! It will only be shown once.",
-        }), 201
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "token": result.token,  # Plaintext - show once!
+                    "token_id": result.token_id,
+                    "message": "Save this token! It will only be shown once.",
+                }
+            ),
+            201,
+        )
 
 
 @agents_user_bp.route("/api/user/agents/token/<token_id>", methods=["DELETE"])
@@ -238,10 +257,12 @@ def get_stats():
         service = get_distribution_service(db)
         stats = service.get_user_stats(user.id)
 
-        return jsonify({
-            "success": True,
-            **stats,
-        })
+        return jsonify(
+            {
+                "success": True,
+                **stats,
+            }
+        )
 
 
 # =============================================================================
@@ -253,12 +274,12 @@ def get_stats():
 def agent_register():
     """
     Register a new agent using a deployment token.
-    
+
     This is called by the agent during first-time setup.
     Token auth, not session auth.
     """
     data = request.get_json()
-    
+
     if not data:
         return jsonify({"error": ERR_BODY_REQUIRED}), 400
 
@@ -283,28 +304,38 @@ def agent_register():
         )
 
         if not result.success:
-            return jsonify({
-                "error": result.error,
-                "error_code": result.error_code,
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "error": result.error,
+                        "error_code": result.error_code,
+                    }
+                ),
+                400,
+            )
 
-        return jsonify({
-            "success": True,
-            "agent_id": result.agent_id,
-            "agent_info": result.agent_info,
-            "message": "Agent registered successfully",
-        }), 201
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "agent_id": result.agent_id,
+                    "agent_info": result.agent_info,
+                    "message": "Agent registered successfully",
+                }
+            ),
+            201,
+        )
 
 
 @agents_user_bp.route("/api/agents/heartbeat", methods=["POST"])
 def agent_heartbeat():
     """
     Record agent heartbeat.
-    
+
     Called periodically by agents to report health.
     """
     data = request.get_json()
-    
+
     if not data:
         return jsonify({"error": ERR_BODY_REQUIRED}), 400
 
@@ -323,10 +354,12 @@ def agent_heartbeat():
         if not success:
             return jsonify({"error": "Agent not found or revoked"}), 404
 
-        return jsonify({
-            "success": True,
-            "message": "Heartbeat recorded",
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": "Heartbeat recorded",
+            }
+        )
 
 
 # =============================================================================
@@ -340,70 +373,72 @@ def agent_heartbeat():
 def get_package_info():
     """
     Get information about available agent packages.
-    
+
     Returns download URLs and instructions for each platform.
     """
     # Base URL for downloads (would be CDN in production)
     base_url = os.environ.get("AMOSKYS_AGENT_DOWNLOAD_URL", "/downloads/agents")
-    
-    return jsonify({
-        "success": True,
-        "version": "1.0.0",
-        "packages": {
-            "windows": {
-                "name": "AMOSKYS Agent for Windows",
-                "filename": "amoskys-agent-windows-1.0.0.exe",
-                "url": f"{base_url}/amoskys-agent-windows-1.0.0.exe",
-                "size_mb": 45,
-                "sha256": "pending",  # Would be actual hash
-                "requirements": "Windows 10 or later, .NET 6 Runtime",
-                "instructions": [
-                    "1. Download the installer",
-                    "2. Run as Administrator",
-                    "3. Enter your deployment token when prompted",
-                    "4. Agent will start automatically",
-                ],
+
+    return jsonify(
+        {
+            "success": True,
+            "version": "1.0.0",
+            "packages": {
+                "windows": {
+                    "name": "AMOSKYS Agent for Windows",
+                    "filename": "amoskys-agent-windows-1.0.0.exe",
+                    "url": f"{base_url}/amoskys-agent-windows-1.0.0.exe",
+                    "size_mb": 45,
+                    "sha256": "pending",  # Would be actual hash
+                    "requirements": "Windows 10 or later, .NET 6 Runtime",
+                    "instructions": [
+                        "1. Download the installer",
+                        "2. Run as Administrator",
+                        "3. Enter your deployment token when prompted",
+                        "4. Agent will start automatically",
+                    ],
+                },
+                "linux": {
+                    "name": "AMOSKYS Agent for Linux",
+                    "filename": "amoskys-agent-linux-1.0.0.tar.gz",
+                    "url": f"{base_url}/amoskys-agent-linux-1.0.0.tar.gz",
+                    "size_mb": 35,
+                    "sha256": "pending",
+                    "requirements": "Linux kernel 4.0+, glibc 2.17+",
+                    "instructions": [
+                        "1. Download and extract the archive",
+                        "2. Run: sudo ./install.sh",
+                        "3. Configure with: amoskys-agent config --token YOUR_TOKEN",
+                        "4. Start with: sudo systemctl start amoskys-agent",
+                    ],
+                },
+                "macos": {
+                    "name": "AMOSKYS Agent for macOS",
+                    "filename": "amoskys-agent-macos-1.0.0.pkg",
+                    "url": f"{base_url}/amoskys-agent-macos-1.0.0.pkg",
+                    "size_mb": 40,
+                    "sha256": "pending",
+                    "requirements": "macOS 11 (Big Sur) or later",
+                    "instructions": [
+                        "1. Download the package",
+                        "2. Open and follow the installer",
+                        "3. Grant Full Disk Access in System Preferences",
+                        "4. Configure with your deployment token",
+                    ],
+                },
+                "docker": {
+                    "name": "AMOSKYS Agent Docker Image",
+                    "image": "amoskys/agent:1.0.0",
+                    "url": "docker pull amoskys/agent:1.0.0",
+                    "size_mb": 150,
+                    "sha256": "pending",
+                    "requirements": "Docker 20.10+",
+                    "instructions": [
+                        "1. Pull the image: docker pull amoskys/agent:1.0.0",
+                        "2. Run: docker run -d -e AMOSKYS_TOKEN=YOUR_TOKEN amoskys/agent:1.0.0",
+                        "3. For Kubernetes, use our Helm chart",
+                    ],
+                },
             },
-            "linux": {
-                "name": "AMOSKYS Agent for Linux",
-                "filename": "amoskys-agent-linux-1.0.0.tar.gz",
-                "url": f"{base_url}/amoskys-agent-linux-1.0.0.tar.gz",
-                "size_mb": 35,
-                "sha256": "pending",
-                "requirements": "Linux kernel 4.0+, glibc 2.17+",
-                "instructions": [
-                    "1. Download and extract the archive",
-                    "2. Run: sudo ./install.sh",
-                    "3. Configure with: amoskys-agent config --token YOUR_TOKEN",
-                    "4. Start with: sudo systemctl start amoskys-agent",
-                ],
-            },
-            "macos": {
-                "name": "AMOSKYS Agent for macOS",
-                "filename": "amoskys-agent-macos-1.0.0.pkg",
-                "url": f"{base_url}/amoskys-agent-macos-1.0.0.pkg",
-                "size_mb": 40,
-                "sha256": "pending",
-                "requirements": "macOS 11 (Big Sur) or later",
-                "instructions": [
-                    "1. Download the package",
-                    "2. Open and follow the installer",
-                    "3. Grant Full Disk Access in System Preferences",
-                    "4. Configure with your deployment token",
-                ],
-            },
-            "docker": {
-                "name": "AMOSKYS Agent Docker Image",
-                "image": "amoskys/agent:1.0.0",
-                "url": "docker pull amoskys/agent:1.0.0",
-                "size_mb": 150,
-                "sha256": "pending",
-                "requirements": "Docker 20.10+",
-                "instructions": [
-                    "1. Pull the image: docker pull amoskys/agent:1.0.0",
-                    "2. Run: docker run -d -e AMOSKYS_TOKEN=YOUR_TOKEN amoskys/agent:1.0.0",
-                    "3. For Kubernetes, use our Helm chart",
-                ],
-            },
-        },
-    })
+        }
+    )

@@ -1,0 +1,53 @@
+[flake8]
+# AMOSKYS Flake8 Configuration
+max-line-length = 120
+max-complexity = 30
+
+# Exclude auto-generated files
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    build,
+    dist,
+    *.egg-info,
+    *_pb2.py,
+    *_pb2_grpc.py,
+    migrations,
+    .eggs
+
+# Ignore specific error codes
+# E501: Line too long (handled by black)
+# W503: Line break before binary operator (conflicts with black)
+# E203: Whitespace before ':' (conflicts with black)
+# E402: Module level import not at top (needed for lazy imports)
+# E226: Missing whitespace around arithmetic operator
+# F403: Star imports (needed for pysnmp)
+# F405: Names from star imports (needed for pysnmp)
+# F841: Local variable assigned but never used (some intentional placeholders)
+# F401: Module imported but unused (some lazy imports)
+ignore =
+    E501,
+    W503,
+    E203,
+    E402,
+    E226,
+    F403,
+    F405,
+    F841,
+    F401
+
+# Per-file ignores for specific patterns
+per-file-ignores =
+    # Test files may have unused imports for fixtures
+    tests/*:F401,F841
+    # Init files often have imports for re-export
+    */__init__.py:F401
+    # Proto files are auto-generated
+    src/amoskys/proto/*:E501,E111,E114,E126,E128,E225,E303
+
+# Statistics
+show-source = true
+statistics = true
+count = true

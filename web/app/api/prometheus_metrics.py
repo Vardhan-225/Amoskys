@@ -6,12 +6,10 @@ Runs on a separate port (9102) to avoid auth requirements.
 """
 
 import os
-import sys
 import time
 import threading
 from functools import wraps
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Any, Callable, Optional
 
 from flask import Blueprint, Response, g, request
 
@@ -26,13 +24,14 @@ try:
         CONTENT_TYPE_LATEST,
         CollectorRegistry,
     )
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
     REGISTRY = None
-    CONTENT_TYPE_LATEST = 'text/plain'
+    CONTENT_TYPE_LATEST = "text/plain"
 
-prometheus_bp = Blueprint('prometheus', __name__, url_prefix='/api/prometheus')
+prometheus_bp = Blueprint("prometheus", __name__, url_prefix="/api/prometheus")
 
 _metrics_initialized = False
 _metrics_lock = threading.Lock()
@@ -60,97 +59,130 @@ def _init_metrics():
     global REQUEST_LATENCY, REQUEST_IN_PROGRESS, ACTIVE_AGENTS, AGENT_CONNECTIONS
     global DB_QUERY_COUNT, DB_QUERY_LATENCY, TELEMETRY_EVENTS, TELEMETRY_QUEUE_SIZE
     global AUTH_ATTEMPTS, SECURITY_EVENTS, UPTIME_SECONDS, STARTUP_TIME
-    
+
     if not PROMETHEUS_AVAILABLE:
         return
-    
+
     with _metrics_lock:
         if _metrics_initialized:
             return
-        
+
         _metrics_initialized = True
         METRICS_REGISTRY = REGISTRY
         STARTUP_TIME = time.time()
-        
+
         try:
-            APP_INFO = Info('amoskys_web', 'AMOSKYS Web Application Information')
-            APP_INFO.info({
-                'version': os.getenv('APP_VERSION', '1.0.0'),
-                'environment': os.getenv('FLASK_ENV', 'development'),
-            })
+            APP_INFO = Info("amoskys_web", "AMOSKYS Web Application Information")
+            APP_INFO.info(
+                {
+                    "version": os.getenv("APP_VERSION", "1.0.0"),
+                    "environment": os.getenv("FLASK_ENV", "development"),
+                }
+            )
         except ValueError:
             pass
-        
+
         try:
             REQUEST_COUNT = Counter(
-                'amoskys_http_requests_total',
-                'Total HTTP requests',
-                ['method', 'endpoint', 'status']
+                "amoskys_http_requests_total",
+                "Total HTTP requests",
+                ["method", "endpoint", "status"],
             )
         except ValueError:
             pass
-        
+
         try:
             REQUEST_LATENCY = Histogram(
-                'amoskys_http_request_duration_seconds',
-                'HTTP request latency in seconds',
-                ['method', 'endpoint'],
-                buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+                "amoskys_http_request_duration_seconds",
+                "HTTP request latency in seconds",
+                ["method", "endpoint"],
+                buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
             )
         except ValueError:
             pass
-        
+
         try:
             REQUEST_IN_PROGRESS = Gauge(
-                'amoskys_http_requests_in_progress',
-                'Number of HTTP requests currently being processed',
-                ['method', 'endpoint']
+                "amoskys_http_requests_in_progress",
+                "Number of HTTP requests currently being processed",
+                ["method", "endpoint"],
             )
         except ValueError:
             pass
-        
+
         try:
-            ACTIVE_AGENTS = Gauge('amoskys_active_agents', 'Number of currently active agents')
+            ACTIVE_AGENTS = Gauge(
+                "amoskys_active_agents", "Number of currently active agents"
+            )
         except ValueError:
             pass
-        
+
         try:
-            AGENT_CONNECTIONS = Counter('amoskys_agent_connections_total', 'Total agent connection attempts', ['status'])
+            AGENT_CONNECTIONS = Counter(
+                "amoskys_agent_connections_total",
+                "Total agent connection attempts",
+                ["status"],
+            )
         except ValueError:
             pass
-        
+
         try:
-            DB_QUERY_COUNT = Counter('amoskys_db_queries_total', 'Total database queries', ['operation', 'table'])
+            DB_QUERY_COUNT = Counter(
+                "amoskys_db_queries_total",
+                "Total database queries",
+                ["operation", "table"],
+            )
         except ValueError:
             pass
-        
+
         try:
-            DB_QUERY_LATENCY = Histogram('amoskys_db_query_duration_seconds', 'Database query latency in seconds', ['operation'], buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0])
+            DB_QUERY_LATENCY = Histogram(
+                "amoskys_db_query_duration_seconds",
+                "Database query latency in seconds",
+                ["operation"],
+                buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0],
+            )
         except ValueError:
             pass
-        
+
         try:
-            TELEMETRY_EVENTS = Counter('amoskys_telemetry_events_total', 'Total telemetry events received', ['event_type'])
+            TELEMETRY_EVENTS = Counter(
+                "amoskys_telemetry_events_total",
+                "Total telemetry events received",
+                ["event_type"],
+            )
         except ValueError:
             pass
-        
+
         try:
-            TELEMETRY_QUEUE_SIZE = Gauge('amoskys_telemetry_queue_size', 'Current telemetry queue size')
+            TELEMETRY_QUEUE_SIZE = Gauge(
+                "amoskys_telemetry_queue_size", "Current telemetry queue size"
+            )
         except ValueError:
             pass
-        
+
         try:
-            AUTH_ATTEMPTS = Counter('amoskys_auth_attempts_total', 'Total authentication attempts', ['type', 'status'])
+            AUTH_ATTEMPTS = Counter(
+                "amoskys_auth_attempts_total",
+                "Total authentication attempts",
+                ["type", "status"],
+            )
         except ValueError:
             pass
-        
+
         try:
-            SECURITY_EVENTS = Counter('amoskys_security_events_total', 'Total security events', ['event_type', 'severity'])
+            SECURITY_EVENTS = Counter(
+                "amoskys_security_events_total",
+                "Total security events",
+                ["event_type", "severity"],
+            )
         except ValueError:
             pass
-        
+
         try:
-            UPTIME_SECONDS = Gauge('amoskys_uptime_seconds', 'Application uptime in seconds')
+            UPTIME_SECONDS = Gauge(
+                "amoskys_uptime_seconds", "Application uptime in seconds"
+            )
         except ValueError:
             pass
 
@@ -163,21 +195,22 @@ def update_uptime():
 
 def track_request_metrics(f):
     """Decorator to track request metrics for Flask routes."""
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not PROMETHEUS_AVAILABLE or REQUEST_COUNT is None:
             return f(*args, **kwargs)
-        
+
         method = request.method
-        endpoint = request.endpoint or 'unknown'
-        
+        endpoint = request.endpoint or "unknown"
+
         if REQUEST_IN_PROGRESS:
             REQUEST_IN_PROGRESS.labels(method=method, endpoint=endpoint).inc()
         start_time = time.time()
-        
+
         try:
             response = f(*args, **kwargs)
-            status = getattr(response, 'status_code', 200)
+            status = getattr(response, "status_code", 200)
             REQUEST_COUNT.labels(method=method, endpoint=endpoint, status=status).inc()
             return response
         except Exception:
@@ -185,17 +218,21 @@ def track_request_metrics(f):
             raise
         finally:
             if REQUEST_LATENCY:
-                REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(time.time() - start_time)
+                REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(
+                    time.time() - start_time
+                )
             if REQUEST_IN_PROGRESS:
                 REQUEST_IN_PROGRESS.labels(method=method, endpoint=endpoint).dec()
-    
+
     return decorated_function
 
 
 def record_auth_attempt(auth_type, success):
     """Record an authentication attempt."""
     if AUTH_ATTEMPTS is not None:
-        AUTH_ATTEMPTS.labels(type=auth_type, status='success' if success else 'failure').inc()
+        AUTH_ATTEMPTS.labels(
+            type=auth_type, status="success" if success else "failure"
+        ).inc()
 
 
 def record_security_event(event_type, severity):
@@ -219,7 +256,7 @@ def set_active_agents(count):
 def record_agent_connection(success):
     """Record an agent connection attempt."""
     if AGENT_CONNECTIONS is not None:
-        AGENT_CONNECTIONS.labels(status='success' if success else 'failure').inc()
+        AGENT_CONNECTIONS.labels(status="success" if success else "failure").inc()
 
 
 def record_db_query(operation, table, duration):
@@ -230,53 +267,55 @@ def record_db_query(operation, table, duration):
         DB_QUERY_LATENCY.labels(operation=operation).observe(duration)
 
 
-@prometheus_bp.route('/metrics', methods=['GET'])
+@prometheus_bp.route("/metrics", methods=["GET"])
 def metrics_endpoint():
     """Expose Prometheus metrics."""
     if not PROMETHEUS_AVAILABLE:
-        return Response("# prometheus_client not installed\n", mimetype='text/plain', status=503)
-    
+        return Response(
+            "# prometheus_client not installed\n", mimetype="text/plain", status=503
+        )
+
     _init_metrics()
     update_uptime()
-    
+
     return Response(generate_latest(METRICS_REGISTRY), mimetype=CONTENT_TYPE_LATEST)
 
 
 class MetricsHandler(BaseHTTPRequestHandler):
     """HTTP handler for Prometheus metrics endpoint."""
-    
+
     def do_GET(self):
-        if self.path == '/metrics' or self.path == '/':
+        if self.path == "/metrics" or self.path == "/":
             if PROMETHEUS_AVAILABLE:
                 _init_metrics()
                 update_uptime()
                 metrics = generate_latest(METRICS_REGISTRY)
                 self.send_response(200)
-                self.send_header('Content-Type', CONTENT_TYPE_LATEST)
-                self.send_header('Content-Length', str(len(metrics)))
+                self.send_header("Content-Type", CONTENT_TYPE_LATEST)
+                self.send_header("Content-Length", str(len(metrics)))
                 self.end_headers()
                 self.wfile.write(metrics)
             else:
                 self.send_response(503)
-                self.send_header('Content-Type', 'text/plain')
+                self.send_header("Content-Type", "text/plain")
                 self.end_headers()
-                self.wfile.write(b'# prometheus_client not installed\n')
-        elif self.path == '/health':
+                self.wfile.write(b"# prometheus_client not installed\n")
+        elif self.path == "/health":
             self.send_response(200)
-            self.send_header('Content-Type', 'text/plain')
+            self.send_header("Content-Type", "text/plain")
             self.end_headers()
-            self.wfile.write(b'OK')
-        elif self.path == '/ready':
+            self.wfile.write(b"OK")
+        elif self.path == "/ready":
             self.send_response(200)
-            self.send_header('Content-Type', 'text/plain')
+            self.send_header("Content-Type", "text/plain")
             self.end_headers()
-            self.wfile.write(b'OK')
+            self.wfile.write(b"OK")
         else:
             self.send_response(404)
-            self.send_header('Content-Type', 'text/plain')
+            self.send_header("Content-Type", "text/plain")
             self.end_headers()
-            self.wfile.write(b'Not Found')
-    
+            self.wfile.write(b"Not Found")
+
     def log_message(self, format, *args):
         """Suppress access logs for metrics endpoint."""
         pass
@@ -289,19 +328,20 @@ _metrics_server_lock = threading.Lock()
 def start_metrics_server(port=9102):
     """Start a dedicated HTTP server for Prometheus metrics."""
     global _metrics_server_started
-    
+
     with _metrics_server_lock:
         if _metrics_server_started:
             return None
-        
+
         try:
             import socket
-            server = HTTPServer(('0.0.0.0', port), MetricsHandler)
+
+            server = HTTPServer(("0.0.0.0", port), MetricsHandler)
             server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            
+
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
-            
+
             _metrics_server_started = True
             _init_metrics()
             print(f"Prometheus metrics server started on port {port}")
@@ -315,29 +355,33 @@ def init_metrics_middleware(app):
     """Initialize metrics middleware for Flask app."""
     if not PROMETHEUS_AVAILABLE:
         return
-    
+
     _init_metrics()
-    
+
     @app.before_request
     def before_request():
         g.start_time = time.time()
         if REQUEST_IN_PROGRESS:
             method = request.method
-            endpoint = request.endpoint or 'unknown'
+            endpoint = request.endpoint or "unknown"
             REQUEST_IN_PROGRESS.labels(method=method, endpoint=endpoint).inc()
-    
+
     @app.after_request
     def after_request(response):
-        if hasattr(g, 'start_time'):
+        if hasattr(g, "start_time"):
             method = request.method
-            endpoint = request.endpoint or 'unknown'
+            endpoint = request.endpoint or "unknown"
             status = response.status_code
-            
+
             if REQUEST_COUNT:
-                REQUEST_COUNT.labels(method=method, endpoint=endpoint, status=status).inc()
+                REQUEST_COUNT.labels(
+                    method=method, endpoint=endpoint, status=status
+                ).inc()
             if REQUEST_LATENCY:
-                REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(time.time() - g.start_time)
+                REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(
+                    time.time() - g.start_time
+                )
             if REQUEST_IN_PROGRESS:
                 REQUEST_IN_PROGRESS.labels(method=method, endpoint=endpoint).dec()
-        
+
         return response

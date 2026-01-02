@@ -3,7 +3,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: amoskys-web
-  namespace: amoskys
   labels:
     app: amoskys-web
     app.kubernetes.io/name: amoskys
@@ -30,7 +29,6 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: amoskys-web
-  namespace: amoskys
   labels:
     app.kubernetes.io/name: amoskys
     app.kubernetes.io/component: web
@@ -82,7 +80,6 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: amoskys-web
-  namespace: amoskys
   labels:
     app.kubernetes.io/name: amoskys
     app.kubernetes.io/component: web
@@ -129,7 +126,6 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: amoskys-web
-  namespace: amoskys
   labels:
     app.kubernetes.io/name: amoskys
     app.kubernetes.io/component: web

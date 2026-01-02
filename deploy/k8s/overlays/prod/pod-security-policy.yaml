@@ -1,30 +1,14 @@
 # AMOSKYS Production Pod Security Standards
 # Using Pod Security Admission (PSA) labels for namespace
 # Note: PodSecurityPolicy is deprecated in K8s 1.21+ and removed in 1.25+
-# This file applies Pod Security Standards via namespace labels
----
-# Namespace with restricted Pod Security Standards
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: amoskys
-  labels:
-    app.kubernetes.io/name: amoskys
-    app.kubernetes.io/environment: production
-    # Pod Security Standards - enforce restricted baseline
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/enforce-version: latest
-    pod-security.kubernetes.io/warn: restricted
-    pod-security.kubernetes.io/warn-version: latest
-    pod-security.kubernetes.io/audit: restricted
-    pod-security.kubernetes.io/audit-version: latest
+# This file applies Pod Security Standards via ResourceQuota and LimitRange
+# Namespace PSA labels are applied via patch in kustomization.yaml
 ---
 # Resource Quota for production namespace
 apiVersion: v1
 kind: ResourceQuota
 metadata:
   name: amoskys-quota
-  namespace: amoskys
 spec:
   hard:
     # Limit total resources in namespace
@@ -47,7 +31,6 @@ apiVersion: v1
 kind: LimitRange
 metadata:
   name: amoskys-limits
-  namespace: amoskys
 spec:
   limits:
     # Default limits for containers

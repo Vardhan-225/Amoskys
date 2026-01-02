@@ -13,6 +13,26 @@ env:
   PYTHON_VERSION: '3.11'
   PROJECT_NAME: amoskys
 jobs:
+  # ============================================
+  # Job: Validate Kubernetes Manifests
+  # ============================================
+  validate-k8s:
+    name: Validate K8s Manifests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Setup kustomize
+      run: |
+        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+        sudo mv kustomize /usr/local/bin/
+    - name: Validate all overlays
+      run: |
+        echo "🔍 Validating Kubernetes manifests..."
+        kustomize build deploy/k8s/overlays/dev > /dev/null && echo "✅ Dev overlay OK"
+        kustomize build deploy/k8s/overlays/staging > /dev/null && echo "✅ Staging overlay OK"
+        kustomize build deploy/k8s/overlays/prod > /dev/null && echo "✅ Prod overlay OK"
+
   test:
     name: Test Suite
     runs-on: ubuntu-latest
@@ -108,6 +128,7 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs:
+    - validate-k8s
     - test
     - security-scan
     - quality-check
@@ -176,7 +197,7 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [test, security-scan, quality-check, deploy]
+    needs: [validate-k8s, test, security-scan, quality-check, deploy]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: write

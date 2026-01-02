@@ -1,0 +1,115 @@
+# AMOSKYS Dev Environment Overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: amoskys-dev
+
+# No namePrefix - use namespace separation instead
+
+labels:
+  - pairs:
+      environment: development
+    includeSelectors: false
+
+resources:
+  - ../../base
+
+patches:
+  # Change namespace name for dev environment
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: amoskys-dev
+      - op: add
+        path: /metadata/labels/app.kubernetes.io~1environment
+        value: development
+    target:
+      kind: Namespace
+      name: amoskys
+
+  # Reduce replicas for dev
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: amoskys-web
+  
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: amoskys-agent
+  
+  # Reduce resource limits for dev
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 200m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 128Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+    target:
+      kind: Deployment
+      name: amoskys-web
+  
+  # Reduce HPA min/max for dev
+  - patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2
+    target:
+      kind: HorizontalPodAutoscaler
+
+  # Reduce PDB for single replica
+  - patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 0
+    target:
+      kind: PodDisruptionBudget
+
+  # Use smaller storage for dev
+  - patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 1Gi
+    target:
+      kind: PersistentVolumeClaim
+
+configMapGenerator:
+  - name: amoskys-config
+    behavior: merge
+    literals:
+      - FLASK_DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - FORCE_HTTPS=false
+      - FLASK_ENV=development
+      - SESSION_COOKIE_SECURE=false
+      - AMOSKYS_REQUIRE_EMAIL_VERIFICATION=false
+      - JSON_LOGS=false
+
+secretGenerator:
+  - name: amoskys-secrets
+    behavior: merge
+    literals:
+      - SECRET_KEY=dev-secret-key-not-for-production
+      - AGENT_SECRET=dev-agent-secret
+
+images:
+  - name: ghcr.io/vardhan-225/amoskys-web
+    newTag: dev
+  - name: ghcr.io/vardhan-225/amoskys-agent
+    newTag: dev

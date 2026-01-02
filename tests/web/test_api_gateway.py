@@ -32,7 +32,7 @@ def app():
     os.environ["FLASK_DEBUG"] = "true"
     os.environ["FORCE_HTTPS"] = "false"
     os.environ["SECRET_KEY"] = "test-secret-key"
-    
+
     app_instance, _ = create_app()  # Unpack the tuple
     app_instance.config["TESTING"] = True
     return app_instance

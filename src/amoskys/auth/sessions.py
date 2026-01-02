@@ -18,7 +18,7 @@ Security Features:
 Architecture:
     Client receives: session token (44 chars, URL-safe base64)
     Server stores: SHA-256 hash of token (64 hex chars)
-    
+
     On each request:
     1. Client sends token in cookie or Authorization header
     2. Server hashes received token

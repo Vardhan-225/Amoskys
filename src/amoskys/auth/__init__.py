@@ -19,7 +19,7 @@ Usage:
     # High-level auth service (recommended)
     from amoskys.auth import AuthService
     from amoskys.db import get_session_context
-    
+
     with get_session_context() as db:
         auth = AuthService(db)
         result = auth.signup(email="user@example.com", password="SecurePass123!")

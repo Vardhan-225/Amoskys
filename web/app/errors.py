@@ -257,7 +257,9 @@ def render_html_error_page(error: HTTPException) -> Tuple[str, int]:
 
     error_code = error.code
     error_title = error_titles.get(error_code, "Error")
-    error_message = error_messages.get(error_code, str(error.description or "An error occurred."))
+    error_message = error_messages.get(
+        error_code, str(error.description or "An error occurred.")
+    )
 
     # Show login button for auth errors
     show_login = error_code in [401, 403]
@@ -265,12 +267,12 @@ def render_html_error_page(error: HTTPException) -> Tuple[str, int]:
     correlation_id = get_correlation_id()
 
     html = render_template(
-        'errors/error.html',
+        "errors/error.html",
         error_code=error_code,
         error_title=error_title,
         error_message=error_message,
         correlation_id=correlation_id,
-        show_login=show_login
+        show_login=show_login,
     )
 
     return html, error_code
@@ -330,12 +332,12 @@ def register_error_handlers(app: Flask) -> None:
 
         correlation_id = get_correlation_id()
         html = render_template(
-            'errors/error.html',
+            "errors/error.html",
             error_code=500,
             error_title="Internal Server Error",
             error_message="Something went wrong on our end. Our team has been notified and is working on it.",
             correlation_id=correlation_id,
-            show_login=False
+            show_login=False,
         )
         return html, 500
 

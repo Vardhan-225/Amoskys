@@ -9,6 +9,7 @@ For production use with Gunicorn:
 For development use:
     python wsgi.py --dev
 """
+
 import os
 import sys
 from app import create_app
@@ -19,16 +20,18 @@ app, socketio = create_app()
 # Export the application for WSGI servers (Gunicorn, uWSGI, etc.)
 application = app
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Check if running in development mode
-    is_dev = '--dev' in sys.argv or os.environ.get('FLASK_ENV') == 'development'
-    port = int(os.environ.get('FLASK_PORT', 5001))
+    is_dev = "--dev" in sys.argv or os.environ.get("FLASK_ENV") == "development"
+    port = int(os.environ.get("FLASK_PORT", 5001))
 
     if is_dev:
         # Development server with SocketIO support
         print("🧠⚡ AMOSKYS Development Server Starting...")
         print("⚠️  WARNING: Development mode - not suitable for production")
-        socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
+        socketio.run(
+            app, host="0.0.0.0", port=port, debug=True, allow_unsafe_werkzeug=True
+        )
     else:
         print("❌ Error: This script should not be run directly in production.")
         print("Use a production WSGI server like Gunicorn:")

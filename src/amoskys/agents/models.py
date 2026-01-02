@@ -34,7 +34,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from amoskys.db import Base, TimestampMixin
 
@@ -63,11 +63,11 @@ class AgentPlatform(str, enum.Enum):
 class AgentStatus(str, enum.Enum):
     """Agent health status."""
 
-    PENDING = "pending"      # Token created, not yet registered
-    ONLINE = "online"        # Agent is healthy and reporting
-    STALE = "stale"          # No heartbeat in 5 minutes
-    OFFLINE = "offline"      # No heartbeat in 15 minutes
-    REVOKED = "revoked"      # Token manually revoked
+    PENDING = "pending"  # Token created, not yet registered
+    ONLINE = "online"  # Agent is healthy and reporting
+    STALE = "stale"  # No heartbeat in 5 minutes
+    OFFLINE = "offline"  # No heartbeat in 15 minutes
+    REVOKED = "revoked"  # Token manually revoked
 
 
 # =============================================================================
@@ -148,9 +148,7 @@ class AgentToken(TimestampMixin, Base):
     consumed_by_agent_id: Mapped[Optional[str]] = mapped_column(String(36))
 
     # Indexes
-    __table_args__ = (
-        Index("ix_agent_tokens_user_platform", "user_id", "platform"),
-    )
+    __table_args__ = (Index("ix_agent_tokens_user_platform", "user_id", "platform"),)
 
     @classmethod
     def generate_token(cls) -> str:
@@ -162,6 +160,7 @@ class AgentToken(TimestampMixin, Base):
     def hash_token(cls, token: str) -> str:
         """Hash a token for storage."""
         import hashlib
+
         return hashlib.sha256(token.encode()).hexdigest()
 
     def is_valid(self) -> bool:
@@ -232,7 +231,7 @@ class DeployedAgent(TimestampMixin, Base):
         nullable=False,
     )
     ip_address: Mapped[Optional[str]] = mapped_column(String(45))  # IPv6 max length
-    
+
     # Platform and version
     platform: Mapped[AgentPlatform] = mapped_column(
         Enum(AgentPlatform, name="agent_platform", create_constraint=True),
@@ -281,17 +280,17 @@ class DeployedAgent(TimestampMixin, Base):
         """Calculate current status based on last heartbeat."""
         if self.status == AgentStatus.REVOKED:
             return AgentStatus.REVOKED
-        
+
         if not self.last_heartbeat_at:
             return AgentStatus.PENDING
-        
+
         now = datetime.now(timezone.utc)
         last_hb = self.last_heartbeat_at
         # Handle timezone-naive datetimes from DB
         if last_hb.tzinfo is None:
             last_hb = last_hb.replace(tzinfo=timezone.utc)
         delta = now - last_hb
-        
+
         if delta.total_seconds() < 300:  # 5 minutes
             return AgentStatus.ONLINE
         elif delta.total_seconds() < 900:  # 15 minutes

@@ -23,7 +23,7 @@ from typing import Any, Dict, Optional
 from flask import Blueprint, request, jsonify, make_response
 from sqlalchemy.exc import SQLAlchemyError
 
-from amoskys.auth.service import AuthService, AuthServiceConfig
+from amoskys.auth.service import AuthService
 from amoskys.db.web_db import get_web_session_context
 from amoskys.common.logging import get_logger
 from amoskys.notifications.email import (
@@ -34,28 +34,27 @@ from amoskys.notifications.email import (
 logger = get_logger(__name__)
 
 # Create blueprint
-user_auth_bp = Blueprint('user_auth', __name__, url_prefix='/user/auth')
+user_auth_bp = Blueprint("user_auth", __name__, url_prefix="/user/auth")
 
 # Configuration
-SESSION_COOKIE_NAME = 'amoskys_session'
-SESSION_COOKIE_SECURE = os.environ.get('AMOSKYS_SECURE_COOKIES', 'true').lower() == 'true'
-SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
-EMAIL_DEV_MODE = os.environ.get('AMOSKYS_EMAIL_DEV_MODE', 'false').lower() == 'true'
+SESSION_COOKIE_NAME = "amoskys_session"
+SESSION_COOKIE_SECURE = (
+    os.environ.get("AMOSKYS_SECURE_COOKIES", "true").lower() == "true"
+)
+SESSION_COOKIE_SAMESITE = "Lax"  # CSRF protection
+EMAIL_DEV_MODE = os.environ.get("AMOSKYS_EMAIL_DEV_MODE", "false").lower() == "true"
 
 
 def get_client_info() -> Dict[str, Optional[str]]:
     """Extract client IP and user agent from request."""
     # Handle proxy headers for IP
-    ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
-    if ip_address and ',' in ip_address:
-        ip_address = ip_address.split(',')[0].strip()
+    ip_address = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if ip_address and "," in ip_address:
+        ip_address = ip_address.split(",")[0].strip()
 
-    user_agent = request.headers.get('User-Agent')
+    user_agent = request.headers.get("User-Agent")
 
-    return {
-        'ip_address': ip_address,
-        'user_agent': user_agent
-    }
+    return {"ip_address": ip_address, "user_agent": user_agent}
 
 
 def create_session_cookie(session_token: str) -> Any:
@@ -78,7 +77,7 @@ def clear_session_cookie() -> Any:
     response = make_response()
     response.set_cookie(
         SESSION_COOKIE_NAME,
-        '',
+        "",
         httponly=True,
         secure=SESSION_COOKIE_SECURE,
         samesite=SESSION_COOKIE_SAMESITE,
@@ -91,7 +90,8 @@ def clear_session_cookie() -> Any:
 # Signup
 # =============================================================================
 
-@user_auth_bp.route('/signup', methods=['POST'])
+
+@user_auth_bp.route("/signup", methods=["POST"])
 def signup():
     """
     Register a new user account.
@@ -112,23 +112,33 @@ def signup():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'Request body is required',
-                'error_code': 'MISSING_BODY'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Request body is required",
+                        "error_code": "MISSING_BODY",
+                    }
+                ),
+                400,
+            )
 
-        email = data.get('email', '').strip()
-        password = data.get('password', '')
-        full_name = data.get('full_name')
+        email = data.get("email", "").strip()
+        password = data.get("password", "")
+        full_name = data.get("full_name")
 
         # Validate required fields
         if not email or not password:
-            return jsonify({
-                'success': False,
-                'error': 'Email and password are required',
-                'error_code': 'MISSING_FIELDS'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Email and password are required",
+                        "error_code": "MISSING_FIELDS",
+                    }
+                ),
+                400,
+            )
 
         client_info = get_client_info()
 
@@ -139,8 +149,8 @@ def signup():
                 email=email,
                 password=password,
                 full_name=full_name,
-                ip_address=client_info['ip_address'],
-                user_agent=client_info['user_agent'],
+                ip_address=client_info["ip_address"],
+                user_agent=client_info["user_agent"],
             )
 
             # Extract user data while session is still active (avoid lazy loading issues)
@@ -157,19 +167,21 @@ def signup():
                 user_data = None
 
         if not result.success:
-            status_code = 409 if result.error_code == 'EMAIL_EXISTS' else 400
+            status_code = 409 if result.error_code == "EMAIL_EXISTS" else 400
             # Build response without accessing detached user object
             response_data = {
-                'success': result.success,
-                'error': result.error,
-                'error_code': result.error_code,
+                "success": result.success,
+                "error": result.error,
+                "error_code": result.error_code,
             }
             return jsonify(response_data), status_code
 
         # Send verification email if token was generated
         if result.verification_token:
             # Build verification URL
-            verify_url = f"{request.host_url}auth/verify-email?token={result.verification_token}"
+            verify_url = (
+                f"{request.host_url}auth/verify-email?token={result.verification_token}"
+            )
 
             # Send email
             email_sent = send_verification_email(email, verify_url)
@@ -189,10 +201,10 @@ def signup():
 
         # Build success response with extracted user data
         response_data = {
-            'success': True,
-            'error': None,
-            'error_code': None,
-            'user': user_data,
+            "success": True,
+            "error": None,
+            "error_code": None,
+            "user": user_data,
         }
 
         # In dev mode, include verification token
@@ -201,35 +213,48 @@ def signup():
                 "signup_verification_token",
                 user_id=user_id,
                 token=result.verification_token,
-                verify_url=f"/auth/verify-email?token={result.verification_token}"
+                verify_url=f"/auth/verify-email?token={result.verification_token}",
             )
-            response_data['dev_verification_token'] = result.verification_token
-            response_data['dev_verify_url'] = f"/auth/verify-email?token={result.verification_token}"
+            response_data["dev_verification_token"] = result.verification_token
+            response_data["dev_verify_url"] = (
+                f"/auth/verify-email?token={result.verification_token}"
+            )
 
         return jsonify(response_data), 201
 
     except SQLAlchemyError as e:
         logger.error("signup_database_error", error=str(e))
-        return jsonify({
-            'success': False,
-            'error': 'Database error occurred',
-            'error_code': 'DATABASE_ERROR'
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Database error occurred",
+                    "error_code": "DATABASE_ERROR",
+                }
+            ),
+            500,
+        )
 
     except Exception as e:
         logger.error("signup_unexpected_error", error=str(e), exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': 'An unexpected error occurred',
-            'error_code': 'SERVER_ERROR'
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "An unexpected error occurred",
+                    "error_code": "SERVER_ERROR",
+                }
+            ),
+            500,
+        )
 
 
 # =============================================================================
 # Email Verification
 # =============================================================================
 
-@user_auth_bp.route('/resend-verification', methods=['POST'])
+
+@user_auth_bp.route("/resend-verification", methods=["POST"])
 def resend_verification():
     """
     Resend email verification link.
@@ -247,19 +272,29 @@ def resend_verification():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'Request body is required',
-                'error_code': 'MISSING_BODY'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Request body is required",
+                        "error_code": "MISSING_BODY",
+                    }
+                ),
+                400,
+            )
 
-        email = data.get('email', '').strip()
+        email = data.get("email", "").strip()
         if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email is required',
-                'error_code': 'MISSING_EMAIL'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Email is required",
+                        "error_code": "MISSING_EMAIL",
+                    }
+                ),
+                400,
+            )
 
         client_info = get_client_info()
 
@@ -267,16 +302,18 @@ def resend_verification():
             auth_service = AuthService(db)
             result = auth_service.resend_verification_email(
                 email=email,
-                ip_address=client_info['ip_address'],
+                ip_address=client_info["ip_address"],
             )
 
         if not result.success:
             return jsonify(result.to_dict()), 400
 
         # Get the verification token from the result
-        if hasattr(result, 'verification_token') and result.verification_token:
+        if hasattr(result, "verification_token") and result.verification_token:
             # Send verification email
-            verify_url = f"{request.host_url}auth/verify-email?token={result.verification_token}"
+            verify_url = (
+                f"{request.host_url}auth/verify-email?token={result.verification_token}"
+            )
             email_sent = send_verification_email(email, verify_url)
 
             if email_sent:
@@ -284,21 +321,28 @@ def resend_verification():
             else:
                 logger.error("resend_verification_email_failed", email=email)
 
-        return jsonify({
-            'success': True,
-            'message': 'Verification email sent successfully'
-        }), 200
+        return (
+            jsonify(
+                {"success": True, "message": "Verification email sent successfully"}
+            ),
+            200,
+        )
 
     except Exception as e:
         logger.error("resend_verification_error", error=str(e), exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': 'An unexpected error occurred',
-            'error_code': 'SERVER_ERROR'
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "An unexpected error occurred",
+                    "error_code": "SERVER_ERROR",
+                }
+            ),
+            500,
+        )
 
 
-@user_auth_bp.route('/verify-email', methods=['POST'])
+@user_auth_bp.route("/verify-email", methods=["POST"])
 def verify_email():
     """
     Verify user's email address.
@@ -316,19 +360,29 @@ def verify_email():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'Request body is required',
-                'error_code': 'MISSING_BODY'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Request body is required",
+                        "error_code": "MISSING_BODY",
+                    }
+                ),
+                400,
+            )
 
-        token = data.get('token', '').strip()
+        token = data.get("token", "").strip()
         if not token:
-            return jsonify({
-                'success': False,
-                'error': 'Verification token is required',
-                'error_code': 'MISSING_TOKEN'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Verification token is required",
+                        "error_code": "MISSING_TOKEN",
+                    }
+                ),
+                400,
+            )
 
         client_info = get_client_info()
 
@@ -336,8 +390,8 @@ def verify_email():
             auth_service = AuthService(db)
             result = auth_service.verify_email(
                 token=token,
-                ip_address=client_info['ip_address'],
-                user_agent=client_info['user_agent'],
+                ip_address=client_info["ip_address"],
+                user_agent=client_info["user_agent"],
             )
 
         if not result.success:
@@ -347,18 +401,24 @@ def verify_email():
 
     except Exception as e:
         logger.error("verify_email_error", error=str(e), exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': 'An unexpected error occurred',
-            'error_code': 'SERVER_ERROR'
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "An unexpected error occurred",
+                    "error_code": "SERVER_ERROR",
+                }
+            ),
+            500,
+        )
 
 
 # =============================================================================
 # Login
 # =============================================================================
 
-@user_auth_bp.route('/login', methods=['POST'])
+
+@user_auth_bp.route("/login", methods=["POST"])
 def login():
     """
     Authenticate user and create session.
@@ -377,21 +437,31 @@ def login():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'Request body is required',
-                'error_code': 'MISSING_BODY'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Request body is required",
+                        "error_code": "MISSING_BODY",
+                    }
+                ),
+                400,
+            )
 
-        email = data.get('email', '').strip()
-        password = data.get('password', '')
+        email = data.get("email", "").strip()
+        password = data.get("password", "")
 
         if not email or not password:
-            return jsonify({
-                'success': False,
-                'error': 'Email and password are required',
-                'error_code': 'MISSING_FIELDS'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Email and password are required",
+                        "error_code": "MISSING_FIELDS",
+                    }
+                ),
+                400,
+            )
 
         client_info = get_client_info()
 
@@ -400,8 +470,8 @@ def login():
             result = auth_service.login(
                 email=email,
                 password=password,
-                ip_address=client_info['ip_address'],
-                user_agent=client_info['user_agent'],
+                ip_address=client_info["ip_address"],
+                user_agent=client_info["user_agent"],
             )
 
         if not result.success:
@@ -416,35 +486,46 @@ def login():
         response = create_session_cookie(result.session_token)
         response_data = result.to_dict()
         # Don't send session token in JSON (it's in cookie)
-        response_data.pop('session_token', None)
+        response_data.pop("session_token", None)
 
         response.data = jsonify(response_data).data
-        response.content_type = 'application/json'
+        response.content_type = "application/json"
 
         return response, 200
 
     except SQLAlchemyError as e:
         logger.error("login_database_error", error=str(e))
-        return jsonify({
-            'success': False,
-            'error': 'Database error occurred',
-            'error_code': 'DATABASE_ERROR'
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Database error occurred",
+                    "error_code": "DATABASE_ERROR",
+                }
+            ),
+            500,
+        )
 
     except Exception as e:
         logger.error("login_unexpected_error", error=str(e), exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': 'An unexpected error occurred',
-            'error_code': 'SERVER_ERROR'
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "An unexpected error occurred",
+                    "error_code": "SERVER_ERROR",
+                }
+            ),
+            500,
+        )
 
 
 # =============================================================================
 # Logout
 # =============================================================================
 
-@user_auth_bp.route('/logout', methods=['POST'])
+
+@user_auth_bp.route("/logout", methods=["POST"])
 def logout():
     """
     Logout current session.
@@ -461,11 +542,10 @@ def logout():
         if not session_token:
             # Already logged out - return success
             response = clear_session_cookie()
-            response.data = jsonify({
-                'success': True,
-                'message': 'Already logged out'
-            }).data
-            response.content_type = 'application/json'
+            response.data = jsonify(
+                {"success": True, "message": "Already logged out"}
+            ).data
+            response.content_type = "application/json"
             return response, 200
 
         client_info = get_client_info()
@@ -474,14 +554,14 @@ def logout():
             auth_service = AuthService(db)
             result = auth_service.logout(
                 session_token=session_token,
-                ip_address=client_info['ip_address'],
-                user_agent=client_info['user_agent'],
+                ip_address=client_info["ip_address"],
+                user_agent=client_info["user_agent"],
             )
 
         # Clear cookie regardless of result
         response = clear_session_cookie()
         response.data = jsonify(result.to_dict()).data
-        response.content_type = 'application/json'
+        response.content_type = "application/json"
 
         return response, 200
 
@@ -489,12 +569,14 @@ def logout():
         logger.error("logout_error", error=str(e), exc_info=True)
         # Clear cookie even on error
         response = clear_session_cookie()
-        response.data = jsonify({
-            'success': False,
-            'error': 'An unexpected error occurred',
-            'error_code': 'SERVER_ERROR'
-        }).data
-        response.content_type = 'application/json'
+        response.data = jsonify(
+            {
+                "success": False,
+                "error": "An unexpected error occurred",
+                "error_code": "SERVER_ERROR",
+            }
+        ).data
+        response.content_type = "application/json"
         return response, 500
 
 
@@ -502,7 +584,8 @@ def logout():
 # Password Reset
 # =============================================================================
 
-@user_auth_bp.route('/forgot-password', methods=['POST'])
+
+@user_auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
     """
     Request password reset email.
@@ -520,19 +603,29 @@ def forgot_password():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'Request body is required',
-                'error_code': 'MISSING_BODY'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Request body is required",
+                        "error_code": "MISSING_BODY",
+                    }
+                ),
+                400,
+            )
 
-        email = data.get('email', '').strip()
+        email = data.get("email", "").strip()
         if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email is required',
-                'error_code': 'MISSING_EMAIL'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Email is required",
+                        "error_code": "MISSING_EMAIL",
+                    }
+                ),
+                400,
+            )
 
         client_info = get_client_info()
 
@@ -540,13 +633,15 @@ def forgot_password():
             auth_service = AuthService(db)
             result = auth_service.request_password_reset(
                 email=email,
-                ip_address=client_info['ip_address'],
+                ip_address=client_info["ip_address"],
             )
 
         # Send password reset email if token was generated
         if result.reset_token:
             # Build reset URL
-            reset_url = f"{request.host_url}auth/reset-password?token={result.reset_token}"
+            reset_url = (
+                f"{request.host_url}auth/reset-password?token={result.reset_token}"
+            )
 
             # Send email
             email_sent = send_password_reset_email(email, reset_url)
@@ -567,30 +662,42 @@ def forgot_password():
             logger.info(
                 "password_reset_token",
                 token=result.reset_token,
-                reset_url=f"/auth/reset-password?token={result.reset_token}"
+                reset_url=f"/auth/reset-password?token={result.reset_token}",
             )
             # Include token in response for dev testing
             response_data = result.to_dict()
-            response_data['dev_reset_token'] = result.reset_token
-            response_data['dev_reset_url'] = f"/auth/reset-password?token={result.reset_token}"
+            response_data["dev_reset_token"] = result.reset_token
+            response_data["dev_reset_url"] = (
+                f"/auth/reset-password?token={result.reset_token}"
+            )
             return jsonify(response_data), 200
 
         # Always return success for security (don't reveal if email exists)
-        return jsonify({
-            'success': True,
-            'message': 'If an account exists with this email, a password reset link has been sent.'
-        }), 200
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": "If an account exists with this email, a password reset link has been sent.",
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         logger.error("forgot_password_error", error=str(e), exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': 'An unexpected error occurred',
-            'error_code': 'SERVER_ERROR'
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "An unexpected error occurred",
+                    "error_code": "SERVER_ERROR",
+                }
+            ),
+            500,
+        )
 
 
-@user_auth_bp.route('/reset-password', methods=['POST'])
+@user_auth_bp.route("/reset-password", methods=["POST"])
 def reset_password():
     """
     Reset password using reset token.
@@ -609,21 +716,31 @@ def reset_password():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'Request body is required',
-                'error_code': 'MISSING_BODY'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Request body is required",
+                        "error_code": "MISSING_BODY",
+                    }
+                ),
+                400,
+            )
 
-        token = data.get('token', '').strip()
-        new_password = data.get('new_password', '')
+        token = data.get("token", "").strip()
+        new_password = data.get("new_password", "")
 
         if not token or not new_password:
-            return jsonify({
-                'success': False,
-                'error': 'Token and new password are required',
-                'error_code': 'MISSING_FIELDS'
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Token and new password are required",
+                        "error_code": "MISSING_FIELDS",
+                    }
+                ),
+                400,
+            )
 
         client_info = get_client_info()
 
@@ -632,8 +749,8 @@ def reset_password():
             result = auth_service.reset_password(
                 token=token,
                 new_password=new_password,
-                ip_address=client_info['ip_address'],
-                user_agent=client_info['user_agent'],
+                ip_address=client_info["ip_address"],
+                user_agent=client_info["user_agent"],
             )
 
         if not result.success:
@@ -643,18 +760,24 @@ def reset_password():
 
     except Exception as e:
         logger.error("reset_password_error", error=str(e), exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': 'An unexpected error occurred',
-            'error_code': 'SERVER_ERROR'
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "An unexpected error occurred",
+                    "error_code": "SERVER_ERROR",
+                }
+            ),
+            500,
+        )
 
 
 # =============================================================================
 # Session Validation (for middleware/frontend)
 # =============================================================================
 
-@user_auth_bp.route('/validate-session', methods=['GET'])
+
+@user_auth_bp.route("/validate-session", methods=["GET"])
 def validate_session():
     """
     Validate current session and return user info.
@@ -668,11 +791,16 @@ def validate_session():
         session_token = request.cookies.get(SESSION_COOKIE_NAME)
 
         if not session_token:
-            return jsonify({
-                'success': False,
-                'error': 'No session found',
-                'error_code': 'NO_SESSION'
-            }), 401
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "No session found",
+                        "error_code": "NO_SESSION",
+                    }
+                ),
+                401,
+            )
 
         client_info = get_client_info()
 
@@ -680,37 +808,49 @@ def validate_session():
             auth_service = AuthService(db)
             result = auth_service.validate_and_refresh_session(
                 token=session_token,
-                ip_address=client_info['ip_address'],
-                user_agent=client_info['user_agent'],
+                ip_address=client_info["ip_address"],
+                user_agent=client_info["user_agent"],
             )
 
         if not result.is_valid:
             response = clear_session_cookie()
-            response.data = jsonify({
-                'success': False,
-                'error': 'Invalid or expired session',
-                'error_code': 'INVALID_SESSION'
-            }).data
-            response.content_type = 'application/json'
+            response.data = jsonify(
+                {
+                    "success": False,
+                    "error": "Invalid or expired session",
+                    "error_code": "INVALID_SESSION",
+                }
+            ).data
+            response.content_type = "application/json"
             return response, 401
 
         # Return user info
         user = result.user
-        return jsonify({
-            'success': True,
-            'user': {
-                'id': str(user.id),
-                'email': user.email,
-                'full_name': user.full_name,
-                'role': user.role.value,
-                'is_verified': user.is_verified,
-            }
-        }), 200
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "user": {
+                        "id": str(user.id),
+                        "email": user.email,
+                        "full_name": user.full_name,
+                        "role": user.role.value,
+                        "is_verified": user.is_verified,
+                    },
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         logger.error("validate_session_error", error=str(e), exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': 'An unexpected error occurred',
-            'error_code': 'SERVER_ERROR'
-        }), 500
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "An unexpected error occurred",
+                    "error_code": "SERVER_ERROR",
+                }
+            ),
+            500,
+        )

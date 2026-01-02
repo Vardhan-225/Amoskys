@@ -15,11 +15,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Blueprint registration
-database_manager_bp = Blueprint('database_manager', __name__, url_prefix='/database-manager')
+database_manager_bp = Blueprint(
+    "database_manager", __name__, url_prefix="/database-manager"
+)
 
 # Database paths (relative to web/ directory)
-DB_PATH = '../data/telemetry.db'
-WAL_PATH = '../data/wal/flowagent.db'
+DB_PATH = "../data/telemetry.db"
+WAL_PATH = "../data/wal/flowagent.db"
 
 # Audit log (in-memory for this session, could be persisted)
 audit_log = []
@@ -28,10 +30,10 @@ audit_log = []
 def log_audit_event(action: str, details: dict):
     """Log database management action for audit trail"""
     entry = {
-        'timestamp': datetime.now().isoformat(),
-        'action': action,
-        'details': details,
-        'operator': 'system'  # Could be extended to include user identity
+        "timestamp": datetime.now().isoformat(),
+        "action": action,
+        "details": details,
+        "operator": "system",  # Could be extended to include user identity
     }
     audit_log.append(entry)
     logger.warning(f"DATABASE AUDIT: {action} - {details}")
@@ -47,32 +49,32 @@ def get_db_connection(db_path: str):
     return conn
 
 
-@database_manager_bp.route('/statistics', methods=['GET'])
+@database_manager_bp.route("/statistics", methods=["GET"])
 def get_statistics():
     """Get overall database statistics"""
     try:
         stats = {
-            'database_path': DB_PATH,
-            'database_size': 0,
-            'wal_size': 0,
-            'total_records': 0,
-            'table_count': 0,
-            'wal_pending_events': 0,
-            'oldest_record': None,
-            'newest_record': None
+            "database_path": DB_PATH,
+            "database_size": 0,
+            "wal_size": 0,
+            "total_records": 0,
+            "table_count": 0,
+            "wal_pending_events": 0,
+            "oldest_record": None,
+            "newest_record": None,
         }
 
         # Get database file size
         if os.path.exists(DB_PATH):
-            stats['database_size'] = os.path.getsize(DB_PATH)
+            stats["database_size"] = os.path.getsize(DB_PATH)
 
         # Get WAL file size and pending events
         if os.path.exists(WAL_PATH):
-            stats['wal_size'] = os.path.getsize(WAL_PATH)
+            stats["wal_size"] = os.path.getsize(WAL_PATH)
             try:
                 wal_conn = get_db_connection(WAL_PATH)
                 cursor = wal_conn.execute("SELECT COUNT(*) FROM wal")
-                stats['wal_pending_events'] = cursor.fetchone()[0]
+                stats["wal_pending_events"] = cursor.fetchone()[0]
                 wal_conn.close()
             except Exception as e:
                 logger.error(f"Failed to query WAL: {e}")
@@ -84,10 +86,16 @@ def get_statistics():
         cursor = conn.execute(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )
-        stats['table_count'] = cursor.fetchone()[0]
+        stats["table_count"] = cursor.fetchone()[0]
 
         # Count total records across all tables
-        tables = ['process_events', 'device_telemetry', 'peripheral_events', 'flow_events', 'security_events']
+        tables = [
+            "process_events",
+            "device_telemetry",
+            "peripheral_events",
+            "flow_events",
+            "security_events",
+        ]
         total = 0
         for table in tables:
             try:
@@ -97,7 +105,7 @@ def get_statistics():
             except Exception:
                 pass  # Table may not exist
 
-        stats['total_records'] = total
+        stats["total_records"] = total
 
         # Get time range from process_events (largest table)
         try:
@@ -105,9 +113,9 @@ def get_statistics():
                 "SELECT MIN(timestamp_dt) as oldest, MAX(timestamp_dt) as newest FROM process_events"
             )
             row = cursor.fetchone()
-            if row and row['oldest']:
-                stats['oldest_record'] = row['oldest']
-                stats['newest_record'] = row['newest']
+            if row and row["oldest"]:
+                stats["oldest_record"] = row["oldest"]
+                stats["newest_record"] = row["newest"]
         except Exception:
             pass  # Table may not exist or be empty
 
@@ -117,18 +125,24 @@ def get_statistics():
 
     except Exception as e:
         logger.error(f"Failed to get statistics: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@database_manager_bp.route('/table-stats', methods=['GET'])
+@database_manager_bp.route("/table-stats", methods=["GET"])
 def get_table_stats():
     """Get statistics for each table"""
     try:
         conn = get_db_connection(DB_PATH)
 
         tables = []
-        table_names = ['process_events', 'device_telemetry', 'peripheral_events',
-                      'flow_events', 'security_events', 'metrics_timeseries']
+        table_names = [
+            "process_events",
+            "device_telemetry",
+            "peripheral_events",
+            "flow_events",
+            "security_events",
+            "metrics_timeseries",
+        ]
 
         for table_name in table_names:
             try:
@@ -147,9 +161,9 @@ def get_table_stats():
                         f"SELECT MIN(timestamp_dt) as oldest, MAX(timestamp_dt) as newest FROM {table_name}"
                     )
                     row = cursor.fetchone()
-                    if row and row['oldest']:
-                        oldest = row['oldest'][:10]  # YYYY-MM-DD
-                        newest = row['newest'][:10]
+                    if row and row["oldest"]:
+                        oldest = row["oldest"][:10]  # YYYY-MM-DD
+                        newest = row["newest"][:10]
                         if oldest == newest:
                             time_range = oldest
                         else:
@@ -157,47 +171,52 @@ def get_table_stats():
                 except Exception:
                     pass  # Table may not have timestamp column
 
-                tables.append({
-                    'name': table_name,
-                    'row_count': row_count,
-                    'size_bytes': int(estimated_size),
-                    'time_range': time_range
-                })
+                tables.append(
+                    {
+                        "name": table_name,
+                        "row_count": row_count,
+                        "size_bytes": int(estimated_size),
+                        "time_range": time_range,
+                    }
+                )
 
             except Exception as e:
                 logger.error(f"Failed to get stats for {table_name}: {e}")
 
         conn.close()
 
-        return jsonify({
-            'tables': tables,
-            'timestamp': datetime.now().isoformat()
-        }), 200
+        return jsonify({"tables": tables, "timestamp": datetime.now().isoformat()}), 200
 
     except Exception as e:
         logger.error(f"Failed to get table stats: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@database_manager_bp.route('/view-table/<table_name>', methods=['GET'])
+@database_manager_bp.route("/view-table/<table_name>", methods=["GET"])
 def view_table(table_name):
     """View raw table data (read-only)"""
     try:
         # Validate table name to prevent SQL injection
-        allowed_tables = ['process_events', 'device_telemetry', 'peripheral_events',
-                         'flow_events', 'security_events', 'metrics_timeseries']
+        allowed_tables = [
+            "process_events",
+            "device_telemetry",
+            "peripheral_events",
+            "flow_events",
+            "security_events",
+            "metrics_timeseries",
+        ]
 
         if table_name not in allowed_tables:
-            return jsonify({'error': 'Invalid table name'}), 400
+            return jsonify({"error": "Invalid table name"}), 400
 
-        limit = request.args.get('limit', 100, type=int)
+        limit = request.args.get("limit", 100, type=int)
         limit = min(limit, 1000)  # Max 1000 records
 
         conn = get_db_connection(DB_PATH)
 
         # Get column names
         cursor = conn.execute(f"PRAGMA table_info({table_name})")
-        columns = [row['name'] for row in cursor.fetchall()]
+        columns = [row["name"] for row in cursor.fetchall()]
 
         # Get total count
         cursor = conn.execute(f"SELECT COUNT(*) FROM {table_name}")
@@ -205,28 +224,32 @@ def view_table(table_name):
 
         # Get records
         cursor = conn.execute(
-            f"SELECT * FROM {table_name} ORDER BY id DESC LIMIT ?",
-            (limit,)
+            f"SELECT * FROM {table_name} ORDER BY id DESC LIMIT ?", (limit,)
         )
         records = [dict(row) for row in cursor.fetchall()]
 
         conn.close()
 
-        return jsonify({
-            'table': table_name,
-            'columns': columns,
-            'records': records,
-            'total_count': total_count,
-            'returned_count': len(records),
-            'timestamp': datetime.now().isoformat()
-        }), 200
+        return (
+            jsonify(
+                {
+                    "table": table_name,
+                    "columns": columns,
+                    "records": records,
+                    "total_count": total_count,
+                    "returned_count": len(records),
+                    "timestamp": datetime.now().isoformat(),
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         logger.error(f"Failed to view table {table_name}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@database_manager_bp.route('/truncate-table/<table_name>', methods=['POST'])
+@database_manager_bp.route("/truncate-table/<table_name>", methods=["POST"])
 def truncate_table(table_name):
     """
     Truncate a table (delete all records)
@@ -234,11 +257,17 @@ def truncate_table(table_name):
     """
     try:
         # Validate table name
-        allowed_tables = ['process_events', 'device_telemetry', 'peripheral_events',
-                         'flow_events', 'security_events', 'metrics_timeseries']
+        allowed_tables = [
+            "process_events",
+            "device_telemetry",
+            "peripheral_events",
+            "flow_events",
+            "security_events",
+            "metrics_timeseries",
+        ]
 
         if table_name not in allowed_tables:
-            return jsonify({'error': 'Invalid table name'}), 400
+            return jsonify({"error": "Invalid table name"}), 400
 
         conn = get_db_connection(DB_PATH)
 
@@ -257,25 +286,33 @@ def truncate_table(table_name):
         conn.close()
 
         # Log audit event
-        log_audit_event('TRUNCATE_TABLE', {
-            'table': table_name,
-            'rows_deleted': rows_before,
-            'rows_remaining': rows_after
-        })
+        log_audit_event(
+            "TRUNCATE_TABLE",
+            {
+                "table": table_name,
+                "rows_deleted": rows_before,
+                "rows_remaining": rows_after,
+            },
+        )
 
-        return jsonify({
-            'status': 'success',
-            'table': table_name,
-            'rows_deleted': rows_before,
-            'timestamp': datetime.now().isoformat()
-        }), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "table": table_name,
+                    "rows_deleted": rows_before,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         logger.error(f"Failed to truncate table {table_name}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@database_manager_bp.route('/reset-database', methods=['POST'])
+@database_manager_bp.route("/reset-database", methods=["POST"])
 def reset_database():
     """
     Reset entire database (truncate all tables)
@@ -284,8 +321,14 @@ def reset_database():
     try:
         conn = get_db_connection(DB_PATH)
 
-        tables = ['process_events', 'device_telemetry', 'peripheral_events',
-                 'flow_events', 'security_events', 'metrics_timeseries']
+        tables = [
+            "process_events",
+            "device_telemetry",
+            "peripheral_events",
+            "flow_events",
+            "security_events",
+            "metrics_timeseries",
+        ]
 
         total_deleted = 0
 
@@ -303,29 +346,34 @@ def reset_database():
         conn.close()
 
         # Log audit event
-        log_audit_event('RESET_DATABASE', {
-            'tables_truncated': len(tables),
-            'total_rows_deleted': total_deleted
-        })
+        log_audit_event(
+            "RESET_DATABASE",
+            {"tables_truncated": len(tables), "total_rows_deleted": total_deleted},
+        )
 
-        return jsonify({
-            'status': 'success',
-            'total_deleted': total_deleted,
-            'tables_reset': len(tables),
-            'timestamp': datetime.now().isoformat()
-        }), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "total_deleted": total_deleted,
+                    "tables_reset": len(tables),
+                    "timestamp": datetime.now().isoformat(),
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         logger.error(f"Failed to reset database: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@database_manager_bp.route('/clear-wal', methods=['POST'])
+@database_manager_bp.route("/clear-wal", methods=["POST"])
 def clear_wal():
     """Clear WAL queue (delete processed events)"""
     try:
         if not os.path.exists(WAL_PATH):
-            return jsonify({'error': 'WAL database not found'}), 404
+            return jsonify({"error": "WAL database not found"}), 404
 
         conn = get_db_connection(WAL_PATH)
 
@@ -344,27 +392,37 @@ def clear_wal():
         conn.close()
 
         # Log audit event
-        log_audit_event('CLEAR_WAL', {
-            'events_deleted': count_before,
-            'events_remaining': count_after
-        })
+        log_audit_event(
+            "CLEAR_WAL",
+            {"events_deleted": count_before, "events_remaining": count_after},
+        )
 
-        return jsonify({
-            'status': 'success',
-            'rows_deleted': count_before,
-            'timestamp': datetime.now().isoformat()
-        }), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "rows_deleted": count_before,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         logger.error(f"Failed to clear WAL: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@database_manager_bp.route('/audit-log', methods=['GET'])
+@database_manager_bp.route("/audit-log", methods=["GET"])
 def get_audit_log():
     """Get audit log of database operations"""
-    return jsonify({
-        'audit_log': audit_log,
-        'count': len(audit_log),
-        'timestamp': datetime.now().isoformat()
-    }), 200
+    return (
+        jsonify(
+            {
+                "audit_log": audit_log,
+                "count": len(audit_log),
+                "timestamp": datetime.now().isoformat(),
+            }
+        ),
+        200,
+    )

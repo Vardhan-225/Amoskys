@@ -23,7 +23,7 @@ def app():
     os.environ["FLASK_DEBUG"] = "true"
     os.environ["FORCE_HTTPS"] = "false"
     os.environ["SECRET_KEY"] = "test-secret-key"
-    
+
     result = create_app()
     if isinstance(result, tuple):
         app_instance, _ = result

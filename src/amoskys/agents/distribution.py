@@ -12,7 +12,7 @@ Features:
 Example Usage:
     >>> from amoskys.agents.distribution import AgentDistributionService
     >>> from amoskys.db import get_session_context
-    >>> 
+    >>>
     >>> with get_session_context() as db:
     ...     service = AgentDistributionService(db)
     ...     result = service.create_deployment_token(
@@ -30,7 +30,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from amoskys.common.logging import get_logger
@@ -55,7 +54,7 @@ logger = get_logger(__name__)
 @dataclass
 class TokenCreationResult:
     """Result of creating a deployment token."""
-    
+
     success: bool
     token: Optional[str] = None  # Plaintext token (show once!)
     token_id: Optional[str] = None
@@ -66,7 +65,7 @@ class TokenCreationResult:
 @dataclass
 class AgentInfo:
     """Agent information for display."""
-    
+
     id: str
     hostname: str
     ip_address: Optional[str]
@@ -82,7 +81,7 @@ class AgentInfo:
 @dataclass
 class AgentListResult:
     """Result of listing user's agents."""
-    
+
     success: bool
     agents: List[AgentInfo]
     total: int
@@ -93,7 +92,7 @@ class AgentListResult:
 @dataclass
 class TokenInfo:
     """Token information for display."""
-    
+
     id: str
     label: str
     platform: str
@@ -106,7 +105,7 @@ class TokenInfo:
 @dataclass
 class TokenListResult:
     """Result of listing user's tokens."""
-    
+
     success: bool
     tokens: List[TokenInfo]
     total: int
@@ -118,7 +117,7 @@ class TokenListResult:
 @dataclass
 class AgentRegistrationResult:
     """Result of agent registration."""
-    
+
     success: bool
     agent_id: Optional[str] = None
     agent_info: Optional[dict] = None
@@ -134,7 +133,7 @@ class AgentRegistrationResult:
 class AgentDistributionService:
     """
     Service for managing agent deployment and distribution.
-    
+
     Handles the complete lifecycle:
     1. User creates deployment token
     2. User downloads agent package with embedded token
@@ -145,11 +144,11 @@ class AgentDistributionService:
 
     # Default token validity: 7 days
     DEFAULT_TOKEN_EXPIRY_DAYS = 7
-    
+
     def __init__(self, db: Session):
         """
         Initialize distribution service.
-        
+
         Args:
             db: SQLAlchemy database session
         """
@@ -169,14 +168,14 @@ class AgentDistributionService:
     ) -> TokenCreationResult:
         """
         Create a new agent deployment token.
-        
+
         Args:
             user_id: UUID of the user creating the token
             label: User-friendly name for this deployment
             platform: Target platform (windows/linux/macos/docker)
             description: Optional description
             expires_in_days: Days until token expires (default: 7)
-        
+
         Returns:
             TokenCreationResult with plaintext token (show once!)
         """
@@ -200,7 +199,9 @@ class AgentDistributionService:
             if expires_in_days is None:
                 expires_in_days = self.DEFAULT_TOKEN_EXPIRY_DAYS
             if expires_in_days > 0:
-                expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
+                expires_at = datetime.now(timezone.utc) + timedelta(
+                    days=expires_in_days
+                )
 
             # Create token record
             token = AgentToken(
@@ -211,7 +212,7 @@ class AgentDistributionService:
                 description=description,
                 expires_at=expires_at,
             )
-            
+
             self.db.add(token)
             self.db.commit()
 
@@ -241,10 +242,10 @@ class AgentDistributionService:
     def list_user_tokens(self, user_id: str) -> TokenListResult:
         """
         List all deployment tokens for a user.
-        
+
         Args:
             user_id: UUID of the user
-        
+
         Returns:
             TokenListResult with token list
         """
@@ -266,15 +267,17 @@ class AgentDistributionService:
                 elif t.is_valid():
                     active_count += 1
 
-                token_infos.append(TokenInfo(
-                    id=t.id,
-                    label=t.label,
-                    platform=t.platform.value,
-                    is_consumed=t.is_consumed,
-                    expires_at=t.expires_at.isoformat() if t.expires_at else None,
-                    created_at=t.created_at.isoformat(),
-                    consumed_by_agent_id=t.consumed_by_agent_id,
-                ))
+                token_infos.append(
+                    TokenInfo(
+                        id=t.id,
+                        label=t.label,
+                        platform=t.platform.value,
+                        is_consumed=t.is_consumed,
+                        expires_at=t.expires_at.isoformat() if t.expires_at else None,
+                        created_at=t.created_at.isoformat(),
+                        consumed_by_agent_id=t.consumed_by_agent_id,
+                    )
+                )
 
             return TokenListResult(
                 success=True,
@@ -298,11 +301,11 @@ class AgentDistributionService:
     def revoke_token(self, user_id: str, token_id: str) -> bool:
         """
         Revoke a deployment token.
-        
+
         Args:
             user_id: UUID of the user (for authorization)
             token_id: UUID of the token to revoke
-        
+
         Returns:
             True if revoked, False otherwise
         """
@@ -348,9 +351,9 @@ class AgentDistributionService:
     ) -> AgentRegistrationResult:
         """
         Register a new agent using a deployment token.
-        
+
         This consumes the token (one-time use).
-        
+
         Args:
             token: Plaintext deployment token
             hostname: Agent's hostname
@@ -359,7 +362,7 @@ class AgentDistributionService:
             version: Agent version string
             capabilities: List of agent capabilities
             metadata: Additional metadata
-        
+
         Returns:
             AgentRegistrationResult with agent ID
         """
@@ -418,7 +421,7 @@ class AgentDistributionService:
                 last_heartbeat_at=datetime.now(timezone.utc),
                 heartbeat_count=1,
             )
-            
+
             self.db.add(agent)
 
             # Consume the token
@@ -463,10 +466,10 @@ class AgentDistributionService:
     def list_user_agents(self, user_id: str) -> AgentListResult:
         """
         List all agents for a user.
-        
+
         Args:
             user_id: UUID of the user
-        
+
         Returns:
             AgentListResult with agent list and status counts
         """
@@ -492,8 +495,10 @@ class AgentDistributionService:
                 current_status = a.calculate_status()
                 if current_status != a.status:
                     a.status = current_status
-                
-                by_status[current_status.value] = by_status.get(current_status.value, 0) + 1
+
+                by_status[current_status.value] = (
+                    by_status.get(current_status.value, 0) + 1
+                )
 
                 # Parse capabilities
                 try:
@@ -501,18 +506,24 @@ class AgentDistributionService:
                 except json.JSONDecodeError:
                     caps = []
 
-                agent_infos.append(AgentInfo(
-                    id=a.id,
-                    hostname=a.hostname,
-                    ip_address=a.ip_address,
-                    platform=a.platform.value,
-                    version=a.version,
-                    status=current_status.value,
-                    capabilities=caps,
-                    last_heartbeat_at=a.last_heartbeat_at.isoformat() if a.last_heartbeat_at else None,
-                    created_at=a.created_at.isoformat(),
-                    heartbeat_count=a.heartbeat_count,
-                ))
+                agent_infos.append(
+                    AgentInfo(
+                        id=a.id,
+                        hostname=a.hostname,
+                        ip_address=a.ip_address,
+                        platform=a.platform.value,
+                        version=a.version,
+                        status=current_status.value,
+                        capabilities=caps,
+                        last_heartbeat_at=(
+                            a.last_heartbeat_at.isoformat()
+                            if a.last_heartbeat_at
+                            else None
+                        ),
+                        created_at=a.created_at.isoformat(),
+                        heartbeat_count=a.heartbeat_count,
+                    )
+                )
 
             # Commit any status updates
             self.db.commit()
@@ -542,21 +553,25 @@ class AgentDistributionService:
     ) -> bool:
         """
         Record a heartbeat from an agent.
-        
+
         Args:
             agent_id: UUID of the agent
             ip_address: Current IP address
             metadata: Optional updated metadata
-        
+
         Returns:
             True if recorded, False otherwise
         """
         try:
-            agent = self.db.query(DeployedAgent).filter(DeployedAgent.id == agent_id).first()
-            
+            agent = (
+                self.db.query(DeployedAgent)
+                .filter(DeployedAgent.id == agent_id)
+                .first()
+            )
+
             if not agent:
                 return False
-            
+
             if agent.status == AgentStatus.REVOKED:
                 return False
 
@@ -565,7 +580,7 @@ class AgentDistributionService:
                 agent.ip_address = ip_address
             if metadata:
                 agent.extra_data = json.dumps(metadata)
-            
+
             self.db.commit()
             return True
 
@@ -577,11 +592,11 @@ class AgentDistributionService:
     def revoke_agent(self, user_id: str, agent_id: str) -> bool:
         """
         Revoke an agent.
-        
+
         Args:
             user_id: UUID of the user (for authorization)
             agent_id: UUID of the agent to revoke
-        
+
         Returns:
             True if revoked, False otherwise
         """
@@ -616,10 +631,10 @@ class AgentDistributionService:
     def get_user_stats(self, user_id: str) -> dict:
         """
         Get agent statistics for a user.
-        
+
         Args:
             user_id: UUID of the user
-        
+
         Returns:
             Dictionary with statistics
         """

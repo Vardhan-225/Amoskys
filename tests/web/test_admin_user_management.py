@@ -33,7 +33,7 @@ def app():
     os.environ["FLASK_DEBUG"] = "true"
     os.environ["FORCE_HTTPS"] = "false"
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing"
-    
+
     result = create_app()
     if isinstance(result, tuple):
         app_instance, _ = result
@@ -66,7 +66,7 @@ def admin_user(app):
                 role=UserRole.ADMIN,
                 is_active=True,
                 is_verified=True,
-                password_hash=hash_password("TestAdminPass123!")
+                password_hash=hash_password("TestAdminPass123!"),
             )
             db.add(admin)
             db.commit()
@@ -85,7 +85,7 @@ def regular_user(app):
             role=UserRole.USER,
             is_active=True,
             is_verified=True,
-            password_hash=hash_password("TestUserPass123!")
+            password_hash=hash_password("TestUserPass123!"),
         )
         db.add(user)
         db.commit()
@@ -106,7 +106,7 @@ class TestAdminUserAPI:
 
     def test_get_users_requires_admin(self, client):
         """Test that getting users requires admin role"""
-        response = client.get('/admin/api/users')
+        response = client.get("/admin/api/users")
         # Should redirect to login or return 401/403
         assert response.status_code in [302, 401, 403]
 
@@ -114,9 +114,9 @@ class TestAdminUserAPI:
         """Test that user updates validate input"""
         # Test with invalid full name (too short)
         response = client.patch(
-            f'/admin/api/users/{regular_user}',
-            data=json.dumps({'full_name': 'A'}),  # Too short
-            content_type='application/json'
+            f"/admin/api/users/{regular_user}",
+            data=json.dumps({"full_name": "A"}),  # Too short
+            content_type="application/json",
         )
         # Should fail validation or require auth
         assert response.status_code in [400, 401, 403]
@@ -124,9 +124,9 @@ class TestAdminUserAPI:
     def test_update_user_validates_role(self, client, admin_user, regular_user):
         """Test that role updates are validated"""
         response = client.patch(
-            f'/admin/api/users/{regular_user}',
-            data=json.dumps({'role': 'invalid_role'}),
-            content_type='application/json'
+            f"/admin/api/users/{regular_user}",
+            data=json.dumps({"role": "invalid_role"}),
+            content_type="application/json",
         )
         # Should fail validation or require auth
         assert response.status_code in [400, 401, 403]
@@ -136,16 +136,16 @@ class TestAdminUserAPI:
         # This would require authenticated session
         # For now, just verify endpoint exists
         response = client.patch(
-            f'/admin/api/users/{regular_user}',
-            data=json.dumps({'is_active': False}),
-            content_type='application/json'
+            f"/admin/api/users/{regular_user}",
+            data=json.dumps({"is_active": False}),
+            content_type="application/json",
         )
         # Should require authentication
         assert response.status_code in [401, 403, 500]
 
     def test_delete_user_requires_confirmation(self, client, admin_user, regular_user):
         """Test that deleting a user requires proper authorization"""
-        response = client.delete(f'/admin/api/users/{regular_user}')
+        response = client.delete(f"/admin/api/users/{regular_user}")
         # Should require authentication - redirect (302) or 401/403 are all acceptable
         assert response.status_code in [302, 401, 403]
 
@@ -200,17 +200,17 @@ class TestAuditLogging:
     def test_audit_event_types_are_valid(self):
         """Test that audit event types use correct enum values"""
         # The bug we fixed was using enum NAME instead of VALUE
-        assert AuditEventType.ACCOUNT_SUSPENDED.value == 'account_suspended'
-        assert AuditEventType.ACCOUNT_DELETED.value == 'account_deleted'
-        assert AuditEventType.LOGIN_SUCCESS.value == 'login_success'
-        assert AuditEventType.LOGIN_FAILURE.value == 'login_failure'
+        assert AuditEventType.ACCOUNT_SUSPENDED.value == "account_suspended"
+        assert AuditEventType.ACCOUNT_DELETED.value == "account_deleted"
+        assert AuditEventType.LOGIN_SUCCESS.value == "login_success"
+        assert AuditEventType.LOGIN_FAILURE.value == "login_failure"
 
     def test_audit_log_stores_metadata(self):
         """Test that audit logs can store JSON metadata"""
         metadata = {
-            'suspended_user_email': 'test@example.com',
-            'suspended_by_admin': 'admin@example.com',
-            'suspended_by_admin_id': 'admin-id-123'
+            "suspended_user_email": "test@example.com",
+            "suspended_by_admin": "admin@example.com",
+            "suspended_by_admin_id": "admin-id-123",
         }
 
         # Should be JSON serializable
@@ -232,6 +232,7 @@ class TestKeyboardAccessibility:
 
         # Verify the pattern exists in the HTML
         import os
+
         users_html_path = os.path.join(
             os.path.dirname(__file__),
             "..",
@@ -240,22 +241,23 @@ class TestKeyboardAccessibility:
             "app",
             "templates",
             "admin",
-            "users.html"
+            "users.html",
         )
 
         if os.path.exists(users_html_path):
-            with open(users_html_path, 'r') as f:
+            with open(users_html_path, "r") as f:
                 content = f.read()
 
             # Check for keyboard handler setup
-            assert 'setupKeyboardHandlers' in content
+            assert "setupKeyboardHandlers" in content
             assert "key === 'Escape'" in content or "key === 'Esc'" in content
-            assert 'trapFocus' in content
-            assert 'focusFirstElement' in content
+            assert "trapFocus" in content
+            assert "focusFirstElement" in content
 
     def test_focus_trap_implementation(self):
         """Test that focus trap is implemented"""
         import os
+
         users_html_path = os.path.join(
             os.path.dirname(__file__),
             "..",
@@ -264,16 +266,16 @@ class TestKeyboardAccessibility:
             "app",
             "templates",
             "admin",
-            "users.html"
+            "users.html",
         )
 
         if os.path.exists(users_html_path):
-            with open(users_html_path, 'r') as f:
+            with open(users_html_path, "r") as f:
                 content = f.read()
 
             # Check for focus trap elements
-            assert 'querySelectorAll' in content
-            assert 'shiftKey' in content  # For Shift+Tab handling
+            assert "querySelectorAll" in content
+            assert "shiftKey" in content  # For Shift+Tab handling
 
 
 if __name__ == "__main__":

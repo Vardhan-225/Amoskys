@@ -5,7 +5,7 @@ Creates a simple HTML page showing SNMP metrics without database queries
 
 from flask import Blueprint, render_template_string
 
-snmp_test_bp = Blueprint('snmp_test', __name__, url_prefix='/snmp')
+snmp_test_bp = Blueprint("snmp_test", __name__, url_prefix="/snmp")
 
 DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -166,17 +166,17 @@ DASHBOARD_HTML = """
                 // Load stats
                 const statsRes = await fetch('/api/snmp/stats');
                 const stats = await statsRes.json();
-                
+
                 document.getElementById('total-events').textContent = stats.total_events || 0;
                 document.getElementById('total-devices').textContent = stats.total_devices || 0;
                 document.getElementById('events-hour').textContent = stats.events_last_hour || 0;
-                document.getElementById('avg-payload').textContent = 
+                document.getElementById('avg-payload').textContent =
                     stats.avg_payload_bytes ? stats.avg_payload_bytes + ' B' : '0 B';
-                
+
                 // Load devices
                 const devicesRes = await fetch('/api/snmp/devices');
                 const devicesData = await devicesRes.json();
-                
+
                 const container = document.getElementById('device-container');
                 if (devicesData.devices && devicesData.devices.length > 0) {
                     container.innerHTML = devicesData.devices.map(device => `
@@ -195,11 +195,11 @@ DASHBOARD_HTML = """
                 } else {
                     container.innerHTML = '<p style="color: #666;">No devices found. Waiting for SNMP telemetry...</p>';
                 }
-                
+
                 document.getElementById('last-update').textContent = new Date().toLocaleString();
             } catch (error) {
                 console.error('Error loading data:', error);
-                document.getElementById('device-container').innerHTML = 
+                document.getElementById('device-container').innerHTML =
                     '<p style="color: #ff4444;">Error loading data. Check console for details.</p>';
             }
         }
@@ -214,7 +214,8 @@ DASHBOARD_HTML = """
 </html>
 """
 
-@snmp_test_bp.route('/dashboard')
+
+@snmp_test_bp.route("/dashboard")
 def dashboard():
     """SNMP Telemetry Dashboard"""
     return render_template_string(DASHBOARD_HTML)

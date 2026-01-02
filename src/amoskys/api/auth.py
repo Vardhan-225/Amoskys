@@ -38,9 +38,9 @@ logger = get_logger(__name__)
 
 # Check if email verification should be disabled for dev
 DEV_MODE = os.environ.get("FLASK_DEBUG", "").lower() == "true"
-REQUIRE_EMAIL_VERIFICATION = os.environ.get(
-    "AMOSKYS_REQUIRE_EMAIL_VERIFICATION", "true"
-).lower() != "false"
+REQUIRE_EMAIL_VERIFICATION = (
+    os.environ.get("AMOSKYS_REQUIRE_EMAIL_VERIFICATION", "true").lower() != "false"
+)
 
 # In dev mode, default to no email verification unless explicitly set
 if DEV_MODE and "AMOSKYS_REQUIRE_EMAIL_VERIFICATION" not in os.environ:
@@ -147,7 +147,7 @@ def signup():
             # Send verification email
             try:
                 # Construct verification URL based on request host
-                base_url = request.host_url.rstrip('/')
+                base_url = request.host_url.rstrip("/")
                 verify_url = f"{base_url}/api/auth/verify-email?token={result.verification_token}"
                 send_verification_email(email=email, verify_url=verify_url)
             except Exception as e:

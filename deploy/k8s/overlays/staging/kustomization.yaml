@@ -1,0 +1,109 @@
+# AMOSKYS Staging Environment Overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: amoskys-staging
+
+# No namePrefix - use namespace separation instead
+
+labels:
+  - pairs:
+      environment: staging
+    includeSelectors: false
+
+resources:
+  - ../../base
+
+patches:
+  # Change namespace name for staging environment
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: amoskys-staging
+      - op: add
+        path: /metadata/labels/app.kubernetes.io~1environment
+        value: staging
+    target:
+      kind: Namespace
+      name: amoskys
+
+  # Keep 2 replicas for staging (same as base)
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: amoskys-web
+  
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: amoskys-agent
+  
+  # Moderate HPA for staging
+  - patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 5
+    target:
+      kind: HorizontalPodAutoscaler
+      name: amoskys-web-hpa
+  
+  - patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 8
+    target:
+      kind: HorizontalPodAutoscaler
+      name: amoskys-agent-hpa
+
+  # Use staging storage size
+  - patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 10Gi
+    target:
+      kind: PersistentVolumeClaim
+      name: prometheus-data
+  
+  - patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 2Gi
+    target:
+      kind: PersistentVolumeClaim
+      name: grafana-data
+
+configMapGenerator:
+  - name: amoskys-config
+    behavior: merge
+    literals:
+      - FLASK_DEBUG=false
+      - LOG_LEVEL=INFO
+      - FORCE_HTTPS=true
+      - FLASK_ENV=staging
+      - AMOSKYS_REQUIRE_EMAIL_VERIFICATION=true
+      - SESSION_COOKIE_SECURE=true
+
+secretGenerator:
+  - name: amoskys-secrets
+    behavior: merge
+    literals:
+      - SECRET_KEY=staging-secret-key-replace-me
+      - AGENT_SECRET=staging-agent-secret-replace-me
+
+images:
+  - name: ghcr.io/vardhan-225/amoskys-web
+    newTag: staging
+  - name: ghcr.io/vardhan-225/amoskys-agent
+    newTag: staging

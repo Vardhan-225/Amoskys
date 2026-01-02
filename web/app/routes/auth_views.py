@@ -9,7 +9,7 @@ The actual authentication logic is handled by:
 - AuthService in amoskys.auth.service
 """
 
-from flask import Blueprint, redirect, render_template, request, url_for
+from flask import Blueprint, redirect, render_template, request
 
 auth_views_bp = Blueprint("auth_views", __name__, url_prefix="/auth")
 
@@ -23,7 +23,7 @@ def login():
         # We could validate the session here, but for now just redirect
         # The dashboard will handle invalid sessions
         return redirect("/dashboard")
-    
+
     # Both GET and POST serve the login page
     # POST without JS is handled by action="javascript:void(0)" in the form
     return render_template("auth/login.html")
@@ -35,7 +35,7 @@ def signup():
     session_token = request.cookies.get("amoskys_session")
     if session_token:
         return redirect("/dashboard")
-    
+
     # Both GET and POST serve the signup page
     # POST without JS is handled by action="javascript:void(0)" in the form
     return render_template("auth/signup.html")
@@ -56,7 +56,7 @@ def reset_password():
     if not token:
         # Redirect to forgot password if no token
         return redirect("/auth/forgot-password")
-    
+
     return render_template("auth/reset-password.html")
 
 
@@ -85,7 +85,7 @@ def resend_verification():
 def logout():
     """
     Handle logout via GET request (for links/buttons).
-    
+
     This is a convenience route that redirects to login after logout.
     For programmatic logout, use POST /api/auth/logout instead.
     """

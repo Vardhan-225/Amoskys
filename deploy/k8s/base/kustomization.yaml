@@ -8,6 +8,7 @@ labels:
   - pairs:
       app.kubernetes.io/part-of: amoskys
       app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/version: "1.0.0"
     includeSelectors: false
 
 resources:
@@ -23,7 +24,3 @@ resources:
   - prometheus-deployment.yaml
   - grafana-deployment.yaml
   - grafana-dashboard-cm.yaml
-
-# Common configuration
-commonLabels:
-  app.kubernetes.io/version: "1.0.0"

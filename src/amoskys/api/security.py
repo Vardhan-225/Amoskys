@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import os
 from functools import wraps
-from typing import Optional
 
 from flask import Flask, jsonify, request
 from flask_limiter import Limiter
@@ -65,7 +64,7 @@ def rate_limit_exempt():
 def rate_limit_error_handler(error):
     """Custom error response for rate limit exceeded."""
     logger.warning(
-        f"Rate limit exceeded",
+        "Rate limit exceeded",
         extra={
             "ip_address": request.remote_addr,
             "path": request.path,
@@ -172,9 +171,7 @@ def require_api_key(f):
 
         if not api_key:
             return (
-                jsonify(
-                    {"error": "API key required", "error_code": "MISSING_API_KEY"}
-                ),
+                jsonify({"error": "API key required", "error_code": "MISSING_API_KEY"}),
                 401,
             )
 
@@ -184,9 +181,7 @@ def require_api_key(f):
                 extra={"ip_address": request.remote_addr},
             )
             return (
-                jsonify(
-                    {"error": "Invalid API key", "error_code": "INVALID_API_KEY"}
-                ),
+                jsonify({"error": "Invalid API key", "error_code": "INVALID_API_KEY"}),
                 403,
             )
 
@@ -250,7 +245,7 @@ def init_security(app: Flask) -> None:
         # Strict settings for production
         # NOTE: We disable nonces (content_security_policy_nonce_in=None) to allow
         # 'unsafe-inline' to work. Many templates use inline onclick handlers which
-        # would be blocked if nonces are enabled (CSP spec ignores 'unsafe-inline' 
+        # would be blocked if nonces are enabled (CSP spec ignores 'unsafe-inline'
         # when nonces are present). This is a pragmatic trade-off until all handlers
         # are converted to event listeners.
         Talisman(

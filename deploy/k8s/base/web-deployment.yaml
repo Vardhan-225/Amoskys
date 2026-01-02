@@ -3,7 +3,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: amoskys-web
-  namespace: amoskys
   labels:
     app: amoskys-web
     app.kubernetes.io/name: amoskys
@@ -133,22 +132,11 @@ spec:
       # Graceful shutdown
       terminationGracePeriodSeconds: 30
 ---
-# Service Account
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: amoskys-web
-  namespace: amoskys
-  labels:
-    app.kubernetes.io/name: amoskys
-    app.kubernetes.io/component: web
----
 # Persistent Volume Claim
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: amoskys-data
-  namespace: amoskys
   labels:
     app.kubernetes.io/name: amoskys
     app.kubernetes.io/component: storage
