@@ -7,12 +7,14 @@ visualization of security events, agent status, and system metrics through
 an intelligent neural interface.
 """
 
-from flask import Blueprint, render_template, jsonify, request
-from datetime import datetime, timezone, timedelta
-from ..api.rate_limiter import require_rate_limit
-from ..middleware import require_login, get_current_user
 import json
 import time
+from datetime import datetime, timedelta, timezone
+
+from flask import Blueprint, jsonify, render_template, request
+
+from ..api.rate_limiter import require_rate_limit
+from ..middleware import get_current_user, require_login
 
 # Constants
 UTC_TIMEZONE_SUFFIX = "+00:00"
@@ -22,11 +24,11 @@ dashboard_bp = Blueprint("dashboard", __name__, url_prefix="/dashboard")
 
 # Import dashboard utilities
 from .utils import (
-    get_threat_timeline_data,
-    get_agent_health_summary,
-    get_system_metrics_snapshot,
     calculate_threat_score,
+    get_agent_health_summary,
     get_event_clustering_data,
+    get_system_metrics_snapshot,
+    get_threat_timeline_data,
 )
 
 
@@ -664,10 +666,8 @@ def agent_logs(agent_id):
 @require_rate_limit(max_requests=5, window_seconds=60)
 def restart_all_agents():
     """Restart all agents (with proper shutdown and restart)"""
-    from .agent_control import (
-        stop_agent as stop_agent_fn,
-        start_agent as start_agent_fn,
-    )
+    from .agent_control import start_agent as start_agent_fn
+    from .agent_control import stop_agent as stop_agent_fn
     from .agent_discovery import AGENT_CATALOG
 
     try:

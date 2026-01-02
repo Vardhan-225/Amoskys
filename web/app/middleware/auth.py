@@ -21,11 +21,11 @@ Usage:
 from functools import wraps
 from typing import Optional
 
-from flask import request, redirect, url_for, flash, g, jsonify
+from flask import flash, g, jsonify, redirect, request, url_for
 
 from amoskys.auth import AuthService, User
-from amoskys.db.web_db import get_web_session_context
 from amoskys.common.logging import get_logger
+from amoskys.db.web_db import get_web_session_context
 
 logger = get_logger(__name__)
 

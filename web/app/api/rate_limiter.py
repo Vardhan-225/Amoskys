@@ -11,11 +11,12 @@ Usage:
         return jsonify({'status': 'success'})
 """
 
-from flask import request, jsonify
-from functools import wraps
-from datetime import datetime, timedelta
-from collections import defaultdict
 import logging
+from collections import defaultdict
+from datetime import datetime, timedelta
+from functools import wraps
+
+from flask import jsonify, request
 
 logger = logging.getLogger(__name__)
 

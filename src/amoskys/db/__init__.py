@@ -25,13 +25,7 @@ from datetime import datetime
 from typing import Any, Generator
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import (
-    DeclarativeBase,
-    Mapped,
-    Session,
-    mapped_column,
-    sessionmaker,
-)
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.sql import func
 
 __all__ = [

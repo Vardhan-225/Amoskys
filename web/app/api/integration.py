@@ -4,9 +4,10 @@ API Gateway Integration with Dashboard
 Phase 2.4 - Unified API Access
 """
 
-from flask import Blueprint, jsonify, request
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
+
+from flask import Blueprint, jsonify, request
 
 # Create integration blueprint
 integration_bp = Blueprint("integration", __name__, url_prefix="/v1")
@@ -21,9 +22,9 @@ def dashboard_status():
     try:
         # Import dashboard utilities
         from ..dashboard.utils import (
-            get_live_threats_data,
             get_live_agents_data,
             get_live_metrics_data,
+            get_live_threats_data,
             get_neural_readiness_status,
         )
 
@@ -71,10 +72,10 @@ def dashboard_data_summary():
     """Get comprehensive dashboard data summary"""
     try:
         from ..dashboard.utils import (
-            get_live_threats_data,
+            calculate_threat_score,
             get_live_agents_data,
             get_live_metrics_data,
-            calculate_threat_score,
+            get_live_threats_data,
             get_neural_readiness_status,
         )
 
@@ -210,15 +211,14 @@ def unified_system_status():
     """Unified system status combining API Gateway and Dashboard data"""
     try:
         # Get dashboard data
-        from ..dashboard.utils import (
-            get_live_threats_data,
-            get_live_agents_data,
-            get_live_metrics_data,
-            get_neural_readiness_status,
-        )
-
         # Get API gateway data
         from ..api.system import system_health
+        from ..dashboard.utils import (
+            get_live_agents_data,
+            get_live_metrics_data,
+            get_live_threats_data,
+            get_neural_readiness_status,
+        )
 
         dashboard_data = {
             "threats": get_live_threats_data(),

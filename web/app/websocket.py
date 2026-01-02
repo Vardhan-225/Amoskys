@@ -4,17 +4,19 @@ WebSocket Handler for Real-time Dashboard Updates
 Phase 2.4 Implementation - Fixed Version
 """
 
-from flask_socketio import SocketIO, emit, join_room, leave_room
+import logging
 import time
 import uuid
 from threading import Thread
-import logging
+
+from flask_socketio import SocketIO, emit, join_room, leave_room
+
 from .dashboard.utils import (
-    get_live_threats_data,
-    get_live_agents_data,
-    get_live_metrics_data,
     calculate_threat_score,
     get_event_clustering_data,
+    get_live_agents_data,
+    get_live_metrics_data,
+    get_live_threats_data,
     get_neural_readiness_status,
 )
 

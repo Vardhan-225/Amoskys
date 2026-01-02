@@ -3,12 +3,14 @@ AMOSKYS API Agents Module
 Agent registration, heartbeat, and status management
 """
 
-from flask import Blueprint, request, jsonify, g
+import platform
 from datetime import datetime, timezone
+
+import psutil
+from flask import Blueprint, g, jsonify, request
+
 from .agent_auth import require_auth
 from .rate_limiter import require_rate_limit
-import psutil
-import platform
 
 agents_bp = Blueprint("agents", __name__, url_prefix="/agents")
 

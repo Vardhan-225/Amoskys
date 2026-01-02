@@ -28,8 +28,8 @@ from amoskys.auth import AuthService, AuthServiceConfig
 from amoskys.common.logging import get_logger
 from amoskys.db.web_db import get_web_session_context as get_session_context
 from amoskys.notifications.email import (
-    send_verification_email,
     send_password_reset_email,
+    send_verification_email,
 )
 
 __all__ = ["auth_bp"]

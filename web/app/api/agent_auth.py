@@ -3,12 +3,13 @@ AMOSKYS API Authentication Module
 JWT-based authentication with role-based access control
 """
 
-from flask import Blueprint, request, jsonify, current_app, g
-from functools import wraps
-import jwt
 import hmac
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
+from functools import wraps
+from typing import Any, Dict, Optional
+
+import jwt
+from flask import Blueprint, current_app, g, jsonify, request
 
 auth_bp = Blueprint("agent_auth", __name__, url_prefix="/agent-auth")
 

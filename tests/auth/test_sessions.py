@@ -26,13 +26,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy.orm import sessionmaker
 
-from amoskys.auth.models import (
-    AuditEventType,
-    AuthAuditLog,
-    Session,
-    User,
-    UserRole,
-)
+from amoskys.auth.models import AuditEventType, AuthAuditLog, Session, User, UserRole
 from amoskys.auth.password import hash_password
 from amoskys.auth.sessions import (
     SessionConfig,

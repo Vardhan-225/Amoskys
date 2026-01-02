@@ -12,6 +12,7 @@ For development use:
 
 import os
 import sys
+
 from app import create_app
 
 # Create the Flask application instance with SocketIO

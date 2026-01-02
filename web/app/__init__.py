@@ -5,11 +5,12 @@ Phase 2.4 - Dashboard Integration
 Phase 1.1 - Unified Error Handling & Structured Logging
 """
 
-from flask import Flask, render_template, request
-from werkzeug.middleware.proxy_fix import ProxyFix
 import logging
 import os
 import sys
+
+from flask import Flask, render_template, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 def create_app():
@@ -102,8 +103,8 @@ def create_app():
 
     # Initialize Prometheus metrics (Production monitoring)
     from .api.prometheus_metrics import (
-        prometheus_bp,
         init_metrics_middleware,
+        prometheus_bp,
         start_metrics_server,
     )
 

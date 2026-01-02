@@ -3,12 +3,14 @@ AMOSKYS API System Module
 System health, metrics, and administrative endpoints
 """
 
-from flask import Blueprint, request, jsonify
+import platform
 from datetime import datetime, timezone
+
+import psutil
+from flask import Blueprint, jsonify, request
+
 from .agent_auth import require_auth
 from .rate_limiter import require_rate_limit
-import psutil
-import platform
 
 system_bp = Blueprint("system", __name__, url_prefix="/system")
 
@@ -193,7 +195,7 @@ def system_metrics():
 def system_status():
     """AMOSKYS platform status and component health"""
     from ..api.agents import AGENT_REGISTRY
-    from ..api.events import EVENT_STORE, EVENT_STATS
+    from ..api.events import EVENT_STATS, EVENT_STORE
 
     # Calculate active agents
     current_time = datetime.now(timezone.utc)

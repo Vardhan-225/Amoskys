@@ -3,15 +3,17 @@ AMOSKYS Agent Control and Auto-Start Management
 Provides lifecycle management for discovered agents with health monitoring
 """
 
-import subprocess
-import psutil
 import os
-import time
-import signal
 import platform
-from pathlib import Path
-from typing import Dict, List, Any, Optional
+import signal
+import subprocess
+import time
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import psutil
+
 from .agent_discovery import AGENT_CATALOG, get_platform_name
 
 # Agent process tracking

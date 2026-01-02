@@ -3,10 +3,11 @@ AMOSKYS SNMP Telemetry API
 Fetches and displays SNMP device metrics from EventBus
 """
 
-from flask import Blueprint, jsonify, request
-from datetime import datetime, timedelta
-import sqlite3
 import os
+import sqlite3
+from datetime import datetime, timedelta
+
+from flask import Blueprint, jsonify, request
 
 snmp_bp = Blueprint("snmp", __name__, url_prefix="/api/snmp")
 

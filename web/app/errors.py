@@ -14,7 +14,7 @@ Features:
 
 from typing import Tuple
 
-from flask import Flask, Response, jsonify, request, render_template
+from flask import Flask, Response, jsonify, render_template, request
 from werkzeug.exceptions import HTTPException
 
 from amoskys.common.exceptions import (

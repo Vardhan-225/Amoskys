@@ -6,23 +6,23 @@ Runs on a separate port (9102) to avoid auth requirements.
 """
 
 import os
-import time
 import threading
+import time
 from functools import wraps
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from flask import Blueprint, Response, g, request
 
 try:
     from prometheus_client import (
+        CONTENT_TYPE_LATEST,
         REGISTRY,
+        CollectorRegistry,
         Counter,
         Gauge,
         Histogram,
         Info,
         generate_latest,
-        CONTENT_TYPE_LATEST,
-        CollectorRegistry,
     )
 
     PROMETHEUS_AVAILABLE = True

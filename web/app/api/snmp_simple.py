@@ -2,10 +2,11 @@
 Simple SNMP Telemetry API - Queries WAL database directly
 """
 
-from flask import Blueprint, jsonify
-from datetime import datetime
-import sqlite3
 import os
+import sqlite3
+from datetime import datetime
+
+from flask import Blueprint, jsonify
 
 snmp_simple_bp = Blueprint("snmp_simple", __name__, url_prefix="/snmp")
 

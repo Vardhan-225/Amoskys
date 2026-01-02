@@ -21,7 +21,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "web"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from app import create_app
-from amoskys.auth.models import User, UserRole, AuditEventType, AuthAuditLog
+
+from amoskys.auth.models import AuditEventType, AuthAuditLog, User, UserRole
 from amoskys.auth.password import hash_password
 from amoskys.db import get_session_context
 

@@ -62,10 +62,7 @@ from amoskys.auth.sessions import (
     revoke_session,
     validate_session,
 )
-from amoskys.auth.tokens import (
-    generate_token,
-    hash_token,
-)
+from amoskys.auth.tokens import generate_token, hash_token
 from amoskys.common.logging import get_logger
 
 __all__ = [

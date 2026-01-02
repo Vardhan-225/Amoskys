@@ -3,11 +3,13 @@ AMOSKYS Peripheral Telemetry API
 Fetches and displays USB/Bluetooth/peripheral device events
 """
 
-from flask import Blueprint, jsonify, request
-from datetime import datetime, timedelta
-from .rate_limiter import require_rate_limit
-import sqlite3
 import os
+import sqlite3
+from datetime import datetime, timedelta
+
+from flask import Blueprint, jsonify, request
+
+from .rate_limiter import require_rate_limit
 
 peripheral_bp = Blueprint(
     "peripheral_telemetry", __name__, url_prefix="/peripheral-telemetry"

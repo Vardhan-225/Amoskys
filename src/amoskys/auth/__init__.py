@@ -33,32 +33,6 @@ Usage:
     from amoskys.auth import User, Session
 """
 
-# Tokens (P3-004)
-from amoskys.auth.tokens import (
-    generate_api_key,
-    generate_backup_codes,
-    generate_numeric_code,
-    generate_token,
-    generate_token_with_expiry,
-    hash_token,
-    verify_token,
-)
-
-# Password hashing (P3-002)
-from amoskys.auth.password import (
-    hash_password,
-    needs_rehash,
-    verify_password,
-)
-
-# Password policy (P3-003)
-from amoskys.auth.password_policy import (
-    PasswordPolicy,
-    PasswordValidationResult,
-    is_common_password,
-    validate_password,
-)
-
 # Models (P3-001)
 from amoskys.auth.models import (
     AuditEventType,
@@ -69,6 +43,27 @@ from amoskys.auth.models import (
     Session,
     User,
     UserRole,
+)
+
+# Password hashing (P3-002)
+from amoskys.auth.password import hash_password, needs_rehash, verify_password
+
+# Password policy (P3-003)
+from amoskys.auth.password_policy import (
+    PasswordPolicy,
+    PasswordValidationResult,
+    is_common_password,
+    validate_password,
+)
+
+# Auth Service (P3-007+)
+from amoskys.auth.service import (
+    AuthResult,
+    AuthService,
+    AuthServiceConfig,
+    LoginResult,
+    PasswordResetResult,
+    SignupResult,
 )
 
 # Session management (P3-005)
@@ -86,14 +81,15 @@ from amoskys.auth.sessions import (
     validate_session,
 )
 
-# Auth Service (P3-007+)
-from amoskys.auth.service import (
-    AuthResult,
-    AuthService,
-    AuthServiceConfig,
-    LoginResult,
-    PasswordResetResult,
-    SignupResult,
+# Tokens (P3-004)
+from amoskys.auth.tokens import (
+    generate_api_key,
+    generate_backup_codes,
+    generate_numeric_code,
+    generate_token,
+    generate_token_with_expiry,
+    hash_token,
+    verify_token,
 )
 
 __all__ = [

@@ -20,15 +20,15 @@ Security Features:
 import os
 from typing import Any, Dict, Optional
 
-from flask import Blueprint, request, jsonify, make_response
+from flask import Blueprint, jsonify, make_response, request
 from sqlalchemy.exc import SQLAlchemyError
 
 from amoskys.auth.service import AuthService
-from amoskys.db.web_db import get_web_session_context
 from amoskys.common.logging import get_logger
+from amoskys.db.web_db import get_web_session_context
 from amoskys.notifications.email import (
-    send_verification_email,
     send_password_reset_email,
+    send_verification_email,
 )
 
 logger = get_logger(__name__)

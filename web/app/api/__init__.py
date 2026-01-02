@@ -13,18 +13,18 @@ api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 # Import API routes after blueprint creation
 from .agent_auth import auth_bp as agent_auth_bp
-from .user_auth import user_auth_bp  # User authentication (Phase 3)
 from .agents import agents_bp
-from .events import events_bp
-from .system import system_bp
-from .integration import integration_bp
-from .snmp_simple import snmp_simple_bp  # Simple SNMP telemetry API
-from .process_telemetry import process_bp  # Process telemetry API
-from .peripheral_telemetry import peripheral_bp  # Peripheral telemetry API
 from .database_manager import database_manager_bp  # Database manager API
-from .health import health_bp  # Health API v1 for Command Center
-from .telemetry import telemetry_bp  # Real-time telemetry from EventBus WAL
 from .docs import generate_openapi_spec
+from .events import events_bp
+from .health import health_bp  # Health API v1 for Command Center
+from .integration import integration_bp
+from .peripheral_telemetry import peripheral_bp  # Peripheral telemetry API
+from .process_telemetry import process_bp  # Process telemetry API
+from .snmp_simple import snmp_simple_bp  # Simple SNMP telemetry API
+from .system import system_bp
+from .telemetry import telemetry_bp  # Real-time telemetry from EventBus WAL
+from .user_auth import user_auth_bp  # User authentication (Phase 3)
 
 # Register sub-blueprints
 api_bp.register_blueprint(agent_auth_bp)  # Agent authentication (/api/agent-auth)

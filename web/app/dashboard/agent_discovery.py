@@ -3,12 +3,13 @@ AMOSKYS Agent Discovery and Monitoring
 Discovers running agents, monitors health, and maps to neural architecture
 """
 
-import psutil
-import socket
 import platform
-from pathlib import Path
+import socket
 from datetime import datetime, timezone
-from typing import Dict, List, Any
+from pathlib import Path
+from typing import Any, Dict, List
+
+import psutil
 
 # Comprehensive Agent Registry
 AGENT_CATALOG = {

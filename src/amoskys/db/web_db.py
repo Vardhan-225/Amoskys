@@ -177,8 +177,8 @@ def init_web_db() -> None:
     - Deployed agents
     """
     # Import models to register them with Base
-    from amoskys.auth import models as auth_models  # noqa: F401
     from amoskys.agents import models as agent_models  # noqa: F401
+    from amoskys.auth import models as auth_models  # noqa: F401
 
     Base.metadata.create_all(bind=get_web_engine())
 
