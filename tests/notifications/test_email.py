@@ -227,7 +227,7 @@ class TestTemplateRendering:
             },
         )
 
-        assert "verify_email.html" is not None
+        assert "verify_email.html" != ""
         assert "https://app.amoskys.com/verify?token=abc123" in html
         assert "user@example.com" in html
         assert "2024" in html

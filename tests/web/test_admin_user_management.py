@@ -24,7 +24,7 @@ from app import create_app
 
 from amoskys.auth.models import AuditEventType, AuthAuditLog, User, UserRole
 from amoskys.auth.password import hash_password
-from amoskys.db import get_session_context
+from amoskys.db import get_session_context, init_db
 
 
 @pytest.fixture
@@ -43,6 +43,9 @@ def app():
 
     app_instance.config["TESTING"] = True
     app_instance.config["WTF_CSRF_ENABLED"] = False  # Disable CSRF for testing
+
+    # Initialize database tables
+    init_db()
 
     return app_instance
 

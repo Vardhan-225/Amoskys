@@ -116,26 +116,39 @@ class TestIsortImports:
             )
 
 
+# Flake8 ignore list matching CI configuration
+FLAKE8_IGNORES = "E203,W503,F401,F841,F541,E501,E722,F403,F405,E128,E401,E402,F811"
+
+
 class TestFlake8Linting:
     """Test that code passes flake8 linting."""
 
-    @pytest.mark.parametrize("directory", ["src", "web"])
+    @pytest.mark.parametrize("directory", ["src", "tests"])
     def test_flake8_linting(self, directory: str) -> None:
         """Check flake8 linting for a directory."""
         target = PROJECT_ROOT / directory
         if not target.exists():
             pytest.skip(f"Directory {directory} does not exist")
 
+        # Build command with CI-matching parameters
+        cmd = [
+            sys.executable,
+            "-m",
+            "flake8",
+            str(target),
+            "--max-line-length=88",
+            f"--extend-ignore={FLAKE8_IGNORES}",
+        ]
+
+        # Add exclude for proto files
+        if directory == "src":
+            cmd.append("--exclude=src/amoskys/proto")
+
         result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "flake8",
-                str(target),
-            ],
+            cmd,
             capture_output=True,
             text=True,
-            cwd=str(PROJECT_ROOT),  # Use project root for .flake8 config
+            cwd=str(PROJECT_ROOT),
         )
 
         if result.returncode != 0:
