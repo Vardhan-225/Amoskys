@@ -1,0 +1,11 @@
+# AMOSKYS Kubernetes Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: amoskys
+  labels:
+    app.kubernetes.io/name: amoskys
+    app.kubernetes.io/part-of: amoskys-platform
+    app.kubernetes.io/managed-by: kustomize
+  annotations:
+    description: "AMOSKYS Neural Security Command Platform"

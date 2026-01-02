@@ -1,0 +1,77 @@
+# AMOSKYS Production Pod Security Standards
+# Using Pod Security Admission (PSA) labels for namespace
+# Note: PodSecurityPolicy is deprecated in K8s 1.21+ and removed in 1.25+
+# This file applies Pod Security Standards via namespace labels
+---
+# Namespace with restricted Pod Security Standards
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: amoskys
+  labels:
+    app.kubernetes.io/name: amoskys
+    app.kubernetes.io/environment: production
+    # Pod Security Standards - enforce restricted baseline
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+---
+# Resource Quota for production namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: amoskys-quota
+  namespace: amoskys
+spec:
+  hard:
+    # Limit total resources in namespace
+    requests.cpu: "20"
+    requests.memory: 40Gi
+    limits.cpu: "40"
+    limits.memory: 80Gi
+    # Limit number of objects
+    pods: "100"
+    services: "20"
+    secrets: "50"
+    configmaps: "50"
+    persistentvolumeclaims: "20"
+    # Limit services by type
+    services.loadbalancers: "2"
+    services.nodeports: "0"
+---
+# Limit Range for default resource constraints
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: amoskys-limits
+  namespace: amoskys
+spec:
+  limits:
+    # Default limits for containers
+    - type: Container
+      default:
+        cpu: 500m
+        memory: 512Mi
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      min:
+        cpu: 10m
+        memory: 32Mi
+      max:
+        cpu: 4
+        memory: 8Gi
+    # Limits for pods
+    - type: Pod
+      max:
+        cpu: 8
+        memory: 16Gi
+    # Limits for PVCs
+    - type: PersistentVolumeClaim
+      min:
+        storage: 1Gi
+      max:
+        storage: 100Gi

@@ -9,6 +9,7 @@ from flask_socketio import SocketIO
 from werkzeug.middleware.proxy_fix import ProxyFix
 import logging
 import os
+import sys
 
 
 def create_app():
@@ -29,6 +30,7 @@ def create_app():
         )
     app.config['SECRET_KEY'] = secret_key
     app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.config['TESTING'] = os.environ.get('TESTING', 'False').lower() == 'true'
     
     # Apply ProxyFix middleware for nginx/Cloudflare reverse proxy
     # This tells Flask to trust X-Forwarded-* headers for:
@@ -86,6 +88,21 @@ def create_app():
     # Initialize security features (Phase 3)
     from amoskys.api.security import init_security
     init_security(app)
+    
+    # Initialize Prometheus metrics (Production monitoring)
+    from .api.prometheus_metrics import prometheus_bp, init_metrics_middleware, start_metrics_server
+    app.register_blueprint(prometheus_bp)
+    init_metrics_middleware(app)
+    
+    # Start dedicated metrics server on port 9102 (for Prometheus scraping)
+    metrics_port = int(os.environ.get('PROMETHEUS_METRICS_PORT', '9102'))
+    # Don't start metrics server during tests (port conflicts)
+    is_testing = app.config['TESTING'] or 'pytest' in sys.modules
+    if not is_testing:
+        try:
+            start_metrics_server(port=metrics_port)
+        except Exception as e:
+            logging.warning(f"Could not start metrics server on port {metrics_port}: {e}")
 
     # Initialize SocketIO for real-time updates
     from .websocket import init_socketio

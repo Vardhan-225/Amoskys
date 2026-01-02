@@ -1,0 +1,161 @@
+# AMOSKYS Web Application Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: amoskys-web
+  namespace: amoskys
+  labels:
+    app: amoskys-web
+    app.kubernetes.io/name: amoskys
+    app.kubernetes.io/component: web
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: amoskys-web
+  template:
+    metadata:
+      labels:
+        app: amoskys-web
+        app.kubernetes.io/name: amoskys
+        app.kubernetes.io/component: web
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: amoskys-web
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      
+      # Anti-affinity to spread pods across nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - amoskys-web
+                topologyKey: kubernetes.io/hostname
+      
+      containers:
+        - name: web
+          image: ghcr.io/vardhan-225/amoskys-web:latest
+          imagePullPolicy: Always
+          
+          ports:
+            - name: http
+              containerPort: 5001
+              protocol: TCP
+            - name: metrics
+              containerPort: 9102
+              protocol: TCP
+          
+          envFrom:
+            - configMapRef:
+                name: amoskys-config
+            - secretRef:
+                name: amoskys-secrets
+          
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health/ping
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ping
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: logs
+              mountPath: /logs
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+      
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: amoskys-data
+        - name: logs
+          emptyDir: {}
+      
+      # Graceful shutdown
+      terminationGracePeriodSeconds: 30
+---
+# Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: amoskys-web
+  namespace: amoskys
+  labels:
+    app.kubernetes.io/name: amoskys
+    app.kubernetes.io/component: web
+---
+# Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: amoskys-data
+  namespace: amoskys
+  labels:
+    app.kubernetes.io/name: amoskys
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard  # Adjust for your cluster

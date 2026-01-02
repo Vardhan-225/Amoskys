@@ -1,0 +1,29 @@
+# AMOSKYS Base Kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: amoskys
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: amoskys
+      app.kubernetes.io/managed-by: kustomize
+    includeSelectors: false
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - serviceaccount.yaml
+  - rbac.yaml
+  - web-deployment.yaml
+  - web-service.yaml
+  - agent-deployment.yaml
+  - agent-service.yaml
+  - prometheus-deployment.yaml
+  - grafana-deployment.yaml
+  - grafana-dashboard-cm.yaml
+
+# Common configuration
+commonLabels:
+  app.kubernetes.io/version: "1.0.0"

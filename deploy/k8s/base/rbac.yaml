@@ -1,0 +1,116 @@
+# AMOSKYS RBAC Configuration
+---
+# Role for Prometheus to scrape metrics from pods
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus
+  namespace: amoskys
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/proxy
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+      - pods/log
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus
+  namespace: amoskys
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: amoskys
+---
+# ClusterRole for Prometheus to scrape cluster-wide metrics
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: amoskys-prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/proxy
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources:
+      - ingresses
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: amoskys-prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: amoskys-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: amoskys
+---
+# Role for web application (minimal permissions)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: amoskys-web
+  namespace: amoskys
+  labels:
+    app.kubernetes.io/name: amoskys
+    app.kubernetes.io/component: web
+rules:
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: amoskys-web
+  namespace: amoskys
+  labels:
+    app.kubernetes.io/name: amoskys
+    app.kubernetes.io/component: web
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: amoskys-web
+subjects:
+  - kind: ServiceAccount
+    name: amoskys-web
+    namespace: amoskys
