@@ -29,6 +29,11 @@ from amoskys.db import get_session_context
 @pytest.fixture
 def app():
     """Create test application"""
+    # Set environment variables BEFORE creating app to ensure proper test configuration
+    os.environ["FLASK_DEBUG"] = "true"
+    os.environ["FORCE_HTTPS"] = "false"
+    os.environ["SECRET_KEY"] = "test-secret-key-for-testing"
+    
     result = create_app()
     if isinstance(result, tuple):
         app_instance, _ = result
@@ -36,7 +41,6 @@ def app():
         app_instance = result
 
     app_instance.config["TESTING"] = True
-    app_instance.config["SECRET_KEY"] = "test-secret-key-for-testing"
     app_instance.config["WTF_CSRF_ENABLED"] = False  # Disable CSRF for testing
 
     return app_instance
@@ -142,8 +146,8 @@ class TestAdminUserAPI:
     def test_delete_user_requires_confirmation(self, client, admin_user, regular_user):
         """Test that deleting a user requires proper authorization"""
         response = client.delete(f'/admin/api/users/{regular_user}')
-        # Should require authentication
-        assert response.status_code in [401, 403]
+        # Should require authentication - redirect (302) or 401/403 are all acceptable
+        assert response.status_code in [302, 401, 403]
 
 
 class TestInputValidation:

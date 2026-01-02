@@ -28,9 +28,13 @@ except ImportError:
 @pytest.fixture
 def app():
     """Create test application"""
+    # Set environment variables BEFORE creating app to ensure proper test configuration
+    os.environ["FLASK_DEBUG"] = "true"
+    os.environ["FORCE_HTTPS"] = "false"
+    os.environ["SECRET_KEY"] = "test-secret-key"
+    
     app_instance, _ = create_app()  # Unpack the tuple
     app_instance.config["TESTING"] = True
-    app_instance.config["SECRET_KEY"] = "test-secret-key"
     return app_instance
 
 
@@ -43,9 +47,9 @@ def client(app):
 @pytest.fixture
 def auth_headers(client):
     """Get authentication headers for testing"""
-    # Login as flowagent-001
+    # Login as flowagent-001 using the agent auth endpoint
     response = client.post(
-        "/api/auth/login",
+        "/api/agent-auth/login",
         json={
             "agent_id": "flowagent-001",
             "secret": "amoskys-neural-flow-secure-key-2025",
@@ -53,7 +57,7 @@ def auth_headers(client):
         headers={"Content-Type": "application/json"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, f"Login failed: {response.data}"
     data = json.loads(response.data)
     token = data["token"]
 
@@ -63,14 +67,14 @@ def auth_headers(client):
 @pytest.fixture
 def admin_headers(client):
     """Get admin authentication headers for testing"""
-    # Login as admin
+    # Login as admin using the agent auth endpoint
     response = client.post(
-        "/api/auth/login",
+        "/api/agent-auth/login",
         json={"agent_id": "admin", "secret": "amoskys-neural-admin-secure-key-2025"},
         headers={"Content-Type": "application/json"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, f"Admin login failed: {response.data}"
     data = json.loads(response.data)
     token = data["token"]
 
@@ -78,12 +82,12 @@ def admin_headers(client):
 
 
 class TestAuthentication:
-    """Test authentication endpoints"""
+    """Test authentication endpoints (agent auth)"""
 
     def test_login_success(self, client):
-        """Test successful login"""
+        """Test successful login with agent credentials"""
         response = client.post(
-            "/api/auth/login",
+            "/api/agent-auth/login",
             json={
                 "agent_id": "flowagent-001",
                 "secret": "amoskys-neural-flow-secure-key-2025",
@@ -101,7 +105,7 @@ class TestAuthentication:
     def test_login_invalid_credentials(self, client):
         """Test login with invalid credentials"""
         response = client.post(
-            "/api/auth/login",
+            "/api/agent-auth/login",
             json={"agent_id": "invalid", "secret": "wrong-secret"},
             headers={"Content-Type": "application/json"},
         )
@@ -113,7 +117,7 @@ class TestAuthentication:
     def test_login_missing_fields(self, client):
         """Test login with missing fields"""
         response = client.post(
-            "/api/auth/login",
+            "/api/agent-auth/login",
             json={"agent_id": "flowagent-001"},
             headers={"Content-Type": "application/json"},
         )
@@ -124,7 +128,7 @@ class TestAuthentication:
 
     def test_verify_token(self, client, auth_headers):
         """Test token verification"""
-        response = client.post("/api/auth/verify", headers=auth_headers)
+        response = client.post("/api/agent-auth/verify", headers=auth_headers)
 
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -133,7 +137,7 @@ class TestAuthentication:
 
     def test_refresh_token(self, client, auth_headers):
         """Test token refresh"""
-        response = client.post("/api/auth/refresh", headers=auth_headers)
+        response = client.post("/api/agent-auth/refresh", headers=auth_headers)
 
         assert response.status_code == 200
         data = json.loads(response.data)

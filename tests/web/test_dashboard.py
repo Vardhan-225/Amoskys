@@ -19,13 +19,17 @@ from app import create_app
 @pytest.fixture
 def app():
     """Create test application"""
+    # Set environment variables BEFORE creating app to ensure proper test configuration
+    os.environ["FLASK_DEBUG"] = "true"
+    os.environ["FORCE_HTTPS"] = "false"
+    os.environ["SECRET_KEY"] = "test-secret-key"
+    
     result = create_app()
     if isinstance(result, tuple):
         app_instance, _ = result
     else:
         app_instance = result
     app_instance.config["TESTING"] = True
-    app_instance.config["SECRET_KEY"] = "test-secret-key"
     return app_instance
 
 

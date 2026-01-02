@@ -20,6 +20,15 @@ if str(src_path) not in current_pythonpath:
     else:
         os.environ['PYTHONPATH'] = str(src_path)
 
+# =============================================================================
+# CRITICAL: Set test environment variables BEFORE any Flask app imports
+# This ensures security features (like HTTPS redirection) are disabled for tests
+# =============================================================================
+os.environ.setdefault("FLASK_DEBUG", "true")
+os.environ.setdefault("FORCE_HTTPS", "false")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest")
+os.environ.setdefault("TESTING", "true")
+
 def pytest_configure(config):
     """Configure pytest with AMOSKYS-specific settings"""
     config.addinivalue_line(
