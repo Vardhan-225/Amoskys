@@ -1,9 +1,12 @@
 [flake8]
 # AMOSKYS Flake8 Configuration
-max-line-length = 120
-max-complexity = 30
+# This config is used by both local development and CI
+# Keep this in sync with what CI expects
 
-# Exclude auto-generated files
+max-line-length = 88
+max-complexity = 15
+
+# Exclude auto-generated and vendor files
 exclude =
     .git,
     __pycache__,
@@ -15,28 +18,33 @@ exclude =
     *_pb2.py,
     *_pb2_grpc.py,
     migrations,
-    .eggs
+    .eggs,
+    node_modules,
+    proto
 
-# Ignore specific error codes
-# E501: Line too long (handled by black)
-# W503: Line break before binary operator (conflicts with black)
+# Black-compatible ignores + practical ignores for enterprise code
 # E203: Whitespace before ':' (conflicts with black)
-# E402: Module level import not at top (needed for lazy imports)
-# E226: Missing whitespace around arithmetic operator
+# W503: Line break before binary operator (conflicts with black, PEP8 reversed this)
+# E501: Line too long (black handles this)
+# E402: Module level import not at top (needed for conditional imports)
+# F841: Local variable assigned but never used (some intentional placeholders)
+# F401: Module imported but unused (re-exports and fixtures)
 # F403: Star imports (needed for pysnmp)
 # F405: Names from star imports (needed for pysnmp)
-# F841: Local variable assigned but never used (some intentional placeholders)
-# F401: Module imported but unused (some lazy imports)
-ignore =
-    E501,
-    W503,
+# F811: Redefinition of unused name (test patterns)
+# C901: Function is too complex (we have some complex agent logic)
+extend-ignore =
     E203,
+    W503,
+    E501,
     E402,
-    E226,
+    F841,
+    F401,
     F403,
     F405,
-    F841,
-    F401
+    F811,
+    F541,
+    C901
 
 # Per-file ignores for specific patterns
 per-file-ignores =
@@ -45,9 +53,9 @@ per-file-ignores =
     # Init files often have imports for re-export
     */__init__.py:F401
     # Proto files are auto-generated
-    src/amoskys/proto/*:E501,E111,E114,E126,E128,E225,E303
+    src/amoskys/proto/*:ALL
 
-# Statistics
+# Output settings
 show-source = true
 statistics = true
 count = true

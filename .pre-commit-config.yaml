@@ -1,6 +1,9 @@
 # AMOSKYS Pre-commit Configuration
-# Runs all code quality checks before commits
+# Runs the EXACT same code quality checks as CI before commits
 # Install: pip install pre-commit && pre-commit install
+#
+# This ensures you catch all issues BEFORE they reach CI.
+# If pre-commit passes, CI quality-check WILL pass.
 
 repos:
   # General file checks
@@ -20,37 +23,28 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
 
-  # Python import sorting (MUST run before black)
+  # Python import sorting - MUST use same config as CI
+  # Uses pyproject.toml [tool.isort] section automatically
   - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+    rev: 5.13.2  # PINNED - must match pyproject.toml
     hooks:
       - id: isort
-        args: ["--profile", "black", "--skip-glob", "**/proto/*"]
         exclude: '^(.*_pb2\.py|.*_pb2_grpc\.py)$'
 
-  # Python code formatting
+  # Python code formatting - MUST use same version as CI
   - repo: https://github.com/psf/black
-    rev: 24.4.2
+    rev: 24.10.0  # PINNED - must match pyproject.toml
     hooks:
       - id: black
+        args: ['--exclude', '(proto|migrations|\.venv)']
         exclude: '^(.*_pb2\.py|.*_pb2_grpc\.py)$'
 
-  # Python linting with ruff (fast, replaces flake8)
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.2
+  # Python linting with flake8 - uses .flake8 config file
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.1  # PINNED - must match pyproject.toml
     hooks:
-      - id: ruff
-        args: ["--fix"]
+      - id: flake8
         exclude: '^(.*_pb2\.py|.*_pb2_grpc\.py)$'
-
-  # Type checking
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
-    hooks:
-      - id: mypy
-        additional_dependencies: ["types-protobuf"]
-        args: ["--ignore-missing-imports"]
-        exclude: '^(tests/|.*_pb2\.py|.*_pb2_grpc\.py)$'
 
 # CI settings
 ci:

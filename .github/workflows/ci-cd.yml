@@ -113,13 +113,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[dev]"
-        pip install flake8
-    - name: Check code formatting
-      run: black --check src/ tests/ --exclude="src/amoskys/proto"
-    - name: Check import sorting
-      run: isort --check-only src/ tests/ --skip-glob="**/proto/*"
+    - name: Check code formatting (black)
+      run: black --check src/ tests/ web/ --exclude="(proto|migrations|\.venv)"
+    - name: Check import sorting (isort)
+      run: isort --check-only --diff src/ tests/ web/
     - name: Lint with flake8
-      run: flake8 src/ tests/ --max-line-length=88 --extend-ignore=E203,W503,F401,F841,F541,E501,E722,F403,F405,E128,E401,E402,F811 --exclude=src/amoskys/proto
+      run: flake8 src/ tests/ web/
     - name: Type check with mypy
       run: |
         pip uninstall amoskys -y || true

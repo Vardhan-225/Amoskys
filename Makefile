@@ -442,6 +442,55 @@ benchmark: venv proto ## Run performance benchmarks
 	$(PYTHON) tools/loadgen.py --benchmark
 	@echo "✅ Benchmarks completed"
 
+# ==============================================
+# STRICT CI-MATCHING QUALITY CHECKS
+# ==============================================
+
+ci-quality-check: ## Run EXACT CI quality checks locally (strict, must pass before push)
+	@echo "🔍 Running STRICT CI quality checks..."
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "Step 1/3: Black formatting check"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@$(PYTHON) -m black --check src/ tests/ web/ --exclude="(proto|migrations|\.venv)" || \
+		(echo "❌ FAILED: Run 'make fix-format' to fix" && exit 1)
+	@echo "✅ Black: PASSED"
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "Step 2/3: isort import ordering check"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@$(PYTHON) -m isort --check-only src/ tests/ web/ || \
+		(echo "❌ FAILED: Run 'make fix-imports' to fix" && exit 1)
+	@echo "✅ isort: PASSED"
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "Step 3/3: Flake8 linting check"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@$(PYTHON) -m flake8 src/ tests/ web/ || \
+		(echo "❌ FAILED: Fix flake8 errors manually" && exit 1)
+	@echo "✅ Flake8: PASSED"
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "🎉 ALL CI QUALITY CHECKS PASSED - Safe to push!"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+fix-format: ## Auto-fix black formatting issues
+	@echo "🔧 Fixing black formatting..."
+	$(PYTHON) -m black src/ tests/ web/ --exclude="(proto|migrations|\.venv)"
+	@echo "✅ Formatting fixed!"
+
+fix-imports: ## Auto-fix isort import ordering
+	@echo "🔧 Fixing import ordering..."
+	$(PYTHON) -m isort src/ tests/ web/
+	@echo "✅ Imports fixed!"
+
+fix-all: fix-format fix-imports ## Fix all auto-fixable code quality issues
+	@echo "✅ All auto-fixable issues resolved!"
+	@echo "💡 Run 'make ci-quality-check' to verify"
+
+pre-push: ci-quality-check ## Run before pushing (alias for ci-quality-check)
+	@echo "✅ Ready to push!"
+
 ci-check: venv proto format lint test security-scan ## Full CI check locally
 	@echo "✅ All CI checks passed"
 

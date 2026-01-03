@@ -1,75 +1,442 @@
-# AMOSKYS Kubernetes Deployment
+# filepath: /Users/athanneeru/Downloads/GitHub/Amoskys/.github/workflows/k8s-deploy.yml
+# AMOSKYS Kubernetes Deployment Pipeline
 name: Kubernetes Deploy
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deploy/k8s/**'
+      - 'deploy/Dockerfile.*'
+      - 'web/**'
+      - 'src/**'
+      - '.github/workflows/k8s-deploy.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'deploy/k8s/**'
+      - 'deploy/Dockerfile.*'
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment'
+        description: 'Deployment environment'
         required: true
         default: 'dev'
         type: choice
-        options: [dev, staging, prod]
-  push:
-    tags: ['v*']
+        options:
+          - dev
+          - staging
+          - prod
+      skip_tests:
+        description: 'Skip tests (emergency deploy)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: '3.11'
 
 jobs:
-  build:
-    name: Build Images
+  # ============================================
+  # Job 1: Validate Kubernetes Manifests
+  # ============================================
+  validate-manifests:
+    name: Validate K8s Manifests
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Install kubeval
+        run: |
+          wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          tar xf kubeval-linux-amd64.tar.gz
+          sudo mv kubeval /usr/local/bin/
+
+      - name: Validate base manifests
+        run: |
+          echo "🔍 Validating base Kustomize configuration..."
+          kustomize build deploy/k8s/base > /tmp/base.yaml
+          echo "✅ Base manifests generated successfully"
+
+      - name: Validate dev overlay
+        run: |
+          echo "🔍 Validating dev overlay..."
+          kustomize build deploy/k8s/overlays/dev > /tmp/dev.yaml
+          kubeval /tmp/dev.yaml --strict --ignore-missing-schemas
+          echo "✅ Dev overlay valid"
+
+      - name: Validate staging overlay
+        run: |
+          echo "🔍 Validating staging overlay..."
+          kustomize build deploy/k8s/overlays/staging > /tmp/staging.yaml
+          kubeval /tmp/staging.yaml --strict --ignore-missing-schemas
+          echo "✅ Staging overlay valid"
+
+      - name: Validate prod overlay
+        run: |
+          echo "🔍 Validating prod overlay..."
+          kustomize build deploy/k8s/overlays/prod > /tmp/prod.yaml
+          kubeval /tmp/prod.yaml --strict --ignore-missing-schemas
+          echo "✅ Prod overlay valid"
+
+      - name: Security scan with kubesec
+        run: |
+          echo "🔒 Running security scan on manifests..."
+          docker run -v /tmp:/tmp kubesec/kubesec:v2 scan /tmp/prod.yaml || true
+          echo "✅ Security scan complete"
+
+      - name: Upload validated manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: k8s-manifests
+          path: /tmp/*.yaml
+          retention-days: 7
+
+  # ============================================
+  # Job 2: Run Tests (unless skipped)
+  # ============================================
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_tests }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,web,agents]"
+
+      - name: Run tests
+        run: |
+          pytest tests/ -v --tb=short -x -q 2>&1 | tail -100
+
+  # ============================================
+  # Job 3: Build and Push Docker Images
+  # ============================================
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [validate-manifests]
     permissions:
       contents: read
       packages: write
     outputs:
-      version: ${{ steps.meta.outputs.version }}
+      web_image: ${{ steps.meta-web.outputs.tags }}
+      agent_image: ${{ steps.meta-agent.outputs.tags }}
+      image_digest: ${{ steps.build-web.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
-      
-      - uses: docker/setup-buildx-action@v3
-      
-      - uses: docker/login-action@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - id: meta
+      - name: Extract metadata for web image
+        id: meta-web
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/amoskys-web
           tags: |
-            type=semver,pattern={{version}}
-            type=sha
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ inputs.environment || 'dev' }}
 
-      - uses: docker/build-push-action@v5
+      - name: Extract metadata for agent image
+        id: meta-agent
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/amoskys-agent
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ inputs.environment || 'dev' }}
+
+      - name: Build and push web image
+        id: build-web
+        uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./deploy/Dockerfile.web
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          file: deploy/Dockerfile.web
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-web.outputs.tags }}
+          labels: ${{ steps.meta-web.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
 
+      - name: Build and push agent image
+        id: build-agent
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/Dockerfile.agent
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-agent.outputs.tags }}
+          labels: ${{ steps.meta-agent.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Generate SBOM
+        if: github.event_name != 'pull_request'
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            anchore/syft:latest \
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/amoskys-web:${{ github.sha }} \
+            -o spdx-json > sbom-web.json || true
+
+      - name: Upload SBOM
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom-*.json
+          retention-days: 30
+
+  # ============================================
+  # Job 4: Deploy to Environment
+  # ============================================
   deploy:
-    name: Deploy
-    needs: build
+    name: Deploy to ${{ inputs.environment || 'dev' }}
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'prod' }}
+    needs: [validate-manifests, build-images, test]
+    if: |
+      always() && 
+      needs.validate-manifests.result == 'success' && 
+      needs.build-images.result == 'success' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
+      github.event_name != 'pull_request'
+    environment:
+      name: ${{ inputs.environment || 'dev' }}
+      url: ${{ steps.deploy.outputs.url }}
     steps:
-      - uses: actions/checkout@v4
-      
-      - uses: azure/setup-kubectl@v4
-      
-      - name: Deploy
-        env:
-          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Configure kubeconfig
         run: |
           mkdir -p ~/.kube
-          echo "$KUBECONFIG_DATA" | base64 -d > ~/.kube/config
-          ENV="${{ github.event.inputs.environment || 'prod' }}"
-          kubectl apply -k deploy/k8s/overlays/$ENV
-          kubectl rollout status deployment/amoskys-web -n amoskys-$ENV --timeout=300s
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Set deployment environment
+        id: env
+        run: |
+          ENV="${{ inputs.environment || 'dev' }}"
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          
+          case $ENV in
+            prod)
+              echo "namespace=amoskys" >> $GITHUB_OUTPUT
+              echo "url=https://amoskys.com" >> $GITHUB_OUTPUT
+              ;;
+            staging)
+              echo "namespace=amoskys-staging" >> $GITHUB_OUTPUT
+              echo "url=https://staging.amoskys.com" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "namespace=amoskys-dev" >> $GITHUB_OUTPUT
+              echo "url=https://dev.amoskys.com" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Update image tags
+        run: |
+          cd deploy/k8s/overlays/${{ steps.env.outputs.environment }}
+          kustomize edit set image \
+            ghcr.io/${{ github.repository_owner }}/amoskys-web=ghcr.io/${{ github.repository_owner }}/amoskys-web:${{ github.sha }} \
+            ghcr.io/${{ github.repository_owner }}/amoskys-agent=ghcr.io/${{ github.repository_owner }}/amoskys-agent:${{ github.sha }}
+
+      - name: Dry run deployment
+        run: |
+          echo "🔍 Dry run deployment to ${{ steps.env.outputs.environment }}..."
+          kustomize build deploy/k8s/overlays/${{ steps.env.outputs.environment }} | \
+            kubectl apply --dry-run=server -f -
+          echo "✅ Dry run successful"
+
+      - name: Deploy to Kubernetes
+        id: deploy
+        run: |
+          echo "🚀 Deploying to ${{ steps.env.outputs.environment }}..."
+          kustomize build deploy/k8s/overlays/${{ steps.env.outputs.environment }} | \
+            kubectl apply -f -
+          
+          echo "⏳ Waiting for rollout..."
+          kubectl rollout status deployment/amoskys-web \
+            -n ${{ steps.env.outputs.namespace }} \
+            --timeout=300s
+          
+          kubectl rollout status deployment/amoskys-agent \
+            -n ${{ steps.env.outputs.namespace }} \
+            --timeout=300s
+          
+          echo "url=${{ steps.env.outputs.url }}" >> $GITHUB_OUTPUT
+          echo "✅ Deployment complete!"
+
+      - name: Verify deployment
+        run: |
+          echo "🔍 Verifying deployment..."
+          kubectl get pods -n ${{ steps.env.outputs.namespace }} -l app.kubernetes.io/name=amoskys
+          kubectl get services -n ${{ steps.env.outputs.namespace }}
+          kubectl get ingress -n ${{ steps.env.outputs.namespace }} || true
+
+      - name: Health check
+        run: |
+          echo "🏥 Running health checks..."
+          # Wait for service to be ready
+          sleep 30
+          
+          # Internal cluster health check
+          kubectl run health-check-${{ github.run_id }} \
+            --rm -i --restart=Never \
+            --image=curlimages/curl:latest \
+            -n ${{ steps.env.outputs.namespace }} \
+            -- curl -sf http://amoskys-web/api/v1/health/ping || echo "Internal health check needs verification"
+
+      - name: Notify success
+        if: success()
+        run: |
+          echo "🎉 Deployment to ${{ steps.env.outputs.environment }} successful!"
+          echo "   URL: ${{ steps.env.outputs.url }}"
+          echo "   Commit: ${{ github.sha }}"
+          echo "   Images: ${{ github.sha }}"
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed, initiating rollback..."
+          kubectl rollout undo deployment/amoskys-web -n ${{ steps.env.outputs.namespace }} || true
+          kubectl rollout undo deployment/amoskys-agent -n ${{ steps.env.outputs.namespace }} || true
+          echo "🔄 Rollback initiated"
+
+  # ============================================
+  # Job 5: Post-deployment validation
+  # ============================================
+  validate-deployment:
+    name: Validate Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: needs.deploy.result == 'success'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Set namespace
+        id: ns
+        run: |
+          ENV="${{ inputs.environment || 'dev' }}"
+          case $ENV in
+            prod) echo "namespace=amoskys" >> $GITHUB_OUTPUT ;;
+            staging) echo "namespace=amoskys-staging" >> $GITHUB_OUTPUT ;;
+            *) echo "namespace=amoskys-dev" >> $GITHUB_OUTPUT ;;
+          esac
+
+      - name: Check pod status
+        run: |
+          echo "📊 Pod Status:"
+          kubectl get pods -n ${{ steps.ns.outputs.namespace }} -o wide
+          
+          echo ""
+          echo "📊 Pod Resource Usage:"
+          kubectl top pods -n ${{ steps.ns.outputs.namespace }} || echo "Metrics not available"
+
+      - name: Check recent events
+        run: |
+          echo "📋 Recent Events:"
+          kubectl get events -n ${{ steps.ns.outputs.namespace }} \
+            --sort-by='.lastTimestamp' | tail -20
+
+      - name: Collect logs on issues
+        if: failure()
+        run: |
+          echo "📜 Collecting logs..."
+          kubectl logs -l app.kubernetes.io/name=amoskys \
+            -n ${{ steps.ns.outputs.namespace }} \
+            --tail=100 --all-containers || true
+
+  # ============================================
+  # Job 6: Cleanup old images
+  # ============================================
+  cleanup:
+    name: Cleanup Old Images
+    runs-on: ubuntu-latest
+    needs: [validate-deployment]
+    if: needs.validate-deployment.result == 'success' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Delete old container images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: amoskys-web
+          package-type: container
+          min-versions-to-keep: 10
+          delete-only-untagged-versions: true
+        continue-on-error: true
+
+      - name: Delete old agent images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: amoskys-agent
+          package-type: container
+          min-versions-to-keep: 10
+          delete-only-untagged-versions: true
+        continue-on-error: true

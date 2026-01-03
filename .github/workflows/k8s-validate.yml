@@ -1,36 +1,169 @@
+# filepath: /Users/athanneeru/Downloads/GitHub/Amoskys/.github/workflows/k8s-validate.yml
 # AMOSKYS Kubernetes Manifest Validation
-name: Kubernetes Validation
+# Runs on all PRs that touch K8s files to catch issues before merge
+name: K8s Manifest Validation
 
 on:
   pull_request:
     paths:
       - 'deploy/k8s/**'
+      - 'deploy/Dockerfile.*'
   push:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
     paths:
       - 'deploy/k8s/**'
 
 jobs:
-  validate-manifests:
-    name: Validate K8s Manifests
+  validate:
+    name: Validate Manifests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup tools
+        run: |
+          # Install kustomize
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+          
+          # Install kubeval
+          wget -q https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          tar xf kubeval-linux-amd64.tar.gz
+          sudo mv kubeval /usr/local/bin/
+          
+          # Install kubeconform (more up-to-date than kubeval)
+          wget -q https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
+          tar xf kubeconform-linux-amd64.tar.gz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Validate YAML syntax
+        run: |
+          echo "🔍 Checking YAML syntax..."
+          find deploy/k8s -name '*.yaml' -o -name '*.yml' | while read f; do
+            python3 -c "import yaml; yaml.safe_load(open('$f'))" && echo "✅ $f" || (echo "❌ $f" && exit 1)
+          done
+
+      - name: Build and validate base
+        run: |
+          echo "📦 Building base kustomization..."
+          kustomize build deploy/k8s/base > /tmp/base.yaml
+          
+          echo "🔍 Validating base manifests..."
+          kubeconform -strict -ignore-missing-schemas -summary /tmp/base.yaml
+
+      - name: Build and validate dev overlay
+        run: |
+          echo "📦 Building dev overlay..."
+          kustomize build deploy/k8s/overlays/dev > /tmp/dev.yaml
+          
+          echo "🔍 Validating dev manifests..."
+          kubeconform -strict -ignore-missing-schemas -summary /tmp/dev.yaml
+          
+          echo "📊 Resource count:"
+          grep -c '^kind:' /tmp/dev.yaml || true
+
+      - name: Build and validate staging overlay
+        run: |
+          echo "📦 Building staging overlay..."
+          kustomize build deploy/k8s/overlays/staging > /tmp/staging.yaml
+          
+          echo "🔍 Validating staging manifests..."
+          kubeconform -strict -ignore-missing-schemas -summary /tmp/staging.yaml
+
+      - name: Build and validate prod overlay
+        run: |
+          echo "📦 Building prod overlay..."
+          kustomize build deploy/k8s/overlays/prod > /tmp/prod.yaml
+          
+          echo "🔍 Validating prod manifests..."
+          kubeconform -strict -ignore-missing-schemas -summary /tmp/prod.yaml
+
+      - name: Check for security issues
+        run: |
+          echo "🔒 Checking for common security issues..."
+          
+          # Check for privileged containers
+          if grep -q "privileged: true" /tmp/prod.yaml; then
+            echo "⚠️ Warning: Found privileged containers in prod"
+          fi
+          
+          # Check for hostNetwork
+          if grep -q "hostNetwork: true" /tmp/prod.yaml; then
+            echo "⚠️ Warning: Found hostNetwork in prod"
+          fi
+          
+          # Check for missing resource limits
+          if ! grep -q "resources:" /tmp/prod.yaml; then
+            echo "⚠️ Warning: Some containers may be missing resource limits"
+          fi
+          
+          echo "✅ Security check complete"
+
+      - name: Diff overlays (informational)
+        run: |
+          echo "📊 Comparing dev vs prod configurations..."
+          echo ""
+          echo "=== Dev replicas ==="
+          grep -A2 "replicas:" /tmp/dev.yaml | head -20 || true
+          echo ""
+          echo "=== Prod replicas ==="
+          grep -A2 "replicas:" /tmp/prod.yaml | head -20 || true
+
+      - name: Upload manifests
+        uses: actions/upload-artifact@v4
         with:
-          version: 'v1.29.0'
+          name: validated-manifests
+          path: /tmp/*.yaml
+          retention-days: 5
 
-      - name: Validate all overlays
-        run: |
-          echo "Validating Kubernetes manifests..."
-          kubectl kustomize deploy/k8s/base > /dev/null && echo "✓ Base OK"
-          kubectl kustomize deploy/k8s/overlays/dev > /dev/null && echo "✓ Dev OK"
-          kubectl kustomize deploy/k8s/overlays/staging > /dev/null && echo "✓ Staging OK"
-          kubectl kustomize deploy/k8s/overlays/prod > /dev/null && echo "✓ Prod OK"
+  dockerfile-lint:
+    name: Lint Dockerfiles
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Dry-run Apply
+      - name: Lint Dockerfile.web
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: deploy/Dockerfile.web
+          failure-threshold: warning
+        continue-on-error: true
+
+      - name: Lint Dockerfile.agent
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: deploy/Dockerfile.agent
+          failure-threshold: warning
+        continue-on-error: true
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download manifests
+        uses: actions/download-artifact@v4
+        with:
+          name: validated-manifests
+          path: /tmp/manifests
+
+      - name: Run Trivy config scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: 'deploy/k8s'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'  # Don't fail, just report
+        continue-on-error: true
+
+      - name: Run kubesec scan
         run: |
-          kubectl kustomize deploy/k8s/overlays/dev | kubectl apply --dry-run=client -f - 2>&1 | tail -10
-          echo "✓ Dry-run successful"
+          echo "🔒 Running kubesec security scan..."
+          docker run -v /tmp/manifests:/manifests kubesec/kubesec:v2 scan /manifests/prod.yaml || true

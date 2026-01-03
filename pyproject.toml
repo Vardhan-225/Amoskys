@@ -82,9 +82,10 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
 
-    # Code quality
-    "black==24.10.0",  # Pin exact version for consistent formatting
-    "isort>=5.13.0",
+    # Code quality - PIN EXACT VERSIONS for CI/local consistency
+    "black==24.10.0",
+    "isort==5.13.2",
+    "flake8==7.1.1",
     "ruff>=0.8.0",
 
     # Type checking
@@ -92,7 +93,10 @@ dev = [
 
     # CLI tools
     "click>=8.1.0",
-    "rich>=13.9.0"
+    "rich>=13.9.0",
+
+    # Pre-commit hooks
+    "pre-commit>=3.6.0"
 ]
 
 # Documentation generation
@@ -165,7 +169,10 @@ extend-exclude = '''
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["infraspectre"]
+known_first_party = ["amoskys"]
+skip_glob = ["**/proto/*", "*_pb2.py", "*_pb2_grpc.py"]
+extend_skip = [".venv", "venv", "build", "dist"]
+src_paths = ["src", "tests", "web"]
 
 [tool.flake8]
 max-line-length = 88
