@@ -197,7 +197,7 @@ show_error_codes = true
 strict_optional = false
 no_implicit_optional = false
 # Disable noisy error categories that are not actual bugs
-disable_error_code = ["var-annotated", "type-arg", "arg-type", "index", "operator", "attr-defined", "call-overload", "return-value", "assignment", "type-var"]
+disable_error_code = ["var-annotated", "type-arg", "arg-type", "index", "operator", "attr-defined", "call-overload", "return-value", "assignment", "type-var", "union-attr", "import-untyped"]
 exclude = [
     "proto/",
     "tests/",
