@@ -1,0 +1,13 @@
+/var/log/amoskys/*.log {
+    daily
+    missingok
+    rotate 3
+    compress
+    delaycompress
+    notifempty
+    maxsize 50M
+    create 0644 ubuntu ubuntu
+    postrotate
+        systemctl reload amoskys-web >/dev/null 2>&1 || true
+    endscript
+}
