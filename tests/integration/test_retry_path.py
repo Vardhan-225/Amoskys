@@ -2,7 +2,6 @@ import os
 import socket
 import subprocess
 import sys
-import threading
 import time
 
 import grpc
@@ -14,9 +13,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
 
-BUS_ADDR = "localhost:50052"
 SERVER_SCRIPT = "src/amoskys/eventbus/server.py"
 SERVER_ARGS = ["--overload", "on"]
+
+
+def find_free_port():
+    """Find a free port to use for the test."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        s.listen(1)
+        port = s.getsockname()[1]
+    return port
 
 
 def wait_for_port(port: int, timeout=10.0):
@@ -47,7 +54,7 @@ def certs():
         pytest.skip("certs missing; run `make certs`")
 
 
-def mtls_channel():
+def mtls_channel(port: int):
     from pathlib import Path
 
     with open(Path("certs") / "ca.crt", "rb") as f:
@@ -59,13 +66,16 @@ def mtls_channel():
     creds = grpc.ssl_channel_credentials(
         root_certificates=ca, private_key=key, certificate_chain=crt
     )
-    return grpc.secure_channel(BUS_ADDR, creds)
+    return grpc.secure_channel(f"localhost:{port}", creds)
 
 
 @pytest.fixture
 def bus_overloaded(certs):
+    # Find a free port dynamically to avoid conflicts
+    server_port = find_free_port()
+    
     env = os.environ.copy()
-    env["BUS_SERVER_PORT"] = "50052"  # Use different port to avoid conflicts
+    env["BUS_SERVER_PORT"] = str(server_port)
     env["BUS_METRICS_DISABLE"] = "1"  # Disable metrics to avoid port contention
     # Set up environment to ensure the subprocess can find imports
     if "PYTHONPATH" in env:
@@ -95,12 +105,12 @@ def bus_overloaded(certs):
     )
 
     try:
-        if not wait_for_port(50052):
+        if not wait_for_port(server_port):
             out, err = p.communicate(timeout=5)
             print("[SERVER] Startup stdout:", out)
             print("[SERVER] Startup stderr:", err)
             raise AssertionError("bus failed to start")
-        yield p
+        yield (p, server_port)
     finally:
         p.terminate()
         try:
@@ -138,7 +148,8 @@ def make_valid_env():
 
 
 def test_retry_ack_when_overloaded(bus_overloaded):
-    with mtls_channel() as ch:
+    _proc, port = bus_overloaded
+    with mtls_channel(port) as ch:
         stub = pbrpc.EventBusStub(ch)
         print("[TEST] Sending Publish request...")
         ack = stub.Publish(make_valid_env(), timeout=3.0)
