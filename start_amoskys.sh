@@ -100,7 +100,7 @@ else
     nohup gunicorn \
         --bind 127.0.0.1:5001 \
         --workers 1 \
-        --worker-class eventlet \
+        --worker-class gevent \
         --timeout 120 \
         --access-logfile /var/log/amoskys/access.log \
         --error-logfile /var/log/amoskys/error.log \

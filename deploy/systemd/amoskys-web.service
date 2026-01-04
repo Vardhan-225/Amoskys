@@ -8,9 +8,9 @@ After=network.target network-online.target
 Wants=network-online.target
 
 [Service]
-Type=notify
-User=www-data
-Group=www-data
+Type=simple
+User=ubuntu
+Group=ubuntu
 RuntimeDirectory=amoskys-web
 RuntimeDirectoryMode=755
 
@@ -20,8 +20,17 @@ Environment=FLASK_ENV=production
 Environment=PYTHONPATH=/opt/amoskys
 Environment=PYTHONUNBUFFERED=1
 
-# Service execution
-ExecStart=/opt/amoskys/.venv/bin/gunicorn --config web/gunicorn_config.py web.wsgi:app
+# Service execution - use gevent worker (eventlet hangs on VPS)
+ExecStart=/opt/amoskys/venv/bin/gunicorn \
+    --worker-class gevent \
+    -w 1 \
+    --bind 127.0.0.1:5001 \
+    --timeout 120 \
+    --access-logfile /var/log/amoskys/access.log \
+    --error-logfile /var/log/amoskys/error.log \
+    --chdir /opt/amoskys/web \
+    wsgi:app
+
 ExecReload=/bin/kill -s HUP $MAINPID
 KillMode=mixed
 TimeoutStopSec=5

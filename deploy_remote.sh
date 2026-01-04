@@ -41,6 +41,27 @@ echo ""
 
 cd "$APP_DIR"
 
+# Pre-flight: Check disk space
+log_info "Pre-flight: Checking disk space..."
+DISK_USAGE=$(df -h / | awk 'NR==2 {gsub("%",""); print $5}')
+if [ "$DISK_USAGE" -gt 90 ]; then
+    log_error "Disk usage is at ${DISK_USAGE}%! Attempting cleanup..."
+    # Clean up old logs
+    find /var/log/amoskys -type f -name "*.log.*" -mtime +1 -delete 2>/dev/null || true
+    find "$APP_DIR/logs" -type f -name "*.log.*" -mtime +1 -delete 2>/dev/null || true
+    # Force log rotation
+    sudo logrotate -f /etc/logrotate.d/amoskys 2>/dev/null || true
+    # Re-check disk space
+    DISK_USAGE=$(df -h / | awk 'NR==2 {gsub("%",""); print $5}')
+    if [ "$DISK_USAGE" -gt 95 ]; then
+        log_error "Disk usage still critical at ${DISK_USAGE}%! Manual intervention required."
+        exit 1
+    fi
+    log_warn "Disk cleaned up, now at ${DISK_USAGE}%"
+else
+    log_info "  Disk usage: ${DISK_USAGE}% ✓"
+fi
+
 # Step 1: Fetch and checkout code
 log_info "Step 1/8: Fetching latest code..."
 git fetch --all --prune
@@ -69,6 +90,16 @@ source "$VENV_DIR/bin/activate"
 pip install --upgrade pip --quiet
 pip install -e ".[all]" --quiet
 
+# Ensure log rotation is configured
+if [ -f "$APP_DIR/deploy/logrotate/amoskys" ]; then
+    sudo cp "$APP_DIR/deploy/logrotate/amoskys" /etc/logrotate.d/amoskys 2>/dev/null || true
+fi
+
+# Ensure systemd service files are up to date
+if [ -f "$APP_DIR/deploy/systemd/amoskys-web.service" ]; then
+    sudo cp "$APP_DIR/deploy/systemd/amoskys-web.service" /etc/systemd/system/amoskys-web.service 2>/dev/null || true
+fi
+
 # Step 4: Run smoke tests
 if [ "${SKIP_TESTS:-false}" != "true" ]; then
     log_info "Step 4/8: Running smoke tests..."
@@ -82,13 +113,17 @@ else
 fi
 
 # Step 5: Stop existing service gracefully
-log_info "Step 5/8: Stopping AMOSKYS service..."
+log_info "Step 5/8: Stopping AMOSKYS services..."
+sudo systemctl stop amoskys-web 2>/dev/null || true
 sudo systemctl stop amoskys 2>/dev/null || true
 sleep 2
 
 # Step 6: Start service
-log_info "Step 6/8: Starting AMOSKYS service..."
-sudo systemctl start amoskys
+log_info "Step 6/8: Starting AMOSKYS services..."
+# Reload systemd in case service files changed
+sudo systemctl daemon-reload
+# Start the web service (agents can be started separately if needed)
+sudo systemctl start amoskys-web
 
 # Step 7: Health check with retries
 log_info "Step 7/8: Running health checks..."
@@ -119,7 +154,7 @@ if [ "$HEALTH_OK" = true ]; then
 else
     log_error "Health check failed after $HEALTH_RETRIES attempts!"
     log_error "Service may have failed to start. Check logs:"
-    sudo journalctl -u amoskys --no-pager -n 20 || true
+    sudo journalctl -u amoskys-web --no-pager -n 30 || true
     exit 1
 fi
 

@@ -1,3 +1,8 @@
+# AMOSKYS Log Rotation Configuration
+# Location: /etc/logrotate.d/amoskys
+# This handles log rotation for all AMOSKYS log files
+
+# Main application logs in /var/log/amoskys
 /var/log/amoskys/*.log {
     daily
     missingok
@@ -10,4 +15,28 @@
     postrotate
         systemctl reload amoskys-web >/dev/null 2>&1 || true
     endscript
+}
+
+# Application logs in /opt/amoskys/logs
+/opt/amoskys/logs/*.log {
+    daily
+    missingok
+    rotate 3
+    compress
+    delaycompress
+    notifempty
+    maxsize 50M
+    create 0644 ubuntu ubuntu
+}
+
+# Dashboard/web logs
+/opt/amoskys/web/logs/*.log {
+    daily
+    missingok
+    rotate 3
+    compress
+    delaycompress
+    notifempty
+    maxsize 50M
+    create 0644 ubuntu ubuntu
 }
