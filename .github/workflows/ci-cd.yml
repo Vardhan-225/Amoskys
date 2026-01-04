@@ -160,6 +160,9 @@ jobs:
         GITHUB_ACTOR: ${{ github.actor }}
       run: |
         ssh -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            -o TCPKeepAlive=yes \
             -i ~/.ssh/amoskys_deploy \
             "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
             "cd /opt/amoskys && GIT_REF=${GIT_REF} GITHUB_ACTOR=${GITHUB_ACTOR} bash deploy_remote.sh"
