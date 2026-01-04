@@ -89,13 +89,23 @@ echo ""
 echo "🌐 Starting Dashboard..."
 echo ""
 
-# Start Flask Dashboard
-if pgrep -f "wsgi.py" > /dev/null; then
+# Start Flask Dashboard with gunicorn for production
+if pgrep -f "gunicorn.*wsgi:app" > /dev/null; then
+    echo "✅ Dashboard already running (PID: $(pgrep -f 'gunicorn.*wsgi:app'))"
+elif pgrep -f "wsgi.py" > /dev/null; then
     echo "✅ Dashboard already running (PID: $(pgrep -f 'wsgi.py'))"
 else
-    echo "🔄 Starting Flask Dashboard..."
-    cd "$PROJECT_ROOT/web"
-    nohup python wsgi.py --dev > ../logs/dashboard.log 2>&1 &
+    echo "🔄 Starting Gunicorn Dashboard (Production)..."
+    cd "$PROJECT_ROOT"
+    nohup gunicorn \
+        --bind 127.0.0.1:5001 \
+        --workers 1 \
+        --worker-class eventlet \
+        --timeout 120 \
+        --access-logfile /var/log/amoskys/access.log \
+        --error-logfile /var/log/amoskys/error.log \
+        --chdir "$PROJECT_ROOT/web" \
+        "wsgi:app" > logs/dashboard.log 2>&1 &
     DASH_PID=$!
     echo "✅ Dashboard started (PID: $DASH_PID)"
     sleep 2
