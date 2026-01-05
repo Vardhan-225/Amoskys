@@ -113,7 +113,7 @@ jobs:
           grep -A2 "replicas:" /tmp/prod.yaml | head -20 || true
 
       - name: Upload manifests
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: validated-manifests
           path: /tmp/*.yaml
