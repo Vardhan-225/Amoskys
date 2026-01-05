@@ -5,8 +5,8 @@
 AMOSKYS operates **11 specialized agents** across endpoints to collect security telemetry. Each agent now uses the **Micro-Probe Architecture** - a "swarm of eyes" pattern where each agent hosts multiple micro-probes, each watching ONE specific threat vector.
 
 **Fleet Status** (as of 2026-01-05):
-- ✅ **3/11** migrated to Micro-Probe Architecture (ProcAgent, DNSAgent, PeripheralAgent)
-- 🔄 **8/11** pending migration
+- ✅ **4/11** migrated to Micro-Probe Architecture (ProcAgent, DNSAgent, PeripheralAgent, AuthGuard)
+- 🔄 **7/11** pending migration
 - 🎯 **Target**: 100% unbreakable by Week 4
 - 👁️ **77+ Micro-Probes** across 11 agents = "If you breathe, we see it"
 
@@ -76,7 +76,7 @@ class MicroProbe(abc.ABC):
 | [ProcAgent](#1-procagent-process-monitoring) | 8 | ✅ Implemented | T1059, T1218, T1055, T1496, T1036, T1078, T1204 |
 | [PeripheralAgent](#2-peripheralagent-usbbluetooth-monitoring) | 7 | ✅ Implemented | T1200, T1091, T1052, T1056.001, T1557 |
 | [DNSAgent](#4-dnsagent-dns-threat-detection) | 9 | ✅ Implemented | T1071.004, T1568.002, T1568.001, T1048.001, T1566 |
-| [AuthGuardAgent](#3-authguardagent-authentication-monitoring) | 8 | 🔄 Planned | T1110, T1078, T1548, T1136 |
+| [AuthGuardAgent](#3-authguardagent-authentication-monitoring) | 8 | ✅ Implemented | T1110, T1110.003, T1078, T1548, T1059, T1621 |
 | [FIMAgent](#5-fimagent-file-integrity-monitoring) | 8 | 🔄 Planned | T1565, T1070, T1547, T1037 |
 | [PersistenceGuard](#6-persistenceguardagent-persistence-detection) | 8 | 🔄 Planned | T1547, T1053, T1136, T1098 |
 | [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | 7 | 🔄 Planned | T1055, T1014, T1068, T1611 |
@@ -138,18 +138,20 @@ class MicroProbe(abc.ABC):
 
 ---
 
-### 4. AuthGuardAgent Probes (8 probes) 🔄 PLANNED
+### 3. AuthGuardAgent Probes (8 probes) ✅
 
 | # | Probe | Description | MITRE | Severity |
 |---|-------|-------------|-------|----------|
-| 1 | `SSHLoginProbe` | SSH login success/failure | T1078 | INFO/HIGH |
-| 2 | `SSHBruteForceProbe` | Brute force detection | T1110 | CRITICAL |
-| 3 | `SudoElevationProbe` | Privilege escalation via sudo | T1548 | MEDIUM |
-| 4 | `NewAccountLoginProbe` | Login from newly created account | T1136 | HIGH |
-| 5 | `OffHoursAccessProbe` | Access outside business hours | T1078 | MEDIUM |
-| 6 | `LockUnlockProbe` | Screen lock/unlock patterns | T1078 | LOW |
-| 7 | `ServiceAccountMisuseProbe` | Interactive login as service acct | T1078.003 | HIGH |
-| 8 | `PasswordChangeProbe` | Password modification events | T1098 | MEDIUM |
+| 1 | `SSHBruteForceProbe` | SSH brute force (5+ failures per IP/user) | T1110, T1078 | HIGH |
+| 2 | `SSHPasswordSprayProbe` | Low-and-slow across many users | T1110.003 | HIGH |
+| 3 | `SSHGeoImpossibleTravelProbe` | Geographic impossibility (>1000km in <1hr) | T1078 | CRITICAL |
+| 4 | `SudoElevationProbe` | First-time sudo or 3x spike | T1548.003 | MEDIUM |
+| 5 | `SudoSuspiciousCommandProbe` | Dangerous sudo (bash, chmod 4777, etc.) | T1548, T1059 | HIGH/CRITICAL |
+| 6 | `OffHoursLoginProbe` | Access outside 6am-8pm | T1078 | MEDIUM |
+| 7 | `MFABypassOrAnomalyProbe` | MFA fatigue (push bombing) | T1621 | HIGH/CRITICAL |
+| 8 | `AccountLockoutStormProbe` | Mass account lockout (5+ accounts) | T1110, T1499 | HIGH |
+
+**File**: `src/amoskys/agents/auth/probes.py`
 
 ---
 
@@ -281,9 +283,9 @@ The 77 micro-probes provide coverage across **42 unique MITRE techniques**:
 | # | Agent | Status | Priority | Complexity | Migration Time |
 |---|-------|--------|----------|------------|----------------|
 | 1 | [ProcAgent](#1-procagent-process-monitoring) | ✅ Migrated | P0 | Low | Reference |
-| 2 | [PeripheralAgent](#2-peripheralagent-usbbluetooth-monitoring) | 🔄 Pending | P1 | Low | 2 hours |
-| 3 | [AuthGuardAgent](#3-authguardagent-authentication-monitoring) | 🔄 Pending | P1 | Medium | 3 hours |
-| 4 | [DNSAgent](#4-dnsagent-dns-threat-detection) | 🔄 Pending | P0 | High | 4 hours |
+| 2 | [PeripheralAgent](#2-peripheralagent-usbbluetooth-monitoring) | ✅ Migrated | P1 | Low | Complete |
+| 3 | [AuthGuardAgent](#3-authguardagent-authentication-monitoring) | ✅ Migrated | P1 | Medium | Complete |
+| 4 | [DNSAgent](#4-dnsagent-dns-threat-detection) | ✅ Migrated | P0 | High | Complete |
 | 5 | [FIMAgent](#5-fimagent-file-integrity-monitoring) | 🔄 Pending | P0 | High | 4 hours |
 | 6 | [PersistenceGuardAgent](#6-persistenceguardagent-persistence-detection) | 🔄 Pending | P1 | Medium | 3 hours |
 | 7 | [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | 🔄 Pending | P2 | High | 5 hours |
