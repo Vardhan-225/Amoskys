@@ -73,7 +73,7 @@ def mtls_channel(port: int):
 def bus_overloaded(certs):
     # Find a free port dynamically to avoid conflicts
     server_port = find_free_port()
-    
+
     env = os.environ.copy()
     env["BUS_SERVER_PORT"] = str(server_port)
     env["BUS_METRICS_DISABLE"] = "1"  # Disable metrics to avoid port contention
