@@ -7,6 +7,7 @@ This package provides shared functionality used across all agent implementations
 - Hardened agent base with tamper detection
 - Advanced threat detection primitives
 - Standardized CLI framework
+- Micro-probe architecture for "swarm of eyes" detection
 """
 
 # CLI Framework
@@ -25,6 +26,16 @@ from amoskys.agents.common.hardened_base import (
     ThreatLevel,
 )
 from amoskys.agents.common.local_queue import LocalQueue
+
+# Micro-Probe Architecture
+from amoskys.agents.common.probes import (
+    MicroProbe,
+    MicroProbeAgentMixin,
+    ProbeContext,
+    ProbeRegistry,
+    Severity,
+    TelemetryEvent,
+)
 from amoskys.agents.common.threat_detection import (
     AttackPhase,
     C2Detector,
@@ -68,4 +79,11 @@ __all__ = [
     "C2Detector",
     "CredentialAccessDetector",
     "ExfiltrationDetector",
+    # Micro-Probe Architecture
+    "MicroProbe",
+    "MicroProbeAgentMixin",
+    "ProbeContext",
+    "ProbeRegistry",
+    "Severity",
+    "TelemetryEvent",
 ]
