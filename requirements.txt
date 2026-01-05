@@ -131,7 +131,7 @@ Pygments==2.19.2
 PyJWT==2.10.1
 pyparsing==3.2.5
 pysmi-lextudio==1.4.3
-pysnmp==7.1.21
+pysnmp==7.1.22
 pysnmpcrypto==0.0.4
 pytest==8.4.1
 pytest-asyncio==0.24.0
