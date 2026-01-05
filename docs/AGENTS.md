@@ -5,10 +5,10 @@
 AMOSKYS operates **11 specialized agents** across endpoints to collect security telemetry. Each agent now uses the **Micro-Probe Architecture** - a "swarm of eyes" pattern where each agent hosts multiple micro-probes, each watching ONE specific threat vector.
 
 **Fleet Status** (as of 2026-01-05):
-- ✅ **4/11** migrated to Micro-Probe Architecture (ProcAgent, DNSAgent, PeripheralAgent, AuthGuard)
-- 🔄 **7/11** pending migration
+- ✅ **5/11** migrated to Micro-Probe Architecture (ProcAgent, DNSAgent, PeripheralAgent, AuthGuard, FIMAgent)
+- 🔄 **6/11** pending migration
 - 🎯 **Target**: 100% unbreakable by Week 4
-- 👁️ **77+ Micro-Probes** across 11 agents = "If you breathe, we see it"
+- 👁️ **85+ Micro-Probes** across 11 agents = "If you breathe, we see it"
 
 ---
 
@@ -77,7 +77,7 @@ class MicroProbe(abc.ABC):
 | [PeripheralAgent](#2-peripheralagent-usbbluetooth-monitoring) | 7 | ✅ Implemented | T1200, T1091, T1052, T1056.001, T1557 |
 | [DNSAgent](#4-dnsagent-dns-threat-detection) | 9 | ✅ Implemented | T1071.004, T1568.002, T1568.001, T1048.001, T1566 |
 | [AuthGuardAgent](#3-authguardagent-authentication-monitoring) | 8 | ✅ Implemented | T1110, T1110.003, T1078, T1548, T1059, T1621 |
-| [FIMAgent](#5-fimagent-file-integrity-monitoring) | 8 | 🔄 Planned | T1565, T1070, T1547, T1037 |
+| [FIMAgent](#5-fimagent-file-integrity-monitoring) | 8 | ✅ Implemented | T1036, T1547, T1505.003, T1548, T1574, T1556, T1014, T1565 |
 | [PersistenceGuard](#6-persistenceguardagent-persistence-detection) | 8 | 🔄 Planned | T1547, T1053, T1136, T1098 |
 | [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | 7 | 🔄 Planned | T1055, T1014, T1068, T1611 |
 | [FlowAgent](#9-flowagent-network-flow-monitoring) | 8 | 🔄 Planned | T1071, T1048, T1090, T1021 |
@@ -155,18 +155,20 @@ class MicroProbe(abc.ABC):
 
 ---
 
-### 5. FIMAgent Probes (8 probes) 🔄 PLANNED
+### 5. FIMAgent Probes (8 probes) ✅
 
 | # | Probe | Description | MITRE | Severity |
 |---|-------|-------------|-------|----------|
-| 1 | `SystemBinaryIntegrityProbe` | /bin, /usr/bin modifications | T1565 | CRITICAL |
-| 2 | `WebRootWebshellProbe` | Webshell detection in /var/www | T1505.003 | CRITICAL |
-| 3 | `ConfigSecretsProbe` | Config files with secrets | T1552 | HIGH |
-| 4 | `SUIDSGIDProbe` | SUID/SGID bit changes | T1548.001 | HIGH |
-| 5 | `BootKernelFilesProbe` | /boot and kernel module changes | T1014 | CRITICAL |
-| 6 | `LogTamperingProbe` | /var/log modifications | T1070 | HIGH |
-| 7 | `SecurityToolPathProbe` | AV/EDR binary tampering | T1562.001 | CRITICAL |
-| 8 | `HighValueDirectoryProbe` | SSH keys, cron.d, sudoers | T1547, T1053 | HIGH |
+| 1 | `CriticalSystemFileChangeProbe` | Critical binaries/configs modified | T1565, T1036 | CRITICAL |
+| 2 | `SUIDBitChangeProbe` | SUID/SGID bit additions | T1548.001 | HIGH |
+| 3 | `ServiceCreationProbe` | New LaunchAgents/systemd/cron services | T1547, T1543 | HIGH |
+| 4 | `WebShellDropProbe` | Webshell detection (PHP/JSP/ASP patterns) | T1505.003 | CRITICAL |
+| 5 | `ConfigBackdoorProbe` | SSH/sudo/PAM config tampering | T1556, T1548 | HIGH |
+| 6 | `LibraryHijackProbe` | LD_PRELOAD rootkits, .so drops | T1574.006, T1014 | CRITICAL |
+| 7 | `BootloaderTamperProbe` | /boot kernel/bootloader tampering | T1014, T1542 | CRITICAL |
+| 8 | `WorldWritableSensitiveProbe` | World-writable /etc, /var/log | T1565, T1070 | CRITICAL |
+
+**File**: `src/amoskys/agents/fim/probes.py`
 
 ---
 
@@ -286,7 +288,7 @@ The 77 micro-probes provide coverage across **42 unique MITRE techniques**:
 | 2 | [PeripheralAgent](#2-peripheralagent-usbbluetooth-monitoring) | ✅ Migrated | P1 | Low | Complete |
 | 3 | [AuthGuardAgent](#3-authguardagent-authentication-monitoring) | ✅ Migrated | P1 | Medium | Complete |
 | 4 | [DNSAgent](#4-dnsagent-dns-threat-detection) | ✅ Migrated | P0 | High | Complete |
-| 5 | [FIMAgent](#5-fimagent-file-integrity-monitoring) | 🔄 Pending | P0 | High | 4 hours |
+| 5 | [FIMAgent](#5-fimagent-file-integrity-monitoring) | ✅ Migrated | P0 | High | Complete |
 | 6 | [PersistenceGuardAgent](#6-persistenceguardagent-persistence-detection) | 🔄 Pending | P1 | Medium | 3 hours |
 | 7 | [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | 🔄 Pending | P2 | High | 5 hours |
 | 8 | [SNMPAgent](#8-snmpagent-network-device-telemetry) | 🔄 Pending | P2 | Low | 2 hours |
