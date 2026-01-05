@@ -136,6 +136,16 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Set up Python for validation
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Validate deployment configuration
+      run: |
+        python scripts/validate_deployment.py --env production
+        echo "✅ Deployment configuration validated"
+
     - name: Set up SSH key for AMOSKYS VPS
       run: |
         mkdir -p ~/.ssh

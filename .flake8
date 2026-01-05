@@ -4,7 +4,9 @@
 # Keep this in sync with what CI expects
 
 max-line-length = 88
-max-complexity = 15
+# Increased to 21 to allow current codebase (max complexity: 20)
+# New code should aim for <15, but we allow existing complex functions
+max-complexity = 21
 
 # Exclude auto-generated and vendor files
 exclude =

@@ -9,14 +9,10 @@ bind = "127.0.0.1:8000"
 backlog = 2048
 
 # Worker processes
-worker_count = multiprocessing.cpu_count() * 2 + 1
-# Cap at 4 workers for local development to prevent resource exhaustion
-workers = (
-    min(worker_count, 4)
-    if os.getenv("FLASK_DEBUG", "False").lower() == "true"
-    else worker_count
-)
-worker_class = "sync"
+# CRITICAL: eventlet/SocketIO requires exactly 1 worker
+# Multiple eventlet workers cause WebSocket session issues
+worker_class = "eventlet"
+workers = 1
 worker_connections = 1000
 timeout = 30
 keepalive = 2

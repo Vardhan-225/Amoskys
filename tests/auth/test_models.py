@@ -29,7 +29,10 @@ from amoskys.auth.models import (
     PasswordResetToken,
 )
 from amoskys.auth.models import Session as AuthSession
-from amoskys.auth.models import User, UserRole
+from amoskys.auth.models import (
+    User,
+    UserRole,
+)
 from amoskys.db import Base
 
 # =============================================================================
