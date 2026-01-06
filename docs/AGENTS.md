@@ -5,10 +5,10 @@
 AMOSKYS operates **11 specialized agents** across endpoints to collect security telemetry. Each agent now uses the **Micro-Probe Architecture** - a "swarm of eyes" pattern where each agent hosts multiple micro-probes, each watching ONE specific threat vector.
 
 **Fleet Status** (as of 2026-01-05):
-- ✅ **6/11** migrated to Micro-Probe Architecture (ProcAgent, DNSAgent, PeripheralAgent, AuthGuard, FIMAgent, FlowAgent)
-- 🔄 **5/11** pending migration
+- ✅ **7/11** migrated to Micro-Probe Architecture (ProcAgent, DNSAgent, PeripheralAgent, AuthGuard, FIMAgent, FlowAgent, PersistenceGuard)
+- 🔄 **4/11** pending migration
 - 🎯 **Target**: 100% unbreakable by Week 4
-- 👁️ **93+ Micro-Probes** across 11 agents = "If you breathe, we see it"
+- 👁️ **101+ Micro-Probes** across 11 agents = "If you breathe, we see it"
 
 ---
 
@@ -78,7 +78,7 @@ class MicroProbe(abc.ABC):
 | [DNSAgent](#4-dnsagent-dns-threat-detection) | 9 | ✅ Implemented | T1071.004, T1568.002, T1568.001, T1048.001, T1566 |
 | [AuthGuardAgent](#3-authguardagent-authentication-monitoring) | 8 | ✅ Implemented | T1110, T1110.003, T1078, T1548, T1059, T1621 |
 | [FIMAgent](#5-fimagent-file-integrity-monitoring) | 8 | ✅ Implemented | T1036, T1547, T1505.003, T1548, T1574, T1556, T1014, T1565 |
-| [PersistenceGuard](#6-persistenceguardagent-persistence-detection) | 8 | 🔄 Planned | T1547, T1053, T1136, T1098 |
+| [PersistenceGuard](#6-persistenceguardagent-persistence-detection) | 8 | ✅ Implemented | T1037, T1053, T1098, T1176, T1543, T1546, T1547, T1564 |
 | [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | 7 | 🔄 Planned | T1055, T1014, T1068, T1611 |
 | [FlowAgent](#9-flowagent-network-flow-monitoring) | 8 | ✅ Implemented | T1046, T1021, T1041, T1071, T1090, T1552 |
 | [SNMPAgent](#8-snmpagent-network-device-telemetry) | 6 | 🔄 Planned | T1557, T1562, T1200 |
@@ -172,18 +172,20 @@ class MicroProbe(abc.ABC):
 
 ---
 
-### 6. PersistenceGuard Probes (8 probes) 🔄 PLANNED
+### 6. PersistenceGuard Probes (8 probes) ✅
 
 | # | Probe | Description | MITRE | Severity |
 |---|-------|-------------|-------|----------|
-| 1 | `LaunchAgentDaemonProbe` | macOS LaunchAgent/Daemon | T1543.001 | HIGH |
-| 2 | `SystemdServiceProbe` | Linux systemd service files | T1543.002 | HIGH |
-| 3 | `CronJobProbe` | Cron job modifications | T1053.003 | HIGH |
-| 4 | `SSHAuthorizedKeysProbe` | SSH authorized_keys changes | T1098.004 | CRITICAL |
-| 5 | `LoginItemStartupProbe` | Login items and startup scripts | T1547.001 | HIGH |
-| 6 | `BrowserExtensionProbe` | Malicious browser extensions | T1176 | MEDIUM |
-| 7 | `RegistryAutostartProbe` | Windows registry autostart | T1547.001 | HIGH |
-| 8 | `HiddenPersistenceProbe` | Hidden files in home/system | T1564.001 | MEDIUM |
+| 1 | `LaunchAgentDaemonProbe` | macOS LaunchAgent/Daemon persistence | T1543.001, T1037.005 | HIGH/MEDIUM |
+| 2 | `SystemdServicePersistenceProbe` | Linux systemd service creation/modification | T1543.002 | HIGH/MEDIUM |
+| 3 | `CronJobPersistenceProbe` | Cron/anacron @reboot entries | T1053.003 | HIGH/MEDIUM |
+| 4 | `SSHKeyBackdoorProbe` | SSH authorized_keys backdoors | T1098.004 | CRITICAL/HIGH |
+| 5 | `ShellProfileHijackProbe` | bashrc/zshrc/profile hijacking | T1037.004, T1546.004 | HIGH/MEDIUM |
+| 6 | `BrowserExtensionPersistenceProbe` | Malicious browser extensions | T1176 | HIGH/MEDIUM |
+| 7 | `StartupFolderLoginItemProbe` | GUI autostart items (.desktop, login items) | T1547.001, T1037.001 | HIGH/MEDIUM |
+| 8 | `HiddenFilePersistenceProbe` | Hidden executable loaders | T1564, T1053, T1547 | HIGH/MEDIUM |
+
+**File**: `src/amoskys/agents/persistence/probes.py`
 
 ---
 
@@ -291,7 +293,7 @@ The 77 micro-probes provide coverage across **42 unique MITRE techniques**:
 | 3 | [AuthGuardAgent](#3-authguardagent-authentication-monitoring) | ✅ Migrated | P1 | Medium | Complete |
 | 4 | [DNSAgent](#4-dnsagent-dns-threat-detection) | ✅ Migrated | P0 | High | Complete |
 | 5 | [FIMAgent](#5-fimagent-file-integrity-monitoring) | ✅ Migrated | P0 | High | Complete |
-| 6 | [PersistenceGuardAgent](#6-persistenceguardagent-persistence-detection) | 🔄 Pending | P1 | Medium | 3 hours |
+| 6 | [PersistenceGuardAgent](#6-persistenceguardagent-persistence-detection) | ✅ Migrated | P1 | Medium | Complete |
 | 7 | [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | 🔄 Pending | P2 | High | 5 hours |
 | 8 | [SNMPAgent](#8-snmpagent-network-device-telemetry) | 🔄 Pending | P2 | Low | 2 hours |
 | 9 | [FlowAgent](#9-flowagent-network-flow-monitoring) | ✅ Migrated | P1 | Medium | Complete |
