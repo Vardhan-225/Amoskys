@@ -40,10 +40,18 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Set, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, Sequence, Set, Type
 
 if TYPE_CHECKING:
     from amoskys.agents.common.base import HardenedAgentBase
+    from amoskys.agents.common.metrics import AgentMetrics
+
+
+class _HasMetrics(Protocol):
+    """Protocol for type checking: classes with an AgentMetrics attribute."""
+
+    metrics: "AgentMetrics"
+
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +89,7 @@ class TelemetryEvent:
         severity: Event severity level
         probe_name: Name of the probe that generated this event
         timestamp: UTC timestamp of event creation
+        timestamp_ns: Optional nanosecond timestamp (converts to timestamp if set)
         data: Probe-specific event data
         mitre_techniques: MITRE ATT&CK technique IDs
         mitre_tactics: MITRE ATT&CK tactic IDs
@@ -95,12 +104,20 @@ class TelemetryEvent:
     probe_name: str
     data: Dict[str, Any]
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp_ns: Optional[int] = None  # If provided, overrides timestamp
     mitre_techniques: List[str] = field(default_factory=list)
     mitre_tactics: List[str] = field(default_factory=list)
     confidence: float = 0.8
     device_id: str = ""
     correlation_id: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        """Convert timestamp_ns to timestamp if provided."""
+        if self.timestamp_ns is not None:
+            # Convert nanoseconds to datetime
+            seconds = self.timestamp_ns / 1e9
+            self.timestamp = datetime.fromtimestamp(seconds, tz=timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -135,6 +152,7 @@ class ProbeContext:
         device_id: Unique device identifier
         agent_name: Name of parent agent
         collection_time: When this collection cycle started
+        now_ns: Current timestamp in nanoseconds (optional, for v2 agents)
         previous_state: State from last collection (agent-managed)
         shared_data: Data shared between probes in same agent
         config: Probe-specific configuration overrides
@@ -145,6 +163,7 @@ class ProbeContext:
     collection_time: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+    now_ns: Optional[int] = None  # Nanosecond timestamp for v2 agents
     previous_state: Dict[str, Any] = field(default_factory=dict)
     shared_data: Dict[str, Any] = field(default_factory=dict)
     config: Dict[str, Any] = field(default_factory=dict)
@@ -420,11 +439,23 @@ class MicroProbeAgentMixin:
         ...         return self.scan_all_probes()
     """
 
-    def __init__(self, *args, **kwargs) -> None:
-        """Initialize mixin state."""
+    # Type hint for metrics - will be provided by HardenedAgentBase when mixed
+    metrics: "AgentMetrics"
+
+    def __init__(self, *args, probes: Optional[List[MicroProbe]] = None, **kwargs) -> None:
+        """Initialize mixin state.
+
+        Args:
+            probes: Optional list of probes to register immediately
+            *args, **kwargs: Passed to parent class
+        """
         super().__init__(*args, **kwargs)
         self._probes: List[MicroProbe] = []
         self._probe_state: Dict[str, Dict[str, Any]] = {}  # Persistent state per probe
+
+        # Register probes if provided
+        if probes:
+            self.register_probes(probes)
 
     def register_probe(self, probe: MicroProbe) -> None:
         """Register a micro-probe with this agent.
@@ -496,6 +527,10 @@ class MicroProbeAgentMixin:
                 probe.last_scan = datetime.now(timezone.utc)
                 probe.scan_count += 1
 
+                # Track probe events emitted (if agent has metrics)
+                if events and hasattr(self, "metrics"):
+                    self.metrics.record_probe_events_emitted(len(events))
+
                 # Enrich events with device_id
                 for event in events:
                     event.device_id = context.device_id
@@ -510,6 +545,11 @@ class MicroProbeAgentMixin:
             except Exception as e:
                 probe.error_count += 1
                 probe.last_error = str(e)
+
+                # Track probe errors (if agent has metrics)
+                if hasattr(self, "metrics"):
+                    self.metrics.record_probe_error()
+
                 logger.error(f"Probe {probe.name} scan failed: {e}")
 
         return all_events
@@ -571,6 +611,72 @@ class MicroProbeAgentMixin:
             List of probe names
         """
         return [probe.name for probe in self._probes]
+
+    @property
+    def probes(self) -> List[MicroProbe]:
+        """Get list of registered probes.
+
+        Returns:
+            List of MicroProbe instances
+        """
+        return self._probes
+
+    def run_probes(self, context: ProbeContext) -> List[TelemetryEvent]:
+        """Run all enabled probes with given context.
+
+        This is a convenience method for v2 agents that build their own context.
+
+        Args:
+            context: ProbeContext with shared data
+
+        Returns:
+            List of TelemetryEvents from all probes
+        """
+        all_events: List[TelemetryEvent] = []
+
+        for probe in self._probes:
+            if not probe.enabled:
+                continue
+
+            try:
+                # Update context with probe-specific state
+                context.previous_state = self._probe_state.get(probe.name, {})
+
+                # Run probe scan
+                start_time = time.time()
+                events = probe.scan(context)
+                scan_duration = time.time() - start_time
+
+                # Update probe metrics
+                probe.last_scan = datetime.now(timezone.utc)
+                probe.scan_count += 1
+
+                # Track probe events emitted (if agent has metrics)
+                if events and hasattr(self, "metrics"):
+                    self.metrics.record_probe_events_emitted(len(events))
+
+                # Enrich events with device_id
+                for event in events:
+                    event.device_id = context.device_id
+
+                all_events.extend(events)
+
+                logger.debug(
+                    f"Probe {probe.name} returned {len(events)} events "
+                    f"in {scan_duration:.3f}s"
+                )
+
+            except Exception as e:
+                probe.error_count += 1
+                probe.last_error = str(e)
+
+                # Track probe errors (if agent has metrics)
+                if hasattr(self, "metrics"):
+                    self.metrics.record_probe_error()
+
+                logger.error(f"Probe {probe.name} scan failed: {e}", exc_info=True)
+
+        return all_events
 
 
 # =============================================================================

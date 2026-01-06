@@ -4,9 +4,9 @@
 
 AMOSKYS operates **11 specialized agents** across endpoints to collect security telemetry. Each agent now uses the **Micro-Probe Architecture** - a "swarm of eyes" pattern where each agent hosts multiple micro-probes, each watching ONE specific threat vector.
 
-**Fleet Status** (as of 2026-01-05):
-- ✅ **7/11** migrated to Micro-Probe Architecture (ProcAgent, DNSAgent, PeripheralAgent, AuthGuard, FIMAgent, FlowAgent, PersistenceGuard)
-- 🔄 **4/11** pending migration
+**Fleet Status** (as of 2026-01-06):
+- ✅ **8/11** migrated to Micro-Probe Architecture (ProcAgent, DNSAgent, PeripheralAgent, AuthGuard, FIMAgent, FlowAgent, PersistenceGuard, KernelAuditAgent)
+- 🔄 **3/11** pending migration
 - 🎯 **Target**: 100% unbreakable by Week 4
 - 👁️ **101+ Micro-Probes** across 11 agents = "If you breathe, we see it"
 
@@ -79,7 +79,7 @@ class MicroProbe(abc.ABC):
 | [AuthGuardAgent](#3-authguardagent-authentication-monitoring) | 8 | ✅ Implemented | T1110, T1110.003, T1078, T1548, T1059, T1621 |
 | [FIMAgent](#5-fimagent-file-integrity-monitoring) | 8 | ✅ Implemented | T1036, T1547, T1505.003, T1548, T1574, T1556, T1014, T1565 |
 | [PersistenceGuard](#6-persistenceguardagent-persistence-detection) | 8 | ✅ Implemented | T1037, T1053, T1098, T1176, T1543, T1546, T1547, T1564 |
-| [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | 7 | 🔄 Planned | T1055, T1014, T1068, T1611 |
+| [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | 7 | ✅ Implemented | T1055, T1014, T1068, T1222, T1562 |
 | [FlowAgent](#9-flowagent-network-flow-monitoring) | 8 | ✅ Implemented | T1046, T1021, T1041, T1071, T1090, T1552 |
 | [SNMPAgent](#8-snmpagent-network-device-telemetry) | 6 | 🔄 Planned | T1557, T1562, T1200 |
 | [Protocol Collectors](#10-protocol-collectors-iot-telemetry) | 10 | 🔄 Planned | T1071, T1565, T1557 |
@@ -189,17 +189,25 @@ class MicroProbe(abc.ABC):
 
 ---
 
-### 7. KernelAuditAgent Probes (7 probes) 🔄 PLANNED
+### 7. KernelAuditAgent Probes (7 probes) ✅ IMPLEMENTED
+
+**v2 Agent**: `KernelAuditAgentV2` with micro-probe architecture
 
 | # | Probe | Description | MITRE | Severity |
 |---|-------|-------------|-------|----------|
-| 1 | `ExecSyscallProbe` | execve() system calls | T1059 | INFO |
-| 2 | `SetuidSetgidProbe` | setuid/setgid syscalls | T1548 | HIGH |
-| 3 | `PtraceInjectionProbe` | ptrace() for injection | T1055.008 | CRITICAL |
-| 4 | `ModuleLoadProbe` | Kernel module loading | T1547.006 | CRITICAL |
-| 5 | `FileOpenSensitiveProbe` | Open on /etc/shadow, keys | T1552 | HIGH |
-| 6 | `NetworkConnectSyscallProbe` | connect() to suspicious ports | T1071 | MEDIUM |
-| 7 | `MountFSSyscallProbe` | mount() syscall abuse | T1611 | HIGH |
+| 1 | `ExecveHighRiskProbe` | Execution from /tmp, /dev/shm, user dirs | T1059, T1204.002 | MEDIUM-HIGH |
+| 2 | `PrivEscSyscallProbe` | setuid/seteuid gaining EUID 0 | T1068, T1548.001 | HIGH-CRITICAL |
+| 3 | `KernelModuleLoadProbe` | init_module from suspicious paths | T1014, T1547.006 | HIGH-CRITICAL |
+| 4 | `PtraceAbuseProbe` | ptrace on protected processes (sshd, sudo) | T1055, T1055.008 | MEDIUM-CRITICAL |
+| 5 | `FilePermissionTamperProbe` | chmod/chown on /etc/shadow, sudoers | T1222, T1222.002 | HIGH-CRITICAL |
+| 6 | `AuditTamperProbe` | Attempts to blind audit subsystem | T1562.001, T1070.002 | HIGH-CRITICAL |
+| 7 | `SyscallFloodProbe` | Abnormal syscall patterns (brute force) | T1592, T1083 | MEDIUM-HIGH |
+
+**Files**:
+- `src/amoskys/agents/kernel_audit/probes.py` - Micro-probes
+- `src/amoskys/agents/kernel_audit/kernel_audit_agent_v2.py` - v2 Agent
+- `src/amoskys/agents/kernel_audit/collector.py` - Audit log collector
+- `src/amoskys/agents/kernel_audit/types.py` - KernelAuditEvent type
 
 ---
 
@@ -294,7 +302,7 @@ The 77 micro-probes provide coverage across **42 unique MITRE techniques**:
 | 4 | [DNSAgent](#4-dnsagent-dns-threat-detection) | ✅ Migrated | P0 | High | Complete |
 | 5 | [FIMAgent](#5-fimagent-file-integrity-monitoring) | ✅ Migrated | P0 | High | Complete |
 | 6 | [PersistenceGuardAgent](#6-persistenceguardagent-persistence-detection) | ✅ Migrated | P1 | Medium | Complete |
-| 7 | [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | 🔄 Pending | P2 | High | 5 hours |
+| 7 | [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | ✅ Migrated | P2 | High | Complete |
 | 8 | [SNMPAgent](#8-snmpagent-network-device-telemetry) | 🔄 Pending | P2 | Low | 2 hours |
 | 9 | [FlowAgent](#9-flowagent-network-flow-monitoring) | ✅ Migrated | P1 | Medium | Complete |
 | 10 | [Protocol Collectors](#10-protocol-collectors-iot-telemetry) | 🔄 Pending | P3 | Low | 1 hour each |

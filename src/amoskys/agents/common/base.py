@@ -32,13 +32,21 @@ Usage:
 from __future__ import annotations
 
 import abc
+import json
 import logging
 import signal
 import sys
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Sequence
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence
+
+from amoskys.agents.common.metrics import AgentMetrics
+
+if TYPE_CHECKING:
+    from amoskys.messaging_pb2 import TelemetryEvent as ProtoEvent
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +179,8 @@ class HardenedAgentBase(abc.ABC):
         *,
         eventbus_publisher: Optional[Any] = None,
         local_queue: Optional[Any] = None,
+        queue_adapter: Optional[Any] = None,
+        metrics_interval: float = 60.0,
     ) -> None:
         """Initialize hardened agent base.
 
@@ -180,15 +190,19 @@ class HardenedAgentBase(abc.ABC):
             collection_interval: Seconds between collection cycles
             eventbus_publisher: EventBus client for publishing
             local_queue: LocalQueue instance for offline resilience
+            queue_adapter: LocalQueueAdapter for simplified queue interface
+            metrics_interval: Seconds between metrics telemetry emissions
         """
         self.agent_name = agent_name
         self.device_id = device_id
         self.collection_interval = collection_interval
         self.eventbus_publisher = eventbus_publisher
         self.local_queue = local_queue
+        self.queue_adapter = queue_adapter
 
         self.circuit_breaker = CircuitBreaker()
         self.is_running: bool = False
+        self._shutdown: bool = False
 
         # Health tracking
         self.start_time: float = time.time()
@@ -197,6 +211,11 @@ class HardenedAgentBase(abc.ABC):
         self.last_error: Optional[str] = None
         self.collection_count: int = 0
         self.error_count: int = 0
+
+        # Observability metrics
+        self.metrics = AgentMetrics()
+        self._metrics_interval_seconds = metrics_interval
+        self._last_metrics_emit_ns = int(time.time() * 1e9)
 
     # ----------------- Lifecycle Hooks (Override These) -------------------
 
@@ -462,6 +481,143 @@ class HardenedAgentBase(abc.ABC):
             )
         return drained
 
+    # ----------------- Metrics & Observability -----------------------------
+
+    def _build_metrics_event(self) -> "ProtoEvent":
+        """Build a TelemetryEvent encapsulating current agent metrics.
+
+        Returns:
+            ProtoEvent with event_type="agent_metrics" and metrics data
+        """
+        # Import here to avoid circular dependency
+        from amoskys.messaging_pb2 import TelemetryEvent as ProtoEvent
+
+        from amoskys.agents.common.probes import Severity
+
+        metrics_dict = self.metrics.to_dict()
+        now_ns = int(time.time() * 1e9)
+
+        event = ProtoEvent(
+            event_type="agent_metrics",
+            severity=Severity.INFO.value,
+            event_timestamp_ns=now_ns,
+            source_component=self.__class__.__name__,
+        )
+
+        # Add metrics as attributes (map<string, string>)
+        for k, v in metrics_dict.items():
+            if v is not None:
+                event.attributes[k] = str(v)
+
+        return event
+
+    def _maybe_emit_metrics_telemetry(self) -> None:
+        """Emit agent metrics as telemetry if interval elapsed.
+
+        Uses the same WAL/queue flush path as normal telemetry.
+        Emits AGENT_METRICS DeviceTelemetry every N seconds.
+        """
+        now_ns = int(time.time() * 1e9)
+        if (now_ns - self._last_metrics_emit_ns) < int(
+            self._metrics_interval_seconds * 1e9
+        ):
+            return
+
+        self._last_metrics_emit_ns = now_ns
+
+        # Create metrics telemetry using queue_adapter or skip
+        if not self.queue_adapter:
+            logger.debug(
+                "Agent %s: no queue_adapter configured, skipping metrics emission",
+                self.agent_name,
+            )
+            return
+
+        try:
+            metrics_event = self._build_metrics_event()
+        except Exception as exc:
+            logger.exception("Failed to build metrics event: %s", exc)
+            return
+
+        try:
+            # Import here to avoid circular dependency
+            from amoskys.messaging_pb2 import DeviceTelemetry
+
+            telemetry = DeviceTelemetry(
+                device_id=self.device_id,
+                device_type="HOST",
+                protocol="AGENT_METRICS",
+                timestamp_ns=now_ns,
+                collection_agent=self.__class__.__name__,
+                agent_version=getattr(self, "agent_version", "v2"),
+                events=[metrics_event],
+            )
+
+            self.queue_adapter.enqueue(telemetry)
+            self.metrics.record_events_emitted(1)
+
+            logger.debug(
+                "Agent %s emitted metrics telemetry: loops=%d/%d, events=%d, probes=%d",
+                self.agent_name,
+                self.metrics.loops_succeeded,
+                self.metrics.loops_started,
+                self.metrics.events_emitted,
+                self.metrics.probe_events_emitted,
+            )
+
+        except Exception as exc:
+            logger.exception("Failed to emit metrics telemetry: %s", exc)
+
+    def start_metrics_http_server(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 9100,
+    ) -> None:
+        """Optional side-channel metrics endpoint for local scraping.
+
+        Starts a daemon thread serving JSON metrics at /metrics or /metrics.json.
+        Useful for Prometheus scraping or local debugging.
+
+        Args:
+            host: Bind address (default localhost only)
+            port: Port to listen on (default 9100)
+        """
+        agent = self  # Capture reference for handler
+
+        class _AgentMetricsHandler(BaseHTTPRequestHandler):
+            """HTTP handler for agent metrics endpoint."""
+
+            def log_message(self, format: str, *args: Any) -> None:
+                """Suppress default logging."""
+                pass
+
+            def do_GET(self) -> None:
+                if self.path not in ("/metrics", "/metrics.json"):
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+
+                metrics = agent.metrics.to_dict()
+                payload = json.dumps(metrics).encode("utf-8")
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+        server = HTTPServer((host, port), _AgentMetricsHandler)
+
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        logger.info(
+            "Metrics HTTP server for %s started on %s:%d",
+            self.__class__.__name__,
+            host,
+            port,
+        )
+
     # ----------------- Health & Introspection ------------------------------
 
     def health_summary(self) -> dict:
@@ -503,6 +659,9 @@ class HardenedAgentBase(abc.ABC):
         cycle_start = time.time()
         self.collection_count += 1
 
+        # Track loop start
+        self.metrics.record_loop_start()
+
         try:
             # Step 1: Collect raw data
             raw_events = self.collect_data()
@@ -529,9 +688,13 @@ class HardenedAgentBase(abc.ABC):
             # Step 4: Publish to EventBus
             if enriched:
                 self._publish_with_retry(enriched)
+                self.metrics.record_events_emitted(len(enriched))
 
             self.last_successful_collection = time.time()
             duration = self.last_successful_collection - cycle_start
+
+            # Track loop success (auto-timestamps)
+            self.metrics.record_loop_success()
 
             logger.info(
                 "Agent %s cycle %s complete: raw=%d valid=%d rejected=%d duration=%.3fs",
@@ -546,13 +709,94 @@ class HardenedAgentBase(abc.ABC):
         except Exception as e:
             self.error_count += 1
             self.last_error = str(e)
-            logger.error(
+
+            # Track loop failure (auto-timestamps)
+            self.metrics.record_loop_failure(e)
+
+            logger.exception(
                 "Agent %s cycle %s failed: %s",
                 self.agent_name,
                 cycle_id,
                 e,
-                exc_info=True,
             )
+
+    def run(self) -> None:
+        """Simplified agent loop for v2 agents using queue_adapter.
+
+        Lifecycle:
+            1. Run setup() - exit if fails
+            2. Register signal handlers
+            3. Enter main loop:
+               - Run collection cycle
+               - Emit metrics if interval elapsed
+               - Sleep until next interval
+            4. On SIGTERM/SIGINT: graceful shutdown
+
+        This is a simpler version of run_forever() designed for v2 agents
+        that use queue_adapter for all publishing (no EventBus retries).
+        """
+        logger.info("Starting agent %s on device %s", self.agent_name, self.device_id)
+
+        if not self.setup():
+            logger.critical("Agent %s setup failed; exiting", self.agent_name)
+            sys.exit(1)
+
+        self.is_running = True
+        self._shutdown = False
+
+        # Register signal handlers for graceful shutdown
+        signal.signal(signal.SIGTERM, self._handle_signal)
+        signal.signal(signal.SIGINT, self._handle_signal)
+
+        try:
+            while not self._shutdown and self.is_running:
+                loop_start = time.time()
+                self.metrics.record_loop_start()
+
+                try:
+                    # Collect data (returns list of DeviceTelemetry)
+                    items = self.collect_data() or []
+
+                    # Track events emitted
+                    self.metrics.record_events_emitted(len(items))
+
+                    # Flush to queue_adapter
+                    if self.queue_adapter and items:
+                        for item in items:
+                            self.queue_adapter.enqueue(item)
+
+                    # Track loop success (auto-timestamps)
+                    self.metrics.record_loop_success()
+                    self.last_successful_collection = time.time()
+
+                except Exception as exc:
+                    # Track loop failure (auto-timestamps)
+                    self.metrics.record_loop_failure(exc)
+                    self.error_count += 1
+                    self.last_error = str(exc)
+                    logger.exception(
+                        "Agent %s collection failed: %s",
+                        self.agent_name,
+                        exc,
+                    )
+
+                # Emit metrics telemetry if interval elapsed
+                self._maybe_emit_metrics_telemetry()
+
+                # Sleep for remaining interval
+                elapsed = time.time() - loop_start
+                sleep_for = max(0.0, self.collection_interval - elapsed)
+                if sleep_for > 0:
+                    time.sleep(sleep_for)
+
+        finally:
+            try:
+                self.shutdown()
+            except Exception as e:
+                logger.error(
+                    "Agent %s shutdown failed: %s", self.agent_name, e, exc_info=True
+                )
+            logger.info("Agent %s stopped", self.agent_name)
 
     def run_forever(self) -> None:
         """Main agent loop with setup, signal handling, and graceful shutdown.
@@ -597,6 +841,9 @@ class HardenedAgentBase(abc.ABC):
 
                 # Run collection cycle
                 self._run_one_cycle()
+
+                # Emit metrics telemetry if interval elapsed
+                self._maybe_emit_metrics_telemetry()
 
                 # Sleep until next collection
                 time.sleep(self.collection_interval)

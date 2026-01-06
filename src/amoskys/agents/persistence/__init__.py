@@ -14,6 +14,7 @@ The v2 agent uses the "swarm of eyes" pattern with probes for:
     - Hidden executable loaders
 """
 
+from amoskys.agents.persistence.persistence_agent import PersistenceGuardAgent
 from amoskys.agents.persistence.persistence_agent_v2 import (
     PersistenceCollector,
     PersistenceGuardV2,
@@ -35,6 +36,7 @@ from amoskys.agents.persistence.probes import (
 )
 
 __all__ = [
+    "PersistenceGuardAgent",
     "PersistenceGuardV2",
     "PersistenceCollector",
     "PersistenceEntry",
