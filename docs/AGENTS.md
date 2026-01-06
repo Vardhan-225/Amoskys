@@ -5,10 +5,10 @@
 AMOSKYS operates **11 specialized agents** across endpoints to collect security telemetry. Each agent now uses the **Micro-Probe Architecture** - a "swarm of eyes" pattern where each agent hosts multiple micro-probes, each watching ONE specific threat vector.
 
 **Fleet Status** (as of 2026-01-05):
-- ✅ **5/11** migrated to Micro-Probe Architecture (ProcAgent, DNSAgent, PeripheralAgent, AuthGuard, FIMAgent)
-- 🔄 **6/11** pending migration
+- ✅ **6/11** migrated to Micro-Probe Architecture (ProcAgent, DNSAgent, PeripheralAgent, AuthGuard, FIMAgent, FlowAgent)
+- 🔄 **5/11** pending migration
 - 🎯 **Target**: 100% unbreakable by Week 4
-- 👁️ **85+ Micro-Probes** across 11 agents = "If you breathe, we see it"
+- 👁️ **93+ Micro-Probes** across 11 agents = "If you breathe, we see it"
 
 ---
 
@@ -80,7 +80,7 @@ class MicroProbe(abc.ABC):
 | [FIMAgent](#5-fimagent-file-integrity-monitoring) | 8 | ✅ Implemented | T1036, T1547, T1505.003, T1548, T1574, T1556, T1014, T1565 |
 | [PersistenceGuard](#6-persistenceguardagent-persistence-detection) | 8 | 🔄 Planned | T1547, T1053, T1136, T1098 |
 | [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | 7 | 🔄 Planned | T1055, T1014, T1068, T1611 |
-| [FlowAgent](#9-flowagent-network-flow-monitoring) | 8 | 🔄 Planned | T1071, T1048, T1090, T1021 |
+| [FlowAgent](#9-flowagent-network-flow-monitoring) | 8 | ✅ Implemented | T1046, T1021, T1041, T1071, T1090, T1552 |
 | [SNMPAgent](#8-snmpagent-network-device-telemetry) | 6 | 🔄 Planned | T1557, T1562, T1200 |
 | [Protocol Collectors](#10-protocol-collectors-iot-telemetry) | 10 | 🔄 Planned | T1071, T1565, T1557 |
 | [DeviceDiscovery](#11-devicediscoveryengine-network-enumeration) | 6 | 🔄 Planned | T1046, T1018, T1040 |
@@ -201,18 +201,20 @@ class MicroProbe(abc.ABC):
 
 ---
 
-### 8. FlowAgent Probes (8 probes) 🔄 PLANNED
+### 8. FlowAgent Probes (8 probes) ✅
 
 | # | Probe | Description | MITRE | Severity |
 |---|-------|-------------|-------|----------|
-| 1 | `NewOutboundConnectionProbe` | First-time outbound destination | T1071 | LOW |
-| 2 | `LongLivedFlowProbe` | Connections lasting >1 hour | T1571 | MEDIUM |
-| 3 | `HighVolumeTransferProbe` | Large data transfers | T1048 | HIGH |
-| 4 | `InternalPortScanProbe` | Lateral movement scanning | T1046 | HIGH |
-| 5 | `LateralMovementProtocolProbe` | SMB, WMI, WinRM, SSH internal | T1021 | HIGH |
-| 6 | `C2PortPatternProbe` | Common C2 ports (443, 8443) | T1571 | MEDIUM |
-| 7 | `DNSOnlyC2HostProbe` | Hosts with only DNS traffic | T1071.004 | HIGH |
-| 8 | `TorProxyProbe` | Tor exit node connections | T1090.003 | HIGH |
+| 1 | `PortScanSweepProbe` | Vertical port scans (20+ ports) | T1046 | HIGH |
+| 2 | `LateralSMBWinRMProbe` | Lateral movement via SMB/RDP/WinRM/SSH | T1021.002, T1021.001, T1021.006, T1021.004 | HIGH |
+| 3 | `DataExfilVolumeSpikeProbe` | Data exfil spike (50MB+ or 5x baseline) | T1041, T1048 | CRITICAL |
+| 4 | `C2BeaconFlowProbe` | C2 beaconing patterns (jitter <0.2) | T1071.001, T1573.002 | HIGH |
+| 5 | `CleartextCredentialLeakProbe` | Cleartext protocols (HTTP, FTP, Telnet) | T1552.001 | HIGH/MEDIUM |
+| 6 | `SuspiciousTunnelProbe` | Long-lived tunnels (>10min, <500 bytes/pkt) | T1090.001, T1572 | HIGH |
+| 7 | `InternalReconDNSFlowProbe` | DNS recon (100+ queries in 10min) | T1046, T1590 | MEDIUM |
+| 8 | `NewExternalServiceProbe` | First-time external connections | T1071 | INFO |
+
+**File**: `src/amoskys/agents/flow/probes.py`
 
 ---
 
@@ -292,7 +294,7 @@ The 77 micro-probes provide coverage across **42 unique MITRE techniques**:
 | 6 | [PersistenceGuardAgent](#6-persistenceguardagent-persistence-detection) | 🔄 Pending | P1 | Medium | 3 hours |
 | 7 | [KernelAuditAgent](#7-kernelaauditagent-kernel-syscall-monitoring) | 🔄 Pending | P2 | High | 5 hours |
 | 8 | [SNMPAgent](#8-snmpagent-network-device-telemetry) | 🔄 Pending | P2 | Low | 2 hours |
-| 9 | [FlowAgent](#9-flowagent-network-flow-monitoring) | 🔄 Pending | P1 | Medium | 3 hours |
+| 9 | [FlowAgent](#9-flowagent-network-flow-monitoring) | ✅ Migrated | P1 | Medium | Complete |
 | 10 | [Protocol Collectors](#10-protocol-collectors-iot-telemetry) | 🔄 Pending | P3 | Low | 1 hour each |
 | 11 | [DeviceDiscoveryEngine](#11-devicediscoveryengine-network-enumeration) | 🔄 Pending | P2 | Medium | 3 hours |
 
@@ -907,21 +909,29 @@ Collects metrics from network devices (routers, switches, firewalls) via SNMP.
 ## 9. FlowAgent (Network Flow Monitoring)
 
 ### Purpose
-Monitors network flows (connections) for threat detection and network visibility.
+Monitors network flows (TCP/UDP connections) for threat detection including port scanning, lateral movement, data exfiltration, C2 beaconing, and suspicious tunnels.
 
 ### Collection Method
-- **Source**: Network flow data (5-tuple + byte counts)
-- **Interval**: Real-time (event-driven)
-- **WAL**: `config.agent.wal_path`
+- **Source**:
+  - eBPF (Linux)
+  - pcap/libpcap (cross-platform)
+  - NetFlow/sFlow exports
+  - OS-specific APIs (macOS Network Extension, Windows ETW)
+- **Interval**: 60 seconds (configurable)
 - **Platform**: Cross-platform
 
 ### Signals Collected
 
 | Signal | Type | Description |
 |--------|------|-------------|
-| `flow_start` | Event | New connection established |
-| `flow_end` | Event | Connection closed |
-| `flow_stats` | Metric | Bytes TX/RX, duration |
+| `flow_portscan_vertical` | Alert | Vertical port scan (20+ ports) |
+| `flow_lateral_smb_winrm_detected` | Alert | Lateral movement via admin protocols |
+| `flow_exfil_volume_spike` | Alert | Data exfiltration spike (50MB+ or 5x baseline) |
+| `flow_c2_beaconing_pattern` | Alert | C2 beaconing (regular intervals, low jitter) |
+| `flow_cleartext_credentials_detected` | Alert | Cleartext protocols (HTTP, FTP, Telnet) |
+| `flow_suspicious_tunnel_detected` | Alert | Long-lived tunnel (>10min, small packets) |
+| `flow_internal_dns_recon_suspected` | Alert | DNS reconnaissance (100+ queries) |
+| `flow_new_external_service_seen` | Info | First-time external connection |
 
 ### Data Contract
 
@@ -931,36 +941,60 @@ FlowEvent {
     dst_ip: string              # Destination IP
     src_port: int32             # Source port
     dst_port: int32             # Destination port
-    protocol: string            # "TCP", "UDP", "ICMP"
+    protocol: string            # "TCP", "UDP", "ICMP", "OTHER"
     bytes_tx: int64             # Bytes transmitted
     bytes_rx: int64             # Bytes received
-    timestamp_ns: int64
+    packet_count: int32         # Total packets
+    first_seen_ns: int64        # Flow start timestamp
+    last_seen_ns: int64         # Flow end timestamp
+    direction: string           # "INBOUND", "OUTBOUND", "LATERAL", "UNKNOWN"
+    app_protocol: string        # "HTTP", "SMB", "DNS", etc. (optional)
+    tcp_flags: string           # TCP flags (optional)
 }
 ```
 
 ### Validation Rules
 
-- ✅ `src_ip`, `dst_ip` required, valid IP format
+- ✅ `device_id` required and non-empty
+- ✅ `timestamp_ns` within 1 hour of current time
+- ✅ `events` list non-empty
+- ✅ `src_ip`, `dst_ip` valid IP format
 - ✅ `src_port`, `dst_port` range: 0-65535
 - ✅ `protocol` in ["TCP", "UDP", "ICMP", "OTHER"]
 - ✅ `bytes_tx`, `bytes_rx` non-negative
 
 ### Enrichment
 
-- GeoIP for src/dst IPs
-- Port classification (common services vs suspicious)
-- Threat intel (known C2 IPs, malware infrastructure)
+- IP address (via `socket.gethostbyname()`)
+- Flow collection statistics
 
-### Migration Priority
+### Threat Detection Algorithms
 
-**P1** - Important for network visibility
+| Threat | Detection Method | Threshold |
+|--------|------------------|-----------|
+| **Port Scan** | Track distinct ports per (src, dst) pair | 20+ ports |
+| **Lateral Movement** | Monitor admin protocols (SMB:445, RDP:3389, WinRM:5985/5986, SSH:22) | First-time edge |
+| **Data Exfil** | EWMA baseline + spike detection | 50MB+ or 5x baseline |
+| **C2 Beacon** | Inter-arrival time analysis (mean, jitter ratio) | 4+ flows, jitter <0.2 |
+| **Cleartext Creds** | HTTP:80, FTP:21, Telnet:23, POP3:110, IMAP:143, SMTP:25 | Any usage |
+| **Tunnel** | Long-lived + small packets | >10min, <500 bytes/pkt |
+| **DNS Recon** | High DNS query volume | 100+ queries in 10min |
+| **New Service** | First-time external (dst_ip, dst_port) | First occurrence |
 
-**Estimated Time**: 3 hours
+### Current Status
+
+- ✅ **Migrated** to `HardenedAgentBase`
+- ✅ Circuit breaker enabled
+- ✅ Local queue integration
+- ✅ Validation implemented
+- ✅ Enrichment implemented
+- ✅ 8 micro-probes implemented
 
 ### Files
 
-- Implementation: `src/amoskys/agents/flowagent/flow_agent.py`
-- WAL: Uses SQLiteWAL
+- Implementation: [flow_agent_v2.py](../src/amoskys/agents/flow/flow_agent_v2.py)
+- Probes: [probes.py](../src/amoskys/agents/flow/probes.py)
+- Tests: [test_flow_probes.py](../tests/agents/test_flow_probes.py)
 
 ---
 
