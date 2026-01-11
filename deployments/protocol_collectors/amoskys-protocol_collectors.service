@@ -7,8 +7,9 @@ Wants=network-online.target
 Type=simple
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/protocol_collectors
+WorkingDirectory=/home/ubuntu/amoskys-src
 Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONPATH=/home/ubuntu/amoskys-src/src"
 
 # Agent command - using venv Python
 ExecStart=/home/ubuntu/amoskys-venv/bin/python3 /home/ubuntu/protocol_collectors/run_agent_v2.py \
