@@ -30,7 +30,6 @@ Usage:
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any, Dict, List, Optional, Sequence
 
 from amoskys.agents.common.base import HardenedAgentBase
@@ -89,25 +88,26 @@ class ProtocolCollectorsV2(MicroProbeAgentMixin, HardenedAgentBase):
             metrics_interval: Seconds between metrics emissions
             probes: Custom probes (overrides defaults)
         """
-        # Initialize base classes
-        HardenedAgentBase.__init__(
-            self,
-            device_id=device_id,
+        # Initialize using super() for proper MRO handling
+        super().__init__(
             agent_name=agent_name,
+            device_id=device_id,
             collection_interval=collection_interval,
+            probes=probes,
+            queue_adapter=queue_adapter,
+            metrics_interval=metrics_interval,
         )
-        MicroProbeAgentMixin.__init__(self)
         
         self.log_path = log_path
         self.use_stub = use_stub
-        self.queue_adapter = queue_adapter
-        self.metrics_interval = metrics_interval
         self._collector = collector
-        self._custom_probes = probes
-        self._last_metrics_time = 0.0
 
-    def setup(self) -> None:
-        """Initialize collector and register probes."""
+    def setup(self) -> bool:
+        """Initialize collector and register probes.
+        
+        Returns:
+            True if setup succeeded, False otherwise
+        """
         logger.info(f"Setting up {self.agent_name} for device {self.device_id}")
 
         # Initialize collector
@@ -118,14 +118,12 @@ class ProtocolCollectorsV2(MicroProbeAgentMixin, HardenedAgentBase):
             )
         logger.info(f"Initialized collector: {type(self._collector).__name__}")
 
-        # Register probes
-        if self._custom_probes:
-            for probe in self._custom_probes:
-                self.register_probe(probe)
-        else:
+        # Register default probes if none were provided
+        if not self.probes:
             self._register_default_probes()
 
         logger.info(f"{self.agent_name} setup complete: {len(self.probes)} probes active")
+        return True
 
     def _register_default_probes(self) -> None:
         """Register all default protocol collector probes."""
@@ -134,8 +132,10 @@ class ProtocolCollectorsV2(MicroProbeAgentMixin, HardenedAgentBase):
             self.register_probe(probe)
         logger.info(f"Registered {len(PROTOCOL_PROBES)} default protocol_collectors probes")
 
-    def collect(self) -> List[Dict[str, Any]]:
+    def collect_data(self) -> List[Dict[str, Any]]:
         """Collect protocol events and run through probes.
+        
+        This implements the abstract method from HardenedAgentBase.
         
         Returns:
             List of telemetry dictionaries from probe analysis
@@ -148,13 +148,12 @@ class ProtocolCollectorsV2(MicroProbeAgentMixin, HardenedAgentBase):
             logger.debug(f"Collected {len(protocol_events)} protocol events")
         except Exception as e:
             logger.error(f"Error collecting protocol events: {e}")
-            self._record_loop_failure()
             return results
 
         # Create probe context with events
         context = ProbeContext(
             device_id=self.device_id,
-            timestamp=time.time(),
+            agent_name=self.agent_name,
             shared_data={"protocol_events": protocol_events},
         )
 
@@ -175,45 +174,7 @@ class ProtocolCollectorsV2(MicroProbeAgentMixin, HardenedAgentBase):
                 except Exception as e:
                     logger.error(f"Failed to enqueue event: {e}")
 
-        self._record_loop_success()
-        
-        # Emit metrics periodically
-        self._maybe_emit_metrics()
-        
         return results
-
-    def _record_loop_success(self) -> None:
-        """Record successful collection loop."""
-        self._metrics["loops_succeeded"] = self._metrics.get("loops_succeeded", 0) + 1
-
-    def _record_loop_failure(self) -> None:
-        """Record failed collection loop."""
-        self._metrics["loops_failed"] = self._metrics.get("loops_failed", 0) + 1
-
-    def _maybe_emit_metrics(self) -> None:
-        """Emit metrics if interval has passed."""
-        now = time.time()
-        if now - self._last_metrics_time >= self.metrics_interval:
-            self._emit_metrics()
-            self._last_metrics_time = now
-
-    def _emit_metrics(self) -> None:
-        """Log current agent metrics."""
-        succeeded = self._metrics.get("loops_succeeded", 0)
-        failed = self._metrics.get("loops_failed", 0)
-        total = succeeded + failed
-        success_rate = (succeeded / total * 100) if total > 0 else 100.0
-
-        # Get probe metrics
-        probe_stats = self.get_probe_stats()
-
-        logger.info(
-            f"Agent emitted metrics: "
-            f"loops_started={total}, loops_succeeded={succeeded}, "
-            f"success_rate={success_rate:.1f}%, "
-            f"probe_events_emitted={probe_stats.get('total_events', 0)}, "
-            f"active_probes={len(self.probes)}"
-        )
 
     def cleanup(self) -> None:
         """Clean up resources."""
