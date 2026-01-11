@@ -1,0 +1,33 @@
+[Unit]
+Description=AMOSKYS ProtocolCollectors v2 - Protocol Plane Threat Detection
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/protocol_collectors
+Environment="PYTHONUNBUFFERED=1"
+
+# Agent command - using venv Python
+ExecStart=/home/ubuntu/amoskys-venv/bin/python3 /home/ubuntu/protocol_collectors/run_agent_v2.py \
+    --device-id=%H \
+    --queue-path=/var/lib/amoskys/queues/protocol_collectors \
+    --collection-interval=5 \
+    --metrics-interval=60
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+
+# Resource limits (tune based on load)
+MemoryMax=512M
+NoNewPrivileges=yes
+
+# Environment
+Environment="AMOSKYS_AGENT=protocol_collectors_v2"
+
+[Install]
+WantedBy=multi-user.target
