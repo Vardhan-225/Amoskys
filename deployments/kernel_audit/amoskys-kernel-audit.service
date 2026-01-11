@@ -1,0 +1,79 @@
+[Unit]
+Description=AMOSKYS KernelAudit Guard v2 - Syscall-Plane Threat Detection
+Documentation=https://github.com/amoskys/amoskys
+After=auditd.service network.target
+Requires=auditd.service
+PartOf=amoskys.target
+
+# Ensure audit is running before we start
+ConditionPathExists=/var/log/audit/audit.log
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+
+# Agent command - using venv Python
+ExecStart=/home/ubuntu/amoskys-venv/bin/python3 /home/ubuntu/kernel_audit/run_agent_v2.py \
+    --device-id=%H \
+    --queue-path=/var/lib/amoskys/queues/kernel_audit \
+    --audit-log=/var/log/audit/audit.log \
+    --collection-interval=5 \
+    --metrics-interval=60
+
+# Alternative: Run via Python module with venv
+# ExecStart=/home/ubuntu/amoskys-venv/bin/python3 -m amoskys.agents.kernel_audit \
+#     --device-id=%H \
+#     --queue-path=/var/lib/amoskys/queues/kernel_audit
+
+# Restart policy
+Restart=always
+RestartSec=10s
+StartLimitInterval=300s
+StartLimitBurst=5
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Memory and CPU limits (adjust based on system resources)
+MemoryMax=512M
+CPUQuota=50%
+
+# Security hardening (relaxed for home directory access)
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=no
+ReadWritePaths=/var/lib/amoskys/queues
+ReadOnlyPaths=/var/log/audit /home/ubuntu/amoskys-src /home/ubuntu/amoskys-venv /home/ubuntu/kernel_audit
+
+# Capability restrictions
+# Note: We need CAP_DAC_READ_SEARCH to read audit logs
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+
+# Namespace isolation
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+# System call filtering (optional - enable after testing)
+# SystemCallFilter=@system-service
+# SystemCallFilter=~@privileged @resources
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="AMOSKYS_AGENT=kernel_audit_v2"
+Environment="PYTHONPATH=/home/ubuntu/amoskys-src/src"
+WorkingDirectory=/home/ubuntu/amoskys-src
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=amoskys-kernel-audit
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=amoskys.target

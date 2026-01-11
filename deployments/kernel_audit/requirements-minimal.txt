@@ -1,0 +1,27 @@
+# Minimal requirements for KernelAudit Agent v2
+# Excludes heavy ML dependencies (TensorFlow, Keras, etc.)
+# These are not needed for kernel-level syscall monitoring
+
+# Core async/networking
+aiohttp>=3.9.0
+anyio>=4.0.0
+httpx>=0.27.0
+
+# Data validation
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# Observability/metrics
+prometheus_client>=0.20.0
+python-json-logger>=3.0.0
+
+# System monitoring
+psutil>=5.9.0
+
+# Testing (optional but included for smoke tests)
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+
+# Utilities
+PyYAML>=6.0.0
+typing_extensions>=4.10.0
