@@ -12,7 +12,7 @@ aext-shared==4.20.0
 aext-toolbox==4.20.0
 aiobotocore==2.19.0
 aiohappyeyeballs==2.4.4
-aiohttp==3.11.10
+aiohttp==3.13.3
 aioitertools==0.7.1
 aiosignal==1.2.0
 alabaster==0.7.16
