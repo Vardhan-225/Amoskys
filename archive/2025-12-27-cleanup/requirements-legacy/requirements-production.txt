@@ -307,7 +307,7 @@ queuelib==1.6.2
 readchar==4.0.5
 referencing==0.30.2
 regex==2024.11.6
-requests==2.32.3
+requests==2.32.4
 requests-file==2.1.0
 requests-toolbelt==1.0.0
 rfc3339_validator==0.1.4
