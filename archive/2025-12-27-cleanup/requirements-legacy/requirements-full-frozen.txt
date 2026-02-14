@@ -330,7 +330,7 @@ semver @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_85w
 Send2Trash @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_a6shz7yg5h/croot/send2trash_1736541353497/work
 sentry-sdk @ file:///Users/builder/cbouss/buildout/croot/sentry-sdk_1735858402985/work
 service-identity @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_bcsu3iimeq/croot/service_identity_1749714989457/work
-setuptools==72.1.0
+setuptools==78.1.1
 sgmllib3k==1.0.0
 shellingham @ file:///Users/builder/cbouss/perseverance-python-buildout/croot/shellingham_1728591266231/work
 sip @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_7dqoklyi10/croot/sip_1736542203351/work
