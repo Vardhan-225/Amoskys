@@ -160,19 +160,13 @@ class ProtocolCollectorsV2(MicroProbeAgentMixin, HardenedAgentBase):
         # Run all probes
         telemetry_events = self.run_probes(context)
         
-        # Convert to dictionaries and enqueue
+        # Convert to dictionaries
+        # NOTE: Do not enqueue here — base class run() handles queue_adapter.enqueue()
         for event in telemetry_events:
             event_dict = event.to_dict()
             event_dict["device_id"] = self.device_id
             event_dict["agent"] = self.agent_name
             results.append(event_dict)
-
-            # Enqueue if adapter available
-            if self.queue_adapter:
-                try:
-                    self.queue_adapter.enqueue(event_dict)
-                except Exception as e:
-                    logger.error(f"Failed to enqueue event: {e}")
 
         return results
 

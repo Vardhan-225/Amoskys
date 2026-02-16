@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# AMOSKYS Mac Lab (local dev environment, never committed)
+.amoskys_lab/
+
 # AMOSKYS runtime data (should not be in version control)
 data/
 !data/.gitkeep
@@ -297,6 +300,9 @@ config/*.local.*
 *.swp
 *.swo
 *~
+~$*
+.~lock.*
+lu*.tmp
 .vscode/launch.json
 .vscode/tasks.json
 .vscode/extensions.json

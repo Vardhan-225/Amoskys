@@ -40,3 +40,13 @@
     maxsize 50M
     create 0644 ubuntu ubuntu
 }
+
+# Queue drain script logs
+/var/log/amoskys-drain.log {
+    weekly
+    rotate 4
+    compress
+    missingok
+    notifempty
+    copytruncate
+}

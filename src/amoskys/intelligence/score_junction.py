@@ -378,16 +378,14 @@ class ScoreJunction:
         metric_value = None
         if event.HasField("metric_data"):
             metric_name = event.metric_data.metric_name
-            metric_value = (
-                event.metric_data.numeric_value
-                if event.metric_data.HasField("numeric_value")
-                else None
-            )
+            # numeric_value is a proto3 scalar (double) — defaults to 0.0,
+            # cannot use HasField on scalars.
+            metric_value = event.metric_data.numeric_value or None
 
-        # Extract alert data if present
+        # Extract alarm data if present (proto uses alarm_data, not alert_data)
         alert_type = None
-        if event.HasField("alert_data"):
-            alert_type = event.alert_data.alert_type
+        if event.HasField("alarm_data"):
+            alert_type = event.alarm_data.alarm_type
 
         return CorrelatedEvent(
             event_id=event.event_id,
@@ -400,7 +398,7 @@ class ScoreJunction:
             metric_value=metric_value,
             alert_type=alert_type,
             additional_context=(
-                dict(event.additional_context) if event.additional_context else {}
+                dict(event.attributes) if event.attributes else {}
             ),
         )
 
