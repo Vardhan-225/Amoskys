@@ -35,6 +35,7 @@ import argparse
 import ipaddress
 import logging
 import os
+import platform
 import re
 import socket
 import subprocess
@@ -163,6 +164,14 @@ class MacOSFlowCollector:
         self.interface = interface
         self.flows_collected = 0
         self._collection_errors = 0
+        self._nettop = None
+
+        if platform.system() == "Darwin":
+            try:
+                from amoskys.agents.flow.nettop_collector import MacOSNettopCollector
+                self._nettop = MacOSNettopCollector()
+            except ImportError:
+                logger.debug("nettop collector not available")
 
     def collect(self, window_seconds: int = 60) -> List[FlowEvent]:
         """Run ``lsof -i -n -P`` and parse output into FlowEvent objects."""
@@ -202,6 +211,25 @@ class MacOSFlowCollector:
         except Exception as e:
             logger.error("Flow collection error: %s", e, exc_info=True)
             self._collection_errors += 1
+
+        # Merge nettop byte counts by PID
+        if self._nettop and flows:
+            try:
+                nettop_records = self._nettop.collect()
+                if nettop_records:
+                    merged = 0
+                    for flow in flows:
+                        if flow.pid and flow.pid in nettop_records:
+                            rec = nettop_records[flow.pid]
+                            flow.bytes_rx = rec.bytes_in
+                            flow.bytes_tx = rec.bytes_out
+                            if not flow.process_name:
+                                flow.process_name = rec.process_name
+                            merged += 1
+                    if merged:
+                        logger.debug("Merged nettop bytes for %d/%d flows", merged, len(flows))
+            except Exception as e:
+                logger.debug("nettop merge failed: %s", e)
 
         self.flows_collected += len(flows)
         logger.debug("Collected %d flows (%d total)", len(flows), self.flows_collected)
@@ -247,13 +275,22 @@ class MacOSFlowCollector:
             app_proto = self._guess_app_protocol(dst_port)
             tcp_flags = self._state_to_flags(state) if protocol == "TCP" else None
 
+            # Capture PID from lsof column 1 (for nettop merge)
+            pid = None
+            process_name = None
+            try:
+                pid = int(parts[1])
+                process_name = parts[0]
+            except (ValueError, IndexError):
+                pass
+
             return FlowEvent(
                 src_ip=src_ip,
                 dst_ip=dst_ip,
                 src_port=src_port,
                 dst_port=dst_port,
                 protocol=protocol,
-                bytes_tx=0,       # lsof doesn't report bytes
+                bytes_tx=0,       # lsof doesn't report bytes — nettop fills later
                 bytes_rx=0,
                 packet_count=1,   # snapshot — 1 observation
                 first_seen_ns=now_ns,
@@ -261,6 +298,8 @@ class MacOSFlowCollector:
                 direction=direction,
                 app_protocol=app_proto,
                 tcp_flags=tcp_flags,
+                pid=pid,
+                process_name=process_name,
             )
 
         # UDP with arrow but no state parenthetical
@@ -277,6 +316,14 @@ class MacOSFlowCollector:
                 src_port = int(m2.group(2))
                 dst_port = int(m2.group(4))
 
+                pid = None
+                process_name = None
+                try:
+                    pid = int(parts[1])
+                    process_name = parts[0]
+                except (ValueError, IndexError):
+                    pass
+
                 return FlowEvent(
                     src_ip=src_ip,
                     dst_ip=dst_ip,
@@ -290,6 +337,8 @@ class MacOSFlowCollector:
                     last_seen_ns=now_ns,
                     direction=self._infer_direction(src_ip, dst_ip),
                     app_protocol=self._guess_app_protocol(dst_port),
+                    pid=pid,
+                    process_name=process_name,
                 )
 
         return None

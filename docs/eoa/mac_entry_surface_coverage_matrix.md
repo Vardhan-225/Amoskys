@@ -11,10 +11,10 @@
 
 | # | Property | Definition | Current Status |
 |---|----------|-----------|----------------|
-| 1 | **Coverage** | Every major attacker entry surface produces telemetry | ✅ 7/7 core surfaces covered (see map below) |
-| 2 | **Continuity** | Heartbeat + change events emitted every cycle | ✅ All 7 agents emit METRIC heartbeats |
+| 1 | **Coverage** | Every major attacker entry surface produces telemetry | ✅ 8/8 core surfaces covered (incl. kernel) |
+| 2 | **Continuity** | Heartbeat + change events emitted every cycle | ✅ All 8 agents emit METRIC heartbeats |
 | 3 | **Losslessness** | At-least-once durability on-device (SQLite WAL queue) | ✅ LocalQueueAdapter + idempotency keys |
-| 4 | **Integrity** | Tamper-evident envelopes (signing + hash chain) | 🟡 Proto has `sig`/`prev_sig`/`signing_algorithm` — **not yet wired** |
+| 4 | **Integrity** | Tamper-evident envelopes (signing + hash chain) | ✅ Ed25519 `sig`/`prev_sig` wired |
 | 5 | **Reproducibility** | Every SECURITY event → raw evidence fields, timestamps, provenance | ✅ `attributes` map + `source_component` + `event_timestamp_ns` |
 
 ---
@@ -27,15 +27,15 @@ The device is **7 attack surfaces**, not 9 agents. Agents are implementations.
 |---|---------------|---------------------|-------|-----------|------------|-------|
 | 1 | **Execution** | process spawn, cmdline, parent/child, binary path, interpreter | ProcAgent V3 | psutil (live) | ✅ **STRONG** | User-space |
 | 2 | **Persistence** | LaunchAgents/Daemons, cron, shell profiles, login items, SSH keys | PersistenceGuard V2 | plistlib + crontab + hashlib | ✅ **STRONG** | User-space |
-| 3 | **Filesystem** | file drops, modifications, permission flips, new executables | FIMAgent V2 | os.walk + hashlib (diff) | ✅ **WORKING** | User-space |
+| 3 | **Filesystem** | file drops, modifications, permission flips, new executables | FIMAgent V2 | os.walk + hashlib (diff) + FSEvents (real-time) | ✅ **STRONG** | User-space + FSEvents |
 | 4 | **Network (DNS)** | DNS queries, resolution, domain intelligence | DNSAgent V2 | `log show` mDNSResponder | ✅ **WORKING** | Unified log |
-| 5 | **Network (Flow)** | TCP/UDP connections, listening ports, outbound beacons, lateral movement | FlowAgent V2 | MacOSFlowCollector (`lsof -i -n -P`) | ✅ **WORKING** | User-space |
+| 5 | **Network (Flow)** | TCP/UDP connections, listening ports, outbound beacons, lateral movement | FlowAgent V2 | MacOSFlowCollector (`lsof -i -n -P` + nettop bytes) | ✅ **STRONG** | User-space |
 | 6 | **Auth** | sudo, SSH, local logins, failed attempts, privilege changes | AuthGuard V2.1 | MacOSAuthLogCollector V2.1 (`log show` broad predicate + `last`) | ✅ **WORKING** | Unified log + last |
 | 7 | **Peripheral** | USB insertion, HID injection, storage, network adapters, Bluetooth | PeripheralAgent V2 | system_profiler SPUSBDataType | ✅ **WORKING** | User-space |
-| 8 | **Kernel** | syscalls, module loads, ptrace/injection, privilege escalation | KernelAudit V2 | AuditdLogCollector (Linux only) | 🔴 **BLIND** | — |
+| 8 | **Kernel** | syscalls, module loads, ptrace/injection, privilege escalation | KernelAudit V2 | MacOSAuditCollector (OpenBSM via `praudit -x`) | ✅ **WORKING** | Kernel (OpenBSM) |
 | 9 | **Discovery** | ARP/network device enumeration, rogue DHCP, shadow IT | DeviceDiscovery V2 | ARP cache + port scan | 🟡 **UNTESTED** | User-space |
 
-**Verdict: 7 of 7 core surfaces have working signal on macOS. Kernel (#8) is blind, Discovery (#9) is untested.**
+**Verdict: 8 of 8 core surfaces have working signal on macOS. Discovery (#9) is untested.**
 
 ---
 
@@ -71,7 +71,7 @@ The device is **7 attack surfaces**, not 9 agents. Agents are implementations.
 
 **Gaps:**
 - No `codesign` verification (macOS code signature status)
-- No process GUID (cross-event correlation key)
+- ~~No process GUID~~ ✅ **DONE** — `process_guid` added to all 8 probes
 - No exe SHA-256 hash (binary provenance)
 - No working directory capture
 

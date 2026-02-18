@@ -407,6 +407,7 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         self.baseline_mode = baseline_mode
         self.monitor_paths = monitor_paths or self._get_platform_paths()
         self.baseline_engine = BaselineEngine(BASELINE_PATH)
+        self._fsevents_collector = None
 
         # Register all FIM probes
         self.register_probes(create_fim_probes())
@@ -457,6 +458,31 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
                         "No baseline found — first cycle will auto-create baseline"
                     )
                     self.baseline_mode = "auto_create"
+
+            # Start FSEvents real-time watcher (macOS only, optional)
+            if platform.system() == "Darwin":
+                try:
+                    from collections import deque as _deque
+
+                    from amoskys.agents.fim.fsevents_collector import (
+                        MacOSFSEventsCollector,
+                    )
+
+                    fsevents_buffer = _deque(maxlen=10000)
+                    self._fsevents_collector = MacOSFSEventsCollector(
+                        self.monitor_paths, fsevents_buffer
+                    )
+                    self._fsevents_collector.start()
+                    logger.info(
+                        "FSEvents watcher started for %d paths",
+                        len(self.monitor_paths),
+                    )
+                except ImportError:
+                    logger.warning(
+                        "watchdog not installed; FSEvents watcher disabled"
+                    )
+                except Exception as e:
+                    logger.warning("FSEvents watcher failed to start: %s", e)
 
             # Setup probes
             if not self.setup_probes():
@@ -519,6 +545,26 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
 
         # Compare against baseline
         changes = self.baseline_engine.compare(current_state)
+
+        # Merge real-time FSEvents changes collected between polls
+        if self._fsevents_collector:
+            fsevents_changes = self._fsevents_collector.drain()
+            if fsevents_changes:
+                existing_keys = {
+                    (c.path, c.change_type) for c in changes
+                }
+                merged = 0
+                for fc in fsevents_changes:
+                    if (fc.path, fc.change_type) not in existing_keys:
+                        changes.append(fc)
+                        merged += 1
+                if merged:
+                    logger.info(
+                        "Merged %d FSEvents changes (total: %d)",
+                        merged,
+                        len(changes),
+                    )
+
         logger.info(f"Detected {len(changes)} file changes")
 
         if not changes:
@@ -733,6 +779,10 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
     def shutdown(self) -> None:
         """Graceful shutdown."""
         logger.info("FIMAgentV2 shutting down...")
+
+        # Stop FSEvents watcher
+        if self._fsevents_collector:
+            self._fsevents_collector.stop()
 
         # Close EventBus connection
         if self.eventbus_publisher:

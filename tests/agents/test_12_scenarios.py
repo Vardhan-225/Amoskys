@@ -1,7 +1,8 @@
-"""12-Scenario Attack Surface Validation Suite.
+"""25-Scenario Attack Surface Validation Suite.
 
-Maps to the 12 test scenarios defined in:
-    docs/eoa/mac_entry_surface_coverage_matrix.md (lines 491-514)
+Maps to attack surface coverage for all 8 agents. Originally 12 scenarios
+(docs/eoa/mac_entry_surface_coverage_matrix.md), extended to 25 to cover
+newly-unblocked probes from sensor upgrades (FSEvents, nettop, OpenBSM).
 
 Each test injects mock data through the probe's expected interface
 (shared_data, psutil mock, etc.) and verifies the probe fires with
@@ -14,6 +15,12 @@ Coverage:
     Surface 9-10: DNS (DNSAgent V2)
     Surface 11: Peripheral (PeripheralAgent V2)
     Surface 12: Auth (AuthGuard V2.1)
+    Surface 13-14: Filesystem advanced (FIM — SUID, Config backdoor)
+    Surface 15-16: Persistence advanced (SSH key, Hidden file)
+    Surface 17-20: Network flow (Port scan, Exfil, C2 beacon, Tunnel)
+    Surface 21-22: DNS advanced (Suspicious TLD, DNS tunneling)
+    Surface 23: Auth brute force (AuthGuard)
+    Surface 24-25: Kernel audit (Execve from /tmp, Syscall flood)
 """
 
 from __future__ import annotations
@@ -619,12 +626,583 @@ class TestScenario12_SudoElevation:
 
 
 # ============================================================================
-# SUMMARY — Verify all 12 scenarios are present
+# SCENARIO 13 — SUID bit added  (FIMAgent → suid_bit_change)
+# ============================================================================
+
+
+class TestScenario13_SUIDbitChange:
+    """Attacker sets SUID bit on a binary for privilege escalation."""
+
+    def test_suid_bit_fires(self):
+        from amoskys.agents.fim.probes import (
+            ChangeType,
+            FileChange,
+            FileState,
+            SUIDBitChangeProbe,
+        )
+
+        probe = SUIDBitChangeProbe()
+
+        old_state = FileState(
+            path="/usr/bin/find",
+            sha256="a" * 64,
+            size=4096,
+            mode=stat.S_IFREG | 0o755,  # No SUID
+            uid=0, gid=0,
+            mtime_ns=_now_ns() - 1_000_000_000,
+            is_dir=False, is_symlink=False,
+        )
+
+        new_state = FileState(
+            path="/usr/bin/find",
+            sha256="a" * 64,
+            size=4096,
+            mode=stat.S_IFREG | 0o4755,  # SUID set!
+            uid=0, gid=0,
+            mtime_ns=_now_ns(),
+            is_dir=False, is_symlink=False,
+        )
+
+        change = FileChange(
+            path="/usr/bin/find",
+            change_type=ChangeType.PERM_CHANGED,
+            old_state=old_state,
+            new_state=new_state,
+            timestamp_ns=_now_ns(),
+        )
+
+        context = _ctx(agent_name="fim_agent_v2", file_changes=[change])
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert ev.event_type == "suid_bit_added"
+        assert ev.severity == Severity.CRITICAL
+        assert "T1548.001" in ev.mitre_techniques
+
+
+# ============================================================================
+# SCENARIO 14 — sshd_config backdoor  (FIMAgent → config_backdoor)
+# ============================================================================
+
+
+class TestScenario14_ConfigBackdoor:
+    """Attacker modifies sshd_config to enable root login."""
+
+    def test_ssh_config_backdoor_fires(self, tmp_path):
+        from amoskys.agents.fim.probes import (
+            ChangeType,
+            ConfigBackdoorProbe,
+            FileChange,
+            FileState,
+        )
+
+        probe = ConfigBackdoorProbe()
+
+        # Create a temp file with backdoor patterns — probe reads the actual file
+        config = tmp_path / "sshd_config"
+        config.write_bytes(b"PermitRootLogin yes\nPasswordAuthentication yes\n")
+
+        new_state = FileState(
+            path=str(config),
+            sha256="b" * 64,
+            size=50,
+            mode=stat.S_IFREG | 0o644,
+            uid=0, gid=0,
+            mtime_ns=_now_ns(),
+            is_dir=False, is_symlink=False,
+        )
+
+        # Use the temp file path so _check_ssh_config can read it
+        change = FileChange(
+            path=str(config),  # Actual readable path with "sshd_config" in name
+            change_type=ChangeType.MODIFIED,
+            old_state=None,
+            new_state=new_state,
+            timestamp_ns=_now_ns(),
+        )
+
+        context = _ctx(agent_name="fim_agent_v2", file_changes=[change])
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert ev.event_type == "ssh_config_backdoor"
+        assert ev.severity == Severity.CRITICAL
+
+
+# ============================================================================
+# SCENARIO 15 — SSH key backdoor  (PersistenceGuard → ssh_key_backdoor)
+# ============================================================================
+
+
+class TestScenario15_SSHKeyBackdoor:
+    """Attacker adds unauthorized SSH public key to root's authorized_keys."""
+
+    def test_ssh_key_backdoor_fires(self):
+        from amoskys.agents.persistence.probes import (
+            PersistenceChange,
+            PersistenceChangeType,
+            PersistenceEntry,
+            SSHKeyBackdoorProbe,
+        )
+
+        probe = SSHKeyBackdoorProbe()
+        now = _now_ns()
+
+        new_key = PersistenceEntry(
+            id="ssh:root:AAAAB3NzaC1yc2EAAAA",
+            mechanism_type="SSH_AUTHORIZED_KEY",
+            user="root",
+            path="/root/.ssh/authorized_keys",
+            command="ssh-rsa AAAAB3NzaC1yc2EAAAA...",
+            args="",
+            enabled=True,
+            hash="e" * 64,
+            metadata={},
+            last_seen_ns=now,
+        )
+
+        change = PersistenceChange(
+            entry_id="ssh:root:AAAAB3NzaC1yc2EAAAA",
+            mechanism_type="SSH_AUTHORIZED_KEY",
+            change_type=PersistenceChangeType.CREATED,
+            old_entry=None,
+            new_entry=new_key,
+            timestamp_ns=now,
+        )
+
+        context = _ctx(
+            agent_name="persistence_agent_v2",
+            persistence_changes=[change],
+        )
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert "ssh" in ev.event_type.lower() and "key" in ev.event_type.lower()
+        assert ev.severity in (Severity.HIGH, Severity.CRITICAL)
+        assert "T1098.004" in ev.mitre_techniques
+
+
+# ============================================================================
+# SCENARIO 16 — Hidden executable file  (PersistenceGuard → hidden_file)
+# ============================================================================
+
+
+class TestScenario16_HiddenFile:
+    """Attacker drops hidden executable in home directory."""
+
+    def test_hidden_file_persistence_fires(self):
+        from amoskys.agents.persistence.probes import (
+            HiddenFilePersistenceProbe,
+            PersistenceChange,
+            PersistenceChangeType,
+            PersistenceEntry,
+        )
+
+        probe = HiddenFilePersistenceProbe()
+        now = _now_ns()
+
+        entry = PersistenceEntry(
+            id="/Users/alice/.backdoor",
+            mechanism_type="HIDDEN_FILE_PERSISTENCE",
+            user="alice",
+            path="/Users/alice/.backdoor",
+            command="/Users/alice/.backdoor",
+            args="",
+            enabled=True,
+            hash="f" * 64,
+            metadata={"is_executable": "true"},
+            last_seen_ns=now,
+        )
+
+        change = PersistenceChange(
+            entry_id="/Users/alice/.backdoor",
+            mechanism_type="HIDDEN_FILE_PERSISTENCE",
+            change_type=PersistenceChangeType.CREATED,
+            old_entry=None,
+            new_entry=entry,
+            timestamp_ns=now,
+        )
+
+        context = _ctx(
+            agent_name="persistence_agent_v2",
+            persistence_changes=[change],
+        )
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert "hidden" in ev.event_type.lower()
+        assert ev.severity in (Severity.MEDIUM, Severity.HIGH)
+        assert any("T1564" in t for t in ev.mitre_techniques)
+
+
+# ============================================================================
+# SCENARIO 17 — Vertical port scan  (FlowAgent → port_scan_sweep)
+# ============================================================================
+
+
+class TestScenario17_PortScan:
+    """Attacker scans 25 ports on internal target."""
+
+    def test_vertical_port_scan_fires(self):
+        from amoskys.agents.flow.probes import FlowEvent, PortScanSweepProbe
+
+        probe = PortScanSweepProbe()
+        now = _now_ns()
+
+        flows = [
+            FlowEvent(
+                src_ip="10.0.0.100", dst_ip="10.0.0.200",
+                src_port=50000 + i, dst_port=i,
+                protocol="TCP", bytes_tx=64, bytes_rx=0,
+                packet_count=1,
+                first_seen_ns=now + i * 1_000_000,
+                last_seen_ns=now + i * 1_000_000,
+            )
+            for i in range(1, 26)  # 25 ports
+        ]
+
+        context = _ctx(agent_name="flow_agent_v2", flows=flows)
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert ev.event_type == "flow_portscan_vertical"
+        assert ev.severity == Severity.HIGH
+        assert "T1046" in ev.mitre_techniques
+
+
+# ============================================================================
+# SCENARIO 18 — Data exfiltration 50MB+  (FlowAgent → exfil_volume_spike)
+# ============================================================================
+
+
+class TestScenario18_DataExfil:
+    """Attacker exfiltrates 55 MB to external IP."""
+
+    def test_exfil_volume_spike_fires(self):
+        from amoskys.agents.flow.probes import DataExfilVolumeSpikeProbe, FlowEvent
+
+        probe = DataExfilVolumeSpikeProbe()
+        now = _now_ns()
+
+        flows = [
+            FlowEvent(
+                src_ip="10.0.0.5", dst_ip="203.0.113.99",
+                src_port=54321, dst_port=443,
+                protocol="TCP",
+                bytes_tx=55 * 1024 * 1024,  # 55 MB (nettop populated)
+                bytes_rx=1024,
+                packet_count=1000,
+                first_seen_ns=now, last_seen_ns=now,
+                direction="OUTBOUND",
+                pid=5555, process_name="exfil_tool",
+            )
+        ]
+
+        context = _ctx(agent_name="flow_agent_v2", flows=flows)
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert ev.event_type == "flow_exfil_volume_spike"
+        assert ev.severity == Severity.CRITICAL
+        assert any("T1041" in t or "T1048" in t for t in ev.mitre_techniques)
+
+
+# ============================================================================
+# SCENARIO 19 — C2 beaconing pattern  (FlowAgent → c2_beacon_flow)
+# ============================================================================
+
+
+class TestScenario19_C2Beacon:
+    """Malware beacons every 60s with small payloads."""
+
+    def test_c2_beacon_fires(self):
+        from amoskys.agents.flow.probes import C2BeaconFlowProbe, FlowEvent
+
+        probe = C2BeaconFlowProbe()
+        now = _now_ns()
+
+        # 6 flows at exactly 60s intervals, small bytes
+        flows = [
+            FlowEvent(
+                src_ip="10.0.0.5", dst_ip="198.51.100.1",
+                src_port=54321, dst_port=443,
+                protocol="TCP",
+                bytes_tx=256, bytes_rx=128,
+                packet_count=1,
+                first_seen_ns=now + i * 60_000_000_000,
+                last_seen_ns=now + i * 60_000_000_000,
+                direction="OUTBOUND",
+                pid=9999, process_name="beacon",
+            )
+            for i in range(6)
+        ]
+
+        context = _ctx(agent_name="flow_agent_v2", flows=flows)
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert ev.event_type == "flow_c2_beaconing_pattern"
+        assert ev.severity == Severity.HIGH
+        assert any("T1071" in t for t in ev.mitre_techniques)
+
+
+# ============================================================================
+# SCENARIO 20 — Suspicious tunnel  (FlowAgent → suspicious_tunnel)
+# ============================================================================
+
+
+class TestScenario20_SuspiciousTunnel:
+    """Long-lived SSH tunnel with small packet sizes."""
+
+    def test_suspicious_tunnel_fires(self):
+        from amoskys.agents.flow.probes import FlowEvent, SuspiciousTunnelProbe
+
+        probe = SuspiciousTunnelProbe()
+        now = _now_ns()
+
+        flows = [
+            FlowEvent(
+                src_ip="10.0.0.5", dst_ip="198.51.100.50",
+                src_port=54321, dst_port=4444,  # Non-standard
+                protocol="TCP",
+                bytes_tx=25000, bytes_rx=25000,
+                packet_count=200,  # avg size = 250 bytes (<500 threshold)
+                first_seen_ns=now - 700_000_000_000,  # 700s (>600s threshold)
+                last_seen_ns=now,
+                direction="OUTBOUND",
+                pid=7777, process_name="tunnel",
+            )
+        ]
+
+        context = _ctx(agent_name="flow_agent_v2", flows=flows)
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert ev.event_type == "flow_suspicious_tunnel_detected"
+        assert ev.severity == Severity.HIGH
+        assert any("T1090" in t or "T1572" in t for t in ev.mitre_techniques)
+
+
+# ============================================================================
+# SCENARIO 21 — Suspicious TLD queries  (DNSAgent → suspicious_tld)
+# ============================================================================
+
+
+class TestScenario21_SuspiciousTLD:
+    """Malware queries domains on high-risk TLDs (.xyz, .top, .tk)."""
+
+    def test_suspicious_tld_fires(self):
+        from amoskys.agents.dns.probes import DNSQuery, SuspiciousTLDProbe
+
+        probe = SuspiciousTLDProbe()
+        now = datetime.now(timezone.utc)
+
+        queries = [
+            DNSQuery(
+                timestamp=now,
+                domain=f"c2-server-{i}.xyz",
+                query_type="A",
+                response_code="NOERROR",
+                process_name="malware",
+                process_pid=5555,
+            )
+            for i in range(3)
+        ]
+
+        context = _ctx(agent_name="dns_agent_v2", dns_queries=queries)
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert "tld" in ev.event_type.lower()
+        assert ev.severity in (Severity.MEDIUM, Severity.HIGH)
+        assert any("T1071" in t for t in ev.mitre_techniques)
+
+
+# ============================================================================
+# SCENARIO 22 — DNS tunneling via TXT  (DNSAgent → large_txt_tunneling)
+# ============================================================================
+
+
+class TestScenario22_DNSTunneling:
+    """Attacker exfiltrates data via encoded TXT record queries."""
+
+    def test_dns_tunneling_fires(self):
+        from amoskys.agents.dns.probes import DNSQuery, LargeTXTTunnelingProbe
+
+        probe = LargeTXTTunnelingProbe()
+        now = datetime.now(timezone.utc)
+
+        # 6 TXT queries (≥5 threshold) with long subdomain labels
+        queries = [
+            DNSQuery(
+                timestamp=now,
+                domain=f"{'a' * 55}.tunnel.evil.com",  # >50 char label
+                query_type="TXT",
+                response_code="NOERROR",
+                process_name="iodine",
+                process_pid=3333,
+            )
+            for i in range(6)
+        ]
+
+        context = _ctx(agent_name="dns_agent_v2", dns_queries=queries)
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        # Should detect either high TXT volume or tunneling pattern
+        event_types = [e.event_type for e in events]
+        assert any("txt" in t.lower() or "tunnel" in t.lower() for t in event_types)
+
+
+# ============================================================================
+# SCENARIO 23 — SSH brute force  (AuthGuard → ssh_brute_force)
+# ============================================================================
+
+
+class TestScenario23_SSHBruteForce:
+    """Attacker sends 6 failed SSH attempts against 'admin' account."""
+
+    def test_ssh_brute_force_fires(self):
+        from amoskys.agents.auth.probes import AuthEvent, SSHBruteForceProbe
+
+        probe = SSHBruteForceProbe()
+        now = _now_ns()
+
+        auth_events = [
+            AuthEvent(
+                timestamp_ns=now + i * 1_000_000_000,
+                event_type="SSH_LOGIN",
+                status="FAILURE",
+                username="admin",
+                source_ip="10.99.99.99",
+            )
+            for i in range(6)  # 6 failures (threshold is 5)
+        ]
+
+        context = _ctx(
+            agent_name="auth_guard_v2",
+            auth_events=auth_events,
+        )
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert "brute" in ev.event_type.lower()
+        assert ev.severity in (Severity.HIGH, Severity.CRITICAL)
+        assert any("T1110" in t for t in ev.mitre_techniques)
+
+
+# ============================================================================
+# SCENARIO 24 — Execve from /tmp  (KernelAudit → execve_high_risk)
+# ============================================================================
+
+
+class TestScenario24_ExecveFromTmp:
+    """Attacker executes dropped binary from /tmp via kernel audit trail."""
+
+    def test_execve_high_risk_fires(self):
+        from amoskys.agents.kernel_audit.probes import ExecveHighRiskProbe
+        from amoskys.agents.kernel_audit.types import KernelAuditEvent
+
+        probe = ExecveHighRiskProbe()
+        now = _now_ns()
+
+        kernel_events = [
+            KernelAuditEvent(
+                event_id="audit-001",
+                timestamp_ns=now,
+                host="test-host",
+                syscall="execve",
+                exe="/tmp/payload",
+                pid=7777,
+                ppid=1,
+                uid=501,
+                euid=501,
+                cwd="/tmp",
+                path="/tmp/payload",
+                result="success",
+                cmdline="/tmp/payload --connect-back",
+                raw={},
+            )
+        ]
+
+        context = _ctx(
+            agent_name="kernel_audit_agent_v2",
+            kernel_events=kernel_events,
+        )
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert ev.event_type == "kernel_execve_high_risk"
+        assert ev.severity in (Severity.MEDIUM, Severity.HIGH)
+        assert any("T1059" in t or "T1204" in t for t in ev.mitre_techniques)
+
+
+# ============================================================================
+# SCENARIO 25 — Kernel syscall flood  (KernelAudit → syscall_flood)
+# ============================================================================
+
+
+class TestScenario25_SyscallFlood:
+    """Attacker's tool generates rapid syscall burst."""
+
+    def test_syscall_flood_fires(self):
+        from amoskys.agents.kernel_audit.probes import SyscallFloodProbe
+        from amoskys.agents.kernel_audit.types import KernelAuditEvent
+
+        probe = SyscallFloodProbe()
+        now = _now_ns()
+
+        # 110 syscalls from same PID (threshold is 100)
+        kernel_events = [
+            KernelAuditEvent(
+                event_id=f"audit-{i:04d}",
+                timestamp_ns=now + i * 1_000_000,
+                host="test-host",
+                syscall="open",
+                exe="/tmp/scanner",
+                pid=6666,
+                ppid=1,
+                uid=501,
+                euid=501,
+                cwd="/tmp",
+                path=f"/etc/file_{i}",
+                result="success",
+                raw={},
+            )
+            for i in range(110)
+        ]
+
+        context = _ctx(
+            agent_name="kernel_audit_agent_v2",
+            kernel_events=kernel_events,
+        )
+        events = probe.scan(context)
+
+        assert len(events) >= 1
+        ev = events[0]
+        assert ev.event_type == "kernel_syscall_flood"
+        assert ev.severity in (Severity.MEDIUM, Severity.HIGH)
+        assert any("T1592" in t or "T1083" in t for t in ev.mitre_techniques)
+
+
+# ============================================================================
+# SUMMARY — Verify all 25 scenarios are present
 # ============================================================================
 
 
 class TestScenarioInventory:
-    """Meta-test: verify the test suite covers all 12 documented scenarios."""
+    """Meta-test: verify the test suite covers all 25 documented scenarios."""
 
     EXPECTED_SCENARIOS = [
         "TestScenario01_BinaryFromTemp",
@@ -639,10 +1217,23 @@ class TestScenarioInventory:
         "TestScenario10_DGADomains",
         "TestScenario11_USBStorage",
         "TestScenario12_SudoElevation",
+        "TestScenario13_SUIDbitChange",
+        "TestScenario14_ConfigBackdoor",
+        "TestScenario15_SSHKeyBackdoor",
+        "TestScenario16_HiddenFile",
+        "TestScenario17_PortScan",
+        "TestScenario18_DataExfil",
+        "TestScenario19_C2Beacon",
+        "TestScenario20_SuspiciousTunnel",
+        "TestScenario21_SuspiciousTLD",
+        "TestScenario22_DNSTunneling",
+        "TestScenario23_SSHBruteForce",
+        "TestScenario24_ExecveFromTmp",
+        "TestScenario25_SyscallFlood",
     ]
 
-    def test_all_12_scenarios_defined(self):
-        """All 12 attack surface scenarios have test classes."""
+    def test_all_25_scenarios_defined(self):
+        """All 25 attack surface scenarios have test classes."""
         import sys
 
         module = sys.modules[__name__]

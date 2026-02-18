@@ -67,6 +67,10 @@ class FlowEvent:
     app_protocol: str = "UNKNOWN"  # "HTTP", "HTTPS", "DNS", "SMB", "RDP", "SSH", etc.
     tcp_flags: Optional[str] = None  # summary flags for TCP (e.g., "S", "SA", "FA", "R")
 
+    # Process context (populated by nettop on macOS)
+    pid: Optional[int] = None
+    process_name: Optional[str] = None
+
     def duration_seconds(self) -> float:
         """Calculate flow duration in seconds."""
         return (self.last_seen_ns - self.first_seen_ns) / 1e9
