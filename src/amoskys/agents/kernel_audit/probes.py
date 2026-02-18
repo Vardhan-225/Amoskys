@@ -172,7 +172,7 @@ class ExecveHighRiskProbe(MicroProbe):
     description = "Detect process execution from high-risk directories"
     mitre_techniques = ["T1059", "T1204.002"]
     mitre_tactics = ["Execution", "Defense Evasion"]
-    platforms = ["linux"]
+    platforms = ["linux", "darwin"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for high-risk execve calls."""
@@ -254,7 +254,7 @@ class PrivEscSyscallProbe(MicroProbe):
     description = "Detect privilege escalation via setuid/setgid syscalls"
     mitre_techniques = ["T1068", "T1548.001"]
     mitre_tactics = ["Privilege Escalation"]
-    platforms = ["linux"]
+    platforms = ["linux", "darwin"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for privilege escalation syscalls."""
@@ -330,7 +330,7 @@ class KernelModuleLoadProbe(MicroProbe):
     description = "Detect kernel module loading from suspicious locations"
     mitre_techniques = ["T1014", "T1547.006"]
     mitre_tactics = ["Persistence", "Defense Evasion"]
-    platforms = ["linux"]
+    platforms = ["linux", "darwin"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for module load/unload syscalls."""
@@ -411,7 +411,7 @@ class PtraceAbuseProbe(MicroProbe):
     description = "Detect ptrace abuse for process injection"
     mitre_techniques = ["T1055", "T1055.008"]
     mitre_tactics = ["Defense Evasion", "Privilege Escalation"]
-    platforms = ["linux"]
+    platforms = ["linux", "darwin"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for suspicious ptrace activity."""
@@ -495,7 +495,7 @@ class FilePermissionTamperProbe(MicroProbe):
     description = "Detect permission tampering on sensitive files"
     mitre_techniques = ["T1222", "T1222.002"]
     mitre_tactics = ["Defense Evasion", "Credential Access"]
-    platforms = ["linux"]
+    platforms = ["linux", "darwin"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for sensitive file permission changes."""
@@ -575,7 +575,7 @@ class AuditTamperProbe(MicroProbe):
     description = "Detect attempts to disable or tamper with audit"
     mitre_techniques = ["T1562.001", "T1070.002"]
     mitre_tactics = ["Defense Evasion"]
-    platforms = ["linux"]
+    platforms = ["linux", "darwin"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for audit tampering attempts."""
@@ -673,7 +673,7 @@ class SyscallFloodProbe(MicroProbe):
     description = "Detect abnormal syscall patterns"
     mitre_techniques = ["T1592", "T1083"]
     mitre_tactics = ["Reconnaissance", "Discovery"]
-    platforms = ["linux"]
+    platforms = ["linux", "darwin"]
 
     # Thresholds
     FLOOD_THRESHOLD = 100  # syscalls per window
