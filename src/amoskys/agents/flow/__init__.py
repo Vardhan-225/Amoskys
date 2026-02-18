@@ -14,7 +14,7 @@ The v2 agent uses the "swarm of eyes" pattern with probes for:
     - New external service connections
 """
 
-from amoskys.agents.flow.flow_agent_v2 import FlowAgentV2, FlowCollector
+from amoskys.agents.flow.flow_agent_v2 import FlowAgentV2, MacOSFlowCollector
 from amoskys.agents.flow.probes import (
     C2BeaconFlowProbe,
     CleartextCredentialLeakProbe,
@@ -30,7 +30,7 @@ from amoskys.agents.flow.probes import (
 
 __all__ = [
     "FlowAgentV2",
-    "FlowCollector",
+    "MacOSFlowCollector",
     "FlowEvent",
     "create_flow_probes",
     "PortScanSweepProbe",

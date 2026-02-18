@@ -45,15 +45,15 @@ import socket
 import time
 from typing import Any, Dict, Optional, Sequence
 
-from amoskys.agents.common.base import HardenedAgentBase
-from amoskys.agents.common.probes import MicroProbeAgentMixin, ProbeContext
+from amoskys.agents.common.base import HardenedAgentBase, ValidationResult
+from amoskys.agents.common.probes import MicroProbeAgentMixin, ProbeContext, TelemetryEvent
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
 from amoskys.agents.persistence.probes import (
     PersistenceBaselineEngine,
     PersistenceEntry,
     create_persistence_probes,
 )
-from amoskys.messaging_pb2 import DeviceTelemetry, TelemetryEvent as ProtoEvent
+from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 
 logger = logging.getLogger(__name__)
 
@@ -66,16 +66,11 @@ logger = logging.getLogger(__name__)
 class PersistenceCollector:
     """Platform-specific persistence mechanism collector.
 
-    Collects snapshot of all persistence mechanisms:
-        - systemd: systemctl list-unit-files, parse ExecStart from unit files
-        - cron: parse /etc/crontab, /etc/cron.d/*, crontab -l per user
-        - shell profiles: hash ~/.bashrc, ~/.profile, etc.
+    Collects snapshot of all persistence mechanisms on macOS:
+        - launchd: enumerate LaunchAgents/LaunchDaemons plists
+        - cron: parse crontab -l output
+        - shell profiles: hash ~/.bashrc, ~/.zshrc, ~/.bash_profile, etc.
         - SSH keys: hash & count authorized_keys
-        - launchd (macOS): enumerate LaunchAgents/LaunchDaemons
-        - startup items: .desktop files (Linux), login items (macOS)
-
-    For now, this is a stub that returns empty snapshot.
-    TODO: Implement actual persistence enumeration for each platform.
     """
 
     def __init__(self):
@@ -88,25 +83,184 @@ class PersistenceCollector:
         Returns:
             Dictionary mapping entry_id to PersistenceEntry
         """
-        # TODO: Implement actual persistence collection
-        # Options:
-        #   1. systemd: systemctl list-unit-files --type=service
-        #   2. cron: parse /etc/crontab, /etc/cron.d/*, crontab -l
-        #   3. launchd: enumerate /Library/LaunchAgents, /Library/LaunchDaemons
-        #   4. SSH keys: parse ~/.ssh/authorized_keys for all users
-        #   5. Shell profiles: hash ~/.bashrc, ~/.bash_profile, ~/.zshrc, etc.
-        #   6. Browser extensions: enumerate Chrome/Firefox extension dirs
-        #   7. Startup items: parse ~/.config/autostart/*.desktop (Linux)
-        #   8. Hidden files: find hidden executables referenced by other mechanisms
+        import hashlib
+        import os
+        import platform
+        import plistlib
+        import subprocess
+        import time
 
         logger.debug("Collecting persistence snapshot")
-
-        # Placeholder: return empty snapshot
-        # In production, this would return actual PersistenceEntry objects
         snapshot: Dict[str, PersistenceEntry] = {}
+        now_ns = int(time.time() * 1e9)
+
+        if platform.system() != "Darwin":
+            logger.info("Non-macOS platform — persistence collector deferred")
+            self.entries_collected = len(snapshot)
+            return snapshot
+
+        # ── 1. LaunchAgents / LaunchDaemons ───────────────────────────
+        home = os.path.expanduser("~")
+        launch_dirs = [
+            (f"{home}/Library/LaunchAgents", "USER_LAUNCH_AGENT"),
+            ("/Library/LaunchAgents", "SYSTEM_LAUNCH_AGENT"),
+            ("/Library/LaunchDaemons", "SYSTEM_LAUNCH_DAEMON"),
+        ]
+
+        for dir_path, mech_type in launch_dirs:
+            if not os.path.isdir(dir_path):
+                continue
+            try:
+                for fname in os.listdir(dir_path):
+                    if not fname.endswith(".plist"):
+                        continue
+                    fpath = os.path.join(dir_path, fname)
+                    try:
+                        file_hash = self._sha256_file(fpath)
+                        cmd, args_str, label, enabled = "", "", fname, True
+                        try:
+                            with open(fpath, "rb") as pf:
+                                plist = plistlib.load(pf)
+                            prog_args = plist.get("ProgramArguments", [])
+                            cmd = plist.get("Program", prog_args[0] if prog_args else "")
+                            args_str = " ".join(prog_args[1:]) if len(prog_args) > 1 else ""
+                            label = plist.get("Label", fname)
+                            enabled = not plist.get("Disabled", False)
+                        except Exception:
+                            pass  # binary or corrupt plist — still record it
+
+                        stat = os.stat(fpath)
+                        entry_id = f"launchd:{fpath}"
+                        snapshot[entry_id] = PersistenceEntry(
+                            id=entry_id,
+                            mechanism_type=mech_type,
+                            user=self._file_owner(fpath),
+                            path=fpath,
+                            command=cmd,
+                            args=args_str,
+                            enabled=enabled,
+                            hash=file_hash,
+                            metadata={
+                                "label": label,
+                                "dir": dir_path,
+                                "mtime": str(int(stat.st_mtime)),
+                                "size": str(stat.st_size),
+                            },
+                            last_seen_ns=now_ns,
+                        )
+                    except (OSError, PermissionError) as e:
+                        logger.debug(f"Skipping {fpath}: {e}")
+            except PermissionError:
+                logger.debug(f"Cannot list {dir_path}")
+
+        # ── 2. Cron jobs ──────────────────────────────────────────────
+        try:
+            result = subprocess.run(
+                ["crontab", "-l"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                cron_content = result.stdout.strip()
+                cron_hash = hashlib.sha256(cron_content.encode()).hexdigest()
+                entry_id = f"cron:user:{os.environ.get('USER', 'unknown')}"
+                snapshot[entry_id] = PersistenceEntry(
+                    id=entry_id,
+                    mechanism_type="CRON_USER",
+                    user=os.environ.get("USER", "unknown"),
+                    path=None,
+                    command=cron_content[:200],
+                    args=None,
+                    enabled=True,
+                    hash=cron_hash,
+                    metadata={"line_count": str(len(cron_content.splitlines()))},
+                    last_seen_ns=now_ns,
+                )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+        # ── 3. Shell profiles ─────────────────────────────────────────
+        shell_files = [
+            ".bashrc", ".bash_profile", ".profile",
+            ".zshrc", ".zprofile", ".zlogin", ".zshenv",
+        ]
+        for fname in shell_files:
+            fpath = os.path.join(home, fname)
+            if not os.path.isfile(fpath):
+                continue
+            try:
+                file_hash = self._sha256_file(fpath)
+                stat = os.stat(fpath)
+                entry_id = f"shell_profile:{fpath}"
+                snapshot[entry_id] = PersistenceEntry(
+                    id=entry_id,
+                    mechanism_type="SHELL_PROFILE",
+                    user=self._file_owner(fpath),
+                    path=fpath,
+                    command=None,
+                    args=None,
+                    enabled=True,
+                    hash=file_hash,
+                    metadata={
+                        "mtime": str(int(stat.st_mtime)),
+                        "size": str(stat.st_size),
+                    },
+                    last_seen_ns=now_ns,
+                )
+            except (OSError, PermissionError):
+                pass
+
+        # ── 4. SSH authorized_keys ────────────────────────────────────
+        ak_path = os.path.join(home, ".ssh", "authorized_keys")
+        if os.path.isfile(ak_path):
+            try:
+                file_hash = self._sha256_file(ak_path)
+                with open(ak_path) as f:
+                    lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+                entry_id = f"ssh_keys:{ak_path}"
+                snapshot[entry_id] = PersistenceEntry(
+                    id=entry_id,
+                    mechanism_type="SSH_AUTHORIZED_KEYS",
+                    user=self._file_owner(ak_path),
+                    path=ak_path,
+                    command=None,
+                    args=None,
+                    enabled=True,
+                    hash=file_hash,
+                    metadata={
+                        "key_count": str(len(lines)),
+                        "mtime": str(int(os.stat(ak_path).st_mtime)),
+                    },
+                    last_seen_ns=now_ns,
+                )
+            except (OSError, PermissionError):
+                pass
 
         self.entries_collected += len(snapshot)
+        logger.info(f"Persistence snapshot: {len(snapshot)} entries collected")
         return snapshot
+
+    @staticmethod
+    def _sha256_file(path: str) -> str:
+        """Compute SHA-256 hash of a file."""
+        import hashlib
+        h = hashlib.sha256()
+        try:
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(65536), b""):
+                    h.update(chunk)
+            return h.hexdigest()
+        except (OSError, PermissionError):
+            return ""
+
+    @staticmethod
+    def _file_owner(path: str) -> str:
+        """Get file owner username."""
+        import os as _os
+        import pwd
+        try:
+            return pwd.getpwuid(_os.stat(path).st_uid).pw_name
+        except (OSError, KeyError):
+            return "unknown"
 
 
 # =============================================================================
@@ -139,29 +293,30 @@ class PersistenceGuardV2(MicroProbeAgentMixin, HardenedAgentBase):
         baseline_path: str = "data/persistence_baseline.json",
         collection_interval: float = COLLECTION_INTERVAL_SECONDS,
     ):
-        """Initialize PersistenceGuardV2.
-
-        Args:
-            device_id: Unique device identifier (defaults to hostname)
-            queue_path: Path to local queue database
-            baseline_mode: "create" to create baseline, "monitor" to detect changes
-            baseline_path: Path to baseline JSON file
-            collection_interval: Persistence check interval in seconds
-        """
-        # Get device ID
+        """Initialize PersistenceGuardV2."""
         if device_id is None:
             device_id = socket.gethostname()
 
-        # Initialize base classes
-        HardenedAgentBase.__init__(
-            self,
+        from pathlib import Path
+        Path(queue_path).parent.mkdir(parents=True, exist_ok=True)
+
+        queue_adapter = LocalQueueAdapter(
+            queue_path=queue_path,
+            agent_name=self.AGENT_NAME,
+            device_id=device_id,
+            max_bytes=50 * 1024 * 1024,
+            max_retries=10,
+        )
+
+        super().__init__(
             agent_name=self.AGENT_NAME,
             device_id=device_id,
             collection_interval=collection_interval,
-            queue_adapter=LocalQueueAdapter(queue_path),
+            local_queue=queue_adapter,
         )
 
-        MicroProbeAgentMixin.__init__(self, probes=create_persistence_probes())
+        # Register probes
+        self.register_probes(create_persistence_probes())
 
         # Initialize collector and baseline engine
         self.collector = PersistenceCollector()
@@ -172,13 +327,14 @@ class PersistenceGuardV2(MicroProbeAgentMixin, HardenedAgentBase):
         if self.baseline_mode == "monitor":
             if not self.baseline_engine.load():
                 logger.warning(
-                    "Failed to load baseline - run with --mode create first"
+                    "No baseline found — first cycle will create one automatically"
                 )
+                self.baseline_mode = "auto_create"
 
         logger.info(
             f"PersistenceGuardV2 initialized: device={device_id}, "
             f"mode={baseline_mode}, baseline={baseline_path}, "
-            f"interval={collection_interval}s, probes={len(self.probes)}"
+            f"interval={collection_interval}s, probes={len(self._probes)}"
         )
 
     def setup(self) -> bool:
@@ -210,131 +366,127 @@ class PersistenceGuardV2(MicroProbeAgentMixin, HardenedAgentBase):
 
         logger.debug(f"Collected {len(snapshot)} persistence entries in this cycle")
 
-        # Create baseline mode - just save and exit
-        if self.baseline_mode == "create":
+        # Auto-create baseline on first cycle if none exists
+        if self.baseline_mode in ("create", "auto_create"):
             self.baseline_engine.create_from_snapshot(snapshot)
             self.baseline_engine.save()
             logger.info(
                 f"Baseline created with {len(snapshot)} persistence entries"
             )
-            return []
+            if self.baseline_mode == "auto_create":
+                self.baseline_mode = "monitor"
+            else:
+                return []
 
         # Monitor mode - compare against baseline
         changes = self.baseline_engine.compare(snapshot)
 
-        # No changes, no events
-        if not changes:
-            logger.debug("No persistence changes detected in this cycle")
-            return []
+        # Build a snapshot-summary event every cycle (so EOA can verify signal)
+        proto_events = []
 
-        # Build probe context
-        context = ProbeContext(
-            device_id=self.device_id,
-            agent_name=self.AGENT_NAME,
-            now_ns=now_ns,
-            shared_data={"persistence_changes": changes},
+        # Always emit a snapshot summary event
+        summary_event = telemetry_pb2.TelemetryEvent(
+            event_id=f"persistence_snapshot_{now_ns}",
+            event_type="METRIC",
+            severity="INFO",
+            event_timestamp_ns=now_ns,
+            source_component="persistence_collector",
+            metric_data=telemetry_pb2.MetricData(
+                metric_name="persistence_entries",
+                metric_type="GAUGE",
+                numeric_value=float(len(snapshot)),
+                unit="entries",
+            ),
         )
+        proto_events.append(summary_event)
 
-        # Run all probes
-        probe_events = self.run_probes(context)
+        if changes:
+            logger.info(f"Detected {len(changes)} persistence changes")
+            # Run all probes via mixin
+            probe_events = self.scan_all_probes()
 
-        if not probe_events:
-            logger.debug("No threat events detected in this cycle")
-            return []
+            # Also emit raw change events even if probes don't fire
+            for change in changes:
+                security_event = telemetry_pb2.SecurityEvent(
+                    event_category=f"persistence_{change.mechanism_type.lower()}",
+                    risk_score=0.6,
+                    analyst_notes=f"Change type: {change.change_type.name}, "
+                                  f"entry: {change.entry_id}",
+                )
+                # Add MITRE techniques based on mechanism type
+                mitre_map = {
+                    "USER_LAUNCH_AGENT": ["T1543", "T1547"],
+                    "SYSTEM_LAUNCH_AGENT": ["T1543", "T1547"],
+                    "SYSTEM_LAUNCH_DAEMON": ["T1543", "T1547"],
+                    "CRON_USER": ["T1053.003"],
+                    "SHELL_PROFILE": ["T1546.004"],
+                    "SSH_AUTHORIZED_KEYS": ["T1098.004"],
+                }
+                techniques = mitre_map.get(change.mechanism_type, ["T1547"])
+                security_event.mitre_techniques.extend(techniques)
 
-        # Package as DeviceTelemetry
-        telemetry = DeviceTelemetry(
+                change_event = telemetry_pb2.TelemetryEvent(
+                    event_id=f"persistence_change_{change.entry_id}_{now_ns}",
+                    event_type="SECURITY",
+                    severity="HIGH" if change.change_type.name == "CREATED" else "MEDIUM",
+                    event_timestamp_ns=now_ns,
+                    source_component=f"persistence_{change.mechanism_type.lower()}",
+                    security_event=security_event,
+                    confidence_score=0.6,
+                )
+
+                # Populate attributes with evidence
+                change_event.attributes["change_type"] = change.change_type.name
+                change_event.attributes["mechanism_type"] = change.mechanism_type
+                change_event.attributes["entry_id"] = change.entry_id
+                if change.new_entry:
+                    if change.new_entry.path:
+                        change_event.attributes["file_path"] = change.new_entry.path
+                    if change.new_entry.command:
+                        change_event.attributes["command"] = str(change.new_entry.command)
+                    if change.new_entry.hash:
+                        change_event.attributes["file_hash"] = change.new_entry.hash
+                    if change.new_entry.user:
+                        change_event.attributes["user"] = change.new_entry.user
+                if change.old_entry and change.old_entry.hash:
+                    change_event.attributes["old_hash"] = change.old_entry.hash
+
+                proto_events.append(change_event)
+
+            # Update baseline with current snapshot
+            self.baseline_engine.create_from_snapshot(snapshot)
+        else:
+            logger.debug("No persistence changes detected in this cycle")
+
+        # Create DeviceTelemetry
+        device_telemetry = telemetry_pb2.DeviceTelemetry(
             device_id=self.device_id,
             device_type="HOST",
             protocol="PERSISTENCE",
+            events=proto_events,
             timestamp_ns=now_ns,
             collection_agent=self.AGENT_NAME,
             agent_version="2.0.0",
         )
 
-        # Convert TelemetryEvent to protobuf
-        for event in probe_events:
-            proto_event = ProtoEvent(
-                event_id=f"{event.event_type}_{event.timestamp_ns}",
-                event_type=event.event_type,
-                severity=event.severity.value,
-                timestamp_ns=event.timestamp_ns,
-            )
+        return [device_telemetry]
 
-            # Add event data as metadata
-            for key, value in event.data.items():
-                proto_event.metadata[key] = str(value)
-
-            telemetry.events.append(proto_event)
-
-        logger.info(
-            f"Detected {len(probe_events)} persistence threat events: "
-            f"{[e.event_type for e in probe_events]}"
-        )
-
-        return [telemetry]
-
-    def validate_event(self, event: DeviceTelemetry) -> bool:
-        """Validate telemetry event before publishing.
-
-        Args:
-            event: DeviceTelemetry protobuf message
-
-        Returns:
-            True if valid, False otherwise
-        """
-        # Basic validation
-        if not event.device_id:
-            logger.warning("Validation failed: device_id is empty")
-            return False
-
-        if not event.events:
-            logger.warning("Validation failed: no events in telemetry")
-            return False
-
-        # Timestamp sanity check (within 1 hour of current time)
-        now_ns = int(time.time() * 1e9)
-        time_diff_hours = abs(event.timestamp_ns - now_ns) / (3600 * 1e9)
-
-        if time_diff_hours > 1:
-            logger.warning(
-                f"Validation failed: timestamp too far from current time "
-                f"(diff={time_diff_hours:.2f}h)"
-            )
-            return False
-
-        return True
-
-    def enrich_event(self, event: DeviceTelemetry) -> DeviceTelemetry:
-        """Enrich telemetry with additional metadata.
-
-        Args:
-            event: DeviceTelemetry protobuf message
-
-        Returns:
-            Enriched DeviceTelemetry
-        """
-        # Add device IP address
-        try:
-            ip_address = socket.gethostbyname(socket.gethostname())
-            event.metadata["ip_address"] = ip_address
-        except OSError:
-            pass
-
-        # Add collector stats
-        event.metadata["entries_collected_total"] = str(
-            self.collector.entries_collected
-        )
-
-        return event
+    def validate_event(self, event: Any) -> ValidationResult:
+        """Validate telemetry before publishing."""
+        errors = []
+        if not hasattr(event, "device_id") or not event.device_id:
+            errors.append("Missing device_id")
+        if not hasattr(event, "timestamp_ns") or event.timestamp_ns == 0:
+            errors.append("Missing timestamp_ns")
+        now = time.time() * 1e9
+        if hasattr(event, "timestamp_ns") and event.timestamp_ns > 0:
+            if abs(event.timestamp_ns - now) > 3600 * 1e9:
+                errors.append("timestamp_ns too far from current time")
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors)
 
     def shutdown(self) -> None:
         """Cleanup hook - called at agent shutdown."""
         logger.info(f"{self.AGENT_NAME} shutting down...")
-
-        # Cleanup collector resources
-        # (e.g., close file handles, cleanup temp files)
-
         logger.info(f"{self.AGENT_NAME} shutdown complete")
 
 
@@ -408,12 +560,11 @@ def main():
         if args.mode == "create":
             logger.info("Creating persistence baseline...")
             agent.setup()
-            # Run one collection cycle to create baseline
             agent.collect_data()
             logger.info(f"Baseline created and saved to {args.baseline_path}")
         else:
             logger.info("Starting PersistenceGuardV2 in monitor mode...")
-            agent.run()
+            agent.run_forever()
     except KeyboardInterrupt:
         logger.info("Received interrupt signal, shutting down...")
         agent.shutdown()

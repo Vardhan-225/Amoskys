@@ -370,18 +370,33 @@ class ProcAgentV3(MicroProbeAgentMixin, HardenedAgentBase):
                     tags=["process", "metric"],
                 )
             else:
-                # Security event
+                # Security event — populate SecurityEvent sub-message
+                security_event = telemetry_pb2.SecurityEvent(
+                    event_category=event.event_type,
+                    risk_score=event.confidence,
+                    analyst_notes=str(event.data),
+                )
+                if event.mitre_techniques:
+                    security_event.mitre_techniques.extend(event.mitre_techniques)
+
+                # Extract source_ip if present in data
+                if event.data.get("source_ip"):
+                    security_event.source_ip = str(event.data["source_ip"])
+
                 proto_event = telemetry_pb2.TelemetryEvent(
                     event_id=f"{event.probe_name}_{event.event_type}_{timestamp_ns}",
                     event_type="SECURITY",
                     severity=event.severity.value,
                     event_timestamp_ns=timestamp_ns,
                     source_component=event.probe_name,
-                    tags=event.mitre_techniques + event.tags,
+                    security_event=security_event,
+                    confidence_score=event.confidence,
+                    tags=event.tags,
                 )
-                # Add security data
-                if event.mitre_techniques:
-                    proto_event.mitre_techniques.extend(event.mitre_techniques)
+
+                # Flatten probe data into attributes for evidence tracing
+                for k, v in event.data.items():
+                    proto_event.attributes[k] = str(v)
 
             proto_events.append(proto_event)
 
@@ -395,17 +410,6 @@ class ProcAgentV3(MicroProbeAgentMixin, HardenedAgentBase):
             collection_agent="proc-agent-v3",
             agent_version="3.0.0",
         )
-
-        # Add alert data for high-severity events
-        for event in events:
-            if event.severity.value in ("HIGH", "CRITICAL"):
-                alert = telemetry_pb2.AlertData(
-                    alert_type=event.event_type,
-                    severity=event.severity.value,
-                    description=str(event.data),
-                    mitre_techniques=event.mitre_techniques,
-                )
-                device_telemetry.alerts.append(alert)
 
         return device_telemetry
 

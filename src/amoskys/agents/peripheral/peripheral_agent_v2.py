@@ -185,7 +185,7 @@ class PeripheralAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         """Initialize agent resources.
 
         Verifies:
-            - Certificates exist
+            - Certificates exist (warns if missing — dev mode tolerant)
             - Probes initialize successfully
 
         Returns:
@@ -194,13 +194,12 @@ class PeripheralAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         try:
             import os
 
-            # Verify certificates
+            # Verify certificates (warn but don't fail — dev mode may lack certs)
             required_certs = ["ca.crt", "agent.crt", "agent.key"]
             for cert in required_certs:
                 cert_path = f"{CERT_DIR}/{cert}"
                 if not os.path.exists(cert_path):
-                    logger.error(f"Certificate not found: {cert_path}")
-                    return False
+                    logger.warning(f"Certificate not found: {cert_path} (EventBus publishing will fail)")
 
             # Setup probes
             if not self.setup_probes():
@@ -218,78 +217,106 @@ class PeripheralAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         """Run all probes and collect events.
 
         Returns:
-            List of DeviceTelemetry protobuf messages
+            List of DeviceTelemetry protobuf messages (always at least one)
         """
+        timestamp_ns = int(time.time() * 1e9)
+
         # Run all probes
         events = self.scan_all_probes()
 
         logger.info(f"Probes generated {len(events)} events")
 
-        # Convert to protobuf
-        if events:
-            return [self._events_to_telemetry(events)]
-        return []
+        # Build proto events
+        proto_events = []
 
-    def _events_to_telemetry(
-        self, events: List[TelemetryEvent]
-    ) -> telemetry_pb2.DeviceTelemetry:
-        """Convert TelemetryEvents to protobuf DeviceTelemetry.
-
-        Args:
-            events: List of TelemetryEvent objects
-
-        Returns:
-            DeviceTelemetry protobuf message
-        """
-        # Create peripheral telemetry
-        peripheral_data = telemetry_pb2.PeripheralTelemetry()
-
-        for event in events:
-            if event.event_type == "usb_device_connected":
-                device = telemetry_pb2.USBDevice(
-                    device_id=event.data.get("device_id", ""),
-                    name=event.data.get("name", ""),
-                    vendor_id=event.data.get("vendor_id", ""),
-                    product_id=event.data.get("product_id", ""),
-                    manufacturer=event.data.get("manufacturer", ""),
-                    serial_number=event.data.get("serial_number", ""),
-                )
-                peripheral_data.connected_devices.append(device)
-
-            elif event.event_type == "usb_storage_detected":
-                peripheral_data.storage_device_detected = True
-
-            elif event.event_type == "usb_network_adapter_detected":
-                peripheral_data.network_adapter_detected = True
-
-            elif event.event_type == "new_keyboard_detected":
-                peripheral_data.new_keyboard_detected = True
-                peripheral_data.badusb_risk = event.data.get("badusb_risk", False)
-
-            elif event.event_type == "peripheral_risk_assessment":
-                peripheral_data.risk_score = event.data.get("risk_score", 0.0)
-
-        # Create device telemetry
-        telemetry = telemetry_pb2.DeviceTelemetry(
-            device_id=self.device_id,
-            timestamp=int(time.time()),
-            hostname=self.device_id,
-            platform=platform.system(),
-            peripheral_telemetry=peripheral_data,
+        # Always emit a collection summary metric (heartbeat)
+        proto_events.append(
+            telemetry_pb2.TelemetryEvent(
+                event_id=f"peripheral_collection_summary_{timestamp_ns}",
+                event_type="METRIC",
+                severity="INFO",
+                event_timestamp_ns=timestamp_ns,
+                source_component="peripheral_collector",
+                tags=["peripheral", "metric"],
+                metric_data=telemetry_pb2.MetricData(
+                    metric_name="peripheral_events_collected",
+                    metric_type="GAUGE",
+                    numeric_value=float(len(events)),
+                    unit="events",
+                ),
+            )
         )
 
-        # Add alert data for high-severity events
-        for event in events:
-            if event.severity.value in ("HIGH", "CRITICAL"):
-                alert = telemetry_pb2.AlertData(
-                    alert_type=event.event_type,
-                    severity=event.severity.value,
-                    description=str(event.data),
-                    mitre_techniques=event.mitre_techniques,
+        # Probe event count metric (when probes fire)
+        if events:
+            proto_events.append(
+                telemetry_pb2.TelemetryEvent(
+                    event_id=f"peripheral_probe_events_{timestamp_ns}",
+                    event_type="METRIC",
+                    severity="INFO",
+                    event_timestamp_ns=timestamp_ns,
+                    source_component="peripheral_agent",
+                    tags=["peripheral", "metric"],
+                    metric_data=telemetry_pb2.MetricData(
+                        metric_name="peripheral_probe_events",
+                        metric_type="GAUGE",
+                        numeric_value=float(len(events)),
+                        unit="events",
+                    ),
                 )
-                telemetry.alerts.append(alert)
+            )
 
-        return telemetry
+        # Convert probe events to SecurityEvent-based telemetry
+        severity_map = {
+            "DEBUG": "DEBUG",
+            "INFO": "INFO",
+            "LOW": "LOW",
+            "MEDIUM": "MEDIUM",
+            "HIGH": "HIGH",
+            "CRITICAL": "CRITICAL",
+        }
+
+        for event in events:
+            # Build SecurityEvent sub-message
+            security_event = telemetry_pb2.SecurityEvent(
+                event_category=event.event_type,
+                risk_score=0.8 if event.severity.value in ("HIGH", "CRITICAL") else 0.4,
+                analyst_notes=f"Probe: {event.probe_name}, "
+                              f"Severity: {event.severity.value}",
+            )
+            security_event.mitre_techniques.extend(event.mitre_techniques)
+
+            tel_event = telemetry_pb2.TelemetryEvent(
+                event_id=f"{event.event_type}_{timestamp_ns}",
+                event_type="SECURITY",
+                severity=severity_map.get(event.severity.value, "INFO"),
+                event_timestamp_ns=timestamp_ns,
+                source_component=event.probe_name or "peripheral_agent",
+                tags=["peripheral", "threat"],
+                security_event=security_event,
+                confidence_score=event.confidence if hasattr(event, 'confidence') else 0.7,
+            )
+
+            # Populate attributes map with evidence
+            if event.data:
+                for key, value in event.data.items():
+                    if value is not None:
+                        tel_event.attributes[key] = str(value)
+
+            proto_events.append(tel_event)
+
+        # Create DeviceTelemetry
+        telemetry = telemetry_pb2.DeviceTelemetry(
+            device_id=self.device_id,
+            device_type="HOST",
+            protocol="USB",
+            events=proto_events,
+            timestamp_ns=timestamp_ns,
+            collection_agent="peripheral_agent_v2",
+            agent_version="2.0.0",
+        )
+
+        return [telemetry]
 
     def validate_event(self, event: Any) -> ValidationResult:
         """Validate telemetry before publishing.
@@ -300,13 +327,14 @@ class PeripheralAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         Returns:
             ValidationResult
         """
+        errors = []
         if not hasattr(event, "device_id") or not event.device_id:
-            return ValidationResult(is_valid=False, errors=["Missing device_id"])
-
-        if not hasattr(event, "timestamp") or event.timestamp == 0:
-            return ValidationResult(is_valid=False, errors=["Missing timestamp"])
-
-        return ValidationResult(is_valid=True)
+            errors.append("Missing device_id")
+        if not hasattr(event, "timestamp_ns") or event.timestamp_ns <= 0:
+            errors.append("Missing or invalid timestamp_ns")
+        if not event.events:
+            errors.append("events list is empty")
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors)
 
     def shutdown(self) -> None:
         """Graceful shutdown."""
@@ -356,11 +384,19 @@ def main():
         action="store_true",
         help="Enable debug logging",
     )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Log level (default: INFO)",
+    )
 
     args = parser.parse_args()
 
-    if args.debug:
+    if args.debug or args.log_level == "DEBUG":
         logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(getattr(logging, args.log_level))
 
     agent = PeripheralAgentV2(collection_interval=args.interval)
 

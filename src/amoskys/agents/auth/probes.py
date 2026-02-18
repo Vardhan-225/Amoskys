@@ -355,19 +355,34 @@ class SudoElevationProbe(MicroProbe):
         events: List[TelemetryEvent] = []
         auth_events: List[AuthEvent] = context.shared_data.get("auth_events", [])
 
-        # Count sudo executions per user
+        # Count sudo executions per user (success or denied)
         sudo_counts: Dict[str, int] = collections.Counter()
+        sudo_denied: Dict[str, List[AuthEvent]] = collections.defaultdict(list)
         first_time_users: Set[str] = set()
 
         for ev in auth_events:
-            if ev.event_type == "SUDO_EXEC" and ev.status == "SUCCESS":
+            if ev.event_type in ("SUDO_EXEC", "SUDO_DENIED"):
                 sudo_counts[ev.username] += 1
-
-                # Check if first-time
                 if ev.username not in self.baseline_sudo_counts:
                     first_time_users.add(ev.username)
+                if ev.event_type == "SUDO_DENIED":
+                    sudo_denied[ev.username].append(ev)
 
-        # Flag first-time sudo users
+        events.extend(self._check_first_time_users(first_time_users, sudo_counts))
+        events.extend(self._check_denied_attempts(sudo_denied))
+        events.extend(self._check_spikes(sudo_counts))
+
+        # Update baseline
+        for user, count in sudo_counts.items():
+            self.baseline_sudo_counts[user] = count
+
+        return events
+
+    def _check_first_time_users(
+        self, first_time_users: Set[str], sudo_counts: Dict[str, int],
+    ) -> List[TelemetryEvent]:
+        """Flag first-time sudo users."""
+        events: List[TelemetryEvent] = []
         for user in first_time_users:
             events.append(
                 TelemetryEvent(
@@ -381,8 +396,36 @@ class SudoElevationProbe(MicroProbe):
                     mitre_techniques=["T1548.003"],
                 )
             )
+        return events
 
-        # Flag sudden spikes
+    def _check_denied_attempts(
+        self, sudo_denied: Dict[str, List[AuthEvent]],
+    ) -> List[TelemetryEvent]:
+        """Flag denied sudo attempts (privilege escalation attempt)."""
+        events: List[TelemetryEvent] = []
+        for user, denied_events in sudo_denied.items():
+            if denied_events:
+                events.append(
+                    TelemetryEvent(
+                        event_type="sudo_denied_attempt",
+                        severity=Severity.MEDIUM,
+                        probe_name=self.name,
+                        data={
+                            "username": user,
+                            "denied_count": len(denied_events),
+                            "reasons": list({e.reason for e in denied_events if e.reason}),
+                            "commands": [e.command for e in denied_events[:5] if e.command],
+                        },
+                        mitre_techniques=["T1548.003"],
+                    )
+                )
+        return events
+
+    def _check_spikes(
+        self, sudo_counts: Dict[str, int],
+    ) -> List[TelemetryEvent]:
+        """Flag sudden spikes in sudo usage."""
+        events: List[TelemetryEvent] = []
         for user, current_count in sudo_counts.items():
             baseline = self.baseline_sudo_counts.get(user, 0)
             if baseline > 0 and current_count >= baseline * SUDO_SPIKE_MULTIPLIER:
@@ -400,11 +443,6 @@ class SudoElevationProbe(MicroProbe):
                         mitre_techniques=["T1548.003"],
                     )
                 )
-
-        # Update baseline
-        for user, count in sudo_counts.items():
-            self.baseline_sudo_counts[user] = count
-
         return events
 
 

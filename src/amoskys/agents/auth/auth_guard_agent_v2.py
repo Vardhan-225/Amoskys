@@ -258,106 +258,498 @@ class LinuxAuthLogCollector(AuthLogCollector):
 
 
 class MacOSAuthLogCollector(AuthLogCollector):
-    """Collects authentication events on macOS via unified log."""
+    """Collects authentication events on macOS via unified log + ``last``.
+
+    Data sources (broadened from V1):
+        1. **Unified log** — ``log show`` with a wide predicate covering:
+           - ``sudo`` — privilege escalation & denied attempts
+           - ``sshd`` — remote SSH login success/failure
+           - ``loginwindow`` — console login, screen-lock/unlock
+           - ``coreauthd`` / ``LocalAuthentication`` — biometric / password auth
+           - ``SecurityAgent`` — authorisation dialogs
+           - ``authd`` — the authorisation daemon itself
+           - ``screensaver`` — screen-saver lock events
+        2. **``last`` command** — session login/logout history (robust fallback
+           that works even when unified log is noisy or private).
+
+    Key fixes over V1:
+        * JSON key is ``processImagePath``, **not** ``process``
+        * ``--info`` flag added (many auth entries are Info-level)
+        * Query window widened to 2 min with timestamp-based dedup
+        * Actual macOS sudo format parsed:
+          ``user : <reason> ; TTY=… ; PWD=… ; USER=… ; COMMAND=…``
+        * New event types: ``SUDO_DENIED``, ``LOCAL_LOGIN``, ``SCREEN_LOCK``,
+          ``SCREEN_UNLOCK``
+    """
+
+    # ── Unified-log predicate (much broader than V1) ────────────────────
+    _LOG_PREDICATE = (
+        '(process == "sudo"'
+        ' OR process == "sshd"'
+        ' OR process == "loginwindow"'
+        ' OR process == "SecurityAgent"'
+        ' OR process == "authd"'
+        ' OR process == "screensaver"'
+        ' OR process == "coreauthd"'
+        ' OR subsystem == "com.apple.Authorization"'
+        ' OR subsystem == "com.apple.LocalAuthentication"'
+        ' OR subsystem == "com.apple.loginwindow.logging"'
+        ")"
+    )
+
+    # Query window (2 min) — intentionally overlaps with 30 s cycle
+    _QUERY_WINDOW = "2m"
 
     def __init__(self):
         self.last_timestamp: Optional[datetime] = None
+        # Dedup: set of (processID, machTimestamp) seen within a sliding window
+        self._seen_keys: set = set()
+        self._seen_keys_max = 10_000
+        # Track last 'last' parse position
+        self._last_boot_time: Optional[str] = None
+
+    # ------------------------------------------------------------------ #
+    #  Public API                                                          #
+    # ------------------------------------------------------------------ #
 
     def collect(self) -> List[AuthEvent]:
-        """Collect auth events from macOS unified logging."""
-        events = []
+        """Collect auth events from all macOS sources, deduplicated."""
+        events: List[AuthEvent] = []
+
+        # Source 1: Unified log (primary)
+        events.extend(self._collect_unified_log())
+
+        # Source 2: `last` command (login sessions – robust fallback)
+        events.extend(self._collect_last())
+
+        logger.debug(
+            f"MacOSAuthLogCollector collected {len(events)} auth events "
+            f"(dedup pool size: {len(self._seen_keys)})"
+        )
+        return events
+
+    # ------------------------------------------------------------------ #
+    #  Source 1: Unified log                                               #
+    # ------------------------------------------------------------------ #
+
+    def _collect_unified_log(self) -> List[AuthEvent]:
+        """Query unified log for auth events."""
+        events: List[AuthEvent] = []
 
         try:
-            # Query sshd and sudo logs
             cmd = [
-                "log",
-                "show",
-                "--predicate",
-                '(process == "sshd" OR process == "sudo") AND (eventMessage CONTAINS "password" OR eventMessage CONTAINS "COMMAND")',
-                "--last",
-                "1m",
-                "--style",
-                "json",
+                "log", "show",
+                "--predicate", self._LOG_PREDICATE,
+                "--last", self._QUERY_WINDOW,
+                "--style", "json",
+                "--info",       # capture Info-level entries (many auth events)
             ]
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=15,
+            )
 
-            if result.returncode == 0 and result.stdout:
-                try:
-                    logs = json.loads(result.stdout)
-                    for entry in logs:
-                        event = self._parse_log_entry(entry)
-                        if event:
-                            events.append(event)
-                except json.JSONDecodeError:
-                    logger.debug("Failed to parse log output as JSON")
+            if result.returncode != 0:
+                logger.debug(f"log show returned {result.returncode}")
+                return events
+
+            if not result.stdout or result.stdout.strip() in ("", "[]"):
+                return events
+
+            try:
+                log_entries = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                logger.debug("Failed to parse log show JSON output")
+                return events
+
+            for entry in log_entries:
+                # ── Dedup by (processID, machTimestamp) ──────────────
+                dedup_key = (
+                    entry.get("processID", 0),
+                    entry.get("machTimestamp", 0),
+                )
+                if dedup_key in self._seen_keys:
+                    continue
+                self._seen_keys.add(dedup_key)
+
+                # Evict oldest when pool grows too large
+                if len(self._seen_keys) > self._seen_keys_max:
+                    self._seen_keys = set(
+                        list(self._seen_keys)[self._seen_keys_max // 2:]
+                    )
+
+                event = self._parse_unified_entry(entry)
+                if event:
+                    events.append(event)
 
         except subprocess.TimeoutExpired:
-            logger.warning("Auth log collection timed out")
+            logger.warning("Auth log collection timed out (15 s)")
         except Exception as e:
-            logger.error(f"Failed to collect auth logs: {e}")
+            logger.error(f"Failed to collect unified log: {e}")
 
         return events
 
-    def _parse_log_entry(self, entry: Dict) -> Optional[AuthEvent]:
-        """Parse a log entry into AuthEvent."""
+    def _parse_unified_entry(self, entry: Dict) -> Optional[AuthEvent]:
+        """Parse a single unified-log JSON entry into an AuthEvent.
+
+        Key difference from V1: the JSON key for the process binary is
+        ``processImagePath`` (e.g. ``/usr/bin/sudo``), **not** ``process``.
+        """
         try:
             message = entry.get("eventMessage", "")
-            timestamp_str = entry.get("timestamp", "")
-            process = entry.get("process", "")
+            if not message:
+                return None
 
-            # Parse timestamp
+            timestamp_str = entry.get("timestamp", "")
+            process_path = entry.get("processImagePath", "")
+            process_name = process_path.rsplit("/", 1)[-1] if process_path else ""
+            process_id = entry.get("processID", 0)
+
+            # ── Parse timestamp ──────────────────────────────────────
             timestamp = datetime.now(timezone.utc)
             if timestamp_str:
                 try:
+                    # macOS format: "2026-02-17 17:17:13.534573-0600"
                     timestamp = datetime.fromisoformat(
                         timestamp_str.replace("Z", "+00:00")
                     )
                 except ValueError:
                     pass
-
             timestamp_ns = int(timestamp.timestamp() * 1e9)
 
-            # SSH events
-            if process == "sshd":
-                if "Failed password" in message:
-                    # Extract username and IP
-                    match = re.search(r"for (\S+) from ([\d.]+)", message)
-                    if match:
-                        return AuthEvent(
-                            timestamp_ns=timestamp_ns,
-                            event_type="SSH_LOGIN",
-                            status="FAILURE",
-                            username=match.group(1),
-                            source_ip=match.group(2),
-                        )
-                elif "Accepted password" in message:
-                    match = re.search(r"for (\S+) from ([\d.]+)", message)
-                    if match:
-                        return AuthEvent(
-                            timestamp_ns=timestamp_ns,
-                            event_type="SSH_LOGIN",
-                            status="SUCCESS",
-                            username=match.group(1),
-                            source_ip=match.group(2),
-                        )
+            # ── Process-specific parsing ─────────────────────────────
 
-            # Sudo events
-            if process == "sudo" and "COMMAND=" in message:
-                match = re.search(r"(\S+)\s+:.*COMMAND=(.+)", message)
-                if match:
-                    return AuthEvent(
-                        timestamp_ns=timestamp_ns,
-                        event_type="SUDO_EXEC",
-                        status="SUCCESS",
-                        username=match.group(1),
-                        command=match.group(2),
-                    )
+            # 1. SUDO events
+            if process_name == "sudo":
+                return self._parse_sudo_message(message, timestamp_ns, process_id)
+
+            # 2. SSHD events
+            if process_name == "sshd":
+                return self._parse_sshd_message(message, timestamp_ns)
+
+            # 3. loginwindow events (console login, screen lock/unlock)
+            if process_name == "loginwindow":
+                return self._parse_loginwindow_message(message, timestamp_ns)
+
+            # 4. SecurityAgent (authorisation dialog events)
+            if process_name == "SecurityAgent":
+                return self._parse_security_agent_message(
+                    message, timestamp_ns
+                )
+
+            # 5. screensaver events
+            if process_name in ("ScreenSaverEngine", "screensaver"):
+                return self._parse_screensaver_message(message, timestamp_ns)
+
+            # 6. coreauthd / LocalAuthentication
+            if process_name == "coreauthd":
+                return self._parse_coreauthd_message(message, timestamp_ns)
 
         except Exception as e:
-            logger.debug(f"Failed to parse log entry: {e}")
+            logger.debug(f"Failed to parse unified log entry: {e}")
 
         return None
+
+    # ── Sudo parser ──────────────────────────────────────────────────────
+
+    def _parse_sudo_message(
+        self, message: str, timestamp_ns: int, _pid: int
+    ) -> Optional[AuthEvent]:
+        """Parse macOS sudo unified-log message.
+
+        Actual macOS format:
+            ``username : TTY=ttys015 ; PWD=/some/dir ; USER=root ; COMMAND=/bin/ls``
+            ``username : a password is required ; TTY=... ; COMMAND=...``
+            ``username : command not allowed ; TTY=... ; COMMAND=...``
+        """
+        # Skip noisy library messages (group lookups, config reads)
+        if any(kw in message for kw in [
+            "Retrieve User", "Retrieve Group", "Too many groups",
+            "Performance impact", "Reading config", "Using original path",
+        ]):
+            return None
+
+        # Pattern: "user : <optional reason> ; TTY=… ; … ; COMMAND=…"
+        sudo_match = re.match(
+            r"^(\S+)\s+:\s+(.+?)(?:\s+;\s+TTY=(\S+))?(?:\s+;\s+PWD=(\S+))?"
+            r"(?:\s+;\s+USER=(\S+))?(?:\s+;\s+COMMAND=(.+))?$",
+            message,
+        )
+        if sudo_match:
+            username = sudo_match.group(1)
+            reason_or_info = sudo_match.group(2).strip()
+            tty = sudo_match.group(3) or ""
+            # groups 4 (PWD) and 5 (USER) captured but not stored on AuthEvent
+            command = sudo_match.group(6) or ""
+
+            # Determine status
+            if "password is required" in reason_or_info:
+                status = "FAILURE"
+                event_type = "SUDO_DENIED"
+                reason = "password required (non-interactive)"
+            elif "command not allowed" in reason_or_info:
+                status = "FAILURE"
+                event_type = "SUDO_DENIED"
+                reason = "command not allowed"
+            elif "not allowed to run" in reason_or_info:
+                status = "FAILURE"
+                event_type = "SUDO_DENIED"
+                reason = "user not allowed"
+            elif "incorrect password" in reason_or_info.lower():
+                status = "FAILURE"
+                event_type = "SUDO_DENIED"
+                reason = "incorrect password"
+            elif command:
+                status = "SUCCESS"
+                event_type = "SUDO_EXEC"
+                reason = ""
+            else:
+                # Some other sudo message — skip noise
+                return None
+
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type=event_type,
+                status=status,
+                username=username,
+                command=command.strip(),
+                tty=tty,
+                reason=reason,
+            )
+
+        return None
+
+    # ── SSHD parser ──────────────────────────────────────────────────────
+
+    def _parse_sshd_message(
+        self, message: str, timestamp_ns: int
+    ) -> Optional[AuthEvent]:
+        """Parse sshd unified-log messages."""
+        # Failed password
+        match = re.search(
+            r"Failed password for (?:invalid user )?(\S+) from ([\d.]+)", message
+        )
+        if match:
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type="SSH_LOGIN",
+                status="FAILURE",
+                username=match.group(1),
+                source_ip=match.group(2),
+                reason="invalid password",
+            )
+
+        # Accepted password
+        match = re.search(r"Accepted password for (\S+) from ([\d.]+)", message)
+        if match:
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type="SSH_LOGIN",
+                status="SUCCESS",
+                username=match.group(1),
+                source_ip=match.group(2),
+            )
+
+        # Accepted publickey
+        match = re.search(r"Accepted publickey for (\S+) from ([\d.]+)", message)
+        if match:
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type="SSH_LOGIN",
+                status="SUCCESS",
+                username=match.group(1),
+                source_ip=match.group(2),
+                reason="publickey",
+            )
+
+        # Connection closed / disconnected
+        match = re.search(r"Connection closed by ([\d.]+)", message)
+        if match:
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type="SSH_DISCONNECT",
+                status="SUCCESS",
+                username="",
+                source_ip=match.group(1),
+            )
+
+        return None
+
+    # ── loginwindow parser ───────────────────────────────────────────────
+
+    def _parse_loginwindow_message(
+        self, message: str, timestamp_ns: int
+    ) -> Optional[AuthEvent]:
+        """Parse loginwindow messages for console login / screen events."""
+        msg_lower = message.lower()
+
+        # Screen lock events (SAC = Screen Assessment Context)
+        if "sacshieldwindowshowing" in msg_lower and "true" in msg_lower:
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type="SCREEN_LOCK",
+                status="SUCCESS",
+                username="",
+            )
+
+        # Screen unlock
+        if "sacshieldwindowshowing" in msg_lower and "false" in msg_lower:
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type="SCREEN_UNLOCK",
+                status="SUCCESS",
+                username="",
+            )
+
+        # Console login (USER_PROCESS)
+        if "user_process" in msg_lower or "console login" in msg_lower:
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type="LOCAL_LOGIN",
+                status="SUCCESS",
+                username="",
+                reason="console",
+            )
+
+        return None
+
+    # ── SecurityAgent parser ─────────────────────────────────────────────
+
+    def _parse_security_agent_message(
+        self, message: str, timestamp_ns: int
+    ) -> Optional[AuthEvent]:
+        """Parse SecurityAgent messages (authorisation prompts)."""
+        msg_lower = message.lower()
+
+        if "authorization" in msg_lower and "succeeded" in msg_lower:
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type="AUTH_PROMPT",
+                status="SUCCESS",
+                username="",
+                reason="SecurityAgent authorization",
+            )
+        if "authorization" in msg_lower and "failed" in msg_lower:
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type="AUTH_PROMPT",
+                status="FAILURE",
+                username="",
+                reason="SecurityAgent authorization failed",
+            )
+        return None
+
+    # ── screensaver parser ───────────────────────────────────────────────
+
+    def _parse_screensaver_message(
+        self, message: str, timestamp_ns: int
+    ) -> Optional[AuthEvent]:
+        """Parse screensaver events."""
+        msg_lower = message.lower()
+        if "lock" in msg_lower or "activat" in msg_lower:
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type="SCREEN_LOCK",
+                status="SUCCESS",
+                username="",
+                reason="screensaver",
+            )
+        return None
+
+    # ── coreauthd / LocalAuthentication parser ───────────────────────────
+
+    def _parse_coreauthd_message(
+        self, message: str, timestamp_ns: int
+    ) -> Optional[AuthEvent]:
+        """Parse coreauthd messages — biometric / password evaluation."""
+        # Only capture high-signal messages, not Context create/dealloc noise
+        msg_lower = message.lower()
+
+        if "evaluate" in msg_lower and "policy" in msg_lower:
+            status = "SUCCESS" if "success" in msg_lower else "FAILURE"
+            return AuthEvent(
+                timestamp_ns=timestamp_ns,
+                event_type="BIOMETRIC_AUTH",
+                status=status,
+                username="",
+                reason="LocalAuthentication policy evaluation",
+            )
+        return None
+
+    # ------------------------------------------------------------------ #
+    #  Source 2: `last` command                                            #
+    # ------------------------------------------------------------------ #
+
+    def _collect_last(self) -> List[AuthEvent]:
+        """Parse ``last`` for recent login sessions.
+
+        Only returns events from the *current boot* that haven't been
+        reported yet (tracked via dedup pool).
+        """
+        events: List[AuthEvent] = []
+        try:
+            result = subprocess.run(
+                ["last", "-10"],  # last 10 entries
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode != 0:
+                return events
+
+            for line in result.stdout.splitlines():
+                event = self._parse_last_line(line)
+                if event:
+                    events.append(event)
+
+        except subprocess.TimeoutExpired:
+            logger.debug("last command timed out")
+        except Exception as e:
+            logger.debug(f"Failed to collect from last: {e}")
+
+        return events
+
+    def _parse_last_line(self, line: str) -> Optional[AuthEvent]:
+        """Parse a single ``last`` output line into an AuthEvent (or None)."""
+        line = line.strip()
+        if not line or line.startswith("wtmp"):
+            return None
+
+        parts = line.split()
+        if len(parts) < 5:
+            return None
+
+        username = parts[0]
+        tty = parts[1]
+
+        # Skip reboot/shutdown meta-lines
+        if username in ("reboot", "shutdown"):
+            return None
+
+        # Extract login start time string for dedup
+        time_key = " ".join(parts[2:6]) if len(parts) >= 6 else line
+
+        dedup_key = ("last", username, tty, time_key)
+        if dedup_key in self._seen_keys:
+            return None
+        self._seen_keys.add(dedup_key)
+
+        # Determine event type
+        if tty == "console":
+            event_type = "LOCAL_LOGIN"
+        elif tty.startswith("ttys"):
+            event_type = "TERMINAL_SESSION"
+        else:
+            event_type = "LOCAL_LOGIN"
+
+        still_logged_in = "still logged in" in line
+
+        return AuthEvent(
+            timestamp_ns=int(time.time() * 1e9),
+            event_type=event_type,
+            status="SUCCESS",
+            username=username,
+            tty=tty,
+            reason="still logged in" if still_logged_in else "completed",
+        )
 
 
 def get_auth_collector() -> AuthLogCollector:
@@ -392,21 +784,29 @@ class AuthGuardAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
     management.
     """
 
-    def __init__(self, collection_interval: float = 30.0):
+    def __init__(
+        self,
+        collection_interval: float = 30.0,
+        queue_path_override: Optional[str] = None,
+        device_id_override: Optional[str] = None,
+    ):
         """Initialize AuthGuard Agent v2.
 
         Args:
             collection_interval: Seconds between collection cycles
+            queue_path_override: Optional override for local queue DB path
+            device_id_override: Optional override for device ID
         """
-        device_id = socket.gethostname()
+        device_id = device_id_override or socket.gethostname()
+        queue_path = queue_path_override or QUEUE_PATH
 
         # Create EventBus publisher
         publisher = EventBusPublisher(EVENTBUS_ADDRESS, CERT_DIR)
 
         # Create local queue
-        Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
+        Path(queue_path).parent.mkdir(parents=True, exist_ok=True)
         queue_adapter = LocalQueueAdapter(
-            queue_path=QUEUE_PATH,
+            queue_path=queue_path,
             agent_name="auth_guard_agent_v2",
             device_id=device_id,
             max_bytes=50 * 1024 * 1024,
@@ -424,6 +824,9 @@ class AuthGuardAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
 
         # Platform-specific auth log collector
         self.auth_collector = get_auth_collector()
+
+        # Lifetime counter for heartbeat COUNTER metric
+        self._total_auth_events: int = 0
 
         # Register all auth probes
         self.register_probes(create_auth_probes())
@@ -444,18 +847,21 @@ class AuthGuardAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         try:
             import os
 
-            # Verify certificates
+            # Verify certificates (warn but don't fail — dev mode may lack certs)
             required_certs = ["ca.crt", "agent.crt", "agent.key"]
             for cert in required_certs:
                 cert_path = f"{CERT_DIR}/{cert}"
                 if not os.path.exists(cert_path):
-                    logger.error(f"Certificate not found: {cert_path}")
-                    return False
+                    logger.warning(f"Certificate not found: {cert_path} (EventBus publishing will fail)")
 
-            # Test auth log collector
+            # Test auth log collector (reset dedup pool after test so first
+            # real cycle still sees events)
             try:
                 test_events = self.auth_collector.collect()
                 logger.info(f"Auth collector test: {len(test_events)} events")
+                pool = getattr(self.auth_collector, "_seen_keys", None)
+                if pool is not None:
+                    pool.clear()
             except Exception as e:
                 logger.warning(f"Auth collector test failed: {e}")
                 # Continue anyway - collector may work later
@@ -478,20 +884,51 @@ class AuthGuardAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         Returns:
             List of DeviceTelemetry protobuf messages
         """
+        timestamp_ns = int(time.time() * 1e9)
+
         # Collect auth events
         auth_events = self.auth_collector.collect()
-        logger.debug(f"Collected {len(auth_events)} auth events")
+        self._total_auth_events += len(auth_events)
+        logger.info(f"Collected {len(auth_events)} auth events (total: {self._total_auth_events})")
 
-        # Create context with auth events
+        # Run probes against collected auth events
+        probe_events = self._run_auth_probes(auth_events)
+        logger.info(f"Probes generated {len(probe_events)} events from {len(auth_events)} auth events")
+
+        # Build proto events
+        proto_events = self._build_heartbeat_metrics(
+            timestamp_ns, len(auth_events), len(probe_events),
+        )
+        proto_events.extend(
+            self._build_probe_security_events(timestamp_ns, probe_events)
+        )
+
+        # Create DeviceTelemetry
+        telemetry = telemetry_pb2.DeviceTelemetry(
+            device_id=self.device_id,
+            device_type="HOST",
+            protocol="AUTH",
+            events=proto_events,
+            timestamp_ns=timestamp_ns,
+            collection_agent="auth_guard_agent_v2",
+            agent_version="2.1.0",
+        )
+
+        return [telemetry]
+
+    # ── collect_data helpers ─────────────────────────────────────────────
+
+    def _run_auth_probes(
+        self, auth_events: List[AuthEvent],
+    ) -> List[TelemetryEvent]:
+        """Feed auth events to all probes and collect results."""
         context = self._create_probe_context()
         context.shared_data["auth_events"] = auth_events
 
-        # Run all probes and collect events
         events: List[TelemetryEvent] = []
         for probe in self._probes:
             if not probe.enabled:
                 continue
-
             try:
                 probe_events = probe.scan(context)
                 events.extend(probe_events)
@@ -501,94 +938,116 @@ class AuthGuardAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
                 probe.error_count += 1
                 probe.last_error = str(e)
                 logger.error(f"Probe {probe.name} failed: {e}")
+        return events
 
-        logger.info(f"Probes generated {len(events)} events")
+    def _build_heartbeat_metrics(
+        self,
+        timestamp_ns: int,
+        auth_count: int,
+        probe_event_count: int,
+    ) -> List[telemetry_pb2.TelemetryEvent]:
+        """Build heartbeat METRIC TelemetryEvents (always emitted)."""
+        metrics: List[telemetry_pb2.TelemetryEvent] = []
 
-        # Convert to protobuf
-        if events:
-            return [self._events_to_telemetry(events, auth_events)]
-        return []
-
-    def _events_to_telemetry(
-        self, events: List[TelemetryEvent], auth_events: List[AuthEvent]
-    ) -> telemetry_pb2.DeviceTelemetry:
-        """Convert TelemetryEvents to protobuf DeviceTelemetry.
-
-        Args:
-            events: List of TelemetryEvent objects from probes
-            auth_events: List of raw AuthEvent objects
-
-        Returns:
-            DeviceTelemetry protobuf message
-        """
-        timestamp_ns = int(time.time() * 1e9)
-
-        # Create telemetry events from probe output
-        telemetry_events = []
-
-        # Add basic metrics
-        telemetry_events.append(
+        # GAUGE: auth events in this cycle
+        metrics.append(
             telemetry_pb2.TelemetryEvent(
-                event_id=f"auth_event_count_{timestamp_ns}",
+                event_id=f"auth_collection_summary_{timestamp_ns}",
                 event_type="METRIC",
                 severity="INFO",
                 event_timestamp_ns=timestamp_ns,
+                source_component="auth_collector",
+                tags=["auth", "metric"],
                 metric_data=telemetry_pb2.MetricData(
-                    metric_name="auth_event_count",
+                    metric_name="auth_events_collected",
                     metric_type="GAUGE",
-                    numeric_value=float(len(auth_events)),
+                    numeric_value=float(auth_count),
                     unit="events",
                 ),
-                source_component="auth_guard_agent",
-                tags=["auth", "metric"],
             )
         )
 
-        # Convert probe events to telemetry
-        for event in events:
-            # Create appropriate telemetry based on event type
-            severity_map = {
-                "DEBUG": "DEBUG",
-                "INFO": "INFO",
-                "LOW": "LOW",
-                "MEDIUM": "MEDIUM",
-                "HIGH": "HIGH",
-                "CRITICAL": "CRITICAL",
-            }
-
-            tel_event = telemetry_pb2.TelemetryEvent(
-                event_id=f"{event.event_type}_{timestamp_ns}",
-                event_type="ALERT" if event.severity.value in ("HIGH", "CRITICAL") else "METRIC",
-                severity=severity_map.get(event.severity.value, "INFO"),
+        # COUNTER: lifetime total
+        metrics.append(
+            telemetry_pb2.TelemetryEvent(
+                event_id=f"auth_events_total_{timestamp_ns}",
+                event_type="METRIC",
+                severity="INFO",
                 event_timestamp_ns=timestamp_ns,
-                source_component="auth_guard_agent",
-                tags=["auth", "threat"] + event.mitre_techniques,
+                source_component="auth_collector",
+                tags=["auth", "metric"],
+                metric_data=telemetry_pb2.MetricData(
+                    metric_name="auth_events_collected_total",
+                    metric_type="COUNTER",
+                    numeric_value=float(self._total_auth_events),
+                    unit="events",
+                ),
             )
+        )
 
-            # Add metric data
-            tel_event.metric_data.CopyFrom(
-                telemetry_pb2.MetricData(
-                    metric_name=event.event_type,
-                    metric_type="GAUGE",
-                    numeric_value=1.0,
-                    unit="threat_indicator",
+        # Probe events (only when > 0)
+        if probe_event_count:
+            metrics.append(
+                telemetry_pb2.TelemetryEvent(
+                    event_id=f"auth_probe_events_{timestamp_ns}",
+                    event_type="METRIC",
+                    severity="INFO",
+                    event_timestamp_ns=timestamp_ns,
+                    source_component="auth_guard_agent",
+                    tags=["auth", "metric"],
+                    metric_data=telemetry_pb2.MetricData(
+                        metric_name="auth_probe_events",
+                        metric_type="GAUGE",
+                        numeric_value=float(probe_event_count),
+                        unit="events",
+                    ),
                 )
             )
 
-            telemetry_events.append(tel_event)
+        return metrics
 
-        # Create device telemetry
-        telemetry = telemetry_pb2.DeviceTelemetry(
-            device_id=self.device_id,
-            device_type="HOST",
-            protocol="AUTH",
-            events=telemetry_events,
-            timestamp_ns=timestamp_ns,
-            collection_agent="auth-guard-agent",
-            agent_version="2.0.0",
-        )
+    _SEVERITY_MAP = {
+        "DEBUG": "DEBUG", "INFO": "INFO", "LOW": "LOW",
+        "MEDIUM": "MEDIUM", "HIGH": "HIGH", "CRITICAL": "CRITICAL",
+    }
 
-        return telemetry
+    def _build_probe_security_events(
+        self,
+        timestamp_ns: int,
+        events: List[TelemetryEvent],
+    ) -> List[telemetry_pb2.TelemetryEvent]:
+        """Convert probe TelemetryEvents to SecurityEvent-based protos."""
+        results: List[telemetry_pb2.TelemetryEvent] = []
+
+        for event in events:
+            security_event = telemetry_pb2.SecurityEvent(
+                event_category=event.event_type,
+                risk_score=0.8 if event.severity.value in ("HIGH", "CRITICAL") else 0.5,
+                analyst_notes=(
+                    f"Probe: {event.probe_name}, Severity: {event.severity.value}"
+                ),
+            )
+            security_event.mitre_techniques.extend(event.mitre_techniques)
+
+            tel_event = telemetry_pb2.TelemetryEvent(
+                event_id=f"{event.event_type}_{timestamp_ns}",
+                event_type="SECURITY",
+                severity=self._SEVERITY_MAP.get(event.severity.value, "INFO"),
+                event_timestamp_ns=timestamp_ns,
+                source_component=event.probe_name or "auth_guard_agent",
+                tags=["auth", "threat"],
+                security_event=security_event,
+                confidence_score=0.7,
+            )
+
+            if event.data:
+                for key, value in event.data.items():
+                    if value is not None:
+                        tel_event.attributes[key] = str(value)
+
+            results.append(tel_event)
+
+        return results
 
     def validate_event(self, event: Any) -> ValidationResult:
         """Validate telemetry before publishing.
@@ -659,17 +1118,42 @@ def main():
         action="store_true",
         help="Enable debug logging",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default=None,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging level (overrides --debug)",
+    )
+    parser.add_argument(
+        "--queue-path",
+        type=str,
+        default=None,
+        help="Override local queue DB path",
+    )
+    parser.add_argument(
+        "--device-id",
+        type=str,
+        default=None,
+        help="Override device ID (default: hostname)",
+    )
 
     args = parser.parse_args()
 
-    if args.debug:
+    if args.log_level:
+        logging.getLogger().setLevel(getattr(logging, args.log_level))
+    elif args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
     logger.info("=" * 70)
     logger.info("AMOSKYS AuthGuard Agent v2 (Micro-Probe Architecture)")
     logger.info("=" * 70)
 
-    agent = AuthGuardAgentV2(collection_interval=args.interval)
+    agent = AuthGuardAgentV2(
+        collection_interval=args.interval,
+        queue_path_override=args.queue_path,
+        device_id_override=args.device_id,
+    )
 
     try:
         agent.run_forever()

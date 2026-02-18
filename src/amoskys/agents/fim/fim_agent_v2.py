@@ -427,8 +427,8 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         """Initialize agent resources.
 
         Verifies:
-            - Certificates exist
-            - Baseline exists (or creates if in create mode)
+            - Certificates exist (warning only in dev mode)
+            - Baseline exists (auto-creates if missing)
             - Probes initialize successfully
 
         Returns:
@@ -437,13 +437,12 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         try:
             import os
 
-            # Verify certificates
+            # Verify certificates (warn but don't fail — dev mode may lack certs)
             required_certs = ["ca.crt", "agent.crt", "agent.key"]
             for cert in required_certs:
                 cert_path = f"{CERT_DIR}/{cert}"
                 if not os.path.exists(cert_path):
-                    logger.error(f"Certificate not found: {cert_path}")
-                    return False
+                    logger.warning(f"Certificate not found: {cert_path} (EventBus publishing will fail)")
 
             # Handle baseline
             if self.baseline_mode == "create":
@@ -454,8 +453,10 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
 
             elif self.baseline_mode == "monitor":
                 if not self.baseline_engine.load():
-                    logger.error("Baseline not found. Run with baseline_mode='create' first.")
-                    return False
+                    logger.warning(
+                        "No baseline found — first cycle will auto-create baseline"
+                    )
+                    self.baseline_mode = "auto_create"
 
             # Setup probes
             if not self.setup_probes():
@@ -475,16 +476,77 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         Returns:
             List of DeviceTelemetry protobuf messages
         """
+        timestamp_ns = int(time.time() * 1e9)
+
         # Scan current filesystem state
         current_state = self._scan_filesystem()
-        logger.debug(f"Scanned {len(current_state)} files")
+        logger.info(f"Scanned {len(current_state)} files")
+
+        # Auto-create baseline on first cycle if none exists
+        if self.baseline_mode == "auto_create":
+            logger.info(
+                f"Auto-creating baseline from {len(current_state)} files"
+            )
+            self.baseline_engine.baseline = current_state
+            self.baseline_engine.save()
+            self.baseline_mode = "monitor"
+
+            # Emit a metric-only event for the baseline creation
+            baseline_event = telemetry_pb2.TelemetryEvent(
+                event_id=f"fim_baseline_created_{timestamp_ns}",
+                event_type="METRIC",
+                severity="INFO",
+                event_timestamp_ns=timestamp_ns,
+                metric_data=telemetry_pb2.MetricData(
+                    metric_name="fim_baseline_files",
+                    metric_type="GAUGE",
+                    numeric_value=float(len(current_state)),
+                    unit="files",
+                ),
+                source_component="fim_agent",
+                tags=["fim", "baseline"],
+            )
+            telemetry = telemetry_pb2.DeviceTelemetry(
+                device_id=self.device_id,
+                device_type="HOST",
+                protocol="FIM",
+                events=[baseline_event],
+                timestamp_ns=timestamp_ns,
+                collection_agent="fim_agent_v2",
+                agent_version="2.0.0",
+            )
+            return [telemetry]
 
         # Compare against baseline
         changes = self.baseline_engine.compare(current_state)
         logger.info(f"Detected {len(changes)} file changes")
 
         if not changes:
-            return []  # No changes, no events
+            # Still emit a heartbeat metric so EOA knows agent is alive
+            heartbeat = telemetry_pb2.TelemetryEvent(
+                event_id=f"fim_heartbeat_{timestamp_ns}",
+                event_type="METRIC",
+                severity="INFO",
+                event_timestamp_ns=timestamp_ns,
+                metric_data=telemetry_pb2.MetricData(
+                    metric_name="fim_heartbeat",
+                    metric_type="GAUGE",
+                    numeric_value=float(len(self.baseline_engine.baseline)),
+                    unit="baseline_files",
+                ),
+                source_component="fim_agent",
+                tags=["fim", "heartbeat"],
+            )
+            telemetry = telemetry_pb2.DeviceTelemetry(
+                device_id=self.device_id,
+                device_type="HOST",
+                protocol="FIM",
+                events=[heartbeat],
+                timestamp_ns=timestamp_ns,
+                collection_agent="fim_agent_v2",
+                agent_version="2.0.0",
+            )
+            return [telemetry]
 
         # Create context with file changes
         context = self._create_probe_context()
@@ -560,7 +622,7 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         # Create telemetry events from probe output
         telemetry_events = []
 
-        # Add basic metrics
+        # Add basic metrics — change count
         telemetry_events.append(
             telemetry_pb2.TelemetryEvent(
                 event_id=f"fim_change_count_{timestamp_ns}",
@@ -578,7 +640,25 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
             )
         )
 
-        # Convert probe events to telemetry
+        # Probe event count metric
+        telemetry_events.append(
+            telemetry_pb2.TelemetryEvent(
+                event_id=f"fim_probe_events_{timestamp_ns}",
+                event_type="METRIC",
+                severity="INFO",
+                event_timestamp_ns=timestamp_ns,
+                metric_data=telemetry_pb2.MetricData(
+                    metric_name="fim_probe_events",
+                    metric_type="GAUGE",
+                    numeric_value=float(len(events)),
+                    unit="events",
+                ),
+                source_component="fim_agent",
+                tags=["fim", "metric"],
+            )
+        )
+
+        # Convert probe events to SecurityEvent-based telemetry
         severity_map = {
             "DEBUG": "DEBUG",
             "INFO": "INFO",
@@ -589,24 +669,31 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         }
 
         for event in events:
+            # Build SecurityEvent sub-message with MITRE techniques
+            security_event = telemetry_pb2.SecurityEvent(
+                event_category=event.event_type,
+                risk_score=0.8 if event.severity.value in ("HIGH", "CRITICAL") else 0.5,
+                analyst_notes=f"Probe: {event.probe_name}, "
+                              f"Severity: {event.severity.value}",
+            )
+            security_event.mitre_techniques.extend(event.mitre_techniques)
+
             tel_event = telemetry_pb2.TelemetryEvent(
                 event_id=f"{event.event_type}_{timestamp_ns}",
-                event_type="ALERT" if event.severity.value in ("HIGH", "CRITICAL") else "METRIC",
+                event_type="SECURITY",
                 severity=severity_map.get(event.severity.value, "INFO"),
                 event_timestamp_ns=timestamp_ns,
-                source_component="fim_agent",
-                tags=["fim", "threat"] + event.mitre_techniques,
+                source_component=event.probe_name or "fim_agent",
+                tags=["fim", "threat"],
+                security_event=security_event,
+                confidence_score=0.7,
             )
 
-            # Add metric data
-            tel_event.metric_data.CopyFrom(
-                telemetry_pb2.MetricData(
-                    metric_name=event.event_type,
-                    metric_type="GAUGE",
-                    numeric_value=1.0,
-                    unit="threat_indicator",
-                )
-            )
+            # Populate attributes map with evidence from probe data
+            if event.data:
+                for key, value in event.data.items():
+                    if value is not None:
+                        tel_event.attributes[key] = str(value)
 
             telemetry_events.append(tel_event)
 
@@ -617,7 +704,7 @@ class FIMAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
             protocol="FIM",
             events=telemetry_events,
             timestamp_ns=timestamp_ns,
-            collection_agent="fim-agent",
+            collection_agent="fim_agent_v2",
             agent_version="2.0.0",
         )
 
@@ -699,20 +786,67 @@ def main():
         action="store_true",
         help="Enable debug logging",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default=None,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging level (overrides --debug)",
+    )
+    parser.add_argument(
+        "--device-id",
+        type=str,
+        default=None,
+        help="Device identifier (default: hostname)",
+    )
+    parser.add_argument(
+        "--queue-path",
+        type=str,
+        default=None,
+        help="Local queue database path (default: data/queue/fim_agent_v2.db)",
+    )
+    parser.add_argument(
+        "--baseline-path",
+        type=str,
+        default=None,
+        help="Baseline JSON file path (default: data/fim_baseline.json)",
+    )
+    parser.add_argument(
+        "--monitor-paths",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Paths to monitor (default: platform-specific critical paths)",
+    )
 
     args = parser.parse_args()
 
-    if args.debug:
+    # Configure logging
+    if args.log_level:
+        logging.getLogger().setLevel(getattr(logging, args.log_level))
+    elif args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
     logger.info("=" * 70)
     logger.info("AMOSKYS FIM Agent v2 (Micro-Probe Architecture)")
     logger.info("=" * 70)
 
+    # Override globals from CLI args if provided
+    global QUEUE_PATH, BASELINE_PATH
+    if args.queue_path:
+        QUEUE_PATH = args.queue_path
+    if args.baseline_path:
+        BASELINE_PATH = args.baseline_path
+
     agent = FIMAgentV2(
         collection_interval=args.interval,
         baseline_mode=args.mode,
+        monitor_paths=args.monitor_paths,
     )
+
+    # Override device_id if provided
+    if args.device_id:
+        agent.device_id = args.device_id
 
     if args.mode == "create":
         logger.info("Baseline creation complete. Exiting.")

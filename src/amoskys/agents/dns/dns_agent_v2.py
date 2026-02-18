@@ -342,13 +342,12 @@ class DNSAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         try:
             import os
 
-            # Verify certificates
+            # Verify certificates (warn but don't fail — dev mode may lack certs)
             required_certs = ["ca.crt", "agent.crt", "agent.key"]
             for cert in required_certs:
                 cert_path = f"{CERT_DIR}/{cert}"
                 if not os.path.exists(cert_path):
-                    logger.error(f"Certificate not found: {cert_path}")
-                    return False
+                    logger.warning(f"Certificate not found: {cert_path} (EventBus publishing will fail)")
 
             # Test DNS collector
             try:
@@ -376,15 +375,11 @@ class DNSAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         Returns:
             List of DeviceTelemetry protobuf messages
         """
+        timestamp_ns = int(time.time() * 1e9)
+
         # Collect DNS queries
         dns_queries = self.dns_collector.collect()
-        logger.debug(f"Collected {len(dns_queries)} DNS queries")
-
-        # Prepare shared context for probes
-        # Store queries in a way probes can access
-        for probe in self._probes:
-            if hasattr(probe, "query_buffer"):
-                probe.query_buffer = []
+        logger.info(f"Collected {len(dns_queries)} DNS queries")
 
         # Create context with DNS queries
         context = self._create_probe_context()
@@ -406,74 +401,99 @@ class DNSAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
                 probe.last_error = str(e)
                 logger.error(f"Probe {probe.name} failed: {e}")
 
-        logger.info(f"Probes generated {len(events)} events")
+        logger.info(f"Probes generated {len(events)} events from {len(dns_queries)} queries")
 
-        # Convert to protobuf
-        if events:
-            return [self._events_to_telemetry(events)]
-        return []
+        # Build proto events
+        proto_events = []
 
-    def _events_to_telemetry(
-        self, events: List[TelemetryEvent]
-    ) -> telemetry_pb2.DeviceTelemetry:
-        """Convert TelemetryEvents to protobuf DeviceTelemetry.
-
-        Args:
-            events: List of TelemetryEvent objects
-
-        Returns:
-            DeviceTelemetry protobuf message
-        """
-        # Create DNS telemetry
-        dns_data = telemetry_pb2.DNSTelemetry()
-
-        for event in events:
-            # Map events to appropriate protobuf fields
-            if event.event_type == "dns_query":
-                query = telemetry_pb2.DNSRecord(
-                    domain_queried=event.data.get("domain", ""),
-                    record_type=event.data.get("query_type", "A"),
-                    source_ip=event.data.get("source_ip", ""),
-                )
-                dns_data.recent_queries.append(query)
-
-            elif event.event_type in (
-                "dga_domain_detected",
-                "suspicious_domain_entropy",
-            ):
-                dns_data.dga_score = event.data.get("dga_score", 0.0)
-                dns_data.dga_domain = event.data.get("domain", "")
-
-            elif event.event_type == "dns_beaconing_detected":
-                dns_data.beaconing_detected = True
-                dns_data.beacon_domain = event.data.get("domain", "")
-                dns_data.beacon_interval = event.data.get("avg_interval_seconds", 0)
-
-            elif event.event_type == "dns_tunneling_suspected":
-                dns_data.tunneling_suspected = True
-                dns_data.tunnel_domain = event.data.get("domain", "")
-
-        # Create device telemetry
-        telemetry = telemetry_pb2.DeviceTelemetry(
-            device_id=self.device_id,
-            timestamp=int(time.time()),
-            hostname=self.device_id,
-            platform=platform.system(),
-            dns_telemetry=dns_data,
+        # Always emit a collection summary metric (heartbeat)
+        proto_events.append(
+            telemetry_pb2.TelemetryEvent(
+                event_id=f"dns_collection_summary_{timestamp_ns}",
+                event_type="METRIC",
+                severity="INFO",
+                event_timestamp_ns=timestamp_ns,
+                source_component="dns_collector",
+                tags=["dns", "metric"],
+                metric_data=telemetry_pb2.MetricData(
+                    metric_name="dns_queries_collected",
+                    metric_type="GAUGE",
+                    numeric_value=float(len(dns_queries)),
+                    unit="queries",
+                ),
+            )
         )
 
-        # Add alert data for high-severity events
-        for event in events:
-            if event.severity.value in ("HIGH", "CRITICAL"):
-                alert = telemetry_pb2.AlertData(
-                    alert_type=event.event_type,
-                    severity=event.severity.value,
-                    description=str(event.data),
-                    mitre_techniques=event.mitre_techniques,
+        # Probe event count metric
+        if events:
+            proto_events.append(
+                telemetry_pb2.TelemetryEvent(
+                    event_id=f"dns_probe_events_{timestamp_ns}",
+                    event_type="METRIC",
+                    severity="INFO",
+                    event_timestamp_ns=timestamp_ns,
+                    source_component="dns_agent",
+                    tags=["dns", "metric"],
+                    metric_data=telemetry_pb2.MetricData(
+                        metric_name="dns_probe_events",
+                        metric_type="GAUGE",
+                        numeric_value=float(len(events)),
+                        unit="events",
+                    ),
                 )
-                telemetry.alerts.append(alert)
+            )
 
-        return telemetry
+        # Convert probe events to SecurityEvent-based telemetry
+        severity_map = {
+            "DEBUG": "DEBUG",
+            "INFO": "INFO",
+            "LOW": "LOW",
+            "MEDIUM": "MEDIUM",
+            "HIGH": "HIGH",
+            "CRITICAL": "CRITICAL",
+        }
+
+        for event in events:
+            # Build SecurityEvent sub-message
+            security_event = telemetry_pb2.SecurityEvent(
+                event_category=event.event_type,
+                risk_score=0.8 if event.severity.value in ("HIGH", "CRITICAL") else 0.4,
+                analyst_notes=f"Probe: {event.probe_name}, "
+                              f"Severity: {event.severity.value}",
+            )
+            security_event.mitre_techniques.extend(event.mitre_techniques)
+
+            tel_event = telemetry_pb2.TelemetryEvent(
+                event_id=f"{event.event_type}_{timestamp_ns}",
+                event_type="SECURITY",
+                severity=severity_map.get(event.severity.value, "INFO"),
+                event_timestamp_ns=timestamp_ns,
+                source_component=event.probe_name or "dns_agent",
+                tags=["dns", "threat"],
+                security_event=security_event,
+                confidence_score=0.7,
+            )
+
+            # Populate attributes map with evidence
+            if event.data:
+                for key, value in event.data.items():
+                    if value is not None:
+                        tel_event.attributes[key] = str(value)
+
+            proto_events.append(tel_event)
+
+        # Create DeviceTelemetry
+        telemetry = telemetry_pb2.DeviceTelemetry(
+            device_id=self.device_id,
+            device_type="HOST",
+            protocol="DNS",
+            events=proto_events,
+            timestamp_ns=timestamp_ns,
+            collection_agent="dns_agent_v2",
+            agent_version="2.0.0",
+        )
+
+        return [telemetry]
 
     def validate_event(self, event: Any) -> ValidationResult:
         """Validate telemetry before publishing.
@@ -484,13 +504,14 @@ class DNSAgentV2(MicroProbeAgentMixin, HardenedAgentBase):
         Returns:
             ValidationResult
         """
+        errors = []
         if not hasattr(event, "device_id") or not event.device_id:
-            return ValidationResult(is_valid=False, errors=["Missing device_id"])
-
-        if not hasattr(event, "timestamp") or event.timestamp == 0:
-            return ValidationResult(is_valid=False, errors=["Missing timestamp"])
-
-        return ValidationResult(is_valid=True)
+            errors.append("Missing device_id")
+        if not hasattr(event, "timestamp_ns") or event.timestamp_ns <= 0:
+            errors.append("Missing or invalid timestamp_ns")
+        if not event.events:
+            errors.append("events list is empty")
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors)
 
     def shutdown(self) -> None:
         """Graceful shutdown."""
@@ -541,11 +562,24 @@ def main():
         action="store_true",
         help="Enable debug logging",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default=None,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging level (overrides --debug)",
+    )
 
     args = parser.parse_args()
 
-    if args.debug:
+    if args.log_level:
+        logging.getLogger().setLevel(getattr(logging, args.log_level))
+    elif args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    logger.info("=" * 70)
+    logger.info("AMOSKYS DNS Agent v2 (Micro-Probe Architecture)")
+    logger.info("=" * 70)
 
     agent = DNSAgentV2(collection_interval=args.interval)
 
