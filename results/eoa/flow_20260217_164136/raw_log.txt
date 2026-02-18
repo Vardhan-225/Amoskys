@@ -1,0 +1,56 @@
+2026-02-17 16:41:36,880 INFO     [FlowAgentV2] ======================================================================
+2026-02-17 16:41:36,880 INFO     [FlowAgentV2] AMOSKYS FlowAgent V2 (Micro-Probe Architecture)
+2026-02-17 16:41:36,880 INFO     [FlowAgentV2] ======================================================================
+2026-02-17 16:41:36,881 INFO     [amoskys.agents.common.local_queue] LocalQueue initialized: path=data/queue/flow_agent_v2.db, max_bytes=52428800
+2026-02-17 16:41:36,881 INFO     [amoskys.agents.common.probes] Registered probe: port_scan_sweep
+2026-02-17 16:41:36,881 INFO     [amoskys.agents.common.probes] Registered probe: lateral_smb_winrm
+2026-02-17 16:41:36,881 INFO     [amoskys.agents.common.probes] Registered probe: data_exfil_volume_spike
+2026-02-17 16:41:36,881 INFO     [amoskys.agents.common.probes] Registered probe: c2_beacon_flow
+2026-02-17 16:41:36,881 INFO     [amoskys.agents.common.probes] Registered probe: cleartext_credential_leak
+2026-02-17 16:41:36,881 INFO     [amoskys.agents.common.probes] Registered probe: suspicious_tunnel
+2026-02-17 16:41:36,881 INFO     [amoskys.agents.common.probes] Registered probe: internal_recon_dns_flow
+2026-02-17 16:41:36,881 INFO     [amoskys.agents.common.probes] Registered probe: new_external_service
+2026-02-17 16:41:36,881 INFO     [FlowAgentV2] FlowAgentV2 initialised: device=Akashs-MacBook-Air.local, interface=all, interval=15s, probes=8
+2026-02-17 16:41:36,881 INFO     [amoskys.agents.common.base] Starting agent flow_agent_v2 on device Akashs-MacBook-Air.local
+2026-02-17 16:41:36,904 DEBUG    [FlowAgentV2] Collected 11 flows (11 total)
+2026-02-17 16:41:36,904 INFO     [FlowAgentV2] Flow collector test: 11 connections seen
+2026-02-17 16:41:36,904 INFO     [amoskys.agents.common.probes] Probe port_scan_sweep initialized
+2026-02-17 16:41:36,904 INFO     [amoskys.agents.common.probes] Probe lateral_smb_winrm initialized
+2026-02-17 16:41:36,904 INFO     [amoskys.agents.common.probes] Probe data_exfil_volume_spike initialized
+2026-02-17 16:41:36,904 INFO     [amoskys.agents.common.probes] Probe c2_beacon_flow initialized
+2026-02-17 16:41:36,904 INFO     [amoskys.agents.common.probes] Probe cleartext_credential_leak initialized
+2026-02-17 16:41:36,904 INFO     [amoskys.agents.common.probes] Probe suspicious_tunnel initialized
+2026-02-17 16:41:36,904 INFO     [amoskys.agents.common.probes] Probe internal_recon_dns_flow initialized
+2026-02-17 16:41:36,904 INFO     [amoskys.agents.common.probes] Probe new_external_service initialized
+2026-02-17 16:41:36,904 INFO     [amoskys.agents.common.probes] Initialized 8/8 probes
+2026-02-17 16:41:36,904 INFO     [FlowAgentV2] FlowAgentV2 setup complete
+2026-02-17 16:41:36,926 DEBUG    [FlowAgentV2] Collected 11 flows (22 total)
+2026-02-17 16:41:36,926 INFO     [FlowAgentV2] Collected 11 flows in this cycle
+2026-02-17 16:41:36,926 INFO     [FlowAgentV2] Probes generated 0 events from 11 flows
+2026-02-17 16:41:51,959 DEBUG    [FlowAgentV2] Collected 11 flows (33 total)
+2026-02-17 16:41:51,959 INFO     [FlowAgentV2] Collected 11 flows in this cycle
+2026-02-17 16:41:51,959 INFO     [FlowAgentV2] Probes generated 0 events from 11 flows
+2026-02-17 16:42:06,963 DEBUG    [FlowAgentV2] Collected 11 flows (44 total)
+2026-02-17 16:42:06,963 INFO     [FlowAgentV2] Collected 11 flows in this cycle
+2026-02-17 16:42:06,963 INFO     [FlowAgentV2] Probes generated 0 events from 11 flows
+2026-02-17 16:42:21,947 DEBUG    [FlowAgentV2] Collected 11 flows (55 total)
+2026-02-17 16:42:21,947 INFO     [FlowAgentV2] Collected 11 flows in this cycle
+2026-02-17 16:42:21,947 INFO     [FlowAgentV2] Probes generated 0 events from 11 flows
+2026-02-17 16:42:36,973 DEBUG    [FlowAgentV2] Collected 11 flows (66 total)
+2026-02-17 16:42:36,973 INFO     [FlowAgentV2] Collected 11 flows in this cycle
+2026-02-17 16:42:36,974 INFO     [FlowAgentV2] Probes generated 0 events from 11 flows
+2026-02-17 16:42:36,974 DEBUG    [amoskys.agents.common.base] Agent flow_agent_v2: no queue_adapter configured, skipping metrics emission
+2026-02-17 16:42:51,979 DEBUG    [FlowAgentV2] Collected 11 flows (77 total)
+2026-02-17 16:42:51,979 INFO     [FlowAgentV2] Collected 11 flows in this cycle
+2026-02-17 16:42:51,979 INFO     [FlowAgentV2] Probes generated 0 events from 11 flows
+2026-02-17 16:43:06,986 DEBUG    [FlowAgentV2] Collected 12 flows (89 total)
+2026-02-17 16:43:06,986 INFO     [FlowAgentV2] Collected 12 flows in this cycle
+2026-02-17 16:43:06,987 INFO     [FlowAgentV2] Probes generated 0 events from 12 flows
+2026-02-17 16:43:21,965 DEBUG    [FlowAgentV2] Collected 12 flows (101 total)
+2026-02-17 16:43:21,965 INFO     [FlowAgentV2] Collected 12 flows in this cycle
+2026-02-17 16:43:21,965 INFO     [FlowAgentV2] Probes generated 0 events from 12 flows
+2026-02-17 16:43:36,992 DEBUG    [FlowAgentV2] Collected 10 flows (111 total)
+2026-02-17 16:43:36,992 INFO     [FlowAgentV2] Collected 10 flows in this cycle
+2026-02-17 16:43:36,993 INFO     [FlowAgentV2] Probes generated 0 events from 10 flows
+2026-02-17 16:43:36,993 DEBUG    [amoskys.agents.common.base] Agent flow_agent_v2: no queue_adapter configured, skipping metrics emission
+2026-02-17 16:43:36,993 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 received signal 15; shutting down

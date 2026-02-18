@@ -1,0 +1,262 @@
+2026-02-17 16:46:51,183 INFO     [FlowAgentV2] ======================================================================
+2026-02-17 16:46:51,183 INFO     [FlowAgentV2] AMOSKYS FlowAgent V2 (Micro-Probe Architecture)
+2026-02-17 16:46:51,183 INFO     [FlowAgentV2] ======================================================================
+2026-02-17 16:46:51,184 INFO     [amoskys.agents.common.local_queue] LocalQueue initialized: path=data/queue/flow_agent_v2.db, max_bytes=52428800
+2026-02-17 16:46:51,184 INFO     [amoskys.agents.common.probes] Registered probe: port_scan_sweep
+2026-02-17 16:46:51,184 INFO     [amoskys.agents.common.probes] Registered probe: lateral_smb_winrm
+2026-02-17 16:46:51,184 INFO     [amoskys.agents.common.probes] Registered probe: data_exfil_volume_spike
+2026-02-17 16:46:51,184 INFO     [amoskys.agents.common.probes] Registered probe: c2_beacon_flow
+2026-02-17 16:46:51,184 INFO     [amoskys.agents.common.probes] Registered probe: cleartext_credential_leak
+2026-02-17 16:46:51,184 INFO     [amoskys.agents.common.probes] Registered probe: suspicious_tunnel
+2026-02-17 16:46:51,184 INFO     [amoskys.agents.common.probes] Registered probe: internal_recon_dns_flow
+2026-02-17 16:46:51,184 INFO     [amoskys.agents.common.probes] Registered probe: new_external_service
+2026-02-17 16:46:51,184 INFO     [FlowAgentV2] FlowAgentV2 initialised: device=Akashs-MacBook-Air.local, interface=all, interval=15s, probes=8
+2026-02-17 16:46:51,184 INFO     [amoskys.agents.common.base] Starting agent flow_agent_v2 on device Akashs-MacBook-Air.local
+2026-02-17 16:46:51,214 DEBUG    [FlowAgentV2] Collected 12 flows (12 total)
+2026-02-17 16:46:51,214 INFO     [FlowAgentV2] Flow collector test: 12 connections seen
+2026-02-17 16:46:51,214 INFO     [amoskys.agents.common.probes] Probe port_scan_sweep initialized
+2026-02-17 16:46:51,214 INFO     [amoskys.agents.common.probes] Probe lateral_smb_winrm initialized
+2026-02-17 16:46:51,214 INFO     [amoskys.agents.common.probes] Probe data_exfil_volume_spike initialized
+2026-02-17 16:46:51,214 INFO     [amoskys.agents.common.probes] Probe c2_beacon_flow initialized
+2026-02-17 16:46:51,214 INFO     [amoskys.agents.common.probes] Probe cleartext_credential_leak initialized
+2026-02-17 16:46:51,214 INFO     [amoskys.agents.common.probes] Probe suspicious_tunnel initialized
+2026-02-17 16:46:51,214 INFO     [amoskys.agents.common.probes] Probe internal_recon_dns_flow initialized
+2026-02-17 16:46:51,214 INFO     [amoskys.agents.common.probes] Probe new_external_service initialized
+2026-02-17 16:46:51,214 INFO     [amoskys.agents.common.probes] Initialized 8/8 probes
+2026-02-17 16:46:51,214 INFO     [FlowAgentV2] FlowAgentV2 setup complete
+2026-02-17 16:46:51,238 DEBUG    [FlowAgentV2] Collected 12 flows (24 total)
+2026-02-17 16:46:51,238 INFO     [FlowAgentV2] Collected 12 flows in this cycle
+2026-02-17 16:46:51,239 INFO     [FlowAgentV2] Probes generated 0 events from 12 flows
+2026-02-17 16:46:51,250 INFO     [FlowAgentV2] Created secure gRPC channel with mTLS
+2026-02-17 16:46:51,254 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 16:46:51,456 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 16:46:51,862 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/flow/flow_agent_v2.py", line 119, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 16:46:51,867 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368411866586112:1
+2026-02-17 16:46:51,867 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 cycle 1bb634b4 complete: raw=1 valid=1 rejected=0 duration=0.653s
+2026-02-17 16:47:06,873 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 16:47:07,079 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-17 16:47:07,080 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 16:47:07,483 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:47:07,484 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368427483572992:2
+2026-02-17 16:47:07,484 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368411866586112:1
+2026-02-17 16:47:07,484 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 drained 1 events from local queue
+2026-02-17 16:47:07,538 DEBUG    [FlowAgentV2] Collected 13 flows (37 total)
+2026-02-17 16:47:07,538 INFO     [FlowAgentV2] Collected 13 flows in this cycle
+2026-02-17 16:47:07,538 INFO     [FlowAgentV2] Probes generated 1 events from 13 flows
+2026-02-17 16:47:07,542 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:47:07,542 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368427542436096:3
+2026-02-17 16:47:07,542 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 cycle 4e457207 complete: raw=1 valid=1 rejected=0 duration=0.058s
+2026-02-17 16:47:22,569 DEBUG    [FlowAgentV2] Collected 12 flows (49 total)
+2026-02-17 16:47:22,570 INFO     [FlowAgentV2] Collected 12 flows in this cycle
+2026-02-17 16:47:22,570 INFO     [FlowAgentV2] Probes generated 0 events from 12 flows
+2026-02-17 16:47:22,572 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:47:22,572 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368442572489984:4
+2026-02-17 16:47:22,572 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 cycle 3f62e281 complete: raw=1 valid=1 rejected=0 duration=0.028s
+2026-02-17 16:47:37,631 DEBUG    [FlowAgentV2] Collected 12 flows (61 total)
+2026-02-17 16:47:37,631 INFO     [FlowAgentV2] Collected 12 flows in this cycle
+2026-02-17 16:47:37,631 INFO     [FlowAgentV2] Probes generated 0 events from 12 flows
+2026-02-17 16:47:37,634 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-17 16:47:37,635 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 16:47:37,841 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 16:47:38,247 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/flow/flow_agent_v2.py", line 119, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 16:47:38,250 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368458249640960:5
+2026-02-17 16:47:38,250 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 cycle 5a7a508a complete: raw=1 valid=1 rejected=0 duration=0.672s
+2026-02-17 16:47:53,256 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 16:47:53,462 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-17 16:47:53,462 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 16:47:53,863 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:47:53,864 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368473863834112:6
+2026-02-17 16:47:53,864 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368427483572992:2
+2026-02-17 16:47:53,864 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:47:53,864 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368473864378880:7
+2026-02-17 16:47:53,864 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368427542436096:3
+2026-02-17 16:47:53,864 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:47:53,864 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368473864674048:8
+2026-02-17 16:47:53,864 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368442572489984:4
+2026-02-17 16:47:53,864 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:47:53,865 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368473864912896:9
+2026-02-17 16:47:53,865 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368458249640960:5
+2026-02-17 16:47:53,865 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 drained 4 events from local queue
+2026-02-17 16:47:56,910 DEBUG    [FlowAgentV2] Collected 11 flows (72 total)
+2026-02-17 16:47:56,910 INFO     [FlowAgentV2] Collected 11 flows in this cycle
+2026-02-17 16:47:56,910 INFO     [FlowAgentV2] Probes generated 0 events from 11 flows
+2026-02-17 16:47:56,913 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:47:56,913 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368476913560064:10
+2026-02-17 16:47:56,913 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 cycle 3e6cab1a complete: raw=1 valid=1 rejected=0 duration=3.049s
+2026-02-17 16:47:56,913 DEBUG    [amoskys.agents.common.base] Agent flow_agent_v2: no queue_adapter configured, skipping metrics emission
+2026-02-17 16:48:11,943 DEBUG    [FlowAgentV2] Collected 11 flows (83 total)
+2026-02-17 16:48:11,943 INFO     [FlowAgentV2] Collected 11 flows in this cycle
+2026-02-17 16:48:11,943 INFO     [FlowAgentV2] Probes generated 0 events from 11 flows
+2026-02-17 16:48:11,944 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:48:11,945 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368491944786944:11
+2026-02-17 16:48:11,945 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 cycle 3f88b809 complete: raw=1 valid=1 rejected=0 duration=0.026s
+2026-02-17 16:48:26,998 DEBUG    [FlowAgentV2] Collected 11 flows (94 total)
+2026-02-17 16:48:26,998 INFO     [FlowAgentV2] Collected 11 flows in this cycle
+2026-02-17 16:48:26,998 INFO     [FlowAgentV2] Probes generated 0 events from 11 flows
+2026-02-17 16:48:27,001 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-17 16:48:27,001 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 16:48:27,207 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 16:48:27,613 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/flow/flow_agent_v2.py", line 119, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 16:48:27,616 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368507615881984:12
+2026-02-17 16:48:27,616 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 cycle c3e953ea complete: raw=1 valid=1 rejected=0 duration=0.666s
+2026-02-17 16:48:42,622 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 16:48:42,828 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-17 16:48:42,828 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for flow_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 16:48:43,230 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:48:43,231 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368523230710016:13
+2026-02-17 16:48:43,233 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368473863834112:6
+2026-02-17 16:48:43,233 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:48:43,233 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368523233283072:14
+2026-02-17 16:48:43,233 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368473864378880:7
+2026-02-17 16:48:43,233 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:48:43,234 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368523234053120:15
+2026-02-17 16:48:43,234 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368473864674048:8
+2026-02-17 16:48:43,234 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:48:43,234 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368523234735104:16
+2026-02-17 16:48:43,235 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368473864912896:9
+2026-02-17 16:48:43,235 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:48:43,235 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368523235089920:17
+2026-02-17 16:48:43,235 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368476913560064:10
+2026-02-17 16:48:43,235 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:48:43,235 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368523235491072:18
+2026-02-17 16:48:43,235 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368491944786944:11
+2026-02-17 16:48:43,235 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:48:43,235 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368523235859968:19
+2026-02-17 16:48:43,236 DEBUG    [amoskys.agents.common.local_queue] Drained: flow_agent_v2:Akashs-MacBook-Air.local:1771368507615881984:12
+2026-02-17 16:48:43,236 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 drained 7 events from local queue
+2026-02-17 16:48:43,281 DEBUG    [FlowAgentV2] Collected 11 flows (105 total)
+2026-02-17 16:48:43,281 INFO     [FlowAgentV2] Collected 11 flows in this cycle
+2026-02-17 16:48:43,282 INFO     [FlowAgentV2] Probes generated 0 events from 11 flows
+2026-02-17 16:48:43,284 WARNING  [amoskys.agents.common.base] Circuit OPEN for flow_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 16:48:43,285 DEBUG    [amoskys.agents.common.local_queue] Enqueued: flow_agent_v2:Akashs-MacBook-Air.local:1771368523285018112:20
+2026-02-17 16:48:43,285 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 cycle d32963d5 complete: raw=1 valid=1 rejected=0 duration=0.049s
+2026-02-17 16:48:51,225 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 received signal 15; shutting down
+2026-02-17 16:48:58,290 INFO     [FlowAgentV2] FlowAgentV2 shutting down...
+2026-02-17 16:48:58,291 INFO     [FlowAgentV2] FlowAgentV2 shutdown complete
+2026-02-17 16:48:58,291 INFO     [amoskys.agents.common.base] Agent flow_agent_v2 stopped

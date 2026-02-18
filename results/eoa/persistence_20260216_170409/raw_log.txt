@@ -1,0 +1,130 @@
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.common.local_queue] LocalQueue initialized: path=data/queue/persistence_guard_v2.db, max_bytes=52428800
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.common.probes] Registered probe: launchd_persistence
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.common.probes] Registered probe: systemd_persistence
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.common.probes] Registered probe: cron_persistence
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.common.probes] Registered probe: ssh_key_backdoor
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.common.probes] Registered probe: shell_profile_hijack
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.common.probes] Registered probe: browser_extension_persistence
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.common.probes] Registered probe: startup_folder_login_item
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.common.probes] Registered probe: hidden_file_persistence
+2026-02-16 17:04:09,252 WARNING  [amoskys.agents.persistence.probes] Baseline file not found: data/persistence_baseline.json
+2026-02-16 17:04:09,252 WARNING  [amoskys.agents.persistence.persistence_agent_v2] No baseline found — first cycle will create one automatically
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.persistence.persistence_agent_v2] PersistenceGuardV2 initialized: device=Akashs-MacBook-Air.local, mode=monitor, baseline=data/persistence_baseline.json, interval=10.0s, probes=8
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.persistence.persistence_agent_v2] Starting PersistenceGuardV2 in monitor mode...
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.common.base] Starting agent persistence_guard_v2 on device Akashs-MacBook-Air.local
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.persistence.persistence_agent_v2] persistence_guard_v2 setup starting...
+2026-02-16 17:04:09,252 INFO     [amoskys.agents.persistence.persistence_agent_v2] persistence_guard_v2 setup complete
+2026-02-16 17:04:09,263 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 22 entries collected
+2026-02-16 17:04:09,264 INFO     [amoskys.agents.persistence.probes] Created baseline with 22 entries
+2026-02-16 17:04:09,264 INFO     [amoskys.agents.persistence.probes] Saved baseline: 22 persistence entries to data/persistence_baseline.json
+2026-02-16 17:04:09,264 INFO     [amoskys.agents.persistence.persistence_agent_v2] Baseline created with 22 persistence entries
+2026-02-16 17:04:09,264 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:04:09,466 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:04:09,871 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for persistence_guard_v2: No eventbus_publisher configured
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 347, in _publish_to_eventbus
+    raise RuntimeError("No eventbus_publisher configured")
+RuntimeError: No eventbus_publisher configured
+2026-02-16 17:04:09,874 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle 01c56c07 complete: raw=1 valid=1 rejected=0 duration=0.622s
+2026-02-16 17:04:19,880 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:04:20,083 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-16 17:04:20,083 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:04:20,488 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:04:20,490 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 drained 1 events from local queue
+2026-02-16 17:04:20,506 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 22 entries collected
+2026-02-16 17:04:20,506 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:04:20,507 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle cda0d537 complete: raw=1 valid=1 rejected=0 duration=0.017s
+2026-02-16 17:04:30,529 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 22 entries collected
+2026-02-16 17:04:30,530 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:04:30,530 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle c6610660 complete: raw=1 valid=1 rejected=0 duration=0.018s
+2026-02-16 17:04:40,551 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 22 entries collected
+2026-02-16 17:04:40,552 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:04:40,552 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle df8a7411 complete: raw=1 valid=1 rejected=0 duration=0.017s
+2026-02-16 17:04:50,575 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 23 entries collected
+2026-02-16 17:04:50,575 INFO     [amoskys.agents.persistence.persistence_agent_v2] Detected 1 persistence changes
+2026-02-16 17:04:50,576 INFO     [amoskys.agents.persistence.probes] Created baseline with 23 entries
+2026-02-16 17:04:50,576 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-16 17:04:50,576 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:04:50,782 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:04:51,184 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for persistence_guard_v2: No eventbus_publisher configured
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 347, in _publish_to_eventbus
+    raise RuntimeError("No eventbus_publisher configured")
+RuntimeError: No eventbus_publisher configured
+2026-02-16 17:04:51,188 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle bee551ac complete: raw=1 valid=1 rejected=0 duration=0.630s
+2026-02-16 17:05:01,191 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:05:01,398 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-16 17:05:01,398 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:05:01,803 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:01,804 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:01,805 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:01,805 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:01,806 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:01,806 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 drained 5 events from local queue
+2026-02-16 17:05:01,812 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 23 entries collected
+2026-02-16 17:05:01,812 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:01,812 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle 5fc77097 complete: raw=1 valid=1 rejected=0 duration=0.006s
+2026-02-16 17:05:11,831 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 23 entries collected
+2026-02-16 17:05:11,831 INFO     [amoskys.agents.persistence.persistence_agent_v2] Detected 1 persistence changes
+2026-02-16 17:05:11,832 INFO     [amoskys.agents.persistence.probes] Created baseline with 23 entries
+2026-02-16 17:05:11,832 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:11,832 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle 05a263e3 complete: raw=1 valid=1 rejected=0 duration=0.015s
+2026-02-16 17:05:21,848 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 23 entries collected
+2026-02-16 17:05:21,848 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:21,848 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle b3db2589 complete: raw=1 valid=1 rejected=0 duration=0.014s
+2026-02-16 17:05:31,867 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 23 entries collected
+2026-02-16 17:05:31,868 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-16 17:05:31,868 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:05:32,070 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:05:32,473 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for persistence_guard_v2: No eventbus_publisher configured
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 347, in _publish_to_eventbus
+    raise RuntimeError("No eventbus_publisher configured")
+RuntimeError: No eventbus_publisher configured
+2026-02-16 17:05:32,474 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle 5340e8b6 complete: raw=1 valid=1 rejected=0 duration=0.621s
+2026-02-16 17:05:42,480 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:05:42,685 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-16 17:05:42,685 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for persistence_guard_v2: No eventbus_publisher configured
+2026-02-16 17:05:43,087 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:43,088 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:43,088 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:43,089 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:43,089 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:43,089 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:43,089 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:43,090 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:43,090 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:43,090 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 drained 9 events from local queue
+2026-02-16 17:05:43,105 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 22 entries collected
+2026-02-16 17:05:43,105 INFO     [amoskys.agents.persistence.persistence_agent_v2] Detected 2 persistence changes
+2026-02-16 17:05:43,105 INFO     [amoskys.agents.persistence.probes] Created baseline with 22 entries
+2026-02-16 17:05:43,105 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:43,106 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle d5c3a92e complete: raw=1 valid=1 rejected=0 duration=0.015s
+2026-02-16 17:05:53,129 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 22 entries collected
+2026-02-16 17:05:53,130 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:05:53,130 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle 9fb439c8 complete: raw=1 valid=1 rejected=0 duration=0.019s
+2026-02-16 17:06:03,141 INFO     [amoskys.agents.persistence.persistence_agent_v2] Persistence snapshot: 22 entries collected
+2026-02-16 17:06:03,141 WARNING  [amoskys.agents.common.base] Circuit OPEN for persistence_guard_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:06:03,143 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 cycle 835f3028 complete: raw=1 valid=1 rejected=0 duration=0.008s
+2026-02-16 17:06:09,323 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 received signal 15; shutting down
+2026-02-16 17:06:13,147 INFO     [amoskys.agents.persistence.persistence_agent_v2] persistence_guard_v2 shutting down...
+2026-02-16 17:06:13,147 INFO     [amoskys.agents.persistence.persistence_agent_v2] persistence_guard_v2 shutdown complete
+2026-02-16 17:06:13,147 INFO     [amoskys.agents.common.base] Agent persistence_guard_v2 stopped

@@ -1,0 +1,121 @@
+{
+  "agent": "fim",
+  "label": "FIMAgent V2",
+  "timestamp": "2026-02-16T23:26:51.336581+00:00",
+  "duration_s": 120.2,
+  "mac_ready": true,
+  "collector": "os.walk + hashlib (live)",
+  "probes_declared": 8,
+  "analysis": {
+    "total_queue_rows": 8,
+    "decode_ok": 8,
+    "decode_fail": 0,
+    "total_events": 10,
+    "event_types": {
+      "METRIC": 9,
+      "SECURITY": 1
+    },
+    "severities": {
+      "INFO": 9,
+      "HIGH": 1
+    },
+    "probe_names": {
+      "fim_agent": 9,
+      "critical_system_file_change": 1
+    },
+    "mitre_techniques_observed": [
+      "T1036",
+      "T1547"
+    ],
+    "has_metric_data": 9,
+    "has_alarm_data": 0,
+    "has_security_event": 1,
+    "has_attributes": 1,
+    "empty_evidence_events": 0
+  },
+  "resource_samples": [
+    {
+      "sample": 0,
+      "elapsed_s": 0.0,
+      "rss_kb": 3344,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 1,
+      "elapsed_s": 10.0,
+      "rss_kb": 59552,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 2,
+      "elapsed_s": 20.0,
+      "rss_kb": 40512,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 3,
+      "elapsed_s": 30.1,
+      "rss_kb": 40816,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 4,
+      "elapsed_s": 40.1,
+      "rss_kb": 43296,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 5,
+      "elapsed_s": 50.1,
+      "rss_kb": 46320,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 6,
+      "elapsed_s": 60.1,
+      "rss_kb": 46320,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 7,
+      "elapsed_s": 70.1,
+      "rss_kb": 46816,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 8,
+      "elapsed_s": 80.1,
+      "rss_kb": 47840,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 9,
+      "elapsed_s": 90.2,
+      "rss_kb": 44784,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 10,
+      "elapsed_s": 100.2,
+      "rss_kb": 46048,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 11,
+      "elapsed_s": 110.2,
+      "rss_kb": 48096,
+      "cpu_pct": 0.1
+    },
+    {
+      "sample": 12,
+      "elapsed_s": 120.2,
+      "rss_kb": 48160,
+      "cpu_pct": 0.6
+    }
+  ],
+  "tracebacks": 0,
+  "log_file": "/Users/athanneeru/Downloads/GitHub/Amoskys/results/eoa/fim_20260216_172445/raw_log.txt",
+  "queue_dbs": [
+    "/Users/athanneeru/Downloads/GitHub/Amoskys/data/queue/fim_agent_v2.db"
+  ]
+}

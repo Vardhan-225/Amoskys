@@ -1,0 +1,366 @@
+2026-02-16 16:00:42,464 INFO     [ProcAgentV3] ======================================================================
+2026-02-16 16:00:42,464 INFO     [ProcAgentV3] AMOSKYS Process Agent v3 (Micro-Probe Architecture)
+2026-02-16 16:00:42,464 INFO     [ProcAgentV3] ======================================================================
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.local_queue] LocalQueue initialized: path=data/queue/proc_agent_v3.db, max_bytes=52428800
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Registered probe: process_spawn
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Registered probe: lolbin_execution
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Registered probe: process_tree_anomaly
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Registered probe: high_cpu_memory
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Registered probe: long_lived_process
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Registered probe: suspicious_user_process
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Registered probe: binary_from_temp
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Registered probe: script_interpreter
+2026-02-16 16:00:42,465 INFO     [ProcAgentV3] ProcAgentV3 initialized with 8 probes
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.base] Starting agent proc_agent_v3 on device Akashs-MacBook-Air.local
+2026-02-16 16:00:42,465 INFO     [ProcAgentV3] psutil verification passed
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Probe process_spawn initialized
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Probe lolbin_execution initialized
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Probe process_tree_anomaly initialized
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Probe high_cpu_memory initialized
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Probe long_lived_process initialized
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Probe suspicious_user_process initialized
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Probe binary_from_temp initialized
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Probe script_interpreter initialized
+2026-02-16 16:00:42,465 INFO     [amoskys.agents.common.probes] Initialized 8/8 probes
+2026-02-16 16:00:42,465 INFO     [ProcAgentV3] ProcAgentV3 setup complete
+2026-02-16 16:00:42,599 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.024s
+2026-02-16 16:00:42,620 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.021s
+2026-02-16 16:00:42,638 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.017s
+2026-02-16 16:00:42,655 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.017s
+2026-02-16 16:00:42,668 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.013s
+2026-02-16 16:00:42,683 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.015s
+2026-02-16 16:00:42,703 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 22 events in 0.020s
+2026-02-16 16:00:42,719 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.016s
+2026-02-16 16:00:42,720 INFO     [ProcAgentV3] Collected 34 events (metrics: 3, probes: 31)
+2026-02-16 16:00:42,723 INFO     [ProcAgentV3] Created secure gRPC channel with mTLS
+2026-02-16 16:00:42,725 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 16:00:42,930 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 16:00:43,333 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 119, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 16:00:43,335 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279243334996992:1
+2026-02-16 16:00:43,335 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle c6167309 complete: raw=1 valid=1 rejected=0 duration=0.870s
+2026-02-16 16:00:53,342 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 16:00:53,548 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-16 16:00:53,548 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 16:00:53,953 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:00:53,956 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279253954183936:2
+2026-02-16 16:00:53,957 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279243334996992:1
+2026-02-16 16:00:53,957 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 drained 1 events from local queue
+2026-02-16 16:00:54,104 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 5 events in 0.040s
+2026-02-16 16:00:54,128 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.024s
+2026-02-16 16:00:54,146 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.018s
+2026-02-16 16:00:54,163 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.016s
+2026-02-16 16:00:54,176 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.013s
+2026-02-16 16:00:54,188 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.012s
+2026-02-16 16:00:54,205 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.017s
+2026-02-16 16:00:54,221 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.017s
+2026-02-16 16:00:54,221 INFO     [ProcAgentV3] Collected 17 events (metrics: 3, probes: 14)
+2026-02-16 16:00:54,221 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:00:54,222 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279254222011904:3
+2026-02-16 16:00:54,222 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle dd2e401e complete: raw=1 valid=1 rejected=0 duration=0.264s
+2026-02-16 16:01:04,355 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 3 events in 0.023s
+2026-02-16 16:01:04,374 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.018s
+2026-02-16 16:01:04,389 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.015s
+2026-02-16 16:01:04,404 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.015s
+2026-02-16 16:01:04,416 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.013s
+2026-02-16 16:01:04,430 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.014s
+2026-02-16 16:01:04,448 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.018s
+2026-02-16 16:01:04,466 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.018s
+2026-02-16 16:01:04,466 INFO     [ProcAgentV3] Collected 15 events (metrics: 3, probes: 12)
+2026-02-16 16:01:04,466 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:01:04,467 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279264466993920:4
+2026-02-16 16:01:04,467 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle c7be7a47 complete: raw=1 valid=1 rejected=0 duration=0.240s
+2026-02-16 16:01:14,624 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 1 events in 0.045s
+2026-02-16 16:01:14,648 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.024s
+2026-02-16 16:01:14,665 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.017s
+2026-02-16 16:01:14,679 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.014s
+2026-02-16 16:01:14,692 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.012s
+2026-02-16 16:01:14,705 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.013s
+2026-02-16 16:01:14,725 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.020s
+2026-02-16 16:01:14,743 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.018s
+2026-02-16 16:01:14,743 INFO     [ProcAgentV3] Collected 13 events (metrics: 3, probes: 10)
+2026-02-16 16:01:14,743 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:01:14,743 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279274743703040:5
+2026-02-16 16:01:14,743 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle c9276f3d complete: raw=1 valid=1 rejected=0 duration=0.271s
+2026-02-16 16:01:24,897 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.047s
+2026-02-16 16:01:24,924 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.027s
+2026-02-16 16:01:24,941 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.017s
+2026-02-16 16:01:24,955 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.013s
+2026-02-16 16:01:24,965 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.011s
+2026-02-16 16:01:24,976 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.011s
+2026-02-16 16:01:24,993 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.016s
+2026-02-16 16:01:25,008 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.016s
+2026-02-16 16:01:25,008 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 16:01:25,009 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-16 16:01:25,009 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 16:01:25,210 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 16:01:25,612 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 119, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 16:01:25,615 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279285614554880:6
+2026-02-16 16:01:25,615 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle 72bad073 complete: raw=1 valid=1 rejected=0 duration=0.866s
+2026-02-16 16:01:35,621 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 16:01:35,827 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-16 16:01:35,828 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 16:01:36,232 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:01:36,235 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279296232996096:7
+2026-02-16 16:01:36,236 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279253954183936:2
+2026-02-16 16:01:36,236 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:01:36,237 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279296236964096:8
+2026-02-16 16:01:36,239 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279254222011904:3
+2026-02-16 16:01:36,239 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:01:36,240 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279296239972096:9
+2026-02-16 16:01:36,242 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279264466993920:4
+2026-02-16 16:01:36,242 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:01:36,243 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279296242757120:10
+2026-02-16 16:01:36,243 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279274743703040:5
+2026-02-16 16:01:36,243 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:01:36,244 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279296243482880:11
+2026-02-16 16:01:36,245 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279285614554880:6
+2026-02-16 16:01:36,245 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 drained 5 events from local queue
+2026-02-16 16:01:36,398 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.050s
+2026-02-16 16:01:36,422 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.024s
+2026-02-16 16:01:36,437 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.016s
+2026-02-16 16:01:36,450 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.013s
+2026-02-16 16:01:36,462 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.012s
+2026-02-16 16:01:36,473 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.011s
+2026-02-16 16:01:36,490 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.017s
+2026-02-16 16:01:36,507 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.016s
+2026-02-16 16:01:36,507 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 16:01:36,507 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:01:36,507 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279296507482880:12
+2026-02-16 16:01:36,507 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle f7c70d27 complete: raw=1 valid=1 rejected=0 duration=0.262s
+2026-02-16 16:01:46,661 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.041s
+2026-02-16 16:01:46,687 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.026s
+2026-02-16 16:01:46,703 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.016s
+2026-02-16 16:01:46,720 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.017s
+2026-02-16 16:01:46,730 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.010s
+2026-02-16 16:01:46,740 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.011s
+2026-02-16 16:01:46,756 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.015s
+2026-02-16 16:01:46,770 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.014s
+2026-02-16 16:01:46,770 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 16:01:46,770 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:01:46,770 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279306770496000:13
+2026-02-16 16:01:46,770 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle 93c7010d complete: raw=1 valid=1 rejected=0 duration=0.258s
+2026-02-16 16:01:46,770 DEBUG    [amoskys.agents.common.base] Agent proc_agent_v3: no queue_adapter configured, skipping metrics emission
+2026-02-16 16:01:56,926 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.045s
+2026-02-16 16:01:56,954 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.028s
+2026-02-16 16:01:56,971 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.017s
+2026-02-16 16:01:56,986 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.015s
+2026-02-16 16:01:56,996 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.010s
+2026-02-16 16:01:57,006 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.010s
+2026-02-16 16:01:57,020 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.014s
+2026-02-16 16:01:57,035 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.015s
+2026-02-16 16:01:57,035 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 16:01:57,035 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:01:57,035 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279317035323904:14
+2026-02-16 16:01:57,035 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle aaca9322 complete: raw=1 valid=1 rejected=0 duration=0.260s
+2026-02-16 16:02:07,164 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.021s
+2026-02-16 16:02:07,185 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.020s
+2026-02-16 16:02:07,200 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.015s
+2026-02-16 16:02:07,218 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.018s
+2026-02-16 16:02:07,233 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.014s
+2026-02-16 16:02:07,244 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.011s
+2026-02-16 16:02:07,260 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.016s
+2026-02-16 16:02:07,275 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.015s
+2026-02-16 16:02:07,275 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 16:02:07,275 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-16 16:02:07,275 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 16:02:07,481 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 16:02:07,886 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 119, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 16:02:07,892 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279327891150080:15
+2026-02-16 16:02:07,892 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle f4614c6d complete: raw=1 valid=1 rejected=0 duration=0.853s
+2026-02-16 16:02:17,898 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 16:02:18,100 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-16 16:02:18,100 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for proc_agent_v3: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 16:02:18,505 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:18,507 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279338506107904:16
+2026-02-16 16:02:18,508 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279296232996096:7
+2026-02-16 16:02:18,508 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:18,509 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279338509025024:17
+2026-02-16 16:02:18,509 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279296236964096:8
+2026-02-16 16:02:18,509 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:18,509 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279338509672960:18
+2026-02-16 16:02:18,510 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279296239972096:9
+2026-02-16 16:02:18,510 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:18,510 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279338510224896:19
+2026-02-16 16:02:18,510 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279296242757120:10
+2026-02-16 16:02:18,510 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:18,510 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279338510746112:20
+2026-02-16 16:02:18,511 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279296243482880:11
+2026-02-16 16:02:18,511 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:18,511 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279338511173888:21
+2026-02-16 16:02:18,511 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279296507482880:12
+2026-02-16 16:02:18,511 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:18,511 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279338511554048:22
+2026-02-16 16:02:18,511 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279306770496000:13
+2026-02-16 16:02:18,511 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:18,512 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279338511991040:23
+2026-02-16 16:02:18,512 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279317035323904:14
+2026-02-16 16:02:18,512 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:18,512 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279338512441088:24
+2026-02-16 16:02:18,512 DEBUG    [amoskys.agents.common.local_queue] Drained: proc_agent_v3:Akashs-MacBook-Air.local:1771279327891150080:15
+2026-02-16 16:02:18,512 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 drained 9 events from local queue
+2026-02-16 16:02:18,660 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.043s
+2026-02-16 16:02:18,685 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.025s
+2026-02-16 16:02:18,701 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.016s
+2026-02-16 16:02:18,718 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.017s
+2026-02-16 16:02:18,732 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.013s
+2026-02-16 16:02:18,742 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.010s
+2026-02-16 16:02:18,757 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.014s
+2026-02-16 16:02:18,773 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.016s
+2026-02-16 16:02:18,773 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 16:02:18,773 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:18,773 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279338773298944:25
+2026-02-16 16:02:18,773 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle 36b5a343 complete: raw=1 valid=1 rejected=0 duration=0.260s
+2026-02-16 16:02:28,930 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.045s
+2026-02-16 16:02:28,955 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.025s
+2026-02-16 16:02:28,973 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.018s
+2026-02-16 16:02:28,989 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.016s
+2026-02-16 16:02:29,003 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.014s
+2026-02-16 16:02:29,018 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.014s
+2026-02-16 16:02:29,031 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.013s
+2026-02-16 16:02:29,044 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.014s
+2026-02-16 16:02:29,045 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 16:02:29,045 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:29,045 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279349045126912:26
+2026-02-16 16:02:29,045 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle e9e5545d complete: raw=1 valid=1 rejected=0 duration=0.267s
+2026-02-16 16:02:39,203 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 47 events in 0.045s
+2026-02-16 16:02:39,274 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.032s
+2026-02-16 16:02:39,372 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.027s
+2026-02-16 16:02:39,396 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.024s
+2026-02-16 16:02:39,425 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.028s
+2026-02-16 16:02:39,455 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.022s
+2026-02-16 16:02:39,484 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.029s
+2026-02-16 16:02:39,522 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.035s
+2026-02-16 16:02:39,522 INFO     [ProcAgentV3] Collected 59 events (metrics: 3, probes: 56)
+2026-02-16 16:02:39,530 WARNING  [amoskys.agents.common.base] Circuit OPEN for proc_agent_v3; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 16:02:39,542 DEBUG    [amoskys.agents.common.local_queue] Enqueued: proc_agent_v3:Akashs-MacBook-Air.local:1771279359541255936:27
+2026-02-16 16:02:39,542 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 cycle d78b7dc5 complete: raw=1 valid=1 rejected=0 duration=0.492s
+2026-02-16 16:02:42,517 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 received signal 15; shutting down
+2026-02-16 16:02:49,547 INFO     [ProcAgentV3] ProcAgentV3 shutting down...
+2026-02-16 16:02:49,548 INFO     [ProcAgentV3] ProcAgentV3 shutdown complete
+2026-02-16 16:02:49,548 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 stopped

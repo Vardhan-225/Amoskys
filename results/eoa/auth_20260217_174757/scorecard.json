@@ -1,0 +1,121 @@
+{
+  "agent": "auth",
+  "label": "AuthGuard V2",
+  "timestamp": "2026-02-17T23:50:06.540205+00:00",
+  "duration_s": 120.2,
+  "mac_ready": true,
+  "collector": "MacOSAuthLogCollector (log show broad + last)",
+  "probes_declared": 8,
+  "analysis": {
+    "total_queue_rows": 11,
+    "decode_ok": 11,
+    "decode_fail": 0,
+    "total_events": 25,
+    "event_types": {
+      "METRIC": 23,
+      "SECURITY": 2
+    },
+    "severities": {
+      "INFO": 23,
+      "MEDIUM": 2
+    },
+    "probe_names": {
+      "auth_collector": 22,
+      "auth_guard_agent": 1,
+      "sudo_elevation": 2
+    },
+    "mitre_techniques_observed": [
+      "T1548.003"
+    ],
+    "has_metric_data": 23,
+    "has_alarm_data": 0,
+    "has_security_event": 2,
+    "has_attributes": 2,
+    "empty_evidence_events": 0
+  },
+  "resource_samples": [
+    {
+      "sample": 0,
+      "elapsed_s": 0.0,
+      "rss_kb": 3600,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 1,
+      "elapsed_s": 10.0,
+      "rss_kb": 56528,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 2,
+      "elapsed_s": 20.0,
+      "rss_kb": 57024,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 3,
+      "elapsed_s": 30.1,
+      "rss_kb": 57376,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 4,
+      "elapsed_s": 40.1,
+      "rss_kb": 57472,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 5,
+      "elapsed_s": 50.1,
+      "rss_kb": 57488,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 6,
+      "elapsed_s": 60.1,
+      "rss_kb": 57328,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 7,
+      "elapsed_s": 70.1,
+      "rss_kb": 57632,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 8,
+      "elapsed_s": 80.1,
+      "rss_kb": 57712,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 9,
+      "elapsed_s": 90.2,
+      "rss_kb": 57776,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 10,
+      "elapsed_s": 100.2,
+      "rss_kb": 57776,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 11,
+      "elapsed_s": 110.2,
+      "rss_kb": 57792,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 12,
+      "elapsed_s": 120.2,
+      "rss_kb": 57776,
+      "cpu_pct": 0.0
+    }
+  ],
+  "tracebacks": 0,
+  "log_file": "/Users/athanneeru/Downloads/GitHub/Amoskys/results/eoa/auth_20260217_174757/raw_log.txt",
+  "queue_dbs": [
+    "/Users/athanneeru/Downloads/GitHub/Amoskys/data/queue/auth_agent_v2.db"
+  ]
+}

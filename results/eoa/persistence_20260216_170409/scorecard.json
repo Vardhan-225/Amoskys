@@ -1,0 +1,124 @@
+{
+  "agent": "persistence",
+  "label": "PersistenceGuard V2",
+  "timestamp": "2026-02-16T23:06:13.267955+00:00",
+  "duration_s": 120.2,
+  "mac_ready": true,
+  "collector": "macOS LaunchAgents/Daemons, cron, shell profiles, SSH keys (live)",
+  "probes_declared": 8,
+  "analysis": {
+    "total_queue_rows": 12,
+    "decode_ok": 12,
+    "decode_fail": 0,
+    "total_events": 16,
+    "event_types": {
+      "METRIC": 12,
+      "SECURITY": 4
+    },
+    "severities": {
+      "INFO": 12,
+      "HIGH": 1,
+      "MEDIUM": 3
+    },
+    "probe_names": {
+      "persistence_collector": 12,
+      "persistence_user_launch_agent": 2,
+      "persistence_shell_profile": 2
+    },
+    "mitre_techniques_observed": [
+      "T1543",
+      "T1546.004",
+      "T1547"
+    ],
+    "has_metric_data": 12,
+    "has_alarm_data": 0,
+    "has_security_event": 4,
+    "has_attributes": 4,
+    "empty_evidence_events": 0
+  },
+  "resource_samples": [
+    {
+      "sample": 0,
+      "elapsed_s": 0.0,
+      "rss_kb": 3936,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 1,
+      "elapsed_s": 10.0,
+      "rss_kb": 50384,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 2,
+      "elapsed_s": 20.0,
+      "rss_kb": 50704,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 3,
+      "elapsed_s": 30.1,
+      "rss_kb": 51072,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 4,
+      "elapsed_s": 40.1,
+      "rss_kb": 51520,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 5,
+      "elapsed_s": 50.1,
+      "rss_kb": 52000,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 6,
+      "elapsed_s": 60.1,
+      "rss_kb": 52176,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 7,
+      "elapsed_s": 70.1,
+      "rss_kb": 52352,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 8,
+      "elapsed_s": 80.1,
+      "rss_kb": 52512,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 9,
+      "elapsed_s": 90.2,
+      "rss_kb": 52672,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 10,
+      "elapsed_s": 100.2,
+      "rss_kb": 52752,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 11,
+      "elapsed_s": 110.2,
+      "rss_kb": 39024,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 12,
+      "elapsed_s": 120.2,
+      "rss_kb": 39232,
+      "cpu_pct": 0.0
+    }
+  ],
+  "tracebacks": 0,
+  "log_file": "/Users/athanneeru/Downloads/GitHub/Amoskys/results/eoa/persistence_20260216_170409/raw_log.txt",
+  "queue_dbs": [
+    "/Users/athanneeru/Downloads/GitHub/Amoskys/data/queue/persistence_guard_v2.db"
+  ]
+}

@@ -1,0 +1,270 @@
+2026-02-16 15:42:38,166 INFO     [ProcAgentV3] ======================================================================
+2026-02-16 15:42:38,166 INFO     [ProcAgentV3] AMOSKYS Process Agent v3 (Micro-Probe Architecture)
+2026-02-16 15:42:38,166 INFO     [ProcAgentV3] ======================================================================
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.local_queue] LocalQueue initialized: path=data/queue/proc_agent_v3.db, max_bytes=52428800
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Registered probe: process_spawn
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Registered probe: lolbin_execution
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Registered probe: process_tree_anomaly
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Registered probe: high_cpu_memory
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Registered probe: long_lived_process
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Registered probe: suspicious_user_process
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Registered probe: binary_from_temp
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Registered probe: script_interpreter
+2026-02-16 15:42:38,169 INFO     [ProcAgentV3] ProcAgentV3 initialized with 8 probes
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.base] Starting agent proc_agent_v3 on device Akashs-MacBook-Air.local
+2026-02-16 15:42:38,169 INFO     [ProcAgentV3] psutil verification passed
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Probe process_spawn initialized
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Probe lolbin_execution initialized
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Probe process_tree_anomaly initialized
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Probe high_cpu_memory initialized
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Probe long_lived_process initialized
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Probe suspicious_user_process initialized
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Probe binary_from_temp initialized
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Probe script_interpreter initialized
+2026-02-16 15:42:38,169 INFO     [amoskys.agents.common.probes] Initialized 8/8 probes
+2026-02-16 15:42:38,169 INFO     [ProcAgentV3] ProcAgentV3 setup complete
+2026-02-16 15:42:38,313 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.033s
+2026-02-16 15:42:38,336 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.023s
+2026-02-16 15:42:38,355 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.018s
+2026-02-16 15:42:38,371 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.016s
+2026-02-16 15:42:38,385 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.014s
+2026-02-16 15:42:38,400 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.015s
+2026-02-16 15:42:38,429 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 22 events in 0.029s
+2026-02-16 15:42:38,447 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.017s
+2026-02-16 15:42:38,447 INFO     [ProcAgentV3] Collected 34 events (metrics: 3, probes: 31)
+2026-02-16 15:42:38,447 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle 4d90f11c failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:42:48,609 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.048s
+2026-02-16 15:42:48,634 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.025s
+2026-02-16 15:42:48,655 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.021s
+2026-02-16 15:42:48,672 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.017s
+2026-02-16 15:42:48,685 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.013s
+2026-02-16 15:42:48,698 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.013s
+2026-02-16 15:42:48,716 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.018s
+2026-02-16 15:42:48,734 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.018s
+2026-02-16 15:42:48,734 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 15:42:48,734 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle 019209bb failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:42:58,890 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.037s
+2026-02-16 15:42:58,914 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.023s
+2026-02-16 15:42:58,933 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.019s
+2026-02-16 15:42:58,948 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.014s
+2026-02-16 15:42:58,960 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.013s
+2026-02-16 15:42:58,974 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.014s
+2026-02-16 15:42:58,993 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.019s
+2026-02-16 15:42:59,012 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.019s
+2026-02-16 15:42:59,012 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 15:42:59,012 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle 6e73ef36 failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:43:09,156 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.027s
+2026-02-16 15:43:09,178 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.022s
+2026-02-16 15:43:09,197 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.019s
+2026-02-16 15:43:09,213 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.016s
+2026-02-16 15:43:09,227 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.014s
+2026-02-16 15:43:09,242 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.015s
+2026-02-16 15:43:09,263 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.021s
+2026-02-16 15:43:09,285 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.022s
+2026-02-16 15:43:09,285 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 15:43:09,285 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle 347a1af1 failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:43:19,445 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.049s
+2026-02-16 15:43:19,473 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.028s
+2026-02-16 15:43:19,493 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.019s
+2026-02-16 15:43:19,515 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.016s
+2026-02-16 15:43:19,537 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.014s
+2026-02-16 15:43:19,558 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.016s
+2026-02-16 15:43:19,579 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.021s
+2026-02-16 15:43:19,604 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.021s
+2026-02-16 15:43:19,604 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 15:43:19,604 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle add64115 failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:43:29,767 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.049s
+2026-02-16 15:43:29,793 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.027s
+2026-02-16 15:43:29,813 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.020s
+2026-02-16 15:43:29,828 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.015s
+2026-02-16 15:43:29,840 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.012s
+2026-02-16 15:43:29,854 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.013s
+2026-02-16 15:43:29,871 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.017s
+2026-02-16 15:43:29,888 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.017s
+2026-02-16 15:43:29,888 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 15:43:29,888 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle 62e4e911 failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:43:40,040 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.042s
+2026-02-16 15:43:40,067 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.028s
+2026-02-16 15:43:40,086 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.018s
+2026-02-16 15:43:40,102 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.016s
+2026-02-16 15:43:40,116 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.014s
+2026-02-16 15:43:40,129 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.013s
+2026-02-16 15:43:40,146 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.017s
+2026-02-16 15:43:40,163 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.017s
+2026-02-16 15:43:40,163 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 15:43:40,163 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle ff6d02c7 failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:43:40,163 DEBUG    [amoskys.agents.common.base] Agent proc_agent_v3: no queue_adapter configured, skipping metrics emission
+2026-02-16 15:43:50,307 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.036s
+2026-02-16 15:43:50,334 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.026s
+2026-02-16 15:43:50,353 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.019s
+2026-02-16 15:43:50,371 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.017s
+2026-02-16 15:43:50,382 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.011s
+2026-02-16 15:43:50,393 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.011s
+2026-02-16 15:43:50,410 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.016s
+2026-02-16 15:43:50,426 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.016s
+2026-02-16 15:43:50,426 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 15:43:50,426 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle d7f29edd failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:44:00,560 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 0 events in 0.023s
+2026-02-16 15:44:00,585 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.025s
+2026-02-16 15:44:00,618 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.032s
+2026-02-16 15:44:00,656 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.038s
+2026-02-16 15:44:00,676 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.020s
+2026-02-16 15:44:00,692 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.016s
+2026-02-16 15:44:00,713 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.021s
+2026-02-16 15:44:00,733 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.020s
+2026-02-16 15:44:00,733 INFO     [ProcAgentV3] Collected 12 events (metrics: 3, probes: 9)
+2026-02-16 15:44:00,733 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle d9128db5 failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:44:10,867 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 5 events in 0.024s
+2026-02-16 15:44:10,891 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.024s
+2026-02-16 15:44:10,912 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.020s
+2026-02-16 15:44:10,931 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.020s
+2026-02-16 15:44:10,946 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.015s
+2026-02-16 15:44:10,958 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.012s
+2026-02-16 15:44:10,976 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.018s
+2026-02-16 15:44:10,994 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.018s
+2026-02-16 15:44:10,994 INFO     [ProcAgentV3] Collected 17 events (metrics: 3, probes: 14)
+2026-02-16 15:44:10,994 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle 20193095 failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:44:21,157 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 13 events in 0.051s
+2026-02-16 15:44:21,187 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.029s
+2026-02-16 15:44:21,207 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.020s
+2026-02-16 15:44:21,225 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.018s
+2026-02-16 15:44:21,242 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.017s
+2026-02-16 15:44:21,256 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.013s
+2026-02-16 15:44:21,273 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.017s
+2026-02-16 15:44:21,289 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.016s
+2026-02-16 15:44:21,289 INFO     [ProcAgentV3] Collected 25 events (metrics: 3, probes: 22)
+2026-02-16 15:44:21,289 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle 67e53c2c failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:44:31,442 DEBUG    [amoskys.agents.common.probes] Probe process_spawn returned 2 events in 0.045s
+2026-02-16 15:44:31,473 DEBUG    [amoskys.agents.common.probes] Probe lolbin_execution returned 8 events in 0.031s
+2026-02-16 15:44:31,494 DEBUG    [amoskys.agents.common.probes] Probe process_tree_anomaly returned 0 events in 0.021s
+2026-02-16 15:44:31,512 DEBUG    [amoskys.agents.common.probes] Probe high_cpu_memory returned 0 events in 0.018s
+2026-02-16 15:44:31,527 DEBUG    [amoskys.agents.common.probes] Probe long_lived_process returned 0 events in 0.015s
+2026-02-16 15:44:31,542 DEBUG    [amoskys.agents.common.probes] Probe suspicious_user_process returned 1 events in 0.015s
+2026-02-16 15:44:31,558 DEBUG    [amoskys.agents.common.probes] Probe binary_from_temp returned 0 events in 0.016s
+2026-02-16 15:44:31,573 DEBUG    [amoskys.agents.common.probes] Probe script_interpreter returned 0 events in 0.014s
+2026-02-16 15:44:31,573 INFO     [ProcAgentV3] Collected 14 events (metrics: 3, probes: 11)
+2026-02-16 15:44:31,573 ERROR    [amoskys.agents.common.base] Agent proc_agent_v3 cycle 074ea665 failed: mitre_techniques
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 667, in _run_one_cycle
+    raw_events = self.collect_data()
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 281, in collect_data
+    return [self._events_to_telemetry(all_events)]
+            ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/proc/proc_agent_v3.py", line 384, in _events_to_telemetry
+    proto_event.mitre_techniques.extend(event.mitre_techniques)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: mitre_techniques
+2026-02-16 15:44:38,201 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 received signal 15; shutting down
+2026-02-16 15:44:41,575 INFO     [ProcAgentV3] ProcAgentV3 shutting down...
+2026-02-16 15:44:41,575 INFO     [ProcAgentV3] ProcAgentV3 shutdown complete
+2026-02-16 15:44:41,575 INFO     [amoskys.agents.common.base] Agent proc_agent_v3 stopped

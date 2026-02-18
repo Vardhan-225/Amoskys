@@ -1,0 +1,121 @@
+{
+  "agent": "flow",
+  "label": "FlowAgent V2",
+  "timestamp": "2026-02-17T22:49:00.459776+00:00",
+  "duration_s": 120.2,
+  "mac_ready": true,
+  "collector": "MacOSFlowCollector (lsof -i -n -P)",
+  "probes_declared": 8,
+  "analysis": {
+    "total_queue_rows": 8,
+    "decode_ok": 8,
+    "decode_fail": 0,
+    "total_events": 18,
+    "event_types": {
+      "METRIC": 17,
+      "SECURITY": 1
+    },
+    "severities": {
+      "INFO": 18
+    },
+    "probe_names": {
+      "flow_collector": 16,
+      "flow_agent": 1,
+      "new_external_service": 1
+    },
+    "mitre_techniques_observed": [
+      "T1041",
+      "T1595"
+    ],
+    "has_metric_data": 17,
+    "has_alarm_data": 0,
+    "has_security_event": 1,
+    "has_attributes": 9,
+    "empty_evidence_events": 0
+  },
+  "resource_samples": [
+    {
+      "sample": 0,
+      "elapsed_s": 0.0,
+      "rss_kb": 5808,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 1,
+      "elapsed_s": 10.0,
+      "rss_kb": 58512,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 2,
+      "elapsed_s": 20.0,
+      "rss_kb": 59408,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 3,
+      "elapsed_s": 30.0,
+      "rss_kb": 59424,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 4,
+      "elapsed_s": 40.1,
+      "rss_kb": 59440,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 5,
+      "elapsed_s": 50.1,
+      "rss_kb": 59536,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 6,
+      "elapsed_s": 60.1,
+      "rss_kb": 59600,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 7,
+      "elapsed_s": 70.1,
+      "rss_kb": 59616,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 8,
+      "elapsed_s": 80.1,
+      "rss_kb": 59648,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 9,
+      "elapsed_s": 90.1,
+      "rss_kb": 59680,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 10,
+      "elapsed_s": 100.2,
+      "rss_kb": 59696,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 11,
+      "elapsed_s": 110.2,
+      "rss_kb": 59712,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 12,
+      "elapsed_s": 120.2,
+      "rss_kb": 59744,
+      "cpu_pct": 0.0
+    }
+  ],
+  "tracebacks": 0,
+  "log_file": "/Users/athanneeru/Downloads/GitHub/Amoskys/results/eoa/flow_20260217_164651/raw_log.txt",
+  "queue_dbs": [
+    "/Users/athanneeru/Downloads/GitHub/Amoskys/data/queue/flow_agent_v2.db"
+  ]
+}

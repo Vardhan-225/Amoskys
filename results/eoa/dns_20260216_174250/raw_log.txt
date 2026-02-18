@@ -1,0 +1,227 @@
+2026-02-16 17:42:50,346 INFO     [DNSAgentV2] ======================================================================
+2026-02-16 17:42:50,346 INFO     [DNSAgentV2] AMOSKYS DNS Agent v2 (Micro-Probe Architecture)
+2026-02-16 17:42:50,346 INFO     [DNSAgentV2] ======================================================================
+2026-02-16 17:42:50,348 INFO     [amoskys.agents.common.local_queue] LocalQueue initialized: path=data/queue/dns_agent_v2.db, max_bytes=52428800
+2026-02-16 17:42:50,348 INFO     [amoskys.agents.common.probes] Registered probe: raw_dns_query
+2026-02-16 17:42:50,348 INFO     [amoskys.agents.common.probes] Registered probe: dga_score
+2026-02-16 17:42:50,348 INFO     [amoskys.agents.common.probes] Registered probe: beaconing_pattern
+2026-02-16 17:42:50,348 INFO     [amoskys.agents.common.probes] Registered probe: suspicious_tld
+2026-02-16 17:42:50,348 INFO     [amoskys.agents.common.probes] Registered probe: nxdomain_burst
+2026-02-16 17:42:50,348 INFO     [amoskys.agents.common.probes] Registered probe: txt_tunneling
+2026-02-16 17:42:50,348 INFO     [amoskys.agents.common.probes] Registered probe: fast_flux_rebinding
+2026-02-16 17:42:50,348 INFO     [amoskys.agents.common.probes] Registered probe: new_domain_for_process
+2026-02-16 17:42:50,348 INFO     [amoskys.agents.common.probes] Registered probe: blocked_domain_hit
+2026-02-16 17:42:50,348 INFO     [DNSAgentV2] DNSAgentV2 initialized with 9 probes
+2026-02-16 17:42:50,348 INFO     [amoskys.agents.common.base] Starting agent dns_agent_v2 on device Akashs-MacBook-Air.local
+2026-02-16 17:42:52,260 INFO     [DNSAgentV2] DNS collector test: 0 queries
+2026-02-16 17:42:52,260 INFO     [amoskys.agents.common.probes] Probe raw_dns_query initialized
+2026-02-16 17:42:52,260 INFO     [amoskys.agents.common.probes] Probe dga_score initialized
+2026-02-16 17:42:52,260 INFO     [amoskys.agents.common.probes] Probe beaconing_pattern initialized
+2026-02-16 17:42:52,260 INFO     [amoskys.agents.common.probes] Probe suspicious_tld initialized
+2026-02-16 17:42:52,260 INFO     [amoskys.agents.common.probes] Probe nxdomain_burst initialized
+2026-02-16 17:42:52,260 INFO     [amoskys.agents.common.probes] Probe txt_tunneling initialized
+2026-02-16 17:42:52,260 INFO     [amoskys.agents.common.probes] Probe fast_flux_rebinding initialized
+2026-02-16 17:42:52,260 INFO     [amoskys.agents.common.probes] Probe new_domain_for_process initialized
+2026-02-16 17:42:52,260 INFO     [amoskys.agents.common.probes] Probe blocked_domain_hit initialized
+2026-02-16 17:42:52,260 INFO     [amoskys.agents.common.probes] Initialized 9/9 probes
+2026-02-16 17:42:52,260 INFO     [DNSAgentV2] DNSAgentV2 setup complete
+2026-02-16 17:42:52,924 INFO     [DNSAgentV2] Collected 1 DNS queries
+2026-02-16 17:42:52,924 INFO     [DNSAgentV2] Probes generated 1 events from 1 queries
+2026-02-16 17:42:52,928 INFO     [DNSAgentV2] Created secure gRPC channel with mTLS
+2026-02-16 17:42:52,930 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 17:42:53,135 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 17:42:53,538 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/dns/dns_agent_v2.py", line 121, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 17:42:53,544 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285373544215040:1
+2026-02-16 17:42:53,545 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 cycle e9e3d3c8 complete: raw=1 valid=1 rejected=0 duration=1.284s
+2026-02-16 17:43:03,546 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 17:43:03,752 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-16 17:43:03,752 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 17:43:04,157 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:43:04,159 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285384157199872:2
+2026-02-16 17:43:04,160 DEBUG    [amoskys.agents.common.local_queue] Drained: dns_agent_v2:Akashs-MacBook-Air.local:1771285373544215040:1
+2026-02-16 17:43:04,160 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 drained 1 events from local queue
+2026-02-16 17:43:04,834 INFO     [DNSAgentV2] Collected 0 DNS queries
+2026-02-16 17:43:04,834 INFO     [DNSAgentV2] Probes generated 0 events from 0 queries
+2026-02-16 17:43:04,834 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:43:04,834 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285384834532096:3
+2026-02-16 17:43:04,834 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 cycle aed75e72 complete: raw=1 valid=1 rejected=0 duration=0.674s
+2026-02-16 17:43:15,489 INFO     [DNSAgentV2] Collected 0 DNS queries
+2026-02-16 17:43:15,490 INFO     [DNSAgentV2] Probes generated 0 events from 0 queries
+2026-02-16 17:43:15,490 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:43:15,490 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285395490224128:4
+2026-02-16 17:43:15,490 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 cycle bfb6af9f complete: raw=1 valid=1 rejected=0 duration=0.651s
+2026-02-16 17:43:26,156 INFO     [DNSAgentV2] Collected 1 DNS queries
+2026-02-16 17:43:26,157 INFO     [DNSAgentV2] Probes generated 1 events from 1 queries
+2026-02-16 17:43:26,157 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:43:26,157 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285406157257984:5
+2026-02-16 17:43:26,157 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 cycle 0ceb05b4 complete: raw=1 valid=1 rejected=0 duration=0.662s
+2026-02-16 17:43:36,870 INFO     [DNSAgentV2] Collected 1 DNS queries
+2026-02-16 17:43:36,870 INFO     [DNSAgentV2] Probes generated 1 events from 1 queries
+2026-02-16 17:43:36,870 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-16 17:43:36,870 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 17:43:37,076 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 17:43:37,482 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/dns/dns_agent_v2.py", line 121, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 17:43:37,486 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285417485577984:6
+2026-02-16 17:43:37,486 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 cycle 3df9e913 complete: raw=1 valid=1 rejected=0 duration=1.324s
+2026-02-16 17:43:47,488 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 17:43:47,690 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-16 17:43:47,690 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 17:43:48,095 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:43:48,096 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285428095962880:7
+2026-02-16 17:43:48,096 DEBUG    [amoskys.agents.common.local_queue] Drained: dns_agent_v2:Akashs-MacBook-Air.local:1771285384157199872:2
+2026-02-16 17:43:48,097 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:43:48,097 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285428097120000:8
+2026-02-16 17:43:48,097 DEBUG    [amoskys.agents.common.local_queue] Drained: dns_agent_v2:Akashs-MacBook-Air.local:1771285384834532096:3
+2026-02-16 17:43:48,097 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:43:48,098 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285428097933056:9
+2026-02-16 17:43:48,098 DEBUG    [amoskys.agents.common.local_queue] Drained: dns_agent_v2:Akashs-MacBook-Air.local:1771285395490224128:4
+2026-02-16 17:43:48,098 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:43:48,098 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285428098582016:10
+2026-02-16 17:43:48,099 DEBUG    [amoskys.agents.common.local_queue] Drained: dns_agent_v2:Akashs-MacBook-Air.local:1771285406157257984:5
+2026-02-16 17:43:48,099 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:43:48,099 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285428099234048:11
+2026-02-16 17:43:48,099 DEBUG    [amoskys.agents.common.local_queue] Drained: dns_agent_v2:Akashs-MacBook-Air.local:1771285417485577984:6
+2026-02-16 17:43:48,099 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 drained 5 events from local queue
+2026-02-16 17:43:48,807 INFO     [DNSAgentV2] Collected 2 DNS queries
+2026-02-16 17:43:48,807 INFO     [DNSAgentV2] Probes generated 2 events from 2 queries
+2026-02-16 17:43:48,807 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:43:48,807 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285428807506944:12
+2026-02-16 17:43:48,807 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 cycle 2ba6d2af complete: raw=1 valid=1 rejected=0 duration=0.708s
+2026-02-16 17:43:59,474 INFO     [DNSAgentV2] Collected 1 DNS queries
+2026-02-16 17:43:59,474 INFO     [DNSAgentV2] Probes generated 1 events from 1 queries
+2026-02-16 17:43:59,474 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:43:59,475 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285439474675968:13
+2026-02-16 17:43:59,475 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 cycle 52094f20 complete: raw=1 valid=1 rejected=0 duration=0.662s
+2026-02-16 17:43:59,475 DEBUG    [amoskys.agents.common.base] Agent dns_agent_v2: no queue_adapter configured, skipping metrics emission
+2026-02-16 17:44:10,158 INFO     [DNSAgentV2] Collected 0 DNS queries
+2026-02-16 17:44:10,158 INFO     [DNSAgentV2] Probes generated 0 events from 0 queries
+2026-02-16 17:44:10,158 WARNING  [amoskys.agents.common.base] Circuit OPEN for dns_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 17:44:10,159 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285450158963968:14
+2026-02-16 17:44:10,159 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 cycle 122adfc1 complete: raw=1 valid=1 rejected=0 duration=0.684s
+2026-02-16 17:44:20,381 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 received signal 15; shutting down
+2026-02-16 17:44:20,869 INFO     [DNSAgentV2] Collected 0 DNS queries
+2026-02-16 17:44:20,869 INFO     [DNSAgentV2] Probes generated 0 events from 0 queries
+2026-02-16 17:44:20,869 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-16 17:44:20,869 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 17:44:21,071 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 17:44:21,476 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for dns_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/dns/dns_agent_v2.py", line 121, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 17:44:21,477 DEBUG    [amoskys.agents.common.local_queue] Enqueued: dns_agent_v2:Akashs-MacBook-Air.local:1771285461477409024:15
+2026-02-16 17:44:21,477 INFO     [amoskys.agents.common.base] Agent dns_agent_v2 cycle b5ac8e60 complete: raw=1 valid=1 rejected=0 duration=1.313s

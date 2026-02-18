@@ -1,0 +1,199 @@
+{
+  "timestamp": "2026-02-18T00:30:41.739300+00:00",
+  "platform": "macOS (Darwin)",
+  "agents_audited": [
+    "proc",
+    "fim",
+    "persistence",
+    "dns",
+    "auth",
+    "flow",
+    "peripheral"
+  ],
+  "best_runs": {
+    "proc": "proc_20260216_160042",
+    "fim": "fim_20260216_172445",
+    "persistence": "persistence_20260216_170409",
+    "dns": "dns_20260216_174250",
+    "auth": "auth_20260217_174757",
+    "flow": "flow_20260217_164651",
+    "peripheral": "peripheral_20260216_190218"
+  },
+  "coverage": {
+    "entry_points_observed": 7,
+    "entry_points_linux_only": 3,
+    "entry_points_total": 10
+  },
+  "totals": {
+    "total_events": 344,
+    "security_events": 211,
+    "metric_events": 133,
+    "events_with_attributes": 219,
+    "empty_evidence_events": 0
+  },
+  "mitre_techniques": [
+    "T1036",
+    "T1041",
+    "T1059",
+    "T1071.004",
+    "T1078",
+    "T1200",
+    "T1204",
+    "T1218",
+    "T1218.010",
+    "T1218.011",
+    "T1543",
+    "T1546.004",
+    "T1547",
+    "T1548.003",
+    "T1595"
+  ],
+  "probes_by_agent": {
+    "proc/system_metrics": 36,
+    "proc/lolbin_execution": 96,
+    "proc/suspicious_user_process": 12,
+    "proc/binary_from_temp": 22,
+    "proc/process_spawn": 56,
+    "fim/fim_agent": 9,
+    "fim/critical_system_file_change": 1,
+    "persistence/persistence_collector": 12,
+    "persistence/persistence_user_launch_agent": 2,
+    "persistence/persistence_shell_profile": 2,
+    "dns/dns_collector": 9,
+    "dns/dns_agent": 5,
+    "dns/raw_dns_query": 6,
+    "auth/auth_collector": 22,
+    "auth/auth_guard_agent": 1,
+    "auth/sudo_elevation": 2,
+    "flow/flow_collector": 16,
+    "flow/flow_agent": 1,
+    "flow/new_external_service": 1,
+    "peripheral/peripheral_collector": 11,
+    "peripheral/peripheral_agent": 11,
+    "peripheral/usb_inventory": 11
+  },
+  "per_agent": {
+    "proc": {
+      "run": "proc_20260216_160042",
+      "label": "ProcAgent V3",
+      "total_events": 222,
+      "security_events": 186,
+      "metric_events": 36,
+      "probes_fired": [
+        "system_metrics",
+        "lolbin_execution",
+        "suspicious_user_process",
+        "binary_from_temp",
+        "process_spawn"
+      ],
+      "mitre": [
+        "T1059",
+        "T1078",
+        "T1204",
+        "T1218",
+        "T1218.010",
+        "T1218.011"
+      ],
+      "tracebacks": 3
+    },
+    "fim": {
+      "run": "fim_20260216_172445",
+      "label": "FIMAgent V2",
+      "total_events": 10,
+      "security_events": 1,
+      "metric_events": 9,
+      "probes_fired": [
+        "fim_agent",
+        "critical_system_file_change"
+      ],
+      "mitre": [
+        "T1036",
+        "T1547"
+      ],
+      "tracebacks": 0
+    },
+    "persistence": {
+      "run": "persistence_20260216_170409",
+      "label": "PersistenceGuard V2",
+      "total_events": 16,
+      "security_events": 4,
+      "metric_events": 12,
+      "probes_fired": [
+        "persistence_collector",
+        "persistence_user_launch_agent",
+        "persistence_shell_profile"
+      ],
+      "mitre": [
+        "T1543",
+        "T1546.004",
+        "T1547"
+      ],
+      "tracebacks": 0
+    },
+    "dns": {
+      "run": "dns_20260216_174250",
+      "label": "DNSAgent V2",
+      "total_events": 20,
+      "security_events": 6,
+      "metric_events": 14,
+      "probes_fired": [
+        "dns_collector",
+        "dns_agent",
+        "raw_dns_query"
+      ],
+      "mitre": [
+        "T1071.004"
+      ],
+      "tracebacks": 0
+    },
+    "auth": {
+      "run": "auth_20260217_174757",
+      "label": "AuthGuard V2",
+      "total_events": 25,
+      "security_events": 2,
+      "metric_events": 23,
+      "probes_fired": [
+        "auth_collector",
+        "auth_guard_agent",
+        "sudo_elevation"
+      ],
+      "mitre": [
+        "T1548.003"
+      ],
+      "tracebacks": 0
+    },
+    "flow": {
+      "run": "flow_20260217_164651",
+      "label": "FlowAgent V2",
+      "total_events": 18,
+      "security_events": 1,
+      "metric_events": 17,
+      "probes_fired": [
+        "flow_collector",
+        "flow_agent",
+        "new_external_service"
+      ],
+      "mitre": [
+        "T1041",
+        "T1595"
+      ],
+      "tracebacks": 0
+    },
+    "peripheral": {
+      "run": "peripheral_20260216_190218",
+      "label": "PeripheralAgent V2",
+      "total_events": 33,
+      "security_events": 11,
+      "metric_events": 22,
+      "probes_fired": [
+        "peripheral_collector",
+        "peripheral_agent",
+        "usb_inventory"
+      ],
+      "mitre": [
+        "T1200"
+      ],
+      "tracebacks": 0
+    }
+  }
+}

@@ -1,0 +1,283 @@
+2026-02-17 17:38:22,906 INFO     [AuthGuardAgentV2] ======================================================================
+2026-02-17 17:38:22,906 INFO     [AuthGuardAgentV2] AMOSKYS AuthGuard Agent v2 (Micro-Probe Architecture)
+2026-02-17 17:38:22,906 INFO     [AuthGuardAgentV2] ======================================================================
+2026-02-17 17:38:22,907 INFO     [amoskys.agents.common.local_queue] LocalQueue initialized: path=data/queue/auth_agent_v2.db, max_bytes=52428800
+2026-02-17 17:38:22,908 INFO     [amoskys.agents.common.probes] Registered probe: ssh_bruteforce
+2026-02-17 17:38:22,908 INFO     [amoskys.agents.common.probes] Registered probe: ssh_password_spray
+2026-02-17 17:38:22,908 INFO     [amoskys.agents.common.probes] Registered probe: ssh_geo_impossible_travel
+2026-02-17 17:38:22,908 INFO     [amoskys.agents.common.probes] Registered probe: sudo_elevation
+2026-02-17 17:38:22,908 INFO     [amoskys.agents.common.probes] Registered probe: sudo_suspicious_command
+2026-02-17 17:38:22,908 INFO     [amoskys.agents.common.probes] Registered probe: off_hours_login
+2026-02-17 17:38:22,908 INFO     [amoskys.agents.common.probes] Registered probe: mfa_bypass_anomaly
+2026-02-17 17:38:22,908 INFO     [amoskys.agents.common.probes] Registered probe: account_lockout_storm
+2026-02-17 17:38:22,908 INFO     [AuthGuardAgentV2] AuthGuardAgentV2 initialized with 8 probes
+2026-02-17 17:38:22,908 INFO     [amoskys.agents.common.base] Starting agent auth_guard_agent_v2 on device Akashs-MacBook-Air.local
+2026-02-17 17:38:23,761 DEBUG    [AuthGuardAgentV2] MacOSAuthLogCollector collected 8 auth events (dedup pool size: 129)
+2026-02-17 17:38:23,761 INFO     [AuthGuardAgentV2] Auth collector test: 8 events
+2026-02-17 17:38:23,761 INFO     [amoskys.agents.common.probes] Probe ssh_bruteforce initialized
+2026-02-17 17:38:23,761 INFO     [amoskys.agents.common.probes] Probe ssh_password_spray initialized
+2026-02-17 17:38:23,761 INFO     [amoskys.agents.common.probes] Probe ssh_geo_impossible_travel initialized
+2026-02-17 17:38:23,761 INFO     [amoskys.agents.common.probes] Probe sudo_elevation initialized
+2026-02-17 17:38:23,761 INFO     [amoskys.agents.common.probes] Probe sudo_suspicious_command initialized
+2026-02-17 17:38:23,762 INFO     [amoskys.agents.common.probes] Probe off_hours_login initialized
+2026-02-17 17:38:23,762 INFO     [amoskys.agents.common.probes] Probe mfa_bypass_anomaly initialized
+2026-02-17 17:38:23,762 INFO     [amoskys.agents.common.probes] Probe account_lockout_storm initialized
+2026-02-17 17:38:23,762 INFO     [amoskys.agents.common.probes] Initialized 8/8 probes
+2026-02-17 17:38:23,762 INFO     [AuthGuardAgentV2] AuthGuardAgentV2 setup complete
+2026-02-17 17:38:24,579 DEBUG    [AuthGuardAgentV2] MacOSAuthLogCollector collected 0 auth events (dedup pool size: 129)
+2026-02-17 17:38:24,579 INFO     [AuthGuardAgentV2] Collected 0 auth events (total: 0)
+2026-02-17 17:38:24,580 INFO     [AuthGuardAgentV2] Probes generated 0 events from 0 auth events
+2026-02-17 17:38:24,584 INFO     [AuthGuardAgentV2] Created secure gRPC channel with mTLS
+2026-02-17 17:38:24,585 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 17:38:24,790 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 17:38:25,195 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/auth/auth_guard_agent_v2.py", line 123, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 17:38:25,197 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371505197497088:1
+2026-02-17 17:38:25,197 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 cycle dd5a3e72 complete: raw=1 valid=1 rejected=0 duration=1.436s
+2026-02-17 17:38:35,203 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 17:38:35,408 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-17 17:38:35,408 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 17:38:35,811 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:38:35,811 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371515811632128:2
+2026-02-17 17:38:35,811 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371505197497088:1
+2026-02-17 17:38:35,811 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 drained 1 events from local queue
+2026-02-17 17:38:39,278 DEBUG    [AuthGuardAgentV2] MacOSAuthLogCollector collected 0 auth events (dedup pool size: 129)
+2026-02-17 17:38:39,278 INFO     [AuthGuardAgentV2] Collected 0 auth events (total: 0)
+2026-02-17 17:38:39,278 INFO     [AuthGuardAgentV2] Probes generated 0 events from 0 auth events
+2026-02-17 17:38:39,278 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:38:39,278 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371519278488064:3
+2026-02-17 17:38:39,278 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 cycle ac31f26c complete: raw=1 valid=1 rejected=0 duration=3.467s
+2026-02-17 17:38:50,163 DEBUG    [AuthGuardAgentV2] MacOSAuthLogCollector collected 0 auth events (dedup pool size: 129)
+2026-02-17 17:38:50,163 INFO     [AuthGuardAgentV2] Collected 0 auth events (total: 0)
+2026-02-17 17:38:50,163 INFO     [AuthGuardAgentV2] Probes generated 0 events from 0 auth events
+2026-02-17 17:38:50,163 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:38:50,163 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371530163561984:4
+2026-02-17 17:38:50,163 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 cycle be0a5fde complete: raw=1 valid=1 rejected=0 duration=0.880s
+2026-02-17 17:39:01,030 DEBUG    [AuthGuardAgentV2] MacOSAuthLogCollector collected 0 auth events (dedup pool size: 129)
+2026-02-17 17:39:01,030 INFO     [AuthGuardAgentV2] Collected 0 auth events (total: 0)
+2026-02-17 17:39:01,030 INFO     [AuthGuardAgentV2] Probes generated 0 events from 0 auth events
+2026-02-17 17:39:01,030 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:39:01,030 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371541030727936:5
+2026-02-17 17:39:01,030 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 cycle bc8857d1 complete: raw=1 valid=1 rejected=0 duration=0.862s
+2026-02-17 17:39:11,896 DEBUG    [AuthGuardAgentV2] MacOSAuthLogCollector collected 0 auth events (dedup pool size: 129)
+2026-02-17 17:39:11,896 INFO     [AuthGuardAgentV2] Collected 0 auth events (total: 0)
+2026-02-17 17:39:11,896 INFO     [AuthGuardAgentV2] Probes generated 0 events from 0 auth events
+2026-02-17 17:39:11,896 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-17 17:39:11,896 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 17:39:12,102 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 17:39:12,503 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/auth/auth_guard_agent_v2.py", line 123, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 17:39:12,507 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371552506736896:6
+2026-02-17 17:39:12,507 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 cycle ab719b36 complete: raw=1 valid=1 rejected=0 duration=1.471s
+2026-02-17 17:39:22,508 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 17:39:22,713 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-17 17:39:22,713 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 17:39:23,118 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:39:23,119 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371563119031040:7
+2026-02-17 17:39:23,119 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371515811632128:2
+2026-02-17 17:39:23,119 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:39:23,119 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371563119297024:8
+2026-02-17 17:39:23,119 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371519278488064:3
+2026-02-17 17:39:23,119 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:39:23,119 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371563119439872:9
+2026-02-17 17:39:23,119 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371530163561984:4
+2026-02-17 17:39:23,119 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:39:23,119 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371563119545088:10
+2026-02-17 17:39:23,119 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371541030727936:5
+2026-02-17 17:39:23,119 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:39:23,119 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371563119671040:11
+2026-02-17 17:39:23,119 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371552506736896:6
+2026-02-17 17:39:23,119 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 drained 5 events from local queue
+2026-02-17 17:39:26,955 DEBUG    [AuthGuardAgentV2] MacOSAuthLogCollector collected 0 auth events (dedup pool size: 129)
+2026-02-17 17:39:26,955 INFO     [AuthGuardAgentV2] Collected 0 auth events (total: 0)
+2026-02-17 17:39:26,955 INFO     [AuthGuardAgentV2] Probes generated 0 events from 0 auth events
+2026-02-17 17:39:26,955 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:39:26,955 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371566955747072:12
+2026-02-17 17:39:26,955 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 cycle 2635039f complete: raw=1 valid=1 rejected=0 duration=3.836s
+2026-02-17 17:39:26,955 DEBUG    [amoskys.agents.common.base] Agent auth_guard_agent_v2: no queue_adapter configured, skipping metrics emission
+2026-02-17 17:39:37,813 DEBUG    [AuthGuardAgentV2] MacOSAuthLogCollector collected 0 auth events (dedup pool size: 129)
+2026-02-17 17:39:37,814 INFO     [AuthGuardAgentV2] Collected 0 auth events (total: 0)
+2026-02-17 17:39:37,814 INFO     [AuthGuardAgentV2] Probes generated 0 events from 0 auth events
+2026-02-17 17:39:37,814 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:39:37,814 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371577814127104:13
+2026-02-17 17:39:37,814 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 cycle 48be6719 complete: raw=1 valid=1 rejected=0 duration=0.853s
+2026-02-17 17:39:48,654 DEBUG    [AuthGuardAgentV2] MacOSAuthLogCollector collected 0 auth events (dedup pool size: 131)
+2026-02-17 17:39:48,655 INFO     [AuthGuardAgentV2] Collected 0 auth events (total: 0)
+2026-02-17 17:39:48,655 INFO     [AuthGuardAgentV2] Probes generated 0 events from 0 auth events
+2026-02-17 17:39:48,655 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:39:48,655 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371588655192064:14
+2026-02-17 17:39:48,655 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 cycle f980a47e complete: raw=1 valid=1 rejected=0 duration=0.836s
+2026-02-17 17:39:59,481 DEBUG    [AuthGuardAgentV2] MacOSAuthLogCollector collected 0 auth events (dedup pool size: 131)
+2026-02-17 17:39:59,482 INFO     [AuthGuardAgentV2] Collected 0 auth events (total: 0)
+2026-02-17 17:39:59,482 INFO     [AuthGuardAgentV2] Probes generated 0 events from 0 auth events
+2026-02-17 17:39:59,482 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-17 17:39:59,482 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 17:39:59,687 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 17:40:00,094 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/auth/auth_guard_agent_v2.py", line 123, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 1159, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/amoskys-venv/lib/python3.13/site-packages/grpc/_channel.py", line 990, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-17 17:40:00,097 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371600096483072:15
+2026-02-17 17:40:00,097 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 cycle 2b390d1e complete: raw=1 valid=1 rejected=0 duration=1.437s
+2026-02-17 17:40:10,103 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 17:40:10,309 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-17 17:40:10,309 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for auth_guard_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-17 17:40:10,715 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:40:10,717 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371610715385088:16
+2026-02-17 17:40:10,717 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371563119031040:7
+2026-02-17 17:40:10,717 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:40:10,717 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371610717662976:17
+2026-02-17 17:40:10,718 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371563119297024:8
+2026-02-17 17:40:10,718 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:40:10,718 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371610718321920:18
+2026-02-17 17:40:10,718 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371563119439872:9
+2026-02-17 17:40:10,718 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:40:10,719 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371610718936064:19
+2026-02-17 17:40:10,719 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371563119545088:10
+2026-02-17 17:40:10,719 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:40:10,719 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371610719753984:20
+2026-02-17 17:40:10,720 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371563119671040:11
+2026-02-17 17:40:10,720 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:40:10,720 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371610720143104:21
+2026-02-17 17:40:10,720 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371566955747072:12
+2026-02-17 17:40:10,720 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:40:10,720 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371610720535040:22
+2026-02-17 17:40:10,720 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371577814127104:13
+2026-02-17 17:40:10,720 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:40:10,721 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371610720884992:23
+2026-02-17 17:40:10,721 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371588655192064:14
+2026-02-17 17:40:10,721 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:40:10,721 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371610721170944:24
+2026-02-17 17:40:10,721 DEBUG    [amoskys.agents.common.local_queue] Drained: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371600096483072:15
+2026-02-17 17:40:10,721 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 drained 9 events from local queue
+2026-02-17 17:40:14,539 DEBUG    [AuthGuardAgentV2] MacOSAuthLogCollector collected 0 auth events (dedup pool size: 131)
+2026-02-17 17:40:14,539 INFO     [AuthGuardAgentV2] Collected 0 auth events (total: 0)
+2026-02-17 17:40:14,539 INFO     [AuthGuardAgentV2] Probes generated 0 events from 0 auth events
+2026-02-17 17:40:14,539 WARNING  [amoskys.agents.common.base] Circuit OPEN for auth_guard_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-17 17:40:14,539 DEBUG    [amoskys.agents.common.local_queue] Enqueued: auth_guard_agent_v2:Akashs-MacBook-Air.local:1771371614539529984:25
+2026-02-17 17:40:14,539 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 cycle 650ca44a complete: raw=1 valid=1 rejected=0 duration=3.818s
+2026-02-17 17:40:23,006 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 received signal 15; shutting down
+2026-02-17 17:40:24,544 INFO     [AuthGuardAgentV2] AuthGuardAgentV2 shutting down...
+2026-02-17 17:40:24,544 INFO     [AuthGuardAgentV2] AuthGuardAgentV2 shutdown complete
+2026-02-17 17:40:24,544 INFO     [amoskys.agents.common.base] Agent auth_guard_agent_v2 stopped

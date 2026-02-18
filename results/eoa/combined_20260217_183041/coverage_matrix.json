@@ -1,0 +1,113 @@
+[
+  {
+    "id": "EP-01",
+    "category": "Process execution",
+    "description": "Spawn, args, parent/child, LOLBins, fileless",
+    "agents": [
+      "proc"
+    ],
+    "status": "OBSERVED",
+    "events_observed": 222,
+    "notes": "222 events captured"
+  },
+  {
+    "id": "EP-02",
+    "category": "Persistence",
+    "description": "launchd, cron, shell profiles, login items, browser ext",
+    "agents": [
+      "persistence",
+      "fim"
+    ],
+    "status": "OBSERVED",
+    "events_observed": 26,
+    "notes": "26 events captured"
+  },
+  {
+    "id": "EP-03",
+    "category": "File tampering",
+    "description": "Config backdoors, SUID changes, webshell drops, library hijack",
+    "agents": [
+      "fim"
+    ],
+    "status": "OBSERVED",
+    "events_observed": 10,
+    "notes": "10 events captured"
+  },
+  {
+    "id": "EP-04",
+    "category": "Network egress",
+    "description": "Outbound flows, beaconing, new external services, exfil volume",
+    "agents": [
+      "flow"
+    ],
+    "status": "OBSERVED",
+    "events_observed": 18,
+    "notes": "18 events captured"
+  },
+  {
+    "id": "EP-05",
+    "category": "DNS behavior",
+    "description": "DGA domains, suspicious TLDs, tunneling, NXdomain bursts",
+    "agents": [
+      "dns"
+    ],
+    "status": "OBSERVED",
+    "events_observed": 20,
+    "notes": "20 events captured"
+  },
+  {
+    "id": "EP-06",
+    "category": "Authentication",
+    "description": "SSH brute force, sudo abuse, privilege escalation",
+    "agents": [
+      "auth"
+    ],
+    "status": "OBSERVED",
+    "events_observed": 25,
+    "notes": "25 events captured"
+  },
+  {
+    "id": "EP-07",
+    "category": "Peripheral insertion",
+    "description": "USB storage/network/HID, Bluetooth, hardware additions",
+    "agents": [
+      "peripheral"
+    ],
+    "status": "OBSERVED",
+    "events_observed": 33,
+    "notes": "33 events captured"
+  },
+  {
+    "id": "EP-08",
+    "category": "Device discovery",
+    "description": "New devices on network, rogue services, ARP anomalies",
+    "agents": [
+      "device_discovery"
+    ],
+    "status": "LINUX_ONLY",
+    "events_observed": 0,
+    "notes": "Requires Linux \u2014 deferred"
+  },
+  {
+    "id": "EP-09",
+    "category": "Kernel-level signals",
+    "description": "Syscalls, module loads, ptrace, capability abuse",
+    "agents": [
+      "kernel_audit"
+    ],
+    "status": "LINUX_ONLY",
+    "events_observed": 0,
+    "notes": "Requires Linux \u2014 deferred"
+  },
+  {
+    "id": "EP-10",
+    "category": "Application-layer protocol anomalies",
+    "description": "HTTP/SSH/RDP/SMTP pattern deviations",
+    "agents": [
+      "protocol_collectors"
+    ],
+    "status": "LINUX_ONLY",
+    "events_observed": 0,
+    "notes": "Requires Linux \u2014 deferred"
+  }
+]

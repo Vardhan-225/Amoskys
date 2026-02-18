@@ -1,0 +1,109 @@
+{
+  "agent": "proc",
+  "label": "ProcAgent V3",
+  "timestamp": "2026-02-16T21:44:41.704198+00:00",
+  "duration_s": 120.2,
+  "mac_ready": true,
+  "collector": "psutil (live)",
+  "probes_declared": 8,
+  "analysis": {
+    "total_queue_rows": 1,
+    "decode_ok": 0,
+    "decode_fail": 1,
+    "total_events": 0,
+    "event_types": {},
+    "severities": {},
+    "probe_names": {},
+    "mitre_techniques_observed": [],
+    "has_metric_data": 0,
+    "has_alarm_data": 0,
+    "has_security_event": 0,
+    "has_attributes": 0,
+    "empty_evidence_events": 0
+  },
+  "resource_samples": [
+    {
+      "sample": 0,
+      "elapsed_s": 0.0,
+      "rss_kb": 6704,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 1,
+      "elapsed_s": 10.0,
+      "rss_kb": 52032,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 2,
+      "elapsed_s": 20.1,
+      "rss_kb": 53696,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 3,
+      "elapsed_s": 30.1,
+      "rss_kb": 43456,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 4,
+      "elapsed_s": 40.1,
+      "rss_kb": 44544,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 5,
+      "elapsed_s": 50.1,
+      "rss_kb": 45680,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 6,
+      "elapsed_s": 60.1,
+      "rss_kb": 46448,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 7,
+      "elapsed_s": 70.2,
+      "rss_kb": 46992,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 8,
+      "elapsed_s": 80.2,
+      "rss_kb": 46992,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 9,
+      "elapsed_s": 90.2,
+      "rss_kb": 47184,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 10,
+      "elapsed_s": 100.2,
+      "rss_kb": 47104,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 11,
+      "elapsed_s": 110.2,
+      "rss_kb": 47936,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 12,
+      "elapsed_s": 120.2,
+      "rss_kb": 48528,
+      "cpu_pct": 0.0
+    }
+  ],
+  "tracebacks": 12,
+  "log_file": "/Users/athanneeru/Downloads/GitHub/Amoskys/results/eoa/proc_20260216_154237/raw_log.txt",
+  "queue_dbs": [
+    "/Users/athanneeru/Downloads/GitHub/Amoskys/data/queue/proc_agent_v3.db"
+  ]
+}

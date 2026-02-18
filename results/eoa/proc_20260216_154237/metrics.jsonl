@@ -1,0 +1,13 @@
+{"sample": 0, "elapsed_s": 0.0, "rss_kb": 6704, "cpu_pct": 0.0}
+{"sample": 1, "elapsed_s": 10.0, "rss_kb": 52032, "cpu_pct": 0.0}
+{"sample": 2, "elapsed_s": 20.1, "rss_kb": 53696, "cpu_pct": 0.0}
+{"sample": 3, "elapsed_s": 30.1, "rss_kb": 43456, "cpu_pct": 0.0}
+{"sample": 4, "elapsed_s": 40.1, "rss_kb": 44544, "cpu_pct": 0.0}
+{"sample": 5, "elapsed_s": 50.1, "rss_kb": 45680, "cpu_pct": 0.0}
+{"sample": 6, "elapsed_s": 60.1, "rss_kb": 46448, "cpu_pct": 0.0}
+{"sample": 7, "elapsed_s": 70.2, "rss_kb": 46992, "cpu_pct": 0.0}
+{"sample": 8, "elapsed_s": 80.2, "rss_kb": 46992, "cpu_pct": 0.0}
+{"sample": 9, "elapsed_s": 90.2, "rss_kb": 47184, "cpu_pct": 0.0}
+{"sample": 10, "elapsed_s": 100.2, "rss_kb": 47104, "cpu_pct": 0.0}
+{"sample": 11, "elapsed_s": 110.2, "rss_kb": 47936, "cpu_pct": 0.0}
+{"sample": 12, "elapsed_s": 120.2, "rss_kb": 48528, "cpu_pct": 0.0}

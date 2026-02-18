@@ -1,0 +1,97 @@
+{
+  "agent": "auth",
+  "label": "AuthGuard V2",
+  "timestamp": "2026-02-16T23:56:51.051549+00:00",
+  "duration_s": 90.1,
+  "mac_ready": true,
+  "collector": "MacOSAuthLogCollector (log show sshd/sudo)",
+  "probes_declared": 8,
+  "analysis": {
+    "total_queue_rows": 8,
+    "decode_ok": 8,
+    "decode_fail": 0,
+    "total_events": 8,
+    "event_types": {
+      "METRIC": 8
+    },
+    "severities": {
+      "INFO": 8
+    },
+    "probe_names": {
+      "auth_collector": 8
+    },
+    "mitre_techniques_observed": [],
+    "has_metric_data": 8,
+    "has_alarm_data": 0,
+    "has_security_event": 0,
+    "has_attributes": 0,
+    "empty_evidence_events": 0
+  },
+  "resource_samples": [
+    {
+      "sample": 0,
+      "elapsed_s": 0.0,
+      "rss_kb": 4832,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 1,
+      "elapsed_s": 10.0,
+      "rss_kb": 56512,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 2,
+      "elapsed_s": 20.0,
+      "rss_kb": 56640,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 3,
+      "elapsed_s": 30.1,
+      "rss_kb": 42400,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 4,
+      "elapsed_s": 40.1,
+      "rss_kb": 27904,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 5,
+      "elapsed_s": 50.1,
+      "rss_kb": 28464,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 6,
+      "elapsed_s": 60.1,
+      "rss_kb": 19872,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 7,
+      "elapsed_s": 70.1,
+      "rss_kb": 27056,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 8,
+      "elapsed_s": 80.1,
+      "rss_kb": 27824,
+      "cpu_pct": 0.0
+    },
+    {
+      "sample": 9,
+      "elapsed_s": 90.1,
+      "rss_kb": 25616,
+      "cpu_pct": 0.0
+    }
+  ],
+  "tracebacks": 0,
+  "log_file": "/Users/athanneeru/Downloads/GitHub/Amoskys/results/eoa/auth_20260216_175510/raw_log.txt",
+  "queue_dbs": [
+    "/Users/athanneeru/Downloads/GitHub/Amoskys/data/queue/auth_agent_v2.db"
+  ]
+}

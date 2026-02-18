@@ -1,0 +1,337 @@
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.local_queue] LocalQueue initialized: path=data/queue/peripheral_agent_v2.db, max_bytes=52428800
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Registered probe: usb_inventory
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Registered probe: usb_connection_edge
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Registered probe: usb_storage
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Registered probe: usb_network_adapter
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Registered probe: hid_anomaly
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Registered probe: bluetooth_device
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Registered probe: peripheral_risk_score
+2026-02-16 19:02:19,073 INFO     [PeripheralAgentV2] PeripheralAgentV2 initialized with 7 probes
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.base] Starting agent peripheral_agent_v2 on device Akashs-MacBook-Air.local
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Probe usb_inventory initialized
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Probe usb_connection_edge initialized
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Probe usb_storage initialized
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Probe usb_network_adapter initialized
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Probe hid_anomaly initialized
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Probe bluetooth_device initialized
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Probe peripheral_risk_score initialized
+2026-02-16 19:02:19,073 INFO     [amoskys.agents.common.probes] Initialized 7/7 probes
+2026-02-16 19:02:19,073 INFO     [PeripheralAgentV2] PeripheralAgentV2 setup complete
+2026-02-16 19:02:19,205 DEBUG    [amoskys.agents.common.probes] Probe usb_inventory returned 1 events in 0.132s
+2026-02-16 19:02:19,337 DEBUG    [amoskys.agents.common.probes] Probe usb_connection_edge returned 0 events in 0.131s
+2026-02-16 19:02:19,470 DEBUG    [amoskys.agents.common.probes] Probe usb_storage returned 0 events in 0.133s
+2026-02-16 19:02:19,603 DEBUG    [amoskys.agents.common.probes] Probe usb_network_adapter returned 0 events in 0.133s
+2026-02-16 19:02:19,741 DEBUG    [amoskys.agents.common.probes] Probe hid_anomaly returned 0 events in 0.138s
+2026-02-16 19:02:19,801 DEBUG    [amoskys.agents.common.probes] Probe bluetooth_device returned 0 events in 0.060s
+2026-02-16 19:02:19,941 DEBUG    [amoskys.agents.common.probes] Probe peripheral_risk_score returned 0 events in 0.140s
+2026-02-16 19:02:19,941 INFO     [PeripheralAgentV2] Probes generated 1 events
+2026-02-16 19:02:19,959 INFO     [PeripheralAgentV2] Created secure gRPC channel with mTLS
+2026-02-16 19:02:19,964 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 19:02:20,169 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 19:02:20,575 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/peripheral/peripheral_agent_v2.py", line 117, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/opt/anaconda3/lib/python3.13/site-packages/grpc/_channel.py", line 1181, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/opt/anaconda3/lib/python3.13/site-packages/grpc/_channel.py", line 1009, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 19:02:20,581 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290140581328896:1
+2026-02-16 19:02:20,581 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 cycle d526b43b complete: raw=1 valid=1 rejected=0 duration=1.508s
+2026-02-16 19:02:30,588 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 19:02:30,788 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-16 19:02:30,788 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 19:02:31,194 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:02:31,194 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290151194304000:2
+2026-02-16 19:02:31,194 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290140581328896:1
+2026-02-16 19:02:31,195 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 drained 1 events from local queue
+2026-02-16 19:02:31,351 DEBUG    [amoskys.agents.common.probes] Probe usb_inventory returned 1 events in 0.156s
+2026-02-16 19:02:31,422 DEBUG    [amoskys.agents.common.probes] Probe usb_connection_edge returned 0 events in 0.071s
+2026-02-16 19:02:31,484 DEBUG    [amoskys.agents.common.probes] Probe usb_storage returned 0 events in 0.062s
+2026-02-16 19:02:31,622 DEBUG    [amoskys.agents.common.probes] Probe usb_network_adapter returned 0 events in 0.138s
+2026-02-16 19:02:31,684 DEBUG    [amoskys.agents.common.probes] Probe hid_anomaly returned 0 events in 0.062s
+2026-02-16 19:02:31,803 DEBUG    [amoskys.agents.common.probes] Probe bluetooth_device returned 0 events in 0.119s
+2026-02-16 19:02:31,876 DEBUG    [amoskys.agents.common.probes] Probe peripheral_risk_score returned 0 events in 0.073s
+2026-02-16 19:02:31,876 INFO     [PeripheralAgentV2] Probes generated 1 events
+2026-02-16 19:02:31,876 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:02:31,877 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290151876901120:3
+2026-02-16 19:02:31,877 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 cycle 973cc3c7 complete: raw=1 valid=1 rejected=0 duration=0.682s
+2026-02-16 19:02:42,010 DEBUG    [amoskys.agents.common.probes] Probe usb_inventory returned 1 events in 0.129s
+2026-02-16 19:02:42,180 DEBUG    [amoskys.agents.common.probes] Probe usb_connection_edge returned 0 events in 0.170s
+2026-02-16 19:02:42,252 DEBUG    [amoskys.agents.common.probes] Probe usb_storage returned 0 events in 0.072s
+2026-02-16 19:02:42,418 DEBUG    [amoskys.agents.common.probes] Probe usb_network_adapter returned 0 events in 0.166s
+2026-02-16 19:02:42,500 DEBUG    [amoskys.agents.common.probes] Probe hid_anomaly returned 0 events in 0.081s
+2026-02-16 19:02:42,615 DEBUG    [amoskys.agents.common.probes] Probe bluetooth_device returned 0 events in 0.115s
+2026-02-16 19:02:42,688 DEBUG    [amoskys.agents.common.probes] Probe peripheral_risk_score returned 0 events in 0.073s
+2026-02-16 19:02:42,689 INFO     [PeripheralAgentV2] Probes generated 1 events
+2026-02-16 19:02:42,689 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:02:42,689 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290162689139968:4
+2026-02-16 19:02:42,689 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 cycle a4627139 complete: raw=1 valid=1 rejected=0 duration=0.807s
+2026-02-16 19:02:52,829 DEBUG    [amoskys.agents.common.probes] Probe usb_inventory returned 1 events in 0.135s
+2026-02-16 19:02:52,903 DEBUG    [amoskys.agents.common.probes] Probe usb_connection_edge returned 0 events in 0.073s
+2026-02-16 19:02:53,036 DEBUG    [amoskys.agents.common.probes] Probe usb_storage returned 0 events in 0.133s
+2026-02-16 19:02:53,171 DEBUG    [amoskys.agents.common.probes] Probe usb_network_adapter returned 0 events in 0.135s
+2026-02-16 19:02:53,305 DEBUG    [amoskys.agents.common.probes] Probe hid_anomaly returned 0 events in 0.134s
+2026-02-16 19:02:53,364 DEBUG    [amoskys.agents.common.probes] Probe bluetooth_device returned 0 events in 0.058s
+2026-02-16 19:02:53,494 DEBUG    [amoskys.agents.common.probes] Probe peripheral_risk_score returned 0 events in 0.130s
+2026-02-16 19:02:53,494 INFO     [PeripheralAgentV2] Probes generated 1 events
+2026-02-16 19:02:53,494 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:02:53,495 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290173494628096:5
+2026-02-16 19:02:53,495 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 cycle 49186f95 complete: raw=1 valid=1 rejected=0 duration=0.801s
+2026-02-16 19:03:03,713 DEBUG    [amoskys.agents.common.probes] Probe usb_inventory returned 1 events in 0.212s
+2026-02-16 19:03:03,787 DEBUG    [amoskys.agents.common.probes] Probe usb_connection_edge returned 0 events in 0.073s
+2026-02-16 19:03:03,928 DEBUG    [amoskys.agents.common.probes] Probe usb_storage returned 0 events in 0.140s
+2026-02-16 19:03:04,061 DEBUG    [amoskys.agents.common.probes] Probe usb_network_adapter returned 0 events in 0.133s
+2026-02-16 19:03:04,129 DEBUG    [amoskys.agents.common.probes] Probe hid_anomaly returned 0 events in 0.068s
+2026-02-16 19:03:04,188 DEBUG    [amoskys.agents.common.probes] Probe bluetooth_device returned 0 events in 0.059s
+2026-02-16 19:03:04,258 DEBUG    [amoskys.agents.common.probes] Probe peripheral_risk_score returned 0 events in 0.071s
+2026-02-16 19:03:04,258 INFO     [PeripheralAgentV2] Probes generated 1 events
+2026-02-16 19:03:04,259 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-16 19:03:04,259 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 19:03:04,462 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 19:03:04,862 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/peripheral/peripheral_agent_v2.py", line 117, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/opt/anaconda3/lib/python3.13/site-packages/grpc/_channel.py", line 1181, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/opt/anaconda3/lib/python3.13/site-packages/grpc/_channel.py", line 1009, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 19:03:04,863 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290184863622912:6
+2026-02-16 19:03:04,864 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 cycle 298a687a complete: raw=1 valid=1 rejected=0 duration=1.363s
+2026-02-16 19:03:14,869 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 19:03:15,074 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-16 19:03:15,074 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv6:%5B::1%5D:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 19:03:15,479 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:03:15,480 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290195479802880:7
+2026-02-16 19:03:15,481 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290151194304000:2
+2026-02-16 19:03:15,481 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:03:15,481 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290195481400064:8
+2026-02-16 19:03:15,481 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290151876901120:3
+2026-02-16 19:03:15,481 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:03:15,481 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290195481547008:9
+2026-02-16 19:03:15,482 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290162689139968:4
+2026-02-16 19:03:15,482 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:03:15,482 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290195482056960:10
+2026-02-16 19:03:15,482 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290173494628096:5
+2026-02-16 19:03:15,482 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:03:15,482 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290195482801920:11
+2026-02-16 19:03:15,482 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290184863622912:6
+2026-02-16 19:03:15,482 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 drained 5 events from local queue
+2026-02-16 19:03:15,689 DEBUG    [amoskys.agents.common.probes] Probe usb_inventory returned 1 events in 0.207s
+2026-02-16 19:03:15,910 DEBUG    [amoskys.agents.common.probes] Probe usb_connection_edge returned 0 events in 0.221s
+2026-02-16 19:03:16,074 DEBUG    [amoskys.agents.common.probes] Probe usb_storage returned 0 events in 0.164s
+2026-02-16 19:03:16,148 DEBUG    [amoskys.agents.common.probes] Probe usb_network_adapter returned 0 events in 0.073s
+2026-02-16 19:03:16,276 DEBUG    [amoskys.agents.common.probes] Probe hid_anomaly returned 0 events in 0.128s
+2026-02-16 19:03:16,335 DEBUG    [amoskys.agents.common.probes] Probe bluetooth_device returned 0 events in 0.059s
+2026-02-16 19:03:16,409 DEBUG    [amoskys.agents.common.probes] Probe peripheral_risk_score returned 0 events in 0.074s
+2026-02-16 19:03:16,409 INFO     [PeripheralAgentV2] Probes generated 1 events
+2026-02-16 19:03:16,409 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:03:16,409 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290196409778944:12
+2026-02-16 19:03:16,409 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 cycle ea891a30 complete: raw=1 valid=1 rejected=0 duration=0.927s
+2026-02-16 19:03:26,545 DEBUG    [amoskys.agents.common.probes] Probe usb_inventory returned 1 events in 0.135s
+2026-02-16 19:03:26,679 DEBUG    [amoskys.agents.common.probes] Probe usb_connection_edge returned 0 events in 0.134s
+2026-02-16 19:03:26,753 DEBUG    [amoskys.agents.common.probes] Probe usb_storage returned 0 events in 0.074s
+2026-02-16 19:03:26,826 DEBUG    [amoskys.agents.common.probes] Probe usb_network_adapter returned 0 events in 0.073s
+2026-02-16 19:03:26,958 DEBUG    [amoskys.agents.common.probes] Probe hid_anomaly returned 0 events in 0.132s
+2026-02-16 19:03:27,077 DEBUG    [amoskys.agents.common.probes] Probe bluetooth_device returned 0 events in 0.118s
+2026-02-16 19:03:27,148 DEBUG    [amoskys.agents.common.probes] Probe peripheral_risk_score returned 0 events in 0.072s
+2026-02-16 19:03:27,149 INFO     [PeripheralAgentV2] Probes generated 1 events
+2026-02-16 19:03:27,149 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:03:27,149 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290207149145088:13
+2026-02-16 19:03:27,149 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 cycle 0b02cc59 complete: raw=1 valid=1 rejected=0 duration=0.738s
+2026-02-16 19:03:27,149 DEBUG    [amoskys.agents.common.base] Agent peripheral_agent_v2: no queue_adapter configured, skipping metrics emission
+2026-02-16 19:03:40,343 DEBUG    [amoskys.agents.common.probes] Probe usb_inventory returned 1 events in 3.189s
+2026-02-16 19:03:40,418 DEBUG    [amoskys.agents.common.probes] Probe usb_connection_edge returned 0 events in 0.075s
+2026-02-16 19:03:40,548 DEBUG    [amoskys.agents.common.probes] Probe usb_storage returned 0 events in 0.130s
+2026-02-16 19:03:40,620 DEBUG    [amoskys.agents.common.probes] Probe usb_network_adapter returned 0 events in 0.072s
+2026-02-16 19:03:40,750 DEBUG    [amoskys.agents.common.probes] Probe hid_anomaly returned 0 events in 0.130s
+2026-02-16 19:03:40,814 DEBUG    [amoskys.agents.common.probes] Probe bluetooth_device returned 0 events in 0.063s
+2026-02-16 19:03:40,949 DEBUG    [amoskys.agents.common.probes] Probe peripheral_risk_score returned 0 events in 0.135s
+2026-02-16 19:03:40,949 INFO     [PeripheralAgentV2] Probes generated 1 events
+2026-02-16 19:03:40,950 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:03:40,950 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290220950112000:14
+2026-02-16 19:03:40,950 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 cycle 89780cd2 complete: raw=1 valid=1 rejected=0 duration=3.796s
+2026-02-16 19:03:51,051 DEBUG    [amoskys.agents.common.probes] Probe usb_inventory returned 1 events in 0.096s
+2026-02-16 19:03:51,123 DEBUG    [amoskys.agents.common.probes] Probe usb_connection_edge returned 0 events in 0.072s
+2026-02-16 19:03:51,263 DEBUG    [amoskys.agents.common.probes] Probe usb_storage returned 0 events in 0.139s
+2026-02-16 19:03:51,336 DEBUG    [amoskys.agents.common.probes] Probe usb_network_adapter returned 0 events in 0.074s
+2026-02-16 19:03:51,408 DEBUG    [amoskys.agents.common.probes] Probe hid_anomaly returned 0 events in 0.072s
+2026-02-16 19:03:51,530 DEBUG    [amoskys.agents.common.probes] Probe bluetooth_device returned 0 events in 0.122s
+2026-02-16 19:03:51,605 DEBUG    [amoskys.agents.common.probes] Probe peripheral_risk_score returned 0 events in 0.075s
+2026-02-16 19:03:51,605 INFO     [PeripheralAgentV2] Probes generated 1 events
+2026-02-16 19:03:51,605 INFO     [amoskys.agents.common.base] Circuit breaker HALF_OPEN (testing recovery)
+2026-02-16 19:03:51,606 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 19:03:51,811 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 19:03:52,216 ERROR    [amoskys.agents.common.base] Publish attempt 3/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+Traceback (most recent call last):
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 396, in _publish_with_retry
+    self._publish_with_circuit_breaker(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 364, in _publish_with_circuit_breaker
+    self._publish_to_eventbus(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/common/base.py", line 350, in _publish_to_eventbus
+    self.eventbus_publisher.publish(events)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/agents/peripheral/peripheral_agent_v2.py", line 117, in publish
+    ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+  File "/opt/anaconda3/lib/python3.13/site-packages/grpc/_channel.py", line 1181, in __call__
+    return _end_unary_response_blocking(state, call, False, None)
+  File "/opt/anaconda3/lib/python3.13/site-packages/grpc/_channel.py", line 1009, in _end_unary_response_blocking
+    raise _InactiveRpcError(state)  # pytype: disable=not-instantiable
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+grpc._channel._InactiveRpcError: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_status:14, grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"}"
+>
+2026-02-16 19:03:52,217 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290232217349120:15
+2026-02-16 19:03:52,217 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 cycle 9f0993e4 complete: raw=1 valid=1 rejected=0 duration=1.262s
+2026-02-16 19:04:02,222 ERROR    [amoskys.agents.common.base] Publish attempt 1/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 19:04:02,428 WARNING  [amoskys.agents.common.base] Circuit breaker OPEN (failures: 5)
+2026-02-16 19:04:02,428 ERROR    [amoskys.agents.common.base] Publish attempt 2/3 failed for peripheral_agent_v2: <_InactiveRpcError of RPC that terminated with:
+	status = StatusCode.UNAVAILABLE
+	details = "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)"
+	debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: connect: Connection refused (61)", grpc_status:14}"
+>
+2026-02-16 19:04:02,829 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290242829349120:16
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290195479802880:7
+2026-02-16 19:04:02,830 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290242830393088:17
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290195481400064:8
+2026-02-16 19:04:02,830 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290242830522880:18
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290195481547008:9
+2026-02-16 19:04:02,830 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290242830672896:19
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290195482056960:10
+2026-02-16 19:04:02,830 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290242830793984:20
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290195482801920:11
+2026-02-16 19:04:02,830 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290242830914048:21
+2026-02-16 19:04:02,830 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290196409778944:12
+2026-02-16 19:04:02,831 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:04:02,831 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290242831016960:22
+2026-02-16 19:04:02,831 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290207149145088:13
+2026-02-16 19:04:02,831 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:04:02,831 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290242831153920:23
+2026-02-16 19:04:02,831 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290220950112000:14
+2026-02-16 19:04:02,831 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:04:02,831 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290242831252992:24
+2026-02-16 19:04:02,831 DEBUG    [amoskys.agents.common.local_queue] Drained: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290232217349120:15
+2026-02-16 19:04:02,831 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 drained 9 events from local queue
+2026-02-16 19:04:02,977 DEBUG    [amoskys.agents.common.probes] Probe usb_inventory returned 1 events in 0.146s
+2026-02-16 19:04:03,047 DEBUG    [amoskys.agents.common.probes] Probe usb_connection_edge returned 0 events in 0.070s
+2026-02-16 19:04:03,179 DEBUG    [amoskys.agents.common.probes] Probe usb_storage returned 0 events in 0.132s
+2026-02-16 19:04:03,313 DEBUG    [amoskys.agents.common.probes] Probe usb_network_adapter returned 0 events in 0.133s
+2026-02-16 19:04:03,376 DEBUG    [amoskys.agents.common.probes] Probe hid_anomaly returned 0 events in 0.063s
+2026-02-16 19:04:03,426 DEBUG    [amoskys.agents.common.probes] Probe bluetooth_device returned 0 events in 0.050s
+2026-02-16 19:04:03,487 DEBUG    [amoskys.agents.common.probes] Probe peripheral_risk_score returned 0 events in 0.061s
+2026-02-16 19:04:03,487 INFO     [PeripheralAgentV2] Probes generated 1 events
+2026-02-16 19:04:03,487 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:04:03,487 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290243487587072:25
+2026-02-16 19:04:03,487 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 cycle 6d093fc3 complete: raw=1 valid=1 rejected=0 duration=0.656s
+2026-02-16 19:04:13,625 DEBUG    [amoskys.agents.common.probes] Probe usb_inventory returned 1 events in 0.133s
+2026-02-16 19:04:13,689 DEBUG    [amoskys.agents.common.probes] Probe usb_connection_edge returned 0 events in 0.063s
+2026-02-16 19:04:13,820 DEBUG    [amoskys.agents.common.probes] Probe usb_storage returned 0 events in 0.132s
+2026-02-16 19:04:13,893 DEBUG    [amoskys.agents.common.probes] Probe usb_network_adapter returned 0 events in 0.073s
+2026-02-16 19:04:14,025 DEBUG    [amoskys.agents.common.probes] Probe hid_anomaly returned 0 events in 0.132s
+2026-02-16 19:04:14,076 DEBUG    [amoskys.agents.common.probes] Probe bluetooth_device returned 0 events in 0.051s
+2026-02-16 19:04:14,209 DEBUG    [amoskys.agents.common.probes] Probe peripheral_risk_score returned 0 events in 0.132s
+2026-02-16 19:04:14,209 INFO     [PeripheralAgentV2] Probes generated 1 events
+2026-02-16 19:04:14,209 WARNING  [amoskys.agents.common.base] Circuit OPEN for peripheral_agent_v2; enqueueing 1 events locally: Circuit breaker is OPEN
+2026-02-16 19:04:14,209 DEBUG    [amoskys.agents.common.local_queue] Enqueued: peripheral_agent_v2:Akashs-MacBook-Air.local:1771290254209596928:26
+2026-02-16 19:04:14,209 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 cycle 2ab29d9d complete: raw=1 valid=1 rejected=0 duration=0.717s
+2026-02-16 19:04:19,013 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 received signal 15; shutting down
+2026-02-16 19:04:24,214 INFO     [PeripheralAgentV2] PeripheralAgentV2 shutting down...
+2026-02-16 19:04:24,215 INFO     [PeripheralAgentV2] PeripheralAgentV2 shutdown complete
+2026-02-16 19:04:24,215 INFO     [amoskys.agents.common.base] Agent peripheral_agent_v2 stopped
