@@ -9,6 +9,7 @@ Key Features:
     - Automatic Retry: Background drain attempts reconnection
     - Backpressure: Drops oldest events when queue exceeds limit
     - Deduplication: Prevents duplicate event submission
+    - Integrity: Optional Ed25519 signature + SHA-256 content hash per row
 
 Design Philosophy:
     Unlike the FlowAgent WAL (which handles high-volume streaming data),
@@ -29,7 +30,7 @@ import logging
 import os
 import sqlite3
 import time
-from typing import Callable
+from typing import Callable, Optional
 
 from amoskys.proto import universal_telemetry_pb2 as pb
 
@@ -43,11 +44,21 @@ CREATE TABLE IF NOT EXISTS queue (
   idem TEXT NOT NULL,
   ts_ns INTEGER NOT NULL,
   bytes BLOB NOT NULL,
-  retries INTEGER DEFAULT 0
+  retries INTEGER DEFAULT 0,
+  content_hash BLOB DEFAULT NULL,
+  sig BLOB DEFAULT NULL,
+  prev_sig BLOB DEFAULT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS queue_idem ON queue(idem);
 CREATE INDEX IF NOT EXISTS queue_ts ON queue(ts_ns);
 """
+
+# Columns added in the signing update.  Used by _migrate_schema().
+_SIGNING_COLUMNS = {
+    "content_hash": "BLOB DEFAULT NULL",
+    "sig": "BLOB DEFAULT NULL",
+    "prev_sig": "BLOB DEFAULT NULL",
+}
 
 
 class LocalQueue:
@@ -83,10 +94,18 @@ class LocalQueue:
         self.max_retries = max_retries
         self.db = sqlite3.connect(self.path, timeout=5.0, isolation_level=None)
         self.db.executescript(SCHEMA)
+        self._migrate_schema()
         logger.info(f"LocalQueue initialized: path={path}, max_bytes={max_bytes}")
 
-    def enqueue(self, telemetry: pb.DeviceTelemetry, idempotency_key: str) -> bool:
-        """Add telemetry to queue with deduplication.
+    def enqueue(
+        self,
+        telemetry: pb.DeviceTelemetry,
+        idempotency_key: str,
+        content_hash: Optional[bytes] = None,
+        sig: Optional[bytes] = None,
+        prev_sig: Optional[bytes] = None,
+    ) -> bool:
+        """Add telemetry to queue with deduplication and optional signing.
 
         Serializes and stores telemetry. Duplicate idempotency keys are
         silently ignored. Enforces backlog size limit.
@@ -94,6 +113,9 @@ class LocalQueue:
         Args:
             telemetry: DeviceTelemetry protobuf message
             idempotency_key: Unique key for deduplication
+            content_hash: SHA-256 digest of serialized payload (optional)
+            sig: Ed25519 signature over content_hash (optional)
+            prev_sig: Previous row's signature for hash chain (optional)
 
         Returns:
             bool: True if enqueued, False if duplicate
@@ -106,8 +128,16 @@ class LocalQueue:
 
         try:
             self.db.execute(
-                "INSERT INTO queue(idem, ts_ns, bytes) VALUES(?,?,?)",
-                (idempotency_key, ts_ns, sqlite3.Binary(data)),
+                "INSERT INTO queue(idem, ts_ns, bytes, content_hash, sig, prev_sig) "
+                "VALUES(?,?,?,?,?,?)",
+                (
+                    idempotency_key,
+                    ts_ns,
+                    sqlite3.Binary(data),
+                    sqlite3.Binary(content_hash) if content_hash else None,
+                    sqlite3.Binary(sig) if sig else None,
+                    sqlite3.Binary(prev_sig) if prev_sig else None,
+                ),
             )
             logger.debug(f"Enqueued: {idempotency_key}")
             self._enforce_backlog()
@@ -121,9 +151,14 @@ class LocalQueue:
     ) -> int:
         """Drain queued telemetry by publishing via callback.
 
-        Fetches up to `limit` events in FIFO order and attempts to publish
-        each via the provided callback. Successfully published events are
+        Fetches up to ``limit`` events in FIFO order and attempts to publish
+        each via the provided callback.  Successfully published events are
         deleted from the queue.
+
+        The ``publish_fn`` receives a :class:`~pb.DeviceTelemetry` message.
+        Signature metadata (``content_hash``, ``sig``, ``prev_sig``) is
+        available via :meth:`drain_signed` for callers that need to wrap
+        events in a ``UniversalEnvelope``.
 
         Args:
             publish_fn: Callback that publishes telemetry (should return PublishAck)
@@ -137,18 +172,59 @@ class LocalQueue:
             - RPC failure: Stop draining, increment retry counter
             - Max retries exceeded: Delete from queue (drop event)
         """
+
+        def _compat_publish(telemetry, _idem, _ts_ns, _content_hash, _sig, _prev_sig):
+            return publish_fn(telemetry)
+
+        return self._drain_impl(_compat_publish, limit)
+
+    def drain_signed(
+        self,
+        publish_fn: Callable[
+            [pb.DeviceTelemetry, str, int, Optional[bytes], Optional[bytes], Optional[bytes]],
+            object,
+        ],
+        limit: int = 100,
+    ) -> int:
+        """Drain with full signature metadata.
+
+        Like :meth:`drain`, but ``publish_fn`` receives additional arguments::
+
+            publish_fn(telemetry, idem_key, ts_ns, content_hash, sig, prev_sig)
+
+        This allows callers (e.g. :class:`LocalQueueAdapter`) to wrap each
+        event in a signed ``UniversalEnvelope`` before publishing to the
+        EventBus.
+        """
+        return self._drain_impl(publish_fn, limit)
+
+    def _drain_impl(
+        self,
+        publish_fn: Callable,
+        limit: int,
+    ) -> int:
+        """Internal drain implementation shared by drain() and drain_signed()."""
         cur = self.db.execute(
-            "SELECT id, bytes, retries, idem FROM queue ORDER BY id LIMIT ?", (limit,)
+            "SELECT id, bytes, retries, idem, ts_ns, content_hash, sig, prev_sig "
+            "FROM queue ORDER BY id LIMIT ?",
+            (limit,),
         )
         rows = cur.fetchall()
         drained = 0
 
-        for rowid, blob, retries, idem in rows:
+        for rowid, blob, retries, idem, ts_ns, content_hash, sig, prev_sig in rows:
             telemetry = pb.DeviceTelemetry()
             telemetry.ParseFromString(bytes(blob))
 
             try:
-                ack = publish_fn(telemetry)
+                ack = publish_fn(
+                    telemetry,
+                    idem,
+                    ts_ns,
+                    bytes(content_hash) if content_hash else None,
+                    bytes(sig) if sig else None,
+                    bytes(prev_sig) if prev_sig else None,
+                )
 
                 # Check if publish was successful
                 if hasattr(ack, "status"):
@@ -214,6 +290,20 @@ class LocalQueue:
         """
         cur = self.db.execute("DELETE FROM queue")
         return cur.rowcount
+
+    def _migrate_schema(self):
+        """Add signing columns to existing databases that lack them.
+
+        Safe to call multiple times — uses ``ALTER TABLE ... ADD COLUMN``
+        which is a no-op if the column already exists (caught via
+        OperationalError).
+        """
+        for col_name, col_type in _SIGNING_COLUMNS.items():
+            try:
+                self.db.execute(f"ALTER TABLE queue ADD COLUMN {col_name} {col_type}")
+                logger.info(f"Schema migration: added column queue.{col_name}")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
     def _enforce_backlog(self):
         """Enforce maximum queue size by dropping oldest events.

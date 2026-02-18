@@ -535,7 +535,11 @@ class TestRoundTripFidelity:
     """Verify data survives the dict→proto→SQLite→proto round trip."""
 
     def test_threat_event_round_trip(self, adapter):
-        """Full threat event should survive enqueue → drain round trip."""
+        """Full threat event should survive enqueue → drain round trip.
+
+        drain() now wraps events in UniversalEnvelope (correct for EventBus).
+        The DeviceTelemetry payload is inside envelope.device_telemetry.
+        """
         event = {
             "event_type": "protocol_threat",
             "severity": "HIGH",
@@ -552,7 +556,7 @@ class TestRoundTripFidelity:
         }
         adapter.enqueue(event)
 
-        # Drain and capture the proto
+        # Drain and capture the envelope
         captured = []
 
         def capture_fn(events):
@@ -561,7 +565,15 @@ class TestRoundTripFidelity:
         adapter.drain(capture_fn, limit=1)
 
         assert len(captured) == 1
-        telemetry = captured[0]
+        envelope = captured[0]
+
+        # Verify envelope metadata
+        assert envelope.version == "1.0"
+        assert envelope.idempotency_key  # non-empty
+        assert envelope.ts_ns > 0
+
+        # Unwrap: DeviceTelemetry is inside the envelope
+        telemetry = envelope.device_telemetry
 
         # Verify top-level fields
         assert telemetry.device_id == "host-lab-001"
@@ -669,3 +681,174 @@ class TestEdgeCases:
         event = {"event_type": "METRIC", "event_id": "custom-id-123"}
         telemetry = adapter._dict_to_telemetry(event)
         assert telemetry.events[0].event_id == "custom-id-123"
+
+
+# ---------------------------------------------------------------------------
+# Envelope signing
+# ---------------------------------------------------------------------------
+
+
+class TestEnvelopeSigning:
+    """Tests for Ed25519 signing at enqueue + UniversalEnvelope at drain."""
+
+    @pytest.fixture
+    def ed25519_key_path(self, tmp_path):
+        """Generate a fresh Ed25519 keypair and return the private key path."""
+        from cryptography.hazmat.primitives.asymmetric import ed25519 as ed_mod
+
+        sk = ed_mod.Ed25519PrivateKey.generate()
+        key_path = str(tmp_path / "agent.ed25519")
+        raw = sk.private_bytes_raw()
+        with open(key_path, "wb") as f:
+            f.write(raw)
+        return key_path
+
+    @pytest.fixture
+    def signed_adapter(self, tmp_path, ed25519_key_path):
+        """Adapter with signing enabled."""
+        return LocalQueueAdapter(
+            queue_path=str(tmp_path / "signed_queue.db"),
+            agent_name="test_agent",
+            device_id="test-device",
+            signing_key_path=ed25519_key_path,
+        )
+
+    def test_signing_enabled_property(self, signed_adapter):
+        """signing_enabled should be True when key is loaded."""
+        assert signed_adapter.signing_enabled is True
+
+    def test_signing_disabled_without_key(self, adapter):
+        """Default adapter (no key) should have signing_enabled=False."""
+        assert adapter.signing_enabled is False
+
+    def test_signing_disabled_bad_path(self, tmp_path):
+        """Non-existent key path should gracefully disable signing."""
+        a = LocalQueueAdapter(
+            queue_path=str(tmp_path / "q.db"),
+            agent_name="test",
+            device_id="test",
+            signing_key_path="/nonexistent/key",
+        )
+        assert a.signing_enabled is False
+
+    def test_enqueue_stores_content_hash(self, signed_adapter):
+        """Enqueue should store SHA-256 content_hash in queue row."""
+        import hashlib
+
+        event = {"event_type": "METRIC", "severity": "INFO"}
+        signed_adapter.enqueue(event)
+
+        # Read raw queue row
+        row = signed_adapter.queue.db.execute(
+            "SELECT content_hash, sig, prev_sig FROM queue LIMIT 1"
+        ).fetchone()
+        content_hash, sig, prev_sig = row
+
+        assert content_hash is not None
+        assert len(bytes(content_hash)) == 32  # SHA-256 = 32 bytes
+
+    def test_enqueue_stores_signature(self, signed_adapter):
+        """Enqueue with signing key should store 64-byte Ed25519 sig."""
+        event = {"event_type": "METRIC", "severity": "INFO"}
+        signed_adapter.enqueue(event)
+
+        row = signed_adapter.queue.db.execute(
+            "SELECT sig FROM queue LIMIT 1"
+        ).fetchone()
+        sig = row[0]
+
+        assert sig is not None
+        assert len(bytes(sig)) == 64  # Ed25519 signature = 64 bytes
+
+    def test_content_hash_without_signing_key(self, adapter):
+        """Even without a key, content_hash should be stored."""
+        event = {"event_type": "METRIC", "severity": "INFO"}
+        adapter.enqueue(event)
+
+        row = adapter.queue.db.execute(
+            "SELECT content_hash, sig FROM queue LIMIT 1"
+        ).fetchone()
+        content_hash, sig = row
+
+        assert content_hash is not None
+        assert len(bytes(content_hash)) == 32
+        assert sig is None  # No key → no signature
+
+    def test_prev_sig_chain(self, signed_adapter):
+        """Each enqueue should chain prev_sig from previous sig."""
+        for i in range(3):
+            signed_adapter.enqueue({"event_type": "METRIC", "severity": "INFO"})
+
+        rows = signed_adapter.queue.db.execute(
+            "SELECT sig, prev_sig FROM queue ORDER BY id"
+        ).fetchall()
+
+        # First row: prev_sig should be NULL (empty chain start)
+        assert rows[0][1] is None
+
+        # Second row: prev_sig should equal first row's sig
+        assert bytes(rows[1][1]) == bytes(rows[0][0])
+
+        # Third row: prev_sig should equal second row's sig
+        assert bytes(rows[2][1]) == bytes(rows[1][0])
+
+    def test_signature_verifies(self, signed_adapter, ed25519_key_path):
+        """Stored signature should verify against stored content_hash."""
+        from amoskys.common.crypto.signing import load_public_key, verify
+
+        # We need the public key — derive from private key
+        from cryptography.hazmat.primitives.asymmetric import ed25519 as ed_mod
+        from cryptography.hazmat.primitives import serialization
+
+        with open(ed25519_key_path, "rb") as f:
+            sk = ed_mod.Ed25519PrivateKey.from_private_bytes(f.read())
+        pk = sk.public_key()
+
+        signed_adapter.enqueue({"event_type": "METRIC", "severity": "INFO"})
+
+        row = signed_adapter.queue.db.execute(
+            "SELECT content_hash, sig FROM queue LIMIT 1"
+        ).fetchone()
+        content_hash = bytes(row[0])
+        sig = bytes(row[1])
+
+        assert verify(pk, content_hash, sig) is True
+
+    def test_drain_produces_signed_envelope(self, signed_adapter):
+        """drain() should produce UniversalEnvelope with sig fields."""
+        signed_adapter.enqueue({"event_type": "METRIC", "severity": "INFO"})
+
+        captured = []
+
+        def capture_fn(events):
+            captured.extend(events)
+
+        signed_adapter.drain(capture_fn, limit=1)
+
+        assert len(captured) == 1
+        envelope = captured[0]
+
+        assert envelope.sig  # non-empty bytes
+        assert len(envelope.sig) == 64
+        assert envelope.signing_algorithm == "Ed25519"
+        assert envelope.version == "1.0"
+        assert envelope.HasField("device_telemetry")
+
+    def test_drain_unsigned_still_wraps_envelope(self, adapter):
+        """drain() without signing should still produce UniversalEnvelope."""
+        adapter.enqueue({"event_type": "METRIC", "severity": "INFO"})
+
+        captured = []
+
+        def capture_fn(events):
+            captured.extend(events)
+
+        adapter.drain(capture_fn, limit=1)
+
+        assert len(captured) == 1
+        envelope = captured[0]
+
+        assert envelope.version == "1.0"
+        assert envelope.HasField("device_telemetry")
+        assert envelope.sig == b""  # No signature
+        assert envelope.signing_algorithm == ""  # Not set

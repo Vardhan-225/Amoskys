@@ -385,7 +385,10 @@ class TestProtobufRoundTrip:
         assert recovered[0].device_id == "empty-host"
 
     def test_adapter_dict_round_trip(self, adapter):
-        """Dict event → adapter.enqueue → drain → verify SecurityEvent."""
+        """Dict event → adapter.enqueue → drain → verify SecurityEvent.
+
+        drain() now wraps in UniversalEnvelope; unwrap via .device_telemetry.
+        """
         event = {
             "event_type": "protocol_threat",
             "severity": "HIGH",
@@ -410,7 +413,8 @@ class TestProtobufRoundTrip:
         adapter.drain(capture_fn, limit=1)
         assert len(captured) == 1
 
-        t = captured[0]
+        envelope = captured[0]
+        t = envelope.device_telemetry
         assert t.collection_agent == "test_agent"
         assert t.device_id == "host-test-001"
 
@@ -449,10 +453,13 @@ class TestSchemaInvariants:
         assert len(rows) == 1
 
     def test_queue_table_columns(self, queue):
-        """queue table must have id, idem, ts_ns, bytes, retries columns."""
+        """queue table must have core + signing columns."""
         rows = queue.db.execute("PRAGMA table_info(queue)").fetchall()
         col_names = {r[1] for r in rows}
-        assert col_names == {"id", "idem", "ts_ns", "bytes", "retries"}
+        assert col_names == {
+            "id", "idem", "ts_ns", "bytes", "retries",
+            "content_hash", "sig", "prev_sig",
+        }
 
     def test_synchronous_normal(self, queue):
         """PRAGMA synchronous must be NORMAL for WAL performance."""

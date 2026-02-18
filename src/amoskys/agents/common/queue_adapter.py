@@ -8,16 +8,32 @@ The adapter handles:
     - Automatic idempotency key generation
     - Event-to-protobuf conversion
     - Simplified enqueue/drain interface
+    - Ed25519 envelope signing (when a signing key is provided)
+    - UniversalEnvelope wrapping on drain
 """
 
+import hashlib
 import logging
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from amoskys.agents.common.local_queue import LocalQueue
 from amoskys.proto import universal_telemetry_pb2 as pb
 
 logger = logging.getLogger(__name__)
+
+
+def _load_signing_key(path: str):
+    """Try to load an Ed25519 private key.  Returns None on any failure."""
+    try:
+        from amoskys.common.crypto.signing import load_private_key
+
+        key = load_private_key(path)
+        logger.info("Envelope signing enabled (Ed25519 key loaded)")
+        return key
+    except Exception as exc:
+        logger.info("Envelope signing disabled: %s", exc)
+        return None
 
 
 class LocalQueueAdapter:
@@ -26,6 +42,10 @@ class LocalQueueAdapter:
     Provides a simplified interface where:
         - enqueue(event) automatically generates idempotency keys
         - drain(publish_fn, limit) handles the publish callback
+
+    When *signing_key_path* is provided and the key file exists, every
+    enqueued event is signed with Ed25519.  A SHA-256 ``content_hash``
+    is always computed (even without a signing key) for tamper detection.
 
     Attributes:
         queue: Underlying LocalQueue instance
@@ -40,6 +60,7 @@ class LocalQueueAdapter:
         device_id: str,
         max_bytes: int = 50 * 1024 * 1024,
         max_retries: int = 10,
+        signing_key_path: Optional[str] = None,
     ):
         """Initialize queue adapter.
 
@@ -49,6 +70,8 @@ class LocalQueueAdapter:
             device_id: Device ID for idempotency keys
             max_bytes: Maximum queue size in bytes
             max_retries: Maximum retry attempts per event
+            signing_key_path: Path to Ed25519 private key (32 bytes raw).
+                If None or file missing, signing is silently disabled.
         """
         self.queue = LocalQueue(
             path=queue_path, max_bytes=max_bytes, max_retries=max_retries
@@ -57,8 +80,19 @@ class LocalQueueAdapter:
         self.device_id = device_id
         self._sequence = 0
 
+        # Signing state
+        self._signing_key = (
+            _load_signing_key(signing_key_path) if signing_key_path else None
+        )
+        self._prev_sig: bytes = b""  # Hash chain: starts empty
+
+    @property
+    def signing_enabled(self) -> bool:
+        """True when an Ed25519 key is loaded and signing is active."""
+        return self._signing_key is not None
+
     def enqueue(self, event: Any) -> bool:
-        """Enqueue event with automatic key generation.
+        """Enqueue event with automatic key generation and signing.
 
         Args:
             event: Event to enqueue (dict, DeviceTelemetry, etc.)
@@ -69,7 +103,9 @@ class LocalQueueAdapter:
         Behavior:
             - Generates idempotency key: {agent}:{device}:{timestamp}:{seq}
             - Converts event to DeviceTelemetry if needed
-            - Calls underlying LocalQueue.enqueue()
+            - Computes SHA-256 content_hash of serialized payload
+            - Signs content_hash with Ed25519 if key available
+            - Maintains prev_sig hash chain across enqueues
         """
         # Generate idempotency key
         ts_ns = int(time.time() * 1e9)
@@ -82,41 +118,71 @@ class LocalQueueAdapter:
         elif isinstance(event, dict):
             telemetry = self._dict_to_telemetry(event)
         else:
-            # Assume it's already a protobuf with SerializeToString
             telemetry = event
 
-        return self.queue.enqueue(telemetry, idem_key)
+        # Compute content hash (always — even without signing key)
+        payload_bytes = telemetry.SerializeToString()
+        content_hash = hashlib.sha256(payload_bytes).digest()
+
+        # Sign if key available
+        sig: Optional[bytes] = None
+        prev_sig = self._prev_sig or None
+
+        if self._signing_key is not None:
+            from amoskys.common.crypto.signing import sign
+
+            sig = sign(self._signing_key, content_hash)
+
+        result = self.queue.enqueue(
+            telemetry,
+            idem_key,
+            content_hash=content_hash,
+            sig=sig,
+            prev_sig=prev_sig,
+        )
+
+        # Advance hash chain on successful enqueue
+        if result and sig is not None:
+            self._prev_sig = sig
+
+        return result
 
     def drain(self, publish_fn: Callable, limit: int = 100) -> int:
-        """Drain queue using publish callback.
+        """Drain queue, wrapping each event in a signed UniversalEnvelope.
 
         Args:
-            publish_fn: Function that publishes events (takes list of events)
+            publish_fn: Function that publishes events (takes list of events).
+                Each event is a ``UniversalEnvelope`` when signing is wired,
+                or a raw ``DeviceTelemetry`` for backward compat when no
+                signature data exists on the row.
             limit: Maximum events to drain
 
         Returns:
             Number of events successfully drained
-
-        Note:
-            The publish_fn should handle retries internally.
-            LocalQueue expects publish_fn(telemetry) -> ack.
-            We wrap it to match that interface.
         """
 
-        def wrapped_publish(telemetry: pb.DeviceTelemetry) -> Any:
-            """Wrap publish_fn to match LocalQueue expectations."""
-            # publish_fn expects a list, but LocalQueue calls per-event
-            # We create a simple ack-like object
+        def _wrap_and_publish(telemetry, idem, ts_ns, content_hash, sig, prev_sig):
+            """Wrap DeviceTelemetry in UniversalEnvelope with signature."""
+            envelope = pb.UniversalEnvelope()
+            envelope.version = "1.0"
+            envelope.ts_ns = ts_ns
+            envelope.idempotency_key = idem
+            envelope.device_telemetry.CopyFrom(telemetry)
+
+            if sig:
+                envelope.sig = sig
+                envelope.signing_algorithm = "Ed25519"
+            if prev_sig:
+                envelope.prev_sig = prev_sig
+
             try:
-                publish_fn([telemetry])
-                # Return success-like object
+                publish_fn([envelope])
                 return type("Ack", (), {"status": 0})()
             except Exception as e:
                 logger.warning(f"Publish failed in queue drain: {e}")
-                # Return failure-like object
-                return type("Ack", (), {"status": 2})()  # ERROR status
+                return type("Ack", (), {"status": 2})()
 
-        return self.queue.drain(wrapped_publish, limit=limit)
+        return self.queue.drain_signed(_wrap_and_publish, limit=limit)
 
     def size(self) -> int:
         """Get number of events in queue."""

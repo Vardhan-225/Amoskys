@@ -599,7 +599,8 @@ class TestQueueToFusionIntegration:
         adapter.drain(capture_fn, limit=1)
         assert len(captured) == 1
 
-        t = captured[0]
+        envelope = captured[0]
+        t = envelope.device_telemetry
         ev = t.events[0]
         sec = ev.security_event
 
