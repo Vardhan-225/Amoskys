@@ -1,9 +1,12 @@
 # AMOSKYS Attribute Coverage Truth Table
 
-> **Purpose:** For each of the 63 probes, verify whether the macOS collector
-> actually populates every field the probe reads. A probe is **REAL** only when
-> every field it depends on carries live data. A single phantom field can blind
-> the entire probe.
+> **Purpose:** For each of the 62 macOS-active probes, verify whether the macOS
+> collector actually populates every field the probe reads. A probe is **REAL**
+> only when every field it depends on carries live data. A single phantom field
+> can blind the entire probe.
+>
+> **Revision 2** — corrected after 5-agent deep audit (Auth, Persistence,
+> Peripheral, Kernel findings were too generous in v1).
 
 ---
 
@@ -12,9 +15,9 @@
 | Grade | Meaning |
 |-------|---------|
 | **REAL** | Every field the probe reads is populated by the macOS collector with accurate, live data. Probe can fire in production. |
-| **DEGRADED** | Field is populated, but the value is inaccurate or semantically wrong (e.g., per-process bytes assigned to per-flow). Probe fires, but with wrong thresholds. |
-| **BROKEN** | A critical field the probe reads is hardcoded/stubbed/None. The probe **can never fire** on macOS. |
-| **PARTIAL** | Core detection works, but enrichment fields (process context, etc.) are missing. Detection fires, but investigation is impaired. |
+| **DEGRADED** | Field is populated, but the value is inaccurate or semantically wrong (e.g., per-process bytes assigned to per-flow, or command=None preventing pattern matching). Probe fires, but with wrong thresholds or reduced fidelity. |
+| **BROKEN** | A critical field the probe reads is hardcoded/stubbed/None, OR no collector generates the required mechanism_type/event_type. The probe **can never fire correctly** on macOS. |
+| **PARTIAL** | Core detection works, but enrichment fields (process context, geo, etc.) are missing. Detection fires, but investigation is impaired. |
 
 ---
 
@@ -26,17 +29,21 @@
 | **FIM** | 8 | **6** | 0 | 0 | 2 |
 | **Flow** | 8 | **5** | 2 | **1** | 0 |
 | **DNS** | 9 | **2** | 2 | **4** | 1 |
-| **Auth** | 8 | **7** | 0 | 0 | 1 |
-| **Persistence** | 7 | **7** | 0 | 0 | 0 |
-| **Peripheral** | 4 | **4** | 0 | 0 | 0 |
+| **Auth** | 8 | **4** | 0 | **3** | 1 |
+| **Persistence** | 7 | **1** | 3 | **3** | 0 |
+| **Peripheral** | 7 | **5** | 2 | 0 | 0 |
 | **KernelAudit** | 7 | **5** | 0 | 0 | 2 |
-| **TOTAL** | **59** | **44** | **4** | **5** | **6** |
+| **TOTAL** | **62** | **36** | **9** | **11** | **6** |
 
-**Honest coverage: 44/59 probes (74.6%) are REAL — not 98%.**
+**Honest coverage: 36/62 probes (58.1%) are REAL.**
 
-The scorecard showed 98.4% "surface coverage" which just counted probes with
-`"darwin" in platforms`. That's a lie. This table counts probes where the
-data pipeline actually works end-to-end.
+The v1 table claimed 44/59 (74.6%). That was too generous — it undercounted
+Peripheral probes (4 vs actual 7), and marked Auth, Persistence probes as REAL
+when their collectors don't generate the required event types or fields.
+
+**Effective Detection (REAL + PARTIAL):** 42/62 (67.7%) fire at all.
+**BROKEN:** 11/62 (17.7%) — phantom probes that never fire or always false-positive.
+**DEGRADED:** 9/62 (14.5%) — fire with wrong data or reduced detection quality.
 
 ---
 
@@ -153,64 +160,101 @@ string splitting looking for the word "for". Critical fields are hardcoded:
 
 ---
 
-## 5. AUTH AGENT (7 REAL, 1 PARTIAL)
+## 5. AUTH AGENT (4 REAL, 3 BROKEN, 1 PARTIAL)
 
-**Collector:** macOS unified log (`log show`) with broad predicate covering sudo, sshd, loginwindow, SecurityAgent, authd, coreauthd, screensaver. Plus `last` command for session history.
+**Collector:** macOS unified log (`log show`) with broad predicate covering sudo,
+sshd, loginwindow, SecurityAgent, authd, coreauthd, screensaver. Plus `last`
+command for session history.
 
-This is a well-implemented collector with process-specific parsers for sudo messages, sshd messages, loginwindow events, and SecurityAgent authorization dialogs.
+The collector generates event types: SSH_LOGIN, SUDO_EXEC, SUDO_DENIED,
+LOCAL_LOGIN, SCREEN_LOCK, SCREEN_UNLOCK, AUTH_PROMPT, BIOMETRIC_AUTH.
+
+**It does NOT generate:** MFA_CHALLENGE, MFA_SUCCESS, ACCOUNT_LOCKED, VPN_LOGIN.
+
+**Geo fields (src_latitude, src_longitude, src_country, src_city):** Declared in
+AuthEvent dataclass but **never populated** by the collector. No GeoIP enrichment
+exists.
 
 | Probe | Critical Fields | Collector Status | Verdict |
 |-------|----------------|-----------------|---------|
 | ssh_bruteforce | event_type=SSH_LOGIN, status=FAILURE, source_ip, username | sshd logs parsed with specific patterns | **REAL** |
 | password_spray | event_type=SSH_LOGIN, status=FAILURE, username (many distinct) | sshd logs parsed | **REAL** |
-| geo_impossible_travel | source_ip, timestamp (needs GeoIP lookup) | source_ip from sshd logs; **GeoIP DB not bundled** | **PARTIAL** — data collected, but GeoIP resolution requires external DB |
+| geo_impossible_travel | source_ip, **src_latitude**, **src_longitude**, timestamp | Guard at probes.py:248: `if ev.src_latitude is not None and ev.src_longitude is not None` — since lat/lon are **always None**, zero logins enter the analysis. Probe **never fires**. | **BROKEN** — geo fields are phantom; guard skips all events |
 | sudo_elevation | event_type=SUDO, username, command | sudo log parsing is well-implemented (V2 format) | **REAL** |
 | sudo_suspicious_command | event_type=SUDO, command (regex for dangerous patterns) | Command extracted from sudo log | **REAL** |
-| off_hours_login | timestamp, event_type | Timestamp from log | **REAL** |
-| mfa_fatigue | event_type (MFA-related) | SecurityAgent + coreauthd parsing | **REAL** |
-| account_lockout_storm | event_type=FAILURE, username (many failures) | Parsed from auth logs | **REAL** |
+| off_hours_login | timestamp, event_type (SSH_LOGIN or LOCAL_LOGIN), status, username | SSH logins: all fields real. LOCAL_LOGIN: **username stubbed as ""** in collector. Probe still fires (timestamp-based), but event data lacks identity for local logins. | **PARTIAL** — SSH works fully; local login username missing |
+| mfa_bypass_anomaly | event_type=**MFA_CHALLENGE**, event_type=**MFA_SUCCESS** | Collector **never generates** MFA_CHALLENGE or MFA_SUCCESS events. `mfa_successes` set is always empty → every SSH_LOGIN SUCCESS triggers false "mfa_bypass_suspected" alert. | **BROKEN** — false-positive factory (no MFA events exist, so every login appears to bypass MFA) |
+| account_lockout_storm | event_type=**ACCOUNT_LOCKED** | Collector **never generates** ACCOUNT_LOCKED events. `locked_accounts` is always empty → threshold never met. | **BROKEN** — event type not implemented in collector |
 
-**Auth is solid.** The V2 collector was specifically redesigned for macOS unified logging with correct JSON key names (`processImagePath` not `process`) and proper sudo format parsing.
+### Auth Gaps (corrected from v1):
+1. **Geo enrichment completely absent**: `src_latitude`, `src_longitude`, `src_country`, `src_city` are declared in the AuthEvent dataclass but never set. The GeoImpossibleTravel probe has a correct guard (`if lat is not None and lon is not None`) that prevents it from crashing — but also prevents it from ever running.
+2. **MFA event types not collected**: The macOS unified log from SecurityAgent/coreauthd doesn't map to MFA_CHALLENGE/MFA_SUCCESS event types. The collector generates AUTH_PROMPT and BIOMETRIC_AUTH instead, but the probe looks for MFA_CHALLENGE/MFA_SUCCESS specifically. Worse: since `mfa_successes` is always empty, every successful SSH login triggers a false "MFA bypass" alert.
+3. **ACCOUNT_LOCKED not implemented**: macOS doesn't have a native account lockout mechanism in the same way as Active Directory. The collector would need to synthesize this from rapid failure counts, but currently doesn't.
+
+**v1 claimed 7 REAL, 1 PARTIAL. Actual: 4 REAL, 3 BROKEN, 1 PARTIAL.**
 
 ---
 
-## 6. PERSISTENCE AGENT (7/7 REAL)
+## 6. PERSISTENCE AGENT (1 REAL, 3 DEGRADED, 3 BROKEN)
 
 **Collector:** Scans actual macOS persistence locations:
 - `/Library/LaunchAgents/*.plist`, `/Library/LaunchDaemons/*.plist`
 - `~/Library/LaunchAgents/*.plist`
 - crontab entries (`crontab -l`)
 - `~/.ssh/authorized_keys`
-- Shell profiles (`.bashrc`, `.zshrc`, `.bash_profile`)
+- Shell profiles (`.bashrc`, `.zshrc`, `.bash_profile`) — **hash only, no content**
 
 Uses baseline comparison — compares current snapshot against known-good state.
 
+**NOT collected:** browser extensions, startup/login items, hidden files.
+
 | Probe | Critical Fields | Collector Status | Verdict |
 |-------|----------------|-----------------|---------|
-| launchd_persistence | plist path, plist content (ProgramArguments), RunAtLoad | Reads actual plists | **REAL** |
-| cron_persistence | crontab entries, @reboot patterns | Parses crontab -l output | **REAL** |
-| ssh_key_backdoor | authorized_keys content, forced commands | Reads actual file | **REAL** |
-| shell_profile_hijack | .bashrc/.zshrc content, suspicious patterns | Reads actual files | **REAL** |
-| browser_extension | extension manifest.json, permissions | Reads actual manifests | **REAL** |
-| hidden_file_persistence | Hidden executable files (dot-prefix) | File enumeration | **REAL** |
-| startup_login_item | Login items, LaunchAgent plists | Reads actual plists | **REAL** |
+| launchd_persistence | plist path, command (ProgramArguments), RunAtLoad, user | Reads XML plists correctly. **Binary plists**: plistlib parse fails silently (exception caught at pass), command field becomes empty/None. Many system plists are binary format. | **DEGRADED** — XML plists work; binary plists produce phantom command field |
+| cron_persistence | crontab entries, command, @reboot patterns | Parses `crontab -l` output. Command populated (truncated to 200 chars). Core detection works. | **REAL** |
+| ssh_key_backdoor | authorized_keys path, hash, **metadata["has_forced_command"]** | Collector reads file and counts keys but **never extracts forced command** from key content. `has_forced_command` field is never set in metadata. Probe can detect new keys (CREATED) but can't identify forced-command backdoors. | **DEGRADED** — new key detection works; forced-command analysis is phantom |
+| shell_profile_hijack | mechanism_type=SHELL_PROFILE, **command** (pattern matching) | Collector sets `command=None` (persistence_agent_v2.py:199). Only records hash. Probe at probes.py:777: `if entry.command:` — always False. Pattern matching against MALICIOUS_PATTERNS is dead code. Probe fires MEDIUM on any change but **can never detect specific attack patterns** (curl\|bash, sudo alias, etc.). | **DEGRADED** — fires on any change (MEDIUM) but can't distinguish malicious from benign |
+| browser_extension_persistence | mechanism_type=**BROWSER_EXTENSION**, permissions, publisher | Collector **never generates** BROWSER_EXTENSION entries. No browser extension paths are scanned. Probe iterates zero changes. | **BROKEN** — no collector implementation |
+| startup_folder_login_item | mechanism_type=**STARTUP_ITEM**, path, command | Collector **never generates** STARTUP_ITEM entries. No login item or startup folder enumeration exists. macOS login items (SMLoginItemSetEnabled, LSSharedFileList) are not scanned. | **BROKEN** — no collector implementation |
+| hidden_file_persistence | mechanism_type=**HIDDEN_FILE**, path, metadata["is_executable"] | Collector **never generates** HIDDEN_FILE entries. No hidden file scanning exists. | **BROKEN** — no collector implementation |
 
-**No gaps.** Persistence probes read actual filesystem state on macOS.
+### Persistence Gaps (corrected from v1):
+1. **Binary plist parsing fails silently**: Many macOS system plists are in binary format. `plistlib.load()` fails on these, exception is caught with `pass`, and command/args remain empty. The probe fires (CREATED/MODIFIED detected via hash change) but can't analyze the actual persistence mechanism.
+2. **Shell profile content never inspected**: The collector only records the SHA256 hash of shell profiles. The `command` field is explicitly set to `None`. The probe's malicious pattern matching (curl|bash, sudo alias override, PATH hijacking to /tmp) is completely dead code.
+3. **SSH forced commands not extracted**: The collector reads authorized_keys and counts lines, but never parses individual key entries for `command="..."` prefixes. This is a common SSH backdoor technique.
+4. **Three mechanism types have no collector**: BROWSER_EXTENSION, STARTUP_ITEM, HIDDEN_FILE — the probes exist with full detection logic, but no collector generates entries with these mechanism types.
+
+**v1 claimed 7/7 REAL. Actual: 1 REAL, 3 DEGRADED, 3 BROKEN.**
 
 ---
 
-## 7. PERIPHERAL AGENT (4/4 REAL)
+## 7. PERIPHERAL AGENT (5 REAL, 2 DEGRADED)
 
-**Collector:** `system_profiler SPUSBDataType -json` for USB devices, `system_profiler SPBluetoothDataType -json` for Bluetooth.
+**Collector:** `system_profiler SPUSBDataType -json` for USB devices,
+`system_profiler SPBluetoothDataType -json` for Bluetooth.
+
+The USB collector populates: device_id (hash of vid:pid:serial), name, vendor_id,
+product_id, serial_number, manufacturer, location_id, device_speed.
+
+**Not populated:** device_class (initialized empty, never set from system_profiler),
+is_authorized (always False), first_seen/last_seen (never tracked).
 
 | Probe | Critical Fields | Collector Status | Verdict |
 |-------|----------------|-----------------|---------|
-| usb_storage | USB vendor, product, serial, media type | system_profiler JSON | **REAL** |
-| usb_hid | USB device class (HID devices) | system_profiler JSON | **REAL** |
-| bluetooth_new_device | BT device name, address, connected status | system_profiler JSON | **REAL** |
-| peripheral_policy | All device fields vs policy rules | system_profiler JSON | **REAL** |
+| usb_inventory | device_id, name, vendor_id, product_id, manufacturer | All populated from system_profiler | **REAL** |
+| usb_connection_edge | device_id, name, vendor_id, product_id, serial (new vs known) | All populated; state tracking works | **REAL** |
+| usb_storage | **device_class**, name | `device_class` is **never populated** (phantom). Probe falls back to name pattern matching ("Storage", "Disk", "Flash"). Works for obviously-named devices; misses devices with generic names. | **DEGRADED** — relies on name heuristic instead of USB class code |
+| usb_network_adapter | vendor_id, name | Vendor ID + name pattern matching. Both populated. | **REAL** |
+| hid_keyboard_mouse_anomaly | vendor_id, product_id, name (count baseline) | All populated; count-based detection works | **REAL** |
+| bluetooth_device | address, name, device_type, connected, paired | Bluetooth collector implementation is incomplete (noted in code: "Simplified"). Parsing may miss devices or produce incomplete records. | **DEGRADED** — parser incomplete for full Bluetooth device enumeration |
+| high_risk_peripheral_score | name, device counts | Name-based scoring from populated fields | **REAL** |
 
-**No gaps.** system_profiler provides comprehensive device data on macOS.
+### Peripheral Gaps:
+1. **device_class phantom**: USB device class code (e.g., 0x08 for Mass Storage) is the reliable way to identify device type. system_profiler doesn't directly expose USB class codes in the JSON output. The collector initialized the field but never populates it.
+2. **first_seen/last_seen not tracked**: No temporal analysis possible — can't detect "device was connected for only 30 seconds" which is a common exfil indicator.
+3. **Bluetooth parser incomplete**: The code explicitly notes simplified implementation. Full parsing of paired devices, connection history, and device capabilities is not implemented.
+
+**v1 claimed 4 probes, 4/4 REAL. Actual: 7 probes, 5 REAL, 2 DEGRADED.**
 
 ---
 
@@ -256,7 +300,34 @@ the fields probes need.
 4. **Enhanced mDNSResponder parsing** — Parse query type from log message
    (partial fix for TXT tunneling). Won't fix response_code or IPs.
 
-### Priority 2: Flow Collector Enhancement (1 BROKEN, 2 DEGRADED)
+### Priority 2: Persistence Collector Expansion (3 BROKEN + 3 DEGRADED probes)
+
+The persistence collector only scans 4 mechanism types (LaunchAgents, cron, shell
+profiles, SSH keys) but the probe set expects 7 mechanism types.
+
+**Missing collectors to build:**
+- **Browser extension scanner**: Enumerate `~/Library/Application Support/Google/Chrome/Default/Extensions/`, `~/Library/Application Support/Firefox/Profiles/*/extensions/`. Read manifest.json for permissions.
+- **Login item scanner**: Use `LSSharedFileList` or parse `~/Library/Application Support/com.apple.backgroundtaskmanagementagent/backgrounditems.btm`. Also check `osascript -e 'tell application "System Events" to get login items'`.
+- **Hidden file scanner**: Walk monitored directories, flag dot-prefixed executables.
+
+**Existing collectors to fix:**
+- **Binary plist parsing**: Use `plistlib.load()` with `fmt=plistlib.FMT_BINARY` or shell out to `plutil -convert xml1 -o -`.
+- **Shell profile content inspection**: Read file content into `command` field instead of just hashing.
+- **SSH forced command extraction**: Parse each authorized_keys line for `command="..."` prefix.
+
+### Priority 3: Auth Collector Gaps (3 BROKEN probes)
+
+**GeoImpossibleTravel (BROKEN):**
+- Fix: Integrate GeoIP2 database (MaxMind GeoLite2-City). Look up `source_ip` → lat/lon/city/country. Add to AuthEvent before passing to probes.
+
+**MFABypassAnomaly (BROKEN — false-positive factory):**
+- Fix option A: Map SecurityAgent AUTH_PROMPT → MFA_CHALLENGE and BIOMETRIC_AUTH → MFA_SUCCESS. This would make the probe meaningful on macOS with Touch ID.
+- Fix option B: Disable the probe on macOS (no native MFA in the AD/Okta sense).
+
+**AccountLockoutStorm (BROKEN):**
+- Fix: Synthesize ACCOUNT_LOCKED events from rapid failure counts. If 5+ FAILURE events for same username in 60s, generate synthetic ACCOUNT_LOCKED.
+
+### Priority 4: Flow Collector Enhancement (1 BROKEN, 2 DEGRADED)
 
 **SuspiciousTunnelProbe (BROKEN):** Needs duration + packet counts.
 - Fix: Track connections across cycles (remember first_seen_ns from previous scan,
@@ -264,18 +335,17 @@ the fields probes need.
   same (src, dst, port) tuple is seen.
 
 **DataExfil + C2Beacon (DEGRADED):** nettop per-process bytes ≠ per-flow bytes.
-- Fix: Use `nettop -P -L 1 -J bytes_in,bytes_out,interface -x` with per-interface
-  breakdown, OR use `dtrace` to get per-socket byte counts, OR track flow-level
-  deltas across cycles (current nettop total minus previous total ÷ number of flows).
+- Fix: Track flow-level deltas across cycles (current nettop total minus previous
+  total ÷ number of flows for that process), OR use `dtrace` for per-socket counts.
 
-### Priority 3: KernelAudit Enrichment (2 PARTIAL)
+### Priority 5: KernelAudit Enrichment (2 PARTIAL)
 
 **ppid, cwd, dest_pid**: Not available in BSM.
 - Fix: Cross-reference with psutil at event time: when we see a BSM event for PID X,
   look up `psutil.Process(X).ppid()`, `.cwd()`. For ptrace, the target PID may be
   in the `exec_args` or `arg` tokens — need deeper BSM parsing.
 
-### Priority 4: FIM macOS Boot Path (1 PARTIAL)
+### Priority 6: FIM macOS Boot Path (1 PARTIAL)
 
 **bootloader_tamper**: Watches `/boot` (Linux path).
 - Fix: Add macOS paths: `/System/Library/CoreServices/boot.efi`,
@@ -285,25 +355,40 @@ the fields probes need.
 
 ## The Honest Numbers
 
-| Metric | Scorecard Claim | Truth |
-|--------|----------------|-------|
-| Surface Coverage (darwin-declared probes) | 98.4% | 98.4% (this number is real) |
-| **Attribute Coverage (fields actually populated)** | Not measured | **74.6%** (44/59 probes fully functional) |
-| **Effective Detection (REAL + PARTIAL)** | Not measured | **84.7%** (50/59 probes fire at all) |
-| **BROKEN probes (never fire)** | 0 claimed | **5 probes** are phantom |
-| **DEGRADED probes (fire incorrectly)** | 0 claimed | **4 probes** have accuracy issues |
+| Metric | Scorecard Claim | v1 Truth Table | v2 Truth Table (this) |
+|--------|----------------|----------------|----------------------|
+| Surface Coverage (darwin-declared probes) | 98.4% | 98.4% | 98.4% (real) |
+| **Attribute Coverage (REAL probes)** | Not measured | 74.6% (44/59) | **58.1%** (36/62) |
+| **Effective Detection (REAL + PARTIAL)** | Not measured | 84.7% (50/59) | **67.7%** (42/62) |
+| **BROKEN probes** | 0 claimed | 5 | **11** |
+| **DEGRADED probes** | 0 claimed | 4 | **9** |
+| Probes in v1 vs v2 | — | 59 | 62 (v1 undercounted Peripheral) |
+
+### What Changed Between v1 and v2:
+
+| Agent | v1 Assessment | v2 Assessment | Delta |
+|-------|--------------|---------------|-------|
+| Auth | 7 REAL, 1 PARTIAL | 4 REAL, 3 BROKEN, 1 PARTIAL | -3 REAL, +3 BROKEN |
+| Persistence | 7 REAL | 1 REAL, 3 DEGRADED, 3 BROKEN | -6 REAL, +3 DEGRADED, +3 BROKEN |
+| Peripheral | 4 REAL (4 probes) | 5 REAL, 2 DEGRADED (7 probes) | +3 probes discovered |
 
 ---
 
 ## Corrective Action Priority Matrix
 
-| Fix | Probes Unblocked | Effort | Impact |
-|-----|-----------------|--------|--------|
-| DNS collector rewrite (pcap or ES) | 4 BROKEN → REAL | HIGH | +6.8% coverage |
-| Flow connection tracking (stateful) | 1 BROKEN → REAL | MEDIUM | +1.7% coverage |
-| nettop per-flow byte estimation | 2 DEGRADED → REAL | MEDIUM | accuracy fix |
-| KernelAudit psutil enrichment | 2 PARTIAL → REAL | LOW | enrichment fix |
-| FIM macOS boot paths | 1 PARTIAL → REAL | LOW | +1.7% coverage |
-| DNS timestamp verification | 1 DEGRADED → REAL | LOW | accuracy fix |
+| Fix | Probes Unblocked | Effort | Coverage Impact |
+|-----|-----------------|--------|-----------------|
+| Persistence collector expansion (browser ext, startup, hidden) | 3 BROKEN → REAL | HIGH | +4.8% |
+| Auth collector gaps (geo, MFA mapping, lockout synthesis) | 3 BROKEN → REAL | MEDIUM | +4.8% |
+| DNS collector rewrite (pcap or ES) | 4 BROKEN → REAL | HIGH | +6.5% |
+| Persistence collector fixes (plist, shell content, SSH forced cmd) | 3 DEGRADED → REAL | MEDIUM | accuracy |
+| Flow connection tracking (stateful) | 1 BROKEN → REAL | MEDIUM | +1.6% |
+| Peripheral device_class + Bluetooth parser | 2 DEGRADED → REAL | LOW | accuracy |
+| nettop per-flow byte estimation | 2 DEGRADED → REAL | MEDIUM | accuracy |
+| KernelAudit psutil enrichment | 2 PARTIAL → REAL | LOW | enrichment |
+| FIM macOS boot paths | 1 PARTIAL → REAL | LOW | +1.6% |
+| DNS timestamp verification | 1 DEGRADED → REAL | LOW | accuracy |
 
-**After all fixes: 59/59 probes REAL = 100% attribute coverage.**
+**After all fixes: 62/62 probes REAL = 100% attribute coverage.**
+
+**Minimum viable target: Fix all 11 BROKEN probes → 47/62 (75.8%) REAL.**
