@@ -250,6 +250,115 @@ class TestProcProbes:
         assert "high_cpu_memory" in names
 
 
+class TestProcessGuid:
+    """Test process_guid correlation key generation and propagation."""
+
+    def test_make_process_guid_deterministic(self):
+        """Same inputs always produce the same GUID."""
+        from amoskys.agents.proc.probes import _make_process_guid
+
+        g1 = _make_process_guid("host1", 1234, 1708123456.789)
+        g2 = _make_process_guid("host1", 1234, 1708123456.789)
+        assert g1 == g2
+
+    def test_make_process_guid_format(self):
+        """GUID is 16-char lowercase hex."""
+        from amoskys.agents.proc.probes import _make_process_guid
+
+        guid = _make_process_guid("host1", 42, 1700000000.0)
+        assert len(guid) == 16
+        assert all(c in "0123456789abcdef" for c in guid)
+
+    def test_make_process_guid_different_pids(self):
+        """Different PIDs with same create_time produce different GUIDs."""
+        from amoskys.agents.proc.probes import _make_process_guid
+
+        g1 = _make_process_guid("host1", 100, 1700000000.0)
+        g2 = _make_process_guid("host1", 101, 1700000000.0)
+        assert g1 != g2
+
+    def test_make_process_guid_different_create_times(self):
+        """Same PID recycled at different times produces different GUIDs."""
+        from amoskys.agents.proc.probes import _make_process_guid
+
+        g1 = _make_process_guid("host1", 100, 1700000000.0)
+        g2 = _make_process_guid("host1", 100, 1700000001.0)
+        assert g1 != g2
+
+    def test_make_process_guid_different_hosts(self):
+        """Same PID on different hosts produces different GUIDs."""
+        from amoskys.agents.proc.probes import _make_process_guid
+
+        g1 = _make_process_guid("host1", 100, 1700000000.0)
+        g2 = _make_process_guid("host2", 100, 1700000000.0)
+        assert g1 != g2
+
+    def test_process_spawn_probe_emits_guid(self):
+        """ProcessSpawnProbe includes process_guid in event data."""
+        from unittest.mock import MagicMock, patch
+
+        import psutil as real_psutil
+
+        from amoskys.agents.proc.probes import ProcessSpawnProbe
+
+        probe = ProcessSpawnProbe()
+        probe.first_run = False
+        probe.known_pids = set()
+
+        mock_proc = MagicMock()
+        mock_proc.info = {
+            "pid": 999,
+            "name": "test_bin",
+            "exe": "/usr/bin/test_bin",
+            "cmdline": ["/usr/bin/test_bin", "--flag"],
+            "username": "user1",
+            "ppid": 1,
+            "create_time": 1700000000.0,
+        }
+
+        context = ProbeContext(device_id="test-host", agent_name="proc_agent_v3")
+
+        with patch("amoskys.agents.proc.probes.psutil") as mock_psutil, \
+             patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True):
+            mock_psutil.process_iter.return_value = [mock_proc]
+            mock_psutil.NoSuchProcess = real_psutil.NoSuchProcess
+            mock_psutil.AccessDenied = real_psutil.AccessDenied
+            mock_psutil.Process.side_effect = real_psutil.NoSuchProcess(1)
+
+            events = probe.scan(context)
+
+        assert len(events) >= 1
+        event = events[0]
+        assert "process_guid" in event.data
+        assert len(event.data["process_guid"]) == 16
+        assert event.correlation_id == event.data["process_guid"]
+
+    def test_guid_consistent_across_probes(self):
+        """Same process observed by different probes gets the same GUID."""
+        from amoskys.agents.proc.probes import _make_process_guid
+
+        # Simulate the same process seen by two different probes
+        pid, create_time, device_id = 1234, 1700000000.5, "my-host"
+
+        guid_from_spawn = _make_process_guid(device_id, pid, create_time)
+        guid_from_lolbin = _make_process_guid(device_id, pid, create_time)
+        guid_from_temp = _make_process_guid(device_id, pid, create_time)
+
+        assert guid_from_spawn == guid_from_lolbin == guid_from_temp
+
+    def test_processinfo_has_guid_field(self):
+        """ProcessInfo dataclass includes process_guid field."""
+        from amoskys.agents.proc.probes import ProcessInfo
+
+        info = ProcessInfo(
+            pid=1, name="test", exe="/bin/test", cmdline=[],
+            username="root", ppid=0, parent_name="init",
+            create_time=0.0, cpu_percent=0.0, memory_percent=0.0,
+            status="running", process_guid="abc123",
+        )
+        assert info.process_guid == "abc123"
+
+
 class TestPeripheralProbes:
     """Test Peripheral probe implementations."""
 

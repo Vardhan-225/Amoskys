@@ -22,6 +22,7 @@ MITRE ATT&CK Coverage:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import platform
@@ -71,6 +72,17 @@ class ProcessInfo:
     memory_percent: float
     status: str
     cwd: str = ""
+    process_guid: str = ""
+
+
+def _make_process_guid(device_id: str, pid: int, create_time: float) -> str:
+    """Generate a stable process GUID for cross-event correlation.
+
+    Combines device_id, PID, and process create_time to produce a
+    16-char hex identifier that survives PID recycling.
+    """
+    raw = f"{device_id}:{pid}:{int(create_time * 1e9)}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
 # =============================================================================
@@ -131,12 +143,16 @@ class ProcessSpawnProbe(MicroProbe):
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass
 
+                guid = _make_process_guid(
+                    context.device_id, pid, info.get("create_time", 0)
+                )
                 events.append(
                     self._create_event(
                         event_type="process_spawned",
                         severity=Severity.INFO,
                         data={
                             "pid": pid,
+                            "process_guid": guid,
                             "name": info.get("name", ""),
                             "exe": info.get("exe", ""),
                             "cmdline": info.get("cmdline", []),
@@ -145,6 +161,7 @@ class ProcessSpawnProbe(MicroProbe):
                             "parent_name": parent_name,
                         },
                         confidence=1.0,
+                        correlation_id=guid,
                     )
                 )
 
@@ -280,7 +297,7 @@ class LOLBinExecutionProbe(MicroProbe):
             return events
 
         for proc in psutil.process_iter(
-            ["pid", "name", "exe", "cmdline", "username", "ppid"]
+            ["pid", "name", "exe", "cmdline", "username", "ppid", "create_time"]
         ):
             try:
                 info = proc.info
@@ -302,12 +319,18 @@ class LOLBinExecutionProbe(MicroProbe):
                     else:
                         severity = Severity.LOW
 
+                    guid = _make_process_guid(
+                        context.device_id,
+                        info.get("pid", 0),
+                        info.get("create_time", 0),
+                    )
                     events.append(
                         self._create_event(
                             event_type="lolbin_execution",
                             severity=severity,
                             data={
                                 "pid": info.get("pid"),
+                                "process_guid": guid,
                                 "binary": name,
                                 "category": category,
                                 "cmdline": cmdline,
@@ -315,6 +338,7 @@ class LOLBinExecutionProbe(MicroProbe):
                                 "username": info.get("username", ""),
                             },
                             confidence=0.7 if suspicious_patterns else 0.4,
+                            correlation_id=guid,
                         )
                     )
 
@@ -409,7 +433,7 @@ class ProcessTreeAnomalyProbe(MicroProbe):
         if not PSUTIL_AVAILABLE:
             return events
 
-        for proc in psutil.process_iter(["pid", "name", "ppid", "cmdline"]):
+        for proc in psutil.process_iter(["pid", "name", "ppid", "cmdline", "create_time"]):
             try:
                 info = proc.info
                 child_name = info.get("name", "").lower()
@@ -430,12 +454,18 @@ class ProcessTreeAnomalyProbe(MicroProbe):
                         suspicious_parent in parent_name
                         and suspicious_child in child_name
                     ):
+                        guid = _make_process_guid(
+                            context.device_id,
+                            info.get("pid", 0),
+                            info.get("create_time", 0),
+                        )
                         events.append(
                             self._create_event(
                                 event_type="suspicious_process_tree",
                                 severity=Severity.HIGH,
                                 data={
                                     "child_pid": info.get("pid"),
+                                    "process_guid": guid,
                                     "child_name": child_name,
                                     "child_cmdline": info.get("cmdline", []),
                                     "parent_name": parent_name,
@@ -443,6 +473,7 @@ class ProcessTreeAnomalyProbe(MicroProbe):
                                     "reason": reason,
                                 },
                                 confidence=0.85,
+                                correlation_id=guid,
                             )
                         )
                         break
@@ -496,7 +527,7 @@ class HighCPUAndMemoryProbe(MicroProbe):
         current_high_pids = set()
 
         for proc in psutil.process_iter(
-            ["pid", "name", "cpu_percent", "memory_percent", "username"]
+            ["pid", "name", "cpu_percent", "memory_percent", "username", "create_time"]
         ):
             try:
                 info = proc.info
@@ -512,12 +543,16 @@ class HighCPUAndMemoryProbe(MicroProbe):
                     if pid not in self.high_resource_pids:
                         self.high_resource_pids[pid] = now
                     elif now - self.high_resource_pids[pid] > self.SUSTAINED_SECONDS:
+                        guid = _make_process_guid(
+                            context.device_id, pid, info.get("create_time", 0)
+                        )
                         events.append(
                             self._create_event(
                                 event_type="high_resource_process",
                                 severity=Severity.MEDIUM,
                                 data={
                                     "pid": pid,
+                                    "process_guid": guid,
                                     "name": info.get("name", ""),
                                     "cpu_percent": round(cpu, 1),
                                     "memory_percent": round(mem, 1),
@@ -527,6 +562,7 @@ class HighCPUAndMemoryProbe(MicroProbe):
                                     "username": info.get("username", ""),
                                 },
                                 confidence=0.7,
+                                correlation_id=guid,
                             )
                         )
 
@@ -604,17 +640,24 @@ class LongLivedProcessProbe(MicroProbe):
                 # Check if process should be short-lived
                 if name in self.EXPECTED_SHORT_LIVED:
                     if runtime > self.LONG_LIVED_THRESHOLD:
+                        guid = _make_process_guid(
+                            context.device_id,
+                            info.get("pid", 0),
+                            create_time,
+                        )
                         events.append(
                             self._create_event(
                                 event_type="unexpectedly_long_process",
                                 severity=Severity.MEDIUM,
                                 data={
                                     "pid": info.get("pid"),
+                                    "process_guid": guid,
                                     "name": name,
                                     "runtime_seconds": int(runtime),
                                     "username": info.get("username", ""),
                                 },
                                 confidence=0.6,
+                                correlation_id=guid,
                             )
                         )
 
@@ -666,7 +709,7 @@ class SuspiciousUserProcessProbe(MicroProbe):
         if not PSUTIL_AVAILABLE:
             return events
 
-        for proc in psutil.process_iter(["pid", "name", "username"]):
+        for proc in psutil.process_iter(["pid", "name", "username", "create_time"]):
             try:
                 info = proc.info
                 name = info.get("name", "").lower()
@@ -679,17 +722,24 @@ class SuspiciousUserProcessProbe(MicroProbe):
                         "system",
                         "nt authority\\system",
                     ):
+                        guid = _make_process_guid(
+                            context.device_id,
+                            info.get("pid", 0),
+                            info.get("create_time", 0),
+                        )
                         events.append(
                             self._create_event(
                                 event_type="process_wrong_user",
                                 severity=Severity.HIGH,
                                 data={
                                     "pid": info.get("pid"),
+                                    "process_guid": guid,
                                     "name": name,
                                     "username": username,
                                     "expected_user": "root/SYSTEM",
                                 },
                                 confidence=0.8,
+                                correlation_id=guid,
                             )
                         )
 
@@ -739,7 +789,7 @@ class BinaryFromTempProbe(MicroProbe):
         if not PSUTIL_AVAILABLE:
             return events
 
-        for proc in psutil.process_iter(["pid", "name", "exe", "cmdline", "username"]):
+        for proc in psutil.process_iter(["pid", "name", "exe", "cmdline", "username", "create_time"]):
             try:
                 info = proc.info
                 pid = info["pid"]
@@ -754,18 +804,23 @@ class BinaryFromTempProbe(MicroProbe):
                     if re.search(pattern, exe_lower, re.IGNORECASE):
                         self.reported_pids.add(pid)
 
+                        guid = _make_process_guid(
+                            context.device_id, pid, info.get("create_time", 0)
+                        )
                         events.append(
                             self._create_event(
                                 event_type="execution_from_temp",
                                 severity=Severity.HIGH,
                                 data={
                                     "pid": pid,
+                                    "process_guid": guid,
                                     "name": info.get("name", ""),
                                     "exe": exe,
                                     "cmdline": info.get("cmdline", []),
                                     "username": info.get("username", ""),
                                 },
                                 confidence=0.85,
+                                correlation_id=guid,
                             )
                         )
                         break
@@ -839,7 +894,7 @@ class ScriptInterpreterProbe(MicroProbe):
         if not PSUTIL_AVAILABLE:
             return events
 
-        for proc in psutil.process_iter(["pid", "name", "cmdline", "username"]):
+        for proc in psutil.process_iter(["pid", "name", "cmdline", "username", "create_time"]):
             try:
                 info = proc.info
                 name = info.get("name", "").lower()
@@ -857,18 +912,25 @@ class ScriptInterpreterProbe(MicroProbe):
                         matches.append(pattern)
 
                 if matches:
+                    guid = _make_process_guid(
+                        context.device_id,
+                        info.get("pid", 0),
+                        info.get("create_time", 0),
+                    )
                     events.append(
                         self._create_event(
                             event_type="suspicious_script_execution",
                             severity=Severity.HIGH,
                             data={
                                 "pid": info.get("pid"),
+                                "process_guid": guid,
                                 "interpreter": name,
                                 "cmdline": cmdline,
                                 "matched_patterns": matches[:5],  # Limit
                                 "username": info.get("username", ""),
                             },
                             confidence=0.8,
+                            correlation_id=guid,
                         )
                     )
 
