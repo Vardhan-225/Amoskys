@@ -118,32 +118,81 @@ class SuspiciousPathDetector:
 
     Attackers often execute from world-writable directories or
     locations that bypass security controls.
+
+    P0-15: Platform-aware path registries. Use ``get_suspicious_paths()``
+    and ``get_trusted_paths()`` for current-platform paths. The class-level
+    ``SUSPICIOUS_PATHS`` / ``TRUSTED_PATHS`` are preserved for backward
+    compatibility (default to darwin).
     """
 
-    # High-risk execution paths
-    SUSPICIOUS_PATHS = [
-        "/tmp/",
-        "/var/tmp/",
-        "/dev/shm/",
-        "/.Trash/",
-        "/private/tmp/",
-        "/Users/*/Downloads/",
-        "/Users/*/.local/",
-        "/Users/*/Library/Caches/",
-        "~/Downloads/",
-    ]
+    # P0-15: Platform-specific suspicious paths
+    _PLATFORM_SUSPICIOUS_PATHS: Dict[str, List[str]] = {
+        "darwin": [
+            "/tmp/",
+            "/var/tmp/",
+            "/dev/shm/",
+            "/.Trash/",
+            "/private/tmp/",
+            "/Users/*/Downloads/",
+            "/Users/*/.local/",
+            "/Users/*/Library/Caches/",
+            "~/Downloads/",
+        ],
+        "linux": [
+            "/tmp/",
+            "/var/tmp/",
+            "/dev/shm/",
+            "/home/*/Downloads/",
+            "/home/*/.local/",
+            "/run/user/*/",
+            "/etc/systemd/",
+            "/etc/init.d/",
+            "~/Downloads/",
+        ],
+    }
 
-    # Known legitimate paths to whitelist
-    TRUSTED_PATHS = [
-        "/usr/bin/",
-        "/usr/sbin/",
-        "/bin/",
-        "/sbin/",
-        "/usr/local/bin/",
-        "/Applications/",
-        "/System/",
-        "/Library/",
-    ]
+    # P0-15: Platform-specific trusted paths
+    _PLATFORM_TRUSTED_PATHS: Dict[str, List[str]] = {
+        "darwin": [
+            "/usr/bin/",
+            "/usr/sbin/",
+            "/bin/",
+            "/sbin/",
+            "/usr/local/bin/",
+            "/Applications/",
+            "/System/",
+            "/Library/",
+        ],
+        "linux": [
+            "/usr/bin/",
+            "/usr/sbin/",
+            "/bin/",
+            "/sbin/",
+            "/usr/local/bin/",
+            "/opt/",
+            "/snap/",
+        ],
+    }
+
+    # Backward-compatible class attributes (default to darwin)
+    SUSPICIOUS_PATHS = _PLATFORM_SUSPICIOUS_PATHS["darwin"]
+    TRUSTED_PATHS = _PLATFORM_TRUSTED_PATHS["darwin"]
+
+    @classmethod
+    def get_suspicious_paths(cls, plat: Optional[str] = None) -> List[str]:
+        """Return suspicious paths for the given or current platform."""
+        plat = plat or os.uname().sysname.lower() if hasattr(os, "uname") else "darwin"
+        return cls._PLATFORM_SUSPICIOUS_PATHS.get(
+            plat, cls._PLATFORM_SUSPICIOUS_PATHS["darwin"]
+        )
+
+    @classmethod
+    def get_trusted_paths(cls, plat: Optional[str] = None) -> List[str]:
+        """Return trusted paths for the given or current platform."""
+        plat = plat or os.uname().sysname.lower() if hasattr(os, "uname") else "darwin"
+        return cls._PLATFORM_TRUSTED_PATHS.get(
+            plat, cls._PLATFORM_TRUSTED_PATHS["darwin"]
+        )
 
     # Suspicious file extensions for executables
     SUSPICIOUS_EXTENSIONS = [
@@ -870,46 +919,96 @@ class ThreatAnalyzer:
     Orchestrates all detectors and provides unified threat analysis.
     """
 
+    # P0-16: Detector names for stats tracking
+    _DETECTOR_NAMES = (
+        "path_detector",
+        "lolbin_detector",
+        "reverse_shell_detector",
+        "credential_detector",
+        "exfil_detector",
+        "c2_detector",
+        "persistence_detector",
+    )
+
     def __init__(self):
         self.indicators: List[ThreatIndicator] = []
         self._lock = threading.Lock()
+
+        # P0-16: Per-detector execution stats
+        self._detector_stats: Dict[str, Dict[str, int]] = {
+            name: {"calls": 0, "hits": 0, "errors": 0} for name in self._DETECTOR_NAMES
+        }
+
+    def _run_detector(
+        self,
+        detector_name: str,
+        fn: Any,
+        *args: Any,
+    ) -> Optional[ThreatIndicator]:
+        """P0-16: Run a detector with stats tracking."""
+        self._detector_stats[detector_name]["calls"] += 1
+        try:
+            result = fn(*args)
+            if result is not None:
+                self._detector_stats[detector_name]["hits"] += 1
+            return result
+        except Exception as exc:
+            self._detector_stats[detector_name]["errors"] += 1
+            logger.warning("DETECTOR_ERROR: detector=%s error=%s", detector_name, exc)
+            return None
 
     def analyze_process(self, ctx: ProcessContext) -> List[ThreatIndicator]:
         """Analyze a process for threats"""
         found = []
 
         # Check suspicious path
-        is_suspicious, reason = SuspiciousPathDetector.is_suspicious_path(ctx.exe_path)
-        if is_suspicious:
-            found.append(
-                ThreatIndicator(
-                    indicator_type="suspicious_path",
-                    value=ctx.exe_path,
-                    confidence=0.70,
-                    attack_phase=AttackPhase.EXECUTION,
-                    mitre_techniques=["T1059"],
-                    description=reason,
-                    source="path_detector",
-                )
+        self._detector_stats["path_detector"]["calls"] += 1
+        try:
+            is_suspicious, reason = SuspiciousPathDetector.is_suspicious_path(
+                ctx.exe_path
             )
+            if is_suspicious:
+                self._detector_stats["path_detector"]["hits"] += 1
+                found.append(
+                    ThreatIndicator(
+                        indicator_type="suspicious_path",
+                        value=ctx.exe_path,
+                        confidence=0.70,
+                        attack_phase=AttackPhase.EXECUTION,
+                        mitre_techniques=["T1059"],
+                        description=reason,
+                        source="path_detector",
+                    )
+                )
+        except Exception as exc:
+            self._detector_stats["path_detector"]["errors"] += 1
+            logger.warning("DETECTOR_ERROR: detector=path_detector error=%s", exc)
 
         # Check LOLBin abuse
-        indicator = LOLBinDetector.check_command(ctx.name, ctx.cmdline)
+        indicator = self._run_detector(
+            "lolbin_detector", LOLBinDetector.check_command, ctx.name, ctx.cmdline
+        )
         if indicator:
             found.append(indicator)
 
         # Check reverse shell
-        indicator = ReverseShellDetector.check_process_context(ctx)
+        indicator = self._run_detector(
+            "reverse_shell_detector", ReverseShellDetector.check_process_context, ctx
+        )
         if indicator:
             found.append(indicator)
 
         # Check credential access
-        indicator = CredentialAccessDetector.check_command(ctx.cmdline)
+        indicator = self._run_detector(
+            "credential_detector", CredentialAccessDetector.check_command, ctx.cmdline
+        )
         if indicator:
             found.append(indicator)
 
         # Check exfiltration
-        indicator = ExfiltrationDetector.check_command(ctx.cmdline)
+        indicator = self._run_detector(
+            "exfil_detector", ExfiltrationDetector.check_command, ctx.cmdline
+        )
         if indicator:
             found.append(indicator)
 
@@ -924,7 +1023,7 @@ class ThreatAnalyzer:
         found = []
 
         # Check C2 indicators
-        indicator = C2Detector.check_connection(conn)
+        indicator = self._run_detector("c2_detector", C2Detector.check_connection, conn)
         if indicator:
             found.append(indicator)
 
@@ -941,13 +1040,23 @@ class ThreatAnalyzer:
 
         # Check persistence
         if operation in ["write", "create"]:
-            indicator = PersistenceDetector.check_file_write(file_path, content)
+            indicator = self._run_detector(
+                "persistence_detector",
+                PersistenceDetector.check_file_write,
+                file_path,
+                content,
+            )
             if indicator:
                 found.append(indicator)
 
         # Check credential access
         if operation in ["read", "open"]:
-            indicator = CredentialAccessDetector.check_file_access(file_path, operation)
+            indicator = self._run_detector(
+                "credential_detector",
+                CredentialAccessDetector.check_file_access,
+                file_path,
+                operation,
+            )
             if indicator:
                 found.append(indicator)
 
@@ -955,6 +1064,10 @@ class ThreatAnalyzer:
             self.indicators.extend(found)
 
         return found
+
+    def get_detector_stats(self) -> Dict[str, Dict[str, int]]:
+        """P0-16: Return per-detector execution statistics."""
+        return dict(self._detector_stats)
 
     def get_threat_summary(self) -> Dict[str, Any]:
         """Get summary of detected threats"""
@@ -989,6 +1102,7 @@ class ThreatAnalyzer:
                 "by_attack_phase": by_phase,
                 "by_indicator_type": by_type,
                 "recent_indicators": [i.to_dict() for i in self.indicators[-10:]],
+                "detector_stats": self.get_detector_stats(),
             }
 
     def clear_indicators(self):

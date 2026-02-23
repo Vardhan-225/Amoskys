@@ -1,37 +1,29 @@
 """File Integrity Monitoring (FIM) agent.
 
-This module provides two implementations:
-    - FIMAgent: Original monolithic implementation
-    - FIMAgentV2: Micro-probe architecture with 8 specialized detectors
-
-The v2 agent uses the "swarm of eyes" pattern with probes for:
-    - Critical system file tampering (binaries, configs)
-    - SUID/SGID bit privilege escalation
-    - Service persistence (LaunchAgents, systemd, cron)
-    - Webshell detection (PHP/JSP/ASP obfuscation patterns)
-    - Configuration backdoors (SSH/sudo/PAM)
-    - Library hijacking (LD_PRELOAD rootkits)
-    - Bootloader tampering (/boot monitoring)
-    - World-writable sensitive files (permission abuse)
+Micro-probe architecture with 8 specialized detectors.
 """
 
-from amoskys.agents.fim.fim_agent_v2 import FIMAgentV2, BaselineEngine
+from amoskys.agents.fim.fim_agent import BaselineEngine, FIMAgent
 from amoskys.agents.fim.probes import (
-    FileState,
-    FileChange,
-    ChangeType,
-    create_fim_probes,
-    CriticalSystemFileChangeProbe,
-    SUIDBitChangeProbe,
-    ServiceCreationProbe,
-    WebShellDropProbe,
-    ConfigBackdoorProbe,
-    LibraryHijackProbe,
     BootloaderTamperProbe,
+    ChangeType,
+    ConfigBackdoorProbe,
+    CriticalSystemFileChangeProbe,
+    FileChange,
+    FileState,
+    LibraryHijackProbe,
+    ServiceCreationProbe,
+    SUIDBitChangeProbe,
+    WebShellDropProbe,
     WorldWritableSensitiveProbe,
+    create_fim_probes,
 )
 
+# B5.1: Deprecated alias
+FIMAgentV2 = FIMAgent
+
 __all__ = [
+    "FIMAgent",
     "FIMAgentV2",
     "BaselineEngine",
     "FileState",

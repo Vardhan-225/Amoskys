@@ -29,7 +29,7 @@
     <div class="bundles-grid">
         <div class="bundle-card" onclick="marketplace.applyBundle('essential')">
             <div class="bundle-badge recommended">RECOMMENDED</div>
-            <div class="bundle-icon">🎯</div>
+            <div class="bundle-icon">&#127919;</div>
             <h4 class="bundle-name">Essential Security</h4>
             <p class="bundle-desc">Core monitoring for comprehensive endpoint protection</p>
             <div class="bundle-count">5 perspectives</div>
@@ -40,10 +40,14 @@
                 <span class="tag">Auth</span>
                 <span class="tag">+1</span>
             </div>
+            <div style="display:flex;gap:0.3rem;margin-top:0.5rem;justify-content:center;">
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,255,136,0.1);color:#00ff88;border-radius:3px;font-weight:600;">macOS</span>
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,255,136,0.1);color:#00ff88;border-radius:3px;font-weight:600;">Linux</span>
+            </div>
         </div>
 
         <div class="bundle-card" onclick="marketplace.applyBundle('advanced')">
-            <div class="bundle-icon">🚀</div>
+            <div class="bundle-icon">&#128640;</div>
             <h4 class="bundle-name">Advanced Defense</h4>
             <p class="bundle-desc">Extended coverage with kernel and memory analysis</p>
             <div class="bundle-count">8 perspectives</div>
@@ -53,10 +57,14 @@
                 <span class="tag">Memory</span>
                 <span class="tag">+5</span>
             </div>
+            <div style="display:flex;gap:0.3rem;margin-top:0.5rem;justify-content:center;">
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,255,136,0.1);color:#00ff88;border-radius:3px;font-weight:600;">macOS</span>
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,255,136,0.1);color:#00ff88;border-radius:3px;font-weight:600;">Linux</span>
+            </div>
         </div>
 
         <div class="bundle-card" onclick="marketplace.applyBundle('cloud')">
-            <div class="bundle-icon">☁️</div>
+            <div class="bundle-icon">&#9729;&#65039;</div>
             <h4 class="bundle-name">Cloud Native</h4>
             <p class="bundle-desc">Container and cloud infrastructure monitoring</p>
             <div class="bundle-count">4 perspectives</div>
@@ -65,6 +73,10 @@
                 <span class="tag">Cloud</span>
                 <span class="tag">Network</span>
                 <span class="tag">+1</span>
+            </div>
+            <div style="display:flex;gap:0.3rem;margin-top:0.5rem;justify-content:center;">
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,255,136,0.1);color:#00ff88;border-radius:3px;font-weight:600;">Linux</span>
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,170,255,0.1);color:#00aaff;border-radius:3px;font-weight:600;">Docker</span>
             </div>
         </div>
 
@@ -1116,16 +1128,8 @@ class Marketplace {
     }
 
     confirmDeploy() {
-        const perspectives = Array.from(this.selectedPerspectives);
-        const names = perspectives.map(id => this.perspectiveData[id].name);
-
-        alert(`🚀 DEPLOYMENT INITIATED\n\nSelected Perspectives:\n${names.join('\n')}\n\nIn production, this would:\n✓ Generate custom agent installer\n✓ Pre-configure selected perspectives\n✓ Provide download link & instructions\n\nRedirecting to Agent Network dashboard...`);
-
         this.closeDeployModal();
-
-        setTimeout(() => {
-            window.location.href = '/dashboard/agents';
-        }, 500);
+        window.location.href = '/dashboard/deploy';
     }
 }
 

@@ -9,35 +9,67 @@ The actual authentication logic is handled by:
 - AuthService in amoskys.auth.service
 """
 
-from flask import Blueprint, redirect, render_template, request
+import logging
+
+from flask import Blueprint, make_response, redirect, render_template, request
+
+from amoskys.auth import AuthService
+from amoskys.db.web_db import get_web_session_context
+
+logger = logging.getLogger(__name__)
 
 auth_views_bp = Blueprint("auth_views", __name__, url_prefix="/auth")
+
+SESSION_COOKIE_NAME = "amoskys_session"
+
+
+def _session_is_valid(token: str) -> bool:
+    """Check if a session token is still valid. Returns False on any error."""
+    try:
+        client_info = {
+            "ip_address": request.headers.get("X-Forwarded-For", request.remote_addr),
+            "user_agent": request.headers.get("User-Agent"),
+        }
+        with get_web_session_context() as db:
+            auth = AuthService(db)
+            result = auth.validate_and_refresh_session(token=token, **client_info)
+            return result.is_valid
+    except Exception:
+        logger.debug("Session validation failed during auth view check", exc_info=True)
+        return False
+
+
+def _clear_session_and_render(template: str):
+    """Render a template while clearing the stale session cookie."""
+    resp = make_response(render_template(template))
+    resp.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    return resp
 
 
 @auth_views_bp.route("/login", methods=["GET", "POST"])
 def login():
     """Render login page."""
-    # If user is already authenticated, redirect to dashboard
-    session_token = request.cookies.get("amoskys_session")
+    session_token = request.cookies.get(SESSION_COOKIE_NAME)
     if session_token:
-        # We could validate the session here, but for now just redirect
-        # The dashboard will handle invalid sessions
-        return redirect("/dashboard")
+        if _session_is_valid(session_token):
+            return redirect("/dashboard")
+        # Session is invalid/revoked — clear the stale cookie and show login
+        logger.info("Cleared invalid session cookie on login page")
+        return _clear_session_and_render("auth/login.html")
 
-    # Both GET and POST serve the login page
-    # POST without JS is handled by action="javascript:void(0)" in the form
     return render_template("auth/login.html")
 
 
 @auth_views_bp.route("/signup", methods=["GET", "POST"])
 def signup():
     """Render signup page."""
-    session_token = request.cookies.get("amoskys_session")
+    session_token = request.cookies.get(SESSION_COOKIE_NAME)
     if session_token:
-        return redirect("/dashboard")
+        if _session_is_valid(session_token):
+            return redirect("/dashboard")
+        logger.info("Cleared invalid session cookie on signup page")
+        return _clear_session_and_render("auth/signup.html")
 
-    # Both GET and POST serve the signup page
-    # POST without JS is handled by action="javascript:void(0)" in the form
     return render_template("auth/signup.html")
 
 
@@ -79,6 +111,12 @@ def resend_verification():
     # Email should be in query params
     email = request.args.get("email", "")
     return render_template("auth/resend-verification.html", email=email)
+
+
+@auth_views_bp.route("/setup", methods=["GET"])
+def setup():
+    """Render first-time user setup wizard."""
+    return render_template("auth/setup.html")
 
 
 @auth_views_bp.route("/logout")

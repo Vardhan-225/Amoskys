@@ -43,6 +43,7 @@ message Envelope {
   bytes  sig               = 5;
   bytes  prev_sig          = 6;
   bytes  payload           = 7;
+  uint32 schema_version    = 8;   // A3.1: Schema version for forward compatibility
 }
 
 message PublishAck {

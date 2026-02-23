@@ -1,5 +1,4 @@
-"""
-AMOSKYS Kernel Audit Agent - Module Entry Point
+"""AMOSKYS Kernel Audit Agent - Module Entry Point
 
 Run with: python -m amoskys.agents.kernel_audit [options]
 """

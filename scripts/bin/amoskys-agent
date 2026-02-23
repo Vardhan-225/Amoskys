@@ -6,15 +6,15 @@ Entry point for the Amoskys distributed intelligence agent.
 Loads configuration and starts the agent.
 """
 
-import sys
-import os
 import argparse
+import os
+import sys
 
 # Add src to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from amoskys.agents.flowagent.main import main
-from amoskys.config import get_config, init_config, AmoskysConfig
+from amoskys.config import AmoskysConfig, get_config, init_config
 
 
 def run_agent():

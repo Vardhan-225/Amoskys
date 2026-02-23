@@ -1,184 +1,573 @@
-<!-- Agent Control Panel - Standard Production Version -->
+<!-- Agent Control Panel - World-Class Production Version -->
 <div class="agent-control-section" style="margin-bottom: 2rem;">
     <div class="neural-card">
-        <div class="card-header">
-            <h3 class="card-title">🤖 Agent Control Panel</h3>
-            <button id="refresh-agents-btn" class="neural-button" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; cursor: pointer;">🔄 Refresh</button>
+        <!-- Header with batch controls -->
+        <div class="card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <h3 class="card-title" style="margin: 0;">Agent Lifecycle Control</h3>
+                <span id="acp-summary" class="card-badge badge-success" style="font-size: 0.7rem;">Loading...</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <button id="acp-start-all" class="acp-batch-btn acp-batch-start" title="Start all compatible agents">
+                    <span class="acp-btn-icon">&#9654;</span> Start All
+                </button>
+                <button id="acp-stop-all" class="acp-batch-btn acp-batch-stop" title="Stop all running agents">
+                    <span class="acp-btn-icon">&#9724;</span> Stop All
+                </button>
+                <button id="acp-refresh" class="acp-batch-btn acp-batch-refresh" title="Refresh agent status">
+                    &#x21bb; Refresh
+                </button>
+            </div>
         </div>
 
-        <div id="agent-controls-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; padding: 1.5rem 0 0 0;">
-            <!-- Agent cards rendered here -->
+        <!-- System Health Banner (shows disk/resource warnings) -->
+        <div id="acp-health-banner" style="display: none;"></div>
+
+        <!-- Agent Cards Grid -->
+        <div id="agent-controls-grid" class="acp-grid">
+            <div class="acp-loading">
+                <div class="acp-spinner"></div>
+                <div>Discovering agents...</div>
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+/* Agent Control Panel Styles */
+.acp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+    padding: 1.25rem 0 0 0;
+}
+.acp-loading {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 2.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+.acp-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(0, 255, 136, 0.15);
+    border-top-color: var(--neural-primary);
+    border-radius: 50%;
+    animation: acp-spin 0.8s linear infinite;
+}
+@keyframes acp-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Batch Buttons */
+.acp-batch-btn {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+    font-family: inherit;
+}
+.acp-batch-btn:hover { transform: translateY(-1px); }
+.acp-batch-btn:active { transform: translateY(0); }
+.acp-batch-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.acp-batch-start {
+    background: rgba(0, 255, 136, 0.12);
+    color: #00ff88;
+    border-color: rgba(0, 255, 136, 0.3);
+}
+.acp-batch-start:hover:not(:disabled) { background: rgba(0, 255, 136, 0.2); }
+.acp-batch-stop {
+    background: rgba(255, 107, 53, 0.12);
+    color: #FF6B35;
+    border-color: rgba(255, 107, 53, 0.3);
+}
+.acp-batch-stop:hover:not(:disabled) { background: rgba(255, 107, 53, 0.2); }
+.acp-batch-refresh {
+    background: rgba(0, 217, 255, 0.08);
+    color: var(--neural-primary);
+    border-color: rgba(0, 217, 255, 0.2);
+}
+.acp-batch-refresh:hover:not(:disabled) { background: rgba(0, 217, 255, 0.15); }
+.acp-btn-icon { font-size: 0.65rem; }
+
+/* Agent Card */
+.acp-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 1.1rem;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+.acp-card:hover {
+    background: rgba(0, 217, 255, 0.03);
+    border-color: rgba(0, 217, 255, 0.2);
+}
+.acp-card-accent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    border-radius: 3px 0 0 3px;
+}
+
+/* Card Header */
+.acp-card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.acp-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 4px;
+    transition: all 0.3s;
+}
+.acp-card-info { flex: 1; min-width: 0; }
+.acp-card-name {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.15rem;
+    line-height: 1.2;
+}
+.acp-card-id {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    font-family: 'Courier New', monospace;
+}
+.acp-type-badge {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.12rem 0.4rem;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+/* Description */
+.acp-card-desc {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.6rem;
+    background: rgba(0, 255, 136, 0.03);
+    border-radius: 6px;
+    border-left: 2px solid var(--neural-primary);
+}
+
+/* Metrics Grid */
+.acp-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+.acp-metric {
+    text-align: center;
+    padding: 0.35rem 0;
+}
+.acp-metric-val {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+.acp-metric-lbl {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-top: 0.1rem;
+}
+
+/* Capabilities */
+.acp-caps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 0.75rem;
+}
+.acp-cap-tag {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    background: rgba(0, 217, 255, 0.06);
+    color: var(--text-muted);
+    border: 1px solid rgba(0, 217, 255, 0.1);
+}
+
+/* Action Buttons */
+.acp-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+.acp-action-btn {
+    padding: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-family: inherit;
+    text-align: center;
+}
+.acp-action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.acp-action-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.acp-action-btn:active:not(:disabled) { transform: translateY(0); }
+.acp-btn-start {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.9), rgba(0, 200, 100, 0.9));
+    color: #0a0e14;
+}
+.acp-btn-stop {
+    background: rgba(255, 107, 53, 0.15);
+    color: #FF6B35;
+    border: 1px solid rgba(255, 107, 53, 0.3);
+}
+
+/* Status Message */
+.acp-status-msg {
+    margin-top: 0.5rem;
+    font-size: 0.72rem;
+    text-align: center;
+    min-height: 1rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    display: none;
+    transition: all 0.2s;
+}
+
+/* Health Banner */
+.acp-health-warn {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 1rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    margin-top: 0.75rem;
+}
+.acp-health-warn.critical {
+    background: rgba(255, 51, 102, 0.1);
+    border: 1px solid rgba(255, 51, 102, 0.25);
+    color: #ff3366;
+}
+.acp-health-warn.warning {
+    background: rgba(255, 170, 0, 0.1);
+    border: 1px solid rgba(255, 170, 0, 0.25);
+    color: #ffaa00;
+}
+.acp-health-warn.info {
+    background: rgba(0, 217, 255, 0.06);
+    border: 1px solid rgba(0, 217, 255, 0.15);
+    color: var(--neural-primary);
+}
+
+/* Uptime format */
+.acp-uptime {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+</style>
 
 <script nonce="{{ csp_nonce() }}">
 class AgentControlPanel {
     constructor() {
         this.agents = [];
         this.operationInProgress = new Set();
-        this.metricsInterval = null;  // CRITICAL: Track interval to prevent duplicates
-        this.agentDescriptions = {
-            'eventbus': '🔌 Central message hub for all telemetry data (gRPC/mTLS)',
-            'proc_agent': '📊 Monitors processes, CPU, and memory usage on this system',
-            'mac_telemetry': '🧪 Generates test data for system validation (macOS only)',
-            'flow_agent': '🌐 Tracks network flows and connections',
-            'snmp_agent': '🔍 Monitors network devices via SNMP protocol',
-            'device_scanner': '📡 Discovers and inventories devices on the network'
+        this.metricsInterval = null;
+        this.agentMeta = {
+            'eventbus': {
+                desc: 'Central message hub for all telemetry data. Routes events from agents to storage via gRPC with mTLS encryption.',
+                type: 'Infrastructure', typeColor: 'rgba(255,107,53,0.15);color:#FF6B35', accentColor: '#FF6B35'
+            },
+            'proc_agent': {
+                desc: 'Native process monitoring with LOLBin detection, code signing verification, and behavioral anomaly detection.',
+                type: 'Collector', typeColor: 'rgba(78,205,196,0.15);color:#4ECDC4', accentColor: '#4ECDC4'
+            },
+            'dns_agent': {
+                desc: 'DNS-based threat detection: DGA domains, tunneling, fast-flux, beaconing patterns, and blocklist enforcement.',
+                type: 'Collector', typeColor: 'rgba(0,170,255,0.15);color:#00AAFF', accentColor: '#00AAFF'
+            },
+            'auth_agent': {
+                desc: 'Authentication monitoring: brute-force detection, impossible travel, sudo escalation, and MFA bypass detection.',
+                type: 'Collector', typeColor: 'rgba(255,107,53,0.15);color:#FF6B35', accentColor: '#FF6B35'
+            },
+            'fim_agent': {
+                desc: 'File integrity monitoring for SUID escalation, webshell drops, config backdoors, and library hijacking.',
+                type: 'Collector', typeColor: 'rgba(0,255,136,0.15);color:#00FF88', accentColor: '#00FF88'
+            },
+            'flow_agent': {
+                desc: 'Network traffic analysis with C2 beaconing detection, lateral movement, data exfiltration, and tunnel detection.',
+                type: 'Collector', typeColor: 'rgba(243,129,129,0.15);color:#F38181', accentColor: '#F38181'
+            },
+            'persistence_agent': {
+                desc: 'Persistence mechanism detection: LaunchAgents, systemd, cron, SSH keys, shell profiles, browser extensions.',
+                type: 'Collector', typeColor: 'rgba(170,150,218,0.15);color:#AA96DA', accentColor: '#AA96DA'
+            },
+            'peripheral_agent': {
+                desc: 'USB/Bluetooth device monitoring with BadUSB detection, unauthorized device tracking, and exfiltration prevention.',
+                type: 'Collector', typeColor: 'rgba(255,107,157,0.15);color:#FF6B9D', accentColor: '#FF6B9D'
+            },
+            'kernel_audit_agent': {
+                desc: 'Kernel-level syscall monitoring for privilege escalation, ptrace abuse, kernel module loads, and audit tampering.',
+                type: 'Collector', typeColor: 'rgba(255,217,61,0.15);color:#FFD93D', accentColor: '#FFD93D'
+            },
+            'device_discovery_agent': {
+                desc: 'Network asset discovery with ARP enumeration, port scanning, rogue DHCP/DNS detection, and vulnerability bannering.',
+                type: 'Discovery', typeColor: 'rgba(252,186,211,0.15);color:#FCBAD3', accentColor: '#FCBAD3'
+            },
+            'protocol_collectors_agent': {
+                desc: 'Protocol-level threat detection: HTTP anomalies, TLS issues, SSH brute-force, SQL injection, and RDP abuse.',
+                type: 'Collector', typeColor: 'rgba(149,225,211,0.15);color:#95E1D3', accentColor: '#95E1D3'
+            }
         };
         this.init();
     }
 
     async init() {
-        console.log('🤖 Agent Control Panel initialized');
-        
-        // Load agents once on init
         await this.loadAgents();
-        
-        // Setup refresh button
-        const refreshBtn = document.getElementById('refresh-agents-btn');
-        if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => this.loadAgents());
-        }
+        this.attachGlobalListeners();
+    }
+
+    attachGlobalListeners() {
+        var self = this;
+        var refreshBtn = document.getElementById('acp-refresh');
+        if (refreshBtn) refreshBtn.addEventListener('click', function() { self.loadAgents(); });
+
+        var startAllBtn = document.getElementById('acp-start-all');
+        if (startAllBtn) startAllBtn.addEventListener('click', function() { self.batchStart(); });
+
+        var stopAllBtn = document.getElementById('acp-stop-all');
+        if (stopAllBtn) stopAllBtn.addEventListener('click', function() { self.batchStop(); });
     }
 
     async loadAgents() {
         try {
-            const response = await fetch('/dashboard/api/agents/status', {
-                signal: AbortSignal.timeout(5000)
+            var response = await fetch('/dashboard/api/agents/status', {
+                signal: AbortSignal.timeout(8000)
             });
-            
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const data = await response.json();
-            if (data.status === 'success' && Array.isArray(data.data?.agents)) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            var data = await response.json();
+            if (data.status === 'success' && Array.isArray(data.data && data.data.agents)) {
                 this.agents = data.data.agents;
                 this.render();
+                this.updateSummary(data.data);
+                this.checkSystemHealth();
                 return true;
             }
-            throw new Error('Invalid response format');
+            throw new Error('Invalid response');
         } catch (error) {
-            console.error('Failed to load agents:', error);
-            this.showError();
+            console.error('Agent load failed:', error);
+            this.showLoadError(error.message);
         }
+    }
+
+    updateSummary(data) {
+        var badge = document.getElementById('acp-summary');
+        if (!badge) return;
+        var running = data.running || 0;
+        var total = data.total || 0;
+        var stopped = total - running;
+        if (running === total && total > 0) {
+            badge.textContent = running + '/' + total + ' Online';
+            badge.className = 'card-badge badge-success';
+        } else if (running > 0) {
+            badge.textContent = running + '/' + total + ' Online';
+            badge.className = 'card-badge';
+            badge.style.background = 'rgba(255,170,0,0.15)';
+            badge.style.color = '#ffaa00';
+            badge.style.borderColor = 'rgba(255,170,0,0.3)';
+        } else {
+            badge.textContent = '0/' + total + ' Online';
+            badge.className = 'card-badge';
+            badge.style.background = 'rgba(255,51,102,0.15)';
+            badge.style.color = '#ff3366';
+            badge.style.borderColor = 'rgba(255,51,102,0.3)';
+        }
+    }
+
+    async checkSystemHealth() {
+        var banner = document.getElementById('acp-health-banner');
+        if (!banner) return;
+        var warnings = [];
+        var stoppedCount = this.agents.filter(function(a) { return a.status !== 'running'; }).length;
+        if (stoppedCount === this.agents.length && this.agents.length > 0) {
+            warnings.push({
+                level: 'critical',
+                msg: 'All agents are offline. Check system resources (disk space, memory) or start agents individually below.'
+            });
+        } else if (stoppedCount > this.agents.length / 2) {
+            warnings.push({
+                level: 'warning',
+                msg: stoppedCount + ' of ' + this.agents.length + ' agents are stopped. Consider starting them for full monitoring coverage.'
+            });
+        }
+        if (warnings.length === 0) {
+            banner.style.display = 'none';
+            return;
+        }
+        banner.style.display = 'block';
+        banner.innerHTML = warnings.map(function(w) {
+            return '<div class="acp-health-warn ' + w.level + '">' +
+                '<span style="font-size:1.1rem;">' + (w.level === 'critical' ? '&#9888;' : '&#9432;') + '</span>' +
+                '<span>' + w.msg + '</span></div>';
+        }).join('');
     }
 
     render() {
-        const grid = document.getElementById('agent-controls-grid');
+        var grid = document.getElementById('agent-controls-grid');
         if (!grid) return;
-
         if (this.agents.length === 0) {
-            grid.innerHTML = '<div style="grid-column: 1/-1; padding: 2rem; text-align: center; color: var(--text-secondary);">No agents found</div>';
+            grid.innerHTML = '<div class="acp-loading"><div>No agents discovered on this platform.</div></div>';
             return;
         }
-
-        grid.innerHTML = this.agents.map((agent, idx) => this.createCard(agent, idx)).join('');
-        this.attachListeners();
+        var self = this;
+        grid.innerHTML = this.agents.map(function(agent) { return self.createCard(agent); }).join('');
+        this.attachCardListeners();
         this.startMetricsUpdate();
     }
 
-    createCard(agent, idx) {
-        const id = agent.agent_id;
-        const running = agent.status === 'running';
-        const statusColor = running ? 'var(--neural-primary)' : '#999';
-        const description = this.agentDescriptions[id] || 'Monitor and control this agent';
-        
-        return `
-<div class="agent-item" data-agent-id="${id}" style="background: var(--gradient-neural); padding: 1.2rem; border-radius: 10px; border: 1px solid rgba(0, 255, 136, 0.3);">
-    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
-        <div style="width: 10px; height: 10px; border-radius: 50%; background: ${statusColor}; box-shadow: 0 0 8px ${statusColor};"></div>
-        <div style="flex: 1;">
-            <h4 style="margin: 0; font-size: 0.9rem; color: var(--text-primary);">${agent.name || id}</h4>
-            <p style="margin: 0; font-size: 0.7rem; color: var(--text-muted); font-family: monospace;">${id}</p>
-        </div>
-    </div>
+    createCard(agent) {
+        var id = agent.agent_id;
+        var running = agent.status === 'running';
+        var statusColor = running ? '#00ff88' : '#555';
+        var meta = this.agentMeta[id] || {
+            desc: agent.name || 'Security monitoring agent',
+            icon: '&#x1F916;',
+            type: 'Agent',
+            typeColor: 'rgba(255,255,255,0.08);color:var(--text-muted)',
+            accentColor: 'var(--neural-primary)'
+        };
 
-    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 1rem; padding: 0.75rem; background: rgba(0, 255, 136, 0.05); border-radius: 6px; border-left: 2px solid var(--neural-primary);">
-        ${description}
-    </div>
+        var uptime = '';
+        if (running && agent.uptime_seconds > 0) {
+            uptime = this.formatUptime(agent.uptime_seconds);
+        }
 
-    <div style="font-size: 0.8rem; margin-bottom: 1rem;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-            <div>
-                <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 0.2rem;">CPU</div>
-                <div style="color: var(--text-primary); font-weight: 500;" class="metric-cpu">${running ? (agent.cpu_percent?.toFixed(1) || '0') + '%' : '-'}</div>
-            </div>
-            <div>
-                <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 0.2rem;">Memory</div>
-                <div style="color: var(--text-primary); font-weight: 500;" class="metric-mem">${running ? (agent.memory_mb?.toFixed(0) || '0') + 'MB' : '-'}</div>
-            </div>
-            <div>
-                <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 0.2rem;">PID</div>
-                <div style="color: var(--text-primary); font-family: monospace; font-size: 0.75rem;" class="metric-pid">${agent.pid || '-'}</div>
-            </div>
-            <div>
-                <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 0.2rem;">Status</div>
-                <div style="color: ${statusColor}; font-weight: 500;" class="metric-status">${running ? 'Running' : 'Stopped'}</div>
-            </div>
-        </div>
-    </div>
+        var caps = (agent.capabilities || []).slice(0, 4);
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-        <button class="btn-start" data-agent-id="${id}" style="padding: 0.5rem; font-size: 0.75rem; background: linear-gradient(135deg, var(--neural-primary), var(--neural-secondary)); color: var(--bg-primary); border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s; ${running ? 'opacity: 0.4; cursor: not-allowed;' : ''}" ${running ? 'disabled' : ''}>
-            ▶️ Start
-        </button>
-        <button class="btn-stop" data-agent-id="${id}" style="padding: 0.5rem; font-size: 0.75rem; background: rgba(255, 107, 53, 0.2); color: #FF6B35; border: 1px solid #FF6B35; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s; ${!running ? 'opacity: 0.4; cursor: not-allowed;' : ''}" ${!running ? 'disabled' : ''}>
-            ⏹️ Stop
-        </button>
-    </div>
+        return '<div class="acp-card" data-agent-id="' + id + '">' +
+            '<div class="acp-card-accent" style="background:' + meta.accentColor + ';"></div>' +
 
-    <div class="status-msg" style="margin-top: 0.75rem; font-size: 0.75rem; text-align: center; min-height: 1.2rem; display: none;"></div>
-</div>
-        `;
+            '<div class="acp-card-head">' +
+                '<div class="acp-status-dot" style="background:' + statusColor + ';box-shadow:0 0 8px ' + statusColor + ';"></div>' +
+                '<div class="acp-card-info">' +
+                    '<div class="acp-card-name">' + (agent.name || id) + '</div>' +
+                    '<div class="acp-card-id">' + id + (uptime ? ' &middot; <span class="acp-uptime">' + uptime + '</span>' : '') + '</div>' +
+                '</div>' +
+                '<span class="acp-type-badge" style="background:' + meta.typeColor + ';">' + meta.type + '</span>' +
+            '</div>' +
+
+            '<div class="acp-card-desc">' + meta.desc + '</div>' +
+
+            '<div class="acp-metrics">' +
+                '<div class="acp-metric">' +
+                    '<div class="acp-metric-val metric-cpu">' + (running ? (agent.cpu_percent != null ? agent.cpu_percent.toFixed(1) : '0') + '%' : '--') + '</div>' +
+                    '<div class="acp-metric-lbl">CPU</div>' +
+                '</div>' +
+                '<div class="acp-metric">' +
+                    '<div class="acp-metric-val metric-mem">' + (running ? (agent.memory_mb != null ? agent.memory_mb.toFixed(0) : '0') + 'MB' : '--') + '</div>' +
+                    '<div class="acp-metric-lbl">Memory</div>' +
+                '</div>' +
+                '<div class="acp-metric">' +
+                    '<div class="acp-metric-val metric-pid" style="font-family:monospace;font-size:0.78rem;">' + (agent.pid || '--') + '</div>' +
+                    '<div class="acp-metric-lbl">PID</div>' +
+                '</div>' +
+                '<div class="acp-metric">' +
+                    '<div class="acp-metric-val metric-status" style="color:' + statusColor + ';">' + (running ? 'Online' : 'Offline') + '</div>' +
+                    '<div class="acp-metric-lbl">Status</div>' +
+                '</div>' +
+            '</div>' +
+
+            (caps.length > 0 ? '<div class="acp-caps">' + caps.map(function(c) {
+                return '<span class="acp-cap-tag">' + c + '</span>';
+            }).join('') + '</div>' : '') +
+
+            '<div class="acp-actions">' +
+                '<button class="acp-action-btn acp-btn-start" data-agent-id="' + id + '"' + (running ? ' disabled' : '') + '>' +
+                    '&#9654; Start Monitoring' +
+                '</button>' +
+                '<button class="acp-action-btn acp-btn-stop" data-agent-id="' + id + '"' + (!running ? ' disabled' : '') + '>' +
+                    '&#9724; Stop Monitoring' +
+                '</button>' +
+            '</div>' +
+
+            '<div style="padding:0.3rem 0.6rem;font-size:0.65rem;color:var(--text-muted);display:flex;justify-content:space-between;">' +
+                '<span>Last check: ' + (agent.timestamp ? new Date(agent.timestamp).toLocaleTimeString() : '--') + '</span>' +
+                '<span style="font-family:monospace;">' + (agent.platform || '') + '</span>' +
+            '</div>' +
+
+            '<div class="acp-status-msg" data-msg-for="' + id + '"></div>' +
+        '</div>';
     }
 
-    attachListeners() {
-        document.querySelectorAll('.btn-start').forEach(btn => {
-            btn.addEventListener('click', (e) => this.startAgent(e.target.dataset.agentId));
+    attachCardListeners() {
+        var self = this;
+        document.querySelectorAll('.acp-btn-start').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                self.startAgent(e.currentTarget.dataset.agentId);
+            });
         });
-
-        document.querySelectorAll('.btn-stop').forEach(btn => {
-            btn.addEventListener('click', (e) => this.stopAgent(e.target.dataset.agentId));
+        document.querySelectorAll('.acp-btn-stop').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                self.stopAgent(e.currentTarget.dataset.agentId);
+            });
         });
     }
 
     async startAgent(agentId) {
         if (this.operationInProgress.has(agentId)) return;
-        
-        const card = document.querySelector(`[data-agent-id="${agentId}"]`);
-        const btn = card.querySelector('.btn-start');
-        
+        var card = document.querySelector('.acp-card[data-agent-id="' + agentId + '"]');
+        var btn = card ? card.querySelector('.acp-btn-start') : null;
+        if (!card || !btn) return;
+
         this.operationInProgress.add(agentId);
         btn.disabled = true;
-        btn.textContent = '⏳ Starting...';
+        btn.innerHTML = '&#9203; Starting...';
 
         try {
-            const response = await fetch(`/dashboard/api/agents/${agentId}/start`, {
+            var response = await fetch('/dashboard/api/agents/' + agentId + '/start', {
                 method: 'POST',
                 signal: AbortSignal.timeout(30000)
             });
+            var data = await response.json();
 
-            const data = await response.json();
-            
             if (data.status === 'started' || data.status === 'already_running') {
-                this.showMessage(card, '✅ Started', 'success');
-                
-                // Update UI immediately
-                const agent = this.agents.find(a => a.agent_id === agentId);
+                this.showCardMessage(agentId, 'Agent started successfully', 'success');
+                var agent = this.agents.find(function(a) { return a.agent_id === agentId; });
                 if (agent) {
                     agent.status = 'running';
                     agent.pid = data.pid;
-                    this.updateCard(card, agent);
+                    this.updateCardMetrics(card, agent);
                 }
-                
-                // Let metrics polling update automatically - no forced reload
             } else {
-                this.showMessage(card, `❌ ${data.message || 'Failed'}`, 'error');
+                this.showCardMessage(agentId, data.message || 'Start failed', 'error');
             }
         } catch (error) {
-            this.showMessage(card, `❌ ${error.message}`, 'error');
+            this.showCardMessage(agentId, error.message, 'error');
         } finally {
-            btn.textContent = '▶️ Start';
+            btn.innerHTML = '&#9654; Start Monitoring';
             btn.disabled = false;
             this.operationInProgress.delete(agentId);
         }
@@ -186,148 +575,173 @@ class AgentControlPanel {
 
     async stopAgent(agentId) {
         if (this.operationInProgress.has(agentId)) return;
-        
-        const card = document.querySelector(`[data-agent-id="${agentId}"]`);
-        const btn = card.querySelector('.btn-stop');
-        
+        var card = document.querySelector('.acp-card[data-agent-id="' + agentId + '"]');
+        var btn = card ? card.querySelector('.acp-btn-stop') : null;
+        if (!card || !btn) return;
+
         this.operationInProgress.add(agentId);
         btn.disabled = true;
-        btn.textContent = '⏳ Stopping...';
+        btn.innerHTML = '&#9203; Stopping...';
 
         try {
-            const response = await fetch(`/dashboard/api/agents/${agentId}/stop`, {
+            var response = await fetch('/dashboard/api/agents/' + agentId + '/stop', {
                 method: 'POST',
                 signal: AbortSignal.timeout(15000)
             });
+            var data = await response.json();
 
-            const data = await response.json();
-            
             if (data.status === 'stopped' || data.status === 'force_killed' || data.status === 'not_running') {
-                this.showMessage(card, '✅ Stopped', 'success');
-                
-                // Update UI immediately
-                const agent = this.agents.find(a => a.agent_id === agentId);
+                this.showCardMessage(agentId, 'Agent stopped', 'success');
+                var agent = this.agents.find(function(a) { return a.agent_id === agentId; });
                 if (agent) {
                     agent.status = 'stopped';
                     agent.pid = null;
-                    this.updateCard(card, agent);
+                    agent.cpu_percent = 0;
+                    agent.memory_mb = 0;
+                    this.updateCardMetrics(card, agent);
                 }
-                
-                // Let metrics polling update automatically - no forced reload
             } else {
-                this.showMessage(card, `❌ ${data.message || 'Failed'}`, 'error');
+                this.showCardMessage(agentId, data.message || 'Stop failed', 'error');
             }
         } catch (error) {
-            this.showMessage(card, `❌ ${error.message}`, 'error');
+            this.showCardMessage(agentId, error.message, 'error');
         } finally {
-            btn.textContent = '⏹️ Stop';
+            btn.innerHTML = '&#9724; Stop Monitoring';
             btn.disabled = false;
             this.operationInProgress.delete(agentId);
         }
     }
 
-    updateCard(card, agent) {
-        const running = agent.status === 'running';
-        const statusColor = running ? 'var(--neural-primary)' : '#999';
-        
-        const indicator = card.querySelector('div[style*="border-radius: 50%"]');
-        if (indicator) {
-            indicator.style.background = statusColor;
-            indicator.style.boxShadow = `0 0 8px ${statusColor}`;
+    async batchStart() {
+        var btn = document.getElementById('acp-start-all');
+        if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; }
+        var stopped = this.agents.filter(function(a) { return a.status !== 'running'; });
+        for (var i = 0; i < stopped.length; i++) {
+            await this.startAgent(stopped[i].agent_id);
         }
-        
-        card.querySelector('.metric-cpu').textContent = running ? (agent.cpu_percent?.toFixed(1) || '0') + '%' : '-';
-        card.querySelector('.metric-mem').textContent = running ? (agent.memory_mb?.toFixed(0) || '0') + 'MB' : '-';
-        card.querySelector('.metric-pid').textContent = agent.pid || '-';
-        card.querySelector('.metric-status').textContent = running ? 'Running' : 'Stopped';
-        card.querySelector('.metric-status').style.color = statusColor;
-        
-        const startBtn = card.querySelector('.btn-start');
-        const stopBtn = card.querySelector('.btn-stop');
-        
-        startBtn.disabled = running;
-        startBtn.style.opacity = running ? '0.4' : '1';
-        
-        stopBtn.disabled = !running;
-        stopBtn.style.opacity = !running ? '0.4' : '1';
+        if (btn) { btn.disabled = false; btn.innerHTML = '<span class="acp-btn-icon">&#9654;</span> Start All'; }
+        await this.loadAgents();
+    }
+
+    async batchStop() {
+        var btn = document.getElementById('acp-stop-all');
+        if (btn) { btn.disabled = true; btn.textContent = 'Stopping...'; }
+        var running = this.agents.filter(function(a) { return a.status === 'running'; });
+        for (var i = 0; i < running.length; i++) {
+            await this.stopAgent(running[i].agent_id);
+        }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<span class="acp-btn-icon">&#9724;</span> Stop All'; }
+        await this.loadAgents();
+    }
+
+    updateCardMetrics(card, agent) {
+        if (!card) return;
+        var running = agent.status === 'running';
+        var statusColor = running ? '#00ff88' : '#555';
+
+        var dot = card.querySelector('.acp-status-dot');
+        if (dot) { dot.style.background = statusColor; dot.style.boxShadow = '0 0 8px ' + statusColor; }
+
+        var cpu = card.querySelector('.metric-cpu');
+        if (cpu) cpu.textContent = running ? (agent.cpu_percent != null ? agent.cpu_percent.toFixed(1) : '0') + '%' : '--';
+
+        var mem = card.querySelector('.metric-mem');
+        if (mem) mem.textContent = running ? (agent.memory_mb != null ? agent.memory_mb.toFixed(0) : '0') + 'MB' : '--';
+
+        var pid = card.querySelector('.metric-pid');
+        if (pid) pid.textContent = agent.pid || '--';
+
+        var status = card.querySelector('.metric-status');
+        if (status) { status.textContent = running ? 'Online' : 'Offline'; status.style.color = statusColor; }
+
+        var startBtn = card.querySelector('.acp-btn-start');
+        var stopBtn = card.querySelector('.acp-btn-stop');
+        if (startBtn) startBtn.disabled = running;
+        if (stopBtn) stopBtn.disabled = !running;
+
+        // Update summary
+        this.updateSummary({
+            running: this.agents.filter(function(a) { return a.status === 'running'; }).length,
+            total: this.agents.length
+        });
+        this.checkSystemHealth();
     }
 
     startMetricsUpdate() {
-        // Clear any existing interval first - CRITICAL FIX
         if (this.metricsInterval !== null) {
             clearInterval(this.metricsInterval);
         }
-
-        // Update metrics every 5 seconds without full reload
-        this.metricsInterval = setInterval(async () => {
+        var self = this;
+        this.metricsInterval = setInterval(async function() {
             try {
-                const response = await fetch('/dashboard/api/agents/status', {
+                var response = await fetch('/dashboard/api/agents/status', {
                     signal: AbortSignal.timeout(5000)
                 });
-                
                 if (!response.ok) return;
-                
-                const data = await response.json();
-                if (data.status === 'success' && Array.isArray(data.data?.agents)) {
-                    let statusChanged = false;
-                    
-                    data.data.agents.forEach(newAgent => {
-                        const idx = this.agents.findIndex(a => a.agent_id === newAgent.agent_id);
-                        if (idx !== -1) {
-                            const oldStatus = this.agents[idx].status;
-                            
-                            // Update metrics
-                            this.agents[idx].cpu_percent = newAgent.cpu_percent;
-                            this.agents[idx].memory_mb = newAgent.memory_mb;
-                            this.agents[idx].pid = newAgent.pid;
-                            this.agents[idx].status = newAgent.status;
-                            
-                            // Update card if exists
-                            const card = document.querySelector(`[data-agent-id="${newAgent.agent_id}"]`);
-                            if (card) {
-                                this.updateCard(card, this.agents[idx]);
-                            }
-                            
-                            // Only reload if status changed
-                            if (oldStatus !== newAgent.status) {
-                                statusChanged = true;
-                            }
-                        }
-                    });
-                    
-                    // Only do full reload if status actually changed
-                    if (statusChanged) {
-                        this.loadAgents();
-                    }
+                var data = await response.json();
+                if (data.status !== 'success' || !Array.isArray(data.data && data.data.agents)) return;
+
+                var statusChanged = false;
+                data.data.agents.forEach(function(newAgent) {
+                    var idx = self.agents.findIndex(function(a) { return a.agent_id === newAgent.agent_id; });
+                    if (idx === -1) return;
+
+                    var oldStatus = self.agents[idx].status;
+                    self.agents[idx].cpu_percent = newAgent.cpu_percent;
+                    self.agents[idx].memory_mb = newAgent.memory_mb;
+                    self.agents[idx].pid = newAgent.pid;
+                    self.agents[idx].status = newAgent.status;
+                    self.agents[idx].uptime_seconds = newAgent.uptime_seconds;
+
+                    var card = document.querySelector('.acp-card[data-agent-id="' + newAgent.agent_id + '"]');
+                    if (card) self.updateCardMetrics(card, self.agents[idx]);
+
+                    if (oldStatus !== newAgent.status) statusChanged = true;
+                });
+
+                self.updateSummary(data.data);
+
+                if (statusChanged) {
+                    self.checkSystemHealth();
                 }
             } catch (error) {
-                console.error('Metrics update failed:', error);
+                /* silent */
             }
         }, 5000);
     }
 
-    showMessage(card, message, type) {
-        const msg = card.querySelector('.status-msg');
+    showCardMessage(agentId, message, type) {
+        var msg = document.querySelector('.acp-status-msg[data-msg-for="' + agentId + '"]');
         if (!msg) return;
-        
-        msg.textContent = message;
-        msg.style.background = type === 'success' ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 107, 53, 0.2)';
-        msg.style.color = type === 'success' ? 'var(--neural-primary)' : '#FF6B35';
+        msg.textContent = (type === 'success' ? '\u2705 ' : '\u274C ') + message;
         msg.style.display = 'block';
-        
-        setTimeout(() => { msg.style.display = 'none'; }, 3000);
+        msg.style.background = type === 'success' ? 'rgba(0,255,136,0.1)' : 'rgba(255,51,102,0.1)';
+        msg.style.color = type === 'success' ? '#00ff88' : '#ff3366';
+        setTimeout(function() { msg.style.display = 'none'; }, 4000);
     }
 
-    showError() {
-        const grid = document.getElementById('agent-controls-grid');
-        if (grid) {
-            grid.innerHTML = '<div style="grid-column: 1/-1; padding: 2rem; text-align: center; color: var(--text-secondary);">Failed to load agents. <button onclick="location.reload()" class="neural-button" style="margin-top: 1rem; padding: 0.5rem 1rem;">Retry</button></div>';
-        }
+    showLoadError(message) {
+        var grid = document.getElementById('agent-controls-grid');
+        if (!grid) return;
+        grid.innerHTML = '<div class="acp-loading">' +
+            '<div style="color:#ff3366;">Failed to load agents</div>' +
+            '<div style="font-size:0.75rem;color:var(--text-muted);">' + message + '</div>' +
+            '<button onclick="window.agentControlPanel.loadAgents()" class="acp-batch-btn acp-batch-refresh" style="margin-top:0.5rem;">Retry</button>' +
+            '</div>';
+    }
+
+    formatUptime(seconds) {
+        if (!seconds || seconds <= 0) return '';
+        var d = Math.floor(seconds / 86400);
+        var h = Math.floor((seconds % 86400) / 3600);
+        var m = Math.floor((seconds % 3600) / 60);
+        if (d > 0) return d + 'd ' + h + 'h';
+        if (h > 0) return h + 'h ' + m + 'm';
+        return m + 'm';
     }
 }
 
-// Initialize on DOM ready
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('agent-controls-grid')) {
         window.agentControlPanel = new AgentControlPanel();
     }

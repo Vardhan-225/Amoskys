@@ -3,825 +3,1146 @@
 {% block title %}AMOSKYS Cortex Command Center{% endblock %}
 
 {% block content %}
-<div class="command-center-v2">
-    <!-- Welcome Header -->
-    <div class="neural-card">
-        <div class="card-header">
-            <h2 class="card-title">🧠 AMOSKYS Cortex Command Center</h2>
-            <div class="card-badge badge-success">Phase 2.4 Active</div>
-        </div>
-        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-            Real-time neural security monitoring and threat analysis for distributed infrastructure.
-        </p>
-        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-            <a href="/dashboard/soc" class="neural-button">🛡️ SOC Operations</a>
-            <a href="/dashboard/agents" class="neural-button">🤖 Manage Agents</a>
-            <a href="/dashboard/processes" class="neural-button">🔬 Process Telemetry</a>
-            <a href="/dashboard/neural" class="neural-button">🧠 Neural Insights</a>
-        </div>
-    </div>
+<div class="cortex-cc">
 
-    <!-- Real-time Metrics Grid -->
-    <div class="metrics-grid-v2">
-        <div class="metric-card">
-            <div class="metric-value" style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
-                <div class="status-dot status-online" id="threat-status-dot"></div>
-                <span id="threat-score">0</span>
-            </div>
-            <div class="metric-label">Threat Level</div>
-        </div>
-
-        <div class="metric-card">
-            <div class="metric-value" style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
-                <div class="status-dot status-warning" id="agent-status-dot"></div>
-                <span id="agent-count">0</span>
-            </div>
-            <div class="metric-label">Active Agents</div>
-        </div>
-
-        <div class="metric-card">
-            <div class="metric-value" style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
-                <div class="status-dot status-online" id="event-status-dot"></div>
-                <span id="event-count">0</span>
-            </div>
-            <div class="metric-label">Events (24h)</div>
-        </div>
-
-        <div class="metric-card">
-            <div class="metric-value" style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
-                <div class="status-dot status-online" id="health-status-dot"></div>
-                <span id="health-score">0%</span>
-            </div>
-            <div class="metric-label">System Health</div>
-        </div>
-    </div>
-
-    <!-- System Metrics Dashboard -->
-    <div class="neural-card">
-        <div class="card-header">
-            <h3 class="card-title">📊 System Performance</h3>
-            <span class="metric-timestamp" id="metrics-timestamp">Last updated: -</span>
-        </div>
-        <div class="system-metrics-grid">
-            <div class="metric-box">
-                <div style="position: relative; width: 120px; height: 120px; margin: 0 auto;">
-                    <canvas id="cpu-chart"></canvas>
+    <!-- ===== 1. COMMAND HERO ===== -->
+    <div class="command-hero">
+        <div class="hero-top">
+            <div class="hero-posture">
+                <svg class="posture-ring" viewBox="0 0 140 140">
+                    <defs>
+                        <filter id="posture-glow">
+                            <feGaussianBlur stdDeviation="3" result="blur"/>
+                            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                        </filter>
+                    </defs>
+                    <circle cx="70" cy="70" r="58" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="10"/>
+                    <circle cx="70" cy="70" r="58" fill="none" stroke="rgba(0,217,255,0.06)" stroke-width="10"
+                            stroke-dasharray="4 8" stroke-linecap="round"/>
+                    <circle id="posture-arc" cx="70" cy="70" r="58" fill="none" stroke="#00ff88"
+                            stroke-width="10" stroke-linecap="round"
+                            stroke-dasharray="364.4" stroke-dashoffset="364.4"
+                            transform="rotate(-90 70 70)" filter="url(#posture-glow)"/>
+                </svg>
+                <div class="posture-value">
+                    <span id="posture-score">--</span>
+                    <small>POSTURE</small>
                 </div>
-                <div class="metric-box-label">CPU Usage</div>
-                <div class="metric-box-value" id="cpu-value">--%</div>
             </div>
-            <div class="metric-box">
-                <div style="position: relative; width: 120px; height: 120px; margin: 0 auto;">
-                    <canvas id="memory-chart"></canvas>
+
+            <div class="hero-info">
+                <div class="hero-threat-row">
+                    <div class="threat-badge" id="threat-badge">CLEAR</div>
+                    <span class="hero-threat-label">Threat Level</span>
                 </div>
-                <div class="metric-box-label">Memory Usage</div>
-                <div class="metric-box-value" id="memory-value">--%</div>
+                <div class="hero-freshness" id="cb-freshness" style="display:none;">
+                    <span class="freshness-dot" id="freshness-dot"></span>
+                    <span class="freshness-text" id="freshness-text">--</span>
+                </div>
             </div>
-            <div class="metric-box">
-                <div style="position: relative; width: 120px; height: 120px; margin: 0 auto;">
-                    <canvas id="disk-chart"></canvas>
-                </div>
-                <div class="metric-box-label">Disk Usage</div>
-                <div class="metric-box-value" id="disk-value">--%</div>
+
+            <div class="hero-actions">
+                <a href="/dashboard/threat-feed" class="hero-btn hero-btn-live">Live Feed</a>
+                <a href="/dashboard/hunt" class="hero-btn">Hunt</a>
+                <a href="/dashboard/incidents" class="hero-btn">Incidents</a>
+                <a href="/dashboard/deploy" class="hero-btn hero-btn-accent">Deploy</a>
             </div>
-            <div class="metric-box">
-                <div style="position: relative; width: 120px; height: 120px; margin: 0 auto;">
-                    <canvas id="network-chart"></canvas>
-                </div>
-                <div class="metric-box-label">Network Activity</div>
-                <div class="metric-box-value" id="network-value">--%</div>
+        </div>
+
+        <div class="hero-stats">
+            <div class="hero-stat">
+                <span class="hero-stat-val" id="cb-events">0</span>
+                <span class="hero-stat-lbl">Events (24h)</span>
+            </div>
+            <div class="hero-stat-sep"></div>
+            <div class="hero-stat">
+                <span class="hero-stat-val" id="cb-threats">0</span>
+                <span class="hero-stat-lbl">Threats</span>
+            </div>
+            <div class="hero-stat-sep"></div>
+            <div class="hero-stat">
+                <span class="hero-stat-val" id="cb-agents">0/0</span>
+                <span class="hero-stat-lbl">Agents Online</span>
+            </div>
+            <div class="hero-stat-sep"></div>
+            <div class="hero-stat">
+                <span class="hero-stat-val" id="cb-probes">0</span>
+                <span class="hero-stat-lbl">Probes Active</span>
+            </div>
+            <div class="hero-stat-sep"></div>
+            <div class="hero-stat">
+                <span class="hero-stat-val" id="cb-mttd">--</span>
+                <span class="hero-stat-lbl">MTTD</span>
             </div>
         </div>
     </div>
 
-    <!-- Recent Events and Status -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 2rem;">
-        <!-- Recent Threats -->
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">⚠️ Recent Threats</h3>
+    <!-- ===== 2. EVENT ACTIVITY + SEVERITY BREAKDOWN ===== -->
+    <div class="cc-row cc-row-2col-wide">
+        <div class="cc-card">
+            <div class="cc-card-hdr">
+                <h3>Event Activity (24h)</h3>
+                <span class="cc-ts" id="activity-ts">--</span>
             </div>
-            <div id="threats-container" style="max-height: 300px; overflow-y: auto;">
-                <div style="color: var(--text-secondary); text-align: center; padding: 2rem;">
-                    Loading threats...
+            <div id="activity-chart" style="height:80px;"></div>
+        </div>
+        <div class="cc-card">
+            <div class="cc-card-hdr">
+                <h3>Severity Distribution</h3>
+            </div>
+            <div id="severity-chart" style="display:flex;align-items:center;justify-content:center;gap:2rem;min-height:80px;"></div>
+        </div>
+    </div>
+
+    <!-- ===== 3. COMPACT THREAT FEED + OPEN INCIDENTS ===== -->
+    <div class="cc-row cc-row-2col">
+        <div class="cc-card cc-card-threats">
+            <div class="cc-card-hdr">
+                <h3>Recent Threats</h3>
+                <div style="display:flex;gap:0.5rem;align-items:center;">
+                    <span class="cc-badge cc-badge-live" id="threat-feed-status">LIVE</span>
+                    <a href="/dashboard/threat-feed" class="cc-link">View All &rarr;</a>
+                </div>
+            </div>
+            <div class="threat-feed" id="threat-feed">
+                <div class="cc-loading">Connecting to threat feed...</div>
+            </div>
+        </div>
+
+        <div class="cc-card cc-card-incidents">
+            <div class="cc-card-hdr">
+                <h3>Open Incidents</h3>
+                <a href="/dashboard/incidents" class="cc-link">View All</a>
+            </div>
+            <div id="incidents-list">
+                <div class="cc-loading">Loading incidents...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 4. AGENT FLEET STATUS ===== -->
+    <div class="cc-card">
+        <div class="cc-card-hdr">
+            <h3>Agent Fleet</h3>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+                <button class="cc-export-btn" onclick="cortex.exportAgents()" title="Export Agents CSV">Export</button>
+                <a href="/dashboard/agents" class="cc-link">Manage</a>
+            </div>
+        </div>
+        <div class="agent-fleet" id="agent-fleet">
+            <div class="cc-loading">Loading agent fleet...</div>
+        </div>
+    </div>
+
+    <!-- ===== 5. TOP SOURCE IPs ===== -->
+    <div class="cc-card">
+        <div class="cc-card-hdr">
+            <h3>Top Source IPs</h3>
+            <span class="cc-ts" id="ips-ts">--</span>
+        </div>
+        <div id="top-ips" style="min-height:40px;">
+            <div class="cc-loading">Loading...</div>
+        </div>
+    </div>
+
+    <!-- ===== 6. MITRE COVERAGE + THREAT HEATMAP ===== -->
+    <div class="cc-row cc-row-2col">
+        <div class="cc-card">
+            <div class="cc-card-hdr">
+                <h3>MITRE ATT&CK Coverage</h3>
+                <a href="/dashboard/mitre" class="cc-link">Full Matrix</a>
+            </div>
+            <div class="mitre-mini" id="mitre-mini">
+                <div class="cc-loading">Loading MITRE coverage...</div>
+            </div>
+        </div>
+        <div class="cc-card">
+            <div class="cc-card-hdr">
+                <h3>Threat Heatmap</h3>
+                <span class="cc-ts">Events by Hour</span>
+            </div>
+            <div id="heatmap-chart" style="min-height:60px;">
+                <div class="cc-loading">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 7. SYSTEM VITALS + PROBE OBSERVABILITY ===== -->
+    <div class="cc-row cc-row-2col">
+        <div class="cc-card">
+            <div class="cc-card-hdr">
+                <h3>System Vitals</h3>
+                <span class="cc-ts" id="vitals-ts">--</span>
+            </div>
+            <div class="vitals-grid">
+                <div class="vital-gauge">
+                    <svg viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+                        <circle class="gauge-arc" id="cpu-arc" cx="40" cy="40" r="34" fill="none"
+                                stroke="#00ff88" stroke-width="6" stroke-linecap="round"
+                                stroke-dasharray="213.6" stroke-dashoffset="213.6"
+                                transform="rotate(-90 40 40)"/>
+                    </svg>
+                    <div class="vital-val" id="cpu-val">--%</div>
+                    <div class="vital-lbl">CPU</div>
+                </div>
+                <div class="vital-gauge">
+                    <svg viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+                        <circle class="gauge-arc" id="mem-arc" cx="40" cy="40" r="34" fill="none"
+                                stroke="#0088ff" stroke-width="6" stroke-linecap="round"
+                                stroke-dasharray="213.6" stroke-dashoffset="213.6"
+                                transform="rotate(-90 40 40)"/>
+                    </svg>
+                    <div class="vital-val" id="mem-val">--%</div>
+                    <div class="vital-lbl">Memory</div>
+                </div>
+                <div class="vital-gauge">
+                    <svg viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+                        <circle class="gauge-arc" id="disk-arc" cx="40" cy="40" r="34" fill="none"
+                                stroke="#ffaa00" stroke-width="6" stroke-linecap="round"
+                                stroke-dasharray="213.6" stroke-dashoffset="213.6"
+                                transform="rotate(-90 40 40)"/>
+                    </svg>
+                    <div class="vital-val" id="disk-val">--%</div>
+                    <div class="vital-lbl">Disk</div>
+                </div>
+                <div class="vital-gauge">
+                    <svg viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+                        <circle class="gauge-arc" id="net-arc" cx="40" cy="40" r="34" fill="none"
+                                stroke="#cc44ff" stroke-width="6" stroke-linecap="round"
+                                stroke-dasharray="213.6" stroke-dashoffset="213.6"
+                                transform="rotate(-90 40 40)"/>
+                    </svg>
+                    <div class="vital-val" id="net-val">-- MB</div>
+                    <div class="vital-lbl">Network</div>
                 </div>
             </div>
         </div>
 
-        <!-- Agent Status -->
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">🤖 Agent Network</h3>
+        <div class="cc-card">
+            <div class="cc-card-hdr">
+                <h3>Probe Observability</h3>
+                <a href="/dashboard/probe-explorer" class="cc-link">Explorer</a>
             </div>
-            <div id="agents-container" style="max-height: 300px; overflow-y: auto;">
-                <div style="color: var(--text-secondary); text-align: center; padding: 2rem;">
-                    Loading agents...
-                </div>
+            <div id="probe-section">
+                <div class="cc-loading">Loading probe health...</div>
             </div>
         </div>
+    </div>
+
+    <!-- ===== TOAST NOTIFICATIONS ===== -->
+    <div id="cc-toast-container"></div>
+
+    <!-- ===== KEYBOARD HINT ===== -->
+    <div class="cc-kbd-hint" id="kbd-hint">
+        <span><kbd>R</kbd> Refresh</span>
+        <span><kbd>H</kbd> Hunt</span>
+        <span><kbd>I</kbd> Incidents</span>
+        <span><kbd>F</kbd> Feed</span>
     </div>
 </div>
 
 <style>
-.command-center-v2 {
-    padding: 2rem;
+/* ── Cortex Command Center ── */
+.cortex-cc { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
+
+/* ── Command Hero (Two-Tier) ── */
+.command-hero {
+    background: linear-gradient(135deg, rgba(0,217,255,0.07), rgba(0,255,136,0.03), rgba(0,217,255,0.05));
+    border: 1px solid rgba(0,217,255,0.15);
+    border-radius: 16px; padding: 0;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04);
+    position: relative; overflow: hidden;
+}
+.command-hero::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,217,255,0.4), rgba(0,255,136,0.3), rgba(0,217,255,0.4), transparent);
 }
 
-.metrics-grid-v2 {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
-    margin: 2rem 0;
+.hero-top {
+    display: grid; grid-template-columns: 160px 1fr auto;
+    align-items: center; gap: 2rem; padding: 1.5rem 2rem;
 }
 
-.metric-card {
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 136, 255, 0.1));
-    border: 2px solid rgba(0, 255, 136, 0.3);
-    border-radius: 12px;
-    padding: 1.5rem;
-    text-align: center;
+.hero-posture {
+    position: relative; width: 140px; height: 140px; flex-shrink: 0;
+}
+.posture-ring { width: 140px; height: 140px; }
+.posture-value {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+}
+.posture-value span {
+    font-size: 2.4rem; font-weight: 800; color: #00ff88; line-height: 1;
+    text-shadow: 0 0 24px rgba(0,255,136,0.3);
+    transition: color 0.4s, text-shadow 0.4s;
+}
+.posture-value small {
+    font-size: 0.55rem; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 2px; margin-top: 6px; font-weight: 700;
 }
 
-.metric-value {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: #00ff88;
-    text-shadow: 0 0 10px #00ff88;
-    margin-bottom: 0.5rem;
+.hero-info { display: flex; flex-direction: column; gap: 0.75rem; }
+.hero-threat-row { display: flex; align-items: center; gap: 0.75rem; }
+.hero-threat-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.threat-badge {
+    padding: 0.3rem 1.2rem; border-radius: 20px; font-size: 0.8rem;
+    font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;
+    background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.4);
+    transition: all 0.3s;
+}
+.threat-badge.level-critical { background: rgba(255,51,102,0.2); color: #ff3366; border-color: rgba(255,51,102,0.5); animation: pulse-live 2s ease-in-out infinite; }
+.threat-badge.level-high { background: rgba(255,102,0,0.2); color: #ff6600; border-color: rgba(255,102,0,0.5); }
+.threat-badge.level-medium { background: rgba(255,170,0,0.2); color: #ffaa00; border-color: rgba(255,170,0,0.5); }
+.threat-badge.level-low { background: rgba(0,136,255,0.15); color: #0088ff; border-color: rgba(0,136,255,0.4); }
+
+.hero-freshness {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.7rem; border-radius: 8px; font-size: 0.7rem;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+    width: fit-content;
+}
+.freshness-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.freshness-dot.fresh { background: #00ff88; box-shadow: 0 0 6px #00ff88; }
+.freshness-dot.stale { background: #ffaa00; }
+.freshness-dot.old { background: #ff3366; }
+.freshness-text { color: var(--text-muted); white-space: nowrap; }
+
+.hero-actions { display: flex; flex-direction: column; gap: 0.4rem; flex-shrink: 0; }
+.hero-btn {
+    padding: 0.45rem 1.2rem; border-radius: 8px; font-size: 0.78rem; font-weight: 600;
+    text-decoration: none; text-align: center; white-space: nowrap;
+    background: rgba(255,255,255,0.05); color: var(--text-secondary);
+    border: 1px solid rgba(255,255,255,0.1); transition: all 0.2s;
+}
+.hero-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.hero-btn-accent { background: rgba(0,255,136,0.12); color: #00ff88; border-color: rgba(0,255,136,0.3); }
+.hero-btn-accent:hover { background: rgba(0,255,136,0.2); }
+.hero-btn-live { background: rgba(255,51,102,0.1); color: #ff3366; border-color: rgba(255,51,102,0.25); }
+.hero-btn-live:hover { background: rgba(255,51,102,0.18); }
+
+/* ── Hero Stats Strip ── */
+.hero-stats {
+    display: flex; align-items: center; justify-content: center; gap: 0;
+    padding: 0.75rem 2rem; border-top: 1px solid rgba(255,255,255,0.06);
+    background: rgba(0,0,0,0.15);
+}
+.hero-stat {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 0 2rem; min-width: 100px;
+}
+.hero-stat-val {
+    font-size: 1.4rem; font-weight: 700; color: var(--text-primary); line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+}
+.hero-stat-lbl {
+    font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 1px; margin-top: 2px; font-weight: 600;
+}
+.hero-stat-sep {
+    width: 1px; height: 28px; background: rgba(255,255,255,0.08); flex-shrink: 0;
 }
 
-.metric-label {
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+/* ── Shared Card ── */
+.cc-card {
+    background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 1.25rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+}
+.cc-card-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.cc-card-hdr h3 { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); }
+.cc-link { font-size: 0.75rem; color: var(--neural-primary); text-decoration: none; }
+.cc-link:hover { text-decoration: underline; }
+.cc-loading { color: var(--text-muted); text-align: center; padding: 1.5rem; font-size: 0.85rem; }
+.cc-row { display: grid; gap: 1.25rem; }
+.cc-row-2col { grid-template-columns: 1.4fr 1fr; }
+.cc-row-2col-wide { grid-template-columns: 2fr 1fr; }
+
+/* ── Live badge ── */
+.cc-badge { font-size: 0.65rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 10px; letter-spacing: 0.5px; }
+.cc-badge-live { background: rgba(255,51,102,0.15); color: #ff3366; border: 1px solid rgba(255,51,102,0.3); animation: pulse-live 2s ease-in-out infinite; }
+@keyframes pulse-live { 0%,100%{ opacity:1; } 50%{ opacity:0.5; } }
+.cc-ts { font-size: 0.7rem; color: var(--text-muted); }
+
+/* ── Compact Threat Feed ── */
+.threat-feed { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; }
+.threat-feed::-webkit-scrollbar { width: 4px; }
+.threat-feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.tf-item {
+    display: flex; gap: 0.6rem; padding: 0.55rem 0.7rem; border-radius: 8px;
+    background: rgba(255,255,255,0.02); border-left: 3px solid #00ff88;
+    font-size: 0.8rem; transition: background 0.15s; cursor: pointer;
+}
+.tf-item:hover { background: rgba(255,255,255,0.04); }
+.tf-item.sev-critical { border-left-color: #ff3366; }
+.tf-item.sev-high { border-left-color: #ff6600; }
+.tf-item.sev-medium { border-left-color: #ffaa00; }
+.tf-sev {
+    flex-shrink: 0; width: 48px; text-align: center;
+    padding: 0.1rem 0; border-radius: 4px; font-size: 0.55rem;
+    font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px;
+    align-self: flex-start; margin-top: 2px;
+}
+.tf-sev.sev-critical { background: rgba(255,51,102,0.2); color: #ff3366; }
+.tf-sev.sev-high { background: rgba(255,102,0,0.2); color: #ff6600; }
+.tf-sev.sev-medium { background: rgba(255,170,0,0.2); color: #ffaa00; }
+.tf-sev.sev-low { background: rgba(0,136,255,0.15); color: #0088ff; }
+.tf-body { flex: 1; min-width: 0; }
+.tf-type { font-weight: 600; color: var(--text-primary); margin-bottom: 1px; font-size: 0.78rem; }
+.tf-meta { display: flex; gap: 0.5rem; font-size: 0.65rem; color: var(--text-muted); flex-wrap: wrap; }
+.tf-mitre { padding: 0 0.3rem; background: rgba(0,217,255,0.1); border-radius: 3px; color: var(--neural-primary); font-size: 0.6rem; }
+.tf-triage {
+    display: flex; gap: 0.25rem; margin-left: auto; flex-shrink: 0;
+}
+.triage-btn {
+    padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.55rem;
+    font-weight: 700; text-transform: uppercase; cursor: pointer;
+    border: 1px solid; transition: all 0.15s; background: transparent;
+}
+.triage-btn:hover { filter: brightness(1.3); }
+.triage-legit { color: #00ff88; border-color: rgba(0,255,136,0.25); }
+.triage-legit:hover { background: rgba(0,255,136,0.1); }
+.triage-inv { color: #00d9ff; border-color: rgba(0,217,255,0.25); }
+.triage-inv:hover { background: rgba(0,217,255,0.1); }
+.triage-inc { color: #ff3366; border-color: rgba(255,51,102,0.25); }
+.triage-inc:hover { background: rgba(255,51,102,0.1); }
+
+/* ── Incidents ── */
+.inc-item {
+    display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.82rem;
+}
+.inc-item:last-child { border-bottom: none; }
+.inc-sev { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.inc-sev.sev-critical { background: #ff3366; box-shadow: 0 0 6px #ff3366; }
+.inc-sev.sev-high { background: #ff6600; box-shadow: 0 0 6px #ff6600; }
+.inc-sev.sev-medium { background: #ffaa00; }
+.inc-sev.sev-low { background: #0088ff; }
+.inc-body { flex: 1; min-width: 0; }
+.inc-title { color: var(--text-primary); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inc-meta { font-size: 0.7rem; color: var(--text-muted); }
+.inc-sla { flex-shrink: 0; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; }
+.inc-sla.breach { background: rgba(255,51,102,0.15); color: #ff3366; }
+.inc-sla.ok { background: rgba(0,255,136,0.1); color: #00ff88; }
+
+/* ── Agent Fleet ── */
+.agent-fleet { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; }
+.af-card {
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px; padding: 0.85rem; cursor: pointer; transition: all 0.2s;
+    position: relative; overflow: hidden;
+}
+.af-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(0,217,255,0.3), transparent);
+    opacity: 0; transition: opacity 0.2s;
+}
+.af-card:hover { background: rgba(255,255,255,0.04); border-color: rgba(0,217,255,0.2); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.af-card:hover::before { opacity: 1; }
+.af-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.af-name { font-size: 0.78rem; font-weight: 700; color: var(--neural-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.af-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.af-dot.online { background: #00ff88; box-shadow: 0 0 6px #00ff88; }
+.af-dot.degraded { background: #ffaa00; }
+.af-dot.offline { background: #ff3366; }
+.af-stats { display: flex; gap: 0.75rem; font-size: 0.7rem; color: var(--text-muted); }
+.af-probes { display: flex; gap: 2px; margin-top: 0.4rem; }
+.af-probe-dot { width: 6px; height: 6px; border-radius: 1px; }
+.af-sparkline { margin-top: 0.35rem; }
+.af-sparkline svg { display: block; }
+
+/* ── Top IPs ── */
+.ip-bar-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem; font-size: 0.78rem; }
+.ip-label { width: 120px; font-family: monospace; color: var(--text-secondary); font-size: 0.75rem; flex-shrink: 0; text-align: right; }
+.ip-bar-bg { flex: 1; height: 16px; background: rgba(255,255,255,0.04); border-radius: 3px; overflow: hidden; }
+.ip-bar { height: 100%; border-radius: 3px; background: var(--neural-primary); opacity: 0.7; transition: width 0.4s; }
+.ip-count { width: 40px; font-size: 0.7rem; color: var(--text-muted); }
+
+/* ── MITRE Mini-Map ── */
+.mitre-mini { display: flex; flex-direction: column; gap: 0.35rem; }
+.mm-row { display: flex; align-items: center; gap: 0.5rem; }
+.mm-label { width: 120px; font-size: 0.7rem; color: var(--text-secondary); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+.mm-bar-bg { flex: 1; height: 14px; background: rgba(255,255,255,0.04); border-radius: 3px; overflow: hidden; }
+.mm-bar { height: 100%; border-radius: 3px; transition: width 0.4s ease; min-width: 0; }
+.mm-pct { width: 36px; font-size: 0.65rem; color: var(--text-muted); text-align: right; flex-shrink: 0; }
+
+/* ── Heatmap ── */
+.heatmap-grid { display: flex; flex-direction: column; gap: 2px; }
+.heatmap-row { display: flex; gap: 2px; align-items: center; }
+.heatmap-lbl { width: 28px; font-size: 0.55rem; color: var(--text-muted); text-align: right; flex-shrink: 0; }
+.heatmap-cell { width: 100%; aspect-ratio: 1.6; border-radius: 2px; transition: background 0.3s; }
+
+/* ── Vitals ── */
+.vitals-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.vital-gauge { text-align: center; }
+.vital-gauge svg { width: 72px; height: 72px; display: block; margin: 0 auto; }
+.vital-val { font-size: 1rem; font-weight: 700; color: var(--text-primary); margin-top: 0.3rem; }
+.vital-lbl { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ── Probe Section ── */
+.probe-bar-wrap { display: flex; height: 24px; border-radius: 6px; overflow: hidden; background: rgba(255,255,255,0.04); margin-bottom: 0.75rem; }
+.pb-seg { display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 800; color: #000; transition: width 0.4s ease; }
+.probe-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.75rem; margin-bottom: 0.75rem; }
+.probe-legend-i { display: flex; align-items: center; gap: 0.3rem; }
+.probe-legend-d { width: 8px; height: 8px; border-radius: 2px; }
+.probe-agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; }
+.pa-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(255,255,255,0.02); }
+.pa-name { color: var(--neural-primary); font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pa-count { color: var(--text-muted); font-size: 0.7rem; }
+
+/* ── Export button ── */
+.cc-export-btn {
+    padding: 0.2rem 0.6rem; border-radius: 5px; font-size: 0.65rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.3px; cursor: pointer;
+    background: rgba(0,217,255,0.08); color: var(--neural-primary);
+    border: 1px solid rgba(0,217,255,0.2); transition: all 0.15s;
+}
+.cc-export-btn:hover { background: rgba(0,217,255,0.15); border-color: rgba(0,217,255,0.4); }
+
+/* ── Trend arrows ── */
+.cb-trend { font-size: 0.65rem; margin-left: 4px; font-weight: 800; }
+.cb-trend.up { color: #ff3366; }
+.cb-trend.down { color: #00ff88; }
+.cb-trend.flat { color: var(--text-muted); }
+
+/* ── Toast notifications ── */
+#cc-toast-container {
+    position: fixed; top: 1rem; right: 1rem; z-index: 3000;
+    display: flex; flex-direction: column; gap: 0.5rem;
+    pointer-events: none;
+}
+.cc-toast {
+    padding: 0.7rem 1rem; border-radius: 8px; font-size: 0.8rem; font-weight: 600;
+    background: rgba(10,14,39,0.95); border: 1px solid rgba(255,51,102,0.4);
+    color: #ff3366; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    animation: toast-in 0.3s ease, toast-out 0.3s ease 4.7s forwards;
+    pointer-events: auto; max-width: 340px;
+}
+.cc-toast.toast-info { border-color: rgba(0,217,255,0.4); color: var(--neural-primary); }
+.cc-toast.toast-success { border-color: rgba(0,255,136,0.4); color: #00ff88; }
+@keyframes toast-in { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+@keyframes toast-out { from { opacity:1; } to { opacity:0; transform:translateX(40px); } }
+
+/* ── Keyboard hints ── */
+.cc-kbd-hint {
+    position: fixed; bottom: 1rem; right: 1rem; z-index: 2000;
+    display: flex; gap: 0.75rem; padding: 0.5rem 0.8rem;
+    background: rgba(10,14,39,0.9); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; font-size: 0.7rem; color: var(--text-muted);
+    opacity: 0.6; transition: opacity 0.2s;
+}
+.cc-kbd-hint:hover { opacity: 1; }
+.cc-kbd-hint kbd {
+    display: inline-block; padding: 0.1rem 0.35rem; border-radius: 3px;
+    background: rgba(255,255,255,0.08); color: var(--neural-primary);
+    font-size: 0.65rem; font-weight: 700; font-family: monospace;
+    border: 1px solid rgba(255,255,255,0.1); margin-right: 2px;
 }
 
-.metric-detail {
-    color: #0088ff;
-    font-size: 0.8rem;
-    margin-top: 0.5rem;
-}
+/* ── Empty state ── */
+.cc-empty { text-align: center; padding: 2rem; color: var(--text-muted); }
+.cc-empty-icon { font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5; }
+.cc-empty-msg { font-size: 0.85rem; }
+.cc-empty a { color: var(--neural-primary); text-decoration: none; }
 
-.metric-timestamp {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.system-metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 2rem;
-    padding: 1.5rem 0;
-}
-
-.metric-box {
-    text-align: center;
-}
-
-.metric-box canvas {
-    margin: 0 auto;
-    display: block;
-}
-
-.metric-box-label {
-    color: var(--text-secondary);
-    margin-top: 1rem;
-    font-size: 0.9rem;
-}
-
-.metric-box-value {
-    color: #00ff88;
-    font-weight: 700;
-    font-size: 1.2rem;
-    margin-top: 0.3rem;
-}
-
-#threats-container > div,
-#agents-container > div {
-    padding: 0.8rem;
-    border-bottom: 1px solid rgba(0, 255, 136, 0.1);
-    font-size: 0.9rem;
-    line-height: 1.4;
-}
-
-#threats-container > div:last-child,
-#agents-container > div:last-child {
-    border-bottom: none;
-}
-
-.threat-item {
-    padding: 1rem !important;
-    background: rgba(255, 51, 102, 0.1);
-    border-left: 3px solid #ff3366;
-    margin-bottom: 0.5rem;
-    border-radius: 4px;
-}
-
-.threat-type {
-    color: #ff3366;
-    font-weight: 700;
-}
-
-.threat-time {
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    margin-top: 0.3rem;
-}
-
-.agent-item {
-    padding: 1rem !important;
-    background: rgba(0, 136, 255, 0.1);
-    border-left: 3px solid #0088ff;
-    margin-bottom: 0.5rem;
-    border-radius: 4px;
-}
-
-.agent-name {
-    color: var(--neural-primary);
-    font-weight: 600;
-}
-
-.agent-status {
-    font-size: 0.85rem;
-    margin-top: 0.3rem;
-}
-
-.status-online {
-    color: var(--text-secondary);
-}
-
-.status-offline {
-    color: var(--text-secondary);
-}
-
-.status-error {
-    color: #ff3366;
-}
-
-/* Empty State Onboarding Styles */
-.empty-state-onboarding {
-    text-align: center;
-    padding: 2rem;
-    border: 2px dashed rgba(0, 255, 136, 0.3);
-    border-radius: 12px;
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.05), rgba(0, 136, 255, 0.05));
-}
-
-.empty-state-btn {
-    display: inline-block;
-    padding: 0.5rem 1rem;
-    background: transparent;
-    border: 1px solid rgba(0, 255, 136, 0.5);
-    color: #00ff88;
-    text-decoration: none;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    transition: all 0.2s ease;
-}
-
-.empty-state-btn:hover {
-    background: rgba(0, 255, 136, 0.1);
-    border-color: #00ff88;
-}
-
-.empty-state-btn.primary {
-    background: rgba(0, 255, 136, 0.2);
-    border-color: #00ff88;
-}
-
-.empty-state-btn.primary:hover {
-    background: rgba(0, 255, 136, 0.3);
+/* ── Responsive ── */
+@media (max-width: 900px) {
+    .hero-top { grid-template-columns: 1fr; text-align: center; justify-items: center; }
+    .hero-stats { flex-wrap: wrap; }
+    .hero-stat-sep { display: none; }
+    .hero-actions { flex-direction: row; }
+    .cc-row-2col, .cc-row-2col-wide { grid-template-columns: 1fr; }
+    .vitals-grid { grid-template-columns: repeat(2, 1fr); }
+    .mm-label { width: 80px; }
 }
 </style>
 
 <script nonce="{{ csp_nonce() }}">
-class CortexDashboardV2 {
+class CortexCommandCenter {
     constructor() {
-        this.charts = {};
-        this.updateInterval = 5000; // 5 seconds
-        this.updateTimer = null;
-        this.failureCount = { metrics: 0, threats: 0, agents: 0, health: 0 };
-        this.maxRetries = 3;
-        this.lastUpdateTime = { metrics: null, threats: null, agents: null, health: null };
+        this.timer = null;
+        this.REFRESH = 5000;
+        this.CIRC_POSTURE = 2 * Math.PI * 58;  // 364.4
+        this.CIRC_GAUGE = 2 * Math.PI * 34;    // 213.6
+        this.SLA_HOURS = { critical: 4, high: 8, medium: 24, low: 72 };
+        this.TACTICS = [
+            'Reconnaissance','Resource Development','Initial Access','Execution',
+            'Persistence','Privilege Escalation','Defense Evasion','Credential Access',
+            'Discovery','Lateral Movement','Collection','Command and Control',
+            'Exfiltration','Impact'
+        ];
+        this.prevStats = { events: null, threats: null, agents: null };
+        this.threatCache = [];
+        this.agentCache = [];
+        this.seenCritical = new Set();
+        this.clusterCache = null;
         this.init();
     }
 
     async init() {
-        console.log('Initializing Cortex Dashboard V2');
-        this.initCharts();
-        this.startUpdates();
-        // Do initial update immediately
-        await this.updateAll();
+        await this.refreshAll();
+        this.timer = setInterval(() => this.refreshAll(), this.REFRESH);
+        window.addEventListener('beforeunload', () => { if (this.timer) clearInterval(this.timer); });
+        this.initKeyboard();
     }
 
-    initCharts() {
-        const chartConfig = {
-            type: 'doughnut',
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                cutout: '70%',
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { enabled: false }
+    initKeyboard() {
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            switch (e.key.toLowerCase()) {
+                case 'r': e.preventDefault(); this.refreshAll(); this.toast('Refreshing...', 'info'); break;
+                case 'h': e.preventDefault(); window.location = '/dashboard/hunt'; break;
+                case 'i': e.preventDefault(); window.location = '/dashboard/incidents'; break;
+                case 'f': e.preventDefault(); window.location = '/dashboard/threat-feed'; break;
+            }
+        });
+    }
+
+    toast(msg, type) {
+        const container = document.getElementById('cc-toast-container');
+        if (!container) return;
+        for (const existing of container.children) { if (existing.textContent === msg) return; }
+        while (container.children.length >= 3) { container.removeChild(container.firstChild); }
+        const el = document.createElement('div');
+        el.className = 'cc-toast' + (type === 'info' ? ' toast-info' : type === 'success' ? ' toast-success' : '');
+        el.textContent = msg;
+        container.appendChild(el);
+        setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 5000);
+    }
+
+    async refreshAll() {
+        await Promise.allSettled([
+            this.fetchHealth(),
+            this.fetchThreats(),
+            this.fetchAgents(),
+            this.fetchMetrics(),
+            this.fetchProbeHealth(),
+            this.fetchIncidents(),
+            this.fetchMitre(),
+            this.fetchClustering()
+        ]);
+    }
+
+    trendArrow(key, newVal) {
+        const prev = this.prevStats[key];
+        this.prevStats[key] = newVal;
+        if (prev === null) return '';
+        if (newVal > prev) return '<span class="cb-trend up">&#9650;</span>';
+        if (newVal < prev) return '<span class="cb-trend down">&#9660;</span>';
+        return '<span class="cb-trend flat">&#9644;</span>';
+    }
+
+    /* ── 1. Health / Command Hero ── */
+    async fetchHealth() {
+        try {
+            const r = await fetch('/api/v1/health/system');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            if (d.status !== 'success') throw new Error('API error');
+
+            const score = d.health_score || 0;
+            this.setPosture(score);
+
+            const level = (d.threat_level || 'BENIGN').toUpperCase();
+            const badge = document.getElementById('threat-badge');
+            badge.textContent = level === 'BENIGN' ? 'CLEAR' : level;
+            badge.className = 'threat-badge' + this.threatClass(level);
+
+            const ag = d.agents_summary || {};
+            document.getElementById('cb-agents').innerHTML = (ag.online || 0) + '/' + (ag.total || 0) + this.trendArrow('agents', ag.online || 0);
+            const evCount = d.events_last_24h || 0;
+            document.getElementById('cb-events').innerHTML = this.fmtNum(evCount) + this.trendArrow('events', evCount);
+        } catch (e) { /* silent */ }
+    }
+
+    setPosture(score) {
+        const el = document.getElementById('posture-score');
+        el.textContent = score;
+        const color = score >= 70 ? '#00ff88' : score >= 40 ? '#ffaa00' : '#ff3366';
+        el.style.color = color;
+        el.style.textShadow = '0 0 24px ' + color + '4d';
+        const arc = document.getElementById('posture-arc');
+        const offset = this.CIRC_POSTURE * (1 - score / 100);
+        arc.style.strokeDashoffset = offset;
+        arc.style.stroke = color;
+        arc.style.transition = 'stroke-dashoffset 0.6s cubic-bezier(0.4,0,0.2,1), stroke 0.4s';
+    }
+
+    threatClass(level) {
+        if (level === 'CRITICAL' || level === 'UNDER_ATTACK') return ' level-critical';
+        if (level === 'HIGH') return ' level-high';
+        if (level === 'MEDIUM') return ' level-medium';
+        if (level === 'LOW') return ' level-low';
+        return '';
+    }
+
+    /* ── 2. Compact Threat Feed (5 items + triage) ── */
+    async fetchThreats() {
+        try {
+            const r = await fetch('/dashboard/api/live/threats');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            if (d.status !== 'success') throw new Error('API error');
+
+            const threatCount = d.count || 0;
+            document.getElementById('cb-threats').innerHTML = threatCount + this.trendArrow('threats', threatCount);
+            this.updateFreshness(d.data_stale, d.last_event_time);
+            const container = document.getElementById('threat-feed');
+            this.threatCache = d.threats || [];
+
+            // Compute MTTD from timestamps
+            if (this.threatCache.length > 0) {
+                const now = Date.now();
+                let totalMs = 0; let cnt = 0;
+                for (const t of this.threatCache.slice(0, 20)) {
+                    if (t.timestamp) { totalMs += now - new Date(t.timestamp).getTime(); cnt++; }
+                }
+                if (cnt > 0) {
+                    const avgH = totalMs / cnt / 3600000;
+                    document.getElementById('cb-mttd').textContent = avgH < 1 ? Math.round(avgH * 60) + 'm' : avgH.toFixed(1) + 'h';
                 }
             }
-        };
 
-        // CPU Chart
-        this.charts.cpu = new Chart(document.getElementById('cpu-chart'), {
-            ...chartConfig,
-            data: {
-                datasets: [{
-                    data: [0, 100],
-                    backgroundColor: ['#00ff88', 'rgba(255, 255, 255, 0.1)'],
-                    borderWidth: 0
-                }]
+            if (this.threatCache.length === 0) {
+                container.innerHTML = '<div class="cc-empty"><div class="cc-empty-icon">&#x1f6e1;</div><div class="cc-empty-msg">No threats detected.<br><span style="font-size:0.75rem;color:var(--text-muted);"><a href="/dashboard/deploy" style="color:var(--neural-primary);">Deploy agents</a> to begin monitoring.</span></div></div>';
+                return;
             }
-        });
 
-        // Memory Chart
-        this.charts.memory = new Chart(document.getElementById('memory-chart'), {
-            ...chartConfig,
-            data: {
-                datasets: [{
-                    data: [0, 100],
-                    backgroundColor: ['#0088ff', 'rgba(255, 255, 255, 0.1)'],
-                    borderWidth: 0
-                }]
+            // Critical event toast
+            let newCritCount = 0;
+            let lastCritType = '';
+            for (const t of this.threatCache) {
+                if ((t.severity || '').toLowerCase() === 'critical' && t.id && !this.seenCritical.has(t.id)) {
+                    this.seenCritical.add(t.id);
+                    newCritCount++;
+                    lastCritType = t.type || 'Unknown threat';
+                }
             }
-        });
+            if (newCritCount === 1) { this.toast('CRITICAL: ' + lastCritType, 'critical'); }
+            else if (newCritCount > 1) { this.toast(newCritCount + ' new CRITICAL events', 'critical'); }
 
-        // Disk Chart
-        this.charts.disk = new Chart(document.getElementById('disk-chart'), {
-            ...chartConfig,
-            data: {
-                datasets: [{
-                    data: [0, 100],
-                    backgroundColor: ['#ffaa00', 'rgba(255, 255, 255, 0.1)'],
-                    borderWidth: 0
-                }]
-            }
-        });
+            // Render compact feed (8 items with triage)
+            container.innerHTML = this.threatCache.slice(0, 8).map((t, idx) => {
+                const sev = (t.severity || 'low').toLowerCase();
+                const time = t.timestamp ? this.relTime(t.timestamp) : '';
+                const mitreList = (t.mitre_techniques || []).map(m => '<span class="tf-mitre">' + m + '</span>').join(' ');
 
-        // Network Chart (synthetic - bytes sent/recv ratio)
-        this.charts.network = new Chart(document.getElementById('network-chart'), {
-            ...chartConfig,
-            data: {
-                datasets: [{
-                    data: [50, 50],
-                    backgroundColor: ['#ff00ff', 'rgba(255, 255, 255, 0.1)'],
-                    borderWidth: 0
-                }]
-            }
-        });
-
-        console.log('Charts initialized');
+                return '<div class="tf-item sev-' + sev + '" data-idx="' + idx + '">' +
+                    '<div class="tf-sev sev-' + sev + '">' + sev + '</div>' +
+                    '<div class="tf-body">' +
+                        '<div class="tf-type">' + this.fmtType(t.type) + '</div>' +
+                        '<div class="tf-meta">' +
+                            (t.agent_id ? '<span>' + this.esc(t.agent_id) + '</span>' : '') +
+                            '<span>' + time + '</span>' +
+                            mitreList +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="tf-triage">' +
+                        '<button class="triage-btn triage-legit" onclick="event.stopPropagation();cortex.triage(' + idx + ',\'legit\')" title="Mark Legitimate">&#10003;</button>' +
+                        '<button class="triage-btn triage-inv" onclick="event.stopPropagation();cortex.triage(' + idx + ',\'investigate\')" title="Investigate">&#128269;</button>' +
+                        '<button class="triage-btn triage-inc" onclick="event.stopPropagation();cortex.triage(' + idx + ',\'incident\')" title="Create Incident">&#9888;</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        } catch (e) { /* silent */ }
     }
 
-    startUpdates() {
-        // Update every 5 seconds
-        this.updateTimer = setInterval(() => this.updateAll(), this.updateInterval);
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', () => this.cleanup());
-    }
+    /* ── Triage Actions ── */
+    async triage(idx, action) {
+        const t = this.threatCache[idx];
+        if (!t) return;
 
-    cleanup() {
-        if (this.updateTimer) {
-            clearInterval(this.updateTimer);
-            this.updateTimer = null;
+        if (action === 'legit') {
+            this.toast('Marked as legitimate', 'success');
+            return;
+        }
+        if (action === 'investigate') {
+            window.location = '/dashboard/timeline-replay?event_id=' + t.id;
+            return;
+        }
+        if (action === 'incident') {
+            try {
+                const body = {
+                    title: '[Auto] ' + this.fmtType(t.type) + ' - ' + (t.severity || 'medium').toUpperCase(),
+                    description: (t.description || 'Auto-created from live feed. Event #' + t.id),
+                    severity: t.severity || 'medium',
+                    source_event_ids: [t.id],
+                    mitre_techniques: t.mitre_techniques || [],
+                    indicators: t.indicators || {}
+                };
+                const resp = await fetch('/dashboard/api/incidents', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    this.toast('Incident #' + data.incident_id + ' created', 'success');
+                    this.fetchIncidents();
+                } else {
+                    this.toast('Failed: ' + (data.message || 'Unknown error'), 'critical');
+                }
+            } catch (e) {
+                this.toast('Failed to create incident', 'critical');
+            }
         }
     }
 
-    /**
-     * Display error state in UI with retry button
-     */
-    showErrorState(containerId, message, retryFn) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        
-        const errorHtml = `
-            <div style="color: #ff3366; padding: 1rem; border: 1px solid #ff3366; border-radius: 4px; background: rgba(255, 51, 102, 0.1);">
-                <div style="font-weight: 700; margin-bottom: 0.5rem;">⚠️ Error</div>
-                <div style="font-size: 0.9rem; margin-bottom: 1rem;">${message}</div>
-                <button onclick="window.cortexDashboard && window.cortexDashboard.retryUpdate('${containerId}')" 
-                    style="padding: 0.5rem 1rem; background: #ff3366; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Retry
-                </button>
-            </div>
-        `;
-        container.innerHTML = errorHtml;
+    updateFreshness(dataStale, lastEventTime) {
+        const el = document.getElementById('cb-freshness');
+        const dot = document.getElementById('freshness-dot');
+        const text = document.getElementById('freshness-text');
+        if (!el) return;
+        el.style.display = 'flex';
+        if (!lastEventTime) { dot.className = 'freshness-dot old'; text.textContent = 'No data'; return; }
+        const ago = (Date.now() - new Date(lastEventTime).getTime()) / 1000;
+        if (ago < 3600) { dot.className = 'freshness-dot fresh'; text.textContent = 'Live \u00b7 ' + Math.floor(ago / 60) + 'm ago'; }
+        else if (ago < 86400) { dot.className = 'freshness-dot stale'; text.textContent = Math.floor(ago / 3600) + 'h ago'; }
+        else { dot.className = 'freshness-dot old'; text.textContent = Math.floor(ago / 86400) + 'd ago'; }
+        if (dataStale) { el.style.borderColor = 'rgba(255,170,0,0.3)'; el.style.background = 'rgba(255,170,0,0.05)'; }
     }
 
-    /**
-     * Get time elapsed since last successful update
-     */
-    getTimeSinceUpdate(updateType) {
-        const lastTime = this.lastUpdateTime[updateType];
-        if (!lastTime) return 'Never';
-        
-        const elapsed = Math.floor((Date.now() - lastTime) / 1000);
-        if (elapsed < 60) return elapsed + 's ago';
-        if (elapsed < 3600) return Math.floor(elapsed / 60) + 'm ago';
-        return Math.floor(elapsed / 3600) + 'h ago';
-    }
-
-    /**
-     * Update timestamp display with freshness indicator
-     */
-    updateTimestampDisplay(elementId, updateType) {
-        const element = document.getElementById(elementId);
-        if (!element) return;
-        
-        const elapsed = this.getTimeSinceUpdate(updateType);
-        const color = this.getTimestampColor(this.lastUpdateTime[updateType]);
-        element.textContent = `Last updated: ${elapsed}`;
-        element.style.color = color;
-    }
-
-    /**
-     * Determine color based on data freshness
-     */
-    getTimestampColor(lastTime) {
-        if (!lastTime) return '#ff3366'; // Error red
-        const elapsed = Date.now() - lastTime;
-        if (elapsed < 10000) return '#00ff88'; // Fresh - green
-        if (elapsed < 30000) return '#ffaa00'; // Stale - yellow
-        return '#ff3366'; // Very stale - red
-    }
-
-    /**
-     * Retry a specific update
-     */
-    async retryUpdate(updateType) {
-        console.log('Retrying update:', updateType);
-        if (updateType === 'metrics') await this.updateMetrics();
-        else if (updateType === 'threats') await this.updateThreats();
-        else if (updateType === 'agents') await this.updateAgents();
-    }
-
-    cleanup() {
-        if (this.updateTimer) {
-            clearInterval(this.updateTimer);
-            this.updateTimer = null;
-        }
-    }
-
-    async updateAll() {
+    /* ── 3. Agent Fleet ── */
+    async fetchAgents() {
         try {
-            await Promise.all([
-                this.updateHealthStatus(),
-                this.updateMetrics(),
-                this.updateThreats(),
-                this.updateAgents()
-            ]);
-        } catch (error) {
-            console.error('Update error:', error);
-        }
+            const r = await fetch('/dashboard/api/agents/deep-overview');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            const agents = d.agents || [];
+            this.agentCache = agents;
+            const fleet = document.getElementById('agent-fleet');
+
+            if (agents.length === 0) {
+                fleet.innerHTML = '<div class="cc-empty"><div class="cc-empty-msg">No agents. <a href="/dashboard/deploy">Deploy first agent</a>.</div></div>';
+                return;
+            }
+
+            let totalProbes = 0;
+            agents.forEach(a => { totalProbes += (a.probes || []).filter(p => p.status === 'REAL' || p.status === 'DEGRADED').length; });
+            document.getElementById('cb-probes').textContent = totalProbes;
+
+            fleet.innerHTML = agents.map(a => {
+                const probes = a.probes || [];
+                const real = probes.filter(p => p.status === 'REAL').length;
+                const total = probes.length;
+                const health = total > 0 ? Math.round(((real + probes.filter(p => p.status === 'DEGRADED').length) / total) * 100) : 0;
+                const status = health >= 80 ? 'online' : health >= 50 ? 'degraded' : 'offline';
+                const evts = a.event_count || 0;
+                const signed = a.signing_enabled ? '<span style="color:#00ff88;font-size:0.65rem;" title="Ed25519 Signed">&#x1f512;</span>' : '';
+                let probeDots = '';
+                probes.slice(0, 20).forEach(p => {
+                    const c = p.status === 'REAL' ? '#00ff88' : p.status === 'DEGRADED' ? '#ffaa00' : p.status === 'BROKEN' ? '#ff3366' : '#444';
+                    probeDots += '<div class="af-probe-dot" style="background:' + c + ';" title="' + this.esc(p.name || '') + ' (' + p.status + ')"></div>';
+                });
+                const sparkline = this.buildSparkline(a);
+                return '<div class="af-card" onclick="window.location=\'/dashboard/agents\'">' +
+                    '<div class="af-header"><span class="af-name">' + this.esc(a.name || a.id || 'Unknown') + '</span><span class="af-dot ' + status + '"></span></div>' +
+                    '<div class="af-stats"><span>' + real + '/' + total + ' probes</span><span>' + this.fmtNum(evts) + ' events</span>' + signed + '</div>' +
+                    '<div class="af-probes">' + probeDots + '</div>' +
+                    '<div class="af-sparkline">' + sparkline + '</div>' +
+                '</div>';
+            }).join('');
+        } catch (e) { /* silent */ }
     }
 
-    /**
-     * Fetch from Health API v1 for Command Center metrics
-     * This provides real threat level, health score, and agent coverage
-     */
-    async updateHealthStatus() {
+    buildSparkline(agent) {
+        const probes = agent.probes || [];
+        if (probes.length === 0) return '';
+        const w = 160, h = 20, pts = [];
+        const step = Math.max(1, Math.floor(probes.length / 12));
+        for (let i = 0; i < probes.length; i += step) {
+            const slice = probes.slice(i, i + step);
+            const healthy = slice.filter(p => p.status === 'REAL' || p.status === 'DEGRADED').length;
+            pts.push(slice.length > 0 ? healthy / slice.length : 0);
+        }
+        while (pts.length < 2) pts.push(pts[0] || 0);
+        const xStep = w / Math.max(1, pts.length - 1);
+        const points = pts.map((v, i) => (i * xStep).toFixed(1) + ',' + (h - v * h).toFixed(1)).join(' ');
+        const fillPts = '0,' + h + ' ' + points + ' ' + ((pts.length - 1) * xStep).toFixed(1) + ',' + h;
+        const color = pts[pts.length - 1] >= 0.8 ? '#00ff88' : pts[pts.length - 1] >= 0.5 ? '#ffaa00' : '#ff3366';
+        return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="' + w + '" height="' + h + '" style="display:block;">' +
+            '<polygon points="' + fillPts + '" fill="' + color + '" fill-opacity="0.1"/>' +
+            '<polyline points="' + points + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+
+    /* ── 4. Event Clustering (Activity + Severity + Heatmap + Top IPs) ── */
+    async fetchClustering() {
         try {
-            const response = await fetch('/api/v1/health/system', { timeout: 5000 });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const data = await response.json();
-            if (data.status !== 'success') throw new Error('API error: ' + data.status);
-
-            // Update Threat Level card
-            const threatLevel = data.threat_level || 'BENIGN';
-            document.getElementById('threat-score').textContent =
-                threatLevel === 'BENIGN' ? '0' :
-                threatLevel === 'LOW' ? '1' :
-                threatLevel === 'MEDIUM' ? '2' :
-                threatLevel === 'HIGH' ? '3' :
-                threatLevel === 'CRITICAL' ? '4' : '5';
-
-            // Update threat status dot
-            const threatDot = document.getElementById('threat-status-dot');
-
-            if (threatLevel === 'CRITICAL' || threatLevel === 'HIGH') {
-                threatDot.className = 'status-dot status-critical';
-            } else if (threatLevel === 'MEDIUM' || threatLevel === 'LOW') {
-                threatDot.className = 'status-dot status-warning';
-            } else {
-                threatDot.className = 'status-dot status-online';
-            }
-
-            // Update Health Score card
-            const healthScore = data.health_score || 0;
-            const healthDot = document.getElementById('health-status-dot');
-
-            document.getElementById('health-score').textContent = healthScore + '%';
-
-            if (healthScore >= 70) {
-                healthDot.className = 'status-dot status-online';
-            } else if (healthScore >= 40) {
-                healthDot.className = 'status-dot status-warning';
-            } else {
-                healthDot.className = 'status-dot status-critical';
-            }
-
-            // Update Events (24h) card
-            const events24h = data.events_last_24h || 0;
-            const eventDot = document.getElementById('event-status-dot');
-
-            document.getElementById('event-count').textContent = events24h;
-
-            if (events24h > 100) {
-                eventDot.className = 'status-dot status-critical';
-            } else if (events24h > 10) {
-                eventDot.className = 'status-dot status-warning';
-            } else {
-                eventDot.className = 'status-dot status-online';
-            }
-
-            // Update Agent count
-            const agentsSummary = data.agents_summary || {};
-            const online = agentsSummary.online || 0;
-            const total = agentsSummary.total || 0;
-            const agentDot = document.getElementById('agent-status-dot');
-
-            document.getElementById('agent-count').textContent = `${online}/${total}`;
-
-            if (online === total && total > 0) {
-                agentDot.className = 'status-dot status-online';
-            } else if (online > 0) {
-                agentDot.className = 'status-dot status-warning';
-            } else {
-                agentDot.className = 'status-dot status-critical';
-            }
-
-            // Handle empty state
-            if (data.empty_state) {
-                this.showEmptyState(data.empty_state_message);
-            }
-
-            // Update timestamp
-            this.lastUpdateTime.health = Date.now();
-            this.failureCount.health = 0;
-
-        } catch (error) {
-            console.error('Health status update failed:', error);
-            this.failureCount.health++;
-            
-            // Fall back to old method if health API fails
-            if (this.failureCount.health >= this.maxRetries) {
-                console.warn('Health API unavailable, using fallback metrics');
-            }
-        }
+            const r = await fetch('/dashboard/api/live/event-clustering');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            if (d.status !== 'success') throw new Error('API error');
+            this.clusterCache = d.clusters || {};
+            this.renderActivityChart();
+            this.renderSeverityChart();
+            this.renderTopIPs();
+            this.renderHeatmap();
+            document.getElementById('activity-ts').textContent = new Date().toLocaleTimeString();
+            document.getElementById('ips-ts').textContent = new Date().toLocaleTimeString();
+        } catch (e) { /* silent */ }
     }
 
-    getThreatColor(level) {
-        const colors = {
-            'BENIGN': '#00ff88',
-            'LOW': '#00ff88',
-            'MEDIUM': '#ffaa00',
-            'HIGH': '#ff6600',
-            'CRITICAL': '#ff3366',
-            'UNDER_ATTACK': '#ff0000'
-        };
-        return colors[level] || '#ffffff';
+    renderActivityChart() {
+        const byHour = this.clusterCache.by_hour || {};
+        const container = document.getElementById('activity-chart');
+        const hours = Object.keys(byHour).sort();
+        if (hours.length === 0) { container.innerHTML = '<div class="cc-empty"><div class="cc-empty-msg">No activity data</div></div>'; return; }
+        const vals = hours.map(h => byHour[h]);
+        const maxVal = Math.max(1, ...vals);
+        const w = 600, h = 70, barW = Math.max(4, (w - 4) / Math.max(1, hours.length) - 2);
+        let bars = '';
+        vals.forEach((v, i) => {
+            const bh = Math.max(2, (v / maxVal) * (h - 8));
+            const x = 2 + i * ((w - 4) / Math.max(1, vals.length));
+            const color = v > maxVal * 0.7 ? '#ff3366' : v > maxVal * 0.3 ? '#ffaa00' : '#00d9ff';
+            bars += '<rect x="' + x.toFixed(1) + '" y="' + (h - bh).toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="2" fill="' + color + '" fill-opacity="0.7"><title>' + hours[i] + ': ' + v + ' events</title></rect>';
+        });
+        container.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" height="' + h + '" preserveAspectRatio="none" style="display:block;">' + bars + '</svg>';
     }
 
-    showEmptyState(message) {
-        // Update containers with empty state message
-        const threatsContainer = document.getElementById('threats-container');
-        const agentsContainer = document.getElementById('agents-container');
-        
-        // Enhanced empty state with onboarding guidance
-        const onboardingHtml = `
-            <div class="empty-state-onboarding">
-                <div style="font-size: 3rem; margin-bottom: 1rem;">🚀</div>
-                <div style="font-size: 1.2rem; font-weight: 700; color: #00ff88; margin-bottom: 0.5rem;">
-                    Welcome to AMOSKYS
-                </div>
-                <div style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
-                    ${message || 'Your neural security platform is ready. Deploy agents to start monitoring.'}
-                </div>
-                
-                <div style="text-align: left; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
-                    <div style="font-weight: 600; margin-bottom: 0.75rem; color: #00aaff;">Quick Start:</div>
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem;">
-                        <div>
-                            <span style="color: #00ff88; margin-right: 0.5rem;">1.</span>
-                            <code style="background: rgba(0,255,136,0.1); padding: 2px 6px; border-radius: 4px;">
-                                python -m amoskys.agents.proc
-                            </code>
-                        </div>
-                        <div>
-                            <span style="color: #00ff88; margin-right: 0.5rem;">2.</span>
-                            View agent status in <a href="/dashboard/agents" style="color: #00aaff;">Agent Network</a>
-                        </div>
-                        <div>
-                            <span style="color: #00ff88; margin-right: 0.5rem;">3.</span>
-                            Monitor threats in real-time
-                        </div>
-                    </div>
-                </div>
-                
-                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center;">
-                    <a href="/docs" class="empty-state-btn">📚 Documentation</a>
-                    <a href="/dashboard/agents" class="empty-state-btn primary">🤖 Manage Agents</a>
-                </div>
-            </div>
-        `;
-        
-        const threatEmptyHtml = `
-            <div style="color: var(--text-secondary); text-align: center; padding: 2rem; border: 1px dashed rgba(0, 255, 136, 0.3); border-radius: 8px;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🛡️</div>
-                <div style="font-weight: 600; color: #00ff88; margin-bottom: 0.5rem;">All Clear</div>
-                <div style="font-size: 0.9rem;">No threats detected. Once agents are running, threats will appear here.</div>
-            </div>
-        `;
-        
-        if (agentsContainer && !this.hasRealData) {
-            agentsContainer.innerHTML = onboardingHtml;
+    renderSeverityChart() {
+        const bySev = this.clusterCache.by_severity || {};
+        const container = document.getElementById('severity-chart');
+        const total = Object.values(bySev).reduce((a, b) => a + b, 0);
+        if (total === 0) { container.innerHTML = '<div class="cc-empty"><div class="cc-empty-msg">No data</div></div>'; return; }
+
+        const colors = { critical: '#ff3366', high: '#ff6600', medium: '#ffaa00', low: '#0088ff' };
+        const sevOrder = ['critical', 'high', 'medium', 'low'];
+        const r = 40, cx = 50, cy = 50;
+        const circ = 2 * Math.PI * r;
+        let offset = 0;
+        let arcs = '';
+        let legend = '';
+        for (const sev of sevOrder) {
+            const count = bySev[sev] || 0;
+            if (count === 0) continue;
+            const pct = count / total;
+            const dashLen = pct * circ;
+            arcs += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + colors[sev] + '" stroke-width="14" stroke-dasharray="' + dashLen.toFixed(2) + ' ' + (circ - dashLen).toFixed(2) + '" stroke-dashoffset="' + (-offset).toFixed(2) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
+            offset += dashLen;
+            legend += '<div style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;"><div style="width:8px;height:8px;border-radius:2px;background:' + colors[sev] + ';"></div><span style="color:var(--text-secondary);text-transform:capitalize;">' + sev + '</span><span style="color:var(--text-muted);">' + count + '</span></div>';
         }
-        
-        if (threatsContainer && !this.hasRealData) {
-            threatsContainer.innerHTML = threatEmptyHtml;
-        }
+        container.innerHTML = '<svg viewBox="0 0 100 100" width="90" height="90"><circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="14"/>' + arcs + '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" fill="var(--text-primary)" font-size="16" font-weight="800">' + total + '</text><text x="' + cx + '" y="' + (cy + 10) + '" text-anchor="middle" fill="var(--text-muted)" font-size="6" text-transform="uppercase">EVENTS</text></svg><div style="display:flex;flex-direction:column;gap:0.35rem;">' + legend + '</div>';
     }
 
-    async updateMetrics() {
+    renderTopIPs() {
+        const byIP = this.clusterCache.by_source_ip || {};
+        const container = document.getElementById('top-ips');
+        const entries = Object.entries(byIP).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        if (entries.length === 0) { container.innerHTML = '<div class="cc-empty" style="padding:0.5rem;"><div class="cc-empty-msg" style="font-size:0.78rem;">No source IP data</div></div>'; return; }
+        const maxVal = Math.max(1, entries[0][1]);
+        container.innerHTML = entries.map(([ip, count]) => {
+            const pct = Math.round((count / maxVal) * 100);
+            return '<div class="ip-bar-row"><div class="ip-label">' + this.esc(ip) + '</div><div class="ip-bar-bg"><div class="ip-bar" style="width:' + pct + '%;"></div></div><div class="ip-count">' + count + '</div></div>';
+        }).join('');
+    }
+
+    renderHeatmap() {
+        const byHour = this.clusterCache.by_hour || {};
+        const container = document.getElementById('heatmap-chart');
+        const hours = Object.keys(byHour).sort();
+        if (hours.length === 0) { container.innerHTML = '<div class="cc-empty" style="padding:0.5rem;"><div class="cc-empty-msg" style="font-size:0.78rem;">No heatmap data</div></div>'; return; }
+
+        // Group hours into 24-hour buckets
+        const hourBuckets = new Array(24).fill(0);
+        for (const h of hours) {
+            const hourNum = parseInt(h.slice(-2), 10);
+            if (!isNaN(hourNum)) hourBuckets[hourNum] += byHour[h];
+        }
+        const maxVal = Math.max(1, ...hourBuckets);
+
+        // Render as a single row of 24 cells
+        let cells = '';
+        for (let i = 0; i < 24; i++) {
+            const intensity = hourBuckets[i] / maxVal;
+            const color = intensity > 0.7 ? 'rgba(255,51,102,' + (0.3 + intensity * 0.6).toFixed(2) + ')' :
+                          intensity > 0.3 ? 'rgba(255,170,0,' + (0.2 + intensity * 0.5).toFixed(2) + ')' :
+                          intensity > 0 ? 'rgba(0,217,255,' + (0.1 + intensity * 0.4).toFixed(2) + ')' :
+                          'rgba(255,255,255,0.03)';
+            cells += '<div class="heatmap-cell" style="background:' + color + ';" title="' + String(i).padStart(2, '0') + ':00 — ' + hourBuckets[i] + ' events"></div>';
+        }
+        const labels = '<div style="display:flex;justify-content:space-between;font-size:0.5rem;color:var(--text-muted);margin-top:4px;"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span></div>';
+        container.innerHTML = '<div style="display:grid;grid-template-columns:repeat(24,1fr);gap:2px;">' + cells + '</div>' + labels;
+    }
+
+    /* ── 5. MITRE Mini-Map ── */
+    async fetchMitre() {
         try {
-            const response = await fetch('/dashboard/api/live/metrics', { timeout: 5000 });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const data = await response.json();
-            if (data.status !== 'success') throw new Error('API error: ' + data.status);
+            const r = await fetch('/dashboard/api/mitre/coverage');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            const coverage = d.coverage || {};
+            const container = document.getElementById('mitre-mini');
 
-            const metrics = data.metrics;
-            
-            // Helper function for safe element updates
-            const setElementText = (id, text) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = text;
+            const tacticTechniques = {
+                'Reconnaissance': ['T1595','T1592','T1589','T1590','T1591','T1597','T1596','T1593','T1594','T1598'],
+                'Resource Development': ['T1583','T1586','T1584','T1587','T1585','T1588','T1608'],
+                'Initial Access': ['T1189','T1190','T1133','T1200','T1566','T1091','T1195','T1199','T1078'],
+                'Execution': ['T1059','T1203','T1559','T1106','T1053','T1129','T1072','T1569','T1204','T1047'],
+                'Persistence': ['T1098','T1197','T1547','T1037','T1136','T1543','T1546','T1133','T1574','T1525','T1556','T1137','T1053','T1505','T1205'],
+                'Privilege Escalation': ['T1548','T1134','T1547','T1068','T1574','T1055','T1053','T1078'],
+                'Defense Evasion': ['T1548','T1134','T1197','T1140','T1006','T1480','T1211','T1222','T1564','T1574','T1562','T1070','T1202','T1036','T1556','T1578','T1112','T1601','T1599','T1027','T1542','T1055','T1207','T1014','T1218','T1216','T1553','T1221','T1205','T1127','T1535','T1550','T1078','T1497','T1600','T1220'],
+                'Credential Access': ['T1557','T1110','T1555','T1212','T1187','T1606','T1056','T1556','T1111','T1621','T1040','T1003','T1528','T1558','T1539','T1552'],
+                'Discovery': ['T1087','T1010','T1217','T1580','T1538','T1526','T1482','T1083','T1615','T1046','T1135','T1040','T1201','T1120','T1069','T1057','T1012','T1018','T1518','T1082','T1614','T1016','T1049','T1033','T1007','T1124','T1497'],
+                'Lateral Movement': ['T1210','T1534','T1570','T1563','T1021','T1091','T1072','T1080','T1550'],
+                'Collection': ['T1557','T1560','T1123','T1119','T1185','T1115','T1530','T1602','T1213','T1005','T1039','T1025','T1074','T1114','T1056','T1113','T1125'],
+                'Command and Control': ['T1071','T1092','T1132','T1001','T1568','T1573','T1008','T1105','T1104','T1095','T1571','T1572','T1090','T1219','T1205','T1102'],
+                'Exfiltration': ['T1020','T1030','T1048','T1041','T1011','T1052','T1567','T1029','T1537'],
+                'Impact': ['T1531','T1485','T1486','T1565','T1491','T1561','T1499','T1495','T1490','T1489','T1529']
             };
-            
-            // Update CPU
-            const cpu = Math.round(metrics.cpu.percent);
-            setElementText('cpu-value', cpu + '%');
-            this.updateChart('cpu', cpu);
 
-            // Update Memory
-            const mem = Math.round(metrics.memory.percent);
-            setElementText('memory-value', mem + '%');
-            this.updateChart('memory', mem);
-
-            // Update Disk
-            const disk = Math.round(metrics.disk.percent);
-            setElementText('disk-value', disk + '%');
-            this.updateChart('disk', disk);
-
-            // Calculate network activity (synthetic)
-            const netTotal = metrics.network.bytes_sent + metrics.network.bytes_recv;
-            const netPercent = Math.min(100, Math.round((netTotal / (1024 * 1024 * 1024)) % 100));
-            setElementText('network-value', netPercent + '%');
-            this.updateChart('network', netPercent);
-
-            // Update health score
-            const health = Math.round((100 - cpu + 100 - mem + 100 - disk) / 3);
-            setElementText('health-score', health + '%');
-            setElementText('health-status', health > 80 ? 'OPTIMAL' : health > 60 ? 'GOOD' : 'WARNING');
-
-            // Update timestamp with freshness indicator
-            this.lastUpdateTime.metrics = Date.now();
-            this.updateTimestampDisplay('metrics-timestamp', 'metrics');
-            
-            // Clear any previous error state
-            this.failureCount.metrics = 0;
-
-        } catch (error) {
-            console.error('Metrics update failed:', error);
-            this.failureCount.metrics++;
-            
-            if (this.failureCount.metrics >= this.maxRetries) {
-                this.showErrorState('metrics-error', 
-                    `Failed to fetch metrics: ${error.message}. Retrying...`,
-                    () => this.updateMetrics());
-                const statusEl = document.getElementById('health-status');
-                if (statusEl) statusEl.textContent = 'Connection Error';
+            let rows = '';
+            for (const tactic of this.TACTICS) {
+                const techs = tacticTechniques[tactic] || [];
+                const total = techs.length;
+                let covered = 0;
+                techs.forEach(t => { if (coverage[t]) covered++; });
+                const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
+                const color = pct >= 60 ? '#00ff88' : pct >= 30 ? '#ffaa00' : pct > 0 ? '#ff6600' : 'rgba(255,255,255,0.08)';
+                rows += '<div class="mm-row"><div class="mm-label" title="' + tactic + '">' + tactic + '</div><div class="mm-bar-bg"><div class="mm-bar" style="width:' + pct + '%;background:' + color + ';"></div></div><div class="mm-pct">' + covered + '/' + total + '</div></div>';
             }
-        }
+            container.innerHTML = rows;
+        } catch (e) { /* silent */ }
     }
 
-    async updateThreats() {
+    /* ── 6. System Vitals ── */
+    async fetchMetrics() {
         try {
-            const response = await fetch('/dashboard/api/live/threats', { timeout: 5000 });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const data = await response.json();
-            if (data.status !== 'success') throw new Error('API error');
-
-            const container = document.getElementById('threats-container');
-            
-            if (data.threats.length === 0) {
-                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">No threats detected in last 24 hours</div>';
-            } else {
-                container.innerHTML = data.threats.slice(0, 10).map(threat => `
-                    <div class="threat-item">
-                        <div class="threat-type">${threat.type.toUpperCase()}</div>
-                        <div style="color: var(--text-secondary); font-size: 0.85rem;">
-                            ${threat.description || threat.source_ip || 'No details'}
-                        </div>
-                        <div class="threat-time">${new Date(threat.timestamp).toLocaleString()}</div>
-                    </div>
-                `).join('');
-            }
-
-            document.getElementById('event-count').textContent = data.count;
-
-            // Update timestamp with freshness indicator
-            this.lastUpdateTime.threats = Date.now();
-            
-            // Clear any previous error state
-            this.failureCount.threats = 0;
-
-        } catch (error) {
-            console.error('Threats update failed:', error);
-            this.failureCount.threats++;
-            
-            if (this.failureCount.threats >= this.maxRetries) {
-                this.showErrorState('threats-container',
-                    `Failed to fetch threats: ${error.message}. Click Retry to try again.`);
-            }
-        }
+            const r = await fetch('/dashboard/api/live/metrics');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            if (d.status !== 'success') throw new Error('API error');
+            const m = d.metrics || {};
+            const cpu = Math.round(m.cpu?.percent || 0);
+            const mem = Math.round(m.memory?.percent || 0);
+            const disk = Math.round(m.disk?.percent || 0);
+            const netMB = (((m.network?.bytes_sent || 0) + (m.network?.bytes_recv || 0)) / (1024 * 1024)).toFixed(0);
+            const netPct = Math.min(100, Math.round(parseFloat(netMB) / 10));
+            this.setGauge('cpu', cpu, '#00ff88');
+            this.setGauge('mem', mem, '#0088ff');
+            this.setGauge('disk', disk, '#ffaa00');
+            this.setGauge('net', netPct, '#cc44ff');
+            document.getElementById('cpu-val').textContent = cpu + '%';
+            document.getElementById('mem-val').textContent = mem + '%';
+            document.getElementById('disk-val').textContent = disk + '%';
+            document.getElementById('net-val').textContent = netMB + ' MB';
+            document.getElementById('vitals-ts').textContent = new Date().toLocaleTimeString();
+        } catch (e) { /* silent */ }
     }
 
-    async updateAgents() {
+    setGauge(id, pct, color) {
+        const arc = document.getElementById(id + '-arc');
+        if (!arc) return;
+        const offset = this.CIRC_GAUGE * (1 - pct / 100);
+        arc.style.strokeDashoffset = offset;
+        if (id !== 'net') { arc.style.stroke = pct >= 90 ? '#ff3366' : pct >= 70 ? '#ffaa00' : color; }
+    }
+
+    /* ── 7. Recent Incidents ── */
+    async fetchIncidents() {
         try {
-            const response = await fetch('/dashboard/api/live/agents', { timeout: 5000 });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const data = await response.json();
-            if (data.status !== 'success') throw new Error('API error');
-
-            const container = document.getElementById('agents-container');
-            
-            if (!data.agents || data.agents.length === 0) {
-                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">No agents registered</div>';
-                document.getElementById('agent-count').textContent = '0';
-            } else {
-                const onlineCount = data.agents.filter(a => a.status === 'online').length;
-                document.getElementById('agent-count').textContent = onlineCount + '/' + data.agents.length;
-
-                container.innerHTML = data.agents.slice(0, 5).map(agent => {
-                    const statusClass = agent.status === 'online' ? 'status-online' : 'status-offline';
-                    return `
-                        <div class="agent-item">
-                            <div class="agent-name">${agent.agent_id || agent.id}</div>
-                            <div class="agent-status ${statusClass}">
-                                ● ${agent.status || 'unknown'}
-                            </div>
-                            ${agent.last_heartbeat ? `<div class="threat-time">Last seen: ${new Date(agent.last_heartbeat).toLocaleString()}</div>` : ''}
-                        </div>
-                    `;
-                }).join('');
-            }
-
-            // Update timestamp with freshness indicator
-            this.lastUpdateTime.agents = Date.now();
-            
-            // Clear any previous error state
-            this.failureCount.agents = 0;
-
-        } catch (error) {
-            console.error('Agents update failed:', error);
-            this.failureCount.agents++;
-            
-            if (this.failureCount.agents >= this.maxRetries) {
-                this.showErrorState('agents-container',
-                    `Failed to fetch agents: ${error.message}. Click Retry to try again.`);
-            }
-        }
+            const r = await fetch('/dashboard/api/incidents');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            const list = (d.incidents || []).filter(i => i.status === 'open' || i.status === 'investigating').slice(0, 5);
+            const container = document.getElementById('incidents-list');
+            if (list.length === 0) { container.innerHTML = '<div class="cc-empty"><div class="cc-empty-msg">No open incidents</div></div>'; return; }
+            container.innerHTML = list.map(inc => {
+                const sev = (inc.severity || 'low').toLowerCase();
+                const slaH = this.SLA_HOURS[sev] || 72;
+                const created = new Date(inc.created_at || inc.timestamp);
+                const elapsed = (Date.now() - created.getTime()) / 3600000;
+                const remaining = Math.max(0, slaH - elapsed);
+                const breach = remaining <= 0;
+                const slaText = breach ? 'BREACH' : this.fmtDuration(remaining);
+                return '<div class="inc-item"><div class="inc-sev sev-' + sev + '"></div><div class="inc-body"><div class="inc-title">' + this.esc(inc.title || 'Untitled') + '</div><div class="inc-meta">' + sev.toUpperCase() + ' \u00b7 ' + this.relTime(inc.created_at || inc.timestamp) + '</div></div><div class="inc-sla ' + (breach ? 'breach' : 'ok') + '">' + slaText + '</div></div>';
+            }).join('');
+        } catch (e) { /* silent */ }
     }
 
-    updateChart(chartName, percentage) {
-        const chart = this.charts[chartName];
-        if (chart && chart.data.datasets[0]) {
-            chart.data.datasets[0].data = [percentage, 100 - percentage];
-            chart.update('none'); // 'none' = no animation (faster)
-        }
+    /* ── 8. Probe Observability ── */
+    async fetchProbeHealth() {
+        try {
+            const r = await fetch('/dashboard/api/live/probe-health');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            if (d.status !== 'success') throw new Error('API error');
+            const s = d.summary || {};
+            const total = s.total || 1;
+            const container = document.getElementById('probe-section');
+            const sr = s.real || 0, sd = s.degraded || 0, sb = s.broken || 0, sdi = s.disabled || 0;
+            const pct = n => ((n / total) * 100).toFixed(1);
+            const activePct = (((sr + sd) / total) * 100).toFixed(1);
+            let html = '<div class="probe-bar-wrap">';
+            if (sr > 0) html += '<div class="pb-seg" style="width:' + pct(sr) + '%;background:#00ff88;">' + sr + '</div>';
+            if (sd > 0) html += '<div class="pb-seg" style="width:' + pct(sd) + '%;background:#ffaa00;">' + sd + '</div>';
+            if (sb > 0) html += '<div class="pb-seg" style="width:' + pct(sb) + '%;background:#ff3366;">' + sb + '</div>';
+            if (sdi > 0) html += '<div class="pb-seg" style="width:' + pct(sdi) + '%;background:#555;">' + sdi + '</div>';
+            html += '</div>';
+            html += '<div class="probe-legend"><div class="probe-legend-i"><div class="probe-legend-d" style="background:#00ff88;"></div>Real ' + sr + '</div><div class="probe-legend-i"><div class="probe-legend-d" style="background:#ffaa00;"></div>Degraded ' + sd + '</div><div class="probe-legend-i"><div class="probe-legend-d" style="background:#ff3366;"></div>Broken ' + sb + '</div><div class="probe-legend-i"><div class="probe-legend-d" style="background:#555;"></div>Disabled ' + sdi + '</div><div class="probe-legend-i" style="margin-left:auto;font-weight:700;color:#00ff88;">' + activePct + '% Active</div></div>';
+            const agents = s.by_agent || {};
+            const names = Object.keys(agents).sort();
+            if (names.length > 0) {
+                html += '<div class="probe-agent-grid">';
+                for (const name of names) {
+                    const a = agents[name];
+                    const r2 = a.REAL || 0;
+                    const tot = a.total || 0;
+                    const color = r2 === tot ? '#00ff88' : r2 > 0 ? '#ffaa00' : '#ff3366';
+                    html += '<div class="pa-item"><span class="pa-name">' + name + '</span><span class="pa-count" style="color:' + color + ';">' + r2 + '/' + tot + '</span></div>';
+                }
+                html += '</div>';
+            }
+            container.innerHTML = html;
+        } catch (e) { /* silent */ }
+    }
+
+    /* ── Exports ── */
+    exportThreats() {
+        if (this.threatCache.length === 0) { this.toast('No threat data', 'info'); return; }
+        const headers = ['timestamp','type','severity','risk_score','classification','agent_id','source_ip','description'];
+        const rows = this.threatCache.map(t => headers.map(h => { let v = t[h] || ''; return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','));
+        this.downloadCSV('amoskys_threats_' + this.datestamp() + '.csv', [headers.join(','), ...rows].join('\n'));
+    }
+    exportAgents() {
+        if (this.agentCache.length === 0) { this.toast('No agent data', 'info'); return; }
+        const headers = ['name','id','probes_real','probes_total','event_count','mitre_count','signing'];
+        const rows = this.agentCache.map(a => {
+            const ps = a.probe_summary || {};
+            return [a.name, a.id, ps.real||0, ps.total||0, a.event_count||0, a.mitre_count||0, a.signing_enabled?'yes':'no'].map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',');
+        });
+        this.downloadCSV('amoskys_agents_' + this.datestamp() + '.csv', [headers.join(','), ...rows].join('\n'));
+    }
+    downloadCSV(filename, content) {
+        const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.style.display = 'none';
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+        this.toast('Exported ' + filename, 'info');
+    }
+    datestamp() { return new Date().toISOString().slice(0, 10); }
+
+    /* ── Helpers ── */
+    fmtType(t) { return (t || 'unknown').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+    fmtDesc(desc) { if (!desc) return ''; return desc.replace(/^Probe:\s*/, '').replace(/,\s*Severity:\s*\w+/i, '').replace(/\[.*?\]\s*/, '').substring(0, 120); }
+    fmtNum(n) { return n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : String(n); }
+    fmtDuration(h) { return h >= 24 ? Math.floor(h/24)+'d '+Math.floor(h%24)+'h' : h >= 1 ? Math.floor(h)+'h '+Math.floor((h%1)*60)+'m' : Math.floor(h*60)+'m'; }
+    esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    relTime(ts) {
+        const diff = (Date.now() - new Date(ts).getTime()) / 1000;
+        if (diff < 60) return Math.floor(diff) + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        return Math.floor(diff / 86400) + 'd ago';
     }
 }
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-    window.cortexDashboard = new CortexDashboardV2();
-});
-
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
-    if (window.cortexDashboard) {
-        window.cortexDashboard.cleanup();
-    }
-});
+document.addEventListener('DOMContentLoaded', () => { window.cortex = new CortexCommandCenter(); });
 </script>
 {% endblock %}

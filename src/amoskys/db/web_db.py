@@ -182,6 +182,33 @@ def init_web_db() -> None:
 
     Base.metadata.create_all(bind=get_web_engine())
 
+    # Lightweight schema migration for columns added after initial deployment
+    _migrate_user_onboarding_columns(get_web_engine())
+
+
+def _migrate_user_onboarding_columns(engine) -> None:
+    """Add onboarding columns to existing users table if missing."""
+    import sqlalchemy
+
+    inspector = sqlalchemy.inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+
+    existing = {c["name"] for c in inspector.get_columns("users")}
+    migrations = [
+        ("account_type", "VARCHAR(20)"),
+        ("device_os", "VARCHAR(20)"),
+        ("setup_completed", "BOOLEAN NOT NULL DEFAULT 1"),
+    ]
+    with engine.begin() as conn:
+        for col_name, col_type in migrations:
+            if col_name not in existing:
+                conn.execute(
+                    sqlalchemy.text(
+                        f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"
+                    )
+                )
+
 
 def reset_web_engine() -> None:
     """

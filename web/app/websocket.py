@@ -5,8 +5,8 @@ Phase 2.4 Implementation - Fixed Version
 """
 
 import logging
+import os
 import time
-import uuid
 from threading import Thread
 
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -20,11 +20,18 @@ from .dashboard.utils import (
     get_neural_readiness_status,
 )
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-socketio = SocketIO(cors_allowed_origins="*")
+
+def _get_cors_origins():
+    """Get CORS allowed origins from environment. Empty list means same-origin only."""
+    origins = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+    if not origins:
+        return []
+    return [o.strip() for o in origins.split(",") if o.strip()]
+
+
+socketio = SocketIO(cors_allowed_origins=_get_cors_origins())
 
 # Active connections tracking
 active_connections = {}
@@ -89,7 +96,9 @@ updater = DashboardUpdater(socketio)
 @socketio.on("connect", namespace="/dashboard")
 def handle_connect():
     """Handle client connection"""
-    client_id = str(uuid.uuid4())
+    from flask import request as flask_request
+
+    client_id = flask_request.sid
     active_connections[client_id] = {"connected_at": time.time(), "rooms": []}
 
     logger.info(f"Dashboard client connected: {client_id}")
@@ -119,9 +128,9 @@ def handle_disconnect(reason=None):
     Args:
         reason: Optional disconnect reason (may be passed by some SocketIO implementations)
     """
-    client_id = str(
-        uuid.uuid4()
-    )  # Note: In real implementation, track this per session
+    from flask import request as flask_request
+
+    client_id = flask_request.sid
 
     if client_id in active_connections:
         del active_connections[client_id]
@@ -135,10 +144,10 @@ def handle_disconnect(reason=None):
 @socketio.on("join_dashboard", namespace="/dashboard")
 def handle_join_dashboard(data):
     """Handle client joining specific dashboard room"""
+    from flask import request as flask_request
+
     dashboard_type = data.get("dashboard", "cortex")
-    client_id = str(
-        uuid.uuid4()
-    )  # Note: In real implementation, track this per session
+    client_id = flask_request.sid
 
     join_room(dashboard_type)
 
@@ -152,10 +161,10 @@ def handle_join_dashboard(data):
 @socketio.on("leave_dashboard", namespace="/dashboard")
 def handle_leave_dashboard(data):
     """Handle client leaving specific dashboard room"""
+    from flask import request as flask_request
+
     dashboard_type = data.get("dashboard", "cortex")
-    client_id = str(
-        uuid.uuid4()
-    )  # Note: In real implementation, track this per session
+    client_id = flask_request.sid
 
     leave_room(dashboard_type)
 
@@ -172,10 +181,10 @@ def handle_leave_dashboard(data):
 @socketio.on("request_update", namespace="/dashboard")
 def handle_request_update(data):
     """Handle manual update request from client"""
+    from flask import request as flask_request
+
     dashboard_type = data.get("dashboard", "all")
-    client_id = str(
-        uuid.uuid4()
-    )  # Note: In real implementation, track this per session
+    client_id = flask_request.sid
 
     try:
         if dashboard_type == "all" or dashboard_type == "cortex":

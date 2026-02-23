@@ -32,6 +32,7 @@ def app():
     os.environ["FLASK_DEBUG"] = "true"
     os.environ["FORCE_HTTPS"] = "false"
     os.environ["SECRET_KEY"] = "test-secret-key"
+    os.environ["AMOSKYS_API_KEY"] = "test-api-key-for-gateway-tests"
 
     app_instance, _ = create_app()  # Unpack the tuple
     app_instance.config["TESTING"] = True
@@ -368,7 +369,10 @@ class TestHealthAPI:
 
     def test_health_system_endpoint(self, client):
         """Test /api/v1/health/system returns comprehensive status"""
-        response = client.get("/api/v1/health/system")
+        response = client.get(
+            "/api/v1/health/system",
+            headers={"X-API-Key": "test-api-key-for-gateway-tests"},
+        )
         assert response.status_code == 200
 
         data = json.loads(response.data)
@@ -396,7 +400,10 @@ class TestHealthAPI:
 
     def test_health_agents_endpoint(self, client):
         """Test /api/v1/health/agents returns agent details"""
-        response = client.get("/api/v1/health/agents")
+        response = client.get(
+            "/api/v1/health/agents",
+            headers={"X-API-Key": "test-api-key-for-gateway-tests"},
+        )
         assert response.status_code == 200
 
         data = json.loads(response.data)
@@ -411,7 +418,6 @@ class TestHealthAPI:
 
         data = json.loads(response.data)
         assert data["status"] == "ok"
-        assert "timestamp" in data
 
 
 if __name__ == "__main__":

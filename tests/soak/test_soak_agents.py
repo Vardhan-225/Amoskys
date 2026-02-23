@@ -49,7 +49,9 @@ def _get_rss_kb(pid: int) -> int:
     try:
         result = subprocess.run(
             ["ps", "-o", "rss=", "-p", str(pid)],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return int(result.stdout.strip()) if result.returncode == 0 else 0
     except (ValueError, subprocess.TimeoutExpired):
@@ -104,13 +106,19 @@ class TestSoakAgents:
 
             proc = subprocess.Popen(
                 [
-                    sys.executable, "-m",
+                    sys.executable,
+                    "-m",
                     f"amoskys.agents.{agent}.run_agent_v2",
-                    "--device-id", self.device_id,
-                    "--queue-path", str(self.queue_root / agent),
-                    "--collection-interval", "30",
-                    "--metrics-interval", "60",
-                    "--log-level", "INFO",
+                    "--device-id",
+                    self.device_id,
+                    "--queue-path",
+                    str(self.queue_root / agent),
+                    "--collection-interval",
+                    "30",
+                    "--metrics-interval",
+                    "60",
+                    "--log-level",
+                    "INFO",
                     *extra_args,
                 ],
                 cwd=str(PROJECT_ROOT),
@@ -158,9 +166,7 @@ class TestSoakAgents:
             if i < num_samples - 1:
                 time.sleep(SAMPLE_INTERVAL)
 
-        assert len(dead_agents) == 0, (
-            f"Agents died during soak: {dead_agents}"
-        )
+        assert len(dead_agents) == 0, f"Agents died during soak: {dead_agents}"
 
     def test_rss_growth_within_limit(self):
         """RSS growth < {RSS_LIMIT_KB} KB for all agents (post-warmup)."""
@@ -208,9 +214,7 @@ class TestSoakAgents:
             if log_path.exists():
                 content = log_path.read_text()
                 tb_count = content.count("Traceback")
-                assert tb_count == 0, (
-                    f"{agent}: {tb_count} traceback(s) in log"
-                )
+                assert tb_count == 0, f"{agent}: {tb_count} traceback(s) in log"
 
     def test_queue_dbs_intact_after_soak(self):
         """All queue DBs are readable and pass integrity check after soak."""
@@ -218,9 +222,7 @@ class TestSoakAgents:
         time.sleep(SOAK_MINUTES * 60)
 
         for agent in AGENTS:
-            db_path = str(
-                self.queue_root / agent / f"{agent}_queue.db"
-            )
+            db_path = str(self.queue_root / agent / f"{agent}_queue.db")
             ok, count = _check_db_integrity(db_path)
             assert ok, f"{agent}: Queue DB integrity check failed"
 
@@ -242,13 +244,8 @@ class TestSoakAgents:
         proc.wait(timeout=5)
 
         # Verify DB integrity
-        db_path = str(
-            self.queue_root / victim / f"{victim}_queue.db"
-        )
+        db_path = str(self.queue_root / victim / f"{victim}_queue.db")
         ok, count = _check_db_integrity(db_path)
-        assert ok, (
-            f"{victim}: Queue DB corrupt after kill -9 "
-            f"(count={count})"
-        )
+        assert ok, f"{victim}: Queue DB corrupt after kill -9 " f"(count={count})"
         # DB should have at least 1 row from the collection cycle
         assert count >= 0, f"{victim}: Queue DB has no rows"

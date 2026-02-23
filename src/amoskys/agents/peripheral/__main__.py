@@ -1,5 +1,4 @@
-"""
-AMOSKYS Peripheral Agent - Module Entry Point
+"""AMOSKYS Peripheral Agent - Module Entry Point
 
 Run with: python -m amoskys.agents.peripheral [options]
 """

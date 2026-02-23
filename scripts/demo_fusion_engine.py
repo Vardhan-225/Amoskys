@@ -11,13 +11,13 @@ Creates synthetic security events to demonstrate correlation rules:
 This validates the Intelligence layer without requiring live agents.
 """
 
-import sys
 import os
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from amoskys.intel import FusionEngine, TelemetryEventView
 
@@ -44,15 +44,15 @@ def create_ssh_brute_force_scenario(device_id: str, base_time: datetime):
             severity="WARN",
             timestamp=base_time + timedelta(seconds=i * 5),
             security_event={
-                'event_category': 'AUTHENTICATION',
-                'event_action': 'SSH',
-                'event_outcome': 'FAILURE',
-                'user_name': 'admin',
-                'source_ip': '203.0.113.42',
-                'risk_score': 0.6,
-                'mitre_techniques': ['T1110', 'T1021.004'],
-                'requires_investigation': True
-            }
+                "event_category": "AUTHENTICATION",
+                "event_action": "SSH",
+                "event_outcome": "FAILURE",
+                "user_name": "admin",
+                "source_ip": "203.0.113.42",
+                "risk_score": 0.6,
+                "mitre_techniques": ["T1110", "T1021.004"],
+                "requires_investigation": True,
+            },
         )
         events.append(event)
 
@@ -64,15 +64,15 @@ def create_ssh_brute_force_scenario(device_id: str, base_time: datetime):
         severity="INFO",
         timestamp=base_time + timedelta(seconds=15),
         security_event={
-            'event_category': 'AUTHENTICATION',
-            'event_action': 'SSH',
-            'event_outcome': 'SUCCESS',
-            'user_name': 'admin',
-            'source_ip': '203.0.113.42',
-            'risk_score': 0.3,
-            'mitre_techniques': ['T1021.004'],
-            'requires_investigation': False
-        }
+            "event_category": "AUTHENTICATION",
+            "event_action": "SSH",
+            "event_outcome": "SUCCESS",
+            "user_name": "admin",
+            "source_ip": "203.0.113.42",
+            "risk_score": 0.3,
+            "mitre_techniques": ["T1021.004"],
+            "requires_investigation": False,
+        },
     )
     events.append(success_event)
 
@@ -98,15 +98,15 @@ def create_persistence_after_auth_scenario(device_id: str, base_time: datetime):
         severity="INFO",
         timestamp=base_time,
         security_event={
-            'event_category': 'AUTHENTICATION',
-            'event_action': 'SSH',
-            'event_outcome': 'SUCCESS',
-            'user_name': 'compromised_user',
-            'source_ip': '198.51.100.23',
-            'risk_score': 0.3,
-            'mitre_techniques': ['T1021.004'],
-            'requires_investigation': False
-        }
+            "event_category": "AUTHENTICATION",
+            "event_action": "SSH",
+            "event_outcome": "SUCCESS",
+            "user_name": "compromised_user",
+            "source_ip": "198.51.100.23",
+            "risk_score": 0.3,
+            "mitre_techniques": ["T1021.004"],
+            "requires_investigation": False,
+        },
     )
     events.append(ssh_event)
 
@@ -118,18 +118,18 @@ def create_persistence_after_auth_scenario(device_id: str, base_time: datetime):
         severity="WARN",
         timestamp=base_time + timedelta(seconds=120),
         attributes={
-            'persistence_type': 'LAUNCH_AGENT',
-            'file_path': '/Users/compromised_user/Library/LaunchAgents/com.evil.backdoor.plist',
-            'risk_score': '0.7'
+            "persistence_type": "LAUNCH_AGENT",
+            "file_path": "/Users/compromised_user/Library/LaunchAgents/com.evil.backdoor.plist",
+            "risk_score": "0.7",
         },
         audit_event={
-            'audit_category': 'CHANGE',
-            'action_performed': 'CREATED',
-            'object_type': 'LAUNCH_AGENT',
-            'object_id': '/Users/compromised_user/Library/LaunchAgents/com.evil.backdoor.plist',
-            'before_value': '',
-            'after_value': '{"Program": "/tmp/backdoor", "RunAtLoad": true}'
-        }
+            "audit_category": "CHANGE",
+            "action_performed": "CREATED",
+            "object_type": "LAUNCH_AGENT",
+            "object_id": "/Users/compromised_user/Library/LaunchAgents/com.evil.backdoor.plist",
+            "before_value": "",
+            "after_value": '{"Program": "/tmp/backdoor", "RunAtLoad": true}',
+        },
     )
     events.append(persist_event)
 
@@ -150,20 +150,17 @@ def create_suspicious_sudo_scenario(device_id: str, base_time: datetime):
         event_type="SECURITY",
         severity="CRITICAL",
         timestamp=base_time,
-        attributes={
-            'sudo_command': 'vim /etc/sudoers',
-            'auth_method': 'password'
-        },
+        attributes={"sudo_command": "vim /etc/sudoers", "auth_method": "password"},
         security_event={
-            'event_category': 'AUTHENTICATION',
-            'event_action': 'SUDO',
-            'event_outcome': 'SUCCESS',
-            'user_name': 'attacker',
-            'source_ip': '127.0.0.1',
-            'risk_score': 0.8,
-            'mitre_techniques': ['T1548.003'],
-            'requires_investigation': True
-        }
+            "event_category": "AUTHENTICATION",
+            "event_action": "SUDO",
+            "event_outcome": "SUCCESS",
+            "user_name": "attacker",
+            "source_ip": "127.0.0.1",
+            "risk_score": 0.8,
+            "mitre_techniques": ["T1548.003"],
+            "requires_investigation": True,
+        },
     )
 
     return [event]
@@ -189,13 +186,13 @@ def create_multi_tactic_scenario(device_id: str, base_time: datetime):
         severity="WARN",
         timestamp=base_time,
         process_event={
-            'process_name': 'malware',
-            'pid': 12345,
-            'ppid': 1,
-            'uid': 501,
-            'command_line': '/tmp/malware --connect 198.51.100.99',
-            'executable_path': '/tmp/malware'
-        }
+            "process_name": "malware",
+            "pid": 12345,
+            "ppid": 1,
+            "uid": 501,
+            "command_line": "/tmp/malware --connect 198.51.100.99",
+            "executable_path": "/tmp/malware",
+        },
     )
     events.append(process_event)
 
@@ -207,14 +204,14 @@ def create_multi_tactic_scenario(device_id: str, base_time: datetime):
         severity="WARN",
         timestamp=base_time + timedelta(seconds=60),
         flow_event={
-            'src_ip': '192.168.1.100',
-            'src_port': 54321,
-            'dst_ip': '198.51.100.99',
-            'dst_port': 443,
-            'protocol': 'TCP',
-            'bytes_sent': 1024,
-            'bytes_received': 4096
-        }
+            "src_ip": "192.168.1.100",
+            "src_port": 54321,
+            "dst_ip": "198.51.100.99",
+            "dst_port": 443,
+            "protocol": "TCP",
+            "bytes_sent": 1024,
+            "bytes_received": 4096,
+        },
     )
     events.append(flow_event)
 
@@ -226,18 +223,18 @@ def create_multi_tactic_scenario(device_id: str, base_time: datetime):
         severity="CRITICAL",
         timestamp=base_time + timedelta(seconds=180),
         attributes={
-            'persistence_type': 'SSH_KEYS',
-            'file_path': '/Users/victim/.ssh/authorized_keys',
-            'risk_score': '0.8'
+            "persistence_type": "SSH_KEYS",
+            "file_path": "/Users/victim/.ssh/authorized_keys",
+            "risk_score": "0.8",
         },
         audit_event={
-            'audit_category': 'CHANGE',
-            'action_performed': 'CREATED',
-            'object_type': 'SSH_KEYS',
-            'object_id': '/Users/victim/.ssh/authorized_keys',
-            'before_value': '',
-            'after_value': 'ssh-rsa AAAAB3... attacker@evil.com'
-        }
+            "audit_category": "CHANGE",
+            "action_performed": "CREATED",
+            "object_type": "SSH_KEYS",
+            "object_id": "/Users/victim/.ssh/authorized_keys",
+            "before_value": "",
+            "after_value": "ssh-rsa AAAAB3... attacker@evil.com",
+        },
     )
     events.append(persist_event)
 
@@ -254,9 +251,7 @@ def run_demo():
     # Initialize engine
     print("Initializing Fusion Engine...")
     engine = FusionEngine(
-        db_path="data/intel/fusion_demo.db",
-        window_minutes=30,
-        eval_interval=60
+        db_path="data/intel/fusion_demo.db", window_minutes=30, eval_interval=60
     )
     print(f"  Database: {engine.db_path}")
     print(f"  Correlation window: {engine.window_minutes} minutes")
@@ -271,8 +266,10 @@ def run_demo():
     events = create_ssh_brute_force_scenario(device_id, base_time)
     for event in events:
         engine.add_event(event)
-        print(f"  [T+{(event.timestamp - base_time).seconds}s] {event.event_type}: "
-              f"{event.security_event['event_outcome']} SSH from {event.security_event['source_ip']}")
+        print(
+            f"  [T+{(event.timestamp - base_time).seconds}s] {event.event_type}: "
+            f"{event.security_event['event_outcome']} SSH from {event.security_event['source_ip']}"
+        )
     print()
 
     # Evaluate
@@ -295,7 +292,10 @@ def run_demo():
     events = create_persistence_after_auth_scenario(device_id, base_time)
     for event in events:
         engine.add_event(event)
-        print(f"  [T+{(event.timestamp - base_time).seconds}s] {event.event_type}: ", end='')
+        print(
+            f"  [T+{(event.timestamp - base_time).seconds}s] {event.event_type}: ",
+            end="",
+        )
         if event.event_type == "SECURITY":
             print(f"{event.security_event['event_action']} login")
         else:
@@ -343,7 +343,9 @@ def run_demo():
     events = create_multi_tactic_scenario(device_id, base_time)
     for event in events:
         engine.add_event(event)
-        print(f"  [T+{(event.timestamp - base_time).seconds}s] {event.event_type}", end='')
+        print(
+            f"  [T+{(event.timestamp - base_time).seconds}s] {event.event_type}", end=""
+        )
         if event.event_type == "PROCESS":
             print(f": {event.process_event['executable_path']}")
         elif event.event_type == "FLOW":
@@ -376,10 +378,10 @@ def run_demo():
     print("Incidents by Severity:")
     severity_counts = {}
     for inc in all_incidents:
-        sev = inc['severity']
+        sev = inc["severity"]
         severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
-    for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO']:
+    for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]:
         count = severity_counts.get(sev, 0)
         if count > 0:
             print(f"  {sev}: {count}")
@@ -389,7 +391,7 @@ def run_demo():
     if final_risk:
         print(f"Final Device Risk: {final_risk['level']} (score={final_risk['score']})")
         print(f"Contributing Factors:")
-        for tag in final_risk['reason_tags'][:10]:
+        for tag in final_risk["reason_tags"][:10]:
             print(f"  - {tag}")
     print()
 
@@ -404,5 +406,5 @@ def run_demo():
     print("Intelligence layer ready for production integration!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_demo()

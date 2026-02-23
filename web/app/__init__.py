@@ -17,22 +17,54 @@ def create_app():
     """Application factory pattern for AMOSKYS web interface"""
     app = Flask(__name__)
 
-    # Configure app
-    # IMPORTANT: Set SECRET_KEY environment variable in production!
-    # Default key is for development only and should NEVER be used in production
-    secret_key = os.environ.get("SECRET_KEY", "amoskys-neural-security-dev-key")
-    if secret_key == "amoskys-neural-security-dev-key" and not app.config.get("DEBUG"):
-        import warnings
-
-        warnings.warn(
-            "Using default SECRET_KEY in production! "
-            "Set the SECRET_KEY environment variable to a secure random value.",
-            UserWarning,
-            stacklevel=2,
-        )
-    app.config["SECRET_KEY"] = secret_key
+    # Configure debug/testing FIRST (needed for SECRET_KEY gate)
     app.config["DEBUG"] = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
     app.config["TESTING"] = os.environ.get("TESTING", "False").lower() == "true"
+
+    # Configure SECRET_KEY — required in all environments
+    secret_key = os.environ.get("SECRET_KEY")
+    is_dev = app.config["DEBUG"] or app.config["TESTING"]
+
+    if not secret_key:
+        if is_dev:
+            import secrets as _secrets
+
+            secret_key = _secrets.token_hex(32)
+            logging.warning(
+                "SECRET_KEY not set — generated ephemeral key for dev/test. "
+                "Sessions will not persist across restarts."
+            )
+        else:
+            raise ValueError(
+                "SECRET_KEY environment variable is required. "
+                "Generate one: python -c 'import secrets; print(secrets.token_hex(32))'"
+            )
+
+    # Reject known-weak / placeholder keys in production
+    _WEAK_PATTERNS = {
+        "dev-secret-key",
+        "change-in-production",
+        "your-secure-random",
+        "amoskys-neural-security-dev-key",
+        "changeme",
+        "placeholder",
+    }
+    if not is_dev:
+        if len(secret_key) < 32:
+            raise ValueError(
+                f"SECRET_KEY too short ({len(secret_key)} chars). "
+                "Minimum 32 characters required."
+            )
+        lower_key = secret_key.lower()
+        for weak in _WEAK_PATTERNS:
+            if weak in lower_key:
+                raise ValueError(
+                    f"SECRET_KEY contains weak pattern '{weak}'. "
+                    "Generate a cryptographic key: "
+                    "python -c 'import secrets; print(secrets.token_hex(32))'"
+                )
+
+    app.config["SECRET_KEY"] = secret_key
 
     # Apply ProxyFix middleware for nginx/Cloudflare reverse proxy
     # This tells Flask to trust X-Forwarded-* headers for:
@@ -47,14 +79,29 @@ def create_app():
 
     log_level = os.environ.get("LOG_LEVEL", "INFO")
     json_logs = os.environ.get("JSON_LOGS", "true").lower() == "true"
+
+    # Persistent log file with rotation (50MB x 10 files)
+    log_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "logs",
+    )
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "amoskys_web.log")
+
     configure_logging(
         level=log_level,
         json_format=json_logs and not app.config["DEBUG"],
         filter_sensitive=True,
+        log_file=log_file,
     )
 
     # Initialize Flask request logging (correlation IDs, timing)
     init_flask_logging(app)
+
+    # Lightweight schema migration (add any missing columns without heavy imports)
+    from amoskys.db.web_db import _migrate_user_onboarding_columns, get_web_engine
+
+    _migrate_user_onboarding_columns(get_web_engine())
 
     # Register blueprints
     from .routes import main_bp

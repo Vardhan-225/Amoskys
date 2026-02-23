@@ -27,6 +27,7 @@ import logging
 import os
 import platform
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
@@ -433,7 +434,9 @@ class ProcessTreeAnomalyProbe(MicroProbe):
         if not PSUTIL_AVAILABLE:
             return events
 
-        for proc in psutil.process_iter(["pid", "name", "ppid", "cmdline", "create_time"]):
+        for proc in psutil.process_iter(
+            ["pid", "name", "ppid", "cmdline", "create_time"]
+        ):
             try:
                 info = proc.info
                 child_name = info.get("name", "").lower()
@@ -789,7 +792,9 @@ class BinaryFromTempProbe(MicroProbe):
         if not PSUTIL_AVAILABLE:
             return events
 
-        for proc in psutil.process_iter(["pid", "name", "exe", "cmdline", "username", "create_time"]):
+        for proc in psutil.process_iter(
+            ["pid", "name", "exe", "cmdline", "username", "create_time"]
+        ):
             try:
                 info = proc.info
                 pid = info["pid"]
@@ -894,7 +899,9 @@ class ScriptInterpreterProbe(MicroProbe):
         if not PSUTIL_AVAILABLE:
             return events
 
-        for proc in psutil.process_iter(["pid", "name", "cmdline", "username", "create_time"]):
+        for proc in psutil.process_iter(
+            ["pid", "name", "cmdline", "username", "create_time"]
+        ):
             try:
                 info = proc.info
                 name = info.get("name", "").lower()
@@ -941,6 +948,199 @@ class ScriptInterpreterProbe(MicroProbe):
 
 
 # =============================================================================
+# 9. DylibInjectionProbe (Phase 3 - macOS observability)
+# =============================================================================
+
+
+class DylibInjectionProbe(MicroProbe):
+    """Detects DYLD_INSERT_LIBRARIES environment variable abuse.
+
+    macOS-specific probe that monitors process environment for suspicious dylib
+    injection attempts. Dylib injection is a common persistence and privilege
+    escalation technique on macOS.
+
+    MITRE: T1547 (Boot or Logon Autostart Execution), T1574.006 (Dynamic Library Hijacking)
+    """
+
+    name = "dylib_injection"
+    description = "Detects DYLD_INSERT_LIBRARIES abuse and suspicious dylib injection"
+    mitre_techniques = ["T1547", "T1574.006"]
+    mitre_tactics = ["persistence", "privilege_escalation"]
+    scan_interval = 30.0
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.reported_pids: Set[int] = set()
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        """Detect dylib injection attempts."""
+        events = []
+
+        if not PSUTIL_AVAILABLE:
+            return events
+
+        if platform.system() != "Darwin":
+            # Non-macOS platform - log and skip
+            logger.debug("DylibInjectionProbe: Skipping on non-macOS platform")
+            return events
+
+        import subprocess
+
+        try:
+            # Use ps command to check process environment
+            result = subprocess.run(
+                ["ps", "eww", "-o", "pid,command,environ"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            if result.returncode != 0:
+                logger.debug(f"ps command failed: {result.stderr}")
+                return events
+
+            # Parse output for DYLD_INSERT_LIBRARIES
+            for line in result.stdout.split("\n"):
+                if "DYLD_INSERT_LIBRARIES" not in line:
+                    continue
+
+                parts = line.split(None, 2)
+                if len(parts) < 1:
+                    continue
+
+                try:
+                    pid = int(parts[0])
+                    if pid in self.reported_pids:
+                        continue
+
+                    self.reported_pids.add(pid)
+
+                    # Extract process info
+                    proc_name = "unknown"
+                    try:
+                        proc = psutil.Process(pid)
+                        proc_name = proc.name()
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+
+                    # Extract DYLD_INSERT_LIBRARIES value
+                    dylib_value = "unknown"
+                    if "DYLD_INSERT_LIBRARIES=" in line:
+                        dylib_part = line.split("DYLD_INSERT_LIBRARIES=")[1].split()[0]
+                        dylib_value = dylib_part
+
+                    guid = _make_process_guid(context.device_id, pid, time.time())
+
+                    events.append(
+                        self._create_event(
+                            event_type="dylib_injection_detected",
+                            severity=Severity.CRITICAL,
+                            data={
+                                "pid": pid,
+                                "process_guid": guid,
+                                "process_name": proc_name,
+                                "dyld_insert_libraries": dylib_value,
+                                "reason": "Process has DYLD_INSERT_LIBRARIES set (dylib injection)",
+                            },
+                            confidence=0.95,
+                            correlation_id=guid,
+                        )
+                    )
+
+                except (ValueError, IndexError):
+                    continue
+
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            logger.debug(f"DylibInjectionProbe failed: {e}")
+
+        return events
+
+
+# =============================================================================
+# 10. CodeSigningProbe (Phase 3 - macOS observability)
+# =============================================================================
+
+
+class CodeSigningProbe(MicroProbe):
+    """Verifies code signatures on critical macOS processes.
+
+    Checks code signatures on security-critical binaries to detect unsigned
+    or tampered executables. macOS relies on code signing for security boundary
+    enforcement.
+
+    MITRE: T1036 (Masquerading), T1070.005 (Indicator Removal: File Deletion)
+    """
+
+    name = "code_signing"
+    description = "Code signature verification on critical macOS binaries"
+    mitre_techniques = ["T1036", "T1070.005"]
+    mitre_tactics = ["defense_evasion"]
+    scan_interval = 300.0  # Less frequently - slower operation
+
+    # Critical binaries to check
+    CRITICAL_BINARIES = [
+        "/usr/sbin/sshd",
+        "/usr/libexec/securityd",
+        "/usr/bin/sudo",
+        "/bin/bash",
+        "/bin/sh",
+        "/usr/bin/python",
+        "/usr/bin/python3",
+    ]
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        """Verify code signatures on critical binaries."""
+        events = []
+
+        if not PSUTIL_AVAILABLE:
+            return events
+
+        if platform.system() != "Darwin":
+            logger.debug("CodeSigningProbe: Skipping on non-macOS platform")
+            return events
+
+        import subprocess
+
+        for binary_path in self.CRITICAL_BINARIES:
+            if not os.path.exists(binary_path):
+                continue
+
+            try:
+                result = subprocess.run(
+                    ["codesign", "--verify", "--deep", binary_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+
+                # codesign returns 0 if signature is valid
+                if result.returncode != 0:
+                    # Signature verification failed
+                    guid = hashlib.sha256(
+                        f"{context.device_id}:{binary_path}".encode()
+                    ).hexdigest()[:16]
+
+                    events.append(
+                        self._create_event(
+                            event_type="code_signature_invalid",
+                            severity=Severity.HIGH,
+                            data={
+                                "binary_path": binary_path,
+                                "codesign_error": result.stderr or "Unknown error",
+                                "reason": "Critical binary has invalid or missing code signature",
+                            },
+                            confidence=0.9,
+                            correlation_id=guid,
+                        )
+                    )
+
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                logger.debug(f"CodeSigningProbe check failed for {binary_path}: {e}")
+
+        return events
+
+
+# =============================================================================
 # Probe Registry
 # =============================================================================
 
@@ -953,6 +1153,8 @@ PROC_PROBES = [
     SuspiciousUserProcessProbe,
     BinaryFromTempProbe,
     ScriptInterpreterProbe,
+    DylibInjectionProbe,
+    CodeSigningProbe,
 ]
 
 
@@ -967,7 +1169,9 @@ def create_proc_probes() -> List[MicroProbe]:
 
 __all__ = [
     "BinaryFromTempProbe",
+    "CodeSigningProbe",
     "create_proc_probes",
+    "DylibInjectionProbe",
     "HighCPUAndMemoryProbe",
     "LOLBinExecutionProbe",
     "LongLivedProcessProbe",

@@ -1,0 +1,588 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AMOSKYS Live Threat Feed{% endblock %}
+
+{% block content %}
+<div class="tf-page">
+
+    <!-- ===== HEADER BAR ===== -->
+    <div class="tf-header-bar">
+        <div class="tf-header-left">
+            <h2 class="tf-page-title">Live Threat Feed</h2>
+            <span class="tf-badge-live" id="feed-status">LIVE</span>
+            <span class="tf-count" id="feed-count">0 events</span>
+        </div>
+        <div class="tf-header-right">
+            <button class="tf-action-btn" id="export-csv-btn" title="Export as CSV">Export CSV</button>
+            <button class="tf-action-btn tf-action-refresh" id="refresh-feed-btn" title="Refresh now">Refresh</button>
+        </div>
+    </div>
+
+    <!-- ===== FILTER BAR ===== -->
+    <div class="tf-filters">
+        <div class="tf-filter-group">
+            <label class="tf-filter-label">Severity</label>
+            <div class="tf-filter-pills" id="filter-severity">
+                <button class="tf-pill active" data-val="all">All</button>
+                <button class="tf-pill sev-critical" data-val="critical">Critical</button>
+                <button class="tf-pill sev-high" data-val="high">High</button>
+                <button class="tf-pill sev-medium" data-val="medium">Medium</button>
+                <button class="tf-pill sev-low" data-val="low">Low</button>
+            </div>
+        </div>
+        <div class="tf-filter-group">
+            <label class="tf-filter-label">Time</label>
+            <select class="tf-select" id="filter-time">
+                <option value="1">Last 1 hour</option>
+                <option value="6">Last 6 hours</option>
+                <option value="24" selected>Last 24 hours</option>
+                <option value="168">Last 7 days</option>
+                <option value="8760">All time</option>
+            </select>
+        </div>
+        <div class="tf-filter-group">
+            <label class="tf-filter-label">Agent</label>
+            <select class="tf-select" id="filter-agent">
+                <option value="all">All Agents</option>
+            </select>
+        </div>
+        <div class="tf-filter-group tf-filter-search">
+            <label class="tf-filter-label">Search</label>
+            <input type="text" class="tf-search-input" id="filter-search" placeholder="Filter by type, IP, description...">
+        </div>
+    </div>
+
+    <!-- ===== SUMMARY STRIP ===== -->
+    <div class="tf-summary" id="feed-summary">
+        <div class="tf-summary-item"><span class="tf-summary-val" id="sum-total">0</span><span class="tf-summary-lbl">Total</span></div>
+        <div class="tf-summary-sep"></div>
+        <div class="tf-summary-item"><span class="tf-summary-val tf-val-critical" id="sum-critical">0</span><span class="tf-summary-lbl">Critical</span></div>
+        <div class="tf-summary-sep"></div>
+        <div class="tf-summary-item"><span class="tf-summary-val tf-val-high" id="sum-high">0</span><span class="tf-summary-lbl">High</span></div>
+        <div class="tf-summary-sep"></div>
+        <div class="tf-summary-item"><span class="tf-summary-val tf-val-medium" id="sum-medium">0</span><span class="tf-summary-lbl">Medium</span></div>
+        <div class="tf-summary-sep"></div>
+        <div class="tf-summary-item"><span class="tf-summary-val tf-val-low" id="sum-low">0</span><span class="tf-summary-lbl">Low</span></div>
+        <div class="tf-summary-sep"></div>
+        <div class="tf-summary-item"><span class="tf-summary-val" id="sum-investigation">0</span><span class="tf-summary-lbl">Needs Investigation</span></div>
+    </div>
+
+    <!-- ===== THREAT LIST ===== -->
+    <div class="tf-list" id="threat-list">
+        <div class="tf-loading">Connecting to threat feed...</div>
+    </div>
+
+    <!-- ===== PAGINATION ===== -->
+    <div class="tf-pagination" id="pagination" style="display:none;">
+        <button class="tf-page-btn" id="prev-btn" disabled>Previous</button>
+        <span class="tf-page-info" id="page-info">Page 1</span>
+        <button class="tf-page-btn" id="next-btn">Next</button>
+    </div>
+
+    <!-- ===== TOAST CONTAINER ===== -->
+    <div id="tf-toast-container"></div>
+</div>
+
+<style>
+/* ── Threat Feed Page ── */
+.tf-page { padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+
+/* ── Header Bar ── */
+.tf-header-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 1rem;
+}
+.tf-header-left { display: flex; align-items: center; gap: 0.75rem; }
+.tf-page-title { font-size: 1.3rem; font-weight: 800; color: var(--text-primary); }
+.tf-badge-live {
+    font-size: 0.6rem; font-weight: 800; padding: 0.15rem 0.5rem;
+    border-radius: 10px; letter-spacing: 0.5px;
+    background: rgba(255,51,102,0.15); color: #ff3366;
+    border: 1px solid rgba(255,51,102,0.3);
+    animation: pulse-live 2s ease-in-out infinite;
+}
+@keyframes pulse-live { 0%,100%{ opacity:1; } 50%{ opacity:0.5; } }
+.tf-count { font-size: 0.8rem; color: var(--text-muted); }
+.tf-header-right { display: flex; gap: 0.5rem; }
+.tf-action-btn {
+    padding: 0.4rem 0.9rem; border-radius: 8px; font-size: 0.78rem;
+    font-weight: 600; cursor: pointer; border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05); color: var(--text-secondary);
+    transition: all 0.2s;
+}
+.tf-action-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.tf-action-refresh { background: rgba(0,217,255,0.08); color: var(--neural-primary); border-color: rgba(0,217,255,0.2); }
+.tf-action-refresh:hover { background: rgba(0,217,255,0.15); }
+
+/* ── Filters ── */
+.tf-filters {
+    display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;
+    padding: 1rem 1.25rem; border-radius: 12px;
+    background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.06);
+}
+.tf-filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
+.tf-filter-search { flex: 1; min-width: 200px; }
+.tf-filter-label {
+    font-size: 0.6rem; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 1px;
+}
+.tf-filter-pills { display: flex; gap: 0.3rem; }
+.tf-pill {
+    padding: 0.3rem 0.7rem; border-radius: 16px; font-size: 0.7rem;
+    font-weight: 700; cursor: pointer; border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.03); color: var(--text-muted);
+    transition: all 0.15s; text-transform: capitalize;
+}
+.tf-pill:hover { background: rgba(255,255,255,0.06); color: var(--text-secondary); }
+.tf-pill.active { background: rgba(0,217,255,0.12); color: var(--neural-primary); border-color: rgba(0,217,255,0.3); }
+.tf-pill.sev-critical.active { background: rgba(255,51,102,0.15); color: #ff3366; border-color: rgba(255,51,102,0.3); }
+.tf-pill.sev-high.active { background: rgba(255,102,0,0.15); color: #ff6600; border-color: rgba(255,102,0,0.3); }
+.tf-pill.sev-medium.active { background: rgba(255,170,0,0.15); color: #ffaa00; border-color: rgba(255,170,0,0.3); }
+.tf-pill.sev-low.active { background: rgba(0,136,255,0.12); color: #0088ff; border-color: rgba(0,136,255,0.3); }
+.tf-select {
+    padding: 0.35rem 0.7rem; border-radius: 8px; font-size: 0.78rem;
+    background: rgba(255,255,255,0.04); color: var(--text-secondary);
+    border: 1px solid rgba(255,255,255,0.1); outline: none;
+    font-family: inherit;
+}
+.tf-select option { background: var(--bg-primary); color: var(--text-primary); }
+.tf-search-input {
+    width: 100%; padding: 0.35rem 0.7rem; border-radius: 8px;
+    font-size: 0.78rem; background: rgba(255,255,255,0.04);
+    color: var(--text-primary); border: 1px solid rgba(255,255,255,0.1);
+    outline: none; font-family: inherit;
+}
+.tf-search-input:focus { border-color: rgba(0,217,255,0.3); box-shadow: 0 0 0 2px rgba(0,217,255,0.1); }
+
+/* ── Summary Strip ── */
+.tf-summary {
+    display: flex; align-items: center; justify-content: center; gap: 0;
+    padding: 0.65rem 1.5rem; border-radius: 10px;
+    background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.06);
+}
+.tf-summary-item { display: flex; flex-direction: column; align-items: center; padding: 0 1.5rem; min-width: 80px; }
+.tf-summary-val { font-size: 1.2rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tf-summary-lbl { font-size: 0.55rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; font-weight: 600; }
+.tf-summary-sep { width: 1px; height: 24px; background: rgba(255,255,255,0.08); flex-shrink: 0; }
+.tf-val-critical { color: #ff3366; }
+.tf-val-high { color: #ff6600; }
+.tf-val-medium { color: #ffaa00; }
+.tf-val-low { color: #0088ff; }
+
+/* ── Threat List ── */
+.tf-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.tf-loading { color: var(--text-muted); text-align: center; padding: 2rem; font-size: 0.85rem; }
+
+/* ── Threat Item (Full Detail) ── */
+.tf-threat {
+    display: flex; gap: 1rem; padding: 1rem 1.25rem; border-radius: 10px;
+    background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.06);
+    border-left: 4px solid #00ff88; transition: all 0.15s;
+}
+.tf-threat:hover { background: rgba(26,31,58,0.9); border-color: rgba(255,255,255,0.1); }
+.tf-threat.sev-critical { border-left-color: #ff3366; }
+.tf-threat.sev-high { border-left-color: #ff6600; }
+.tf-threat.sev-medium { border-left-color: #ffaa00; }
+
+.tf-threat-sev {
+    flex-shrink: 0; width: 60px; text-align: center;
+    padding: 0.2rem 0; border-radius: 6px; font-size: 0.6rem;
+    font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;
+    align-self: flex-start; margin-top: 2px;
+}
+.tf-threat-sev.sev-critical { background: rgba(255,51,102,0.2); color: #ff3366; }
+.tf-threat-sev.sev-high { background: rgba(255,102,0,0.2); color: #ff6600; }
+.tf-threat-sev.sev-medium { background: rgba(255,170,0,0.2); color: #ffaa00; }
+.tf-threat-sev.sev-low { background: rgba(0,136,255,0.15); color: #0088ff; }
+
+.tf-threat-body { flex: 1; min-width: 0; }
+.tf-threat-title { font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.3rem; }
+.tf-threat-desc {
+    font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;
+    margin-bottom: 0.5rem; max-height: 4.5em; overflow: hidden;
+}
+
+.tf-threat-tags { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.tf-tag {
+    padding: 0.1rem 0.5rem; border-radius: 4px; font-size: 0.65rem;
+    font-weight: 600; display: inline-flex; align-items: center; gap: 0.2rem;
+}
+.tf-tag-mitre { background: rgba(0,217,255,0.1); color: var(--neural-primary); border: 1px solid rgba(0,217,255,0.15); }
+.tf-tag-agent { background: rgba(0,255,136,0.08); color: #00ff88; border: 1px solid rgba(0,255,136,0.15); }
+.tf-tag-ip { background: rgba(255,255,255,0.04); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.08); font-family: monospace; }
+.tf-tag-class { background: rgba(255,170,0,0.08); color: #ffaa00; border: 1px solid rgba(255,170,0,0.15); }
+.tf-tag-risk { background: rgba(255,51,102,0.08); color: #ff3366; border: 1px solid rgba(255,51,102,0.15); }
+
+.tf-threat-meta {
+    display: flex; gap: 1rem; align-items: center; font-size: 0.7rem;
+    color: var(--text-muted); flex-wrap: wrap;
+}
+.tf-threat-meta span { white-space: nowrap; }
+
+/* ── Triage Actions (right-side column) ── */
+.tf-threat-actions {
+    display: flex; flex-direction: column; gap: 0.4rem; flex-shrink: 0;
+    align-self: center;
+}
+.tf-triage-btn {
+    padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.7rem;
+    font-weight: 700; cursor: pointer; border: 1px solid;
+    transition: all 0.15s; background: transparent; white-space: nowrap;
+    text-align: center;
+}
+.tf-triage-btn:hover { filter: brightness(1.3); }
+.tf-triage-legit { color: #00ff88; border-color: rgba(0,255,136,0.25); }
+.tf-triage-legit:hover { background: rgba(0,255,136,0.1); }
+.tf-triage-inv { color: #00d9ff; border-color: rgba(0,217,255,0.25); }
+.tf-triage-inv:hover { background: rgba(0,217,255,0.1); }
+.tf-triage-inc { color: #ff3366; border-color: rgba(255,51,102,0.25); }
+.tf-triage-inc:hover { background: rgba(255,51,102,0.1); }
+
+/* ── Pagination ── */
+.tf-pagination {
+    display: flex; justify-content: center; align-items: center; gap: 1rem;
+    padding: 0.75rem; margin-top: 0.5rem;
+}
+.tf-page-btn {
+    padding: 0.4rem 1rem; border-radius: 8px; font-size: 0.78rem;
+    font-weight: 600; cursor: pointer; border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05); color: var(--text-secondary);
+    transition: all 0.2s;
+}
+.tf-page-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #fff; }
+.tf-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.tf-page-info { font-size: 0.78rem; color: var(--text-muted); }
+
+/* ── Toast ── */
+#tf-toast-container {
+    position: fixed; top: 1rem; right: 1rem; z-index: 3000;
+    display: flex; flex-direction: column; gap: 0.5rem; pointer-events: none;
+}
+.tf-toast {
+    padding: 0.7rem 1rem; border-radius: 8px; font-size: 0.8rem; font-weight: 600;
+    background: rgba(10,14,39,0.95); border: 1px solid rgba(0,255,136,0.4);
+    color: #00ff88; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    animation: tf-toast-in 0.3s ease, tf-toast-out 0.3s ease 4.7s forwards;
+    pointer-events: auto; max-width: 340px;
+}
+.tf-toast.toast-error { border-color: rgba(255,51,102,0.4); color: #ff3366; }
+.tf-toast.toast-info { border-color: rgba(0,217,255,0.4); color: var(--neural-primary); }
+@keyframes tf-toast-in { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+@keyframes tf-toast-out { from { opacity:1; } to { opacity:0; transform:translateX(40px); } }
+
+/* ── Empty state ── */
+.tf-empty { text-align: center; padding: 3rem 2rem; }
+.tf-empty-icon { font-size: 3rem; margin-bottom: 0.75rem; opacity: 0.4; }
+.tf-empty-msg { font-size: 0.9rem; color: var(--text-muted); }
+
+/* ── Triaged fade-out ── */
+.tf-threat.triaged { opacity: 0.3; transition: opacity 0.5s; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+    .tf-filters { flex-direction: column; }
+    .tf-summary { flex-wrap: wrap; }
+    .tf-summary-sep { display: none; }
+    .tf-threat { flex-direction: column; gap: 0.5rem; }
+    .tf-threat-actions { flex-direction: row; }
+    .tf-header-bar { flex-direction: column; align-items: stretch; }
+}
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+class ThreatFeedController {
+    constructor() {
+        this.threats = [];
+        this.filtered = [];
+        this.sevFilter = 'all';
+        this.page = 0;
+        this.perPage = 20;
+        this.timer = null;
+        this.REFRESH = 5000;
+        this.seenAgents = new Set();
+        this.init();
+    }
+
+    async init() {
+        var self = this;
+        document.getElementById('export-csv-btn').addEventListener('click', function() { self.exportCSV(); });
+        document.getElementById('refresh-feed-btn').addEventListener('click', function() { self.refresh(); });
+        document.getElementById('filter-time').addEventListener('change', function() { self.refresh(); });
+        document.getElementById('filter-agent').addEventListener('change', function() { self.applyFilters(); });
+        document.getElementById('filter-search').addEventListener('input', function() { self.applyFilters(); });
+        document.getElementById('prev-btn').addEventListener('click', function() { self.prevPage(); });
+        document.getElementById('next-btn').addEventListener('click', function() { self.nextPage(); });
+        /* Event delegation for severity filter pills */
+        document.getElementById('filter-severity').addEventListener('click', function(e) {
+            var pill = e.target.closest('.tf-pill[data-val]');
+            if (pill) self.setSevFilter(pill.getAttribute('data-val'), pill);
+        });
+        /* Event delegation for triage buttons */
+        document.getElementById('threat-list').addEventListener('click', function(e) {
+            var btn = e.target.closest('[data-triage-action]');
+            if (btn) {
+                var idx = parseInt(btn.getAttribute('data-triage-idx'), 10);
+                var action = btn.getAttribute('data-triage-action');
+                self.triage(idx, action, btn);
+            }
+        });
+        await this.refresh();
+        this.timer = setInterval(() => this.refresh(), this.REFRESH);
+        window.addEventListener('beforeunload', () => { if (this.timer) clearInterval(this.timer); });
+        this.initKeyboard();
+    }
+
+    initKeyboard() {
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            switch (e.key.toLowerCase()) {
+                case 'r': e.preventDefault(); this.refresh(); this.toast('Refreshing...', 'info'); break;
+                case 'escape': document.getElementById('filter-search').value = ''; this.applyFilters(); break;
+            }
+        });
+    }
+
+    async refresh() {
+        try {
+            const r = await fetch('/dashboard/api/live/threats');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            if (d.status !== 'success') throw new Error('API error');
+
+            this.threats = d.threats || [];
+            document.getElementById('feed-count').textContent = this.threats.length + ' events';
+
+            // Populate agent filter dropdown
+            const agentSelect = document.getElementById('filter-agent');
+            const currentAgent = agentSelect.value;
+            const agents = new Set();
+            for (const t of this.threats) {
+                if (t.agent_id) agents.add(t.agent_id);
+            }
+            if (agents.size !== this.seenAgents.size || ![...agents].every(a => this.seenAgents.has(a))) {
+                this.seenAgents = agents;
+                const opts = '<option value="all">All Agents</option>' +
+                    [...agents].sort().map(a => '<option value="' + this.esc(a) + '"' + (a === currentAgent ? ' selected' : '') + '>' + this.esc(a) + '</option>').join('');
+                agentSelect.innerHTML = opts;
+            }
+
+            this.applyFilters();
+        } catch (e) {
+            document.getElementById('feed-status').textContent = 'OFFLINE';
+            document.getElementById('feed-status').style.color = '#ffaa00';
+            document.getElementById('feed-status').style.borderColor = 'rgba(255,170,0,0.3)';
+            document.getElementById('feed-status').style.background = 'rgba(255,170,0,0.15)';
+        }
+    }
+
+    setSevFilter(val, btn) {
+        this.sevFilter = val;
+        document.querySelectorAll('#filter-severity .tf-pill').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        this.page = 0;
+        this.applyFilters();
+    }
+
+    applyFilters() {
+        const search = (document.getElementById('filter-search').value || '').toLowerCase();
+        const agentFilter = document.getElementById('filter-agent').value;
+
+        this.filtered = this.threats.filter(t => {
+            // Severity filter
+            if (this.sevFilter !== 'all' && (t.severity || '').toLowerCase() !== this.sevFilter) return false;
+            // Agent filter
+            if (agentFilter !== 'all' && t.agent_id !== agentFilter) return false;
+            // Text search
+            if (search) {
+                const haystack = [
+                    t.type, t.description, t.source_ip, t.agent_id,
+                    t.classification, ...(t.mitre_techniques || [])
+                ].join(' ').toLowerCase();
+                if (!haystack.includes(search)) return false;
+            }
+            return true;
+        });
+
+        this.updateSummary();
+        this.renderPage();
+    }
+
+    updateSummary() {
+        const all = this.filtered;
+        document.getElementById('sum-total').textContent = all.length;
+        document.getElementById('sum-critical').textContent = all.filter(t => (t.severity || '').toLowerCase() === 'critical').length;
+        document.getElementById('sum-high').textContent = all.filter(t => (t.severity || '').toLowerCase() === 'high').length;
+        document.getElementById('sum-medium').textContent = all.filter(t => (t.severity || '').toLowerCase() === 'medium').length;
+        document.getElementById('sum-low').textContent = all.filter(t => (t.severity || '').toLowerCase() === 'low').length;
+        document.getElementById('sum-investigation').textContent = all.filter(t => t.requires_investigation).length;
+    }
+
+    renderPage() {
+        const container = document.getElementById('threat-list');
+        const pag = document.getElementById('pagination');
+
+        if (this.filtered.length === 0) {
+            container.innerHTML = '<div class="tf-empty"><div class="tf-empty-icon">&#x1f6e1;</div><div class="tf-empty-msg">No threats match your filters</div></div>';
+            pag.style.display = 'none';
+            return;
+        }
+
+        const totalPages = Math.ceil(this.filtered.length / this.perPage);
+        if (this.page >= totalPages) this.page = totalPages - 1;
+        const start = this.page * this.perPage;
+        const pageItems = this.filtered.slice(start, start + this.perPage);
+
+        container.innerHTML = pageItems.map((t, localIdx) => {
+            const idx = start + localIdx;
+            const sev = (t.severity || 'low').toLowerCase();
+            const time = t.timestamp ? this.relTime(t.timestamp) : '';
+            const absTime = t.timestamp ? new Date(t.timestamp).toLocaleString() : '';
+
+            // Tags
+            let tags = '';
+            if (t.mitre_techniques && t.mitre_techniques.length > 0) {
+                tags += t.mitre_techniques.map(m => '<span class="tf-tag tf-tag-mitre">' + m + '</span>').join('');
+            }
+            if (t.agent_id) tags += '<span class="tf-tag tf-tag-agent">' + this.esc(t.agent_id) + '</span>';
+            if (t.source_ip) tags += '<span class="tf-tag tf-tag-ip">' + this.esc(t.source_ip) + '</span>';
+            if (t.classification) tags += '<span class="tf-tag tf-tag-class">' + this.esc(t.classification) + '</span>';
+            if (t.risk_score > 0) tags += '<span class="tf-tag tf-tag-risk">Risk: ' + (t.risk_score * 100).toFixed(0) + '%</span>';
+
+            return '<div class="tf-threat sev-' + sev + '" id="threat-' + idx + '">' +
+                '<div class="tf-threat-sev sev-' + sev + '">' + sev + '</div>' +
+                '<div class="tf-threat-body">' +
+                    '<div class="tf-threat-title">' + this.fmtType(t.type) + '</div>' +
+                    (t.description ? '<div class="tf-threat-desc">' + this.esc(t.description) + '</div>' : '') +
+                    (tags ? '<div class="tf-threat-tags">' + tags + '</div>' : '') +
+                    '<div class="tf-threat-meta">' +
+                        '<span title="' + absTime + '">' + time + '</span>' +
+                        (t.id ? '<span>Event #' + t.id + '</span>' : '') +
+                        (t.requires_investigation ? '<span style="color:#ff3366;">Needs Investigation</span>' : '') +
+                    '</div>' +
+                '</div>' +
+                '<div class="tf-threat-actions">' +
+                    '<button class="tf-triage-btn tf-triage-legit" data-triage-idx="' + idx + '" data-triage-action="legit" title="Mark as Legitimate">Legit</button>' +
+                    '<button class="tf-triage-btn tf-triage-inv" data-triage-idx="' + idx + '" data-triage-action="investigate" title="Investigate in Timeline">Investigate</button>' +
+                    '<button class="tf-triage-btn tf-triage-inc" data-triage-idx="' + idx + '" data-triage-action="incident" title="Create Incident">Incident</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+
+        // Pagination
+        if (totalPages > 1) {
+            pag.style.display = 'flex';
+            document.getElementById('prev-btn').disabled = this.page === 0;
+            document.getElementById('next-btn').disabled = this.page >= totalPages - 1;
+            document.getElementById('page-info').textContent = 'Page ' + (this.page + 1) + ' of ' + totalPages + ' (' + this.filtered.length + ' events)';
+        } else {
+            pag.style.display = 'none';
+        }
+    }
+
+    prevPage() { if (this.page > 0) { this.page--; this.renderPage(); window.scrollTo(0, 0); } }
+    nextPage() {
+        const totalPages = Math.ceil(this.filtered.length / this.perPage);
+        if (this.page < totalPages - 1) { this.page++; this.renderPage(); window.scrollTo(0, 0); }
+    }
+
+    /* ── Triage Actions ── */
+    async triage(idx, action, btn) {
+        const t = this.filtered[idx];
+        if (!t) return;
+
+        if (action === 'legit') {
+            const row = document.getElementById('threat-' + idx);
+            if (row) row.classList.add('triaged');
+            this.toast('Marked as legitimate', 'success');
+            return;
+        }
+        if (action === 'investigate') {
+            window.location = '/dashboard/timeline-replay?event_id=' + t.id;
+            return;
+        }
+        if (action === 'incident') {
+            try {
+                btn.disabled = true;
+                btn.textContent = 'Creating...';
+                const body = {
+                    title: '[Auto] ' + this.fmtType(t.type) + ' - ' + (t.severity || 'medium').toUpperCase(),
+                    description: (t.description || 'Auto-created from threat feed. Event #' + t.id),
+                    severity: t.severity || 'medium',
+                    source_event_ids: [t.id],
+                    mitre_techniques: t.mitre_techniques || [],
+                    indicators: t.indicators || {}
+                };
+                const resp = await fetch('/dashboard/api/incidents', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    this.toast('Incident #' + data.incident_id + ' created', 'success');
+                    btn.textContent = 'Created';
+                    btn.style.color = '#00ff88';
+                    btn.style.borderColor = 'rgba(0,255,136,0.4)';
+                } else {
+                    this.toast('Failed: ' + (data.message || 'Unknown error'), 'error');
+                    btn.textContent = 'Incident';
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                this.toast('Failed to create incident', 'error');
+                btn.textContent = 'Incident';
+                btn.disabled = false;
+            }
+        }
+    }
+
+    /* ── CSV Export ── */
+    exportCSV() {
+        const data = this.filtered.length > 0 ? this.filtered : this.threats;
+        if (data.length === 0) { this.toast('No data to export', 'info'); return; }
+        const headers = ['id','timestamp','type','severity','risk_score','classification','agent_id','source_ip','description','mitre_techniques'];
+        const rows = data.map(t => headers.map(h => {
+            let v = t[h] || '';
+            if (Array.isArray(v)) v = v.join('; ');
+            return '"' + String(v).replace(/"/g, '""') + '"';
+        }).join(','));
+        const csv = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'amoskys_threats_' + new Date().toISOString().slice(0, 10) + '.csv';
+        a.style.display = 'none';
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+        this.toast('Exported ' + data.length + ' events', 'info');
+    }
+
+    /* ── Toast ── */
+    toast(msg, type) {
+        const container = document.getElementById('tf-toast-container');
+        if (!container) return;
+        while (container.children.length >= 3) container.removeChild(container.firstChild);
+        const el = document.createElement('div');
+        el.className = 'tf-toast' + (type === 'error' ? ' toast-error' : type === 'info' ? ' toast-info' : '');
+        el.textContent = msg;
+        container.appendChild(el);
+        setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 5000);
+    }
+
+    /* ── Helpers ── */
+    fmtType(t) { return (t || 'unknown').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+    esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    relTime(ts) {
+        const diff = (Date.now() - new Date(ts).getTime()) / 1000;
+        if (diff < 60) return Math.floor(diff) + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        return Math.floor(diff / 86400) + 'd ago';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => { window.feed = new ThreatFeedController(); });
+</script>
+{% endblock %}

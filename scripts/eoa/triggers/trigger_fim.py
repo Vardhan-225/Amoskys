@@ -53,6 +53,7 @@ def cleanup_sandbox() -> None:
 
 # ── Trigger 1: SUIDBitChangeProbe ──────────────────────────────────────────
 
+
 def trigger_suid_bit(dry_run: bool = False) -> None:
     """Create file and set SUID bit."""
     log("Trigger: SUIDBitChangeProbe")
@@ -70,6 +71,7 @@ def trigger_suid_bit(dry_run: bool = False) -> None:
 
 
 # ── Trigger 2: ServiceCreationProbe ────────────────────────────────────────
+
 
 def trigger_service_creation(dry_run: bool = False) -> None:
     """Create a macOS LaunchAgent plist (in sandbox)."""
@@ -106,6 +108,7 @@ def trigger_service_creation(dry_run: bool = False) -> None:
 
 # ── Trigger 3: WebShellDropProbe ───────────────────────────────────────────
 
+
 def trigger_webshell_drop(dry_run: bool = False) -> None:
     """Create files with webshell patterns in web root sandbox."""
     log("Trigger: WebShellDropProbe")
@@ -127,6 +130,7 @@ def trigger_webshell_drop(dry_run: bool = False) -> None:
 
 
 # ── Trigger 4: ConfigBackdoorProbe ─────────────────────────────────────────
+
 
 def trigger_config_backdoor(dry_run: bool = False) -> None:
     """Create sshd_config and sudoers with backdoor patterns."""
@@ -159,6 +163,7 @@ eoa_attacker ALL=(ALL) NOPASSWD:ALL
 
 # ── Trigger 5: LibraryHijackProbe ─────────────────────────────────────────
 
+
 def trigger_library_hijack(dry_run: bool = False) -> None:
     """Create a suspicious .so file in lib directory (sandbox)."""
     log("Trigger: LibraryHijackProbe")
@@ -175,6 +180,7 @@ def trigger_library_hijack(dry_run: bool = False) -> None:
 
 
 # ── Trigger 6: BootloaderTamperProbe ──────────────────────────────────────
+
 
 def trigger_bootloader_tamper(dry_run: bool = False) -> None:
     """Create simulated boot file changes (sandbox)."""
@@ -200,6 +206,7 @@ def trigger_bootloader_tamper(dry_run: bool = False) -> None:
 
 # ── Trigger 7: WorldWritableSensitiveProbe ────────────────────────────────
 
+
 def trigger_world_writable(dry_run: bool = False) -> None:
     """Create sensitive file and make it world-writable."""
     log("Trigger: WorldWritableSensitiveProbe")
@@ -218,7 +225,9 @@ def trigger_world_writable(dry_run: bool = False) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Trigger Pack: FIM Agent probes")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without executing")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without executing"
+    )
     args = parser.parse_args()
 
     print("\n═══ FIM Agent Trigger Pack ═══")

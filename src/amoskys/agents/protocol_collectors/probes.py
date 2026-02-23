@@ -19,23 +19,24 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 
-from amoskys.agents.common.probes import MicroProbe, ProbeContext, Severity, TelemetryEvent
+from amoskys.agents.common.probes import (
+    MicroProbe,
+    ProbeContext,
+    Severity,
+    TelemetryEvent,
+)
 
 # Use relative import to avoid triggering amoskys.agents.__init__
-from .types import (
-    ProtocolEvent,
-    ProtocolType,
-    ThreatCategory,
-)
+from .types import ProtocolEvent, ProtocolType, ThreatCategory
 
 logger = logging.getLogger(__name__)
 
 
 class HTTPSuspiciousHeadersProbe(MicroProbe):
     """Detect suspicious HTTP headers indicating attacks or C2.
-    
+
     MITRE ATT&CK: T1071.001 (Application Layer Protocol: Web Protocols)
-    
+
     Detection patterns:
         - Unusual User-Agent strings
         - Base64 encoded headers
@@ -72,7 +73,9 @@ class HTTPSuspiciousHeadersProbe(MicroProbe):
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Analyze HTTP events for suspicious headers."""
         events = []
-        protocol_events: List[ProtocolEvent] = context.shared_data.get("protocol_events", [])
+        protocol_events: List[ProtocolEvent] = context.shared_data.get(
+            "protocol_events", []
+        )
 
         for pe in protocol_events:
             if pe.protocol not in (ProtocolType.HTTP, ProtocolType.HTTPS):
@@ -96,35 +99,37 @@ class HTTPSuspiciousHeadersProbe(MicroProbe):
                 suspicious_indicators.append("header_injection_attempt")
 
             if suspicious_indicators:
-                events.append(TelemetryEvent(
-                    event_type="protocol_threat",
-                    severity=Severity.MEDIUM,
-                    probe_name=self.name,
-                    data={
-                        "description": f"Suspicious HTTP headers detected: {', '.join(suspicious_indicators)}",
-                        "category": ThreatCategory.HTTP_SUSPICIOUS.value,
-                        "src_ip": pe.src_ip,
-                        "dst_ip": pe.dst_ip,
-                        "indicators": suspicious_indicators,
-                        "user_agent": user_agent[:200],
-                    },
-                    mitre_techniques=self.mitre_techniques,
-                ))
+                events.append(
+                    TelemetryEvent(
+                        event_type="protocol_threat",
+                        severity=Severity.MEDIUM,
+                        probe_name=self.name,
+                        data={
+                            "description": f"Suspicious HTTP headers detected: {', '.join(suspicious_indicators)}",
+                            "category": ThreatCategory.HTTP_SUSPICIOUS.value,
+                            "src_ip": pe.src_ip,
+                            "dst_ip": pe.dst_ip,
+                            "indicators": suspicious_indicators,
+                            "user_agent": user_agent[:200],
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                    )
+                )
 
         return events
 
     def _contains_base64(self, data: str) -> bool:
         """Check if data contains suspicious Base64 patterns."""
         # Look for long Base64-like strings
-        base64_pattern = r'[A-Za-z0-9+/]{50,}={0,2}'
+        base64_pattern = r"[A-Za-z0-9+/]{50,}={0,2}"
         return bool(re.search(base64_pattern, data))
 
 
 class TLSSSLAnomalyProbe(MicroProbe):
     """Detect TLS/SSL certificate and handshake anomalies.
-    
+
     MITRE ATT&CK: T1573.002 (Encrypted Channel: Asymmetric Cryptography)
-    
+
     Detection patterns:
         - Self-signed certificates
         - Expired certificates
@@ -143,14 +148,16 @@ class TLSSSLAnomalyProbe(MicroProbe):
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Analyze TLS events for anomalies."""
         events = []
-        protocol_events: List[ProtocolEvent] = context.shared_data.get("protocol_events", [])
+        protocol_events: List[ProtocolEvent] = context.shared_data.get(
+            "protocol_events", []
+        )
 
         for pe in protocol_events:
             if pe.protocol not in (ProtocolType.TLS, ProtocolType.HTTPS):
                 continue
 
             anomalies = []
-            
+
             # Check TLS version
             tls_version = pe.metadata.get("tls_version", "")
             if tls_version in self.OLD_TLS_VERSIONS:
@@ -169,29 +176,31 @@ class TLSSSLAnomalyProbe(MicroProbe):
                 anomalies.append("expired_cert")
 
             if anomalies:
-                events.append(TelemetryEvent(
-                    event_type="protocol_threat",
-                    severity=Severity.MEDIUM,
-                    probe_name=self.name,
-                    data={
-                        "description": f"TLS/SSL anomaly detected: {', '.join(anomalies)}",
-                        "category": ThreatCategory.TLS_ANOMALY.value,
-                        "src_ip": pe.src_ip,
-                        "dst_ip": pe.dst_ip,
-                        "anomalies": anomalies,
-                        "tls_version": tls_version,
-                    },
-                    mitre_techniques=self.mitre_techniques,
-                ))
+                events.append(
+                    TelemetryEvent(
+                        event_type="protocol_threat",
+                        severity=Severity.MEDIUM,
+                        probe_name=self.name,
+                        data={
+                            "description": f"TLS/SSL anomaly detected: {', '.join(anomalies)}",
+                            "category": ThreatCategory.TLS_ANOMALY.value,
+                            "src_ip": pe.src_ip,
+                            "dst_ip": pe.dst_ip,
+                            "anomalies": anomalies,
+                            "tls_version": tls_version,
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                    )
+                )
 
         return events
 
 
 class SSHBruteForceProbe(MicroProbe):
     """Detect SSH brute force authentication attempts.
-    
+
     MITRE ATT&CK: T1110 (Brute Force), T1021.004 (Remote Services: SSH)
-    
+
     Detection patterns:
         - Multiple failed auth from same source
         - Invalid username attempts
@@ -213,7 +222,9 @@ class SSHBruteForceProbe(MicroProbe):
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Analyze SSH events for brute force patterns."""
         events = []
-        protocol_events: List[ProtocolEvent] = context.shared_data.get("protocol_events", [])
+        protocol_events: List[ProtocolEvent] = context.shared_data.get(
+            "protocol_events", []
+        )
         now = datetime.now()
         cutoff = now - timedelta(seconds=self.TIME_WINDOW_SECONDS)
 
@@ -222,12 +233,12 @@ class SSHBruteForceProbe(MicroProbe):
                 continue
 
             auth_result = pe.metadata.get("auth_result", "")
-            
+
             if auth_result == "failed":
                 # Track failed attempt
                 src_ip = pe.src_ip
                 self._failed_attempts[src_ip].append(pe.timestamp)
-                
+
                 # Clean old entries
                 self._failed_attempts[src_ip] = [
                     t for t in self._failed_attempts[src_ip] if t > cutoff
@@ -236,21 +247,23 @@ class SSHBruteForceProbe(MicroProbe):
                 # Check threshold
                 recent_failures = len(self._failed_attempts[src_ip])
                 if recent_failures >= self.FAILED_THRESHOLD:
-                    events.append(TelemetryEvent(
-                        event_type="protocol_threat",
-                        severity=Severity.HIGH,
-                    probe_name=self.name,
-                    data={
-                        "description": f"SSH brute force detected: {recent_failures} failed attempts from {src_ip}",
-                            "category": ThreatCategory.SSH_BRUTE_FORCE.value,
-                            "src_ip": src_ip,
-                            "dst_ip": pe.dst_ip,
-                            "failed_count": recent_failures,
-                            "time_window_seconds": self.TIME_WINDOW_SECONDS,
-                            "invalid_user": pe.metadata.get("invalid_user", False),
-                        },
-                        mitre_techniques=self.mitre_techniques,
-                    ))
+                    events.append(
+                        TelemetryEvent(
+                            event_type="protocol_threat",
+                            severity=Severity.HIGH,
+                            probe_name=self.name,
+                            data={
+                                "description": f"SSH brute force detected: {recent_failures} failed attempts from {src_ip}",
+                                "category": ThreatCategory.SSH_BRUTE_FORCE.value,
+                                "src_ip": src_ip,
+                                "dst_ip": pe.dst_ip,
+                                "failed_count": recent_failures,
+                                "time_window_seconds": self.TIME_WINDOW_SECONDS,
+                                "invalid_user": pe.metadata.get("invalid_user", False),
+                            },
+                            mitre_techniques=self.mitre_techniques,
+                        )
+                    )
                     # Reset counter to avoid repeated alerts
                     self._failed_attempts[src_ip] = []
 
@@ -259,9 +272,9 @@ class SSHBruteForceProbe(MicroProbe):
 
 class DNSTunnelingProbe(MicroProbe):
     """Detect DNS tunneling and exfiltration.
-    
+
     MITRE ATT&CK: T1048.003 (Exfiltration Over Alternative Protocol)
-    
+
     Detection patterns:
         - Unusually long DNS queries
         - High volume of TXT record queries
@@ -283,7 +296,9 @@ class DNSTunnelingProbe(MicroProbe):
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Analyze DNS events for tunneling patterns."""
         events = []
-        protocol_events: List[ProtocolEvent] = context.shared_data.get("protocol_events", [])
+        protocol_events: List[ProtocolEvent] = context.shared_data.get(
+            "protocol_events", []
+        )
         now = datetime.now()
         cutoff = now - timedelta(seconds=60)
 
@@ -309,14 +324,16 @@ class DNSTunnelingProbe(MicroProbe):
             if query_type == "TXT":
                 base_domain = ".".join(parts[-2:]) if len(parts) >= 2 else domain
                 self._txt_queries[base_domain].append(pe.timestamp)
-                
+
                 # Clean old entries
                 self._txt_queries[base_domain] = [
                     t for t in self._txt_queries[base_domain] if t > cutoff
                 ]
 
                 if len(self._txt_queries[base_domain]) >= self.TXT_QUERY_THRESHOLD:
-                    indicators.append(f"high_txt_volume:{len(self._txt_queries[base_domain])}")
+                    indicators.append(
+                        f"high_txt_volume:{len(self._txt_queries[base_domain])}"
+                    )
                     self._txt_queries[base_domain] = []
 
             # Check unusual payload size
@@ -324,21 +341,23 @@ class DNSTunnelingProbe(MicroProbe):
                 indicators.append(f"large_dns_payload:{pe.payload_size}")
 
             if indicators:
-                events.append(TelemetryEvent(
-                    event_type="protocol_threat",
-                    severity=Severity.HIGH,
-                    probe_name=self.name,
-                    data={
-                        "description": f"DNS tunneling indicators detected: {', '.join(indicators)}",
-                        "category": ThreatCategory.DNS_TUNNELING.value,
-                        "src_ip": pe.src_ip,
-                        "dst_ip": pe.dst_ip,
-                        "domain": domain[:100],
-                        "query_type": query_type,
-                        "indicators": indicators,
-                    },
-                    mitre_techniques=self.mitre_techniques,
-                ))
+                events.append(
+                    TelemetryEvent(
+                        event_type="protocol_threat",
+                        severity=Severity.HIGH,
+                        probe_name=self.name,
+                        data={
+                            "description": f"DNS tunneling indicators detected: {', '.join(indicators)}",
+                            "category": ThreatCategory.DNS_TUNNELING.value,
+                            "src_ip": pe.src_ip,
+                            "dst_ip": pe.dst_ip,
+                            "domain": domain[:100],
+                            "query_type": query_type,
+                            "indicators": indicators,
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                    )
+                )
 
         return events
 
@@ -348,17 +367,19 @@ class DNSTunnelingProbe(MicroProbe):
         subdomain = domain.split(".")[0] if "." in domain else domain
         if len(subdomain) < 10:
             return False
-        
-        consonants = sum(1 for c in subdomain.lower() if c in "bcdfghjklmnpqrstvwxyz0123456789")
+
+        consonants = sum(
+            1 for c in subdomain.lower() if c in "bcdfghjklmnpqrstvwxyz0123456789"
+        )
         ratio = consonants / len(subdomain)
         return ratio > 0.7
 
 
 class SQLInjectionProbe(MicroProbe):
     """Detect SQL injection attempts in network traffic.
-    
+
     MITRE ATT&CK: T1190 (Exploit Public-Facing Application)
-    
+
     Detection patterns:
         - Common SQL injection payloads
         - UNION-based injection
@@ -384,10 +405,16 @@ class SQLInjectionProbe(MicroProbe):
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Analyze events for SQL injection patterns."""
         events = []
-        protocol_events: List[ProtocolEvent] = context.shared_data.get("protocol_events", [])
+        protocol_events: List[ProtocolEvent] = context.shared_data.get(
+            "protocol_events", []
+        )
 
         for pe in protocol_events:
-            if pe.protocol not in (ProtocolType.HTTP, ProtocolType.HTTPS, ProtocolType.SQL):
+            if pe.protocol not in (
+                ProtocolType.HTTP,
+                ProtocolType.HTTPS,
+                ProtocolType.SQL,
+            ):
                 continue
 
             raw_data = pe.raw_data or ""
@@ -398,30 +425,32 @@ class SQLInjectionProbe(MicroProbe):
                     detected_patterns.append(pattern[:50])
 
             if detected_patterns:
-                events.append(TelemetryEvent(
-                    event_type="protocol_threat",
-                    severity=Severity.CRITICAL,
-                    probe_name=self.name,
-                    data={
-                        "description": f"SQL injection attempt detected from {pe.src_ip}",
-                        "category": ThreatCategory.SQL_INJECTION.value,
-                        "src_ip": pe.src_ip,
-                        "dst_ip": pe.dst_ip,
-                        "dst_port": pe.dst_port,
-                        "patterns_matched": len(detected_patterns),
-                        "sample_payload": raw_data[:200],
-                    },
-                    mitre_techniques=self.mitre_techniques,
-                ))
+                events.append(
+                    TelemetryEvent(
+                        event_type="protocol_threat",
+                        severity=Severity.CRITICAL,
+                        probe_name=self.name,
+                        data={
+                            "description": f"SQL injection attempt detected from {pe.src_ip}",
+                            "category": ThreatCategory.SQL_INJECTION.value,
+                            "src_ip": pe.src_ip,
+                            "dst_ip": pe.dst_ip,
+                            "dst_port": pe.dst_port,
+                            "patterns_matched": len(detected_patterns),
+                            "sample_payload": raw_data[:200],
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                    )
+                )
 
         return events
 
 
 class RDPSuspiciousProbe(MicroProbe):
     """Detect suspicious RDP activity.
-    
+
     MITRE ATT&CK: T1021.001 (Remote Services: Remote Desktop Protocol)
-    
+
     Detection patterns:
         - RDP from unusual sources
         - Multiple RDP sessions
@@ -438,7 +467,9 @@ class RDPSuspiciousProbe(MicroProbe):
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Analyze RDP events for suspicious patterns."""
         events = []
-        protocol_events: List[ProtocolEvent] = context.shared_data.get("protocol_events", [])
+        protocol_events: List[ProtocolEvent] = context.shared_data.get(
+            "protocol_events", []
+        )
 
         for pe in protocol_events:
             if pe.protocol != ProtocolType.RDP:
@@ -455,29 +486,31 @@ class RDPSuspiciousProbe(MicroProbe):
                 suspicious.append("external_source")
 
             if suspicious:
-                events.append(TelemetryEvent(
-                    event_type="protocol_threat",
-                    severity=Severity.MEDIUM,
-                    probe_name=self.name,
-                    data={
-                        "description": f"Suspicious RDP activity: {', '.join(suspicious)}",
-                        "category": ThreatCategory.RDP_SUSPICIOUS.value,
-                        "src_ip": pe.src_ip,
-                        "dst_ip": pe.dst_ip,
-                        "dst_port": pe.dst_port,
-                        "indicators": suspicious,
-                    },
-                    mitre_techniques=self.mitre_techniques,
-                ))
+                events.append(
+                    TelemetryEvent(
+                        event_type="protocol_threat",
+                        severity=Severity.MEDIUM,
+                        probe_name=self.name,
+                        data={
+                            "description": f"Suspicious RDP activity: {', '.join(suspicious)}",
+                            "category": ThreatCategory.RDP_SUSPICIOUS.value,
+                            "src_ip": pe.src_ip,
+                            "dst_ip": pe.dst_ip,
+                            "dst_port": pe.dst_port,
+                            "indicators": suspicious,
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                    )
+                )
 
         return events
 
 
 class FTPCleartextCredsProbe(MicroProbe):
     """Detect FTP cleartext credential exposure.
-    
+
     MITRE ATT&CK: T1552.001 (Unsecured Credentials: Credentials in Files)
-    
+
     Detection patterns:
         - FTP authentication traffic
         - Cleartext username/password
@@ -491,36 +524,40 @@ class FTPCleartextCredsProbe(MicroProbe):
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Analyze FTP events for credential exposure."""
         events = []
-        protocol_events: List[ProtocolEvent] = context.shared_data.get("protocol_events", [])
+        protocol_events: List[ProtocolEvent] = context.shared_data.get(
+            "protocol_events", []
+        )
 
         for pe in protocol_events:
             if pe.protocol != ProtocolType.FTP:
                 continue
 
             # FTP traffic is inherently cleartext
-            events.append(TelemetryEvent(
-                event_type="protocol_threat",
-                severity=Severity.MEDIUM,
+            events.append(
+                TelemetryEvent(
+                    event_type="protocol_threat",
+                    severity=Severity.MEDIUM,
                     probe_name=self.name,
                     data={
                         "description": f"FTP cleartext traffic detected from {pe.src_ip}",
-                    "category": ThreatCategory.FTP_CLEARTEXT.value,
-                    "src_ip": pe.src_ip,
-                    "dst_ip": pe.dst_ip,
-                    "command": pe.metadata.get("command", "unknown"),
-                    "filename": pe.metadata.get("filename", ""),
-                },
-                mitre_techniques=self.mitre_techniques,
-            ))
+                        "category": ThreatCategory.FTP_CLEARTEXT.value,
+                        "src_ip": pe.src_ip,
+                        "dst_ip": pe.dst_ip,
+                        "command": pe.metadata.get("command", "unknown"),
+                        "filename": pe.metadata.get("filename", ""),
+                    },
+                    mitre_techniques=self.mitre_techniques,
+                )
+            )
 
         return events
 
 
 class SMTPSpamPhishProbe(MicroProbe):
     """Detect SMTP spam and phishing patterns.
-    
+
     MITRE ATT&CK: T1566.001 (Phishing: Spearphishing Attachment)
-    
+
     Detection patterns:
         - Bulk email patterns
         - Suspicious sender domains
@@ -532,13 +569,19 @@ class SMTPSpamPhishProbe(MicroProbe):
     mitre_techniques = ["T1566.001"]
 
     SUSPICIOUS_DOMAINS = [
-        r"\.ru$", r"\.cn$", r"\.xyz$", r"\.top$", r"\.tk$",
+        r"\.ru$",
+        r"\.cn$",
+        r"\.xyz$",
+        r"\.top$",
+        r"\.tk$",
     ]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Analyze SMTP events for spam/phishing patterns."""
         events = []
-        protocol_events: List[ProtocolEvent] = context.shared_data.get("protocol_events", [])
+        protocol_events: List[ProtocolEvent] = context.shared_data.get(
+            "protocol_events", []
+        )
 
         for pe in protocol_events:
             if pe.protocol != ProtocolType.SMTP:
@@ -553,29 +596,31 @@ class SMTPSpamPhishProbe(MicroProbe):
                     indicators.append(f"suspicious_domain:{pattern}")
 
             if indicators:
-                events.append(TelemetryEvent(
-                    event_type="protocol_threat",
-                    severity=Severity.MEDIUM,
-                    probe_name=self.name,
-                    data={
-                        "description": f"Suspicious SMTP traffic: {', '.join(indicators)}",
-                        "category": ThreatCategory.SMTP_SPAM_PHISH.value,
-                        "src_ip": pe.src_ip,
-                        "dst_ip": pe.dst_ip,
-                        "sender": sender[:100],
-                        "indicators": indicators,
-                    },
-                    mitre_techniques=self.mitre_techniques,
-                ))
+                events.append(
+                    TelemetryEvent(
+                        event_type="protocol_threat",
+                        severity=Severity.MEDIUM,
+                        probe_name=self.name,
+                        data={
+                            "description": f"Suspicious SMTP traffic: {', '.join(indicators)}",
+                            "category": ThreatCategory.SMTP_SPAM_PHISH.value,
+                            "src_ip": pe.src_ip,
+                            "dst_ip": pe.dst_ip,
+                            "sender": sender[:100],
+                            "indicators": indicators,
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                    )
+                )
 
         return events
 
 
 class IRCP2PC2Probe(MicroProbe):
     """Detect IRC and P2P C2 communication.
-    
+
     MITRE ATT&CK: T1071.001 (Application Layer Protocol)
-    
+
     Detection patterns:
         - IRC traffic to unusual servers
         - P2P protocol signatures
@@ -591,35 +636,39 @@ class IRCP2PC2Probe(MicroProbe):
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Analyze events for IRC/P2P C2 patterns."""
         events = []
-        protocol_events: List[ProtocolEvent] = context.shared_data.get("protocol_events", [])
+        protocol_events: List[ProtocolEvent] = context.shared_data.get(
+            "protocol_events", []
+        )
 
         for pe in protocol_events:
             if pe.protocol != ProtocolType.IRC:
                 continue
 
             # IRC traffic is suspicious in enterprise environments
-            events.append(TelemetryEvent(
-                event_type="protocol_threat",
-                severity=Severity.HIGH,
+            events.append(
+                TelemetryEvent(
+                    event_type="protocol_threat",
+                    severity=Severity.HIGH,
                     probe_name=self.name,
                     data={
                         "description": f"IRC traffic detected from {pe.src_ip} - potential C2",
-                    "category": ThreatCategory.IRC_P2P_C2.value,
-                    "src_ip": pe.src_ip,
-                    "dst_ip": pe.dst_ip,
-                    "dst_port": pe.dst_port,
-                },
-                mitre_techniques=self.mitre_techniques,
-            ))
+                        "category": ThreatCategory.IRC_P2P_C2.value,
+                        "src_ip": pe.src_ip,
+                        "dst_ip": pe.dst_ip,
+                        "dst_port": pe.dst_port,
+                    },
+                    mitre_techniques=self.mitre_techniques,
+                )
+            )
 
         return events
 
 
 class ProtocolAnomalyProbe(MicroProbe):
     """Detect general protocol anomalies.
-    
+
     MITRE ATT&CK: T1205 (Traffic Signaling)
-    
+
     Detection patterns:
         - Protocol on non-standard port
         - Malformed protocol data
@@ -643,7 +692,9 @@ class ProtocolAnomalyProbe(MicroProbe):
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Analyze events for protocol anomalies."""
         events = []
-        protocol_events: List[ProtocolEvent] = context.shared_data.get("protocol_events", [])
+        protocol_events: List[ProtocolEvent] = context.shared_data.get(
+            "protocol_events", []
+        )
 
         for pe in protocol_events:
             anomalies = []
@@ -654,21 +705,23 @@ class ProtocolAnomalyProbe(MicroProbe):
                 anomalies.append(f"non_standard_port:{pe.dst_port}")
 
             if anomalies:
-                events.append(TelemetryEvent(
-                    event_type="protocol_threat",
-                    severity=Severity.LOW,
-                    probe_name=self.name,
-                    data={
-                        "description": f"Protocol anomaly: {', '.join(anomalies)}",
-                        "category": ThreatCategory.PROTOCOL_ANOMALY.value,
-                        "protocol": pe.protocol.value,
-                        "src_ip": pe.src_ip,
-                        "dst_ip": pe.dst_ip,
-                        "dst_port": pe.dst_port,
-                        "anomalies": anomalies,
-                    },
-                    mitre_techniques=self.mitre_techniques,
-                ))
+                events.append(
+                    TelemetryEvent(
+                        event_type="protocol_threat",
+                        severity=Severity.LOW,
+                        probe_name=self.name,
+                        data={
+                            "description": f"Protocol anomaly: {', '.join(anomalies)}",
+                            "category": ThreatCategory.PROTOCOL_ANOMALY.value,
+                            "protocol": pe.protocol.value,
+                            "src_ip": pe.src_ip,
+                            "dst_ip": pe.dst_ip,
+                            "dst_port": pe.dst_port,
+                            "anomalies": anomalies,
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                    )
+                )
 
         return events
 
@@ -686,3 +739,8 @@ PROTOCOL_PROBES = [
     IRCP2PC2Probe,
     ProtocolAnomalyProbe,
 ]
+
+
+def create_protocol_collector_probes():
+    """Factory function for Observability Contract audit."""
+    return [cls() for cls in PROTOCOL_PROBES]

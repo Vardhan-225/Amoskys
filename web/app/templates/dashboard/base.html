@@ -76,13 +76,15 @@
         
         /* Header */
         .neural-header {
-            background: var(--gradient-neural);
-            padding: 1rem 2rem;
-            border-bottom: 2px solid var(--neural-primary);
-            box-shadow: 0 4px 20px rgba(0, 217, 255, 0.3);
+            background: linear-gradient(180deg, rgba(10, 14, 39, 0.98) 0%, rgba(26, 31, 58, 0.95) 100%);
+            padding: 0.75rem 2rem;
+            border-bottom: 1px solid rgba(0, 217, 255, 0.25);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
             position: sticky;
             top: 0;
             z-index: 1000;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
         }
         
         .header-content {
@@ -113,9 +115,10 @@
 
         .neural-logo h1 {
             color: var(--neural-primary);
-            font-size: 1.8rem;
+            font-size: 1.4rem;
             font-weight: 700;
-            text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+            text-shadow: 0 0 10px rgba(0, 217, 255, 0.4);
+            letter-spacing: 0.5px;
         }
 
         .neural-status {
@@ -127,11 +130,12 @@
         .status-indicator {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: rgba(255, 255, 255, 0.1);
+            gap: 0.4rem;
+            padding: 0.35rem 0.75rem;
+            background: rgba(255, 255, 255, 0.06);
             border-radius: 20px;
-            border: 1px solid rgba(0, 217, 255, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.8rem;
         }
         
         .status-dot {
@@ -169,16 +173,16 @@
 
         .sidebar-nav {
             position: fixed;
-            left: -300px;
+            left: -280px;
             top: 0;
-            width: 300px;
+            width: 280px;
             height: 100vh;
-            background: var(--bg-secondary);
-            border-right: 2px solid var(--neural-primary);
+            background: linear-gradient(180deg, var(--bg-secondary) 0%, #0f1433 100%);
+            border-right: 1px solid rgba(0, 217, 255, 0.2);
             z-index: 2000;
-            transition: left 0.3s ease;
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             overflow-y: auto;
-            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+            box-shadow: 4px 0 30px rgba(0, 0, 0, 0.6);
         }
 
         .sidebar-nav.open {
@@ -188,8 +192,8 @@
         /* Push content when sidebar is open */
         body.sidebar-open .dashboard-header,
         body.sidebar-open .dashboard-main {
-            margin-left: 300px;
-            transition: margin-left 0.3s ease;
+            margin-left: 280px;
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .sidebar-overlay {
@@ -240,30 +244,62 @@
         }
 
         .sidebar-menu {
-            padding: 1rem 0;
+            padding: 0.5rem 0;
+        }
+
+        .sidebar-section-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--text-muted);
+            padding: 1rem 1.5rem 0.4rem;
+            user-select: none;
         }
 
         .sidebar-link {
             display: flex;
             align-items: center;
-            gap: 1rem;
-            padding: 1rem 1.5rem;
+            gap: 0.85rem;
+            padding: 0.65rem 1.5rem;
             color: var(--text-secondary);
             text-decoration: none;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
             border-left: 3px solid transparent;
+            font-size: 0.9rem;
+            position: relative;
         }
 
         .sidebar-link:hover {
-            background: rgba(0, 217, 255, 0.1);
+            background: rgba(0, 217, 255, 0.08);
             color: var(--neural-primary);
             border-left-color: var(--neural-primary);
         }
 
         .sidebar-link.active {
-            background: rgba(0, 217, 255, 0.15);
+            background: rgba(0, 217, 255, 0.12);
             color: var(--neural-primary);
             border-left-color: var(--neural-primary);
+            font-weight: 600;
+        }
+
+        .sidebar-link.active::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 60%;
+            background: var(--neural-primary);
+            border-radius: 2px;
+        }
+
+        .sidebar-link-icon {
+            font-size: 1rem;
+            width: 1.25rem;
+            text-align: center;
+            flex-shrink: 0;
         }
 
         .sidebar-link-admin {
@@ -278,8 +314,22 @@
 
         .sidebar-divider {
             height: 1px;
-            background: rgba(0, 217, 255, 0.2);
-            margin: 0.5rem 1.5rem;
+            background: rgba(0, 217, 255, 0.1);
+            margin: 0.25rem 1.5rem;
+        }
+
+        .sidebar-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid rgba(0, 217, 255, 0.1);
+            margin-top: auto;
+        }
+
+        .sidebar-version {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 0.5rem 0 0;
+            letter-spacing: 0.5px;
         }
 
         .logout-btn {
@@ -870,6 +920,36 @@
         .sidebar-link.hidden {
             display: none;
         }
+
+        /* Page transition fade-in */
+        .dashboard-main {
+            animation: page-fade-in 0.35s ease-out;
+        }
+        @keyframes page-fade-in {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Breadcrumb navigation */
+        .breadcrumb-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.4rem 0;
+            margin-bottom: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .breadcrumb-bar a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.15s;
+        }
+        .breadcrumb-bar a:hover {
+            color: var(--neural-primary);
+        }
+        .breadcrumb-bar .bc-sep { opacity: 0.4; }
+        .breadcrumb-bar .bc-current { color: var(--text-secondary); font-weight: 600; }
     </style>
     
     <!-- Chart.js for Visualizations -->
@@ -909,70 +989,106 @@
         <div class="sidebar-search">
             <input type="text" class="sidebar-search-input" id="sidebarSearch" placeholder="Filter navigation..." aria-label="Filter navigation">
         </div>
-        <div class="sidebar-menu">
-            <a href="/dashboard/cortex" class="sidebar-link">
-                <span>🧠</span>
-                <span>Cortex Command</span>
-            </a>
-            <a href="/dashboard/soc" class="sidebar-link">
-                <span>🛡️</span>
-                <span>SOC Operations</span>
-            </a>
-            <a href="/dashboard/agents" class="sidebar-link">
-                <span>🤖</span>
-                <span>Agent Network</span>
-            </a>
-            <a href="/dashboard/processes" class="sidebar-link">
-                <span>🔬</span>
-                <span>Process Telemetry</span>
-            </a>
-            <a href="/dashboard/system" class="sidebar-link">
-                <span>📊</span>
-                <span>System Health</span>
-            </a>
-            <a href="/dashboard/neural" class="sidebar-link">
-                <span>🧠</span>
-                <span>Neural Insights</span>
-            </a>
+        <div class="sidebar-menu" style="display:flex;flex-direction:column;min-height:calc(100vh - 140px);">
+            <div>
+                <div class="sidebar-section-label">Command Center</div>
+                <a href="/dashboard/cortex" class="sidebar-link">
+                    <span class="sidebar-link-icon">🧠</span>
+                    <span>Cortex</span>
+                </a>
+                <a href="/dashboard/soc" class="sidebar-link">
+                    <span class="sidebar-link-icon">🛡️</span>
+                    <span>SOC Operations</span>
+                </a>
+                <a href="/dashboard/agents" class="sidebar-link">
+                    <span class="sidebar-link-icon">🤖</span>
+                    <span>Agent Network</span>
+                </a>
 
-            <div class="sidebar-divider"></div>
+                <div class="sidebar-section-label">Threat Intelligence</div>
+                <a href="/dashboard/threat-feed" class="sidebar-link">
+                    <span class="sidebar-link-icon">&#128680;</span>
+                    <span>Live Threat Feed</span>
+                </a>
+                <a href="/dashboard/mitre" class="sidebar-link">
+                    <span class="sidebar-link-icon">🎯</span>
+                    <span>MITRE ATT&CK</span>
+                </a>
+                <a href="/dashboard/hunt" class="sidebar-link">
+                    <span class="sidebar-link-icon">🔍</span>
+                    <span>Threat Hunting</span>
+                </a>
+                <a href="/dashboard/incidents" class="sidebar-link">
+                    <span class="sidebar-link-icon">🚨</span>
+                    <span>Incidents</span>
+                </a>
+                <a href="/dashboard/network" class="sidebar-link">
+                    <span class="sidebar-link-icon">🌐</span>
+                    <span>Network Map</span>
+                </a>
 
-            <a href="/dashboard/marketplace" class="sidebar-link">
-                <span>🏪</span>
-                <span>Agent Marketplace</span>
-            </a>
-            <a href="/dashboard/evidence-chain" class="sidebar-link">
-                <span>🔗</span>
-                <span>Evidence Chain</span>
-            </a>
-            <a href="/dashboard/timeline-replay" class="sidebar-link">
-                <span>⏱️</span>
-                <span>Timeline Replay</span>
-            </a>
-            <a href="/dashboard/query-builder" class="sidebar-link">
-                <span>🔍</span>
-                <span>Query Builder</span>
-            </a>
-            <a href="/dashboard/perspective-selector" class="sidebar-link">
-                <span>👁️</span>
-                <span>Perspective Selector</span>
-            </a>
+                <div class="sidebar-section-label">Monitoring</div>
+                <a href="/dashboard/probe-explorer" class="sidebar-link">
+                    <span class="sidebar-link-icon">🔬</span>
+                    <span>Probe Explorer</span>
+                </a>
+                <a href="/dashboard/processes" class="sidebar-link">
+                    <span class="sidebar-link-icon">⚙️</span>
+                    <span>Process Telemetry</span>
+                </a>
+                <a href="/dashboard/peripherals" class="sidebar-link">
+                    <span class="sidebar-link-icon">🔌</span>
+                    <span>Peripherals</span>
+                </a>
+                <a href="/dashboard/system" class="sidebar-link">
+                    <span class="sidebar-link-icon">📊</span>
+                    <span>System Health</span>
+                </a>
 
-            <div class="sidebar-divider"></div>
+                <div class="sidebar-section-label">Deployment</div>
+                <a href="/dashboard/deploy" class="sidebar-link">
+                    <span class="sidebar-link-icon">&#128640;</span>
+                    <span>Deploy Agent</span>
+                </a>
+                <a href="/dashboard/my-agents" class="sidebar-link">
+                    <span class="sidebar-link-icon">&#128187;</span>
+                    <span>My Agents</span>
+                </a>
+                <a href="/dashboard/marketplace" class="sidebar-link">
+                    <span class="sidebar-link-icon">&#127978;</span>
+                    <span>Marketplace</span>
+                </a>
 
-            {% if user and user.role.value == 'admin' %}
-            <a href="/admin" class="sidebar-link sidebar-link-admin">
-                <span>🔐</span>
-                <span>Admin Panel</span>
-            </a>
+                <div class="sidebar-section-label">Tools</div>
+                <a href="/dashboard/evidence-chain" class="sidebar-link">
+                    <span class="sidebar-link-icon">&#128279;</span>
+                    <span>Evidence Chain</span>
+                </a>
+                <a href="/dashboard/query-builder" class="sidebar-link">
+                    <span class="sidebar-link-icon">&#128221;</span>
+                    <span>Query Builder</span>
+                </a>
+                <a href="/dashboard/database" class="sidebar-link">
+                    <span class="sidebar-link-icon">&#128452;</span>
+                    <span>Database</span>
+                </a>
 
-            <div class="sidebar-divider"></div>
-            {% endif %}
+                {% if user and user.role.value == 'admin' %}
+                <div class="sidebar-divider"></div>
+                <a href="/admin" class="sidebar-link sidebar-link-admin">
+                    <span class="sidebar-link-icon">🔐</span>
+                    <span>Admin Panel</span>
+                </a>
+                {% endif %}
+            </div>
 
-            <button class="logout-btn" id="logoutBtn">
-                <span>🚪</span>
-                <span>Logout</span>
-            </button>
+            <div class="sidebar-footer">
+                <button class="logout-btn" id="logoutBtn">
+                    <span class="sidebar-link-icon">🚪</span>
+                    <span>Logout</span>
+                </button>
+                <div class="sidebar-version">AMOSKYS v2.4 &middot; Neural Security</div>
+            </div>
         </div>
     </nav>
 
@@ -1005,12 +1121,16 @@
                     <span style="color: var(--text-secondary); font-size: 0.85rem; margin-right: 0.5rem;">Connection</span>
                     <div class="status-dot status-online" id="connection-status"></div>
                 </div>
+                <div class="status-indicator" style="font-size:0.72rem;color:var(--text-muted);gap:0.3rem;" id="header-clock" title="Last dashboard refresh">
+                    <span id="header-time">--:--:--</span>
+                </div>
             </div>
         </div>
     </header>
     
     <!-- Main Dashboard Content -->
     <main class="dashboard-main">
+        <div class="breadcrumb-bar" id="breadcrumb"></div>
         {% block content %}{% endblock %}
     </main>
     
@@ -1025,9 +1145,30 @@
             
             init() {
                 this.updateActiveNav();
+                this.buildBreadcrumb();
                 this.startRealTimeUpdates();
                 this.updateTime();
                 setInterval(() => this.updateTime(), 1000);
+            }
+
+            buildBreadcrumb() {
+                const el = document.getElementById('breadcrumb');
+                if (!el) return;
+                const PAGE_NAMES = {
+                    '/dashboard': 'Cortex', '/dashboard/': 'Cortex', '/dashboard/cortex': 'Cortex',
+                    '/dashboard/soc': 'SOC Operations', '/dashboard/agents': 'Agent Network',
+                    '/dashboard/mitre': 'MITRE ATT&CK', '/dashboard/hunt': 'Threat Hunting',
+                    '/dashboard/incidents': 'Incidents', '/dashboard/network': 'Network Map',
+                    '/dashboard/probe-explorer': 'Probe Explorer', '/dashboard/processes': 'Process Telemetry',
+                    '/dashboard/peripherals': 'Peripherals', '/dashboard/system': 'System Health',
+                    '/dashboard/marketplace': 'Marketplace', '/dashboard/deploy': 'Deploy Agent',
+                    '/dashboard/my-agents': 'My Agents', '/dashboard/database': 'Database',
+                    '/dashboard/evidence-chain': 'Evidence Chain', '/dashboard/query-builder': 'Query Builder',
+                    '/dashboard/threat-feed': 'Live Threat Feed', '/dashboard/timeline-replay': 'Timeline Replay',
+                };
+                const path = window.location.pathname.replace(/\/$/, '') || '/dashboard';
+                const pageName = PAGE_NAMES[path] || path.split('/').pop().replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                el.innerHTML = '<a href="/dashboard/cortex">Dashboard</a><span class="bc-sep">/</span><span class="bc-current">' + pageName + '</span>';
             }
             
             updateActiveNav() {
@@ -1109,6 +1250,10 @@
                 if (timeEl) {
                     timeEl.textContent = timeString;
                 }
+                const headerTime = document.getElementById('header-time');
+                if (headerTime) {
+                    headerTime.textContent = now.toLocaleTimeString();
+                }
             }
         }
         
@@ -1185,7 +1330,7 @@
                 if (path.includes('/soc')) return 'soc';
                 if (path.includes('/agents')) return 'agents';
                 if (path.includes('/system')) return 'system';
-                if (path.includes('/neural')) return 'neural';
+                if (path.includes('/neural')) return 'cortex';
                 return 'cortex';
             }
             
@@ -1375,7 +1520,7 @@
                     { type: 'navigation', icon: '🤖', title: 'Agent Network', description: 'Manage deployed agents', url: '/dashboard/agents', keywords: ['agents', 'network', 'deploy'] },
                     { type: 'navigation', icon: '🔬', title: 'Process Telemetry', description: 'Monitor process activity', url: '/dashboard/processes', keywords: ['process', 'telemetry', 'monitor'] },
                     { type: 'navigation', icon: '📊', title: 'System Health', description: 'System metrics and health', url: '/dashboard/system', keywords: ['system', 'health', 'metrics'] },
-                    { type: 'navigation', icon: '🧠', title: 'Neural Insights', description: 'AI-powered security insights', url: '/dashboard/neural', keywords: ['neural', 'ai', 'insights', 'ml'] },
+                    { type: 'navigation', icon: '🧠', title: 'Cortex Command Center', description: 'Central security command center', url: '/dashboard/cortex', keywords: ['cortex', 'command', 'center', 'overview'] },
                     { type: 'navigation', icon: '🏪', title: 'Agent Marketplace', description: 'Browse and deploy agents', url: '/dashboard/marketplace', keywords: ['marketplace', 'shop', 'agents', 'buy'] },
                     { type: 'navigation', icon: '🔗', title: 'Evidence Chain', description: 'View attack evidence chains', url: '/dashboard/evidence-chain', keywords: ['evidence', 'chain', 'forensics'] },
                     { type: 'navigation', icon: '⏱️', title: 'Timeline Replay', description: 'Replay threat timelines', url: '/dashboard/timeline-replay', keywords: ['timeline', 'replay', 'history'] },

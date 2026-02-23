@@ -98,6 +98,7 @@ class RawDNSQueryProbe(MicroProbe):
     mitre_tactics = ["command_and_control"]
     scan_interval = 5.0
     default_enabled = True
+    requires_fields = ["dns_queries"]
 
     # Rate limiting to prevent event flood
     MAX_EVENTS_PER_CYCLE = 100
@@ -168,6 +169,8 @@ class DGAScoreProbe(MicroProbe):
     mitre_techniques = ["T1568.002"]
     mitre_tactics = ["command_and_control"]
     scan_interval = 10.0
+    requires_fields = ["dns_queries"]
+    field_semantics = {"domain": "fqdn"}
 
     # Thresholds
     ENTROPY_THRESHOLD = 3.5
@@ -337,6 +340,8 @@ class BeaconingPatternProbe(MicroProbe):
     mitre_techniques = ["T1071.004", "T1573.002"]
     mitre_tactics = ["command_and_control"]
     scan_interval = 60.0  # Analyze every minute
+    requires_fields = ["dns_queries"]
+    field_semantics = {"domain": "fqdn", "timestamp": "utc_datetime"}
 
     # Thresholds
     MIN_QUERIES_FOR_PATTERN = 5
@@ -459,6 +464,8 @@ class SuspiciousTLDProbe(MicroProbe):
     mitre_techniques = ["T1071.004"]
     mitre_tactics = ["command_and_control"]
     scan_interval = 5.0
+    requires_fields = ["dns_queries"]
+    field_semantics = {"domain": "fqdn"}
 
     # High-risk TLDs (free registration, lax enforcement)
     SUSPICIOUS_TLDS = {
@@ -536,6 +543,8 @@ class NXDomainBurstProbe(MicroProbe):
     mitre_techniques = ["T1568.002", "T1046"]
     mitre_tactics = ["discovery", "command_and_control"]
     scan_interval = 30.0
+    requires_fields = ["dns_queries"]
+    field_semantics = {"response_code": "dns_rcode"}
 
     # Thresholds
     NXDOMAIN_THRESHOLD = 10  # Per collection window
@@ -606,6 +615,8 @@ class LargeTXTTunnelingProbe(MicroProbe):
     mitre_techniques = ["T1048.001", "T1071.004"]
     mitre_tactics = ["exfiltration", "command_and_control"]
     scan_interval = 15.0
+    requires_fields = ["dns_queries"]
+    field_semantics = {"query_type": "dns_qtype", "domain": "fqdn"}
 
     # Thresholds
     TXT_QUERY_THRESHOLD = 5  # Per collection window
@@ -692,6 +703,9 @@ class FastFluxRebindingProbe(MicroProbe):
     mitre_techniques = ["T1568.001"]
     mitre_tactics = ["command_and_control"]
     scan_interval = 30.0
+    requires_fields = ["dns_queries"]
+    field_semantics = {"response_ips": "ip_address_list"}
+    degraded_without = ["response_ips"]
 
     # Thresholds
     IP_CHANGE_THRESHOLD = 5  # Unique IPs for same domain
@@ -779,49 +793,78 @@ class NewDomainForProcessProbe(MicroProbe):
     mitre_techniques = ["T1071.004"]
     mitre_tactics = ["command_and_control"]
     scan_interval = 10.0
+    requires_fields = ["dns_queries"]
+    field_semantics = {"process_name": "os_process_name", "domain": "fqdn"}
+    degraded_without = ["process_name"]
 
     def __init__(self) -> None:
         super().__init__()
         self.process_domains: Dict[str, Set[str]] = defaultdict(set)
 
-    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
-        """Track new domains per process."""
-        events = []
+    def _track_domain(
+        self,
+        key: str,
+        root: str,
+        domain: str,
+        query: "DNSQuery",
+    ) -> Optional[TelemetryEvent]:
+        """Track a domain for a given key, return event if threshold exceeded."""
+        if root in self.process_domains[key]:
+            return None
+        self.process_domains[key].add(root)
 
+        if query.process_name:
+            # Full mode: per-process tracking
+            if len(self.process_domains[key]) <= 10:
+                return None
+            return self._create_event(
+                event_type="new_domain_for_process",
+                severity=Severity.LOW,
+                data={
+                    "process": query.process_name,
+                    "domain": domain,
+                    "root_domain": root,
+                    "total_domains_for_process": len(self.process_domains[key]),
+                },
+                confidence=0.5,
+            )
+
+        # Domain-only mode: global tracking, lower confidence
+        if len(self.process_domains[key]) <= 20:
+            return None
+        return self._create_event(
+            event_type="new_domain_for_process",
+            severity=Severity.INFO,
+            data={
+                "process": None,
+                "domain": domain,
+                "root_domain": root,
+                "total_domains_global": len(self.process_domains[key]),
+                "missing_process_attribution": True,
+            },
+            confidence=0.3,
+        )
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        """Track new domains per process.
+
+        Operates in two modes:
+          - Full mode (process_name present): per-process domain tracking
+          - Domain-only mode (process_name absent): global domain tracking
+            with lower severity and missing_process_attribution tag
+        """
+        events = []
         queries: List[DNSQuery] = context.shared_data.get("dns_queries", [])
 
         for query in queries:
-            if not query.process_name:
-                continue
-
-            proc = query.process_name
             domain = query.domain.lower()
-
-            # Extract root domain (last 2 parts)
             parts = domain.split(".")
             root = ".".join(parts[-2:]) if len(parts) >= 2 else domain
+            key = query.process_name or "__unattributed__"
 
-            if root not in self.process_domains[proc]:
-                # First time this process has queried this domain
-                self.process_domains[proc].add(root)
-
-                # Skip initial learning period (first 10 domains)
-                if len(self.process_domains[proc]) > 10:
-                    events.append(
-                        self._create_event(
-                            event_type="new_domain_for_process",
-                            severity=Severity.LOW,
-                            data={
-                                "process": proc,
-                                "domain": domain,
-                                "root_domain": root,
-                                "total_domains_for_process": len(
-                                    self.process_domains[proc]
-                                ),
-                            },
-                            confidence=0.5,
-                        )
-                    )
+            event = self._track_domain(key, root, domain, query)
+            if event:
+                events.append(event)
 
         return events
 
@@ -845,6 +888,9 @@ class BlockedDomainHitProbe(MicroProbe):
     mitre_techniques = ["T1071.004", "T1566"]
     mitre_tactics = ["command_and_control", "initial_access"]
     scan_interval = 5.0
+    requires_fields = ["dns_queries"]
+    field_semantics = {"domain": "fqdn"}
+    degraded_without = ["process_name"]
 
     # Sample blocklist (in production, load from file/threat intel)
     BLOCKED_DOMAINS = {

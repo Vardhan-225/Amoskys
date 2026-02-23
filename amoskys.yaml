@@ -1,0 +1,112 @@
+# Amoskys Central Configuration File
+#
+# This is the main configuration file for the Amoskys security platform.
+# All settings can be overridden by environment variables prefixed with AMOSKYS_
+#
+# Security Notice:
+#   - NEVER commit sensitive values (API keys, secrets) to this file
+#   - All secrets must be provided via environment variables
+#   - Use AMOSKYS_SECRET_KEY for cryptographic operations
+#   - See deployment documentation for secret management best practices
+
+eventbus:
+  # Network configuration
+  host: "0.0.0.0"                    # Listen on all interfaces; override with BUS_HOST
+  port: 50051                        # gRPC server port; override with BUS_SERVER_PORT
+
+  # Message size and validation
+  max_envelope_size: 10485760        # Maximum envelope size in bytes (10MB)
+
+  # Deduplication (idempotency cache)
+  dedup_ttl_seconds: 300             # TTL for deduplication cache (5 minutes)
+  dedup_max_entries: 50000           # Maximum deduplication cache size
+
+  # Security
+  require_signatures: false           # Require Ed25519 signatures (set to true in production)
+  # secret_key: MUST BE SET via AMOSKYS_SECRET_KEY environment variable
+
+  # TLS/Certificates
+  tls_enabled: true
+  tls_cert_path: "certs/server.crt"
+  tls_key_path: "certs/server.key"
+  agent_pubkey_path: "certs/agent.ed25519.pub"
+  cert_dir: "certs"
+
+  # Overload protection
+  overload_mode: false
+  max_inflight: 100                  # Max concurrent in-flight requests
+  hard_max: 500                      # Hard limit on inflight requests
+
+  # Monitoring and observability
+  metrics_port_1: 9000
+  metrics_port_2: 9100
+  health_port: 8080
+  metrics_disabled: false
+  log_level: "INFO"                  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+agent:
+  # EventBus connection
+  bus_address: "localhost:50051"
+
+  # Certificate directory
+  cert_dir: "certs"
+
+  # WAL storage
+  wal_path: "data/wal/flowagent.db"
+
+  # Message constraints
+  max_env_bytes: 131072              # 128KB max environment size
+  send_rate: 0                       # Rate limit in messages/sec (0 = unlimited)
+
+  # Retry behavior
+  retry_max: 6
+  retry_timeout: 1.0
+
+  # Metrics and health checks
+  metrics_port: 9101
+  health_port: 8081
+  log_level: "INFO"
+
+  # Circuit breaker configuration
+  circuit_breaker_threshold: 5
+  circuit_breaker_recovery_seconds: 30.0
+  circuit_breaker_success_threshold: 3
+
+wal:
+  # Write-Ahead Log (persistent event storage)
+  db_path: "data/wal.db"
+
+  # SQLite synchronous mode: FULL (safest), NORMAL (balanced), OFF (fastest)
+  sync_mode: "FULL"
+
+  # Performance tuning
+  max_entries: 1000000               # Max entries before pruning
+  checkpoint_interval: 300           # Checkpoint every 5 minutes
+
+storage:
+  # Directory structure
+  data_dir: "data"
+  wal_dir: "data/wal"
+  storage_dir: "data/storage"
+  metrics_dir: "data/metrics"
+
+  # Storage limits
+  max_wal_bytes: 209715200           # 200MB max WAL size
+
+crypto:
+  # Cryptographic key paths
+  ed25519_private_key: "certs/agent.ed25519"
+  trust_map_path: "config/trust_map.yaml"
+
+  # TLS certificates
+  ca_cert: "certs/ca.crt"
+  server_cert: "certs/server.crt"
+  server_key: "certs/server.key"
+  agent_cert: "certs/agent.crt"
+  agent_key: "certs/agent.key"
+
+# Logging configuration (applies globally if no other config present)
+logging:
+  level: "INFO"
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  file: "logs/amoskys.log"           # Optional: set to enable file logging

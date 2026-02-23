@@ -187,9 +187,7 @@ class DeploymentValidator:
 
         # Check for single worker
         if "-w 1" not in content and "--workers 1" not in content:
-            self.warnings.append(
-                "server_setup.sh doesn't explicitly set workers to 1"
-            )
+            self.warnings.append("server_setup.sh doesn't explicitly set workers to 1")
 
         success("Server setup script configured correctly")
 

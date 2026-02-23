@@ -24,15 +24,30 @@ logger = logging.getLogger(__name__)
 
 
 def _load_signing_key(path: str):
-    """Try to load an Ed25519 private key.  Returns None on any failure."""
+    """Try to load an Ed25519 private key.  Returns None on any failure.
+
+    P0-13: Failures are now logged at WARNING with structured details.
+    """
     try:
         from amoskys.common.crypto.signing import load_private_key
 
         key = load_private_key(path)
-        logger.info("Envelope signing enabled (Ed25519 key loaded)")
+        logger.info("Envelope signing enabled (Ed25519 key loaded from %s)", path)
         return key
+    except FileNotFoundError:
+        logger.warning(
+            "SIGNING_KEY_MISSING: path=%s — envelope signing disabled, "
+            "events will be unauthenticated",
+            path,
+        )
+        return None
     except Exception as exc:
-        logger.info("Envelope signing disabled: %s", exc)
+        logger.warning(
+            "SIGNING_KEY_LOAD_FAILURE: path=%s error=%s — "
+            "envelope signing disabled, events will be unauthenticated",
+            path,
+            exc,
+        )
         return None
 
 
@@ -80,11 +95,20 @@ class LocalQueueAdapter:
         self.device_id = device_id
         self._sequence = 0
 
+        # AOC-1: Metrics handle — set by HardenedAgentBase after construction
+        self._metrics: Optional[Any] = None
+
         # Signing state
         self._signing_key = (
             _load_signing_key(signing_key_path) if signing_key_path else None
         )
         self._prev_sig: bytes = b""  # Hash chain: starts empty
+
+        # AOC-1: Wire LocalQueue callbacks to metrics (P0-10, P0-11, P0-12)
+        self.queue._on_backpressure_drop = self._on_backpressure_drop
+        self.queue._on_max_retry_drop = self._on_max_retry_drop
+        self.queue._on_drain_success = self._on_drain_success
+        self.queue._on_drain_failure = self._on_drain_failure
 
     @property
     def signing_enabled(self) -> bool:
@@ -168,6 +192,7 @@ class LocalQueueAdapter:
             envelope.ts_ns = ts_ns
             envelope.idempotency_key = idem
             envelope.device_telemetry.CopyFrom(telemetry)
+            envelope.schema_version = 1
 
             if sig:
                 envelope.sig = sig
@@ -175,12 +200,8 @@ class LocalQueueAdapter:
             if prev_sig:
                 envelope.prev_sig = prev_sig
 
-            try:
-                publish_fn([envelope])
-                return type("Ack", (), {"status": 0})()
-            except Exception as e:
-                logger.warning(f"Publish failed in queue drain: {e}")
-                return type("Ack", (), {"status": 2})()
+            publish_fn([envelope])
+            return type("Ack", (), {"status": 0})()
 
         return self.queue.drain_signed(_wrap_and_publish, limit=limit)
 
@@ -195,6 +216,79 @@ class LocalQueueAdapter:
     def clear(self) -> int:
         """Clear all events from queue."""
         return self.queue.clear()
+
+    # ------------------------------------------------------------------
+    # AOC-1 callback methods (P0-10, P0-11, P0-12)
+    # ------------------------------------------------------------------
+
+    def _on_backpressure_drop(self, count: int) -> None:
+        """Called by LocalQueue when backpressure drops oldest events."""
+        if self._metrics:
+            self._metrics.record_backpressure_drop(count)
+
+    def _on_max_retry_drop(self, _idem_key: str) -> None:
+        """Called by LocalQueue when an event exceeds max retries."""
+        if self._metrics:
+            self._metrics.record_max_retry_drop()
+
+    def _on_drain_success(self, count: int) -> None:
+        """Called by LocalQueue after successful drain."""
+        if self._metrics:
+            self._metrics.record_drain_success(count)
+
+    def _on_drain_failure(self, _idem_key: str, _error: Exception) -> None:
+        """Called by LocalQueue on drain publish failure."""
+        if self._metrics:
+            self._metrics.record_drain_failure()
+
+    # ------------------------------------------------------------------
+    # P0-14: Hash chain verification
+    # ------------------------------------------------------------------
+
+    def verify_hash_chain(self) -> dict:
+        """Walk the signature chain and report integrity.
+
+        Reads all ``(id, sig, prev_sig)`` rows in insertion order and
+        checks that each row's ``prev_sig`` matches the previous row's
+        ``sig``.
+
+        Returns:
+            dict with keys:
+                - chain_valid (bool): True if entire chain is intact
+                - total_rows (int): Number of rows inspected
+                - broken_at (Optional[int]): Row ID where chain broke, or None
+                - unsigned_count (int): Rows with no signature
+        """
+        cur = self.queue.db.execute("SELECT id, sig, prev_sig FROM queue ORDER BY id")
+        rows = cur.fetchall()
+
+        total_rows = len(rows)
+        unsigned_count = 0
+        broken_at = None
+        prev_expected_sig: Optional[bytes] = None
+
+        for rowid, sig, prev_sig in rows:
+            if sig is None:
+                unsigned_count += 1
+                prev_expected_sig = None
+                continue
+
+            sig_bytes = bytes(sig)
+            prev_sig_bytes = bytes(prev_sig) if prev_sig else None
+
+            if prev_expected_sig is not None:
+                if prev_sig_bytes != prev_expected_sig:
+                    broken_at = rowid
+                    break
+
+            prev_expected_sig = sig_bytes
+
+        return {
+            "chain_valid": broken_at is None,
+            "total_rows": total_rows,
+            "broken_at": broken_at,
+            "unsigned_count": unsigned_count,
+        }
 
     # Event types that represent security/threat detections (vs. metrics/status)
     _SECURITY_EVENT_TYPES: frozenset[str] = frozenset(

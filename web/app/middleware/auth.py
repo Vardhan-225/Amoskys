@@ -21,7 +21,7 @@ Usage:
 from functools import wraps
 from typing import Optional
 
-from flask import flash, g, jsonify, redirect, request, url_for
+from flask import flash, g, jsonify, make_response, redirect, request, url_for
 
 from amoskys.auth import AuthService, User
 from amoskys.common.logging import get_logger
@@ -130,11 +130,25 @@ def require_login(f):
                         flash(
                             "Your session has expired. Please log in again.", "warning"
                         )
-                        return redirect(url_for("auth_views.login", next=request.url))
+                        resp = make_response(
+                            redirect(url_for("auth_views.login", next=request.url))
+                        )
+                        resp.delete_cookie(SESSION_COOKIE_NAME, path="/")
+                        return resp
 
                 # Store user in request context
                 g.current_user = result.user
                 g.current_session = result.session
+
+                # Onboarding redirect for first-time users
+                if not getattr(result.user, "setup_completed", True):
+                    if (
+                        not request.path.startswith("/api/onboarding")
+                        and not request.path.startswith("/auth/setup")
+                        and not request.path.startswith("/static")
+                        and not request.path.startswith("/api/user/auth")
+                    ):
+                        return redirect("/auth/setup")
 
                 logger.debug(
                     "User authenticated",

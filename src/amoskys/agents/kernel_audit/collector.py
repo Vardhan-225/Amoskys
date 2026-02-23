@@ -2,18 +2,24 @@
 
 This module provides collectors for kernel audit events from various sources:
     - AuditdLogCollector: Parse /var/log/audit/audit.log (Linux)
-    - MacOSAuditCollector: Parse OpenBSM trails via praudit (macOS)
+    - MacOSUnifiedLogCollector: Query unified logging (macOS 10.15+) - PRIMARY
+    - MacOSAuditCollector: Parse OpenBSM trails via praudit (macOS) - LEGACY FALLBACK
     - StubCollector: For testing with injected events
 
 Design:
     - Collectors return normalized KernelAuditEvent objects
     - Bookmark/offset tracking for incremental collection
     - Pluggable architecture for different audit sources
+
+Note on macOS:
+    OpenBSM is broken on macOS 10.15+ due to SIP disabling BSM audit trails.
+    MacOSUnifiedLogCollector uses the modern 'log show' command instead.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import platform
@@ -22,6 +28,7 @@ import socket
 import subprocess
 import time
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -76,9 +83,7 @@ class AuditdLogCollector(BaseKernelAuditCollector):
     """
 
     # Regex patterns for parsing audit logs
-    AUDIT_LINE_RE = re.compile(
-        r"type=(\w+)\s+msg=audit\((\d+\.\d+):(\d+)\):\s*(.*)"
-    )
+    AUDIT_LINE_RE = re.compile(r"type=(\w+)\s+msg=audit\((\d+\.\d+):(\d+)\):\s*(.*)")
     KEY_VALUE_RE = re.compile(r'(\w+)=("(?:[^"\\]|\\.)*"|\S+)')
 
     # Syscall number to name mapping (x86_64 Linux)
@@ -420,9 +425,7 @@ class MacOSAuditCollector(BaseKernelAuditCollector):
         resolved = self._trail_symlink.resolve()
         if self._trail_path != resolved:
             if self._trail_path is not None:
-                logger.info(
-                    "BSM trail rotated: %s -> %s", self._trail_path, resolved
-                )
+                logger.info("BSM trail rotated: %s -> %s", self._trail_path, resolved)
             self._trail_path = resolved
             self._record_offset = 0
 
@@ -452,7 +455,7 @@ class MacOSAuditCollector(BaseKernelAuditCollector):
             self._record_offset = len(records)
             return []
 
-        new_records = records[self._record_offset:]
+        new_records = records[self._record_offset :]
         self._record_offset = len(records)
 
         events: List[KernelAuditEvent] = []
@@ -697,6 +700,366 @@ class MacOSAuditCollector(BaseKernelAuditCollector):
 
 
 # =============================================================================
+# macOS Unified Log Collector
+# =============================================================================
+
+
+class MacOSUnifiedLogCollector(BaseKernelAuditCollector):
+    """Collector for macOS kernel/security audit events via Unified Logging.
+
+    Uses ``log show`` with NDJSON output to query security-relevant events.
+    This is the modern replacement for OpenBSM on macOS 10.15+ where SIP
+    disables BSM audit trails.
+
+    Monitored subsystems:
+        - com.apple.securityd
+        - com.apple.authd
+        - com.apple.sandbox
+        - com.apple.kernel
+
+    Attributes:
+        _last_timestamp: Last seen event timestamp for incremental collection
+        _subsystems: List of security-relevant subsystems to monitor
+    """
+
+    # Security-relevant subsystems for macOS unified logging
+    SECURITY_SUBSYSTEMS = [
+        "com.apple.securityd",
+        "com.apple.authd",
+        "com.apple.sandbox",
+        "com.apple.kernel",
+    ]
+
+    # Unified log event → normalized syscall/action name
+    EVENT_ACTION_MAP: Dict[str, str] = {
+        "execve": "execve",
+        "exec": "execve",
+        "ptrace": "ptrace",
+        "setuid": "setuid",
+        "setgid": "setgid",
+        "chmod": "chmod",
+        "chown": "chown",
+        "kill": "kill",
+        "fork": "fork",
+        "vfork": "vfork",
+        "clone": "clone",
+        "mmap": "mmap",
+        "mprotect": "mprotect",
+    }
+
+    # Query window for unified log (10 seconds - keeps recent events)
+    QUERY_WINDOW = "10s"
+
+    def __init__(self) -> None:
+        """Initialize macOS Unified Log collector."""
+        super().__init__()
+        self._last_timestamp: Optional[float] = None
+        self._seen_timestamps: Dict[float, int] = {}  # timestamp -> count for dedup
+
+    def collect_batch(self) -> List[KernelAuditEvent]:
+        """Collect batch of events from macOS Unified Logging.
+
+        Runs ``log show`` with an NDJSON predicate for security subsystems,
+        parses JSON output, and converts to KernelAuditEvent objects.
+
+        Returns:
+            List of normalised KernelAuditEvent objects
+        """
+        entries = self._query_unified_log()
+        if not entries:
+            return []
+
+        events: List[KernelAuditEvent] = []
+        for entry in entries:
+            event = self._build_event(entry)
+            if event:
+                events.append(event)
+
+        return events
+
+    def _query_unified_log(self) -> List[Dict[str, Any]]:
+        """Query unified log for security events.
+
+        Returns:
+            List of parsed JSON log entries or empty list on error
+        """
+        try:
+            # Build predicate for security subsystems
+            subsystem_predicates = " OR ".join(
+                f'subsystem == "{subsys}"' for subsys in self.SECURITY_SUBSYSTEMS
+            )
+            predicate = f"({subsystem_predicates})"
+
+            cmd = [
+                "log",
+                "show",
+                "--predicate",
+                predicate,
+                "--last",
+                self.QUERY_WINDOW,
+                "--style",
+                "ndjson",
+            ]
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            if result.returncode != 0:
+                logger.debug(
+                    f"log show returned {result.returncode}: {result.stderr[:200]}"
+                )
+                return []
+
+            if not result.stdout or result.stdout.strip() == "":
+                return []
+
+            # Parse NDJSON (one JSON object per line)
+            entries: List[Dict[str, Any]] = []
+            for line in result.stdout.strip().split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    entries.append(obj)
+                except json.JSONDecodeError:
+                    logger.debug(f"Failed to parse NDJSON line: {line[:100]}")
+                    continue
+
+            logger.debug(f"Unified log query returned {len(entries)} entries")
+            return entries
+
+        except subprocess.TimeoutExpired:
+            logger.error("log show timed out after 30s")
+            return []
+        except FileNotFoundError:
+            logger.error("log command not found — is macOS present?")
+            return []
+        except Exception as e:
+            logger.error(f"Error querying unified log: {e}")
+            return []
+
+    def _build_event(self, entry: Dict[str, Any]) -> Optional[KernelAuditEvent]:
+        """Build KernelAuditEvent from a unified log JSON entry.
+
+        Args:
+            entry: Parsed JSON log entry with keys like:
+                - timestamp: ISO 8601 timestamp
+                - processImagePath: Path to executable
+                - processID: Process ID
+                - senderImagePath: Sender/caller path
+                - eventMessage: Event description
+                - category: Event category
+                - subsystem: Subsystem identifier
+
+        Returns:
+            KernelAuditEvent or None if not mappable to a security event
+        """
+        try:
+            message = entry.get("eventMessage", "").lower()
+            process_path = entry.get("processImagePath", "")
+            sender_path = entry.get("senderImagePath", "")
+            category = entry.get("category", "").lower()
+            subsystem = entry.get("subsystem", "").lower()
+            timestamp_str = entry.get("timestamp", "")
+            process_id = entry.get("processID", 0)
+
+            # Extract process name from path
+            process_name = (
+                process_path.rsplit("/", 1)[-1] if process_path else ""
+            ).lower()
+
+            # Skip entries without meaningful event messages
+            if not message or not process_name:
+                return None
+
+            # Parse timestamp
+            try:
+                if timestamp_str:
+                    # macOS format: "2026-02-17 17:17:13.534573-0600"
+                    dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                    timestamp_ns = int(dt.timestamp() * 1e9)
+                else:
+                    timestamp_ns = int(time.time() * 1e9)
+            except (ValueError, TypeError):
+                timestamp_ns = int(time.time() * 1e9)
+
+            # Determine action type based on message content
+            action = self._classify_action(message, process_name, category)
+            if action is None:
+                return None
+
+            # Infer syscall from action
+            syscall = self._action_to_syscall(action)
+
+            # Determine result (success/failed) from message
+            result = self._infer_result(message)
+
+            # Extract relevant fields from message
+            exe = process_path or None
+            comm = process_name or None
+
+            # Try to extract UID from message if present
+            uid: Optional[int] = None
+            uid_match = re.search(r"uid[=:\s]+(\d+)", message)
+            if uid_match:
+                try:
+                    uid = int(uid_match.group(1))
+                except ValueError:
+                    pass
+
+            # Build raw dict from entry
+            raw_dict = {k: str(v) for k, v in entry.items()}
+
+            return KernelAuditEvent(
+                event_id=self._generate_event_id(
+                    f"{timestamp_ns}:{process_id}:{message[:50]}"
+                ),
+                timestamp_ns=timestamp_ns,
+                host=self.hostname,
+                syscall=syscall,
+                exe=exe,
+                pid=process_id if process_id > 0 else None,
+                ppid=None,  # Unified log does not provide ppid
+                uid=uid,
+                euid=None,
+                gid=None,
+                egid=None,
+                tty=None,
+                cwd=None,
+                path=None,
+                audit_user=None,
+                session=None,
+                action=action,
+                result=result,
+                comm=comm,
+                raw=raw_dict,
+            )
+
+        except Exception as e:
+            logger.debug(f"Failed to build event from unified log entry: {e}")
+            return None
+
+    def _classify_action(
+        self, message: str, process_name: str, category: str
+    ) -> Optional[str]:
+        """Classify unified log event into high-level action type.
+
+        Args:
+            message: Event message (lowercase)
+            process_name: Process name (lowercase)
+            category: Event category (lowercase)
+
+        Returns:
+            Action string ("EXEC", "PTRACE", etc.) or None if not security-relevant
+        """
+        # Check for privilege escalation patterns
+        if any(
+            kw in message for kw in ["setuid", "setgid", "seteuid", "setegid", "capset"]
+        ):
+            if "setuid" in message or "seteuid" in message:
+                return "SETUID"
+            elif "setgid" in message or "setegid" in message:
+                return "SETGID"
+            elif "capset" in message:
+                return "CAPSET"
+
+        # Check for process execution patterns
+        if any(kw in message for kw in ["execve", "exec", "execute"]):
+            return "EXEC"
+
+        # Check for ptrace patterns
+        if "ptrace" in message or "trace" in message or "debugger" in message:
+            return "PTRACE"
+
+        # Check for privilege patterns in securityd/authd
+        if process_name in ("securityd", "authd", "sandbox"):
+            if any(
+                kw in message
+                for kw in ["deny", "denied", "allow", "allowed", "privilege"]
+            ):
+                if "deny" in message or "denied" in message:
+                    return "PRIVILEGE_DENY"
+                else:
+                    return "PRIVILEGE_ALLOW"
+
+        # Check for module/driver loading
+        if any(
+            kw in message for kw in ["module", "driver", "kernel extension", "kext"]
+        ):
+            if "load" in message or "unload" in message:
+                return "MODULE_LOAD"
+
+        # Check for sandbox violations
+        if "sandbox" in process_name or "sandbox" in message:
+            return "SANDBOX_VIOLATION"
+
+        # Check for fork/clone patterns
+        if any(kw in message for kw in ["fork", "vfork", "clone"]):
+            return "FORK"
+
+        # Check for kill patterns
+        if "kill" in message or "signal" in message:
+            return "KILL"
+
+        # Generic security event
+        if any(
+            kw in message
+            for kw in [
+                "security",
+                "auth",
+                "permission",
+                "access",
+                "violation",
+            ]
+        ):
+            return "OTHER"
+
+        return None
+
+    def _action_to_syscall(self, action: str) -> Optional[str]:
+        """Map action type to syscall name.
+
+        Args:
+            action: Action type string
+
+        Returns:
+            Syscall name or None
+        """
+        action_syscall_map = {
+            "EXEC": "execve",
+            "PTRACE": "ptrace",
+            "SETUID": "setuid",
+            "SETGID": "setgid",
+            "CAPSET": "capset",
+            "PRIVILEGE_DENY": "access",
+            "PRIVILEGE_ALLOW": "access",
+            "MODULE_LOAD": "init_module",
+            "SANDBOX_VIOLATION": "mprotect",
+            "FORK": "fork",
+            "KILL": "kill",
+        }
+        return action_syscall_map.get(action)
+
+    def _infer_result(self, message: str) -> str:
+        """Infer syscall result from event message.
+
+        Args:
+            message: Event message (lowercase)
+
+        Returns:
+            "success" or "failed"
+        """
+        if any(kw in message for kw in ["deny", "denied", "failed", "error"]):
+            return "failed"
+        return "success"
+
+
+# =============================================================================
 # Stub Collector for Testing
 # =============================================================================
 
@@ -734,16 +1097,19 @@ class StubKernelAuditCollector(BaseKernelAuditCollector):
 def create_kernel_audit_collector(
     source: Optional[str] = None,
     use_stub: bool = False,
+    use_bsm_fallback: bool = False,
 ) -> BaseKernelAuditCollector:
     """Create appropriate kernel audit collector for the current platform.
 
     Auto-detects the platform and returns the matching collector:
         - Linux: AuditdLogCollector (reads /var/log/audit/audit.log)
-        - macOS/Darwin: MacOSAuditCollector (reads OpenBSM trails via praudit)
+        - macOS/Darwin: MacOSUnifiedLogCollector (via unified logging)
+            - Falls back to MacOSAuditCollector (OpenBSM) if use_bsm_fallback=True
 
     Args:
-        source: Override path to audit log/trail. Defaults per-platform.
+        source: Override path to audit log/trail. Only used for fallback modes.
         use_stub: If True, return StubKernelAuditCollector for testing
+        use_bsm_fallback: If True on macOS, use OpenBSM collector instead of unified log
 
     Returns:
         Collector instance
@@ -754,8 +1120,15 @@ def create_kernel_audit_collector(
     system = platform.system()
 
     if system == "Darwin":
-        trail = source or MacOSAuditCollector.DEFAULT_TRAIL
-        return MacOSAuditCollector(trail_path=trail)
+        if use_bsm_fallback:
+            # Legacy: Use OpenBSM collector if explicitly requested
+            trail = source or MacOSAuditCollector.DEFAULT_TRAIL
+            logger.info("Using OpenBSM collector (legacy fallback)")
+            return MacOSAuditCollector(trail_path=trail)
+        else:
+            # Default: Use modern Unified Logging collector
+            logger.info("Using macOS Unified Logging collector")
+            return MacOSUnifiedLogCollector()
 
     # Default to Linux auditd
     log_path = source or "/var/log/audit/audit.log"
@@ -770,6 +1143,7 @@ __all__ = [
     "BaseKernelAuditCollector",
     "AuditdLogCollector",
     "MacOSAuditCollector",
+    "MacOSUnifiedLogCollector",
     "StubKernelAuditCollector",
     "create_kernel_audit_collector",
 ]

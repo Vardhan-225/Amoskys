@@ -1,12 +1,6 @@
-"""
-AMOSKYS Process Agent - Module Entry Point
+"""AMOSKYS Process Agent - Module Entry Point
 
 Run with: python -m amoskys.agents.proc [options]
-
-Examples:
-    python -m amoskys.agents.proc --once
-    python -m amoskys.agents.proc --interval 60 --log-level DEBUG
-    python -m amoskys.agents.proc --config /etc/amoskys/config.yaml
 """
 
 from amoskys.agents.common.cli import agent_main

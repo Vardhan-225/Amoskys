@@ -19,7 +19,8 @@ import sys
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from amoskys.db import Base, get_engine
+# Import agent models (Phase 3 - Agent Distribution)
+from amoskys.agents.models import AgentToken, DeployedAgent  # noqa: F401
 
 # Import models to register them with SQLAlchemy
 from amoskys.auth.models import (  # noqa: F401
@@ -29,12 +30,7 @@ from amoskys.auth.models import (  # noqa: F401
     Session,
     User,
 )
-
-# Import agent models (Phase 3 - Agent Distribution)
-from amoskys.agents.models import (  # noqa: F401
-    AgentToken,
-    DeployedAgent,
-)
+from amoskys.db import Base, get_engine
 
 
 def init_db():

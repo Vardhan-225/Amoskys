@@ -1,198 +1,109 @@
 #!/usr/bin/env python3
-"""
-AMOSKYS Process Agent (ProcAgent)
-Process monitoring with EventBus publishing
+"""AMOSKYS Process Agent v3 - Micro-Probe Architecture.
+
+This is the modernized Process agent using the "swarm of eyes" pattern.
+8 micro-probes each watch one specific process threat vector.
+
+Probes:
+    1. ProcessSpawnProbe - New process creation
+    2. LOLBinExecutionProbe - Living-off-the-land binary abuse
+    3. ProcessTreeAnomalyProbe - Unusual parent-child relationships
+    4. HighCPUAndMemoryProbe - Resource abuse detection
+    5. LongLivedProcessProbe - Persistent suspicious processes
+    6. SuspiciousUserProcessProbe - Wrong user for process type
+    7. BinaryFromTempProbe - Execution from temp directories
+    8. ScriptInterpreterProbe - Suspicious script execution
+
+MITRE ATT&CK Coverage:
+    - T1059: Command and Scripting Interpreter
+    - T1218: System Binary Proxy Execution
+    - T1055: Process Injection
+    - T1496: Resource Hijacking
+    - T1036: Masquerading
+    - T1204: User Execution
+    - T1078: Valid Accounts
+
+Usage:
+    >>> agent = ProcAgentV3()
+    >>> agent.run_forever()
 """
 
+from __future__ import annotations
+
 import logging
+import platform
 import socket
 import time
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Sequence
 
 import grpc
 import psutil
 
-from amoskys.agents.common import LocalQueue
+from amoskys.agents.common.base import HardenedAgentBase, ValidationResult
+from amoskys.agents.common.probes import MicroProbeAgentMixin, Severity, TelemetryEvent
+from amoskys.agents.common.queue_adapter import LocalQueueAdapter
+from amoskys.agents.proc.probes import create_proc_probes
 from amoskys.config import get_config
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("ProcAgent")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger("ProcAgentV3")
 
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
-QUEUE_PATH = getattr(config.agent, "queue_path", "data/queue/proc_agent.db")
+QUEUE_PATH = getattr(config.agent, "proc_queue_path", "data/queue/proc_agent_v3.db")
 
 
-class ProcAgent:
-    """Process monitoring agent with offline queue resilience"""
+# =============================================================================
+# EventBus Publisher
+# =============================================================================
 
-    def __init__(self, queue_path=None):
-        """Initialize agent with local queue for offline resilience
 
-        Args:
-            queue_path: Path to queue database (default: from config)
-        """
-        self.last_pids = set()
-        self.queue_path = queue_path or QUEUE_PATH
-        self.queue = LocalQueue(
-            path=self.queue_path, max_bytes=50 * 1024 * 1024, max_retries=10  # 50MB
-        )
-        logger.info(f"LocalQueue initialized: {self.queue_path}")
+class EventBusPublisher:
+    """Wrapper for EventBus gRPC client."""
 
-    def _get_grpc_channel(self):
-        """Create gRPC channel to EventBus with mTLS"""
-        try:
-            # Load client certificates for mTLS
-            with open(f"{CERT_DIR}/ca.crt", "rb") as f:
-                ca_cert = f.read()
-            with open(f"{CERT_DIR}/agent.crt", "rb") as f:
-                client_cert = f.read()
-            with open(f"{CERT_DIR}/agent.key", "rb") as f:
-                client_key = f.read()
+    def __init__(self, address: str, cert_dir: str):
+        self.address = address
+        self.cert_dir = cert_dir
+        self._channel = None
+        self._stub = None
 
-            credentials = grpc.ssl_channel_credentials(
-                root_certificates=ca_cert,
-                private_key=client_key,
-                certificate_chain=client_cert,
-            )
-            channel = grpc.secure_channel(EVENTBUS_ADDRESS, credentials)
-            logger.info("Created secure gRPC channel with mTLS")
-            return channel
-        except FileNotFoundError as e:
-            logger.error("Certificate not found: %s", e)
-            return None
-        except Exception as e:
-            logger.error("Failed to create gRPC channel: %s", str(e))
-            return None
-
-    def _scan_processes(self):
-        """Scan all running processes"""
-        processes = {}
-        for proc in psutil.process_iter(["pid", "name", "username"]):
+    def _ensure_channel(self):
+        """Create gRPC channel if needed."""
+        if self._channel is None:
             try:
-                processes[proc.pid] = {
-                    "pid": proc.pid,
-                    "name": proc.name(),
-                    "username": proc.username(),
-                    "cpu_percent": proc.cpu_percent(interval=0),
-                    "memory_percent": proc.memory_percent(),
-                }
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-        return processes
+                with open(f"{self.cert_dir}/ca.crt", "rb") as f:
+                    ca_cert = f.read()
+                with open(f"{self.cert_dir}/agent.crt", "rb") as f:
+                    client_cert = f.read()
+                with open(f"{self.cert_dir}/agent.key", "rb") as f:
+                    client_key = f.read()
 
-    def _create_telemetry(self, processes):
-        """Create DeviceTelemetry protobuf"""
-        timestamp_ns = int(time.time() * 1e9)
+                credentials = grpc.ssl_channel_credentials(
+                    root_certificates=ca_cert,
+                    private_key=client_key,
+                    certificate_chain=client_cert,
+                )
+                self._channel = grpc.secure_channel(self.address, credentials)
+                self._stub = universal_pbrpc.UniversalEventBusStub(self._channel)
+                logger.info("Created secure gRPC channel with mTLS")
+            except FileNotFoundError as e:
+                raise RuntimeError(f"Certificate not found: {e}")
+            except Exception as e:
+                raise RuntimeError(f"Failed to create gRPC channel: {e}")
 
-        events = []
+    def publish(self, events: list) -> None:
+        """Publish events to EventBus."""
+        self._ensure_channel()
 
-        # Process count metric
-        events.append(
-            telemetry_pb2.TelemetryEvent(
-                event_id=f"proc_count_{timestamp_ns}",
-                event_type="METRIC",
-                severity="INFO",
-                event_timestamp_ns=timestamp_ns,
-                metric_data=telemetry_pb2.MetricData(
-                    metric_name="process_count",
-                    metric_type="GAUGE",
-                    numeric_value=float(len(processes)),
-                    unit="processes",
-                ),
-                source_component="proc_agent",
-                tags=["process", "metric"],
-            )
-        )
-
-        # CPU usage metric
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        events.append(
-            telemetry_pb2.TelemetryEvent(
-                event_id=f"system_cpu_{timestamp_ns}",
-                event_type="METRIC",
-                severity="INFO",
-                event_timestamp_ns=timestamp_ns,
-                metric_data=telemetry_pb2.MetricData(
-                    metric_name="system_cpu_percent",
-                    metric_type="GAUGE",
-                    numeric_value=cpu_percent,
-                    unit="percent",
-                ),
-                source_component="proc_agent",
-                tags=["system", "metric"],
-            )
-        )
-
-        # Memory usage metric
-        mem = psutil.virtual_memory()
-        events.append(
-            telemetry_pb2.TelemetryEvent(
-                event_id=f"system_mem_{timestamp_ns}",
-                event_type="METRIC",
-                severity="INFO",
-                event_timestamp_ns=timestamp_ns,
-                metric_data=telemetry_pb2.MetricData(
-                    metric_name="system_memory_percent",
-                    metric_type="GAUGE",
-                    numeric_value=mem.percent,
-                    unit="percent",
-                ),
-                source_component="proc_agent",
-                tags=["system", "metric"],
-            )
-        )
-
-        # Device metadata
-        try:
-            ip_addr = socket.gethostbyname(socket.gethostname())
-        except OSError:
-            ip_addr = "127.0.0.1"
-
-        metadata = telemetry_pb2.DeviceMetadata(
-            manufacturer="Unknown",
-            model=socket.gethostname(),
-            ip_address=ip_addr,
-            protocols=["PROC"],
-        )
-
-        # DeviceTelemetry
-        device_telemetry = telemetry_pb2.DeviceTelemetry(
-            device_id=socket.gethostname(),
-            device_type="HOST",
-            protocol="PROC",
-            metadata=metadata,
-            events=events,
-            timestamp_ns=timestamp_ns,
-            collection_agent="proc-agent",
-            agent_version="1.0.0",
-        )
-
-        return device_telemetry
-
-    def _publish_telemetry(self, device_telemetry):
-        """Publish telemetry to EventBus with queue fallback
-
-        Attempts direct publish to EventBus. On failure, queues the
-        telemetry for later retry. This ensures no data loss during
-        EventBus downtime or network failures.
-
-        Args:
-            device_telemetry: DeviceTelemetry protobuf message
-
-        Returns:
-            bool: True if published or queued, False on error
-        """
-        try:
-            channel = self._get_grpc_channel()
-            if not channel:
-                logger.warning("No gRPC channel, queueing telemetry")
-                return self._queue_telemetry(device_telemetry)
-
-            # Create UniversalEnvelope for UniversalEventBus
+        for device_telemetry in events:
             timestamp_ns = int(time.time() * 1e9)
             idempotency_key = f"{device_telemetry.device_id}_{timestamp_ns}"
             envelope = telemetry_pb2.UniversalEnvelope(
@@ -203,163 +114,402 @@ class ProcAgent:
                 signing_algorithm="Ed25519",
                 priority="NORMAL",
                 requires_acknowledgment=True,
+                schema_version=1,
             )
 
-            # Publish via UniversalEventBus.PublishTelemetry
-            stub = universal_pbrpc.UniversalEventBusStub(channel)
-            ack = stub.PublishTelemetry(envelope, timeout=5.0)
+            ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
 
-            if ack.status == telemetry_pb2.UniversalAck.OK:
-                logger.info(
-                    "Published process telemetry (queue: %d pending)", self.queue.size()
-                )
-                return True
-            else:
-                logger.warning("Publish status: %s, queueing", ack.status)
-                return self._queue_telemetry(device_telemetry)
+            if ack.status != telemetry_pb2.UniversalAck.OK:
+                raise Exception(f"EventBus returned status: {ack.status}")
 
-        except grpc.RpcError as e:
-            logger.warning("RPC failed: %s, queueing telemetry", e.code())
-            return self._queue_telemetry(device_telemetry)
-        except Exception as e:
-            logger.error("Publish failed: %s, queueing telemetry", str(e))
-            return self._queue_telemetry(device_telemetry)
+    def close(self):
+        """Close gRPC channel."""
+        if self._channel:
+            self._channel.close()
+            self._channel = None
+            self._stub = None
 
-    def _queue_telemetry(self, device_telemetry):
-        """Queue telemetry for later retry
+
+# =============================================================================
+# System Metrics Collector
+# =============================================================================
+
+
+class SystemMetricsCollector:
+    """Collects system-level metrics (CPU, memory, process count)."""
+
+    def collect(self) -> Dict[str, Any]:
+        """Collect system metrics.
+
+        Returns:
+            Dict with system metrics
+        """
+        return {
+            "cpu_percent": psutil.cpu_percent(interval=0.1),
+            "memory_percent": psutil.virtual_memory().percent,
+            "process_count": len(list(psutil.process_iter())),
+            "boot_time": psutil.boot_time(),
+        }
+
+
+# =============================================================================
+# Process Agent V3
+# =============================================================================
+
+
+class ProcAgent(MicroProbeAgentMixin, HardenedAgentBase):
+    """Process Agent with micro-probe architecture.
+
+    This agent hosts 8 micro-probes that each monitor a specific process
+    threat vector. The agent handles:
+        - Probe lifecycle management
+        - System metrics collection
+        - Event aggregation and publishing
+        - Circuit breaker and retry logic
+        - Offline queue management
+
+    Probes are responsible only for detection - no networking or state
+    management.
+    """
+
+    def __init__(self, collection_interval: float = 10.0):
+        """Initialize Process Agent v3.
 
         Args:
-            device_telemetry: DeviceTelemetry protobuf message
+            collection_interval: Seconds between collection cycles
+        """
+        device_id = socket.gethostname()
+
+        # Create EventBus publisher
+        publisher = EventBusPublisher(EVENTBUS_ADDRESS, CERT_DIR)
+
+        # Create local queue
+        Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
+        queue_adapter = LocalQueueAdapter(
+            queue_path=QUEUE_PATH,
+            agent_name="proc_agent_v3",
+            device_id=device_id,
+            max_bytes=50 * 1024 * 1024,
+            max_retries=10,
+            signing_key_path=f"{CERT_DIR}/agent.ed25519",
+        )
+
+        # Initialize base classes
+        super().__init__(
+            agent_name="proc_agent_v3",
+            device_id=device_id,
+            collection_interval=collection_interval,
+            eventbus_publisher=publisher,
+            local_queue=queue_adapter,
+        )
+
+        # System metrics collector
+        self.metrics_collector = SystemMetricsCollector()
+
+        # Register all process probes
+        self.register_probes(create_proc_probes())
+
+        logger.info(f"ProcAgentV3 initialized with {len(self._probes)} probes")
+
+    def setup(self) -> bool:
+        """Initialize agent resources.
+
+        Verifies:
+            - Certificates exist
+            - psutil is working
+            - Probes initialize successfully
 
         Returns:
-            bool: True if queued successfully
+            True if setup succeeded
         """
         try:
-            timestamp_ns = int(time.time() * 1e9)
-            idempotency_key = f"{device_telemetry.device_id}_{timestamp_ns}"
-            queued = self.queue.enqueue(device_telemetry, idempotency_key)
+            import os
 
-            if queued:
-                logger.info(
-                    "Queued telemetry (queue: %d items, %d bytes)",
-                    self.queue.size(),
-                    self.queue.size_bytes(),
-                )
+            # Verify certificates
+            required_certs = ["ca.crt", "agent.crt", "agent.key"]
+            for cert in required_certs:
+                cert_path = f"{CERT_DIR}/{cert}"
+                if not os.path.exists(cert_path):
+                    logger.error(f"Certificate not found: {cert_path}")
+                    return False
 
-            return True
-        except Exception as e:
-            logger.error("Failed to queue telemetry: %s", str(e))
-            return False
-
-    def _drain_queue(self):
-        """Attempt to drain queued telemetry to EventBus
-
-        Called periodically to retry publishing queued events when
-        EventBus becomes available again.
-
-        Returns:
-            int: Number of events successfully drained
-        """
-        queue_size = self.queue.size()
-        if queue_size == 0:
-            return 0
-
-        logger.info("Draining queue (%d events pending)...", queue_size)
-
-        def publish_fn(telemetry):
-            """Publish callback for queue drain"""
+            # Test psutil
             try:
-                channel = self._get_grpc_channel()
-                if not channel:
-                    raise Exception("No gRPC channel")
-
-                timestamp_ns = int(time.time() * 1e9)
-                envelope = telemetry_pb2.UniversalEnvelope(
-                    version="v1",
-                    ts_ns=timestamp_ns,
-                    idempotency_key=f"{telemetry.device_id}_{timestamp_ns}_retry",
-                    device_telemetry=telemetry,
-                    signing_algorithm="Ed25519",
-                    priority="NORMAL",
-                    requires_acknowledgment=True,
-                )
-
-                stub = universal_pbrpc.UniversalEventBusStub(channel)
-                ack = stub.PublishTelemetry(envelope, timeout=5.0)
-                return ack
+                _ = psutil.cpu_percent(interval=0)
+                logger.info("psutil verification passed")
             except Exception as e:
-                logger.debug("Drain publish failed: %s", str(e))
-                raise
+                logger.error(f"psutil verification failed: {e}")
+                return False
 
-        try:
-            drained = self.queue.drain(publish_fn, limit=100)
-            if drained > 0:
-                logger.info(
-                    "Drained %d events from queue (%d remaining)",
-                    drained,
-                    self.queue.size(),
-                )
-            return drained
+            # Setup probes
+            if not self.setup_probes():
+                logger.error("No probes initialized successfully")
+                return False
+
+            logger.info("ProcAgentV3 setup complete")
+            return True
+
         except Exception as e:
-            logger.debug("Queue drain error: %s", str(e))
-            return 0
-
-    def collect(self):
-        """Collect and publish process telemetry once
-
-        Collects process telemetry and attempts to publish. If EventBus
-        is unavailable, telemetry is queued for later retry. Also attempts
-        to drain any previously queued events.
-
-        Returns:
-            bool: True if collection succeeded (regardless of publish status)
-        """
-        try:
-            # First, try to drain any queued events
-            self._drain_queue()
-
-            # Collect new telemetry
-            logger.info("Collecting process telemetry...")
-            processes = self._scan_processes()
-            device_telemetry = self._create_telemetry(processes)
-
-            # Publish or queue
-            success = self._publish_telemetry(device_telemetry)
-
-            if success:
-                logger.info("Collection complete (%d processes)", len(processes))
-            else:
-                logger.warning("Collection failed (queued for retry)")
-
-            return True  # Collection itself succeeded
-        except Exception as e:
-            logger.error("Collection error: %s", str(e), exc_info=True)
+            logger.error(f"Setup failed: {e}")
             return False
 
-    def run(self, interval=30):
-        """Main collection loop"""
-        logger.info("AMOSKYS Process Agent starting...")
-        logger.info("EventBus: %s", EVENTBUS_ADDRESS)
-        logger.info("Collection interval: %ds", interval)
+    def collect_data(self) -> Sequence[Any]:
+        """Run all probes and collect events.
 
-        cycle = 0
-        while True:
-            cycle += 1
-            logger.info("=" * 60)
-            logger.info("Cycle #%d - %s", cycle, datetime.now().isoformat())
-            logger.info("=" * 60)
+        Returns:
+            List of DeviceTelemetry protobuf messages
+        """
+        all_events: List[TelemetryEvent] = []
 
-            self.collect()
+        # Collect system metrics
+        try:
+            metrics = self.metrics_collector.collect()
+            all_events.extend(self._create_metric_events(metrics))
+        except Exception as e:
+            logger.error(f"Failed to collect system metrics: {e}")
 
-            logger.info("Next collection in %ds...", interval)
-            time.sleep(interval)
+        # Run all probes
+        probe_events = self.scan_all_probes()
+        all_events.extend(probe_events)
+
+        logger.info(
+            f"Collected {len(all_events)} events "
+            f"(metrics: {len(all_events) - len(probe_events)}, "
+            f"probes: {len(probe_events)})"
+        )
+
+        # Convert to protobuf
+        if all_events:
+            return [self._events_to_telemetry(all_events)]
+        return []
+
+    def _create_metric_events(self, metrics: Dict[str, Any]) -> List[TelemetryEvent]:
+        """Create TelemetryEvents for system metrics.
+
+        Args:
+            metrics: Dict from SystemMetricsCollector
+
+        Returns:
+            List of TelemetryEvents
+        """
+        events = []
+
+        # CPU metric
+        events.append(
+            TelemetryEvent(
+                event_type="system_metric",
+                severity=Severity.DEBUG,
+                probe_name="system_metrics",
+                data={
+                    "metric_name": "cpu_percent",
+                    "value": metrics["cpu_percent"],
+                    "unit": "percent",
+                },
+            )
+        )
+
+        # Memory metric
+        events.append(
+            TelemetryEvent(
+                event_type="system_metric",
+                severity=Severity.DEBUG,
+                probe_name="system_metrics",
+                data={
+                    "metric_name": "memory_percent",
+                    "value": metrics["memory_percent"],
+                    "unit": "percent",
+                },
+            )
+        )
+
+        # Process count metric
+        events.append(
+            TelemetryEvent(
+                event_type="system_metric",
+                severity=Severity.DEBUG,
+                probe_name="system_metrics",
+                data={
+                    "metric_name": "process_count",
+                    "value": metrics["process_count"],
+                    "unit": "processes",
+                },
+            )
+        )
+
+        return events
+
+    def _events_to_telemetry(
+        self, events: List[TelemetryEvent]
+    ) -> telemetry_pb2.DeviceTelemetry:
+        """Convert TelemetryEvents to protobuf DeviceTelemetry.
+
+        Args:
+            events: List of TelemetryEvent objects
+
+        Returns:
+            DeviceTelemetry protobuf message
+        """
+        timestamp_ns = int(time.time() * 1e9)
+
+        # Create telemetry events
+        proto_events = []
+
+        for event in events:
+            if event.event_type == "system_metric":
+                # Metric event
+                proto_event = telemetry_pb2.TelemetryEvent(
+                    event_id=f"{event.probe_name}_{timestamp_ns}",
+                    event_type="METRIC",
+                    severity="INFO",
+                    event_timestamp_ns=timestamp_ns,
+                    metric_data=telemetry_pb2.MetricData(
+                        metric_name=event.data.get("metric_name", ""),
+                        metric_type="GAUGE",
+                        numeric_value=float(event.data.get("value", 0)),
+                        unit=event.data.get("unit", ""),
+                    ),
+                    source_component=event.probe_name,
+                    tags=["process", "metric"],
+                )
+            else:
+                # Security event — populate SecurityEvent sub-message
+                security_event = telemetry_pb2.SecurityEvent(
+                    event_category=event.event_type,
+                    risk_score=event.confidence,
+                    analyst_notes=str(event.data),
+                )
+                if event.mitre_techniques:
+                    security_event.mitre_techniques.extend(event.mitre_techniques)
+
+                # Extract source_ip if present in data
+                if event.data.get("source_ip"):
+                    security_event.source_ip = str(event.data["source_ip"])
+
+                proto_event = telemetry_pb2.TelemetryEvent(
+                    event_id=f"{event.probe_name}_{event.event_type}_{timestamp_ns}",
+                    event_type="SECURITY",
+                    severity=event.severity.value,
+                    event_timestamp_ns=timestamp_ns,
+                    source_component=event.probe_name,
+                    security_event=security_event,
+                    confidence_score=event.confidence,
+                    tags=event.tags,
+                )
+
+                # Flatten probe data into attributes for evidence tracing
+                for k, v in event.data.items():
+                    proto_event.attributes[k] = str(v)
+
+            proto_events.append(proto_event)
+
+        # Create DeviceTelemetry
+        device_telemetry = telemetry_pb2.DeviceTelemetry(
+            device_id=self.device_id,
+            device_type="HOST",
+            protocol="PROC",
+            events=proto_events,
+            timestamp_ns=timestamp_ns,
+            collection_agent="proc-agent-v3",
+            agent_version="3.0.0",
+        )
+
+        return device_telemetry
+
+    def validate_event(self, event: Any) -> ValidationResult:
+        """Validate telemetry before publishing.
+
+        Args:
+            event: DeviceTelemetry protobuf message
+
+        Returns:
+            ValidationResult
+        """
+        errors = []
+
+        if not hasattr(event, "device_id") or not event.device_id:
+            errors.append("Missing device_id")
+
+        if not hasattr(event, "timestamp_ns") or event.timestamp_ns == 0:
+            errors.append("Missing timestamp_ns")
+
+        # Validate timestamp is reasonable
+        now = time.time() * 1e9
+        if hasattr(event, "timestamp_ns") and event.timestamp_ns > 0:
+            if abs(event.timestamp_ns - now) > 3600 * 1e9:  # 1 hour tolerance
+                errors.append("timestamp_ns too far from current time")
+
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors)
+
+    def shutdown(self) -> None:
+        """Graceful shutdown."""
+        logger.info("ProcAgentV3 shutting down...")
+
+        if self.eventbus_publisher:
+            self.eventbus_publisher.close()
+
+        logger.info("ProcAgentV3 shutdown complete")
+
+    def get_health(self) -> Dict[str, Any]:
+        """Get agent health status.
+
+        Returns:
+            Dict with health metrics
+        """
+        return {
+            "agent_name": self.agent_name,
+            "device_id": self.device_id,
+            "is_running": self.is_running,
+            "collection_count": self.collection_count,
+            "error_count": self.error_count,
+            "last_error": self.last_error,
+            "probes": self.get_probe_health(),
+            "circuit_breaker_state": self.circuit_breaker.state,
+        }
+
+
+# =============================================================================
+# CLI Entry Point
+# =============================================================================
 
 
 def main():
-    """Entry point"""
-    agent = ProcAgent()
-    agent.run(interval=30)
+    """Run Process Agent v3."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="AMOSKYS Process Agent v3")
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=10.0,
+        help="Collection interval in seconds",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging",
+    )
+
+    args = parser.parse_args()
+
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    logger.info("=" * 70)
+    logger.info("AMOSKYS Process Agent v3 (Micro-Probe Architecture)")
+    logger.info("=" * 70)
+
+    agent = ProcAgentV3(collection_interval=args.interval)
+
+    try:
+        agent.run_forever()
+    except KeyboardInterrupt:
+        logger.info("Received interrupt, shutting down...")
+        agent.shutdown()
 
 
 if __name__ == "__main__":
     main()
+
+
+# B5.1: Deprecated alias — will be removed in v1.0
+ProcAgentV3 = ProcAgent

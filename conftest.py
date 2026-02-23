@@ -44,6 +44,30 @@ def pytest_configure(config):
         "markers", "security: marks tests as security tests"
     )
 
+import pytest
+
+
+@pytest.fixture
+def tmp_db_path(tmp_path):
+    """B5.3: Per-test isolated SQLite database path.
+
+    Each test that uses this fixture gets a unique, isolated database file
+    in a temporary directory. This prevents SQLite contention between tests.
+
+    Usage:
+        def test_something(tmp_db_path):
+            store = TelemetryStore(tmp_db_path)
+            ...
+    """
+    return str(tmp_path / "test_telemetry.db")
+
+
+@pytest.fixture
+def tmp_wal_path(tmp_path):
+    """B5.3: Per-test isolated WAL database path."""
+    return str(tmp_path / "test_wal.db")
+
+
 def pytest_sessionstart(session):
     """Called after the Session object has been created"""
     print("🧠⚡ AMOSKYS Test Suite - Neural Command Platform Testing")

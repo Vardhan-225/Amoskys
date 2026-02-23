@@ -33,11 +33,16 @@ def main():
     cmd = [
         sys.executable,
         str(AGENT_DIR / "run_agent_v2.py"),
-        "--device-id", "dev-mac",
-        "--queue-path", str(LOCAL_QUEUES),
-        "--collection-interval", "30",  # Discovery is slower
-        "--metrics-interval", "30",
-        "--log-level", "DEBUG",
+        "--device-id",
+        "dev-mac",
+        "--queue-path",
+        str(LOCAL_QUEUES),
+        "--collection-interval",
+        "30",  # Discovery is slower
+        "--metrics-interval",
+        "30",
+        "--log-level",
+        "DEBUG",
     ]
 
     print(f"Running: {' '.join(cmd)}")

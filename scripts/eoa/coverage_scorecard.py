@@ -91,18 +91,22 @@ def discover_probes() -> List[Dict[str, Any]]:
                 if not platforms:
                     platforms = ["linux", "darwin", "windows"]
 
-                all_probes.append({
-                    "agent": agent_name,
-                    "name": probe.name,
-                    "description": getattr(probe, "description", ""),
-                    "platforms": platforms,
-                    "enabled": getattr(probe, "enabled", True),
-                    "mitre_techniques": getattr(probe, "mitre_techniques", []),
-                    "darwin_active": "darwin" in platforms,
-                })
+                all_probes.append(
+                    {
+                        "agent": agent_name,
+                        "name": probe.name,
+                        "description": getattr(probe, "description", ""),
+                        "platforms": platforms,
+                        "enabled": getattr(probe, "enabled", True),
+                        "mitre_techniques": getattr(probe, "mitre_techniques", []),
+                        "darwin_active": "darwin" in platforms,
+                    }
+                )
 
         except Exception as e:
-            print(f"  WARNING: Could not load {agent_name} probes: {e}", file=sys.stderr)
+            print(
+                f"  WARNING: Could not load {agent_name} probes: {e}", file=sys.stderr
+            )
 
     return all_probes
 
@@ -270,9 +274,15 @@ def print_markdown_scorecard(sc: Dict[str, Any]) -> None:
         filled = int(pct / 5)
         return f"[{'#' * filled}{'.' * (20 - filled)}] {pct:5.1f}% (target: {target}%) {symbol}"
 
-    print(f"\n  1. Surface Coverage: {_bar(scores['surface_coverage_pct'], targets['surface_coverage_target'])}")
-    print(f"  2. Probe Proof:      {_bar(scores['probe_proof_pct'], targets['probe_proof_target'])}")
-    print(f"  3. Reliability:      {_bar(scores['reliability_pct'], targets['reliability_target'])}")
+    print(
+        f"\n  1. Surface Coverage: {_bar(scores['surface_coverage_pct'], targets['surface_coverage_target'])}"
+    )
+    print(
+        f"  2. Probe Proof:      {_bar(scores['probe_proof_pct'], targets['probe_proof_target'])}"
+    )
+    print(
+        f"  3. Reliability:      {_bar(scores['reliability_pct'], targets['reliability_target'])}"
+    )
 
     print(f"\n  Total probes:        {totals['total_probes']}")
     print(f"  macOS-active:        {totals['darwin_active_probes']}")
@@ -287,7 +297,9 @@ def print_markdown_scorecard(sc: Dict[str, Any]) -> None:
         darwin = data["darwin_active"]
         proven = data["proven"]
         pct = (proven / darwin * 100) if darwin > 0 else 0
-        print(f"  {agent_name:<20} {data['total']:>6} {darwin:>6} {proven:>7} {pct:>6.0f}%")
+        print(
+            f"  {agent_name:<20} {data['total']:>6} {darwin:>6} {proven:>7} {pct:>6.0f}%"
+        )
 
     # Unproven list
     unproven = sc["details"]["unproven"]
@@ -305,20 +317,21 @@ def print_markdown_scorecard(sc: Dict[str, Any]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="AMOSKYS Coverage Gate Scorecard"
+    parser = argparse.ArgumentParser(description="AMOSKYS Coverage Gate Scorecard")
+    parser.add_argument(
+        "--target",
+        type=float,
+        default=0,
+        help="CI gate: exit 1 if Probe Proof %% < target",
     )
     parser.add_argument(
-        "--target", type=float, default=0,
-        help="CI gate: exit 1 if Probe Proof %% < target"
+        "--json", action="store_true", help="Output JSON instead of markdown"
     )
     parser.add_argument(
-        "--json", action="store_true",
-        help="Output JSON instead of markdown"
-    )
-    parser.add_argument(
-        "--eoa-results", type=str, default=None,
-        help="Path to EOA results JSON for reliability calculation"
+        "--eoa-results",
+        type=str,
+        default=None,
+        help="Path to EOA results JSON for reliability calculation",
     )
     args = parser.parse_args()
 
@@ -360,7 +373,9 @@ def main() -> None:
             )
             sys.exit(1)
         else:
-            print(f"GATE PASSED: Probe Proof {probe_proof:.1f}% >= target {args.target}%")
+            print(
+                f"GATE PASSED: Probe Proof {probe_proof:.1f}% >= target {args.target}%"
+            )
 
 
 if __name__ == "__main__":

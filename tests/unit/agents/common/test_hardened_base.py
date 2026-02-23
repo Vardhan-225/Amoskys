@@ -24,7 +24,6 @@ from amoskys.agents.common.base import (
 )
 from amoskys.agents.common.metrics import AgentMetrics
 
-
 # ---------------------------------------------------------------------------
 # CircuitBreaker unit tests
 # ---------------------------------------------------------------------------
@@ -75,7 +74,9 @@ class TestCircuitBreaker:
         assert cb.state == "HALF_OPEN"
 
     def test_half_open_success_closes_circuit(self):
-        cb = CircuitBreaker(failure_threshold=1, recovery_timeout=0.01, half_open_attempts=2)
+        cb = CircuitBreaker(
+            failure_threshold=1, recovery_timeout=0.01, half_open_attempts=2
+        )
         cb.record_failure()
         time.sleep(0.02)
         cb.allow_call()  # → HALF_OPEN

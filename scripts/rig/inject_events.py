@@ -52,8 +52,10 @@ def inject_events(
     """
     for ev in events:
         if verbose:
-            print(f"  → {ev.event_id} | {ev.event_type:10s} | {ev.severity:8s} | "
-                  f"{ev.attributes.get('probe', 'unknown')}")
+            print(
+                f"  → {ev.event_id} | {ev.event_type:10s} | {ev.severity:8s} | "
+                f"{ev.attributes.get('probe', 'unknown')}"
+            )
         fusion.add_event(ev)
 
     # Evaluate all devices
@@ -124,8 +126,10 @@ def run_scenario(
     if verbose:
         print(f"\n  {status} — {len(incidents)} incident(s) (expected {expected})")
         for detail in result["incident_details"]:
-            print(f"    • [{detail['severity']}] {detail['rule_name']}: "
-                  f"{detail['summary']}")
+            print(
+                f"    • [{detail['severity']}] {detail['rule_name']}: "
+                f"{detail['summary']}"
+            )
             if detail["techniques"]:
                 print(f"      MITRE: {', '.join(detail['techniques'])}")
 
@@ -163,14 +167,18 @@ def main():
                 fail_count += 1
 
             if not args.verbose:
-                print(f"  {r['status']}  {name:35s}  "
-                      f"events={r['events_injected']:2d}  "
-                      f"incidents={r['incidents_found']}/{r['expected_incidents']}")
+                print(
+                    f"  {r['status']}  {name:35s}  "
+                    f"events={r['events_injected']:2d}  "
+                    f"incidents={r['incidents_found']}/{r['expected_incidents']}"
+                )
 
         print()
         print(f"{'═' * 58}")
-        print(f"  Results: {pass_count} passed, {fail_count} failed "
-              f"(of {len(SCENARIOS)} scenarios)")
+        print(
+            f"  Results: {pass_count} passed, {fail_count} failed "
+            f"(of {len(SCENARIOS)} scenarios)"
+        )
         print(f"{'═' * 58}")
 
         if args.output != "-":
@@ -183,9 +191,7 @@ def main():
     elif args.scenario:
         if args.scenario not in SCENARIOS:
             parser.error(f"Unknown scenario: {args.scenario}")
-        result = run_scenario(
-            args.scenario, device_id=args.device_id, verbose=True
-        )
+        result = run_scenario(args.scenario, device_id=args.device_id, verbose=True)
         if args.output != "-":
             with open(args.output, "w") as f:
                 json.dump(result, f, indent=2, default=str)

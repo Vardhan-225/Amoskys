@@ -1,0 +1,302 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Deploy Agent - AMOSKYS{% endblock %}
+
+{% block content %}
+<div style="padding: 2rem;">
+    <!-- Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">Agent Deployment</h2>
+            <a href="/dashboard/my-agents" class="neural-button" style="padding: 0.4rem 1rem; font-size: 0.8rem; text-decoration: none;">My Agents &rarr;</a>
+        </div>
+        <p style="color: var(--text-secondary);">
+            Deploy AMOSKYS security agents to your devices. Generate a deployment token, install the agent, and start monitoring.
+        </p>
+    </div>
+
+    <!-- Deployment Steps -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin: 1.5rem 0;">
+
+        <!-- Step 1: Platform Detection -->
+        <div class="neural-card" id="deploy-step-1">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--neural-primary), var(--neural-secondary)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; color: var(--bg-primary);">1</div>
+                <h3 style="margin: 0; font-size: 1rem;">Select Platform</h3>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
+                <div class="deploy-plat-card" data-platform="macos" onclick="selectDeployPlatform('macos')" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
+                    <div style="font-size: 2rem;">&#127822;</div>
+                    <div style="font-size: 0.8rem; font-weight: 600; margin-top: 0.3rem;">macOS</div>
+                </div>
+                <div class="deploy-plat-card" data-platform="linux" onclick="selectDeployPlatform('linux')" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
+                    <div style="font-size: 2rem;">&#128039;</div>
+                    <div style="font-size: 0.8rem; font-weight: 600; margin-top: 0.3rem;">Linux</div>
+                </div>
+                <div class="deploy-plat-card" data-platform="windows" onclick="selectDeployPlatform('windows')" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
+                    <div style="font-size: 2rem;">&#128187;</div>
+                    <div style="font-size: 0.8rem; font-weight: 600; margin-top: 0.3rem;">Windows</div>
+                </div>
+            </div>
+            <div id="detected-os-badge" style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-muted);"></div>
+        </div>
+
+        <!-- Step 2: Generate Token -->
+        <div class="neural-card" id="deploy-step-2">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem;" id="step2-num">2</div>
+                <h3 style="margin: 0; font-size: 1rem;">Generate Token</h3>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.3rem;">Label (e.g., "Production Server 1")</label>
+                <input type="text" id="token-label" placeholder="My Device" style="width: 100%; padding: 0.5rem 0.8rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; font-size: 0.85rem;">
+            </div>
+            <button class="neural-button" id="btn-gen-token" onclick="generateToken()" style="width: 100%; padding: 0.6rem; cursor: pointer;">Generate Deployment Token</button>
+
+            <div id="token-display" style="display: none; margin-top: 1rem;">
+                <div style="background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.25); border-radius: 8px; padding: 1rem;">
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.3rem;">Your deployment token (shown once):</div>
+                    <div style="font-family: 'Courier New', monospace; font-size: 0.8rem; color: #00ff88; word-break: break-all; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 4px;" id="token-value"></div>
+                    <button onclick="copyToken()" style="margin-top: 0.5rem; padding: 0.3rem 0.8rem; background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); border-radius: 4px; cursor: pointer; font-size: 0.75rem;" id="btn-copy">Copy Token</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Install -->
+        <div class="neural-card" id="deploy-step-3">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem;" id="step3-num">3</div>
+                <h3 style="margin: 0; font-size: 1rem;">Install Agent</h3>
+            </div>
+            <div id="install-instructions" style="font-size: 0.8rem; color: var(--text-secondary);">
+                <p>Select a platform and generate a token first.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Tokens -->
+    <div class="neural-card" style="margin-top: 1.5rem;">
+        <div class="card-header">
+            <h3 class="card-title" style="font-size: 1rem;">Active Deployment Tokens</h3>
+            <button class="neural-button" onclick="loadTokens()" style="padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer;">Refresh</button>
+        </div>
+        <div id="tokens-list" style="margin-top: 1rem;">
+            <div style="color: var(--text-muted); text-align: center; padding: 1.5rem; font-size: 0.85rem;">Loading tokens...</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce() }}">
+let deployPlatform = null;
+let generatedToken = null;
+
+(function() {
+    const ua = navigator.platform.toLowerCase();
+    let detected = null;
+    if (ua.includes('mac')) detected = 'macos';
+    else if (ua.includes('linux')) detected = 'linux';
+    else if (ua.includes('win')) detected = 'windows';
+    if (detected) {
+        selectDeployPlatform(detected);
+        document.getElementById('detected-os-badge').textContent = 'Auto-detected: ' + detected;
+    }
+})();
+
+function selectDeployPlatform(platform) {
+    deployPlatform = platform;
+    document.querySelectorAll('.deploy-plat-card').forEach(function(c) {
+        c.style.borderColor = 'rgba(255,255,255,0.08)';
+        c.style.background = 'rgba(255,255,255,0.03)';
+    });
+    var card = document.querySelector('.deploy-plat-card[data-platform="' + platform + '"]');
+    if (card) {
+        card.style.borderColor = '#00ff88';
+        card.style.background = 'rgba(0,255,136,0.08)';
+    }
+    updateInstallInstructions();
+}
+
+async function generateToken() {
+    if (!deployPlatform) { alert('Please select a platform first.'); return; }
+    var label = document.getElementById('token-label').value || 'My Device';
+    var btn = document.getElementById('btn-gen-token');
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    try {
+        var resp = await fetch('/dashboard/api/agents/deploy/token', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({label: label, platform: deployPlatform}),
+        });
+        var data = await resp.json();
+        if (data.status === 'success' && data.token) {
+            generatedToken = data.token;
+            document.getElementById('token-value').textContent = data.token;
+            document.getElementById('token-display').style.display = 'block';
+            document.getElementById('step2-num').style.background = 'linear-gradient(135deg, var(--neural-primary), var(--neural-secondary))';
+            document.getElementById('step2-num').style.color = 'var(--bg-primary)';
+            updateInstallInstructions();
+            loadTokens();
+        } else {
+            alert(data.message || 'Failed to generate token');
+        }
+    } catch(e) {
+        alert('Failed to generate token: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Generate Deployment Token';
+    }
+}
+
+function copyToken() {
+    if (!generatedToken) return;
+    var btn = document.getElementById('btn-copy');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(generatedToken).then(function() {
+            btn.textContent = 'Copied!';
+            setTimeout(function() { btn.textContent = 'Copy Token'; }, 2000);
+        }, function() {
+            fallbackCopy(generatedToken, btn);
+        });
+    } else {
+        fallbackCopy(generatedToken, btn);
+    }
+}
+function fallbackCopy(text, btn) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); btn.textContent = 'Copied!'; }
+    catch(e) { btn.textContent = 'Copy failed'; }
+    document.body.removeChild(ta);
+    setTimeout(function() { btn.textContent = 'Copy Token'; }, 2000);
+}
+
+function cmdBlock(cmd, label) {
+    var id = 'cmd-' + Math.random().toString(36).substring(2, 8);
+    return '<div style="margin-bottom:0.6rem;">'
+        + '<div style="font-size:0.7rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.2rem;">' + label + '</div>'
+        + '<div style="display:flex;align-items:center;gap:0.4rem;">'
+        + '<code id="' + id + '" style="flex:1;display:block;padding:0.5rem 0.7rem;background:rgba(0,0,0,0.35);border-radius:6px;font-size:0.78rem;color:#00ff88;font-family:monospace;word-break:break-all;border:1px solid rgba(0,255,136,0.1);">' + escapeHtml(cmd) + '</code>'
+        + '<button onclick="copyCmd(\'' + id + '\')" style="flex-shrink:0;padding:0.35rem 0.6rem;background:rgba(0,255,136,0.1);color:#00ff88;border:1px solid rgba(0,255,136,0.2);border-radius:5px;cursor:pointer;font-size:0.65rem;font-weight:700;white-space:nowrap;transition:all 0.15s;" title="Copy command">Copy</button>'
+        + '</div></div>';
+}
+
+function copyCmd(elId) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    var text = el.textContent;
+    var btn = el.parentNode.querySelector('button');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+            btn.textContent = 'Copied!'; btn.style.borderColor = '#00ff88';
+            setTimeout(function() { btn.textContent = 'Copy'; btn.style.borderColor = 'rgba(0,255,136,0.2)'; }, 2000);
+        });
+    } else {
+        fallbackCopy(text, btn);
+    }
+}
+
+function updateInstallInstructions() {
+    var el = document.getElementById('install-instructions');
+    if (!deployPlatform) return;
+    var tokenPlaceholder = generatedToken || 'YOUR_TOKEN';
+    var html = '';
+
+    if (deployPlatform === 'macos') {
+        html += cmdBlock('pip3 install amoskys[web,agents]', 'Step 1 — Install AMOSKYS with all agent capabilities');
+        html += cmdBlock('amoskys-dashboard --token ' + tokenPlaceholder, 'Step 2 — Start the dashboard with your deployment token');
+        html += '<div style="padding:0.6rem;background:rgba(0,217,255,0.05);border:1px solid rgba(0,217,255,0.1);border-radius:6px;margin-top:0.5rem;">'
+            + '<div style="font-size:0.7rem;font-weight:700;color:var(--neural-primary);margin-bottom:0.3rem;">Verify Installation</div>'
+            + '<div style="font-size:0.72rem;color:var(--text-secondary);line-height:1.6;">'
+            + 'After starting, your agent will appear on the <a href="/dashboard/my-agents" style="color:var(--neural-primary);">My Agents</a> page within 30 seconds. '
+            + 'Look for a heartbeat status of <span style="color:#00ff88;font-weight:700;">ONLINE</span>.</div></div>';
+    } else if (deployPlatform === 'linux') {
+        html += cmdBlock('sudo pip3 install amoskys[web,agents]', 'Step 1 — Install AMOSKYS (requires sudo for system-level monitoring)');
+        html += cmdBlock('sudo amoskys-dashboard --token ' + tokenPlaceholder, 'Step 2 — Start the dashboard');
+        html += cmdBlock('sudo systemctl enable --now amoskys', 'Step 3 — (Optional) Enable as systemd service for auto-start');
+        html += '<div style="padding:0.6rem;background:rgba(0,217,255,0.05);border:1px solid rgba(0,217,255,0.1);border-radius:6px;margin-top:0.5rem;">'
+            + '<div style="font-size:0.7rem;font-weight:700;color:var(--neural-primary);margin-bottom:0.3rem;">Verify Installation</div>'
+            + '<div style="font-size:0.72rem;color:var(--text-secondary);line-height:1.6;">'
+            + 'Check service status: <code style="color:#00ff88;background:rgba(0,0,0,0.3);padding:0.1rem 0.3rem;border-radius:3px;font-size:0.7rem;">systemctl status amoskys</code>. '
+            + 'Your agent should appear on <a href="/dashboard/my-agents" style="color:var(--neural-primary);">My Agents</a> within 30 seconds.</div></div>';
+    } else {
+        html += cmdBlock('pip install amoskys[web,agents]', 'Step 1 — Install AMOSKYS');
+        html += cmdBlock('amoskys-dashboard --token ' + tokenPlaceholder, 'Step 2 — Start the dashboard with your deployment token');
+        html += '<div style="padding:0.6rem;background:rgba(0,217,255,0.05);border:1px solid rgba(0,217,255,0.1);border-radius:6px;margin-top:0.5rem;">'
+            + '<div style="font-size:0.7rem;font-weight:700;color:var(--neural-primary);margin-bottom:0.3rem;">Verify Installation</div>'
+            + '<div style="font-size:0.72rem;color:var(--text-secondary);line-height:1.6;">'
+            + 'Your agent should appear on the <a href="/dashboard/my-agents" style="color:var(--neural-primary);">My Agents</a> page within 30 seconds.</div></div>';
+    }
+
+    el.innerHTML = html;
+    document.getElementById('step3-num').style.background = 'linear-gradient(135deg, var(--neural-primary), var(--neural-secondary))';
+    document.getElementById('step3-num').style.color = 'var(--bg-primary)';
+}
+
+async function loadTokens() {
+    var el = document.getElementById('tokens-list');
+    try {
+        var resp = await fetch('/dashboard/api/agents/deploy/tokens');
+        var data = await resp.json();
+        if (data.status === 'success' && data.tokens) {
+            if (data.tokens.length === 0) {
+                el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem;">No deployment tokens yet. Generate one above.</div>';
+                return;
+            }
+            var html = '<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">'
+                + '<tr style="border-bottom:1px solid rgba(255,255,255,0.08);">'
+                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Label</th>'
+                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Platform</th>'
+                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Status</th>'
+                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Created</th>'
+                + '<th style="text-align:right;padding:0.5rem;color:var(--text-muted);font-weight:600;">Action</th></tr>';
+            for (var i = 0; i < data.tokens.length; i++) {
+                var t = data.tokens[i];
+                var statusColor = t.is_consumed ? '#999' : '#00ff88';
+                var statusText = t.is_consumed ? 'Used' : 'Active';
+                var created = new Date(t.created_at).toLocaleDateString();
+                html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
+                    + '<td style="padding:0.5rem;color:var(--text-primary);">' + escapeHtml(t.label) + '</td>'
+                    + '<td style="padding:0.5rem;">' + escapeHtml(t.platform) + '</td>'
+                    + '<td style="padding:0.5rem;"><span style="color:' + statusColor + ';font-weight:600;">' + statusText + '</span></td>'
+                    + '<td style="padding:0.5rem;color:var(--text-muted);">' + created + '</td>'
+                    + '<td style="padding:0.5rem;text-align:right;">';
+                if (!t.is_consumed) {
+                    html += '<button onclick="revokeToken(\'' + t.id + '\')" style="padding:0.2rem 0.5rem;background:rgba(255,51,102,0.15);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;">Revoke</button>';
+                }
+                html += '</td></tr>';
+            }
+            html += '</table>';
+            el.innerHTML = html;
+        } else {
+            el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem;">No tokens found.</div>';
+        }
+    } catch(e) {
+        el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem;">Failed to load tokens.</div>';
+    }
+}
+
+async function revokeToken(tokenId) {
+    if (!confirm('Revoke this token? This cannot be undone.')) return;
+    try {
+        var resp = await fetch('/dashboard/api/agents/deploy/tokens/' + encodeURIComponent(tokenId) + '/revoke', {method: 'POST'});
+        if (!resp.ok) alert('Failed to revoke token');
+        loadTokens();
+    } catch(e) {
+        alert('Failed to revoke token: ' + e.message);
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+document.addEventListener('DOMContentLoaded', loadTokens);
+</script>
+{% endblock %}

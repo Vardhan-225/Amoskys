@@ -212,6 +212,28 @@ def run_agent(
         print(f"{name} version {version}")
         sys.exit(0)
 
+    # Pre-flight config validation (P0-8)
+    config_path = Path(args.config)
+    if not config_path.exists():
+        logger.warning(
+            "Config file not found: %s — agent will use defaults", config_path
+        )
+    else:
+        logger.info(
+            "Config validated: %s (%d bytes)",
+            config_path,
+            config_path.stat().st_size,
+        )
+
+    if args.interval < 1:
+        logger.error("Collection interval must be >= 1 second, got %d", args.interval)
+        sys.exit(1)
+    if args.interval > 3600:
+        logger.warning(
+            "Collection interval > 1h (%ds); heartbeat may appear stale",
+            args.interval,
+        )
+
     logger.info("=" * 60)
     logger.info("AMOSKYS %s starting", name)
     logger.info("=" * 60)
@@ -220,16 +242,27 @@ def run_agent(
     logger.info("  Log level: %s", args.log_level)
     logger.info("  Mode: %s", "single-run" if args.once else "continuous")
 
-    # Instantiate agent
-    try:
-        # Try to pass config path if agent accepts it
+    # Instantiate agent — try multiple constructor signatures
+    agent = None
+    device_id = os.environ.get(
+        "AMOSKYS_DEVICE_ID", os.uname().nodename if hasattr(os, "uname") else "host-001"
+    )
+    for attempt_kwargs in [
+        {"config_path": args.config},
+        {},
+        {"device_id": device_id},
+        {"device_id": device_id, "agent_name": name},
+    ]:
         try:
-            agent = agent_class(config_path=args.config)
+            agent = agent_class(**attempt_kwargs)
+            break
         except TypeError:
-            # Fall back to no-arg constructor
-            agent = agent_class()
-    except Exception as e:
-        logger.error("Failed to instantiate agent: %s", e)
+            continue
+        except Exception as e:
+            logger.error("Failed to instantiate agent: %s", e)
+            sys.exit(1)
+    if agent is None:
+        logger.error("Failed to instantiate agent: no matching constructor found")
         sys.exit(1)
 
     # Heartbeat setup
@@ -247,10 +280,18 @@ def run_agent(
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
 
-    # Get collection method
-    collect_method = getattr(agent, "collect", None) or getattr(agent, "run_once", None)
+    # Get collection method — check all known method names
+    collect_method = (
+        getattr(agent, "collect", None)
+        or getattr(agent, "run_once", None)
+        or getattr(agent, "collect_data", None)
+        or getattr(agent, "scan_all_probes", None)
+        or getattr(agent, "run_probes", None)
+    )
     if not collect_method:
-        logger.error("Agent has no collect() or run_once() method")
+        logger.error(
+            "Agent has no collect/run_once/collect_data/scan_all_probes method"
+        )
         sys.exit(1)
 
     # Run loop
@@ -263,35 +304,28 @@ def run_agent(
             logger.info("-" * 40)
             logger.info("Collection cycle #%d - %s", cycle, datetime.now().isoformat())
 
+            # P0-9: Heartbeat always written regardless of collection outcome
+            hb_status = "healthy"
+            hb_error = None
             try:
                 collect_method()
                 duration_ms = (time.time() - start_time) * 1000
                 logger.info("Cycle complete in %.1fms", duration_ms)
-
-                # Write heartbeat after successful collection
-                if write_heartbeat_enabled:
-                    write_heartbeat(
-                        name,
-                        heartbeat_dir,
-                        extra_data={
-                            "cycle": cycle,
-                            "duration_ms": round(duration_ms, 1),
-                            "status": "healthy",
-                        },
-                    )
-
             except Exception as e:
+                duration_ms = (time.time() - start_time) * 1000
                 logger.exception("Collection error: %s", e)
-                if write_heartbeat_enabled:
-                    write_heartbeat(
-                        name,
-                        heartbeat_dir,
-                        extra_data={
-                            "cycle": cycle,
-                            "status": "error",
-                            "error": str(e),
-                        },
-                    )
+                hb_status = "error"
+                hb_error = str(e)
+
+            if write_heartbeat_enabled:
+                hb_data = {
+                    "cycle": cycle,
+                    "duration_ms": round(duration_ms, 1),
+                    "status": hb_status,
+                }
+                if hb_error:
+                    hb_data["error"] = hb_error
+                write_heartbeat(name, heartbeat_dir, extra_data=hb_data)
 
             # Single-run mode
             if args.once:

@@ -1,10 +1,6 @@
 """Authentication and authorization monitoring agent.
 
-This module provides two implementations:
-    - AuthGuardAgent: Original monolithic implementation
-    - AuthGuardAgentV2: Micro-probe architecture with 8 specialized detectors
-
-The v2 agent uses the "swarm of eyes" pattern with probes for:
+Micro-probe architecture with 8 specialized detectors:
     - SSH brute force and password spraying
     - Geographic impossible travel
     - Sudo elevation and suspicious commands
@@ -13,20 +9,22 @@ The v2 agent uses the "swarm of eyes" pattern with probes for:
     - Account lockout storms
 """
 
-from amoskys.agents.auth.auth_agent import AuthGuardAgent
-from amoskys.agents.auth.auth_guard_agent_v2 import AuthGuardAgentV2
+from amoskys.agents.auth.auth_guard_agent import AuthGuardAgent
 from amoskys.agents.auth.probes import (
+    AccountLockoutStormProbe,
     AuthEvent,
-    create_auth_probes,
+    MFABypassOrAnomalyProbe,
+    OffHoursLoginProbe,
     SSHBruteForceProbe,
-    SSHPasswordSprayProbe,
     SSHGeoImpossibleTravelProbe,
+    SSHPasswordSprayProbe,
     SudoElevationProbe,
     SudoSuspiciousCommandProbe,
-    OffHoursLoginProbe,
-    MFABypassOrAnomalyProbe,
-    AccountLockoutStormProbe,
+    create_auth_probes,
 )
+
+# B5.1: Deprecated alias
+AuthGuardAgentV2 = AuthGuardAgent
 
 __all__ = [
     "AuthGuardAgent",

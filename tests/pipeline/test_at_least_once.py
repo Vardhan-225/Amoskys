@@ -21,7 +21,6 @@ from amoskys.agents.common.local_queue import LocalQueue
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
 from amoskys.proto import universal_telemetry_pb2 as pb
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -46,7 +45,9 @@ def adapter(queue_path):
     )
 
 
-def _make_telemetry(device_id: str, event_id: str, payload: str = "") -> pb.DeviceTelemetry:
+def _make_telemetry(
+    device_id: str, event_id: str, payload: str = ""
+) -> pb.DeviceTelemetry:
     """Build a minimal DeviceTelemetry protobuf."""
     t = pb.DeviceTelemetry(
         device_id=device_id,
@@ -457,8 +458,14 @@ class TestSchemaInvariants:
         rows = queue.db.execute("PRAGMA table_info(queue)").fetchall()
         col_names = {r[1] for r in rows}
         assert col_names == {
-            "id", "idem", "ts_ns", "bytes", "retries",
-            "content_hash", "sig", "prev_sig",
+            "id",
+            "idem",
+            "ts_ns",
+            "bytes",
+            "retries",
+            "content_hash",
+            "sig",
+            "prev_sig",
         }
 
     def test_synchronous_normal(self, queue):

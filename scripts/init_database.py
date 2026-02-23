@@ -12,10 +12,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from sqlalchemy import create_engine, inspect
+
 from amoskys.auth.models import Base
 from amoskys.common.logging import get_logger
 
 logger = get_logger(__name__)
+
 
 def init_database(database_url: str = "sqlite:///data/amoskys.db"):
     """Initialize database with all tables."""
@@ -38,6 +40,7 @@ def init_database(database_url: str = "sqlite:///data/amoskys.db"):
 
     return True
 
+
 if __name__ == "__main__":
     import argparse
 
@@ -45,7 +48,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--database-url",
         default="sqlite:///data/amoskys.db",
-        help="Database URL (default: sqlite:///data/amoskys.db)"
+        help="Database URL (default: sqlite:///data/amoskys.db)",
     )
 
     args = parser.parse_args()
@@ -56,5 +59,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Error initializing database: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

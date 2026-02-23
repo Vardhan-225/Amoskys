@@ -39,6 +39,7 @@ def app():
     os.environ["FLASK_DEBUG"] = "true"
     os.environ["FORCE_HTTPS"] = "false"
     os.environ["SECRET_KEY"] = "test-secret-key-for-smoke-tests"
+    os.environ["AMOSKYS_API_KEY"] = "smoke-test-api-key-12345"
 
     result = create_app()
     if isinstance(result, tuple):
@@ -75,14 +76,18 @@ class TestHealthSmoke:
 
         data = json.loads(response.data)
         assert data["status"] == "ok"
-        assert "timestamp" in data
+        # Ping intentionally returns minimal data (no timestamp, no architecture details)
 
     def test_health_system_returns_valid_structure(self, client):
         """
         CRITICAL: Health system endpoint must return complete status.
         This feeds the Command Center dashboard.
+        Requires authentication (API key or session cookie).
         """
-        response = client.get("/api/v1/health/system")
+        response = client.get(
+            "/api/v1/health/system",
+            headers={"X-API-Key": "smoke-test-api-key-12345"},
+        )
         assert response.status_code == 200
 
         data = json.loads(response.data)
@@ -115,8 +120,11 @@ class TestHealthSmoke:
         assert data["threat_level"] in valid_threat_levels
 
     def test_health_agents_endpoint(self, client):
-        """Health agents endpoint returns agent registry info"""
-        response = client.get("/api/v1/health/agents")
+        """Health agents endpoint returns agent registry info (requires auth)."""
+        response = client.get(
+            "/api/v1/health/agents",
+            headers={"X-API-Key": "smoke-test-api-key-12345"},
+        )
         assert response.status_code == 200
 
         data = json.loads(response.data)

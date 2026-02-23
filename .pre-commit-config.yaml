@@ -22,6 +22,15 @@ repos:
         args: ['--maxkb=1000']
       - id: check-merge-conflict
       - id: detect-private-key
+      - id: check-case-conflict
+
+  # Block secrets / credentials in committed files
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: '^(.*_pb2\.py|.*\.lock|\.secrets\.baseline)$'
 
   # Python import sorting - MUST use same config as CI
   # Uses pyproject.toml [tool.isort] section automatically

@@ -20,49 +20,53 @@ from typing import Any, List, Optional
 
 def test_agent(agent_name: str) -> bool:
     """Test a single agent.
-    
+
     Returns:
         True if all tests pass
     """
     print(f"\n{'='*60}")
     print(f"Testing: {agent_name}")
-    print('='*60)
-    
+    print("=" * 60)
+
     try:
         # Dynamic import based on agent name
         if agent_name == "kernel_audit":
-            from amoskys.agents.kernel_audit.kernel_audit_agent_v2 import KernelAuditAgentV2 as AgentClass
+            from amoskys.agents.kernel_audit.kernel_audit_agent import (
+                KernelAuditAgent as AgentClass,
+            )
         elif agent_name == "protocol_collectors":
-            from amoskys.agents.protocol_collectors import ProtocolCollectorsV2 as AgentClass
+            from amoskys.agents.protocol_collectors import (
+                ProtocolCollectors as AgentClass,
+            )
         elif agent_name == "device_discovery":
-            from amoskys.agents.device_discovery import DeviceDiscoveryV2 as AgentClass
+            from amoskys.agents.device_discovery import DeviceDiscovery as AgentClass
         elif agent_name == "auth_guard":
-            from amoskys.agents.auth import AuthGuardAgentV2 as AgentClass
+            from amoskys.agents.auth import AuthGuardAgent as AgentClass
         elif agent_name == "proc":
-            from amoskys.agents.proc import ProcAgentV3 as AgentClass
+            from amoskys.agents.proc import ProcAgent as AgentClass
         elif agent_name == "dns":
-            from amoskys.agents.dns import DNSAgentV2 as AgentClass
+            from amoskys.agents.dns import DNSAgent as AgentClass
         elif agent_name == "peripheral":
-            from amoskys.agents.peripheral import PeripheralAgentV2 as AgentClass
+            from amoskys.agents.peripheral import PeripheralAgent as AgentClass
         elif agent_name == "persistence":
-            from amoskys.agents.persistence import PersistenceAgentV2 as AgentClass
+            from amoskys.agents.persistence import PersistenceGuard as AgentClass
         elif agent_name == "fim":
-            from amoskys.agents.fim import FIMAgentV2 as AgentClass
+            from amoskys.agents.fim import FIMAgent as AgentClass
         elif agent_name == "flow":
-            from amoskys.agents.flow import FlowAgentV2 as AgentClass
+            from amoskys.agents.flow import FlowAgent as AgentClass
         else:
             print(f"  ❌ Unknown agent: {agent_name}")
             return False
-            
+
         print(f"  ✓ Import successful: {AgentClass.__name__}")
-        
+
     except ImportError as e:
         print(f"  ❌ Import failed: {e}")
         return False
     except Exception as e:
         print(f"  ❌ Import error: {e}")
         return False
-    
+
     # Test instantiation
     try:
         agent = AgentClass(device_id="selftest-node")
@@ -73,7 +77,7 @@ def test_agent(agent_name: str) -> bool:
     except Exception as e:
         print(f"  ❌ Instantiation failed: {e}")
         return False
-    
+
     # Test setup
     try:
         result = agent.setup()
@@ -84,15 +88,15 @@ def test_agent(agent_name: str) -> bool:
     except Exception as e:
         print(f"  ❌ setup() failed: {e}")
         return False
-    
+
     # Test collect_data
     try:
         events = agent.collect_data()
         if events is None:
             events = []
-        events = list(events) if hasattr(events, '__iter__') else [events]
+        events = list(events) if hasattr(events, "__iter__") else [events]
         print(f"  ✓ collect_data() returned {len(events)} events")
-        
+
         # Validate event types (should not be plain strings)
         invalid_events = []
         for i, event in enumerate(events):
@@ -101,32 +105,32 @@ def test_agent(agent_name: str) -> bool:
             elif isinstance(event, dict):
                 # Dicts are OK for JSON serialization path
                 pass
-            elif hasattr(event, 'SerializeToString'):
+            elif hasattr(event, "SerializeToString"):
                 # Protobuf objects are OK
                 pass
-            elif hasattr(event, 'to_dict'):
+            elif hasattr(event, "to_dict"):
                 # TelemetryEvent objects are OK
                 pass
             else:
                 invalid_events.append((i, type(event).__name__))
-        
+
         if invalid_events:
             print(f"  ⚠ Invalid event types found: {invalid_events}")
         else:
             print(f"  ✓ All events have valid types")
-            
+
     except Exception as e:
         print(f"  ❌ collect_data() failed: {e}")
         return False
-    
+
     # Check probe count if available
-    if hasattr(agent, 'probes') or hasattr(agent, '_probes'):
-        probes = getattr(agent, 'probes', getattr(agent, '_probes', []))
+    if hasattr(agent, "probes") or hasattr(agent, "_probes"):
+        probes = getattr(agent, "probes", getattr(agent, "_probes", []))
         print(f"  ✓ Probes registered: {len(probes)}")
         for p in probes:
-            status = "✓" if getattr(p, 'enabled', True) else "○"
+            status = "✓" if getattr(p, "enabled", True) else "○"
             print(f"      {status} {p.name}")
-    
+
     print(f"\n  ✅ {agent_name} PASSED all checks")
     return True
 
@@ -136,25 +140,21 @@ def main():
     parser.add_argument(
         "agent",
         nargs="?",
-        help="Agent to test (kernel_audit, protocol_collectors, device_discovery, etc.)"
+        help="Agent to test (kernel_audit, protocol_collectors, device_discovery, etc.)",
     )
-    parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Test all known agents"
-    )
+    parser.add_argument("--all", action="store_true", help="Test all known agents")
     parser.add_argument(
         "--trinity",
-        action="store_true", 
-        help="Test Trinity agents (kernel_audit, protocol_collectors, device_discovery)"
+        action="store_true",
+        help="Test Trinity agents (kernel_audit, protocol_collectors, device_discovery)",
     )
-    
+
     args = parser.parse_args()
-    
+
     if args.all:
         agents = [
             "kernel_audit",
-            "protocol_collectors", 
+            "protocol_collectors",
             "device_discovery",
             "auth_guard",
             "proc",
@@ -171,29 +171,29 @@ def main():
     else:
         parser.print_help()
         sys.exit(1)
-    
-    print("\n" + "="*60)
+
+    print("\n" + "=" * 60)
     print("AMOSKYS AGENT SELFTEST HARNESS")
-    print("="*60)
-    
+    print("=" * 60)
+
     results = {}
     for agent in agents:
         results[agent] = test_agent(agent)
-    
+
     # Summary
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("SUMMARY")
-    print("="*60)
-    
+    print("=" * 60)
+
     passed = sum(1 for v in results.values() if v)
     failed = len(results) - passed
-    
+
     for agent, result in results.items():
         status = "✅ PASS" if result else "❌ FAIL"
         print(f"  {status}  {agent}")
-    
+
     print(f"\nTotal: {passed}/{len(results)} passed")
-    
+
     if failed > 0:
         sys.exit(1)
 

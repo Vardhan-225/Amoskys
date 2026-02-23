@@ -58,6 +58,7 @@ def _write_log_entries(entries: list[str], dry_run: bool = False) -> None:
 
 # ── Trigger 1: SSHBruteForceProbe ─────────────────────────────────────────
 
+
 def trigger_ssh_brute_force(dry_run: bool = False) -> None:
     """Generate 6 SSH failure entries from same IP→user (threshold is 5)."""
     log("Trigger: SSHBruteForceProbe")
@@ -72,13 +73,26 @@ def trigger_ssh_brute_force(dry_run: bool = False) -> None:
 
 # ── Trigger 2: SSHPasswordSprayProbe ──────────────────────────────────────
 
+
 def trigger_password_spray(dry_run: bool = False) -> None:
     """Generate failures against 12 distinct usernames from same IP."""
     log("Trigger: SSHPasswordSprayProbe")
 
     ts = time.strftime("%b %d %H:%M:%S")
-    users = ["root", "admin", "deploy", "ubuntu", "ec2-user", "centos",
-             "oracle", "postgres", "mysql", "jenkins", "git", "www-data"]
+    users = [
+        "root",
+        "admin",
+        "deploy",
+        "ubuntu",
+        "ec2-user",
+        "centos",
+        "oracle",
+        "postgres",
+        "mysql",
+        "jenkins",
+        "git",
+        "www-data",
+    ]
     entries = [
         f"{ts} eoa-host sshd[{20000+i}]: Failed password for {user} from 10.88.88.88 port {60000+i} ssh2"
         for i, user in enumerate(users)
@@ -87,6 +101,7 @@ def trigger_password_spray(dry_run: bool = False) -> None:
 
 
 # ── Trigger 3: SudoSuspiciousCommandProbe ─────────────────────────────────
+
 
 def trigger_sudo_suspicious(dry_run: bool = False) -> None:
     """Generate sudo entries with dangerous command patterns."""
@@ -104,6 +119,7 @@ def trigger_sudo_suspicious(dry_run: bool = False) -> None:
 
 # ── Trigger 4: OffHoursLoginProbe ─────────────────────────────────────────
 
+
 def trigger_off_hours_login(dry_run: bool = False) -> None:
     """Generate login entries timestamped at 3 AM (off-hours)."""
     log("Trigger: OffHoursLoginProbe")
@@ -117,6 +133,7 @@ def trigger_off_hours_login(dry_run: bool = False) -> None:
 
 
 # ── Trigger 5: AccountLockoutStormProbe ───────────────────────────────────
+
 
 def trigger_account_lockout(dry_run: bool = False) -> None:
     """Generate 6 account lockout entries (threshold is 5)."""
@@ -133,7 +150,9 @@ def trigger_account_lockout(dry_run: bool = False) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Trigger Pack: AuthGuard probes")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without executing")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without executing"
+    )
     args = parser.parse_args()
 
     print("\n═══ AuthGuard Trigger Pack ═══")

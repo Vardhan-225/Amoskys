@@ -1,521 +1,421 @@
 #!/usr/bin/env python3
+"""AMOSKYS Peripheral Agent v2 - Micro-Probe Architecture.
+
+This is the modernized Peripheral agent using the "swarm of eyes" pattern.
+7 micro-probes each watch one specific peripheral threat vector.
+
+Probes:
+    1. USBInventoryProbe - Complete device inventory
+    2. USBConnectionEdgeProbe - Connect/disconnect events
+    3. USBStorageProbe - Storage device monitoring
+    4. USBNetworkAdapterProbe - Network adapter detection
+    5. HIDKeyboardMouseAnomalyProbe - Keystroke injection detection
+    6. BluetoothDeviceProbe - Bluetooth monitoring
+    7. HighRiskPeripheralScoreProbe - Composite risk scoring
+
+MITRE ATT&CK Coverage:
+    - T1200: Hardware Additions
+    - T1091: Replication Through Removable Media
+    - T1052: Exfiltration Over Physical Medium
+    - T1056.001: Input Capture: Keylogging
+    - T1557: Adversary-in-the-Middle
+
+Usage:
+    >>> agent = PeripheralAgentV2()
+    >>> agent.run_forever()
 """
-AMOSKYS Peripheral Monitoring Agent
 
-Monitors physical devices connected to the endpoint:
-- USB devices (flash drives, keyboards, mice, webcams)
-- Bluetooth devices
-- External storage (file transfer detection)
-- Unauthorized device detection
+from __future__ import annotations
 
-This agent is critical for detecting USB-based attacks:
-- BadUSB / Rubber Ducky attacks
-- USB keyloggers
-- Unauthorized data exfiltration
-- Malicious charging cables
-"""
-
-import hashlib
-import json
 import logging
-import os
 import platform
 import socket
-import subprocess
 import time
-from datetime import datetime
-from typing import Dict, List, Set
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Sequence
 
 import grpc
 
+from amoskys.agents.common.base import HardenedAgentBase, ValidationResult
+from amoskys.agents.common.probes import MicroProbeAgentMixin, TelemetryEvent
+from amoskys.agents.common.queue_adapter import LocalQueueAdapter
+from amoskys.agents.peripheral.probes import create_peripheral_probes
 from amoskys.config import get_config
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("PeripheralAgent")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger("PeripheralAgentV2")
 
-# Load configuration
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
+QUEUE_PATH = getattr(
+    config.agent, "peripheral_queue_path", "data/queue/peripheral_agent_v2.db"
+)
 
 
-class PeripheralAgent:
-    """Monitors peripheral devices for security threats"""
+# =============================================================================
+# EventBus Publisher
+# =============================================================================
 
-    def __init__(self):
-        """Initialize peripheral agent"""
-        self.known_devices = {}  # device_id -> device_info
-        self.previous_devices = set()  # Set of device IDs from last scan
-        self.authorized_devices = self._load_authorized_devices()
-        self.platform = platform.system()
 
-        logger.info(f"Peripheral Agent initialized for {self.platform}")
+class EventBusPublisher:
+    """Wrapper for EventBus gRPC client."""
 
-    def _load_authorized_devices(self) -> Set[str]:
-        """Load list of authorized device IDs from config"""
-        # TODO: Load from config file or database
-        # For now, return empty set (all devices flagged as unauthorized)
-        return set()
+    def __init__(self, address: str, cert_dir: str):
+        self.address = address
+        self.cert_dir = cert_dir
+        self._channel = None
+        self._stub = None
 
-    def _get_grpc_channel(self):
-        """Create gRPC channel to EventBus with mTLS"""
-        try:
-            # Load client certificates for mTLS
-            with open(f"{CERT_DIR}/ca.crt", "rb") as f:
-                ca_cert = f.read()
-            with open(f"{CERT_DIR}/agent.crt", "rb") as f:
-                client_cert = f.read()
-            with open(f"{CERT_DIR}/agent.key", "rb") as f:
-                client_key = f.read()
+    def _ensure_channel(self):
+        """Create gRPC channel if needed."""
+        if self._channel is None:
+            try:
+                with open(f"{self.cert_dir}/ca.crt", "rb") as f:
+                    ca_cert = f.read()
+                with open(f"{self.cert_dir}/agent.crt", "rb") as f:
+                    client_cert = f.read()
+                with open(f"{self.cert_dir}/agent.key", "rb") as f:
+                    client_key = f.read()
 
-            credentials = grpc.ssl_channel_credentials(
-                root_certificates=ca_cert,
-                private_key=client_key,
-                certificate_chain=client_cert,
-            )
-            channel = grpc.secure_channel(EVENTBUS_ADDRESS, credentials)
-            logger.info("Created secure gRPC channel with mTLS")
-            return channel
-        except FileNotFoundError as e:
-            logger.error("Certificate not found: %s", e)
-            return None
-        except Exception as e:
-            logger.error("Failed to create gRPC channel: %s", str(e))
-            return None
+                credentials = grpc.ssl_channel_credentials(
+                    root_certificates=ca_cert,
+                    private_key=client_key,
+                    certificate_chain=client_cert,
+                )
+                self._channel = grpc.secure_channel(self.address, credentials)
+                self._stub = universal_pbrpc.UniversalEventBusStub(self._channel)
+                logger.info("Created secure gRPC channel with mTLS")
+            except FileNotFoundError as e:
+                raise RuntimeError(f"Certificate not found: {e}")
+            except Exception as e:
+                raise RuntimeError(f"Failed to create gRPC channel: {e}")
 
-    def _scan_usb_devices_macos(self) -> List[Dict]:
-        """Scan USB devices on macOS using system_profiler"""
-        devices = []
+    def publish(self, events: list) -> None:
+        """Publish events to EventBus."""
+        self._ensure_channel()
 
-        try:
-            # Get USB device tree
-            result = subprocess.run(
-                ["system_profiler", "SPUSBDataType", "-json"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-
-            if result.returncode != 0:
-                logger.error("system_profiler failed: %s", result.stderr)
-                return devices
-
-            data = json.loads(result.stdout)
-
-            # Parse USB device tree
-            def parse_usb_tree(items, devices_list):
-                for item in items:
-                    # Check if this is a USB device (not a controller)
-                    if "_name" in item and item.get("_name") != "USB":
-                        device = {
-                            "name": item.get("_name", "Unknown"),
-                            "vendor_id": item.get("vendor_id", ""),
-                            "product_id": item.get("product_id", ""),
-                            "serial_num": item.get("serial_num", ""),
-                            "manufacturer": item.get("manufacturer", ""),
-                            "location_id": item.get("location_id", ""),
-                            "device_speed": item.get("device_speed", ""),
-                            "bcd_device": item.get("bcd_device", ""),
-                        }
-
-                        # Create unique device ID
-                        device_id = f"{device['vendor_id']}:{device['product_id']}:{device['serial_num']}"
-                        device["device_id"] = hashlib.md5(
-                            device_id.encode()
-                        ).hexdigest()[:16]
-
-                        devices_list.append(device)
-
-                    # Recursively parse children
-                    if "_items" in item:
-                        parse_usb_tree(item["_items"], devices_list)
-
-            # Start parsing from root
-            if "SPUSBDataType" in data:
-                for bus in data["SPUSBDataType"]:
-                    if "_items" in bus:
-                        parse_usb_tree(bus["_items"], devices)
-
-        except subprocess.TimeoutExpired:
-            logger.error("USB scan timed out")
-        except Exception as e:
-            logger.error("Failed to scan USB devices: %s", e)
-
-        return devices
-
-    def _scan_usb_devices_linux(self) -> List[Dict]:
-        """Scan USB devices on Linux using lsusb"""
-        devices = []
-
-        try:
-            result = subprocess.run(
-                ["lsusb", "-v"], capture_output=True, text=True, timeout=10
-            )
-
-            if result.returncode != 0:
-                logger.error("lsusb failed")
-                return devices
-
-            # Parse lsusb output (simplified)
-            for line in result.stdout.split("\n"):
-                if line.startswith("Bus "):
-                    parts = line.split()
-                    if len(parts) >= 6:
-                        device = {
-                            "name": " ".join(parts[6:]),
-                            "vendor_id": parts[5].split(":")[0],
-                            "product_id": (
-                                parts[5].split(":")[1] if ":" in parts[5] else ""
-                            ),
-                            "device_id": hashlib.md5(line.encode()).hexdigest()[:16],
-                        }
-                        devices.append(device)
-
-        except Exception as e:
-            logger.error("Failed to scan USB devices on Linux: %s", e)
-
-        return devices
-
-    def _scan_usb_devices(self) -> List[Dict]:
-        """Scan USB devices (platform-aware)"""
-        if self.platform == "Darwin":
-            return self._scan_usb_devices_macos()
-        elif self.platform == "Linux":
-            return self._scan_usb_devices_linux()
-        else:
-            logger.warning(f"USB scanning not implemented for {self.platform}")
-            return []
-
-    def _scan_mounted_volumes(self) -> List[Dict]:
-        """Scan mounted volumes to detect USB storage"""
-        volumes = []
-
-        try:
-            if self.platform == "Darwin":
-                # Get mounted volumes
-                result = subprocess.run(["df", "-h"], capture_output=True, text=True)
-
-                for line in result.stdout.split("\n")[1:]:  # Skip header
-                    parts = line.split()
-                    if len(parts) >= 6:
-                        mount_point = parts[5]
-                        # Check if it's a removable volume (under /Volumes)
-                        if mount_point.startswith("/Volumes/"):
-                            volumes.append(
-                                {
-                                    "mount_point": mount_point,
-                                    "filesystem": parts[0],
-                                    "size": parts[1],
-                                    "used": parts[2],
-                                    "available": parts[3],
-                                    "capacity": parts[4],
-                                    "volume_name": mount_point.split("/")[-1],
-                                }
-                            )
-
-            elif self.platform == "Linux":
-                # Check /media and /mnt for mounted USB drives
-                for base_path in ["/media", "/mnt"]:
-                    if os.path.exists(base_path):
-                        for item in os.listdir(base_path):
-                            mount_point = os.path.join(base_path, item)
-                            if os.path.ismount(mount_point):
-                                volumes.append(
-                                    {"mount_point": mount_point, "volume_name": item}
-                                )
-
-        except Exception as e:
-            logger.error("Failed to scan mounted volumes: %s", e)
-
-        return volumes
-
-    def _detect_device_events(self, current_devices: List[Dict]) -> Dict:
-        """Detect connection/disconnection events"""
-        current_ids = {d["device_id"] for d in current_devices}
-
-        events = {"connected": [], "disconnected": [], "persistent": []}
-
-        # New devices (connected)
-        for device in current_devices:
-            if device["device_id"] not in self.previous_devices:
-                events["connected"].append(device)
-            else:
-                events["persistent"].append(device)
-
-        # Removed devices (disconnected)
-        disconnected_ids = self.previous_devices - current_ids
-        for device_id in disconnected_ids:
-            if device_id in self.known_devices:
-                events["disconnected"].append(self.known_devices[device_id])
-
-        # Update state
-        self.previous_devices = current_ids
-        for device in current_devices:
-            self.known_devices[device["device_id"]] = device
-
-        return events
-
-    def _classify_device_type(self, device: Dict) -> str:
-        """Classify device type based on attributes"""
-        name = device.get("name", "").lower()
-        vendor = device.get("manufacturer", "").lower()
-
-        if "keyboard" in name or "kbd" in name:
-            return "KEYBOARD"
-        elif "mouse" in name or "pointing" in name:
-            return "MOUSE"
-        elif "storage" in name or "disk" in name or "flash" in name:
-            return "USB_STORAGE"
-        elif "camera" in name or "webcam" in name:
-            return "CAMERA"
-        elif "audio" in name or "microphone" in name:
-            return "AUDIO"
-        elif "bluetooth" in name or "bt" in vendor:
-            return "BLUETOOTH"
-        elif "hub" in name:
-            return "USB_HUB"
-        else:
-            return "UNKNOWN"
-
-    def _calculate_risk_score(self, device: Dict, event_type: str) -> float:
-        """Calculate risk score for device"""
-        risk = 0.0
-
-        # Unauthorized device = high risk
-        if device["device_id"] not in self.authorized_devices:
-            risk += 0.5
-
-        # New connection = moderate risk
-        if event_type == "CONNECTED":
-            risk += 0.2
-
-        # High-risk device types
-        device_type = self._classify_device_type(device)
-        if device_type in ["KEYBOARD", "USB_STORAGE"]:
-            risk += 0.3  # Keyloggers, BadUSB, data exfiltration
-
-        # No serial number = suspicious
-        if not device.get("serial_num"):
-            risk += 0.2
-
-        return min(risk, 1.0)
-
-    def _create_telemetry(
-        self, devices: List[Dict], events: Dict
-    ) -> telemetry_pb2.DeviceTelemetry:
-        """Create DeviceTelemetry protobuf"""
-        timestamp_ns = int(time.time() * 1e9)
-        telemetry_events = []
-
-        # Create events for each connection/disconnection
-        for device in events["connected"]:
-            device_type = self._classify_device_type(device)
-            risk_score = self._calculate_risk_score(device, "CONNECTED")
-
-            event = telemetry_pb2.TelemetryEvent(
-                event_id=f"peripheral_connected_{device['device_id']}_{timestamp_ns}",
-                event_type="STATUS",
-                severity="WARN" if risk_score > 0.5 else "INFO",
-                event_timestamp_ns=timestamp_ns,
-                status_data=telemetry_pb2.StatusData(
-                    component_name=device.get("name", "Unknown Device"),
-                    status="CONNECTED",
-                    previous_status="OFFLINE",
-                    status_change_time_ns=timestamp_ns,
-                ),
-                source_component="peripheral_agent",
-                tags=["peripheral", "usb", device_type.lower()],
-                confidence_score=1.0 - risk_score,
-                attributes={
-                    "device_id": device["device_id"],
-                    "vendor_id": device.get("vendor_id", ""),
-                    "product_id": device.get("product_id", ""),
-                    "manufacturer": device.get("manufacturer", ""),
-                    "device_type": device_type,
-                    "is_authorized": str(
-                        device["device_id"] in self.authorized_devices
-                    ),
-                    "risk_score": str(risk_score),
-                },
-            )
-            telemetry_events.append(event)
-
-        for device in events["disconnected"]:
-            event = telemetry_pb2.TelemetryEvent(
-                event_id=f"peripheral_disconnected_{device['device_id']}_{timestamp_ns}",
-                event_type="STATUS",
-                severity="INFO",
-                event_timestamp_ns=timestamp_ns,
-                status_data=telemetry_pb2.StatusData(
-                    component_name=device.get("name", "Unknown Device"),
-                    status="DISCONNECTED",
-                    previous_status="CONNECTED",
-                    status_change_time_ns=timestamp_ns,
-                ),
-                source_component="peripheral_agent",
-                tags=["peripheral", "usb", "disconnection"],
-                attributes={
-                    "device_id": device["device_id"],
-                    "device_type": self._classify_device_type(device),
-                },
-            )
-            telemetry_events.append(event)
-
-        # Add summary metric
-        summary_event = telemetry_pb2.TelemetryEvent(
-            event_id=f"peripheral_summary_{timestamp_ns}",
-            event_type="METRIC",
-            severity="INFO",
-            event_timestamp_ns=timestamp_ns,
-            metric_data=telemetry_pb2.MetricData(
-                metric_name="connected_peripherals_count",
-                metric_type="GAUGE",
-                numeric_value=float(len(devices)),
-                unit="devices",
-            ),
-            source_component="peripheral_agent",
-            tags=["peripheral", "metric"],
-        )
-        telemetry_events.append(summary_event)
-
-        # Device metadata
-        try:
-            ip_addr = socket.gethostbyname(socket.gethostname())
-        except OSError:
-            ip_addr = "127.0.0.1"
-
-        metadata = telemetry_pb2.DeviceMetadata(
-            manufacturer="Apple" if self.platform == "Darwin" else "Unknown",
-            model=socket.gethostname(),
-            ip_address=ip_addr,
-            protocols=["USB", "PERIPHERAL"],
-        )
-
-        # DeviceTelemetry
-        device_telemetry = telemetry_pb2.DeviceTelemetry(
-            device_id=socket.gethostname(),
-            device_type="ENDPOINT",
-            protocol="PERIPHERAL",
-            metadata=metadata,
-            events=telemetry_events,
-            timestamp_ns=timestamp_ns,
-            collection_agent="peripheral-agent",
-            agent_version="1.0.0",
-        )
-
-        return device_telemetry
-
-    def _publish_telemetry(
-        self, device_telemetry: telemetry_pb2.DeviceTelemetry
-    ) -> bool:
-        """Publish telemetry to EventBus"""
-        try:
-            channel = self._get_grpc_channel()
-            if not channel:
-                logger.error("No gRPC channel")
-                return False
-
-            # Create UniversalEnvelope
+        for device_telemetry in events:
             timestamp_ns = int(time.time() * 1e9)
+            idempotency_key = f"{device_telemetry.device_id}_{timestamp_ns}"
             envelope = telemetry_pb2.UniversalEnvelope(
                 version="v1",
                 ts_ns=timestamp_ns,
-                idempotency_key=f"{device_telemetry.device_id}_peripheral_{timestamp_ns}",
+                idempotency_key=idempotency_key,
                 device_telemetry=device_telemetry,
                 signing_algorithm="Ed25519",
                 priority="NORMAL",
                 requires_acknowledgment=True,
+                schema_version=1,
             )
 
-            # Publish via UniversalEventBus.PublishTelemetry
-            stub = universal_pbrpc.UniversalEventBusStub(channel)
-            ack = stub.PublishTelemetry(envelope, timeout=5.0)
+            ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
 
-            if ack.status == telemetry_pb2.UniversalAck.OK:
-                logger.info(
-                    f"Published peripheral telemetry ({len(device_telemetry.events)} events)"
-                )
-                return True
-            else:
-                logger.warning("Publish status: %s", ack.status)
-                return False
-        except Exception as e:
-            logger.error("Publish failed: %s", str(e))
-            return False
+            if ack.status != telemetry_pb2.UniversalAck.OK:
+                raise Exception(f"EventBus returned status: {ack.status}")
 
-    def collect(self) -> bool:
-        """Collect and publish peripheral telemetry once"""
+    def close(self):
+        """Close gRPC channel."""
+        if self._channel:
+            self._channel.close()
+            self._channel = None
+            self._stub = None
+
+
+# =============================================================================
+# Peripheral Agent V2
+# =============================================================================
+
+
+class PeripheralAgent(MicroProbeAgentMixin, HardenedAgentBase):
+    """Peripheral Agent with micro-probe architecture.
+
+    This agent hosts 7 micro-probes that each monitor a specific peripheral
+    threat vector. The agent handles:
+        - Probe lifecycle management
+        - Event aggregation and publishing
+        - Circuit breaker and retry logic
+        - Offline queue management
+
+    Probes are responsible only for detection - no networking or state
+    management.
+    """
+
+    def __init__(self, collection_interval: float = 10.0):
+        """Initialize Peripheral Agent v2.
+
+        Args:
+            collection_interval: Seconds between collection cycles
+        """
+        device_id = socket.gethostname()
+
+        # Create EventBus publisher
+        publisher = EventBusPublisher(EVENTBUS_ADDRESS, CERT_DIR)
+
+        # Create local queue
+        Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
+        queue_adapter = LocalQueueAdapter(
+            queue_path=QUEUE_PATH,
+            agent_name="peripheral_agent_v2",
+            device_id=device_id,
+            max_bytes=50 * 1024 * 1024,
+            max_retries=10,
+            signing_key_path=f"{CERT_DIR}/agent.ed25519",
+        )
+
+        # Initialize base classes
+        super().__init__(
+            agent_name="peripheral_agent_v2",
+            device_id=device_id,
+            collection_interval=collection_interval,
+            eventbus_publisher=publisher,
+            local_queue=queue_adapter,
+        )
+
+        # Register all peripheral probes
+        self.register_probes(create_peripheral_probes())
+
+        logger.info(f"PeripheralAgentV2 initialized with {len(self._probes)} probes")
+
+    def setup(self) -> bool:
+        """Initialize agent resources.
+
+        Verifies:
+            - Certificates exist (warns if missing — dev mode tolerant)
+            - Probes initialize successfully
+
+        Returns:
+            True if setup succeeded
+        """
         try:
-            logger.info("Scanning peripheral devices...")
+            import os
 
-            # Scan USB devices
-            devices = self._scan_usb_devices()
-            logger.info(f"Found {len(devices)} USB devices")
-
-            # Scan mounted volumes
-            volumes = self._scan_mounted_volumes()
-            if volumes:
-                logger.info(f"Found {len(volumes)} mounted volumes")
-
-            # Detect connection/disconnection events
-            events = self._detect_device_events(devices)
-
-            if events["connected"]:
-                logger.info(f"🔌 {len(events['connected'])} device(s) connected")
-                for dev in events["connected"]:
-                    logger.info(
-                        f"  → {dev['name']} ({self._classify_device_type(dev)})"
+            # Verify certificates (warn but don't fail — dev mode may lack certs)
+            required_certs = ["ca.crt", "agent.crt", "agent.key"]
+            for cert in required_certs:
+                cert_path = f"{CERT_DIR}/{cert}"
+                if not os.path.exists(cert_path):
+                    logger.warning(
+                        f"Certificate not found: {cert_path} (EventBus publishing will fail)"
                     )
 
-            if events["disconnected"]:
-                logger.info(f"🔌 {len(events['disconnected'])} device(s) disconnected")
+            # Setup probes
+            if not self.setup_probes():
+                logger.error("No probes initialized successfully")
+                return False
 
-            # Create and publish telemetry
-            device_telemetry = self._create_telemetry(devices, events)
-            success = self._publish_telemetry(device_telemetry)
-
-            if success:
-                logger.info(f"Collection complete ({len(devices)} devices tracked)")
-            else:
-                logger.warning("Collection failed")
-
-            return success
+            logger.info("PeripheralAgentV2 setup complete")
+            return True
 
         except Exception as e:
-            logger.error("Collection error: %s", str(e), exc_info=True)
+            logger.error(f"Setup failed: {e}")
             return False
 
-    def run(self, interval: int = 30):
-        """Main collection loop"""
-        logger.info("=" * 70)
-        logger.info("AMOSKYS Peripheral Monitoring Agent")
-        logger.info("=" * 70)
-        logger.info(f"Platform: {self.platform}")
-        logger.info(f"EventBus: {EVENTBUS_ADDRESS}")
-        logger.info(f"Collection interval: {interval}s")
-        logger.info("=" * 70)
+    def collect_data(self) -> Sequence[Any]:
+        """Run all probes and collect events.
 
-        cycle = 0
-        while True:
-            cycle += 1
-            logger.info("")
-            logger.info("=" * 70)
-            logger.info(f"Cycle #{cycle} - {datetime.now().isoformat()}")
-            logger.info("=" * 70)
+        Returns:
+            List of DeviceTelemetry protobuf messages (always at least one)
+        """
+        timestamp_ns = int(time.time() * 1e9)
 
-            self.collect()
+        # Run all probes
+        events = self.scan_all_probes()
 
-            logger.info(f"Next collection in {interval}s...")
-            time.sleep(interval)
+        logger.info(f"Probes generated {len(events)} events")
+
+        # Build proto events
+        proto_events = []
+
+        # Always emit a collection summary metric (heartbeat)
+        proto_events.append(
+            telemetry_pb2.TelemetryEvent(
+                event_id=f"peripheral_collection_summary_{timestamp_ns}",
+                event_type="METRIC",
+                severity="INFO",
+                event_timestamp_ns=timestamp_ns,
+                source_component="peripheral_collector",
+                tags=["peripheral", "metric"],
+                metric_data=telemetry_pb2.MetricData(
+                    metric_name="peripheral_events_collected",
+                    metric_type="GAUGE",
+                    numeric_value=float(len(events)),
+                    unit="events",
+                ),
+            )
+        )
+
+        # Probe event count metric (when probes fire)
+        if events:
+            proto_events.append(
+                telemetry_pb2.TelemetryEvent(
+                    event_id=f"peripheral_probe_events_{timestamp_ns}",
+                    event_type="METRIC",
+                    severity="INFO",
+                    event_timestamp_ns=timestamp_ns,
+                    source_component="peripheral_agent",
+                    tags=["peripheral", "metric"],
+                    metric_data=telemetry_pb2.MetricData(
+                        metric_name="peripheral_probe_events",
+                        metric_type="GAUGE",
+                        numeric_value=float(len(events)),
+                        unit="events",
+                    ),
+                )
+            )
+
+        # Convert probe events to SecurityEvent-based telemetry
+        severity_map = {
+            "DEBUG": "DEBUG",
+            "INFO": "INFO",
+            "LOW": "LOW",
+            "MEDIUM": "MEDIUM",
+            "HIGH": "HIGH",
+            "CRITICAL": "CRITICAL",
+        }
+
+        for event in events:
+            # Build SecurityEvent sub-message
+            security_event = telemetry_pb2.SecurityEvent(
+                event_category=event.event_type,
+                risk_score=0.8 if event.severity.value in ("HIGH", "CRITICAL") else 0.4,
+                analyst_notes=f"Probe: {event.probe_name}, "
+                f"Severity: {event.severity.value}",
+            )
+            security_event.mitre_techniques.extend(event.mitre_techniques)
+
+            tel_event = telemetry_pb2.TelemetryEvent(
+                event_id=f"{event.event_type}_{timestamp_ns}",
+                event_type="SECURITY",
+                severity=severity_map.get(event.severity.value, "INFO"),
+                event_timestamp_ns=timestamp_ns,
+                source_component=event.probe_name or "peripheral_agent",
+                tags=["peripheral", "threat"],
+                security_event=security_event,
+                confidence_score=(
+                    event.confidence if hasattr(event, "confidence") else 0.7
+                ),
+            )
+
+            # Populate attributes map with evidence
+            if event.data:
+                for key, value in event.data.items():
+                    if value is not None:
+                        tel_event.attributes[key] = str(value)
+
+            proto_events.append(tel_event)
+
+        # Create DeviceTelemetry
+        telemetry = telemetry_pb2.DeviceTelemetry(
+            device_id=self.device_id,
+            device_type="HOST",
+            protocol="USB",
+            events=proto_events,
+            timestamp_ns=timestamp_ns,
+            collection_agent="peripheral_agent_v2",
+            agent_version="2.0.0",
+        )
+
+        return [telemetry]
+
+    def validate_event(self, event: Any) -> ValidationResult:
+        """Validate telemetry before publishing.
+
+        Args:
+            event: DeviceTelemetry protobuf message
+
+        Returns:
+            ValidationResult
+        """
+        errors = []
+        if not hasattr(event, "device_id") or not event.device_id:
+            errors.append("Missing device_id")
+        if not hasattr(event, "timestamp_ns") or event.timestamp_ns <= 0:
+            errors.append("Missing or invalid timestamp_ns")
+        if not event.events:
+            errors.append("events list is empty")
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors)
+
+    def shutdown(self) -> None:
+        """Graceful shutdown."""
+        logger.info("PeripheralAgentV2 shutting down...")
+
+        if self.eventbus_publisher:
+            self.eventbus_publisher.close()
+
+        logger.info("PeripheralAgentV2 shutdown complete")
+
+    def get_health(self) -> Dict[str, Any]:
+        """Get agent health status.
+
+        Returns:
+            Dict with health metrics
+        """
+        return {
+            "agent_name": self.agent_name,
+            "device_id": self.device_id,
+            "is_running": self.is_running,
+            "collection_count": self.collection_count,
+            "error_count": self.error_count,
+            "last_error": self.last_error,
+            "probes": self.get_probe_health(),
+            "circuit_breaker_state": self.circuit_breaker.state,
+        }
+
+
+# =============================================================================
+# CLI Entry Point
+# =============================================================================
 
 
 def main():
-    """Entry point"""
-    agent = PeripheralAgent()
-    agent.run(interval=30)
+    """Run Peripheral Agent v2."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="AMOSKYS Peripheral Agent v2")
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=10.0,
+        help="Collection interval in seconds",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Log level (default: INFO)",
+    )
+
+    args = parser.parse_args()
+
+    if args.debug or args.log_level == "DEBUG":
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(getattr(logging, args.log_level))
+
+    agent = PeripheralAgentV2(collection_interval=args.interval)
+
+    try:
+        agent.run_forever()
+    except KeyboardInterrupt:
+        logger.info("Received interrupt, shutting down...")
+        agent.shutdown()
 
 
 if __name__ == "__main__":
     main()
+
+
+# B5.1: Deprecated alias — will be removed in v1.0
+PeripheralAgentV2 = PeripheralAgent

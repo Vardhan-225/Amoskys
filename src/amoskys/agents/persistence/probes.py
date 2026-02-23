@@ -30,7 +30,12 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from amoskys.agents.common.probes import MicroProbe, ProbeContext, Severity, TelemetryEvent
+from amoskys.agents.common.probes import (
+    MicroProbe,
+    ProbeContext,
+    Severity,
+    TelemetryEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,9 +147,7 @@ class PersistenceBaselineEngine:
         except OSError as e:
             logger.error(f"Failed to save baseline: {e}")
 
-    def create_from_snapshot(
-        self, snapshot: Dict[str, PersistenceEntry]
-    ) -> None:
+    def create_from_snapshot(self, snapshot: Dict[str, PersistenceEntry]) -> None:
         """Initialize baseline from a snapshot.
 
         Args:
@@ -153,9 +156,7 @@ class PersistenceBaselineEngine:
         self.entries = snapshot.copy()
         logger.info(f"Created baseline with {len(self.entries)} entries")
 
-    def compare(
-        self, current: Dict[str, PersistenceEntry]
-    ) -> List[PersistenceChange]:
+    def compare(self, current: Dict[str, PersistenceEntry]) -> List[PersistenceChange]:
         """Compare current snapshot against baseline and detect changes.
 
         Args:
@@ -353,6 +354,9 @@ class LaunchAgentDaemonProbe(MicroProbe):
     mitre_techniques = ["T1543.001", "T1037.005"]
     mitre_tactics = ["Persistence", "Privilege Escalation"]
     platforms = ["darwin"]
+    requires_fields = ["persistence_changes"]
+    field_semantics = {"command": "plist_program_arguments"}
+    degraded_without = ["command"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan for launchd persistence changes."""
@@ -423,7 +427,9 @@ class LaunchAgentDaemonProbe(MicroProbe):
                             "entry_id": entry.id,
                             "mechanism": entry.mechanism_type,
                             "path": entry.path or "",
-                            "old_command": change.old_entry.command if change.old_entry else "",
+                            "old_command": (
+                                change.old_entry.command if change.old_entry else ""
+                            ),
                             "new_command": entry.command or "",
                             "reason": reason,
                         },
@@ -443,6 +449,8 @@ class SystemdServicePersistenceProbe(MicroProbe):
     mitre_techniques = ["T1543.002"]
     mitre_tactics = ["Persistence", "Privilege Escalation"]
     platforms = ["linux"]
+    requires_fields = ["persistence_changes"]
+    field_semantics = {"command": "systemd_exec_start"}
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan for systemd service changes."""
@@ -512,7 +520,9 @@ class SystemdServicePersistenceProbe(MicroProbe):
                         data={
                             "entry_id": entry.id,
                             "path": entry.path or "",
-                            "old_command": change.old_entry.command if change.old_entry else "",
+                            "old_command": (
+                                change.old_entry.command if change.old_entry else ""
+                            ),
                             "new_command": entry.command or "",
                             "reason": reason,
                         },
@@ -567,6 +577,8 @@ class CronJobPersistenceProbe(MicroProbe):
     mitre_techniques = ["T1053.003"]
     mitre_tactics = ["Persistence", "Privilege Escalation", "Execution"]
     platforms = ["linux", "darwin"]
+    requires_fields = ["persistence_changes"]
+    field_semantics = {"command": "cron_command", "schedule": "cron_schedule"}
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan for cron job changes."""
@@ -635,7 +647,9 @@ class CronJobPersistenceProbe(MicroProbe):
                         timestamp_ns=change.timestamp_ns,
                         data={
                             "entry_id": entry.id,
-                            "old_command": change.old_entry.command if change.old_entry else "",
+                            "old_command": (
+                                change.old_entry.command if change.old_entry else ""
+                            ),
                             "new_command": entry.command or "",
                             "reason": reason,
                         },
@@ -655,6 +669,12 @@ class SSHKeyBackdoorProbe(MicroProbe):
     mitre_techniques = ["T1098.004"]
     mitre_tactics = ["Persistence", "Privilege Escalation"]
     platforms = ["linux", "darwin"]
+    requires_fields = ["persistence_changes"]
+    field_semantics = {
+        "has_forced_command": "boolean",
+        "forced_command": "shell_command",
+    }
+    degraded_without = ["ssh_forced_command"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan for SSH key changes."""
@@ -735,6 +755,9 @@ class ShellProfileHijackProbe(MicroProbe):
     mitre_techniques = ["T1037.004", "T1546.004"]
     mitre_tactics = ["Persistence", "Privilege Escalation"]
     platforms = ["linux", "darwin"]
+    requires_fields = ["persistence_changes"]
+    field_semantics = {"command": "shell_content"}
+    degraded_without = ["command"]
 
     # Patterns that indicate malicious shell profile modifications
     MALICIOUS_PATTERNS = [
@@ -778,7 +801,9 @@ class ShellProfileHijackProbe(MicroProbe):
                     command_bytes = entry.command.encode("utf-8", errors="ignore")
                     for pattern in self.MALICIOUS_PATTERNS:
                         if re.search(pattern, command_bytes, re.IGNORECASE):
-                            matched_patterns.append(pattern.decode("utf-8", errors="ignore"))
+                            matched_patterns.append(
+                                pattern.decode("utf-8", errors="ignore")
+                            )
 
                 if matched_patterns:
                     severity = Severity.HIGH
@@ -813,6 +838,9 @@ class BrowserExtensionPersistenceProbe(MicroProbe):
     mitre_techniques = ["T1176"]
     mitre_tactics = ["Persistence"]
     platforms = ["linux", "darwin", "windows"]
+    requires_fields = ["persistence_changes"]
+    requires_event_types = ["BROWSER_EXTENSION"]
+    field_semantics = {"permissions": "browser_extension_permissions"}
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan for browser extension changes."""
@@ -836,7 +864,9 @@ class BrowserExtensionPersistenceProbe(MicroProbe):
 
                 # Check for dangerous permissions
                 permissions = entry.metadata.get("permissions", "").split(",")
-                dangerous_perms = [p for p in permissions if p in DANGEROUS_EXTENSION_PERMISSIONS]
+                dangerous_perms = [
+                    p for p in permissions if p in DANGEROUS_EXTENSION_PERMISSIONS
+                ]
 
                 is_unknown_publisher = entry.metadata.get("unknown_publisher", False)
 
@@ -892,6 +922,9 @@ class StartupFolderLoginItemProbe(MicroProbe):
     mitre_techniques = ["T1547.001", "T1037.001"]
     mitre_tactics = ["Persistence"]
     platforms = ["linux", "darwin", "windows"]
+    requires_fields = ["persistence_changes"]
+    requires_event_types = ["STARTUP_ITEM"]
+    field_semantics = {"command": "startup_command", "path": "filesystem_path"}
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan for startup item changes."""
@@ -914,7 +947,9 @@ class StartupFolderLoginItemProbe(MicroProbe):
                 reason = "New startup item created"
 
                 # Escalate if suspicious command or path
-                if is_suspicious_command(entry.command) or is_suspicious_path(entry.path):
+                if is_suspicious_command(entry.command) or is_suspicious_path(
+                    entry.path
+                ):
                     severity = Severity.HIGH
                     reason = "New startup item with suspicious command/path"
 
@@ -951,7 +986,9 @@ class StartupFolderLoginItemProbe(MicroProbe):
                         data={
                             "entry_id": entry.id,
                             "path": entry.path or "",
-                            "old_command": change.old_entry.command if change.old_entry else "",
+                            "old_command": (
+                                change.old_entry.command if change.old_entry else ""
+                            ),
                             "new_command": entry.command or "",
                         },
                         mitre_techniques=self.mitre_techniques,
@@ -970,6 +1007,9 @@ class HiddenFilePersistenceProbe(MicroProbe):
     mitre_techniques = ["T1564", "T1053", "T1547"]
     mitre_tactics = ["Persistence", "Defense Evasion"]
     platforms = ["linux", "darwin"]
+    requires_fields = ["persistence_changes"]
+    requires_event_types = ["HIDDEN_FILE"]
+    field_semantics = {"is_executable": "boolean", "path": "filesystem_path"}
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan for hidden file persistence."""
@@ -1022,6 +1062,202 @@ class HiddenFilePersistenceProbe(MicroProbe):
 
 
 # =============================================================================
+# Phase 3 macOS Observability Probes
+# =============================================================================
+
+
+class ConfigProfileProbe(MicroProbe):
+    """Monitors macOS Configuration Profiles for MDM-style persistence.
+
+    Watches:
+        - /Library/Managed Preferences/
+        - /var/db/ConfigurationProfiles/
+
+    Detects new or modified configuration profiles that could be used for
+    persistence, privilege escalation, or control by MDM solutions.
+
+    MITRE: T1556.004 (Modify Authentication Process: Configuration Profile)
+    """
+
+    name = "config_profile"
+    description = "Detect new or modified macOS configuration profiles"
+    mitre_techniques = ["T1556.004", "T1547"]
+    mitre_tactics = ["Persistence", "Privilege Escalation"]
+    platforms = ["darwin"]
+    requires_fields = ["persistence_changes"]
+
+    # macOS profile directories
+    PROFILE_PATHS = {
+        "/Library/Managed Preferences/",
+        "/var/db/ConfigurationProfiles/",
+    }
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        """Scan for configuration profile changes."""
+        changes: List[PersistenceChange] = context.shared_data.get(
+            "persistence_changes", []
+        )
+        events = []
+
+        for change in changes:
+            if change.mechanism_type != "CONFIG_PROFILE":
+                continue
+
+            entry = change.new_entry if change.new_entry else change.old_entry
+            if not entry:
+                continue
+
+            # CREATED - new profile
+            if change.change_type == PersistenceChangeType.CREATED:
+                severity = Severity.MEDIUM
+                reason = "New configuration profile created"
+
+                # Check if profile path is managed
+                is_managed = any(
+                    entry.path and entry.path.startswith(p) for p in self.PROFILE_PATHS
+                )
+                if is_managed:
+                    severity = Severity.HIGH
+                    reason = "New MDM configuration profile detected"
+
+                events.append(
+                    TelemetryEvent(
+                        event_type="persistence_config_profile_created",
+                        severity=severity,
+                        probe_name=self.name,
+                        timestamp_ns=change.timestamp_ns,
+                        data={
+                            "entry_id": entry.id,
+                            "path": entry.path or "",
+                            "profile_name": entry.metadata.get("name", "unknown"),
+                            "profile_uuid": entry.metadata.get("uuid", ""),
+                            "scope": entry.metadata.get("scope", "unknown"),
+                            "reason": reason,
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                        mitre_tactics=self.mitre_tactics,
+                    )
+                )
+
+            # MODIFIED - profile changed
+            elif change.change_type == PersistenceChangeType.MODIFIED:
+                events.append(
+                    TelemetryEvent(
+                        event_type="persistence_config_profile_modified",
+                        severity=Severity.MEDIUM,
+                        probe_name=self.name,
+                        timestamp_ns=change.timestamp_ns,
+                        data={
+                            "entry_id": entry.id,
+                            "path": entry.path or "",
+                            "profile_name": entry.metadata.get("name", "unknown"),
+                            "reason": "Configuration profile modified",
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                        mitre_tactics=self.mitre_tactics,
+                    )
+                )
+
+        return events
+
+
+class AuthPluginProbe(MicroProbe):
+    """Monitors macOS authorization plugins for persistence/privilege escalation.
+
+    Watches:
+        - /Library/Security/SecurityAgentPlugins/
+
+    Detects modifications to authorization system plugins, which can be used
+    for credential harvesting, authentication bypass, or persistence.
+
+    MITRE: T1547.008 (Boot or Logon Autostart Execution: LSASS Driver)
+    """
+
+    name = "auth_plugin"
+    description = "Detect authorization plugin modifications"
+    mitre_techniques = ["T1547.008", "T1556.002"]
+    mitre_tactics = ["Persistence", "Privilege Escalation"]
+    platforms = ["darwin"]
+    requires_fields = ["persistence_changes"]
+
+    PLUGIN_PATHS = {"/Library/Security/SecurityAgentPlugins/"}
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        """Scan for authorization plugin changes."""
+        changes: List[PersistenceChange] = context.shared_data.get(
+            "persistence_changes", []
+        )
+        events = []
+
+        for change in changes:
+            if change.mechanism_type != "AUTH_PLUGIN":
+                continue
+
+            entry = change.new_entry if change.new_entry else change.old_entry
+            if not entry:
+                continue
+
+            # CREATED - new auth plugin
+            if change.change_type == PersistenceChangeType.CREATED:
+                events.append(
+                    TelemetryEvent(
+                        event_type="persistence_auth_plugin_created",
+                        severity=Severity.CRITICAL,
+                        probe_name=self.name,
+                        timestamp_ns=change.timestamp_ns,
+                        data={
+                            "entry_id": entry.id,
+                            "path": entry.path or "",
+                            "plugin_name": entry.metadata.get("name", "unknown"),
+                            "bundle_id": entry.metadata.get("bundle_id", ""),
+                            "reason": "New authorization plugin created (critical persistence vector)",
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                        mitre_tactics=self.mitre_tactics,
+                    )
+                )
+
+            # MODIFIED - plugin changed
+            elif change.change_type == PersistenceChangeType.MODIFIED:
+                events.append(
+                    TelemetryEvent(
+                        event_type="persistence_auth_plugin_modified",
+                        severity=Severity.CRITICAL,
+                        probe_name=self.name,
+                        timestamp_ns=change.timestamp_ns,
+                        data={
+                            "entry_id": entry.id,
+                            "path": entry.path or "",
+                            "plugin_name": entry.metadata.get("name", "unknown"),
+                            "reason": "Authorization plugin modified",
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                        mitre_tactics=self.mitre_tactics,
+                    )
+                )
+
+            # DELETED - plugin removed
+            elif change.change_type == PersistenceChangeType.DELETED:
+                events.append(
+                    TelemetryEvent(
+                        event_type="persistence_auth_plugin_deleted",
+                        severity=Severity.INFO,
+                        probe_name=self.name,
+                        timestamp_ns=change.timestamp_ns,
+                        data={
+                            "entry_id": entry.id,
+                            "path": entry.path or "",
+                            "reason": "Authorization plugin removed",
+                        },
+                        mitre_techniques=self.mitre_techniques,
+                        mitre_tactics=self.mitre_tactics,
+                    )
+                )
+
+        return events
+
+
+# =============================================================================
 # Factory
 # =============================================================================
 
@@ -1030,7 +1266,7 @@ def create_persistence_probes() -> List[MicroProbe]:
     """Create all persistence micro-probes.
 
     Returns:
-        List of 8 persistence probes
+        List of 10 persistence probes (8 original + 2 Phase 3 macOS)
     """
     return [
         LaunchAgentDaemonProbe(),
@@ -1041,4 +1277,6 @@ def create_persistence_probes() -> List[MicroProbe]:
         BrowserExtensionPersistenceProbe(),
         StartupFolderLoginItemProbe(),
         HiddenFilePersistenceProbe(),
+        ConfigProfileProbe(),
+        AuthPluginProbe(),
     ]

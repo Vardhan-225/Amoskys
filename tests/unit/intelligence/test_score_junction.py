@@ -28,8 +28,8 @@ from amoskys.intelligence.score_junction import (
 )
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 
-
 # ── Helpers ──────────────────────────────────────────────────────────
+
 
 def _now_ns() -> int:
     return int(time.time() * 1e9)
@@ -91,6 +91,7 @@ def _make_envelope(
 # CorrelatedEvent
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestCorrelatedEvent:
     """Basic dataclass sanity."""
 
@@ -123,6 +124,7 @@ class TestCorrelatedEvent:
 # EventBuffer
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestEventBuffer:
 
     def test_add_and_retrieve(self):
@@ -140,10 +142,10 @@ class TestEventBuffer:
         assert result == []
 
     def test_window_filtering(self):
-        buf = EventBuffer(window_seconds=10)
+        buf = EventBuffer(window_seconds=60)
         now = _now_ns()
-        old_ev = _make_event(device_id="d1", ts_ns=now - 20_000_000_000)
-        recent_ev = _make_event(device_id="d1", ts_ns=now - 5_000_000_000)
+        old_ev = _make_event(device_id="d1", ts_ns=now - 120_000_000_000)
+        recent_ev = _make_event(device_id="d1", ts_ns=now - 30_000_000_000)
         buf.add_event(old_ev)
         buf.add_event(recent_ev)
 
@@ -152,18 +154,18 @@ class TestEventBuffer:
         assert result[0].event_id == recent_ev.event_id
 
     def test_cleanup_removes_old(self):
-        buf = EventBuffer(window_seconds=10)
+        buf = EventBuffer(window_seconds=60)
         now = _now_ns()
-        old_ev = _make_event(device_id="d1", ts_ns=now - 20_000_000_000)
+        old_ev = _make_event(device_id="d1", ts_ns=now - 120_000_000_000)
         buf.add_event(old_ev)
 
         buf.cleanup_old_events(now)
         assert "d1" not in buf.events_by_entity
 
     def test_cleanup_keeps_recent(self):
-        buf = EventBuffer(window_seconds=10)
+        buf = EventBuffer(window_seconds=60)
         now = _now_ns()
-        ev = _make_event(device_id="d1", ts_ns=now - 2_000_000_000)
+        ev = _make_event(device_id="d1", ts_ns=now - 10_000_000_000)
         buf.add_event(ev)
 
         buf.cleanup_old_events(now)
@@ -196,6 +198,7 @@ class TestEventBuffer:
 # ═══════════════════════════════════════════════════════════════════
 # CorrelationEngine
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestCorrelationEngine:
 
@@ -301,8 +304,12 @@ class TestCorrelationEngine:
     def test_correlation_score_is_positive(self):
         engine = CorrelationEngine()
         events = [
-            _make_event(agent="proc_agent", metric_name="proc_cpu_percent", metric_value=95.0),
-            _make_event(agent="proc_agent", event_type="ALERT", alert_type="SUSPICIOUS_PROCESS"),
+            _make_event(
+                agent="proc_agent", metric_name="proc_cpu_percent", metric_value=95.0
+            ),
+            _make_event(
+                agent="proc_agent", event_type="ALERT", alert_type="SUSPICIOUS_PROCESS"
+            ),
         ]
         correlations = engine.correlate_events(events)
         for name, score, evts in correlations:
@@ -312,6 +319,7 @@ class TestCorrelationEngine:
 # ═══════════════════════════════════════════════════════════════════
 # ThreatScore
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestThreatScore:
 
@@ -336,6 +344,7 @@ class TestThreatScore:
 # ═══════════════════════════════════════════════════════════════════
 # ScoreJunction
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestScoreJunction:
 
@@ -374,12 +383,16 @@ class TestScoreJunction:
     async def test_process_single_event_no_correlation(self):
         """Single benign metric event → no threat (needs ≥2 events to correlate)."""
         sj = ScoreJunction()
-        env = _make_envelope(events=[{
-            "event_type": "METRIC",
-            "severity": "INFO",
-            "metric_name": "uptime",
-            "metric_value": 1234.0,
-        }])
+        env = _make_envelope(
+            events=[
+                {
+                    "event_type": "METRIC",
+                    "severity": "INFO",
+                    "metric_name": "uptime",
+                    "metric_value": 1234.0,
+                }
+            ]
+        )
         result = await sj.process_telemetry(env)
         assert result is None
         assert sj.stats["events_processed"] == 1
@@ -387,11 +400,13 @@ class TestScoreJunction:
     @pytest.mark.asyncio
     async def test_process_increments_events_processed(self):
         sj = ScoreJunction()
-        env = _make_envelope(events=[
-            {"event_type": "METRIC", "metric_name": "a", "metric_value": 1.0},
-            {"event_type": "METRIC", "metric_name": "b", "metric_value": 2.0},
-            {"event_type": "METRIC", "metric_name": "c", "metric_value": 3.0},
-        ])
+        env = _make_envelope(
+            events=[
+                {"event_type": "METRIC", "metric_name": "a", "metric_value": 1.0},
+                {"event_type": "METRIC", "metric_name": "b", "metric_value": 2.0},
+                {"event_type": "METRIC", "metric_name": "c", "metric_value": 3.0},
+            ]
+        )
         await sj.process_telemetry(env)
         assert sj.stats["events_processed"] == 3
 
@@ -424,11 +439,15 @@ class TestScoreJunction:
         """Multiple calls accumulate events in the buffer."""
         sj = ScoreJunction()
         for i in range(5):
-            env = _make_envelope(events=[{
-                "event_type": "METRIC",
-                "metric_name": f"metric_{i}",
-                "metric_value": float(i),
-            }])
+            env = _make_envelope(
+                events=[
+                    {
+                        "event_type": "METRIC",
+                        "metric_name": f"metric_{i}",
+                        "metric_value": float(i),
+                    }
+                ]
+            )
             await sj.process_telemetry(env)
         assert sj.stats["events_processed"] == 5
 
@@ -563,27 +582,83 @@ class TestScoreJunction:
 # GAP-05 Regression Guards
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestGAP05RegressionGuards:
     """Ensure the 3 proto bugs don't regress."""
 
     def test_no_alert_data_hasfield(self):
         """score_junction must NOT use 'alert_data' as a proto field — proto field is 'alarm_data'."""
         import inspect
+
         source = inspect.getsource(ScoreJunction._convert_to_correlated_event)
         # Check only executable lines (skip comments and docstrings)
         code_lines = [
-            line.strip() for line in source.splitlines()
-            if line.strip() and not line.strip().startswith("#") and not line.strip().startswith('"""')
+            line.strip()
+            for line in source.splitlines()
+            if line.strip()
+            and not line.strip().startswith("#")
+            and not line.strip().startswith('"""')
         ]
         code_only = "\n".join(code_lines)
-        assert 'HasField("alert_data")' not in code_only, "Proto field is 'alarm_data', not 'alert_data'"
-        assert "event.alert_data" not in code_only, "Proto field is 'alarm_data', not 'alert_data'"
+        assert (
+            'HasField("alert_data")' not in code_only
+        ), "Proto field is 'alarm_data', not 'alert_data'"
+        assert (
+            "event.alert_data" not in code_only
+        ), "Proto field is 'alarm_data', not 'alert_data'"
         assert "alarm_data" in code_only
 
     def test_no_hasfield_numeric_value(self):
         """Proto3 scalar doubles don't support HasField — must not use it."""
         import inspect
+
         source = inspect.getsource(ScoreJunction._convert_to_correlated_event)
-        assert 'HasField("numeric_value")' not in source, (
-            "Proto3 scalar double cannot use HasField"
-        )
+        assert (
+            'HasField("numeric_value")' not in source
+        ), "Proto3 scalar double cannot use HasField"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# P0-W4: EventBuffer Bounds & Entity Eviction
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestEventBufferBounds:
+    """Window_seconds must be clamped to [60, 3600]."""
+
+    def test_window_too_low_raises(self):
+        with pytest.raises(ValueError, match="window_seconds must be between"):
+            EventBuffer(window_seconds=10)
+
+    def test_window_too_high_raises(self):
+        with pytest.raises(ValueError, match="window_seconds must be between"):
+            EventBuffer(window_seconds=7200)
+
+    def test_window_valid_min(self):
+        buf = EventBuffer(window_seconds=60)
+        assert buf.window_seconds == 60
+
+    def test_window_valid_max(self):
+        buf = EventBuffer(window_seconds=3600)
+        assert buf.window_seconds == 3600
+
+    def test_entity_eviction_at_limit(self):
+        """When max_entities is exceeded, oldest entity is evicted."""
+        buf = EventBuffer(window_seconds=300, max_entities=3)
+        for i in range(5):
+            buf.add_event(_make_event(device_id=f"dev-{i}"))
+
+        # Only 3 entities should remain
+        assert len(buf.events_by_entity) <= 3
+
+
+class TestScoreJunctionWindowClamping:
+    """ScoreJunction clamps out-of-range correlation_window_seconds."""
+
+    def test_junction_clamps_low_window(self):
+        sj = ScoreJunction(config={"correlation_window_seconds": 10})
+        assert sj.correlation_window >= 60
+
+    def test_junction_clamps_high_window(self):
+        sj = ScoreJunction(config={"correlation_window_seconds": 9999})
+        assert sj.correlation_window <= 3600

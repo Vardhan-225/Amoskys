@@ -34,14 +34,14 @@ class TestAgentModuleImports:
         assert hasattr(mod, "DNSAgent")
 
     def test_fim_agent_import(self):
-        """File integrity agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.file_integrity")
+        """FIM agent module imports successfully."""
+        mod = importlib.import_module("amoskys.agents.fim")
         assert hasattr(mod, "FIMAgent")
 
     def test_persistence_agent_import(self):
         """Persistence agent module imports successfully."""
         mod = importlib.import_module("amoskys.agents.persistence")
-        assert hasattr(mod, "PersistenceGuardAgent")
+        assert hasattr(mod, "PersistenceGuard")
 
     def test_kernel_audit_agent_import(self):
         """Kernel audit agent module imports successfully."""

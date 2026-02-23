@@ -58,6 +58,74 @@ class TestDashboardSmoke:
         assert response.status_code == 200
 
 
+class TestThreatEndpoints:
+    """Test rewired TelemetryStore-backed threat endpoints."""
+
+    def test_live_threats_returns_empty_with_no_db(self, client):
+        """GET /dashboard/api/live/threats returns empty list when no DB exists."""
+        response = client.get("/dashboard/api/live/threats")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["status"] == "success"
+        assert isinstance(data["threats"], list)
+        assert "count" in data
+
+    def test_live_threat_score_returns_valid_response(self, client):
+        """GET /dashboard/api/live/threat-score returns valid structure."""
+        response = client.get("/dashboard/api/live/threat-score")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["status"] == "success"
+        assert isinstance(data["threat_score"], (int, float))
+        assert data["threat_level"] in ("LOW", "NONE", "MEDIUM", "HIGH", "CRITICAL")
+
+    def test_event_clustering_returns_empty_with_no_db(self, client):
+        """GET /dashboard/api/live/event-clustering returns empty clusters."""
+        response = client.get("/dashboard/api/live/event-clustering")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["status"] == "success"
+        assert "clusters" in data
+
+
+class TestProbeHealthEndpoint:
+    """Test the probe health observability endpoint."""
+
+    def test_probe_health_returns_valid_summary(self, client):
+        """GET /dashboard/api/live/probe-health returns audit summary."""
+        response = client.get("/dashboard/api/live/probe-health")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["status"] == "success"
+        summary = data["summary"]
+        assert summary["total"] > 0
+        assert "real" in summary
+        assert "degraded" in summary
+        assert "by_agent" in summary
+
+
+class TestDatabaseManagerPagination:
+    """Test database manager pagination and export."""
+
+    def test_view_table_accepts_pagination(self, client):
+        """GET /database-manager/view-table with page params accepted."""
+        response = client.get(
+            "/api/database-manager/view-table/process_events?page=1&per_page=10"
+        )
+        # May 404 (no DB) or 200/500 — but shouldn't be 400
+        assert response.status_code != 400
+
+    def test_view_table_rejects_invalid_table(self, client):
+        """GET /database-manager/view-table rejects unknown tables."""
+        response = client.get("/api/database-manager/view-table/evil_table")
+        assert response.status_code == 400
+
+    def test_export_rejects_invalid_table(self, client):
+        """GET /database-manager/export rejects unknown tables."""
+        response = client.get("/api/database-manager/export/evil_table?format=csv")
+        assert response.status_code == 400
+
+
 if __name__ == "__main__":
     # When run directly, start the dashboard server
     result = create_app()

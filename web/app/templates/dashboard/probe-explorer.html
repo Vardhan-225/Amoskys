@@ -1,0 +1,361 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Probe Explorer - AMOSKYS{% endblock %}
+
+{% block content %}
+<div style="padding: 2rem;">
+    <!-- Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">Probe Explorer</h2>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <a href="/dashboard/agents" class="neural-button" style="padding: 0.4rem 1rem; font-size: 0.8rem; text-decoration: none;">&larr; Agent Network</a>
+                <div class="card-badge badge-success" id="pe-badge">Loading...</div>
+            </div>
+        </div>
+        <p style="color: var(--text-secondary);">
+            Deep inspection of all 85+ micro-probes across the AMOSKYS security agent fleet. View probe contracts, MITRE mappings, health status, and data collection details.
+        </p>
+    </div>
+
+    <!-- Summary -->
+    <div class="metrics-grid" style="margin: 1.5rem 0;">
+        <div class="metric-card">
+            <div class="metric-value" id="pe-total">--</div>
+            <div class="metric-label">Total Probes</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value" id="pe-real" style="color: #00ff88;">--</div>
+            <div class="metric-label">REAL</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value" id="pe-degraded" style="color: #ffaa00;">--</div>
+            <div class="metric-label">DEGRADED</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value" id="pe-mitre" style="color: #ff6b9d;">--</div>
+            <div class="metric-label">MITRE Techniques</div>
+        </div>
+    </div>
+
+    <!-- Filter Controls -->
+    <div class="neural-card" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+            <div style="flex: 2; min-width: 200px;">
+                <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.3rem;">Search Probes</label>
+                <input type="text" id="pe-search" placeholder="e.g. brute force, T1059, dns..."
+                    style="width: 100%; padding: 0.5rem 0.8rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; font-size: 0.9rem;">
+            </div>
+            <div style="min-width: 150px;">
+                <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.3rem;">Agent</label>
+                <select id="pe-agent" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px;">
+                    <option value="">All Agents</option>
+                </select>
+            </div>
+            <div style="min-width: 120px;">
+                <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.3rem;">Status</label>
+                <select id="pe-status" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px;">
+                    <option value="">All</option>
+                    <option value="REAL">REAL</option>
+                    <option value="DEGRADED">DEGRADED</option>
+                    <option value="BROKEN">BROKEN</option>
+                    <option value="DISABLED">DISABLED</option>
+                </select>
+            </div>
+            <div style="min-width: 120px;">
+                <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.3rem;">Category</label>
+                <select id="pe-category" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px;">
+                    <option value="">All</option>
+                    <option value="Endpoint">Endpoint</option>
+                    <option value="Network">Network</option>
+                    <option value="Identity">Identity</option>
+                    <option value="Physical">Physical</option>
+                    <option value="Kernel">Kernel</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results count -->
+    <div id="pe-result-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+
+    <!-- Probe List -->
+    <div id="pe-list">
+        <div style="color: var(--text-muted); text-align: center; padding: 3rem;">Loading probes...</div>
+    </div>
+</div>
+
+<style>
+.pe-agent-group {
+    margin-bottom: 1.5rem;
+}
+.pe-agent-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.pe-agent-header:hover {
+    background: rgba(0,217,255,0.06);
+}
+.pe-agent-header .agent-color-bar {
+    width: 4px;
+    height: 28px;
+    border-radius: 2px;
+}
+.pe-agent-header .agent-label {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+.pe-agent-header .agent-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: auto;
+    display: flex;
+    gap: 1rem;
+}
+.pe-probe-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-top: none;
+    padding: 0.75rem 1rem 0.75rem 2rem;
+    transition: background 0.15s;
+}
+.pe-probe-card:last-child {
+    border-radius: 0 0 8px 8px;
+}
+.pe-probe-card:hover {
+    background: rgba(0,217,255,0.04);
+}
+.pe-probe-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.pe-probe-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.pe-probe-name {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+}
+.pe-probe-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 0.1rem 0.4rem;
+    border-radius: 8px;
+    margin-left: auto;
+}
+.pe-probe-details {
+    margin-top: 0.4rem;
+    padding-left: 1.5rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+.pe-mitre-chip {
+    display: inline-block;
+    padding: 0.08rem 0.35rem;
+    background: rgba(255,107,157,0.12);
+    color: #ff6b9d;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    margin-right: 0.2rem;
+}
+.pe-field-tag {
+    display: inline-block;
+    padding: 0.08rem 0.3rem;
+    background: rgba(0,217,255,0.1);
+    color: #00aaff;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-family: 'Courier New', monospace;
+    margin-right: 0.2rem;
+}
+</style>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce() }}">
+let allProbes = [];
+let allAgents = [];
+
+document.getElementById('pe-search').addEventListener('input', filterProbes);
+document.getElementById('pe-agent').addEventListener('change', filterProbes);
+document.getElementById('pe-status').addEventListener('change', filterProbes);
+document.getElementById('pe-category').addEventListener('change', filterProbes);
+
+async function loadProbeData() {
+    try {
+        const resp = await fetch('/dashboard/api/agents/deep-overview');
+        const data = await resp.json();
+        if (data.status !== 'success') return;
+
+        allAgents = data.agents;
+
+        // Flatten probes
+        allProbes = [];
+        let totalMitre = new Set();
+        for (const a of data.agents) {
+            for (const p of a.probes) {
+                allProbes.push({
+                    ...p,
+                    agent_id: a.id,
+                    agent_name: a.name,
+                    agent_short: a.short,
+                    agent_color: a.color,
+                    agent_category: a.category,
+                });
+                p.mitre.forEach(t => totalMitre.add(t));
+            }
+        }
+
+        // Populate agent filter
+        const agentSelect = document.getElementById('pe-agent');
+        for (const a of data.agents) {
+            const opt = document.createElement('option');
+            opt.value = a.id;
+            opt.textContent = `${a.short} (${a.probes.length})`;
+            agentSelect.appendChild(opt);
+        }
+
+        // Check URL hash for pre-filter
+        if (window.location.hash) {
+            const agentId = window.location.hash.substring(1);
+            if (data.agents.find(a => a.id === agentId)) {
+                document.getElementById('pe-agent').value = agentId;
+            }
+        }
+
+        // Summary
+        const s = data.summary;
+        document.getElementById('pe-total').textContent = s.total_probes;
+        document.getElementById('pe-real').textContent = s.active_probes;
+        document.getElementById('pe-degraded').textContent =
+            allProbes.filter(p => p.status === 'DEGRADED').length;
+        document.getElementById('pe-mitre').textContent = totalMitre.size;
+        document.getElementById('pe-badge').textContent = s.total_probes + ' Probes';
+
+        filterProbes();
+    } catch (err) {
+        console.error('Probe data load failed:', err);
+    }
+}
+
+function filterProbes() {
+    const search = document.getElementById('pe-search').value.toLowerCase();
+    const agentFilter = document.getElementById('pe-agent').value;
+    const statusFilter = document.getElementById('pe-status').value;
+    const categoryFilter = document.getElementById('pe-category').value;
+
+    let filtered = allProbes;
+
+    if (agentFilter) filtered = filtered.filter(p => p.agent_id === agentFilter);
+    if (statusFilter) filtered = filtered.filter(p => p.status === statusFilter);
+    if (categoryFilter) filtered = filtered.filter(p => p.agent_category === categoryFilter);
+    if (search) {
+        filtered = filtered.filter(p =>
+            p.name.toLowerCase().includes(search) ||
+            (p.description || '').toLowerCase().includes(search) ||
+            p.mitre.some(t => t.toLowerCase().includes(search)) ||
+            p.agent_short.toLowerCase().includes(search)
+        );
+    }
+
+    document.getElementById('pe-result-count').textContent =
+        `Showing ${filtered.length} of ${allProbes.length} probes`;
+
+    renderGrouped(filtered);
+}
+
+function renderGrouped(probes) {
+    const container = document.getElementById('pe-list');
+
+    if (probes.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No probes match your filters.</div>';
+        return;
+    }
+
+    // Group by agent
+    const groups = {};
+    for (const p of probes) {
+        if (!groups[p.agent_id]) {
+            groups[p.agent_id] = {
+                agent: allAgents.find(a => a.id === p.agent_id),
+                probes: [],
+            };
+        }
+        groups[p.agent_id].probes.push(p);
+    }
+
+    const verdictStyles = {
+        'REAL': { bg: 'rgba(0,255,136,0.15)', color: '#00ff88', dot: '#00ff88' },
+        'DEGRADED': { bg: 'rgba(255,170,0,0.15)', color: '#ffaa00', dot: '#ffaa00' },
+        'BROKEN': { bg: 'rgba(255,51,102,0.15)', color: '#ff3366', dot: '#ff3366' },
+        'DISABLED': { bg: 'rgba(85,85,85,0.15)', color: '#555', dot: '#555' },
+    };
+
+    let html = '';
+    for (const [agentId, group] of Object.entries(groups)) {
+        const a = group.agent;
+        if (!a) continue;
+
+        const realCount = group.probes.filter(p => p.status === 'REAL').length;
+
+        html += `<div class="pe-agent-group">`;
+        html += `<div class="pe-agent-header">
+            <div class="agent-color-bar" style="background:${a.color};"></div>
+            <span class="agent-label" style="color:${a.color};">${a.name}</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);font-family:monospace;">${a.short}</span>
+            <div class="agent-meta">
+                <span style="color:#00ff88;">${realCount}/${group.probes.length} active</span>
+                <span>${a.mitre_count} MITRE</span>
+                <span>${formatNumber(a.event_count)} events</span>
+            </div>
+        </div>`;
+
+        for (const p of group.probes) {
+            const vs = verdictStyles[p.status] || verdictStyles['DISABLED'];
+            html += `<div class="pe-probe-card">
+                <div class="pe-probe-header">
+                    <div class="pe-probe-dot" style="background:${vs.dot};box-shadow:0 0 5px ${vs.dot};"></div>
+                    <span class="pe-probe-name">${p.name}</span>
+                    <span class="pe-probe-badge" style="background:${vs.bg};color:${vs.color};">${p.status}</span>
+                </div>
+                <div class="pe-probe-details">
+                    ${p.description ? `<div style="margin-bottom:0.3rem;">${p.description}</div>` : ''}
+                    ${p.mitre.length > 0 ? '<div>MITRE: ' + p.mitre.map(t => `<span class="pe-mitre-chip">${t}</span>`).join('') + '</div>' : ''}
+                    ${p.fields.length > 0 ? '<div style="margin-top:0.2rem;">Fields: ' + p.fields.map(f => `<span class="pe-field-tag">${f}</span>`).join('') + '</div>' : ''}
+                    ${p.issues.length > 0 ? `<div style="margin-top:0.2rem;color:#ffaa00;font-size:0.7rem;">Issues: ${p.issues.join('; ')}</div>` : ''}
+                </div>
+            </div>`;
+        }
+
+        html += '</div>';
+    }
+
+    container.innerHTML = html;
+}
+
+function formatNumber(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
+}
+
+document.addEventListener('DOMContentLoaded', loadProbeData);
+</script>
+{% endblock %}

@@ -15,18 +15,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amoskys.agents.flow.nettop_collector import (
-    MacOSNettopCollector,
-    NettopRecord,
-)
+from amoskys.agents.common.probes import ProbeContext, Severity
+from amoskys.agents.flow.nettop_collector import MacOSNettopCollector, NettopRecord
 from amoskys.agents.flow.probes import (
     C2BeaconFlowProbe,
     DataExfilVolumeSpikeProbe,
     FlowEvent,
     SuspiciousTunnelProbe,
 )
-from amoskys.agents.common.probes import ProbeContext, Severity
-
 
 # =============================================================================
 # Sample nettop outputs
@@ -138,7 +134,7 @@ class TestNettopParsing:
         records = MacOSNettopCollector._parse_output(SAMPLE_NETTOP_MULTIENTRY)
 
         assert len(records) == 1
-        assert records[1019].bytes_in == 400   # 100 + 300
+        assert records[1019].bytes_in == 400  # 100 + 300
         assert records[1019].bytes_out == 600  # 200 + 400
 
     def test_parse_malformed_lines_skipped(self):
@@ -202,6 +198,7 @@ class TestNettopCollection:
     def test_collect_timeout(self, mock_run):
         """Timeout returns empty dict and increments error count."""
         import subprocess
+
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="nettop", timeout=10)
 
         collector = MacOSNettopCollector()
@@ -337,11 +334,11 @@ class TestFlowNettopIntegration:
                 merged += 1
 
         assert merged == 2
-        assert flows[0].bytes_rx == 47787      # Chrome bytes_in
-        assert flows[0].bytes_tx == 92643      # Chrome bytes_out
-        assert flows[1].bytes_rx == 43284870   # mDNSResponder bytes_in
-        assert flows[1].bytes_tx == 26438227   # mDNSResponder bytes_out
-        assert flows[2].bytes_tx == 0          # No PID → unchanged
+        assert flows[0].bytes_rx == 47787  # Chrome bytes_in
+        assert flows[0].bytes_tx == 92643  # Chrome bytes_out
+        assert flows[1].bytes_rx == 43284870  # mDNSResponder bytes_in
+        assert flows[1].bytes_tx == 26438227  # mDNSResponder bytes_out
+        assert flows[2].bytes_tx == 0  # No PID → unchanged
         assert flows[2].bytes_rx == 0
 
 
@@ -433,7 +430,7 @@ class TestProbesWithBytes:
                 src_port=54321,
                 dst_port=443,
                 protocol="TCP",
-                bytes_tx=256,    # Small — nettop populated
+                bytes_tx=256,  # Small — nettop populated
                 bytes_rx=128,
                 packet_count=1,
                 first_seen_ns=now_ns + i * 60_000_000_000,  # 60s intervals
@@ -469,7 +466,7 @@ class TestProbesWithBytes:
                 src_port=54321,
                 dst_port=4444,  # Non-standard port
                 protocol="TCP",
-                bytes_tx=25000,   # nettop populated
+                bytes_tx=25000,  # nettop populated
                 bytes_rx=25000,
                 packet_count=200,
                 first_seen_ns=now_ns - 700_000_000_000,  # 700s ago

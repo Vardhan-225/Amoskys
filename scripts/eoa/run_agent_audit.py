@@ -74,10 +74,15 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "mitre": ["T1036", "T1547", "T1574", "T1505.003", "T1548", "T1556", "T1014"],
         "trigger_hint": "Create/modify/delete files in /tmp/eoa_fim_watch. Also watches /etc for real probes.",
         "cli_args": [
-            "--interval", "15",
-            "--mode", "monitor",
-            "--log-level", "DEBUG",
-            "--monitor-paths", "/tmp/eoa_fim_watch", "/etc",
+            "--interval",
+            "15",
+            "--mode",
+            "monitor",
+            "--log-level",
+            "DEBUG",
+            "--monitor-paths",
+            "/tmp/eoa_fim_watch",
+            "/etc",
         ],
     },
     "persistence": {
@@ -88,7 +93,15 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "collector": "macOS LaunchAgents/Daemons, cron, shell profiles, SSH keys (live)",
         "mac_ready": True,
         "description": "Persistence mechanism monitoring (launchd, cron, shell profiles, SSH keys)",
-        "mitre": ["T1037", "T1053.003", "T1098.004", "T1176", "T1543", "T1546.004", "T1547"],
+        "mitre": [
+            "T1037",
+            "T1053.003",
+            "T1098.004",
+            "T1176",
+            "T1543",
+            "T1546.004",
+            "T1547",
+        ],
         "trigger_hint": "Touch a plist in ~/Library/LaunchAgents, modify .zshrc, add crontab entry.",
         "cli_args": ["--interval", "10", "--log-level", "DEBUG", "--mode", "monitor"],
     },
@@ -180,12 +193,15 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def get_rss_kb(pid: int) -> int:
     """Get RSS in KB for a process."""
     try:
         result = subprocess.run(
             ["ps", "-o", "rss=", "-p", str(pid)],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return int(result.stdout.strip()) if result.returncode == 0 else 0
     except (ValueError, subprocess.TimeoutExpired):
@@ -197,7 +213,9 @@ def get_cpu_percent(pid: int) -> float:
     try:
         result = subprocess.run(
             ["ps", "-o", "%cpu=", "-p", str(pid)],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return float(result.stdout.strip()) if result.returncode == 0 else 0.0
     except (ValueError, subprocess.TimeoutExpired):
@@ -218,9 +236,7 @@ def decode_queue_db(db_path: str) -> List[Dict[str, Any]]:
     try:
         conn = sqlite3.connect(db_path, timeout=5)
         # Detect schema: column is 'bytes' (local_queue.py) or 'payload' (older)
-        cols = [
-            row[1] for row in conn.execute("PRAGMA table_info(queue)").fetchall()
-        ]
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(queue)").fetchall()]
         blob_col = "bytes" if "bytes" in cols else "payload"
         ts_col = "ts_ns" if "ts_ns" in cols else "ts"
         rows = conn.execute(
@@ -445,7 +461,9 @@ COVERAGE_ENTRY_POINTS = [
 ]
 
 
-def build_coverage_matrix(audit_results: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_coverage_matrix(
+    audit_results: Dict[str, Dict[str, Any]]
+) -> List[Dict[str, Any]]:
     """Build coverage matrix from audit results."""
     matrix = []
     for ep in COVERAGE_ENTRY_POINTS:
@@ -496,6 +514,7 @@ def build_coverage_matrix(audit_results: Dict[str, Dict[str, Any]]) -> List[Dict
 # Scorecard generation
 # ---------------------------------------------------------------------------
 
+
 def generate_scorecard_md(
     agent_name: str,
     reg: Dict[str, Any],
@@ -541,53 +560,61 @@ def generate_scorecard_md(
     else:
         signal_verdict = "❌ DARK — no events produced"
 
-    lines.extend([
-        f"| Check | Result |",
-        f"|-------|--------|",
-        f"| Live signal | {signal_verdict} |",
-        f"| Total queue rows | {analysis.get('total_queue_rows', 0)} |",
-        f"| Decode success | {analysis.get('decode_ok', 0)}/{analysis.get('total_queue_rows', 0)} |",
-        f"| Total events | {total_events} |",
-        f"| Probe events (non-metric) | {probe_events} |",
-        f"| Events with evidence payload | {total_events - empty_evidence}/{total_events} |",
-        f"| Empty-evidence events | {empty_evidence} |",
-        f"| MITRE techniques observed | {len(analysis.get('mitre_techniques_observed', []))} |",
-        f"| Tracebacks in log | {log_tracebacks} |",
-        "",
-    ])
+    lines.extend(
+        [
+            f"| Check | Result |",
+            f"|-------|--------|",
+            f"| Live signal | {signal_verdict} |",
+            f"| Total queue rows | {analysis.get('total_queue_rows', 0)} |",
+            f"| Decode success | {analysis.get('decode_ok', 0)}/{analysis.get('total_queue_rows', 0)} |",
+            f"| Total events | {total_events} |",
+            f"| Probe events (non-metric) | {probe_events} |",
+            f"| Events with evidence payload | {total_events - empty_evidence}/{total_events} |",
+            f"| Empty-evidence events | {empty_evidence} |",
+            f"| MITRE techniques observed | {len(analysis.get('mitre_techniques_observed', []))} |",
+            f"| Tracebacks in log | {log_tracebacks} |",
+            "",
+        ]
+    )
 
     # Event type breakdown
     if analysis.get("event_types"):
-        lines.extend([
-            "## Event Types Observed",
-            "",
-            "| Event Type | Count |",
-            "|------------|-------|",
-        ])
+        lines.extend(
+            [
+                "## Event Types Observed",
+                "",
+                "| Event Type | Count |",
+                "|------------|-------|",
+            ]
+        )
         for et, count in sorted(analysis["event_types"].items(), key=lambda x: -x[1]):
             lines.append(f"| `{et}` | {count} |")
         lines.append("")
 
     # Probe breakdown
     if analysis.get("probe_names"):
-        lines.extend([
-            "## Probes That Fired",
-            "",
-            "| Probe (source_component) | Events |",
-            "|--------------------------|--------|",
-        ])
+        lines.extend(
+            [
+                "## Probes That Fired",
+                "",
+                "| Probe (source_component) | Events |",
+                "|--------------------------|--------|",
+            ]
+        )
         for pn, count in sorted(analysis["probe_names"].items(), key=lambda x: -x[1]):
             lines.append(f"| `{pn}` | {count} |")
         lines.append("")
 
     # MITRE techniques
     if analysis.get("mitre_techniques_observed"):
-        lines.extend([
-            "## MITRE Techniques Observed",
-            "",
-            ", ".join(f"`{t}`" for t in analysis["mitre_techniques_observed"]),
-            "",
-        ])
+        lines.extend(
+            [
+                "## MITRE Techniques Observed",
+                "",
+                ", ".join(f"`{t}`" for t in analysis["mitre_techniques_observed"]),
+                "",
+            ]
+        )
 
     # Resource usage
     if resource_samples:
@@ -595,59 +622,73 @@ def generate_scorecard_md(
         cpu_values = [s["cpu_pct"] for s in resource_samples if s["cpu_pct"] >= 0]
 
         if rss_values:
-            lines.extend([
-                "## Resource Usage",
-                "",
-                f"| Metric | Value |",
-                f"|--------|-------|",
-                f"| RSS min | {min(rss_values):,} KB |",
-                f"| RSS max | {max(rss_values):,} KB |",
-                f"| RSS final | {rss_values[-1]:,} KB |",
-                f"| CPU avg | {sum(cpu_values)/len(cpu_values):.1f}% |",
-                f"| CPU max | {max(cpu_values):.1f}% |",
-                f"| Samples | {len(resource_samples)} |",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## Resource Usage",
+                    "",
+                    f"| Metric | Value |",
+                    f"|--------|-------|",
+                    f"| RSS min | {min(rss_values):,} KB |",
+                    f"| RSS max | {max(rss_values):,} KB |",
+                    f"| RSS final | {rss_values[-1]:,} KB |",
+                    f"| CPU avg | {sum(cpu_values)/len(cpu_values):.1f}% |",
+                    f"| CPU max | {max(cpu_values):.1f}% |",
+                    f"| Samples | {len(resource_samples)} |",
+                    "",
+                ]
+            )
 
     # Stability
-    lines.extend([
-        "## Stability",
-        "",
-        f"| Check | Result |",
-        f"|-------|--------|",
-        f"| Tracebacks | {'✅ 0' if log_tracebacks == 0 else f'❌ {log_tracebacks}'} |",
-        f"| Loop stability | {'✅ Good' if log_tracebacks == 0 else '⚠️ Check logs'} |",
-        f"| macOS compat | {'✅ Full' if reg['mac_ready'] else '❌ Stub/Linux-only'} |",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Stability",
+            "",
+            f"| Check | Result |",
+            f"|-------|--------|",
+            f"| Tracebacks | {'✅ 0' if log_tracebacks == 0 else f'❌ {log_tracebacks}'} |",
+            f"| Loop stability | {'✅ Good' if log_tracebacks == 0 else '⚠️ Check logs'} |",
+            f"| macOS compat | {'✅ Full' if reg['mac_ready'] else '❌ Stub/Linux-only'} |",
+            "",
+        ]
+    )
 
     # Payload richness check (A3 contract)
-    lines.extend([
-        "## Data Richness (A3 Contract Check)",
-        "",
-        "Every event must include: device_id, collection_agent, event_type, "
-        "timestamp_ns, event_id, and evidence payload.",
-        "",
-        f"| Field | Present |",
-        f"|-------|---------|",
-        f"| Metric data | {analysis.get('has_metric_data', 0)} events |",
-        f"| Security event | {analysis.get('has_security_event', 0)} events |",
-        f"| Alarm data | {analysis.get('has_alarm_data', 0)} events |",
-        f"| Attributes map | {analysis.get('has_attributes', 0)} events |",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Data Richness (A3 Contract Check)",
+            "",
+            "Every event must include: device_id, collection_agent, event_type, "
+            "timestamp_ns, event_id, and evidence payload.",
+            "",
+            f"| Field | Present |",
+            f"|-------|---------|",
+            f"| Metric data | {analysis.get('has_metric_data', 0)} events |",
+            f"| Security event | {analysis.get('has_security_event', 0)} events |",
+            f"| Alarm data | {analysis.get('has_alarm_data', 0)} events |",
+            f"| Attributes map | {analysis.get('has_attributes', 0)} events |",
+            "",
+        ]
+    )
 
     # Next actions
-    lines.extend([
-        "## Next Actions",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Next Actions",
+            "",
+        ]
+    )
     if not reg["mac_ready"]:
-        lines.append("1. **Implement macOS collector** — agent cannot produce live signal without it")
+        lines.append(
+            "1. **Implement macOS collector** — agent cannot produce live signal without it"
+        )
     if probe_events == 0 and reg["mac_ready"]:
-        lines.append("1. **Debug probe scanning** — agent is mac-ready but probes produced 0 events")
+        lines.append(
+            "1. **Debug probe scanning** — agent is mac-ready but probes produced 0 events"
+        )
     if empty_evidence > 0:
-        lines.append(f"1. **Fix empty evidence** — {empty_evidence} events have no payload data")
+        lines.append(
+            f"1. **Fix empty evidence** — {empty_evidence} events have no payload data"
+        )
     if log_tracebacks > 0:
         lines.append(f"1. **Fix {log_tracebacks} tracebacks** — check raw_log.txt")
     if probe_events > 0 and empty_evidence == 0:
@@ -660,6 +701,7 @@ def generate_scorecard_md(
 # ---------------------------------------------------------------------------
 # Main audit loop
 # ---------------------------------------------------------------------------
+
 
 def run_agent_audit(
     agent_name: str,
@@ -717,18 +759,26 @@ def run_agent_audit(
     if reg.get("entry_fn") is None:
         # Has run_agent_v2.py — use -m
         cmd = [
-            sys.executable, "-m", reg["module"],
-            "--device-id", "eoa-audit-mac",
-            "--queue-path", str(queue_dir),
-            "--collection-interval", "10",
-            "--metrics-interval", "30",
-            "--log-level", "DEBUG",
+            sys.executable,
+            "-m",
+            reg["module"],
+            "--device-id",
+            "eoa-audit-mac",
+            "--queue-path",
+            str(queue_dir),
+            "--collection-interval",
+            "10",
+            "--metrics-interval",
+            "30",
+            "--log-level",
+            "DEBUG",
         ]
     else:
         # Has main() — use -c to call it with proper args
         cli_args = reg.get("cli_args", ["--interval", "10", "--debug"])
         cmd = [
-            sys.executable, "-c",
+            sys.executable,
+            "-c",
             f"import sys; sys.path.insert(0, '{PROJECT_ROOT / 'src'}'); "
             f"from {reg['module']} import main; main()",
         ] + cli_args
@@ -783,7 +833,8 @@ def run_agent_audit(
             f"\r  [{status}{remaining}] "
             f"{elapsed:.0f}/{duration_seconds}s  "
             f"RSS={rss:,}KB  CPU={cpu:.1f}%",
-            end="", flush=True,
+            end="",
+            flush=True,
         )
 
         if i < num_samples - 1:
@@ -843,12 +894,18 @@ def run_agent_audit(
     print(f"     Event types: {list(analysis['event_types'].keys())}")
     print(f"     MITRE: {analysis['mitre_techniques_observed']}")
     print(f"     Empty evidence: {analysis['empty_evidence_events']}")
-    print(f"     Tracebacks: {traceback_count} unexpected ({expected_tb} expected circuit-breaker)")
+    print(
+        f"     Tracebacks: {traceback_count} unexpected ({expected_tb} expected circuit-breaker)"
+    )
 
     # Generate scorecard
     scorecard_md = generate_scorecard_md(
-        agent_name, reg, analysis, resource_samples,
-        elapsed_total, traceback_count,
+        agent_name,
+        reg,
+        analysis,
+        resource_samples,
+        elapsed_total,
+        traceback_count,
     )
 
     # Save outputs
@@ -896,6 +953,7 @@ def run_agent_audit(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="AMOSKYS Empirical Observability Audit (EOA)",
@@ -922,27 +980,35 @@ Examples:
         """,
     )
     parser.add_argument(
-        "--agent", type=str,
+        "--agent",
+        type=str,
         help="Agent to audit (see list above)",
     )
     parser.add_argument(
-        "--all", action="store_true",
+        "--all",
+        action="store_true",
         help="Audit ALL agents sequentially",
     )
     parser.add_argument(
-        "--mac-ready", action="store_true",
+        "--mac-ready",
+        action="store_true",
         help="Audit only Mac-ready agents (proc, fim, dns, auth, peripheral)",
     )
     parser.add_argument(
-        "--duration", type=int, default=120,
+        "--duration",
+        type=int,
+        default=120,
         help="Audit duration in seconds (default: 120)",
     )
     parser.add_argument(
-        "--sample-interval", type=int, default=10,
+        "--sample-interval",
+        type=int,
+        default=10,
         help="Resource sample interval in seconds (default: 10)",
     )
     parser.add_argument(
-        "--inventory", action="store_true",
+        "--inventory",
+        action="store_true",
         help="Print agent inventory and exit (no run)",
     )
 
@@ -978,8 +1044,7 @@ Examples:
         agents_to_audit = [args.agent]
     elif args.mac_ready:
         agents_to_audit = [
-            name for name, reg in AGENT_REGISTRY.items()
-            if reg["mac_ready"]
+            name for name, reg in AGENT_REGISTRY.items() if reg["mac_ready"]
         ]
     elif args.all:
         agents_to_audit = list(AGENT_REGISTRY.keys())

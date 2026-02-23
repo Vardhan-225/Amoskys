@@ -663,6 +663,7 @@ class ProtocolCollectorManager:
             ts_ns=int(event.timestamp.timestamp() * 1_000_000_000),
             idempotency_key=f"{event.device_id}_{event.timestamp.timestamp()}",
             flow=flow_event,
+            schema_version=1,
         )
 
         return envelope

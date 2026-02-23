@@ -501,14 +501,21 @@ def configure_logging(
     stream_handler.setLevel(level)
     root_logger.addHandler(stream_handler)
 
-    # Add file handler if specified
+    # Add file handler with rotation if specified
     if log_file:
+        from logging.handlers import RotatingFileHandler
+
         # Ensure directory exists
         log_dir = os.path.dirname(log_file)
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
 
-        file_handler = logging.FileHandler(log_file)
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=50 * 1024 * 1024,  # 50 MB per file
+            backupCount=10,  # Keep 10 rotated files
+            encoding="utf-8",
+        )
         file_handler.setFormatter(formatter)
         file_handler.setLevel(level)
         root_logger.addHandler(file_handler)
@@ -701,14 +708,30 @@ def init_flask_logging(app) -> None:
         if correlation_id:
             response.headers["X-Correlation-ID"] = correlation_id
 
-        # Log request completion
+        # Enrich request context with user identity (if authenticated)
+        user_id = None
+        user_email = None
+        current_user = getattr(g, "current_user", None)
+        if current_user:
+            # Web auth stores a User object; agent auth stores a dict
+            user_id = getattr(current_user, "id", None) or (
+                current_user.get("agent_id") if isinstance(current_user, dict) else None
+            )
+            user_email = getattr(current_user, "email", None)
+
+        # Log request completion with full context
         duration = time.perf_counter() - getattr(g, "request_start_time", 0)
+        user_tag = user_email or user_id or "anon"
         logger = get_logger("amoskys.http")
         logger.info(
-            f"{request.method} {request.path} -> {response.status_code}",
+            f"{request.method} {request.path} -> {response.status_code} "
+            f"[{request.remote_addr}] user={user_tag} {round(duration * 1000)}ms",
             status_code=response.status_code,
-            duration_seconds=duration,
+            duration_seconds=round(duration, 4),
             content_length=response.content_length,
+            remote_addr=request.remote_addr,
+            user_id=user_id,
+            user_email=user_email,
         )
 
         return response

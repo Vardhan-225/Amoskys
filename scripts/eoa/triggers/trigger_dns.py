@@ -57,6 +57,7 @@ def _resolve(domain: str) -> None:
 
 # ── Trigger 1: DGAScoreProbe ──────────────────────────────────────────────
 
+
 def trigger_dga(dry_run: bool = False) -> None:
     """Generate high-entropy domain lookups (DGA-like patterns)."""
     log("Trigger: DGAScoreProbe")
@@ -64,7 +65,9 @@ def trigger_dga(dry_run: bool = False) -> None:
     # Random consonant-heavy strings (high entropy, low vowel ratio)
     dga_domains = []
     for _ in range(5):
-        chars = "".join(random.choices("bcdfghjklmnpqrstvwxyz0123456789", k=random.randint(15, 25)))
+        chars = "".join(
+            random.choices("bcdfghjklmnpqrstvwxyz0123456789", k=random.randint(15, 25))
+        )
         dga_domains.append(f"{chars}.invalid")
 
     for domain in dga_domains:
@@ -76,6 +79,7 @@ def trigger_dga(dry_run: bool = False) -> None:
 
 
 # ── Trigger 2: BeaconingPatternProbe ──────────────────────────────────────
+
 
 def trigger_beaconing(dry_run: bool = False) -> None:
     """Periodic queries to same domain (beacon pattern)."""
@@ -95,13 +99,18 @@ def trigger_beaconing(dry_run: bool = False) -> None:
 
 # ── Trigger 3: SuspiciousTLDProbe ─────────────────────────────────────────
 
+
 def trigger_suspicious_tld(dry_run: bool = False) -> None:
     """Queries to high-risk TLDs (.top, .xyz, .click, .tk, etc.)."""
     log("Trigger: SuspiciousTLDProbe")
 
     risky_tlds = [
-        "eoa-test.top", "eoa-test.xyz", "eoa-test.click",
-        "eoa-test.tk", "eoa-test.gq", "eoa-test.buzz",
+        "eoa-test.top",
+        "eoa-test.xyz",
+        "eoa-test.click",
+        "eoa-test.tk",
+        "eoa-test.gq",
+        "eoa-test.buzz",
     ]
 
     for domain in risky_tlds:
@@ -113,6 +122,7 @@ def trigger_suspicious_tld(dry_run: bool = False) -> None:
 
 
 # ── Trigger 4: NXDomainBurstProbe ─────────────────────────────────────────
+
 
 def trigger_nxdomain_burst(dry_run: bool = False) -> None:
     """Rapid NXDOMAIN burst (12 non-existent domains in quick succession)."""
@@ -129,6 +139,7 @@ def trigger_nxdomain_burst(dry_run: bool = False) -> None:
 
 
 # ── Trigger 5: LargeTXTTunnelingProbe ────────────────────────────────────
+
 
 def trigger_txt_tunneling(dry_run: bool = False) -> None:
     """TXT record queries with long subdomain labels (tunneling pattern)."""
@@ -151,6 +162,7 @@ def trigger_txt_tunneling(dry_run: bool = False) -> None:
 
 # ── Trigger 6: FastFluxRebindingProbe ────────────────────────────────────
 
+
 def trigger_fast_flux(dry_run: bool = False) -> None:
     """Rapid repeated lookups for same domain (fast-flux pattern)."""
     log("Trigger: FastFluxRebindingProbe")
@@ -168,6 +180,7 @@ def trigger_fast_flux(dry_run: bool = False) -> None:
 
 # ── Trigger 7: NewDomainForProcessProbe ──────────────────────────────────
 
+
 def trigger_new_domains(dry_run: bool = False) -> None:
     """Resolve many unique domains (first-time domain pattern)."""
     log("Trigger: NewDomainForProcessProbe")
@@ -184,14 +197,15 @@ def trigger_new_domains(dry_run: bool = False) -> None:
 
 # ── Trigger 8: BlockedDomainHitProbe ─────────────────────────────────────
 
+
 def trigger_blocked_domain(dry_run: bool = False) -> None:
     """Queries matching blocked domain patterns (.onion, .bit, phishing-*)."""
     log("Trigger: BlockedDomainHitProbe")
 
     # These are non-routable / invalid — safe to query
     blocked_patterns = [
-        "eoa-test.onion",          # Tor pattern
-        "eoa-test.bit",            # Namecoin pattern
+        "eoa-test.onion",  # Tor pattern
+        "eoa-test.bit",  # Namecoin pattern
         "phishing-eoa-bank.test",  # Phishing pattern
     ]
 
@@ -205,7 +219,9 @@ def trigger_blocked_domain(dry_run: bool = False) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Trigger Pack: DNSAgent probes")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without executing")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without executing"
+    )
     args = parser.parse_args()
 
     print("\n═══ DNSAgent Trigger Pack ═══")

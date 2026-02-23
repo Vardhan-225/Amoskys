@@ -1,0 +1,668 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}MITRE ATT&CK Coverage - AMOSKYS{% endblock %}
+
+{% block content %}
+<div style="padding: 2rem;">
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">MITRE ATT&CK Coverage Matrix</h2>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+                <div class="card-badge badge-success" id="mitre-status">Loading...</div>
+                <button id="refresh-mitre-btn" class="neural-button" style="padding:0.3rem 0.8rem;font-size:0.75rem;cursor:pointer;">Refresh</button>
+                <button id="export-mitre-btn" class="neural-button" style="padding:0.3rem 0.8rem;font-size:0.75rem;cursor:pointer;">Export CSV</button>
+            </div>
+        </div>
+        <p style="color: var(--text-secondary);">
+            Real-time MITRE ATT&CK framework coverage from all 10 AMOSKYS agents and 77 micro-probes. Hover any technique for details.
+        </p>
+    </div>
+
+    <!-- Coverage Summary Bar -->
+    <div class="neural-card" style="margin-top:1.5rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+            <h3 style="font-size:1rem;margin:0;">Overall Coverage</h3>
+            <span id="coverage-pct" style="font-size:1.5rem;font-weight:700;color:#00ff88;">--%</span>
+        </div>
+        <div style="height:12px;background:rgba(255,255,255,0.06);border-radius:6px;overflow:hidden;">
+            <div id="coverage-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#00ff88,#00d9ff);border-radius:6px;transition:width 0.8s ease;"></div>
+        </div>
+        <div style="display:flex;gap:1.5rem;margin-top:0.75rem;font-size:0.8rem;color:var(--text-muted);">
+            <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#00ff88;margin-right:0.3rem;vertical-align:middle;"></span>Covered (&ge;3 hits)</span>
+            <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ffaa00;margin-right:0.3rem;vertical-align:middle;"></span>Partial (1-2 hits)</span>
+            <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(255,255,255,0.08);margin-right:0.3rem;vertical-align:middle;"></span>Not Covered</span>
+        </div>
+    </div>
+
+    <!-- Summary Metrics -->
+    <div class="metrics-grid" style="margin: 1.5rem 0;">
+        <div class="metric-card"><div class="metric-value" id="total-techniques">--</div><div class="metric-label">Techniques Detected</div></div>
+        <div class="metric-card"><div class="metric-value" id="total-hits">--</div><div class="metric-label">Total Detections</div></div>
+        <div class="metric-card"><div class="metric-value" id="tactic-coverage">--</div><div class="metric-label">Tactics Covered</div></div>
+        <div class="metric-card"><div class="metric-value" id="top-technique">--</div><div class="metric-label">Most Active Technique</div></div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="neural-card" style="margin-top:1.5rem;">
+        <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:0.8rem;color:var(--text-muted);">Filter:</label>
+            <select id="filter-status" style="background:var(--bg-primary);color:var(--text-primary);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.8rem;">
+                <option value="all">All Techniques</option>
+                <option value="covered">Covered Only</option>
+                <option value="uncovered">Gaps Only</option>
+            </select>
+            <input id="filter-search" type="text" placeholder="Search T-ID or name..." style="background:var(--bg-primary);color:var(--text-primary);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.8rem;min-width:200px;">
+        </div>
+    </div>
+
+    <!-- Matrix Grid -->
+    <div class="neural-card" style="margin-top:1.5rem;">
+        <div class="card-header">
+            <h3 class="card-title">ATT&CK Matrix</h3>
+            <div style="font-size:0.75rem;color:var(--text-muted);">Hover for description &middot; Click for full detail</div>
+        </div>
+        <div id="mitre-matrix" style="overflow-x:auto;"><div style="color:var(--text-secondary);text-align:center;padding:2rem;">Loading matrix...</div></div>
+    </div>
+
+    <!-- Agent Attribution -->
+    <div class="neural-card" style="margin-top:1.5rem;">
+        <div class="card-header">
+            <h3 class="card-title">Agent Attribution</h3>
+            <div style="font-size:0.75rem;color:var(--text-muted);">Which agents cover which tactics</div>
+        </div>
+        <div id="agent-attribution" style="padding-top:0.5rem;"><div style="color:var(--text-muted);text-align:center;padding:1.5rem;">Loading...</div></div>
+    </div>
+
+    <!-- Gap Analysis + Detail Table -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1.5rem;">
+        <div class="neural-card">
+            <div class="card-header"><h3 class="card-title">Gap Analysis</h3></div>
+            <div id="gap-analysis" style="max-height:400px;overflow-y:auto;"><div style="color:var(--text-muted);text-align:center;padding:2rem;">Loading...</div></div>
+        </div>
+        <div class="neural-card">
+            <div class="card-header"><h3 class="card-title">Detected Techniques</h3></div>
+            <div id="mitre-table" style="max-height:400px;overflow-y:auto;"><div style="color:var(--text-muted);text-align:center;padding:2rem;">Loading...</div></div>
+        </div>
+    </div>
+
+    <!-- Technique Detail Modal -->
+    <div id="tech-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:2000;justify-content:center;align-items:center;">
+        <div style="background:var(--bg-secondary);border:2px solid var(--neural-primary);border-radius:10px;max-width:600px;width:90%;padding:1.5rem;position:relative;max-height:80vh;overflow-y:auto;">
+            <button id="close-tech-modal-btn" style="position:absolute;top:1rem;right:1rem;background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer;">&times;</button>
+            <div id="tech-modal-content"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+.mitre-matrix-grid { display:grid; grid-template-columns:repeat(14,minmax(110px,1fr)); gap:2px; padding:0.5rem 0; min-width:1540px; }
+.tactic-col { background:rgba(255,255,255,0.02); border-radius:6px; padding:0.5rem; }
+.tactic-hdr { font-size:0.65rem; font-weight:700; text-transform:uppercase; color:#00aaff; letter-spacing:0.3px; padding:0.4rem 0.25rem; border-bottom:1px solid rgba(0,170,255,0.2); margin-bottom:0.4rem; text-align:center; line-height:1.2; }
+.tech-cell { position:relative; padding:0.3rem 0.35rem; margin-bottom:2px; border-radius:3px; font-size:0.68rem; display:flex; justify-content:space-between; align-items:center; cursor:pointer; transition:transform 0.1s,box-shadow 0.1s; min-height:24px; }
+.tech-cell:hover { transform:scale(1.05); z-index:10; box-shadow:0 2px 8px rgba(0,0,0,0.5); }
+.tech-cell.covered { background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.35); color:#00ff88; }
+.tech-cell.partial { background:rgba(255,170,0,0.12); border:1px solid rgba(255,170,0,0.3); color:#ffaa00; }
+.tech-cell.uncovered { background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); color:var(--text-muted); opacity:0.5; }
+.tech-cell:hover .mitre-tip { display:block; }
+.tech-id { font-family:'Courier New',monospace; font-weight:700; font-size:0.65rem; }
+.tech-cnt { font-weight:700; font-size:0.6rem; padding:0 0.3rem; border-radius:6px; background:rgba(0,0,0,0.3); }
+
+/* Hover tooltip */
+.mitre-tip {
+    display:none; position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
+    background:#1a1f3a; border:1px solid var(--neural-primary); border-radius:8px;
+    padding:0.6rem 0.75rem; width:260px; z-index:100; box-shadow:0 4px 20px rgba(0,0,0,0.6);
+    font-size:0.75rem; line-height:1.4; pointer-events:none;
+}
+.mitre-tip::after {
+    content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    border:6px solid transparent; border-top-color:var(--neural-primary);
+}
+.tip-name { font-weight:700; color:var(--neural-primary); margin-bottom:0.3rem; font-size:0.78rem; }
+.tip-desc { color:var(--text-secondary); margin-bottom:0.4rem; }
+.tip-meta { display:flex; gap:0.5rem; flex-wrap:wrap; }
+.tip-tag { padding:0.1rem 0.35rem; border-radius:3px; font-size:0.6rem; font-weight:600; }
+.tip-tag.agent { background:rgba(0,217,255,0.15); color:var(--neural-primary); }
+.tip-tag.sev { background:rgba(255,170,0,0.15); color:#ffaa00; }
+
+.attr-row { display:flex; align-items:center; gap:0.75rem; padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+.attr-agent { min-width:140px; font-weight:600; font-size:0.85rem; }
+.attr-bar-bg { flex:1; height:8px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; }
+.attr-bar-fill { height:100%; border-radius:4px; transition:width 0.6s ease; }
+.gap-item { padding:0.5rem 0.75rem; margin-bottom:0.4rem; background:rgba(255,51,102,0.05); border-left:3px solid rgba(255,51,102,0.4); border-radius:0 4px 4px 0; font-size:0.8rem; cursor:pointer; transition:background 0.15s; }
+.gap-item:hover { background:rgba(255,51,102,0.1); }
+.gap-name { color:var(--text-secondary); font-size:0.75rem; }
+.gap-tactic { font-size:0.7rem; color:var(--text-muted); }
+.mitre-detail-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+.mitre-detail-table th,.mitre-detail-table td { padding:0.4rem 0.6rem; text-align:left; border-bottom:1px solid rgba(255,255,255,0.06); }
+.mitre-detail-table th { color:var(--text-secondary); font-weight:600; font-size:0.75rem; text-transform:uppercase; position:sticky; top:0; background:var(--bg-secondary); }
+
+@media (max-width:900px) {
+    .mitre-matrix-grid { grid-template-columns:repeat(7,minmax(110px,1fr)); }
+}
+</style>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce() }}">
+/* ── MITRE ATT&CK Technique Knowledge Base ── */
+var TECH_DB = {
+    'T1595':{n:'Active Scanning',d:'Adversaries scan victim IP ranges to gather information for targeting.',sev:'low'},
+    'T1595.001':{n:'Scanning IP Blocks',d:'Scan IP blocks to discover hosts, services, and vulnerabilities.',sev:'low'},
+    'T1592':{n:'Gather Victim Host Info',d:'Gather information about victim hosts through scanning or public sources.',sev:'low'},
+    'T1589':{n:'Gather Victim Identity Info',d:'Gather credentials, email addresses, employee names for targeting.',sev:'medium'},
+    'T1590':{n:'Gather Victim Network Info',d:'Gather network information such as topology, DNS, or IP ranges.',sev:'low'},
+    'T1591':{n:'Gather Victim Org Info',d:'Gather org structure, business relationships, or physical locations.',sev:'low'},
+    'T1597':{n:'Search Closed Sources',d:'Search private databases or subscription feeds for targeting info.',sev:'low'},
+    'T1596':{n:'Search Open Tech DBs',d:'Search WHOIS, DNS, certificate transparency logs.',sev:'low'},
+    'T1593':{n:'Search Open Websites',d:'Search public websites, social media for targeting information.',sev:'low'},
+    'T1594':{n:'Search Victim-Owned Websites',d:'Search victim-owned websites for targeting information.',sev:'low'},
+    'T1598':{n:'Phishing for Information',d:'Send phishing messages to gather actionable information.',sev:'medium'},
+    'T1583':{n:'Acquire Infrastructure',d:'Acquire servers, domains, or third-party services for operations.',sev:'low'},
+    'T1586':{n:'Compromise Accounts',d:'Compromise existing accounts (email, social media) for operations.',sev:'medium'},
+    'T1584':{n:'Compromise Infrastructure',d:'Compromise third-party infrastructure for staging or C2.',sev:'medium'},
+    'T1587':{n:'Develop Capabilities',d:'Create custom malware, exploits, or delivery tools.',sev:'medium'},
+    'T1585':{n:'Establish Accounts',d:'Create accounts on third-party services for operations.',sev:'low'},
+    'T1588':{n:'Obtain Capabilities',d:'Buy or download malware, tools, exploits, certificates.',sev:'medium'},
+    'T1608':{n:'Stage Capabilities',d:'Upload tools or payloads to infrastructure for later use.',sev:'medium'},
+    'T1189':{n:'Drive-by Compromise',d:'Gain access through user visiting a compromised website.',sev:'high'},
+    'T1190':{n:'Exploit Public-Facing App',d:'Exploit vulnerability in internet-facing application.',sev:'critical'},
+    'T1133':{n:'External Remote Services',d:'Leverage VPN, Citrix, or other remote access services.',sev:'high'},
+    'T1200':{n:'Hardware Additions',d:'Introduce rogue hardware (USB, network tap) for access.',sev:'high'},
+    'T1566':{n:'Phishing',d:'Send targeted messages with malicious attachments or links.',sev:'high'},
+    'T1566.001':{n:'Spearphishing Attachment',d:'Send spearphishing with malicious file attachment.',sev:'high'},
+    'T1091':{n:'Replication Through Media',d:'Move laterally or gain access via removable media.',sev:'medium'},
+    'T1195':{n:'Supply Chain Compromise',d:'Manipulate products or delivery mechanisms before reaching consumer.',sev:'critical'},
+    'T1199':{n:'Trusted Relationship',d:'Exploit trusted third-party relationship for initial access.',sev:'high'},
+    'T1078':{n:'Valid Accounts',d:'Use stolen or compromised credentials for initial access.',sev:'high'},
+    'T1059':{n:'Command & Scripting Interpreter',d:'Execute commands and scripts via interpreters like bash, PowerShell.',sev:'high'},
+    'T1059.001':{n:'PowerShell',d:'Execute commands via PowerShell interpreter.',sev:'high'},
+    'T1059.003':{n:'Windows Command Shell',d:'Execute commands via cmd.exe.',sev:'medium'},
+    'T1059.004':{n:'Unix Shell',d:'Execute commands via bash, sh, or other Unix shells.',sev:'high'},
+    'T1059.006':{n:'Python',d:'Execute commands via Python interpreter.',sev:'medium'},
+    'T1203':{n:'Exploitation for Client Exec',d:'Exploit software vulnerability in client application for execution.',sev:'critical'},
+    'T1559':{n:'Inter-Process Communication',d:'Abuse IPC mechanisms to execute commands or move data.',sev:'medium'},
+    'T1106':{n:'Native API',d:'Use OS native APIs to execute behaviors.',sev:'medium'},
+    'T1053':{n:'Scheduled Task/Job',d:'Schedule tasks/jobs for execution or persistence.',sev:'medium'},
+    'T1053.003':{n:'Cron',d:'Create or modify cron jobs for scheduled execution.',sev:'medium'},
+    'T1129':{n:'Shared Modules',d:'Execute payloads via loading shared modules.',sev:'medium'},
+    'T1072':{n:'Software Deployment Tools',d:'Abuse legitimate deployment tools for execution.',sev:'high'},
+    'T1569':{n:'System Services',d:'Execute via system services (launchctl, systemctl).',sev:'medium'},
+    'T1204':{n:'User Execution',d:'Rely on user executing a malicious file or link.',sev:'medium'},
+    'T1204.002':{n:'Malicious File',d:'Trick user into executing a malicious file.',sev:'high'},
+    'T1047':{n:'Windows Management Instr.',d:'Use WMI for execution of commands.',sev:'medium'},
+    'T1098':{n:'Account Manipulation',d:'Manipulate accounts to maintain access (add creds, modify permissions).',sev:'high'},
+    'T1098.004':{n:'SSH Authorized Keys',d:'Add SSH keys to authorized_keys for persistent access.',sev:'high'},
+    'T1197':{n:'BITS Jobs',d:'Abuse Background Intelligent Transfer Service for persistence.',sev:'medium'},
+    'T1547':{n:'Boot/Logon Autostart',d:'Configure settings to execute during system boot or logon.',sev:'high'},
+    'T1547.001':{n:'Registry Run Keys / Startup',d:'Add program to Registry run key or Startup folder.',sev:'high'},
+    'T1547.006':{n:'Kernel Modules / Extensions',d:'Load kernel modules for persistence and stealth.',sev:'critical'},
+    'T1547.008':{n:'Authentication Package',d:'Register malicious auth package (DLL) for persistence.',sev:'critical'},
+    'T1037':{n:'Boot/Logon Init Scripts',d:'Use scripts executed at boot/logon for persistence.',sev:'medium'},
+    'T1037.001':{n:'Logon Script (Windows)',d:'Leverage logon scripts for persistence.',sev:'medium'},
+    'T1037.004':{n:'RC Scripts',d:'Use rc.local/rc scripts for boot-time persistence.',sev:'medium'},
+    'T1037.005':{n:'Launch Agent/Daemon',d:'Create macOS launch agents or daemons for persistence.',sev:'high'},
+    'T1136':{n:'Create Account',d:'Create new accounts for persistent access.',sev:'high'},
+    'T1543':{n:'Create/Modify System Process',d:'Create or modify system-level processes for persistence.',sev:'high'},
+    'T1543.001':{n:'Launch Agent',d:'Create macOS Launch Agent for user-level persistence.',sev:'high'},
+    'T1543.002':{n:'Systemd Service',d:'Create systemd service unit for Linux persistence.',sev:'high'},
+    'T1546':{n:'Event Triggered Execution',d:'Establish persistence via event-triggered code execution.',sev:'high'},
+    'T1546.004':{n:'Unix Shell Config Modification',d:'Modify .bashrc/.zshrc for shell startup persistence.',sev:'medium'},
+    'T1574':{n:'Hijack Execution Flow',d:'Hijack how OS locates programs/libraries to execute malicious payloads.',sev:'high'},
+    'T1574.006':{n:'Dynamic Linker Hijacking',d:'Hijack dynamic linker to load malicious shared libraries.',sev:'critical'},
+    'T1525':{n:'Implant Internal Image',d:'Implant malicious code in container images.',sev:'high'},
+    'T1556':{n:'Modify Auth Process',d:'Modify authentication mechanisms to access credentials.',sev:'critical'},
+    'T1556.002':{n:'Password Filter DLL',d:'Register malicious password filter for credential access.',sev:'critical'},
+    'T1556.004':{n:'Network Device Auth',d:'Modify network device authentication for persistence.',sev:'critical'},
+    'T1137':{n:'Office Application Startup',d:'Leverage Office startup events for persistence.',sev:'medium'},
+    'T1505':{n:'Server Software Component',d:'Abuse server software to establish persistent access.',sev:'high'},
+    'T1505.003':{n:'Web Shell',d:'Install web shell on server for persistent remote access.',sev:'critical'},
+    'T1205':{n:'Traffic Signaling',d:'Use special packets/sequences to trigger access mechanisms.',sev:'high'},
+    'T1176':{n:'Browser Extensions',d:'Install malicious browser extensions for persistence.',sev:'medium'},
+    'T1564':{n:'Hide Artifacts',d:'Hide files, processes, or other artifacts to avoid detection.',sev:'medium'},
+    'T1548':{n:'Abuse Elevation Mechanism',d:'Bypass UAC or sudo to escalate privileges.',sev:'high'},
+    'T1548.001':{n:'Setuid and Setgid',d:'Abuse setuid/setgid bits for privilege escalation.',sev:'critical'},
+    'T1548.003':{n:'Sudo and Sudo Caching',d:'Abuse sudo or cached sudo credentials for priv esc.',sev:'high'},
+    'T1134':{n:'Access Token Manipulation',d:'Manipulate access tokens to operate under different context.',sev:'high'},
+    'T1068':{n:'Exploitation for Priv Esc',d:'Exploit software vulnerability for privilege escalation.',sev:'critical'},
+    'T1055':{n:'Process Injection',d:'Inject code into processes to evade defenses and elevate.',sev:'critical'},
+    'T1055.008':{n:'Ptrace System Calls',d:'Use ptrace to inject code into running processes.',sev:'critical'},
+    'T1036':{n:'Masquerading',d:'Disguise malicious artifacts to appear legitimate.',sev:'high'},
+    'T1070':{n:'Indicator Removal',d:'Delete or modify logs, timestamps, or artifacts.',sev:'high'},
+    'T1070.002':{n:'Clear Linux/Mac Logs',d:'Clear system logs on Linux/macOS to hide activity.',sev:'high'},
+    'T1070.005':{n:'Network Share Conn Removal',d:'Remove evidence of network share connections.',sev:'medium'},
+    'T1222':{n:'File/Directory Permissions Mod',d:'Modify file/directory permissions to enable access.',sev:'high'},
+    'T1222.002':{n:'Linux/Mac Permissions Mod',d:'Use chmod/chown to modify Unix file permissions.',sev:'high'},
+    'T1562':{n:'Impair Defenses',d:'Disable or modify security tools and logging.',sev:'critical'},
+    'T1562.001':{n:'Disable/Modify Tools',d:'Disable security software or monitoring tools.',sev:'critical'},
+    'T1218':{n:'System Binary Proxy Exec',d:'Execute via signed system binaries to bypass defenses.',sev:'high'},
+    'T1218.010':{n:'Regsvr32',d:'Use regsvr32 to proxy execute malicious DLLs.',sev:'high'},
+    'T1218.011':{n:'Rundll32',d:'Use rundll32 to proxy execute malicious DLLs.',sev:'high'},
+    'T1027':{n:'Obfuscated Files/Info',d:'Encode, encrypt, or obfuscate payloads to evade detection.',sev:'medium'},
+    'T1140':{n:'Deobfuscate/Decode',d:'Deobfuscate or decode payloads after delivery.',sev:'medium'},
+    'T1014':{n:'Rootkit',d:'Use rootkits to hide the presence of malware.',sev:'critical'},
+    'T1553':{n:'Subvert Trust Controls',d:'Undermine security controls based on code signing or certificates.',sev:'high'},
+    'T1497':{n:'Virtualization/Sandbox Evasion',d:'Check for virtualization/sandbox to avoid analysis.',sev:'medium'},
+    'T1110':{n:'Brute Force',d:'Attempt many passwords/keys to gain access to accounts.',sev:'high'},
+    'T1110.003':{n:'Password Spraying',d:'Try common passwords against many accounts simultaneously.',sev:'high'},
+    'T1555':{n:'Credentials from Password Stores',d:'Extract credentials from browser stores or vaults.',sev:'high'},
+    'T1212':{n:'Exploitation for Cred Access',d:'Exploit software vulnerability to obtain credentials.',sev:'critical'},
+    'T1187':{n:'Forced Authentication',d:'Force user/system to send auth material for capture.',sev:'medium'},
+    'T1606':{n:'Forge Web Credentials',d:'Forge authentication tokens or cookies.',sev:'high'},
+    'T1056':{n:'Input Capture',d:'Capture user input (keylogging, credential interception).',sev:'high'},
+    'T1056.001':{n:'Keylogging',d:'Log keystrokes to capture passwords and sensitive data.',sev:'high'},
+    'T1621':{n:'MFA Request Generation',d:'Flood user with MFA prompts hoping for acceptance.',sev:'high'},
+    'T1040':{n:'Network Sniffing',d:'Sniff network traffic to capture credentials or data.',sev:'medium'},
+    'T1003':{n:'OS Credential Dumping',d:'Dump credentials from OS sources (LSASS, /etc/shadow).',sev:'critical'},
+    'T1528':{n:'Steal Application Access Token',d:'Steal application tokens (OAuth, API keys).',sev:'high'},
+    'T1558':{n:'Steal/Forge Kerberos Tickets',d:'Steal or forge Kerberos tickets for lateral movement.',sev:'high'},
+    'T1539':{n:'Steal Web Session Cookie',d:'Steal web session cookies for authenticated access.',sev:'high'},
+    'T1552':{n:'Unsecured Credentials',d:'Find credentials stored insecurely (files, registry, env vars).',sev:'high'},
+    'T1552.001':{n:'Credentials In Files',d:'Find credentials stored in plaintext files.',sev:'high'},
+    'T1557':{n:'Adversary-in-the-Middle',d:'Position between targets to intercept or modify communications.',sev:'critical'},
+    'T1557.001':{n:'LLMNR/NBT-NS Poisoning',d:'Poison name resolution to capture credentials.',sev:'high'},
+    'T1557.002':{n:'ARP Cache Poisoning',d:'Poison ARP caches to redirect traffic.',sev:'high'},
+    'T1087':{n:'Account Discovery',d:'Enumerate accounts on system or domain.',sev:'low'},
+    'T1010':{n:'Application Window Discovery',d:'List open application windows.',sev:'low'},
+    'T1217':{n:'Browser Info Discovery',d:'Enumerate browser bookmarks, history, and cookies.',sev:'low'},
+    'T1046':{n:'Network Service Discovery',d:'Scan for running services on local or remote systems.',sev:'medium'},
+    'T1135':{n:'Network Share Discovery',d:'Look for accessible network shares.',sev:'low'},
+    'T1057':{n:'Process Discovery',d:'List running processes on the system.',sev:'low'},
+    'T1082':{n:'System Information Discovery',d:'Collect OS version, hostname, architecture info.',sev:'low'},
+    'T1016':{n:'System Network Config Discovery',d:'Discover network configuration (ifconfig, route).',sev:'low'},
+    'T1049':{n:'System Network Connections',d:'List active network connections (netstat).',sev:'low'},
+    'T1033':{n:'System Owner/User Discovery',d:'Identify current user or system owner.',sev:'low'},
+    'T1083':{n:'File and Directory Discovery',d:'Enumerate files and directories of interest.',sev:'low'},
+    'T1018':{n:'Remote System Discovery',d:'Discover other systems on the network.',sev:'medium'},
+    'T1615':{n:'Group Policy Discovery',d:'Enumerate group policies for escalation paths.',sev:'low'},
+    'T1210':{n:'Exploitation of Remote Services',d:'Exploit remote services to move laterally.',sev:'critical'},
+    'T1570':{n:'Lateral Tool Transfer',d:'Transfer tools between systems for lateral movement.',sev:'medium'},
+    'T1563':{n:'Remote Service Session Hijacking',d:'Hijack existing remote sessions.',sev:'high'},
+    'T1021':{n:'Remote Services',d:'Use remote services (SSH, RDP, SMB) for lateral movement.',sev:'high'},
+    'T1021.001':{n:'Remote Desktop Protocol',d:'Use RDP for lateral movement.',sev:'high'},
+    'T1021.002':{n:'SMB/Windows Admin Shares',d:'Use SMB admin shares for lateral movement.',sev:'high'},
+    'T1021.003':{n:'Distributed Component Object',d:'Use DCOM for remote execution.',sev:'high'},
+    'T1021.004':{n:'SSH',d:'Use SSH for lateral movement to remote systems.',sev:'medium'},
+    'T1021.006':{n:'Windows Remote Management',d:'Use WinRM for remote command execution.',sev:'high'},
+    'T1080':{n:'Taint Shared Content',d:'Taint shared content to trick users into executing payloads.',sev:'medium'},
+    'T1550':{n:'Use Alternate Auth Material',d:'Authenticate using hash, ticket, or token instead of password.',sev:'high'},
+    'T1560':{n:'Archive Collected Data',d:'Compress or encrypt collected data before exfiltration.',sev:'medium'},
+    'T1185':{n:'Browser Session Hijacking',d:'Inject into browser process to access web sessions.',sev:'high'},
+    'T1115':{n:'Clipboard Data',d:'Collect data from clipboard.',sev:'low'},
+    'T1530':{n:'Data from Cloud Storage',d:'Access data from cloud storage (S3, Azure Blob).',sev:'high'},
+    'T1005':{n:'Data from Local System',d:'Search local file system for sensitive data.',sev:'medium'},
+    'T1039':{n:'Data from Network Shared Drive',d:'Collect data from network shares.',sev:'medium'},
+    'T1074':{n:'Data Staged',d:'Stage collected data in a location before exfiltration.',sev:'medium'},
+    'T1114':{n:'Email Collection',d:'Collect email data from local or cloud email sources.',sev:'medium'},
+    'T1113':{n:'Screen Capture',d:'Capture screenshots of the desktop.',sev:'medium'},
+    'T1071':{n:'Application Layer Protocol',d:'Use app-layer protocols (HTTP, DNS) for C2.',sev:'high'},
+    'T1071.001':{n:'Web Protocols',d:'Use HTTP/HTTPS for command and control.',sev:'high'},
+    'T1071.004':{n:'DNS',d:'Use DNS protocol for command and control or data exfil.',sev:'high'},
+    'T1132':{n:'Data Encoding',d:'Encode data to hide C2 traffic.',sev:'medium'},
+    'T1001':{n:'Data Obfuscation',d:'Obfuscate C2 traffic to avoid detection.',sev:'medium'},
+    'T1568':{n:'Dynamic Resolution',d:'Dynamically resolve C2 addresses.',sev:'high'},
+    'T1568.001':{n:'Fast Flux DNS',d:'Use fast flux DNS to rapidly change C2 IP addresses.',sev:'high'},
+    'T1568.002':{n:'Domain Generation Algorithms',d:'Use DGA to dynamically generate C2 domains.',sev:'high'},
+    'T1573':{n:'Encrypted Channel',d:'Encrypt C2 channel to evade detection.',sev:'medium'},
+    'T1573.002':{n:'Asymmetric Cryptography',d:'Use asymmetric encryption for C2.',sev:'medium'},
+    'T1008':{n:'Fallback Channels',d:'Use fallback C2 channels when primary is unavailable.',sev:'medium'},
+    'T1105':{n:'Ingress Tool Transfer',d:'Transfer tools from external to compromised system.',sev:'medium'},
+    'T1095':{n:'Non-Application Layer Protocol',d:'Use raw TCP/UDP or ICMP for C2.',sev:'medium'},
+    'T1571':{n:'Non-Standard Port',d:'Use non-standard ports for C2.',sev:'medium'},
+    'T1572':{n:'Protocol Tunneling',d:'Tunnel C2 traffic within legitimate protocols.',sev:'high'},
+    'T1090':{n:'Proxy',d:'Route C2 traffic through proxy or relay.',sev:'high'},
+    'T1219':{n:'Remote Access Software',d:'Use legitimate remote access tools for C2.',sev:'medium'},
+    'T1102':{n:'Web Service',d:'Use legitimate web services for C2.',sev:'medium'},
+    'T1020':{n:'Automated Exfiltration',d:'Automatically exfiltrate data at intervals.',sev:'high'},
+    'T1030':{n:'Data Transfer Size Limits',d:'Exfiltrate data in small chunks to avoid detection.',sev:'medium'},
+    'T1048':{n:'Exfiltration Over Alt Protocol',d:'Exfiltrate via alternative protocols (DNS, ICMP).',sev:'high'},
+    'T1048.001':{n:'Exfil Over Symmetric Encrypted',d:'Exfiltrate over symmetric encrypted non-C2 channel.',sev:'high'},
+    'T1048.003':{n:'Exfil Over Unencrypted Protocol',d:'Exfiltrate over unencrypted non-C2 protocol.',sev:'high'},
+    'T1041':{n:'Exfiltration Over C2 Channel',d:'Exfiltrate data using existing C2 channel.',sev:'high'},
+    'T1011':{n:'Exfil Over Other Network Medium',d:'Exfiltrate via alternative network medium (Bluetooth, WiFi).',sev:'medium'},
+    'T1052':{n:'Exfil Over Physical Medium',d:'Exfiltrate data via USB or other physical media.',sev:'high'},
+    'T1567':{n:'Exfil Over Web Service',d:'Exfiltrate data to cloud storage or web services.',sev:'high'},
+    'T1537':{n:'Transfer Data to Cloud Account',d:'Transfer data to adversary-owned cloud account.',sev:'high'},
+    'T1531':{n:'Account Access Removal',d:'Delete, lock, or manipulate accounts to disrupt access.',sev:'high'},
+    'T1485':{n:'Data Destruction',d:'Destroy data and files on target systems.',sev:'critical'},
+    'T1486':{n:'Data Encrypted for Impact',d:'Encrypt data (ransomware) for impact.',sev:'critical'},
+    'T1565':{n:'Data Manipulation',d:'Manipulate data to impact business operations.',sev:'high'},
+    'T1491':{n:'Defacement',d:'Deface websites or systems for impact.',sev:'medium'},
+    'T1561':{n:'Disk Wipe',d:'Wipe disk structures to render system inoperable.',sev:'critical'},
+    'T1499':{n:'Endpoint Denial of Service',d:'Crash or overload endpoints.',sev:'high'},
+    'T1495':{n:'Firmware Corruption',d:'Corrupt firmware to brick devices.',sev:'critical'},
+    'T1490':{n:'Inhibit System Recovery',d:'Delete backups, disable recovery features.',sev:'critical'},
+    'T1489':{n:'Service Stop',d:'Stop critical services for impact.',sev:'high'},
+    'T1529':{n:'System Shutdown/Reboot',d:'Shutdown or reboot systems for disruption.',sev:'medium'},
+    'T1496':{n:'Resource Hijacking',d:'Hijack compute resources for cryptomining.',sev:'medium'},
+    'T1542':{n:'Pre-OS Boot',d:'Modify pre-OS boot mechanisms (bootloader, firmware).',sev:'critical'},
+    'T1542.003':{n:'Bootkit',d:'Install bootkit for persistence below the OS.',sev:'critical'},
+    'T1050':{n:'New Service',d:'Install a new service for persistence.',sev:'medium'}
+};
+
+var TACTIC_MAP = {
+    'Reconnaissance': ['T1595','T1590','T1592','T1589','T1018'],
+    'Resource Dev': ['T1583','T1584','T1587','T1588'],
+    'Initial Access': ['T1190','T1200','T1566.001','T1133','T1078'],
+    'Execution': ['T1059','T1204','T1204.002','T1053','T1569'],
+    'Persistence': ['T1547','T1543','T1053.003','T1546.004','T1176','T1564','T1098.004','T1137'],
+    'Priv Escalation': ['T1548','T1548.003','T1068','T1078','T1134'],
+    'Defense Evasion': ['T1036','T1070','T1222','T1562','T1218','T1027','T1140'],
+    'Credential Access': ['T1110','T1110.003','T1552','T1552.001','T1621','T1056.001','T1003'],
+    'Discovery': ['T1046','T1018','T1082','T1083','T1049','T1016'],
+    'Lateral Movement': ['T1021','T1021.001','T1021.004','T1091','T1570'],
+    'Collection': ['T1052','T1005','T1039','T1074'],
+    'C2': ['T1071','T1071.001','T1071.004','T1090','T1572','T1573.002','T1568.001','T1568.002'],
+    'Exfiltration': ['T1041','T1048','T1048.001','T1048.003','T1567'],
+    'Impact': ['T1496','T1505.003','T1542','T1556','T1574','T1557','T1557.001','T1205']
+};
+
+var AGENT_TECHNIQUE_MAP = {
+    'ProcAgent': ['T1059','T1204','T1204.002','T1053','T1569','T1036','T1218','T1027','T1496','T1078','T1547','T1574.006'],
+    'FlowAgent': ['T1071','T1071.001','T1090','T1572','T1041','T1048','T1048.003','T1046','T1021.002','T1021.003','T1021.006','T1552.001','T1185','T1557.002','T1595'],
+    'DNSAgent': ['T1071.004','T1568.001','T1568.002','T1048.001','T1566','T1046','T1590'],
+    'AuthGuard': ['T1110','T1110.003','T1078','T1548','T1548.003','T1621','T1059','T1547','T1499'],
+    'FIM': ['T1222','T1222.002','T1070','T1574','T1574.006','T1505.003','T1542.003','T1565','T1036','T1548.001','T1068','T1543','T1053','T1014'],
+    'PersistenceGuard': ['T1547','T1547.001','T1547.008','T1543.001','T1543.002','T1053.003','T1546.004','T1176','T1564','T1098.004','T1037.004','T1037.005','T1556.004','T1556.002'],
+    'Peripheral': ['T1200','T1052','T1091','T1557','T1056.001'],
+    'KernelAudit': ['T1068','T1548.001','T1014','T1547.006','T1055','T1055.008','T1222','T1562.001','T1070.002','T1059','T1204.002','T1083','T1592'],
+    'DeviceDiscovery': ['T1018','T1046','T1200','T1557.001','T1595'],
+    'ProtocolCollector': ['T1190','T1573.002','T1110','T1021.004','T1048.003','T1021.001','T1552.001','T1566.001','T1071.001','T1205']
+};
+
+var agentColors = {
+    'ProcAgent':'#4ECDC4','FlowAgent':'#F38181','DNSAgent':'#AA96DA','AuthGuard':'#FF6B35',
+    'FIM':'#00ff88','PersistenceGuard':'#FCBAD3','Peripheral':'#FF6B9D','KernelAudit':'#FFD93D',
+    'DeviceDiscovery':'#6BCB77','ProtocolCollector':'#00B4D8'
+};
+
+var coverageData = {};
+
+function esc(s) { if (s == null) return ''; var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+
+function getTechTip(tid) {
+    var info = TECH_DB[tid];
+    if (!info) return '';
+    var agents = [];
+    for (var agent in AGENT_TECHNIQUE_MAP) {
+        if (AGENT_TECHNIQUE_MAP[agent].indexOf(tid) !== -1) {
+            agents.push('<span class="tip-tag agent">' + agent + '</span>');
+        }
+    }
+    var sevColors = {low:'#0088ff',medium:'#ffaa00',high:'#ff6600',critical:'#ff3366'};
+    var sevColor = sevColors[info.sev] || '#999';
+    return '<div class="mitre-tip">'
+        + '<div class="tip-name">' + tid + ': ' + esc(info.n) + '</div>'
+        + '<div class="tip-desc">' + esc(info.d) + '</div>'
+        + '<div class="tip-meta">'
+        + '<span class="tip-tag sev" style="background:' + sevColor + '22;color:' + sevColor + ';">' + info.sev.toUpperCase() + '</span>'
+        + (coverageData[tid] ? '<span class="tip-tag" style="background:rgba(0,255,136,0.15);color:#00ff88;">' + coverageData[tid].count + ' hits</span>' : '<span class="tip-tag" style="background:rgba(255,51,102,0.1);color:#ff3366;">No coverage</span>')
+        + '</div>'
+        + (agents.length > 0 ? '<div style="margin-top:0.3rem;display:flex;gap:0.25rem;flex-wrap:wrap;">' + agents.join('') + '</div>' : '')
+        + '</div>';
+}
+
+async function loadMITREData() {
+    try {
+        var resp = await fetch('/dashboard/api/mitre/coverage');
+        var data = await resp.json();
+        if (data.status !== 'success') return;
+
+        coverageData = data.coverage || {};
+        document.getElementById('total-techniques').textContent = data.total_techniques;
+        document.getElementById('total-hits').textContent = data.total_hits;
+        document.getElementById('mitre-status').textContent = data.total_techniques + ' Techniques';
+
+        var topTech = '--', topCount = 0;
+        for (var tid in coverageData) {
+            if (coverageData[tid].count > topCount) { topCount = coverageData[tid].count; topTech = tid; }
+        }
+        var topInfo = TECH_DB[topTech];
+        document.getElementById('top-technique').textContent = topTech + (topInfo ? ' (' + topInfo.n + ')' : '');
+
+        var totalTechniques = 0, coveredTechniques = 0, tacticsCovered = 0;
+        for (var tactic in TACTIC_MAP) {
+            var techs = TACTIC_MAP[tactic];
+            totalTechniques += techs.length;
+            var hasCoverage = false;
+            for (var i = 0; i < techs.length; i++) { if (coverageData[techs[i]]) { coveredTechniques++; hasCoverage = true; } }
+            if (hasCoverage) tacticsCovered++;
+        }
+        document.getElementById('tactic-coverage').textContent = tacticsCovered + '/' + Object.keys(TACTIC_MAP).length;
+        var pct = totalTechniques > 0 ? Math.round((coveredTechniques / totalTechniques) * 100) : 0;
+        document.getElementById('coverage-pct').textContent = pct + '%';
+        document.getElementById('coverage-bar').style.width = pct + '%';
+
+        renderMatrix();
+        renderAttribution();
+        renderGapAnalysis();
+        renderDetailTable();
+    } catch (err) {
+        document.getElementById('mitre-status').textContent = 'Error';
+    }
+}
+
+function renderMatrix() {
+    var filter = document.getElementById('filter-status').value;
+    var search = (document.getElementById('filter-search').value || '').toLowerCase();
+
+    var html = '<div class="mitre-matrix-grid">';
+    for (var tactic in TACTIC_MAP) {
+        html += '<div class="tactic-col"><div class="tactic-hdr">' + tactic + '</div>';
+        var techs = TACTIC_MAP[tactic];
+        for (var i = 0; i < techs.length; i++) {
+            var tid = techs[i];
+            var info = coverageData[tid];
+            var techInfo = TECH_DB[tid];
+            var isCovered = info && info.count >= 3;
+            var isPartial = info && info.count > 0 && info.count < 3;
+
+            // Apply filters
+            if (filter === 'covered' && !info) continue;
+            if (filter === 'uncovered' && info) continue;
+            if (search) {
+                var matchesSearch = tid.toLowerCase().indexOf(search) !== -1;
+                if (techInfo) matchesSearch = matchesSearch || techInfo.n.toLowerCase().indexOf(search) !== -1;
+                if (!matchesSearch) continue;
+            }
+
+            var cls = isCovered ? 'covered' : isPartial ? 'partial' : 'uncovered';
+            var cnt = info ? info.count : 0;
+            html += '<div class="tech-cell ' + cls + '" data-tech-id="' + tid + '">'
+                + '<span class="tech-id">' + tid + '</span>'
+                + '<span class="tech-cnt">' + cnt + '</span>'
+                + getTechTip(tid)
+                + '</div>';
+        }
+        html += '</div>';
+    }
+    html += '</div>';
+    document.getElementById('mitre-matrix').innerHTML = html;
+}
+
+function renderAttribution() {
+    var maxTechs = 0;
+    for (var agent in AGENT_TECHNIQUE_MAP) {
+        if (AGENT_TECHNIQUE_MAP[agent].length > maxTechs) maxTechs = AGENT_TECHNIQUE_MAP[agent].length;
+    }
+    var html = '';
+    for (var agent in AGENT_TECHNIQUE_MAP) {
+        var techs = AGENT_TECHNIQUE_MAP[agent];
+        var detectedCount = 0;
+        for (var i = 0; i < techs.length; i++) { if (coverageData[techs[i]]) detectedCount++; }
+        var pct = maxTechs > 0 ? Math.round((techs.length / maxTechs) * 100) : 0;
+        var color = agentColors[agent] || '#00d9ff';
+        html += '<div class="attr-row">'
+            + '<div class="attr-agent" style="color:' + color + ';">' + agent + '</div>'
+            + '<div class="attr-bar-bg"><div class="attr-bar-fill" style="width:' + pct + '%;background:' + color + ';"></div></div>'
+            + '<div style="min-width:80px;text-align:right;font-size:0.8rem;"><span style="color:#00ff88;font-weight:700;">' + detectedCount + '</span><span style="color:var(--text-muted);">/' + techs.length + '</span></div>'
+            + '</div>';
+    }
+    document.getElementById('agent-attribution').innerHTML = html;
+}
+
+function renderGapAnalysis() {
+    var gaps = [];
+    for (var tactic in TACTIC_MAP) {
+        var techs = TACTIC_MAP[tactic];
+        for (var i = 0; i < techs.length; i++) {
+            if (!coverageData[techs[i]]) {
+                var info = TECH_DB[techs[i]];
+                gaps.push({technique: techs[i], tactic: tactic, name: info ? info.n : '', sev: info ? info.sev : 'unknown'});
+            }
+        }
+    }
+    if (gaps.length === 0) {
+        document.getElementById('gap-analysis').innerHTML = '<div style="text-align:center;padding:2rem;color:#00ff88;font-weight:600;">Full coverage! All techniques detected.</div>';
+        return;
+    }
+    // Sort by severity (critical first)
+    var sevOrder = {critical:0,high:1,medium:2,low:3,unknown:4};
+    gaps.sort(function(a,b) { return (sevOrder[a.sev]||4) - (sevOrder[b.sev]||4); });
+
+    var html = '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">' + gaps.length + ' techniques not yet detected</div>';
+    for (var i = 0; i < gaps.length; i++) {
+        var g = gaps[i];
+        var sevColors = {low:'#0088ff',medium:'#ffaa00',high:'#ff6600',critical:'#ff3366'};
+        var sc = sevColors[g.sev] || '#999';
+        html += '<div class="gap-item" data-tech-id="' + g.technique + '">'
+            + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+            + '<span class="tech-id" style="color:#ff3366;">' + g.technique + '</span>'
+            + '<span style="font-size:0.6rem;font-weight:700;padding:0.1rem 0.35rem;border-radius:3px;background:' + sc + '22;color:' + sc + ';">' + g.sev.toUpperCase() + '</span>'
+            + '</div>'
+            + (g.name ? '<div class="gap-name">' + esc(g.name) + '</div>' : '')
+            + '<div class="gap-tactic">' + g.tactic + '</div>'
+            + '</div>';
+    }
+    document.getElementById('gap-analysis').innerHTML = html;
+}
+
+function renderDetailTable() {
+    var entries = [];
+    for (var tid in coverageData) { entries.push([tid, coverageData[tid]]); }
+    entries.sort(function(a,b) { return b[1].count - a[1].count; });
+
+    if (entries.length === 0) {
+        document.getElementById('mitre-table').innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No detections yet. Deploy agents to start collecting.</div>';
+        return;
+    }
+
+    var html = '<table class="mitre-detail-table"><thead><tr><th>Technique</th><th>Name</th><th>Hits</th><th>Categories</th></tr></thead><tbody>';
+    for (var i = 0; i < entries.length; i++) {
+        var tid = entries[i][0];
+        var info = entries[i][1];
+        var techInfo = TECH_DB[tid];
+        var cats = [];
+        var infoCats = info.categories || {};
+        for (var c in infoCats) { cats.push('<span style="color:#00aaff;">' + esc(c) + '</span>:' + infoCats[c]); }
+        html += '<tr style="cursor:pointer;" data-tech-id="' + tid + '">'
+            + '<td><span style="font-family:monospace;color:#00ff88;font-weight:700;">' + tid + '</span></td>'
+            + '<td style="font-size:0.78rem;color:var(--text-secondary);">' + (techInfo ? esc(techInfo.n) : '') + '</td>'
+            + '<td style="font-weight:700;">' + info.count + '</td>'
+            + '<td style="font-size:0.78rem;">' + cats.join(', ') + '</td></tr>';
+    }
+    html += '</tbody></table>';
+    document.getElementById('mitre-table').innerHTML = html;
+}
+
+function showTechDetail(tid) {
+    var info = coverageData[tid];
+    var techInfo = TECH_DB[tid];
+    var agents = [];
+    for (var agent in AGENT_TECHNIQUE_MAP) {
+        if (AGENT_TECHNIQUE_MAP[agent].indexOf(tid) !== -1) {
+            agents.push('<span style="color:' + (agentColors[agent] || '#00d9ff') + ';font-weight:600;">' + agent + '</span>');
+        }
+    }
+    var tactic = '';
+    for (var t in TACTIC_MAP) { if (TACTIC_MAP[t].indexOf(tid) !== -1) { tactic = t; break; } }
+
+    var sevColors = {low:'#0088ff',medium:'#ffaa00',high:'#ff6600',critical:'#ff3366'};
+    var sev = techInfo ? techInfo.sev : 'unknown';
+    var sevColor = sevColors[sev] || '#999';
+
+    var html = '<h3 style="font-size:1.1rem;margin-bottom:0.3rem;"><span style="font-family:monospace;color:#00ff88;">' + tid + '</span></h3>';
+    if (techInfo) {
+        html += '<div style="font-size:1rem;font-weight:600;margin-bottom:0.5rem;">' + esc(techInfo.n) + '</div>';
+        html += '<div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:1rem;line-height:1.5;">' + esc(techInfo.d) + '</div>';
+    }
+
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;font-size:0.85rem;">'
+        + '<div><span style="color:var(--text-muted);font-size:0.75rem;">Tactic</span><div style="font-weight:600;">' + tactic + '</div></div>'
+        + '<div><span style="color:var(--text-muted);font-size:0.75rem;">Severity</span><div style="font-weight:700;color:' + sevColor + ';">' + sev.toUpperCase() + '</div></div>'
+        + '<div><span style="color:var(--text-muted);font-size:0.75rem;">Detections</span><div style="font-weight:700;color:' + (info ? '#00ff88' : '#ff3366') + ';">' + (info ? info.count : 0) + '</div></div>'
+        + '<div><span style="color:var(--text-muted);font-size:0.75rem;">MITRE Reference</span><div><a href="https://attack.mitre.org/techniques/' + tid.replace('.', '/') + '/" target="_blank" rel="noopener" style="color:var(--neural-primary);text-decoration:none;font-size:0.8rem;">attack.mitre.org &rarr;</a></div></div>'
+        + '<div style="grid-column:span 2;"><span style="color:var(--text-muted);font-size:0.75rem;">Covered By Agents</span><div>' + (agents.length > 0 ? agents.join(', ') : '<span style="color:#ff3366;">No agent coverage</span>') + '</div></div>';
+
+    if (info && info.categories) {
+        var catHtml = '';
+        for (var c in info.categories) {
+            catHtml += '<div style="display:flex;justify-content:space-between;padding:0.25rem 0;border-bottom:1px solid rgba(255,255,255,0.04);"><span style="color:#00aaff;">' + esc(c) + '</span><span>' + info.categories[c] + '</span></div>';
+        }
+        html += '<div style="grid-column:span 2;"><span style="color:var(--text-muted);font-size:0.75rem;">Event Categories</span><div style="margin-top:0.3rem;">' + catHtml + '</div></div>';
+    }
+    html += '</div>';
+
+    document.getElementById('tech-modal-content').innerHTML = html;
+    document.getElementById('tech-modal').style.display = 'flex';
+}
+
+function exportMITRE() {
+    var rows = [['Technique','Name','Severity','Tactic','Status','Hits','Agents']];
+    for (var tactic in TACTIC_MAP) {
+        var techs = TACTIC_MAP[tactic];
+        for (var i = 0; i < techs.length; i++) {
+            var tid = techs[i];
+            var info = coverageData[tid];
+            var techInfo = TECH_DB[tid];
+            var agents = [];
+            for (var agent in AGENT_TECHNIQUE_MAP) {
+                if (AGENT_TECHNIQUE_MAP[agent].indexOf(tid) !== -1) agents.push(agent);
+            }
+            rows.push([
+                tid,
+                techInfo ? techInfo.n : '',
+                techInfo ? techInfo.sev : '',
+                tactic,
+                info ? (info.count >= 3 ? 'Covered' : 'Partial') : 'Gap',
+                info ? info.count : 0,
+                agents.join('; ')
+            ]);
+        }
+    }
+    var csv = rows.map(function(r) { return r.map(function(c) { return '"' + String(c).replace(/"/g,'""') + '"'; }).join(','); }).join('\n');
+    var blob = new Blob([csv], {type:'text/csv'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'amoskys_mitre_coverage_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('refresh-mitre-btn').addEventListener('click', loadMITREData);
+    document.getElementById('export-mitre-btn').addEventListener('click', exportMITRE);
+    document.getElementById('filter-status').addEventListener('change', renderMatrix);
+    document.getElementById('filter-search').addEventListener('input', renderMatrix);
+    document.getElementById('tech-modal').addEventListener('click', function(e) {
+        if (e.target === this) this.style.display = 'none';
+    });
+    document.getElementById('close-tech-modal-btn').addEventListener('click', function() {
+        document.getElementById('tech-modal').style.display = 'none';
+    });
+    document.getElementById('mitre-matrix').addEventListener('click', function(e) {
+        var cell = e.target.closest('[data-tech-id]');
+        if (cell) showTechDetail(cell.getAttribute('data-tech-id'));
+    });
+    document.getElementById('gap-analysis').addEventListener('click', function(e) {
+        var item = e.target.closest('[data-tech-id]');
+        if (item) showTechDetail(item.getAttribute('data-tech-id'));
+    });
+    document.getElementById('mitre-table').addEventListener('click', function(e) {
+        var row = e.target.closest('[data-tech-id]');
+        if (row) showTechDetail(row.getAttribute('data-tech-id'));
+    });
+    loadMITREData();
+});
+</script>
+{% endblock %}

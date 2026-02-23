@@ -1,14 +1,15 @@
-from amoskys.proto import messaging_schema_pb2 as _messaging_schema_pb2
+import messaging_schema_pb2 as _messaging_schema_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class DeviceTelemetry(_message.Message):
-    __slots__ = ("device_id", "device_type", "protocol", "metadata", "events", "security", "timestamp_ns", "collection_agent", "agent_version", "is_compressed", "compression_algorithm", "batch_size", "collection_interval_ms")
+    __slots__ = ("device_id", "device_type", "protocol", "metadata", "events", "security", "timestamp_ns", "collection_agent", "agent_version", "is_compressed", "compression_algorithm", "batch_size", "collection_interval_ms", "schema_version")
     DEVICE_ID_FIELD_NUMBER: _ClassVar[int]
     DEVICE_TYPE_FIELD_NUMBER: _ClassVar[int]
     PROTOCOL_FIELD_NUMBER: _ClassVar[int]
@@ -22,6 +23,7 @@ class DeviceTelemetry(_message.Message):
     COMPRESSION_ALGORITHM_FIELD_NUMBER: _ClassVar[int]
     BATCH_SIZE_FIELD_NUMBER: _ClassVar[int]
     COLLECTION_INTERVAL_MS_FIELD_NUMBER: _ClassVar[int]
+    SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
     device_id: str
     device_type: str
     protocol: str
@@ -35,7 +37,8 @@ class DeviceTelemetry(_message.Message):
     compression_algorithm: str
     batch_size: int
     collection_interval_ms: int
-    def __init__(self, device_id: _Optional[str] = ..., device_type: _Optional[str] = ..., protocol: _Optional[str] = ..., metadata: _Optional[_Union[DeviceMetadata, _Mapping]] = ..., events: _Optional[_Iterable[_Union[TelemetryEvent, _Mapping]]] = ..., security: _Optional[_Union[SecurityContext, _Mapping]] = ..., timestamp_ns: _Optional[int] = ..., collection_agent: _Optional[str] = ..., agent_version: _Optional[str] = ..., is_compressed: bool = ..., compression_algorithm: _Optional[str] = ..., batch_size: _Optional[int] = ..., collection_interval_ms: _Optional[int] = ...) -> None: ...
+    schema_version: int
+    def __init__(self, device_id: _Optional[str] = ..., device_type: _Optional[str] = ..., protocol: _Optional[str] = ..., metadata: _Optional[_Union[DeviceMetadata, _Mapping]] = ..., events: _Optional[_Iterable[_Union[TelemetryEvent, _Mapping]]] = ..., security: _Optional[_Union[SecurityContext, _Mapping]] = ..., timestamp_ns: _Optional[int] = ..., collection_agent: _Optional[str] = ..., agent_version: _Optional[str] = ..., is_compressed: bool = ..., compression_algorithm: _Optional[str] = ..., batch_size: _Optional[int] = ..., collection_interval_ms: _Optional[int] = ..., schema_version: _Optional[int] = ...) -> None: ...
 
 class DeviceMetadata(_message.Message):
     __slots__ = ("manufacturer", "model", "firmware_version", "hardware_version", "serial_number", "ip_address", "mac_address", "subnet", "vlan_id", "protocols", "open_ports", "capabilities", "physical_location", "department", "asset_tag", "compliance_frameworks", "vulnerability_score", "criticality_level", "custom_properties")
@@ -94,7 +97,7 @@ class DeviceMetadata(_message.Message):
     def __init__(self, manufacturer: _Optional[str] = ..., model: _Optional[str] = ..., firmware_version: _Optional[str] = ..., hardware_version: _Optional[str] = ..., serial_number: _Optional[str] = ..., ip_address: _Optional[str] = ..., mac_address: _Optional[str] = ..., subnet: _Optional[str] = ..., vlan_id: _Optional[str] = ..., protocols: _Optional[_Iterable[str]] = ..., open_ports: _Optional[_Iterable[int]] = ..., capabilities: _Optional[_Mapping[str, str]] = ..., physical_location: _Optional[str] = ..., department: _Optional[str] = ..., asset_tag: _Optional[str] = ..., compliance_frameworks: _Optional[_Iterable[str]] = ..., vulnerability_score: _Optional[float] = ..., criticality_level: _Optional[str] = ..., custom_properties: _Optional[_Mapping[str, str]] = ...) -> None: ...
 
 class TelemetryEvent(_message.Message):
-    __slots__ = ("event_id", "event_type", "severity", "event_timestamp_ns", "metric_data", "log_data", "alarm_data", "status_data", "security_event", "audit_event", "tags", "attributes", "source_component", "confidence_score", "is_synthetic", "retry_count")
+    __slots__ = ("event_id", "event_type", "severity", "event_timestamp_ns", "metric_data", "log_data", "alarm_data", "status_data", "security_event", "audit_event", "tags", "attributes", "source_component", "confidence_score", "is_synthetic", "retry_count", "reliability_score", "drift_indicator", "agent_id")
     class AttributesEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
@@ -118,6 +121,9 @@ class TelemetryEvent(_message.Message):
     CONFIDENCE_SCORE_FIELD_NUMBER: _ClassVar[int]
     IS_SYNTHETIC_FIELD_NUMBER: _ClassVar[int]
     RETRY_COUNT_FIELD_NUMBER: _ClassVar[int]
+    RELIABILITY_SCORE_FIELD_NUMBER: _ClassVar[int]
+    DRIFT_INDICATOR_FIELD_NUMBER: _ClassVar[int]
+    AGENT_ID_FIELD_NUMBER: _ClassVar[int]
     event_id: str
     event_type: str
     severity: str
@@ -134,7 +140,10 @@ class TelemetryEvent(_message.Message):
     confidence_score: float
     is_synthetic: bool
     retry_count: int
-    def __init__(self, event_id: _Optional[str] = ..., event_type: _Optional[str] = ..., severity: _Optional[str] = ..., event_timestamp_ns: _Optional[int] = ..., metric_data: _Optional[_Union[MetricData, _Mapping]] = ..., log_data: _Optional[_Union[LogData, _Mapping]] = ..., alarm_data: _Optional[_Union[AlarmData, _Mapping]] = ..., status_data: _Optional[_Union[StatusData, _Mapping]] = ..., security_event: _Optional[_Union[SecurityEvent, _Mapping]] = ..., audit_event: _Optional[_Union[AuditEvent, _Mapping]] = ..., tags: _Optional[_Iterable[str]] = ..., attributes: _Optional[_Mapping[str, str]] = ..., source_component: _Optional[str] = ..., confidence_score: _Optional[float] = ..., is_synthetic: bool = ..., retry_count: _Optional[int] = ...) -> None: ...
+    reliability_score: float
+    drift_indicator: str
+    agent_id: str
+    def __init__(self, event_id: _Optional[str] = ..., event_type: _Optional[str] = ..., severity: _Optional[str] = ..., event_timestamp_ns: _Optional[int] = ..., metric_data: _Optional[_Union[MetricData, _Mapping]] = ..., log_data: _Optional[_Union[LogData, _Mapping]] = ..., alarm_data: _Optional[_Union[AlarmData, _Mapping]] = ..., status_data: _Optional[_Union[StatusData, _Mapping]] = ..., security_event: _Optional[_Union[SecurityEvent, _Mapping]] = ..., audit_event: _Optional[_Union[AuditEvent, _Mapping]] = ..., tags: _Optional[_Iterable[str]] = ..., attributes: _Optional[_Mapping[str, str]] = ..., source_component: _Optional[str] = ..., confidence_score: _Optional[float] = ..., is_synthetic: bool = ..., retry_count: _Optional[int] = ..., reliability_score: _Optional[float] = ..., drift_indicator: _Optional[str] = ..., agent_id: _Optional[str] = ...) -> None: ...
 
 class MetricData(_message.Message):
     __slots__ = ("metric_name", "metric_type", "numeric_value", "string_value", "boolean_value", "binary_value", "unit", "labels", "min_value", "max_value", "avg_value", "sample_count")
@@ -461,7 +470,7 @@ class TelemetryBatch(_message.Message):
     def __init__(self, telemetry_records: _Optional[_Iterable[_Union[DeviceTelemetry, _Mapping]]] = ..., batch_sequence_number: _Optional[int] = ..., batch_start_time_ns: _Optional[int] = ..., batch_end_time_ns: _Optional[int] = ..., is_compressed: bool = ..., compression_algorithm: _Optional[str] = ..., original_size_bytes: _Optional[int] = ..., compressed_size_bytes: _Optional[int] = ..., total_events: _Optional[int] = ..., dropped_events: _Optional[int] = ..., data_quality_score: _Optional[float] = ..., edge_agent_id: _Optional[str] = ..., edge_location: _Optional[str] = ..., edge_metadata: _Optional[_Mapping[str, str]] = ...) -> None: ...
 
 class UniversalEnvelope(_message.Message):
-    __slots__ = ("version", "ts_ns", "idempotency_key", "flow", "process", "device_telemetry", "telemetry_batch", "sig", "prev_sig", "signing_algorithm", "certificate_chain", "priority", "processing_hints", "target_processors", "retry_count", "max_processing_time_ns", "requires_acknowledgment")
+    __slots__ = ("version", "ts_ns", "idempotency_key", "flow", "process", "device_telemetry", "telemetry_batch", "sig", "prev_sig", "signing_algorithm", "certificate_chain", "priority", "processing_hints", "target_processors", "retry_count", "max_processing_time_ns", "requires_acknowledgment", "schema_version")
     VERSION_FIELD_NUMBER: _ClassVar[int]
     TS_NS_FIELD_NUMBER: _ClassVar[int]
     IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
@@ -479,6 +488,7 @@ class UniversalEnvelope(_message.Message):
     RETRY_COUNT_FIELD_NUMBER: _ClassVar[int]
     MAX_PROCESSING_TIME_NS_FIELD_NUMBER: _ClassVar[int]
     REQUIRES_ACKNOWLEDGMENT_FIELD_NUMBER: _ClassVar[int]
+    SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
     version: str
     ts_ns: int
     idempotency_key: str
@@ -496,7 +506,8 @@ class UniversalEnvelope(_message.Message):
     retry_count: int
     max_processing_time_ns: int
     requires_acknowledgment: bool
-    def __init__(self, version: _Optional[str] = ..., ts_ns: _Optional[int] = ..., idempotency_key: _Optional[str] = ..., flow: _Optional[_Union[_messaging_schema_pb2.FlowEvent, _Mapping]] = ..., process: _Optional[_Union[_messaging_schema_pb2.ProcessEvent, _Mapping]] = ..., device_telemetry: _Optional[_Union[DeviceTelemetry, _Mapping]] = ..., telemetry_batch: _Optional[_Union[TelemetryBatch, _Mapping]] = ..., sig: _Optional[bytes] = ..., prev_sig: _Optional[bytes] = ..., signing_algorithm: _Optional[str] = ..., certificate_chain: _Optional[str] = ..., priority: _Optional[str] = ..., processing_hints: _Optional[_Iterable[str]] = ..., target_processors: _Optional[str] = ..., retry_count: _Optional[int] = ..., max_processing_time_ns: _Optional[int] = ..., requires_acknowledgment: bool = ...) -> None: ...
+    schema_version: int
+    def __init__(self, version: _Optional[str] = ..., ts_ns: _Optional[int] = ..., idempotency_key: _Optional[str] = ..., flow: _Optional[_Union[_messaging_schema_pb2.FlowEvent, _Mapping]] = ..., process: _Optional[_Union[_messaging_schema_pb2.ProcessEvent, _Mapping]] = ..., device_telemetry: _Optional[_Union[DeviceTelemetry, _Mapping]] = ..., telemetry_batch: _Optional[_Union[TelemetryBatch, _Mapping]] = ..., sig: _Optional[bytes] = ..., prev_sig: _Optional[bytes] = ..., signing_algorithm: _Optional[str] = ..., certificate_chain: _Optional[str] = ..., priority: _Optional[str] = ..., processing_hints: _Optional[_Iterable[str]] = ..., target_processors: _Optional[str] = ..., retry_count: _Optional[int] = ..., max_processing_time_ns: _Optional[int] = ..., requires_acknowledgment: bool = ..., schema_version: _Optional[int] = ...) -> None: ...
 
 class UniversalAck(_message.Message):
     __slots__ = ("status", "reason", "backoff_hint_ms", "processed_timestamp_ns", "events_accepted", "events_rejected", "validation_errors", "current_load", "queue_depth", "processing_rate_per_second")

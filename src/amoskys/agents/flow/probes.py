@@ -27,6 +27,7 @@ MITRE ATT&CK Coverage:
 from __future__ import annotations
 
 import ipaddress
+import logging
 import statistics
 from collections import defaultdict
 from dataclasses import dataclass
@@ -39,6 +40,7 @@ from amoskys.agents.common.probes import (
     TelemetryEvent,
 )
 
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Flow Event Model
@@ -65,7 +67,9 @@ class FlowEvent:
     # Optional / enriched
     direction: str = "UNKNOWN"  # "INBOUND", "OUTBOUND", "LATERAL"
     app_protocol: str = "UNKNOWN"  # "HTTP", "HTTPS", "DNS", "SMB", "RDP", "SSH", etc.
-    tcp_flags: Optional[str] = None  # summary flags for TCP (e.g., "S", "SA", "FA", "R")
+    tcp_flags: Optional[str] = (
+        None  # summary flags for TCP (e.g., "S", "SA", "FA", "R")
+    )
 
     # Process context (populated by nettop on macOS)
     pid: Optional[int] = None
@@ -149,6 +153,12 @@ class PortScanSweepProbe(MicroProbe):
     mitre_tactics = ["Discovery"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["flows"]
+    field_semantics = {
+        "src_ip": "ipv4_or_ipv6",
+        "dst_ip": "ipv4_or_ipv6",
+        "dst_port": "tcp_udp_port",
+    }
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect port scanning patterns."""
@@ -210,6 +220,12 @@ class LateralSMBWinRMProbe(MicroProbe):
     mitre_tactics = ["Lateral Movement"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["flows"]
+    field_semantics = {
+        "src_ip": "ipv4_or_ipv6",
+        "dst_ip": "ipv4_or_ipv6",
+        "dst_port": "tcp_udp_port",
+    }
 
     def __init__(self):
         super().__init__()
@@ -293,6 +309,9 @@ class DataExfilVolumeSpikeProbe(MicroProbe):
     mitre_tactics = ["Exfiltration"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["flows"]
+    field_semantics = {"bytes_tx": "per_flow_delta", "direction": "flow_direction"}
+    degraded_without = ["bytes_tx"]
 
     def __init__(self):
         super().__init__()
@@ -373,6 +392,13 @@ class C2BeaconFlowProbe(MicroProbe):
     mitre_tactics = ["Command and Control"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["flows"]
+    field_semantics = {
+        "bytes_tx": "per_flow_delta",
+        "bytes_rx": "per_flow_delta",
+        "first_seen_ns": "monotonic_ns",
+    }
+    degraded_without = ["bytes_tx", "bytes_rx"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect beaconing patterns."""
@@ -414,7 +440,9 @@ class C2BeaconFlowProbe(MicroProbe):
 
             # Check beaconing conditions
             if (
-                BEACON_MIN_INTERVAL_SECONDS <= avg_interval <= BEACON_MAX_INTERVAL_SECONDS
+                BEACON_MIN_INTERVAL_SECONDS
+                <= avg_interval
+                <= BEACON_MAX_INTERVAL_SECONDS
                 and jitter_ratio <= BEACON_MAX_JITTER_RATIO
                 and avg_bytes <= BEACON_MAX_BYTES_PER_FLOW
             ):
@@ -465,6 +493,8 @@ class CleartextCredentialLeakProbe(MicroProbe):
     mitre_tactics = ["Credential Access"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["flows"]
+    field_semantics = {"dst_port": "tcp_udp_port", "dst_ip": "ipv4_or_ipv6"}
 
     # Cleartext credential ports
     CLEARTEXT_PORTS = {
@@ -520,8 +550,13 @@ class CleartextCredentialLeakProbe(MicroProbe):
 class SuspiciousTunnelProbe(MicroProbe):
     """Detects long-lived tunnels and suspicious proxies.
 
+    Uses stateful cross-cycle tracking: nettop provides per-cycle snapshots,
+    so a single FlowEvent may only cover a short observation window. This
+    probe accumulates flow history across scans to detect connections that
+    persist beyond the tunnel duration threshold.
+
     Watches:
-        - Long-duration TCP connections (>10 minutes)
+        - Connections persisting across multiple collection cycles
         - High packet count with low average packet size
         - Bidirectional traffic patterns
 
@@ -538,58 +573,127 @@ class SuspiciousTunnelProbe(MicroProbe):
     mitre_tactics = ["Command and Control"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["flows"]
+    field_semantics = {
+        "duration_seconds": "positive_seconds",
+        "packet_count": "monotonic_counter",
+        "bytes_tx": "per_flow_delta",
+    }
+    degraded_without = ["bytes_tx", "bytes_rx"]
 
     # Known proxy/VPN ports (allowlist)
     KNOWN_PROXY_PORTS = {1080, 8080, 8888, 3128}  # SOCKS, HTTP proxies
 
-    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
-        """Detect suspicious tunnels."""
-        events: List[TelemetryEvent] = []
-        flows: List[FlowEvent] = context.shared_data.get("flows", [])
+    # Stateful tracking: evict flows not seen for this many cycles
+    _MAX_STALE_CYCLES = 3
+
+    def __init__(self) -> None:
+        super().__init__()
+        # Stateful connection history: flow_key → tracking state
+        # Each entry: {"first_seen_ns", "last_seen_ns", "total_packets",
+        #              "total_bytes", "cycles_seen", "stale_cycles",
+        #              "already_alerted"}
+        self._flow_history: Dict[str, Dict] = {}
+
+    @staticmethod
+    def _flow_key(flow: "FlowEvent") -> str:
+        """Stable key for a flow across collection cycles."""
+        return f"{flow.src_ip}:{flow.src_port}->{flow.dst_ip}:{flow.dst_port}"
+
+    def _update_flow_history(self, flows: List["FlowEvent"]) -> None:
+        """Update cross-cycle flow history with current observations."""
+        for state in self._flow_history.values():
+            state["stale_cycles"] += 1
 
         for flow in flows:
             if flow.protocol != "TCP":
                 continue
+            key = self._flow_key(flow)
+            if key in self._flow_history:
+                state = self._flow_history[key]
+                state["last_seen_ns"] = flow.last_seen_ns
+                state["total_packets"] += flow.packet_count
+                state["total_bytes"] += flow.total_bytes()
+                state["cycles_seen"] += 1
+                state["stale_cycles"] = 0
+            else:
+                self._flow_history[key] = {
+                    "first_seen_ns": flow.first_seen_ns,
+                    "last_seen_ns": flow.last_seen_ns,
+                    "total_packets": flow.packet_count,
+                    "total_bytes": flow.total_bytes(),
+                    "cycles_seen": 1,
+                    "stale_cycles": 0,
+                    "already_alerted": False,
+                    "dst_port": flow.dst_port,
+                    "src_ip": flow.src_ip,
+                    "dst_ip": flow.dst_ip,
+                    "bytes_tx": flow.bytes_tx,
+                    "bytes_rx": flow.bytes_rx,
+                }
 
-            duration_s = flow.duration_seconds()
+        # Evict stale flows
+        stale_keys = [
+            k
+            for k, v in self._flow_history.items()
+            if v["stale_cycles"] > self._MAX_STALE_CYCLES
+        ]
+        for k in stale_keys:
+            del self._flow_history[k]
 
-            # Check for long-lived connection
-            if duration_s < TUNNEL_MIN_DURATION_SECONDS:
-                continue
+    def _evaluate_tunnel(self, state: Dict) -> Optional[TelemetryEvent]:
+        """Evaluate a tracked flow for tunnel characteristics."""
+        if state["already_alerted"]:
+            return None
 
-            if flow.packet_count < TUNNEL_MIN_PACKETS:
-                continue
+        duration = (state["last_seen_ns"] - state["first_seen_ns"]) / 1e9
+        if duration < TUNNEL_MIN_DURATION_SECONDS:
+            return None
+        if state["total_packets"] < TUNNEL_MIN_PACKETS:
+            return None
 
-            # Calculate average packet size
-            total_bytes = flow.total_bytes()
-            avg_packet_size = total_bytes / flow.packet_count if flow.packet_count > 0 else 0
+        avg_pkt = (
+            state["total_bytes"] / state["total_packets"]
+            if state["total_packets"] > 0
+            else 0
+        )
+        is_known_proxy = state["dst_port"] in self.KNOWN_PROXY_PORTS
 
-            # Check if port is in known proxy list
-            is_known_proxy = flow.dst_port in self.KNOWN_PROXY_PORTS
+        if is_known_proxy or avg_pkt >= 500:
+            return None
 
-            # Flag if not a known proxy and has tunnel characteristics
-            if not is_known_proxy and avg_packet_size < 500:  # Small packets
-                events.append(
-                    TelemetryEvent(
-                        event_type="flow_suspicious_tunnel_detected",
-                        severity=Severity.HIGH,
-                        probe_name=self.name,
-                        data={
-                            "src_ip": flow.src_ip,
-                            "dst_ip": flow.dst_ip,
-                            "dst_port": flow.dst_port,
-                            "duration_seconds": round(duration_s, 2),
-                            "bytes_tx": flow.bytes_tx,
-                            "bytes_rx": flow.bytes_rx,
-                            "packet_count": flow.packet_count,
-                            "avg_packet_size": int(avg_packet_size),
-                            "is_known_proxy": is_known_proxy,
-                            "reason": "Long-lived connection with tunnel characteristics",
-                        },
-                        mitre_techniques=["T1090", "T1572"],
-                    )
-                )
+        state["already_alerted"] = True
+        return TelemetryEvent(
+            event_type="flow_suspicious_tunnel_detected",
+            severity=Severity.HIGH,
+            probe_name=self.name,
+            data={
+                "src_ip": state["src_ip"],
+                "dst_ip": state["dst_ip"],
+                "dst_port": state["dst_port"],
+                "duration_seconds": round(duration, 2),
+                "bytes_tx": state.get("bytes_tx", 0),
+                "bytes_rx": state.get("bytes_rx", 0),
+                "packet_count": state["total_packets"],
+                "avg_packet_size": int(avg_pkt),
+                "cycles_observed": state["cycles_seen"],
+                "is_known_proxy": is_known_proxy,
+                "reason": "Long-lived connection with tunnel "
+                "characteristics (cross-cycle tracking)",
+            },
+            mitre_techniques=["T1090", "T1572"],
+        )
 
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        """Detect suspicious tunnels using cross-cycle state."""
+        flows: List[FlowEvent] = context.shared_data.get("flows", [])
+        self._update_flow_history(flows)
+
+        events: List[TelemetryEvent] = []
+        for state in self._flow_history.values():
+            event = self._evaluate_tunnel(state)
+            if event:
+                events.append(event)
         return events
 
 
@@ -619,6 +723,8 @@ class InternalReconDNSFlowProbe(MicroProbe):
     mitre_tactics = ["Discovery", "Reconnaissance"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["flows"]
+    field_semantics = {"dst_port": "tcp_udp_port", "app_protocol": "protocol_name"}
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect DNS-based reconnaissance."""
@@ -679,6 +785,12 @@ class NewExternalServiceProbe(MicroProbe):
     mitre_tactics = ["Command and Control", "Reconnaissance"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["flows"]
+    field_semantics = {
+        "dst_ip": "ipv4_or_ipv6",
+        "dst_port": "tcp_udp_port",
+        "first_seen_ns": "monotonic_ns",
+    }
 
     # Common approved ports (allowlist)
     COMMON_PORTS = {53, 80, 443, 123, 22, 25, 587, 465, 993, 995}
@@ -727,6 +839,112 @@ class NewExternalServiceProbe(MicroProbe):
 
 
 # =============================================================================
+# Probe 9: Transparent Proxy Detection (Phase 3 - macOS observability)
+# =============================================================================
+
+
+class TransparentProxyProbe(MicroProbe):
+    """Detects Network Extension installations for transparent proxy/filtering.
+
+    Watches:
+        - /Library/SystemExtensions/ directory
+        - systemextensionsctl list output
+        - Network extension loading attempts
+
+    Detects suspicious network extensions that could intercept traffic for
+    data exfiltration, C2, or other malicious purposes.
+
+    MITRE: T1185 (Man in the Browser), T1557 (Adversary-in-the-Middle)
+    """
+
+    name = "transparent_proxy"
+    description = "Transparent proxy/network extension detection"
+    mitre_techniques = ["T1185", "T1557.002"]
+    mitre_tactics = ["Command and Control", "Defense Evasion"]
+    default_enabled = True
+    scan_interval = 300.0  # Check less frequently
+    requires_fields = ["flows"]
+
+    SYSTEM_EXTENSIONS_PATH = "/Library/SystemExtensions/"
+
+    def __init__(self):
+        super().__init__()
+        self.seen_extensions: Set[str] = set()
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        """Detect network extension installations."""
+        events: List[TelemetryEvent] = []
+
+        import os
+        import platform
+        import subprocess
+
+        # Only on macOS
+        if platform.system() != "Darwin":
+            return events
+
+        try:
+            # Check for system extensions
+            if os.path.exists(self.SYSTEM_EXTENSIONS_PATH):
+                for ext_dir in os.listdir(self.SYSTEM_EXTENSIONS_PATH):
+                    ext_path = os.path.join(self.SYSTEM_EXTENSIONS_PATH, ext_dir)
+                    if ext_dir not in self.seen_extensions:
+                        self.seen_extensions.add(ext_dir)
+
+                        # Get more info about the extension
+                        events.append(
+                            TelemetryEvent(
+                                event_type="flow_network_extension_detected",
+                                severity=Severity.MEDIUM,
+                                probe_name=self.name,
+                                data={
+                                    "extension_name": ext_dir,
+                                    "extension_path": ext_path,
+                                    "reason": "Network system extension installed",
+                                },
+                                mitre_techniques=self.mitre_techniques,
+                            )
+                        )
+
+        except (OSError, PermissionError) as e:
+            logger.debug(f"TransparentProxyProbe: Could not read extensions: {e}")
+
+        try:
+            # Check systemextensionsctl for loaded extensions
+            result = subprocess.run(
+                ["systemextensionsctl", "list"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode == 0:
+                for line in result.stdout.split("\n"):
+                    if "enabled" in line.lower() and "network" in line.lower():
+                        # Found an enabled network extension
+                        if line not in self.seen_extensions:
+                            self.seen_extensions.add(line)
+
+                            events.append(
+                                TelemetryEvent(
+                                    event_type="flow_network_extension_enabled",
+                                    severity=Severity.HIGH,
+                                    probe_name=self.name,
+                                    data={
+                                        "extension_info": line,
+                                        "reason": "Network extension is enabled and loaded",
+                                    },
+                                    mitre_techniques=self.mitre_techniques,
+                                )
+                            )
+
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass  # systemextensionsctl not available
+
+        return events
+
+
+# =============================================================================
 # Probe Factory
 # =============================================================================
 
@@ -735,7 +953,7 @@ def create_flow_probes() -> List[MicroProbe]:
     """Create all flow micro-probes.
 
     Returns:
-        List of 8 flow probes
+        List of 9 flow probes (8 original + 1 Phase 3 macOS)
     """
     return [
         PortScanSweepProbe(),
@@ -746,4 +964,5 @@ def create_flow_probes() -> List[MicroProbe]:
         SuspiciousTunnelProbe(),
         InternalReconDNSFlowProbe(),
         NewExternalServiceProbe(),
+        TransparentProxyProbe(),
     ]

@@ -43,7 +43,6 @@ from amoskys.agents.common.probes import (
     TelemetryEvent,
 )
 
-
 # =============================================================================
 # File State Model
 # =============================================================================
@@ -149,8 +148,16 @@ class FileChange:
             new_uid = self.new_state.uid if self.new_state else -1
             return f"Owner changed: {self.path} (UID {old_uid} → {new_uid})"
         elif self.change_type == ChangeType.HASH_CHANGED:
-            old_hash = self.old_state.sha256[:8] if self.old_state and self.old_state.sha256 else "???"
-            new_hash = self.new_state.sha256[:8] if self.new_state and self.new_state.sha256 else "???"
+            old_hash = (
+                self.old_state.sha256[:8]
+                if self.old_state and self.old_state.sha256
+                else "???"
+            )
+            new_hash = (
+                self.new_state.sha256[:8]
+                if self.new_state and self.new_state.sha256
+                else "???"
+            )
             return f"Content changed: {self.path} (hash {old_hash}... → {new_hash}...)"
         return f"Unknown change: {self.path}"
 
@@ -162,9 +169,26 @@ class FileChange:
 
 # Critical system binaries to monitor
 CRITICAL_BINARIES = {
-    "sudo", "su", "sshd", "ssh", "bash", "sh", "zsh", "login",
-    "systemd", "init", "cron", "crond", "passwd", "chsh", "chfn",
-    "mount", "umount", "iptables", "nft", "tcpdump"
+    "sudo",
+    "su",
+    "sshd",
+    "ssh",
+    "bash",
+    "sh",
+    "zsh",
+    "login",
+    "systemd",
+    "init",
+    "cron",
+    "crond",
+    "passwd",
+    "chsh",
+    "chfn",
+    "mount",
+    "umount",
+    "iptables",
+    "nft",
+    "tcpdump",
 }
 
 # Critical config files
@@ -223,6 +247,7 @@ class CriticalSystemFileChangeProbe(MicroProbe):
     mitre_tactics = ["Defense Evasion", "Persistence"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["file_changes"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect critical file changes."""
@@ -242,10 +267,15 @@ class CriticalSystemFileChangeProbe(MicroProbe):
 
             if is_critical_binary or is_critical_config:
                 # Determine severity based on change type
-                severity = Severity.CRITICAL if change.change_type in (
-                    ChangeType.HASH_CHANGED,
-                    ChangeType.MODIFIED,
-                ) else Severity.HIGH
+                severity = (
+                    Severity.CRITICAL
+                    if change.change_type
+                    in (
+                        ChangeType.HASH_CHANGED,
+                        ChangeType.MODIFIED,
+                    )
+                    else Severity.HIGH
+                )
 
                 events.append(
                     TelemetryEvent(
@@ -256,8 +286,12 @@ class CriticalSystemFileChangeProbe(MicroProbe):
                             "path": change.path,
                             "change_type": change.change_type.value,
                             "details": change.get_change_details(),
-                            "old_hash": change.old_state.sha256 if change.old_state else None,
-                            "new_hash": change.new_state.sha256 if change.new_state else None,
+                            "old_hash": (
+                                change.old_state.sha256 if change.old_state else None
+                            ),
+                            "new_hash": (
+                                change.new_state.sha256 if change.new_state else None
+                            ),
                         },
                         mitre_techniques=["T1036", "T1547"],
                     )
@@ -291,6 +325,7 @@ class SUIDBitChangeProbe(MicroProbe):
     mitre_tactics = ["Privilege Escalation"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["file_changes"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect SUID/SGID changes."""
@@ -367,6 +402,7 @@ class ServiceCreationProbe(MicroProbe):
     mitre_tactics = ["Persistence"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["file_changes"]
 
     # Persistence paths to monitor
     PERSISTENCE_PATHS = {
@@ -457,6 +493,7 @@ class WebShellDropProbe(MicroProbe):
     mitre_tactics = ["Persistence"]
     default_enabled = True
     scan_interval = 30.0
+    requires_fields = ["file_changes"]
 
     # Suspicious file extensions
     WEBSHELL_EXTENSIONS = {".php", ".jsp", ".asp", ".aspx", ".cfm", ".jspx"}
@@ -478,8 +515,14 @@ class WebShellDropProbe(MicroProbe):
                 continue
 
             # For new or modified files, check content
-            if change.change_type in (ChangeType.CREATED, ChangeType.MODIFIED, ChangeType.HASH_CHANGED):
-                is_suspicious, patterns_matched = self._check_webshell_patterns(change.path)
+            if change.change_type in (
+                ChangeType.CREATED,
+                ChangeType.MODIFIED,
+                ChangeType.HASH_CHANGED,
+            ):
+                is_suspicious, patterns_matched = self._check_webshell_patterns(
+                    change.path
+                )
 
                 if is_suspicious:
                     events.append(
@@ -548,6 +591,7 @@ class ConfigBackdoorProbe(MicroProbe):
     mitre_tactics = ["Persistence", "Privilege Escalation"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["file_changes"]
 
     # Dangerous SSH config patterns
     DANGEROUS_SSH_PATTERNS = [
@@ -670,6 +714,7 @@ class LibraryHijackProbe(MicroProbe):
     mitre_tactics = ["Persistence", "Defense Evasion"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["file_changes"]
 
     LIBRARY_PATHS = {
         "/lib",
@@ -716,7 +761,11 @@ class LibraryHijackProbe(MicroProbe):
 
             # Check for new .so files in system directories
             is_lib_path = any(change.path.startswith(p) for p in self.LIBRARY_PATHS)
-            if is_lib_path and change.path.endswith(".so") and change.change_type == ChangeType.CREATED:
+            if (
+                is_lib_path
+                and change.path.endswith(".so")
+                and change.change_type == ChangeType.CREATED
+            ):
                 events.append(
                     TelemetryEvent(
                         event_type="new_system_library",
@@ -741,14 +790,14 @@ class LibraryHijackProbe(MicroProbe):
 class BootloaderTamperProbe(MicroProbe):
     """Detects bootkit/kernel tampering.
 
-    Watches:
-        - /boot directory (kernels, initramfs, grub configs)
-        - EFI boot entries
+    Platform-aware monitoring:
+        - Linux: /boot (kernels, initramfs, grub configs)
+        - macOS: /System/Library/Kernels, /Library/Extensions, firmware
 
     Flags:
-        - New kernel images
-        - GRUB config modifications
-        - initramfs changes
+        - New kernel images or kexts
+        - GRUB/EFI config modifications
+        - initramfs / firmware changes
 
     MITRE: T1542.003 (Bootloader Modification)
     """
@@ -759,6 +808,44 @@ class BootloaderTamperProbe(MicroProbe):
     mitre_tactics = ["Persistence", "Defense Evasion"]
     default_enabled = True
     scan_interval = 120.0
+    requires_fields = ["file_changes"]
+
+    # Platform-aware boot paths
+    _BOOT_PREFIXES = {
+        "linux": ["/boot"],
+        "darwin": [
+            "/System/Library/Kernels/",
+            "/System/Library/Extensions/",
+            "/Library/Extensions/",
+            "/usr/standalone/firmware/",
+        ],
+    }
+
+    # Critical filename keywords per platform
+    _CRITICAL_KEYWORDS = {
+        "linux": ["vmlinuz", "initrd", "grub", "efi"],
+        "darwin": ["kernel", "kext", "firmware", "boot.efi", "prelinkedkernel"],
+    }
+
+    @classmethod
+    def _get_platform(cls) -> str:
+        import sys
+
+        return "darwin" if sys.platform == "darwin" else "linux"
+
+    def _is_boot_path(self, path: str) -> bool:
+        """Check if path is within a boot-related directory."""
+        platform_key = self._get_platform()
+        for prefix in self._BOOT_PREFIXES.get(platform_key, ["/boot"]):
+            if path.startswith(prefix):
+                return True
+        return False
+
+    def _is_critical_boot_file(self, path: str) -> bool:
+        """Check if path matches a critical boot file keyword."""
+        platform_key = self._get_platform()
+        keywords = self._CRITICAL_KEYWORDS.get(platform_key, [])
+        return any(kw in path.lower() for kw in keywords)
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect bootloader tampering."""
@@ -766,20 +853,19 @@ class BootloaderTamperProbe(MicroProbe):
         file_changes: List[FileChange] = context.shared_data.get("file_changes", [])
 
         for change in file_changes:
-            # Check if in /boot
-            if not change.path.startswith("/boot"):
+            if not self._is_boot_path(change.path):
                 continue
 
-            # Flag any changes to boot directory
             if change.change_type in (
                 ChangeType.CREATED,
                 ChangeType.MODIFIED,
                 ChangeType.HASH_CHANGED,
             ):
-                # Determine severity based on file type
-                severity = Severity.CRITICAL if any(
-                    x in change.path for x in ["vmlinuz", "initrd", "grub", "efi"]
-                ) else Severity.HIGH
+                severity = (
+                    Severity.CRITICAL
+                    if self._is_critical_boot_file(change.path)
+                    else Severity.HIGH
+                )
 
                 events.append(
                     TelemetryEvent(
@@ -824,6 +910,7 @@ class WorldWritableSensitiveProbe(MicroProbe):
     mitre_tactics = ["Impact", "Defense Evasion"]
     default_enabled = True
     scan_interval = 60.0
+    requires_fields = ["file_changes"]
 
     SENSITIVE_PATHS = {"/etc", "/var/log", "/var/www", "/usr/bin", "/usr/sbin"}
 
@@ -837,9 +924,7 @@ class WorldWritableSensitiveProbe(MicroProbe):
                 continue
 
             # Check if in sensitive path
-            is_sensitive = any(
-                change.path.startswith(p) for p in self.SENSITIVE_PATHS
-            )
+            is_sensitive = any(change.path.startswith(p) for p in self.SENSITIVE_PATHS)
             if not is_sensitive:
                 continue
 
@@ -857,13 +942,163 @@ class WorldWritableSensitiveProbe(MicroProbe):
                         probe_name=self.name,
                         data={
                             "path": change.path,
-                            "old_mode": oct(change.old_state.mode) if change.old_state else None,
+                            "old_mode": (
+                                oct(change.old_state.mode) if change.old_state else None
+                            ),
                             "new_mode": oct(change.new_state.mode),
                             "reason": "Sensitive file made world-writable",
                         },
                         mitre_techniques=["T1565", "T1070"],
                     )
                 )
+
+        return events
+
+
+# =============================================================================
+# Probe 9: Extended Attributes Quarantine Bit Removal (Phase 3 - macOS)
+# =============================================================================
+
+
+class ExtendedAttributesProbe(MicroProbe):
+    """Monitors quarantine bit removal on downloaded files.
+
+    macOS uses extended attributes (xattr) to mark downloaded files with the
+    com.apple.quarantine bit. Removal of this attribute bypasses Gatekeeper
+    checks and is a common malware preparation step.
+
+    Watches:
+        - Downloads directory (/Users/*/Downloads)
+        - Common file drop locations
+        - Removal of com.apple.quarantine xattr
+
+    MITRE: T1222.002 (File and Directory Permissions Modification: Linux & Mac File and Directory Permissions Modification)
+    """
+
+    name = "extended_attributes"
+    description = "Monitor quarantine bit removal and suspicious xattr changes"
+    mitre_techniques = ["T1222.002", "T1036"]
+    mitre_tactics = ["Defense Evasion"]
+    platforms = ["darwin"]
+    default_enabled = True
+    scan_interval = 60.0
+    requires_fields = ["file_changes"]
+
+    # Common file drop locations on macOS
+    DOWNLOAD_PATHS = {
+        "/Users/",  # Will match all user downloads
+        "/tmp/",
+        "/var/tmp/",
+        "/Library/Caches/",
+    }
+
+    # Suspicious file extensions that shouldn't have quarantine removed
+    SUSPICIOUS_EXTENSIONS = {
+        ".app",
+        ".exe",
+        ".dmg",
+        ".pkg",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".sh",
+        ".command",
+        ".scpt",
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.reported_files: Set[str] = set()
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        """Detect quarantine bit removal and suspicious xattr changes."""
+        events: List[TelemetryEvent] = []
+
+        import platform
+        import subprocess
+
+        # Only on macOS
+        if platform.system() != "Darwin":
+            return events
+
+        file_changes: List[FileChange] = context.shared_data.get("file_changes", [])
+
+        for change in file_changes:
+            # Check if in download/suspicious locations
+            is_suspicious_location = any(
+                change.path.startswith(p) for p in self.DOWNLOAD_PATHS
+            )
+            if not is_suspicious_location:
+                continue
+
+            # Check file extension
+            file_ext = Path(change.path).suffix.lower()
+            is_suspicious_ext = file_ext in self.SUSPICIOUS_EXTENSIONS
+
+            if change.path in self.reported_files:
+                continue
+
+            # Check for quarantine xattr presence
+            try:
+                result = subprocess.run(
+                    ["xattr", "-p", "com.apple.quarantine", change.path],
+                    capture_output=True,
+                    timeout=2,
+                )
+
+                quarantine_present = result.returncode == 0
+                quarantine_value = result.stdout.strip() if quarantine_present else ""
+
+                # Flag if quarantine was present before and now missing (removal)
+                if change.old_state and not quarantine_present:
+                    self.reported_files.add(change.path)
+
+                    severity = Severity.HIGH if is_suspicious_ext else Severity.MEDIUM
+
+                    events.append(
+                        TelemetryEvent(
+                            event_type="quarantine_xattr_removed",
+                            severity=severity,
+                            probe_name=self.name,
+                            data={
+                                "path": change.path,
+                                "file_extension": file_ext,
+                                "quarantine_removed": True,
+                                "reason": "Quarantine extended attribute removed from downloaded file",
+                            },
+                            mitre_techniques=self.mitre_techniques,
+                        )
+                    )
+
+                # Flag if suspicious file has no quarantine at all
+                elif (
+                    change.change_type == ChangeType.CREATED
+                    and not quarantine_present
+                    and is_suspicious_ext
+                ):
+                    self.reported_files.add(change.path)
+
+                    events.append(
+                        TelemetryEvent(
+                            event_type="suspicious_file_no_quarantine",
+                            severity=Severity.MEDIUM,
+                            probe_name=self.name,
+                            data={
+                                "path": change.path,
+                                "file_extension": file_ext,
+                                "quarantine_present": False,
+                                "reason": "Suspicious file created without quarantine attribute",
+                            },
+                            mitre_techniques=self.mitre_techniques,
+                        )
+                    )
+
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                # xattr command not available or timeout
+                pass
+            except Exception as e:
+                # Silently skip on other errors (permission denied, etc)
+                pass
 
         return events
 
@@ -877,7 +1112,7 @@ def create_fim_probes() -> List[MicroProbe]:
     """Create all FIM micro-probes.
 
     Returns:
-        List of 8 FIM probes
+        List of 9 FIM probes (8 original + 1 Phase 3 macOS)
     """
     return [
         CriticalSystemFileChangeProbe(),
@@ -888,4 +1123,5 @@ def create_fim_probes() -> List[MicroProbe]:
         LibraryHijackProbe(),
         BootloaderTamperProbe(),
         WorldWritableSensitiveProbe(),
+        ExtendedAttributesProbe(),
     ]

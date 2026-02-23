@@ -1,0 +1,304 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}My Agents - AMOSKYS{% endblock %}
+
+{% block content %}
+<div style="padding: 2rem;">
+    <!-- Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">My Agents</h2>
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="neural-button" onclick="refreshAgents()" style="padding: 0.4rem 1rem; font-size: 0.8rem; cursor: pointer;">Refresh</button>
+                <a href="/dashboard/deploy" class="neural-button" style="padding: 0.4rem 1rem; font-size: 0.8rem; text-decoration: none; background: linear-gradient(135deg, var(--neural-primary), var(--neural-secondary)); color: var(--bg-primary);">+ Deploy New Agent</a>
+            </div>
+        </div>
+        <p style="color: var(--text-secondary);">Manage your deployed AMOSKYS security agents across all platforms.</p>
+    </div>
+
+    <!-- Stats Summary -->
+    <div id="agent-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 1.5rem 0;">
+        <div class="neural-card" style="text-align: center; padding: 1.25rem;">
+            <div style="font-size: 2rem; font-weight: 700; color: var(--neural-primary);" id="stat-total">0</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Total Agents</div>
+        </div>
+        <div class="neural-card" style="text-align: center; padding: 1.25rem;">
+            <div style="font-size: 2rem; font-weight: 700; color: #00ff88;" id="stat-online">0</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Online</div>
+        </div>
+        <div class="neural-card" style="text-align: center; padding: 1.25rem;">
+            <div style="font-size: 2rem; font-weight: 700; color: #ffaa00;" id="stat-stale">0</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Stale</div>
+        </div>
+        <div class="neural-card" style="text-align: center; padding: 1.25rem;">
+            <div style="font-size: 2rem; font-weight: 700; color: #ff3366;" id="stat-offline">0</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Offline</div>
+        </div>
+        <div class="neural-card" style="text-align: center; padding: 1.25rem;">
+            <div style="font-size: 2rem; font-weight: 700; color: var(--text-muted);" id="stat-tokens">0</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Active Tokens</div>
+        </div>
+    </div>
+
+    <!-- Agent List -->
+    <div class="neural-card" style="margin-top: 1.5rem;">
+        <div class="card-header" style="margin-bottom: 1rem;">
+            <h3 class="card-title" style="font-size: 1rem;">Deployed Agents</h3>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <select id="filter-status" onchange="applyFilters()" style="padding: 0.3rem 0.6rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 4px; font-size: 0.75rem;">
+                    <option value="all">All Status</option>
+                    <option value="online">Online</option>
+                    <option value="stale">Stale</option>
+                    <option value="offline">Offline</option>
+                    <option value="revoked">Revoked</option>
+                </select>
+                <select id="filter-platform" onchange="applyFilters()" style="padding: 0.3rem 0.6rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 4px; font-size: 0.75rem;">
+                    <option value="all">All Platforms</option>
+                    <option value="macos">macOS</option>
+                    <option value="linux">Linux</option>
+                    <option value="windows">Windows</option>
+                </select>
+            </div>
+        </div>
+        <div id="agents-list">
+            <div style="color: var(--text-muted); text-align: center; padding: 2rem; font-size: 0.85rem;">Loading agents...</div>
+        </div>
+    </div>
+
+    <!-- Token Management -->
+    <div class="neural-card" style="margin-top: 1.5rem;">
+        <div class="card-header" style="margin-bottom: 1rem;">
+            <h3 class="card-title" style="font-size: 1rem;">Deployment Tokens</h3>
+            <a href="/dashboard/deploy" style="font-size: 0.75rem; color: var(--neural-primary); text-decoration: none;">Generate New Token &rarr;</a>
+        </div>
+        <div id="tokens-list">
+            <div style="color: var(--text-muted); text-align: center; padding: 1.5rem; font-size: 0.85rem;">Loading tokens...</div>
+        </div>
+    </div>
+
+    <!-- Agent Detail Modal -->
+    <div id="agent-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2); border-radius: 12px; width: 90%; max-width: 550px; max-height: 80vh; overflow-y: auto; padding: 2rem; position: relative;">
+            <button onclick="closeModal()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer;">&times;</button>
+            <div id="agent-modal-content"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce() }}">
+let allAgents = [];
+let allTokens = [];
+
+async function refreshAgents() {
+    await Promise.all([loadAgents(), loadTokens(), loadStats()]);
+}
+
+async function loadStats() {
+    try {
+        var resp = await fetch('/dashboard/api/agents/deploy/stats');
+        var data = await resp.json();
+        if (data.status === 'success') {
+            document.getElementById('stat-total').textContent = data.stats.total_agents || 0;
+            document.getElementById('stat-online').textContent = data.stats.online_agents || 0;
+            document.getElementById('stat-stale').textContent = data.stats.stale_agents || 0;
+            document.getElementById('stat-offline').textContent = data.stats.offline_agents || 0;
+            document.getElementById('stat-tokens').textContent = data.stats.active_tokens || 0;
+        }
+    } catch(e) {
+        console.error('Failed to load agent stats:', e);
+    }
+}
+
+async function loadAgents() {
+    var el = document.getElementById('agents-list');
+    try {
+        var resp = await fetch('/dashboard/api/agents/deploy/agents');
+        var data = await resp.json();
+        if (data.status === 'success') {
+            allAgents = data.agents || [];
+            applyFilters();
+        } else {
+            el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;font-size:0.85rem;">Failed to load agents.</div>';
+        }
+    } catch(e) {
+        el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;font-size:0.85rem;">Failed to load agents.</div>';
+    }
+}
+
+function applyFilters() {
+    var statusFilter = document.getElementById('filter-status').value;
+    var platformFilter = document.getElementById('filter-platform').value;
+    var filtered = allAgents.filter(function(a) {
+        if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+        if (platformFilter !== 'all' && a.platform !== platformFilter) return false;
+        return true;
+    });
+    renderAgents(filtered);
+}
+
+function renderAgents(agents) {
+    var el = document.getElementById('agents-list');
+    if (agents.length === 0) {
+        el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">'
+            + '<div style="font-size:2rem;margin-bottom:0.5rem;opacity:0.3;">&#128737;</div>'
+            + '<div style="font-size:0.85rem;">No agents deployed yet.</div>'
+            + '<a href="/dashboard/deploy" style="color:var(--neural-primary);font-size:0.8rem;">Deploy your first agent &rarr;</a></div>';
+        return;
+    }
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">'
+        + '<tr style="border-bottom:1px solid rgba(255,255,255,0.08);">'
+        + '<th style="text-align:left;padding:0.6rem;color:var(--text-muted);font-weight:600;">Hostname</th>'
+        + '<th style="text-align:left;padding:0.6rem;color:var(--text-muted);font-weight:600;">Platform</th>'
+        + '<th style="text-align:left;padding:0.6rem;color:var(--text-muted);font-weight:600;">Status</th>'
+        + '<th style="text-align:left;padding:0.6rem;color:var(--text-muted);font-weight:600;">Last Heartbeat</th>'
+        + '<th style="text-align:left;padding:0.6rem;color:var(--text-muted);font-weight:600;">Version</th>'
+        + '<th style="text-align:right;padding:0.6rem;color:var(--text-muted);font-weight:600;">Actions</th></tr>';
+    for (var i = 0; i < agents.length; i++) {
+        var a = agents[i];
+        var statusColor = {'online':'#00ff88','stale':'#ffaa00','offline':'#ff3366','pending':'#6b7a99','revoked':'#666'}[a.status] || '#6b7a99';
+        var platformIcon = {'macos':'&#127822;','linux':'&#128039;','windows':'&#128187;','docker':'&#128230;'}[a.platform] || '&#128421;';
+        var heartbeat = a.last_heartbeat_at ? timeAgo(a.last_heartbeat_at) : 'Never';
+        html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.15s;" onmouseover="this.style.background=\'rgba(0,217,255,0.03)\'" onmouseout="this.style.background=\'none\'">'
+            + '<td style="padding:0.6rem;color:var(--text-primary);font-weight:500;">' + escapeHtml(a.hostname) + '</td>'
+            + '<td style="padding:0.6rem;">' + platformIcon + ' ' + a.platform + '</td>'
+            + '<td style="padding:0.6rem;"><span style="display:inline-flex;align-items:center;gap:0.3rem;"><span style="width:8px;height:8px;border-radius:50%;background:' + statusColor + ';display:inline-block;"></span><span style="color:' + statusColor + ';font-weight:600;text-transform:capitalize;">' + a.status + '</span></span></td>'
+            + '<td style="padding:0.6rem;color:var(--text-muted);">' + heartbeat + '</td>'
+            + '<td style="padding:0.6rem;color:var(--text-muted);">' + escapeHtml(a.version) + '</td>'
+            + '<td style="padding:0.6rem;text-align:right;">'
+            + '<button onclick="showAgentDetail(\'' + a.id + '\')" style="padding:0.2rem 0.5rem;background:rgba(0,217,255,0.1);color:var(--neural-primary);border:1px solid rgba(0,217,255,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;margin-right:0.3rem;">Details</button>';
+        if (a.status !== 'revoked') {
+            html += '<button onclick="revokeAgent(\'' + a.id + '\')" style="padding:0.2rem 0.5rem;background:rgba(255,51,102,0.1);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;">Revoke</button>';
+        }
+        html += '</td></tr>';
+    }
+    html += '</table>';
+    el.innerHTML = html;
+}
+
+async function loadTokens() {
+    var el = document.getElementById('tokens-list');
+    try {
+        var resp = await fetch('/dashboard/api/agents/deploy/tokens');
+        var data = await resp.json();
+        if (data.status === 'success') {
+            allTokens = data.tokens || [];
+            if (allTokens.length === 0) {
+                el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem;">No deployment tokens. <a href="/dashboard/deploy" style="color:var(--neural-primary);">Generate one</a></div>';
+                return;
+            }
+            var html = '<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">'
+                + '<tr style="border-bottom:1px solid rgba(255,255,255,0.08);">'
+                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Label</th>'
+                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Platform</th>'
+                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Status</th>'
+                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Created</th>'
+                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Expires</th>'
+                + '<th style="text-align:right;padding:0.5rem;color:var(--text-muted);font-weight:600;">Action</th></tr>';
+            for (var i = 0; i < allTokens.length; i++) {
+                var t = allTokens[i];
+                var statusColor = t.is_consumed ? '#666' : '#00ff88';
+                var statusText = t.is_consumed ? 'Consumed' : 'Active';
+                var created = new Date(t.created_at).toLocaleDateString();
+                var expires = t.expires_at ? new Date(t.expires_at).toLocaleDateString() : 'Never';
+                html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
+                    + '<td style="padding:0.5rem;color:var(--text-primary);">' + escapeHtml(t.label) + '</td>'
+                    + '<td style="padding:0.5rem;">' + t.platform + '</td>'
+                    + '<td style="padding:0.5rem;"><span style="color:' + statusColor + ';font-weight:600;">' + statusText + '</span></td>'
+                    + '<td style="padding:0.5rem;color:var(--text-muted);">' + created + '</td>'
+                    + '<td style="padding:0.5rem;color:var(--text-muted);">' + expires + '</td>'
+                    + '<td style="padding:0.5rem;text-align:right;">';
+                if (!t.is_consumed) {
+                    html += '<button onclick="revokeToken(\'' + t.id + '\')" style="padding:0.2rem 0.5rem;background:rgba(255,51,102,0.1);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;">Revoke</button>';
+                }
+                html += '</td></tr>';
+            }
+            html += '</table>';
+            el.innerHTML = html;
+        }
+    } catch(e) {
+        el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem;">Failed to load tokens.</div>';
+    }
+}
+
+function showAgentDetail(agentId) {
+    var agent = allAgents.find(function(a) { return a.id === agentId; });
+    if (!agent) return;
+    var statusColor = {'online':'#00ff88','stale':'#ffaa00','offline':'#ff3366','pending':'#6b7a99','revoked':'#666'}[agent.status] || '#6b7a99';
+    var caps = '';
+    if (agent.capabilities && agent.capabilities.length > 0) {
+        caps = '<div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.5rem;">';
+        for (var i = 0; i < agent.capabilities.length; i++) {
+            caps += '<span style="padding:0.15rem 0.5rem;background:rgba(0,217,255,0.1);color:var(--neural-primary);border-radius:12px;font-size:0.7rem;">' + escapeHtml(agent.capabilities[i]) + '</span>';
+        }
+        caps += '</div>';
+    }
+    var html = '<h3 style="font-size:1.1rem;margin-bottom:1rem;">Agent Details</h3>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;font-size:0.85rem;">'
+        + '<div><span style="color:var(--text-muted);">Hostname</span><div style="font-weight:600;">' + escapeHtml(agent.hostname) + '</div></div>'
+        + '<div><span style="color:var(--text-muted);">Status</span><div><span style="color:' + statusColor + ';font-weight:600;text-transform:capitalize;">' + agent.status + '</span></div></div>'
+        + '<div><span style="color:var(--text-muted);">Platform</span><div>' + agent.platform + '</div></div>'
+        + '<div><span style="color:var(--text-muted);">Version</span><div>' + escapeHtml(agent.version) + '</div></div>'
+        + '<div><span style="color:var(--text-muted);">IP Address</span><div>' + (agent.ip_address || 'N/A') + '</div></div>'
+        + '<div><span style="color:var(--text-muted);">Heartbeats</span><div>' + (agent.heartbeat_count || 0) + '</div></div>'
+        + '<div><span style="color:var(--text-muted);">Last Heartbeat</span><div>' + (agent.last_heartbeat_at ? timeAgo(agent.last_heartbeat_at) : 'Never') + '</div></div>'
+        + '<div><span style="color:var(--text-muted);">Deployed</span><div>' + (agent.created_at ? new Date(agent.created_at).toLocaleDateString() : 'N/A') + '</div></div>'
+        + '</div>';
+    if (caps) html += '<div style="margin-top:1rem;"><span style="color:var(--text-muted);font-size:0.8rem;">Capabilities</span>' + caps + '</div>';
+    if (agent.status !== 'revoked') {
+        html += '<div style="margin-top:1.5rem;border-top:1px solid rgba(255,255,255,0.08);padding-top:1rem;">'
+            + '<button onclick="revokeAgent(\'' + agent.id + '\');closeModal();" style="padding:0.4rem 1rem;background:rgba(255,51,102,0.15);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:6px;cursor:pointer;font-size:0.8rem;">Revoke Agent</button></div>';
+    }
+    document.getElementById('agent-modal-content').innerHTML = html;
+    document.getElementById('agent-modal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('agent-modal').style.display = 'none';
+}
+
+async function revokeAgent(agentId) {
+    if (!confirm('Revoke this agent? The agent will stop reporting.')) return;
+    try {
+        var resp = await fetch('/dashboard/api/agents/deploy/agents/' + encodeURIComponent(agentId) + '/revoke', {method: 'POST'});
+        if (!resp.ok) alert('Failed to revoke agent');
+        refreshAgents();
+    } catch(e) {
+        alert('Failed to revoke agent: ' + e.message);
+    }
+}
+
+async function revokeToken(tokenId) {
+    if (!confirm('Revoke this token? It cannot be undone.')) return;
+    try {
+        var resp = await fetch('/dashboard/api/agents/deploy/tokens/' + encodeURIComponent(tokenId) + '/revoke', {method: 'POST'});
+        if (!resp.ok) alert('Failed to revoke token');
+        refreshAgents();
+    } catch(e) {
+        alert('Failed to revoke token: ' + e.message);
+    }
+}
+
+function timeAgo(isoStr) {
+    if (!isoStr) return 'Never';
+    var d = new Date(isoStr);
+    if (isNaN(d.getTime())) return 'Invalid';
+    var now = new Date();
+    var secs = Math.floor((now - d) / 1000);
+    if (secs < 60) return secs + 's ago';
+    if (secs < 3600) return Math.floor(secs / 60) + 'm ago';
+    if (secs < 86400) return Math.floor(secs / 3600) + 'h ago';
+    return Math.floor(secs / 86400) + 'd ago';
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+document.addEventListener('DOMContentLoaded', refreshAgents);
+</script>
+{% endblock %}

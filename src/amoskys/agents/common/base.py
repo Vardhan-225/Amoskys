@@ -78,6 +78,7 @@ class CircuitBreaker:
     failure_threshold: int = 5
     recovery_timeout: float = 30.0  # seconds
     half_open_attempts: int = 3
+    _on_transition: Optional[Callable] = field(default=None, repr=False)
 
     state: str = field(default="CLOSED", init=False)
     failure_count: int = field(default=0, init=False)
@@ -87,16 +88,25 @@ class CircuitBreaker:
     def _now(self) -> float:
         return time.time()
 
+    def _notify_transition(self, old_state: str, new_state: str) -> None:
+        """AOC-1 (P0-3): Notify observer of every circuit breaker state change."""
+        if self._on_transition is not None:
+            try:
+                self._on_transition(old_state, new_state)
+            except Exception:
+                pass  # Observer failure must not break circuit breaker
+
     def record_success(self) -> None:
         """Record successful operation."""
         if self.state in ("OPEN", "HALF_OPEN"):
             self.success_count += 1
             if self.success_count >= self.half_open_attempts:
-                # Fully close circuit
+                old_state = self.state
                 self.state = "CLOSED"
                 self.failure_count = 0
                 self.success_count = 0
                 logger.info("Circuit breaker CLOSED (recovered)")
+                self._notify_transition(old_state, "CLOSED")
         else:
             # CLOSED state - reset failure count
             self.failure_count = 0
@@ -106,12 +116,19 @@ class CircuitBreaker:
         self.failure_count += 1
         self.last_failure_time = self._now()
         self.success_count = 0
-        if self.failure_count >= self.failure_threshold:
-            if self.state != "OPEN":
-                logger.warning(
-                    "Circuit breaker OPEN (failures: %d)", self.failure_count
-                )
+
+        # HALF_OPEN → OPEN on ANY failure (immediate reopen)
+        if self.state == "HALF_OPEN":
+            logger.warning("Circuit breaker OPEN (failure in HALF_OPEN)")
             self.state = "OPEN"
+            self._notify_transition("HALF_OPEN", "OPEN")
+            return
+
+        # CLOSED → OPEN when threshold exceeded
+        if self.failure_count >= self.failure_threshold and self.state != "OPEN":
+            logger.warning("Circuit breaker OPEN (failures: %d)", self.failure_count)
+            self.state = "OPEN"
+            self._notify_transition("CLOSED", "OPEN")
 
     def _maybe_transition_half_open(self) -> None:
         """Try transitioning from OPEN to HALF_OPEN if recovery timeout passed."""
@@ -121,6 +138,7 @@ class CircuitBreaker:
                 self.failure_count = 0
                 self.success_count = 0
                 logger.info("Circuit breaker HALF_OPEN (testing recovery)")
+                self._notify_transition("OPEN", "HALF_OPEN")
 
     def allow_call(self) -> None:
         """Check if call is allowed, raise if circuit is open."""
@@ -200,7 +218,9 @@ class HardenedAgentBase(abc.ABC):
         self.local_queue = local_queue
         self.queue_adapter = queue_adapter
 
-        self.circuit_breaker = CircuitBreaker()
+        self.circuit_breaker = CircuitBreaker(
+            _on_transition=self._on_circuit_breaker_transition,
+        )
         self.is_running: bool = False
         self._shutdown: bool = False
 
@@ -216,6 +236,10 @@ class HardenedAgentBase(abc.ABC):
         self.metrics = AgentMetrics()
         self._metrics_interval_seconds = metrics_interval
         self._last_metrics_emit_ns = int(time.time() * 1e9)
+
+        # Wire queue adapter metrics (P0-1)
+        if self.queue_adapter and hasattr(self.queue_adapter, "_metrics"):
+            self.queue_adapter._metrics = self.metrics
 
     # ----------------- Lifecycle Hooks (Override These) -------------------
 
@@ -430,11 +454,12 @@ class HardenedAgentBase(abc.ABC):
             Best-effort only. Logs failures but doesn't raise.
         """
         if not self.local_queue:
-            logger.warning(
-                "Local queue not configured for %s; dropping %d events",
+            logger.error(
+                "DATA_LOSS: Agent %s has no local queue; " "%d events permanently lost",
                 self.agent_name,
                 len(events),
             )
+            self.metrics.record_backpressure_drop(len(events))
             return
 
         for ev in events:
@@ -490,9 +515,8 @@ class HardenedAgentBase(abc.ABC):
             ProtoEvent with event_type="agent_metrics" and metrics data
         """
         # Import here to avoid circular dependency
-        from amoskys.messaging_pb2 import TelemetryEvent as ProtoEvent
-
         from amoskys.agents.common.probes import Severity
+        from amoskys.messaging_pb2 import TelemetryEvent as ProtoEvent
 
         metrics_dict = self.metrics.to_dict()
         now_ns = int(time.time() * 1e9)
@@ -640,6 +664,87 @@ class HardenedAgentBase(abc.ABC):
             "local_queue_size": (self.local_queue.size() if self.local_queue else 0),
         }
 
+    # ----------------- AOC-1 Observability (P0-2, P0-3) --------------------
+
+    def _on_circuit_breaker_transition(self, old_state: str, new_state: str) -> None:
+        """AOC-1 (P0-3): Track every circuit breaker state change."""
+        self.metrics.record_circuit_breaker_transition(new_state)
+        logger.warning(
+            "AOC1_CB_TRANSITION: agent=%s %s -> %s (failures=%d)",
+            self.agent_name,
+            old_state,
+            new_state,
+            self.circuit_breaker.failure_count,
+        )
+        self._emit_aoc1_event(
+            "aoc1_circuit_breaker_transition",
+            {
+                "old_state": old_state,
+                "new_state": new_state,
+                "failure_count": self.circuit_breaker.failure_count,
+            },
+        )
+
+    def _emit_heartbeat(self) -> None:
+        """AOC-1 (P0-2): Produce continuous heartbeat signal.
+
+        Called every collection cycle regardless of success/failure.
+        Updates last_heartbeat and emits heartbeat telemetry.
+        """
+        now_ns = int(time.time() * 1e9)
+        self.last_heartbeat = time.time()
+        self.metrics.record_heartbeat(now_ns)
+
+        self._emit_aoc1_event(
+            "aoc1_heartbeat",
+            {
+                "uptime_seconds": round(time.time() - self.start_time, 1),
+                "circuit_breaker_state": self.circuit_breaker.state,
+                "collection_count": self.collection_count,
+                "error_count": self.error_count,
+                "queue_depth": (self.queue_adapter.size() if self.queue_adapter else 0),
+            },
+        )
+
+    def _emit_aoc1_event(self, event_type: str, data: dict) -> None:
+        """Emit an AOC-1 observability event through the queue adapter.
+
+        Silently drops if queue_adapter is not configured (graceful in tests).
+        Observer failures must never break the agent.
+        """
+        if not self.queue_adapter:
+            return
+        try:
+            from amoskys.agents.common.probes import Severity
+            from amoskys.messaging_pb2 import DeviceTelemetry
+            from amoskys.messaging_pb2 import TelemetryEvent as ProtoEvent
+
+            now_ns = int(time.time() * 1e9)
+            event = ProtoEvent(
+                event_type=event_type,
+                severity=Severity.INFO.value,
+                event_timestamp_ns=now_ns,
+                source_component=self.__class__.__name__,
+            )
+            data["agent_name"] = self.agent_name
+            data["device_id"] = self.device_id
+            for k, v in data.items():
+                if v is not None:
+                    event.attributes[k] = str(v)
+
+            telemetry = DeviceTelemetry(
+                device_id=self.device_id,
+                device_type="HOST",
+                protocol="AOC1_OBSERVABILITY",
+                timestamp_ns=now_ns,
+                collection_agent=self.__class__.__name__,
+                agent_version=getattr(self, "agent_version", "v2"),
+                events=[event],
+            )
+            self.queue_adapter.enqueue(telemetry)
+        except Exception as exc:
+            logger.debug("AOC-1 event %s emission failed: %s", event_type, exc)
+
     # ----------------- Main Loop -------------------------------------------
 
     def _handle_signal(self, signum: int, frame: Any) -> None:
@@ -682,8 +787,21 @@ class HardenedAgentBase(abc.ABC):
                         vr.errors,
                     )
 
-            # Step 3: Enrich validated events
-            enriched = [self.enrich_event(ev) for ev in validated]
+            # Step 3: Enrich validated events (P0-4: failure must not block)
+            enriched = []
+            for ev in validated:
+                try:
+                    enriched.append(self.enrich_event(ev))
+                except Exception as enrich_exc:
+                    self.metrics.record_enrich_failure()
+                    logger.warning(
+                        "Agent %s enrich failed in cycle %s, "
+                        "passing original event: %s",
+                        self.agent_name,
+                        cycle_id,
+                        enrich_exc,
+                    )
+                    enriched.append(ev)  # Pass through unenriched
 
             # Step 4: Publish to EventBus
             if enriched:
@@ -780,6 +898,9 @@ class HardenedAgentBase(abc.ABC):
                         exc,
                     )
 
+                # Heartbeat every cycle regardless of success/failure (P0-2)
+                self._emit_heartbeat()
+
                 # Emit metrics telemetry if interval elapsed
                 self._maybe_emit_metrics_telemetry()
 
@@ -841,6 +962,9 @@ class HardenedAgentBase(abc.ABC):
 
                 # Run collection cycle
                 self._run_one_cycle()
+
+                # Heartbeat every cycle regardless of success/failure (P0-2)
+                self._emit_heartbeat()
 
                 # Emit metrics telemetry if interval elapsed
                 self._maybe_emit_metrics_telemetry()

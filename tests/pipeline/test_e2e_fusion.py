@@ -40,7 +40,6 @@ from amoskys.intel.models import (
 )
 from amoskys.proto import universal_telemetry_pb2 as pb
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -395,9 +394,7 @@ class TestBufferTrimming:
 
     def test_old_events_trimmed_on_add(self, tmp_path):
         """Events older than window_minutes are trimmed when new event added."""
-        fusion = FusionEngine(
-            db_path=str(tmp_path / "trim.db"), window_minutes=5
-        )
+        fusion = FusionEngine(db_path=str(tmp_path / "trim.db"), window_minutes=5)
 
         # Add an "old" event (manually backdate timestamp)
         old_event = TelemetryEventView(
@@ -426,9 +423,7 @@ class TestBufferTrimming:
 
     def test_all_events_within_window_kept(self, tmp_path):
         """Events within window_minutes are all retained."""
-        fusion = FusionEngine(
-            db_path=str(tmp_path / "keep.db"), window_minutes=30
-        )
+        fusion = FusionEngine(db_path=str(tmp_path / "keep.db"), window_minutes=30)
 
         for i in range(5):
             ev = TelemetryEventView(
@@ -629,16 +624,12 @@ class TestFusionMetrics:
     def test_events_processed_tracked(self, fusion):
         """total_events_processed increments on add_event."""
         assert fusion.metrics["total_events_processed"] == 0
-        fusion.add_event(
-            _make_telemetry_event_view("m-ev-1", event_type="METRIC")
-        )
+        fusion.add_event(_make_telemetry_event_view("m-ev-1", event_type="METRIC"))
         assert fusion.metrics["total_events_processed"] == 1
 
     def test_evaluations_tracked(self, fusion):
         """total_evaluations increments on evaluate_all_devices."""
-        fusion.add_event(
-            _make_telemetry_event_view("m-ev-2", event_type="METRIC")
-        )
+        fusion.add_event(_make_telemetry_event_view("m-ev-2", event_type="METRIC"))
         fusion.evaluate_all_devices()
         assert fusion.metrics["total_evaluations"] == 1
 

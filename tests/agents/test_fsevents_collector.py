@@ -22,7 +22,6 @@ from amoskys.agents.fim.fsevents_collector import (
 )
 from amoskys.agents.fim.probes import ChangeType, FileChange, FileState
 
-
 # =============================================================================
 # Test: _FSEventsHandler
 # =============================================================================

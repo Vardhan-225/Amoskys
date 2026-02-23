@@ -231,17 +231,17 @@ class TestProcProbes:
     """Test Process probe implementations."""
 
     def test_proc_probes_exist(self):
-        """Verify all 8 process probes are available."""
+        """Verify all 10 process probes are available."""
         from amoskys.agents.proc.probes import PROC_PROBES
 
-        assert len(PROC_PROBES) == 8
+        assert len(PROC_PROBES) == 10
 
     def test_create_proc_probes(self):
         """Test creating process probe instances."""
         from amoskys.agents.proc.probes import create_proc_probes
 
         probes = create_proc_probes()
-        assert len(probes) == 8
+        assert len(probes) == 10
 
         names = {p.name for p in probes}
         assert "process_spawn" in names
@@ -318,8 +318,10 @@ class TestProcessGuid:
 
         context = ProbeContext(device_id="test-host", agent_name="proc_agent_v3")
 
-        with patch("amoskys.agents.proc.probes.psutil") as mock_psutil, \
-             patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True):
+        with (
+            patch("amoskys.agents.proc.probes.psutil") as mock_psutil,
+            patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True),
+        ):
             mock_psutil.process_iter.return_value = [mock_proc]
             mock_psutil.NoSuchProcess = real_psutil.NoSuchProcess
             mock_psutil.AccessDenied = real_psutil.AccessDenied
@@ -351,10 +353,18 @@ class TestProcessGuid:
         from amoskys.agents.proc.probes import ProcessInfo
 
         info = ProcessInfo(
-            pid=1, name="test", exe="/bin/test", cmdline=[],
-            username="root", ppid=0, parent_name="init",
-            create_time=0.0, cpu_percent=0.0, memory_percent=0.0,
-            status="running", process_guid="abc123",
+            pid=1,
+            name="test",
+            exe="/bin/test",
+            cmdline=[],
+            username="root",
+            ppid=0,
+            parent_name="init",
+            create_time=0.0,
+            cpu_percent=0.0,
+            memory_percent=0.0,
+            status="running",
+            process_guid="abc123",
         )
         assert info.process_guid == "abc123"
 

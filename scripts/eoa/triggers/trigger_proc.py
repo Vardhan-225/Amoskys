@@ -44,6 +44,7 @@ def cleanup_sandbox() -> None:
 
 # ── Trigger 1: ScriptInterpreterProbe ──────────────────────────────────────
 
+
 def trigger_script_interpreter(dry_run: bool = False) -> None:
     """Run scripts with suspicious patterns that ScriptInterpreterProbe detects.
 
@@ -73,6 +74,7 @@ def trigger_script_interpreter(dry_run: bool = False) -> None:
 
 # ── Trigger 2: ProcessTreeAnomalyProbe ─────────────────────────────────────
 
+
 def trigger_process_tree_anomaly(dry_run: bool = False) -> None:
     """Spawn unusual parent→child process trees.
 
@@ -83,7 +85,11 @@ def trigger_process_tree_anomaly(dry_run: bool = False) -> None:
     # Python → bash → echo (unusual tree)
     cmd1 = ["bash", "-c", "echo eoa_tree_test_1"]
     # Python → /usr/bin/script interpreter chain
-    cmd2 = [sys.executable, "-c", "import subprocess; subprocess.run(['bash', '-c', 'echo eoa_tree_test_2'], capture_output=True)"]
+    cmd2 = [
+        sys.executable,
+        "-c",
+        "import subprocess; subprocess.run(['bash', '-c', 'echo eoa_tree_test_2'], capture_output=True)",
+    ]
 
     for cmd in [cmd1, cmd2]:
         if dry_run:
@@ -97,6 +103,7 @@ def trigger_process_tree_anomaly(dry_run: bool = False) -> None:
 
 
 # ── Trigger 3: HighCPUAndMemoryProbe ───────────────────────────────────────
+
 
 def trigger_high_cpu(dry_run: bool = False, duration: int = 3) -> None:
     """Brief CPU spike to exercise HighCPUAndMemoryProbe.
@@ -131,6 +138,7 @@ while time.monotonic() < end:
 
 # ── Trigger 4: BinaryFromTempProbe ─────────────────────────────────────────
 
+
 def trigger_binary_from_temp(dry_run: bool = False) -> None:
     """Copy a binary to /tmp and execute it."""
     log("Trigger: BinaryFromTempProbe")
@@ -156,7 +164,9 @@ def trigger_binary_from_temp(dry_run: bool = False) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Trigger Pack: ProcAgent probes")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without executing")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without executing"
+    )
     args = parser.parse_args()
 
     print("\n═══ ProcAgent Trigger Pack ═══")

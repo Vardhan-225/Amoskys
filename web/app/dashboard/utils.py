@@ -16,7 +16,7 @@ UTC_TIMEZONE_SUFFIX = "+00:00"
 
 def get_threat_timeline_data(hours: int = 24) -> Dict[str, Any]:
     """
-    Generate threat timeline data for visualization
+    Generate threat timeline data from TelemetryStore.
 
     Args:
         hours: Number of hours to look back
@@ -24,38 +24,53 @@ def get_threat_timeline_data(hours: int = 24) -> Dict[str, Any]:
     Returns:
         Dict containing timeline data and statistics
     """
-    from ..api.events import EVENT_STORE
+    from .telemetry_bridge import get_telemetry_store
 
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(hours=hours)
-
-    timeline_data = []
-    hourly_counts = {}
+    store = get_telemetry_store()
     severity_counts = {"low": 0, "medium": 0, "high": 0, "critical": 0}
 
-    for event in EVENT_STORE:
-        event_time = datetime.fromisoformat(
-            event["timestamp"].replace("Z", UTC_TIMEZONE_SUFFIX)
+    if store is None:
+        return {
+            "timeline": [],
+            "hourly_counts": {},
+            "severity_distribution": severity_counts,
+            "total_events": 0,
+            "time_range": f"Last {hours} hours",
+        }
+
+    rows = store.get_recent_security_events(limit=500, hours=hours)
+    if not rows:
+        # Fallback: show most recent events regardless of age
+        rows = store.get_recent_security_events(limit=500, hours=8760)
+    timeline_data = []
+    hourly_counts: Dict[str, int] = {}
+
+    for row in rows:
+        risk = row.get("risk_score", 0)
+        sev = _risk_to_severity_label(risk)
+        ts_dt = row.get("timestamp_dt", "")
+
+        timeline_data.append(
+            {
+                "timestamp": ts_dt,
+                "type": row.get("event_category", "unknown"),
+                "severity": sev,
+                "source": row.get("device_id", ""),
+                "description": row.get("description", ""),
+            }
         )
 
-        if event_time > cutoff:
-            # Add to timeline
-            timeline_data.append(
-                {
-                    "timestamp": event["timestamp"],
-                    "type": event["event_type"],
-                    "severity": event["severity"],
-                    "source": event["source_ip"],
-                    "description": event["description"],
-                }
+        # Count by hour
+        try:
+            parsed = datetime.fromisoformat(
+                str(ts_dt).replace("Z", UTC_TIMEZONE_SUFFIX)
             )
-
-            # Count by hour
-            hour_key = event_time.strftime("%Y-%m-%d %H:00")
+            hour_key = parsed.strftime("%Y-%m-%d %H:00")
             hourly_counts[hour_key] = hourly_counts.get(hour_key, 0) + 1
+        except (ValueError, TypeError):
+            pass
 
-            # Count by severity
-            severity_counts[event["severity"]] += 1
+        severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
     return {
         "timeline": sorted(timeline_data, key=lambda x: x["timestamp"]),
@@ -64,6 +79,17 @@ def get_threat_timeline_data(hours: int = 24) -> Dict[str, Any]:
         "total_events": len(timeline_data),
         "time_range": f"Last {hours} hours",
     }
+
+
+def _risk_to_severity_label(risk_score: float) -> str:
+    """Map a 0.0-1.0 risk score to a severity string."""
+    if risk_score >= 0.75:
+        return "critical"
+    elif risk_score >= 0.5:
+        return "high"
+    elif risk_score >= 0.25:
+        return "medium"
+    return "low"
 
 
 def get_agent_health_summary() -> Dict[str, Any]:
@@ -216,7 +242,7 @@ def get_system_metrics_snapshot() -> Dict[str, Any]:
 
 def calculate_threat_score(time_window_hours: int = 1) -> Dict[str, Any]:
     """
-    Calculate current threat score based on recent events
+    Calculate current threat score from TelemetryStore.
 
     Args:
         time_window_hours: Time window for threat calculation
@@ -224,62 +250,25 @@ def calculate_threat_score(time_window_hours: int = 1) -> Dict[str, Any]:
     Returns:
         Dict containing threat score and analysis
     """
-    from ..api.events import EVENT_STORE
+    from .telemetry_bridge import get_telemetry_store
 
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(hours=time_window_hours)
+    store = get_telemetry_store()
 
-    # Severity weights for threat calculation
-    severity_weights = {"low": 1, "medium": 3, "high": 7, "critical": 15}
+    if store is None:
+        return {
+            "threat_score": 0,
+            "threat_level": "LOW",
+            "threat_color": "#00ff88",
+            "recommended_action": "Normal monitoring",
+            "event_count": 0,
+            "time_window_hours": time_window_hours,
+            "event_breakdown": {},
+            "calculation_details": {"raw_score": 0, "normalized_score": 0},
+        }
 
-    # Event type multipliers
-    type_multipliers = {
-        "network_anomaly": 1.2,
-        "intrusion_attempt": 1.5,
-        "malware_detection": 2.0,
-        "data_exfiltration": 2.5,
-        "system_compromise": 3.0,
-    }
-
-    total_score = 0
-    event_count = 0
-    event_breakdown = {}
-
-    for event in EVENT_STORE:
-        event_time = datetime.fromisoformat(
-            event["timestamp"].replace("Z", UTC_TIMEZONE_SUFFIX)
-        )
-
-        if event_time > cutoff:
-            severity = event["severity"]
-            event_type = event["event_type"]
-
-            # Calculate event score
-            base_score = severity_weights.get(severity, 1)
-            type_multiplier = type_multipliers.get(event_type, 1.0)
-            event_score = base_score * type_multiplier
-
-            total_score += event_score
-            event_count += 1
-
-            # Track event breakdown
-            if event_type not in event_breakdown:
-                event_breakdown[event_type] = {"count": 0, "score": 0}
-            event_breakdown[event_type]["count"] += 1
-            event_breakdown[event_type]["score"] += event_score
-
-    # Normalize score (0-100)
-    if event_count > 0:
-        # Base normalization
-        normalized_score = min(
-            total_score / 10, 100
-        )  # Divide by 10 for reasonable scaling
-
-        # Apply time decay
-        time_factor = min(time_window_hours / 24, 1.0)  # Scale based on time window
-        threat_score = int(normalized_score * time_factor)
-    else:
-        threat_score = 0
+    data = store.get_threat_score_data(hours=time_window_hours)
+    threat_score = int(data.get("threat_score", 0))
+    event_count = data.get("event_count", 0)
 
     # Determine threat level and color
     if threat_score >= 75:
@@ -306,24 +295,24 @@ def calculate_threat_score(time_window_hours: int = 1) -> Dict[str, Any]:
         "recommended_action": recommended_action,
         "event_count": event_count,
         "time_window_hours": time_window_hours,
-        "event_breakdown": event_breakdown,
+        "event_breakdown": {},
         "calculation_details": {
-            "raw_score": total_score,
-            "normalized_score": min(total_score / 10, 100) if event_count > 0 else 0,
+            "raw_score": threat_score,
+            "normalized_score": threat_score,
         },
     }
 
 
 def get_event_clustering_data() -> Dict[str, Any]:
     """
-    Generate event clustering data for visualization
+    Generate event clustering data from TelemetryStore.
 
     Returns:
         Dict containing various event clustering analyses
     """
-    from ..api.events import EVENT_STORE
+    from .telemetry_bridge import get_telemetry_store
 
-    clusters = {
+    empty_clusters = {
         "by_type": {},
         "by_severity": {},
         "by_source_ip": {},
@@ -331,46 +320,59 @@ def get_event_clustering_data() -> Dict[str, Any]:
         "by_agent": {},
     }
 
-    # Time-based clustering (last 24 hours)
-    now = datetime.now(timezone.utc)
-    last_24h = now - timedelta(hours=24)
+    store = get_telemetry_store()
 
-    for event in EVENT_STORE:
-        event_time = datetime.fromisoformat(
-            event["timestamp"].replace("Z", UTC_TIMEZONE_SUFFIX)
+    if store is None:
+        return {
+            "clusters": empty_clusters,
+            "statistics": {
+                "total_events": 0,
+                "unique_types": 0,
+                "unique_ips": 0,
+                "unique_agents": 0,
+                "most_active_type": ("none", 0),
+                "most_active_ip": ("none", 0),
+            },
+            "time_range": "Last 24 hours",
+        }
+
+    data = store.get_security_event_clustering(hours=24)
+
+    # Extract source IP counts from indicators using targeted SQL query
+    import json
+    import time as _time
+
+    by_source_ip: Dict[str, int] = {}
+    try:
+        cutoff_ns = int((_time.time() - 24 * 3600) * 1e9)
+        cursor = store.db.execute(
+            """SELECT indicators FROM security_events
+               WHERE timestamp_ns > ? AND indicators LIKE '%_ip%'""",
+            (cutoff_ns,),
         )
-
-        if event_time > last_24h:
-            # Cluster by type
-            event_type = event["event_type"]
-            clusters["by_type"][event_type] = clusters["by_type"].get(event_type, 0) + 1
-
-            # Cluster by severity
-            severity = event["severity"]
-            clusters["by_severity"][severity] = (
-                clusters["by_severity"].get(severity, 0) + 1
+        for row in cursor.fetchall():
+            try:
+                indicators = json.loads(row[0]) if row[0] else {}
+            except (json.JSONDecodeError, TypeError):
+                continue
+            ip = (
+                indicators.get("source_ip")
+                or indicators.get("src_ip")
+                or indicators.get("dst_ip")
             )
+            if ip:
+                by_source_ip[ip] = by_source_ip.get(ip, 0) + 1
+    except Exception:
+        pass
 
-            # Cluster by source IP
-            source_ip = event["source_ip"]
-            clusters["by_source_ip"][source_ip] = (
-                clusters["by_source_ip"].get(source_ip, 0) + 1
-            )
+    clusters = {
+        "by_type": data.get("by_category", {}),
+        "by_severity": data.get("by_severity", {}),
+        "by_source_ip": by_source_ip,
+        "by_hour": data.get("by_hour", {}),
+        "by_agent": {},
+    }
 
-            # Cluster by hour
-            hour_key = event_time.strftime("%H:00")
-            clusters["by_hour"][hour_key] = clusters["by_hour"].get(hour_key, 0) + 1
-
-            # Cluster by agent
-            agent_id = event["agent_id"]
-            clusters["by_agent"][agent_id] = clusters["by_agent"].get(agent_id, 0) + 1
-
-    # Sort and limit results for better visualization
-    clusters["by_source_ip"] = dict(
-        sorted(clusters["by_source_ip"].items(), key=lambda x: x[1], reverse=True)[:15]
-    )
-
-    # Calculate cluster statistics
     total_events = sum(clusters["by_type"].values())
     most_active_type = (
         max(clusters["by_type"].items(), key=lambda x: x[1])
@@ -378,9 +380,7 @@ def get_event_clustering_data() -> Dict[str, Any]:
         else ("none", 0)
     )
     most_active_ip = (
-        max(clusters["by_source_ip"].items(), key=lambda x: x[1])
-        if clusters["by_source_ip"]
-        else ("none", 0)
+        max(by_source_ip.items(), key=lambda x: x[1]) if by_source_ip else ("none", 0)
     )
 
     return {
@@ -388,8 +388,8 @@ def get_event_clustering_data() -> Dict[str, Any]:
         "statistics": {
             "total_events": total_events,
             "unique_types": len(clusters["by_type"]),
-            "unique_ips": len(clusters["by_source_ip"]),
-            "unique_agents": len(clusters["by_agent"]),
+            "unique_ips": len(by_source_ip),
+            "unique_agents": 0,
             "most_active_type": most_active_type,
             "most_active_ip": most_active_ip,
         },
@@ -444,16 +444,72 @@ def get_neural_readiness_status() -> Dict[str, Any]:
         Dict containing neural readiness assessment
     """
     # Check data pipeline health
-    threat_data = get_threat_timeline_data(24)
     agent_data = get_agent_health_summary()
     system_data = get_system_metrics_snapshot()
 
-    # Neural readiness criteria
+    # Get real probe health data
+    probe_score = 0
+    probe_status = "unknown"
+    try:
+        import platform as _platform
+
+        from amoskys.observability.probe_audit import run_audit, summarize_audit
+
+        target = "darwin" if _platform.system() == "Darwin" else "linux"
+        results = run_audit(target)
+        summary = summarize_audit(results)
+        total = summary.get("total", 1) or 1
+        real = summary.get("real", 0)
+        degraded = summary.get("degraded", 0)
+        probe_score = round(((real + degraded) / total) * 100, 1)
+        probe_status = (
+            "ready"
+            if probe_score >= 90
+            else "degraded" if probe_score >= 70 else "critical"
+        )
+    except Exception:
+        probe_score = 0
+        probe_status = "unknown"
+
+    # Get real event counts from DB
+    db_event_count = 0
+    db_table_coverage = 0
+    try:
+        from .telemetry_bridge import get_telemetry_store
+
+        _store = get_telemetry_store()
+        if _store:
+            stats = _store.get_statistics()
+            db_event_count = (
+                stats.get("security_events_count", 0)
+                + stats.get("process_events_count", 0)
+                + stats.get("flow_events_count", 0)
+            )
+            # Count tables with data
+            for key in [
+                "security_events_count",
+                "process_events_count",
+                "flow_events_count",
+                "device_telemetry_count",
+            ]:
+                if stats.get(key, 0) > 0:
+                    db_table_coverage += 1
+    except Exception:
+        pass
+
+    # Neural readiness criteria (using REAL data)
     criteria = {
         "data_flow": {
             "description": "Sufficient event data for training",
-            "status": "ready" if threat_data["total_events"] >= 10 else "limited",
-            "score": min(threat_data["total_events"] / 50, 1.0) * 100,
+            "status": "ready" if db_event_count >= 100 else "limited",
+            "score": min(db_event_count / 500, 1.0) * 100,
+            "detail": f"{db_event_count} events across {db_table_coverage} tables",
+        },
+        "probe_coverage": {
+            "description": "Observability probe coverage",
+            "status": probe_status,
+            "score": probe_score,
+            "detail": f"{probe_score}% probes active",
         },
         "agent_connectivity": {
             "description": "Agent network operational",

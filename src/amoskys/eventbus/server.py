@@ -66,11 +66,9 @@ Security Considerations:
     - TLS 1.2+ required with strong cipher suites
     - SIGHUP signal triggers graceful shutdown
 """
-import hashlib
 import logging
 import os
 import signal
-import sqlite3
 import sys
 import threading
 import time
@@ -88,7 +86,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
 
 # Clean imports for new structure
-from amoskys.common.crypto.signing import load_public_key
+from amoskys.common.crypto.signing import load_public_key, verify
 from amoskys.config import get_config
 from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
@@ -129,6 +127,18 @@ try:
     BUS_RETRY_TOTAL = Counter("bus_retry_total", "Total Publish RETRY acks issued")
 except ValueError:
     BUS_RETRY_TOTAL = Counter("_bus_dummy5", "dummy")
+
+try:
+    BUS_DEDUP_HITS = Counter(
+        "bus_dedup_hits_total", "Duplicate messages caught by app-level dedup"
+    )
+except ValueError:
+    BUS_DEDUP_HITS = Counter("_bus_dummy6", "dummy")
+
+try:
+    BUS_WAL_FAILURES = Counter("bus_wal_write_failures_total", "WAL write failures")
+except ValueError:
+    BUS_WAL_FAILURES = Counter("_bus_dummy7", "dummy")
 
 # Configuration from centralized config
 BUS_MAX_INFLIGHT = config.eventbus.max_inflight
@@ -204,6 +214,11 @@ DEDUPE_MAX = int(os.getenv("BUS_DEDUPE_MAX", "50000"))
 _dedupe: "OrderedDict[str, float]" = OrderedDict()
 
 MAX_ENV_BYTES = int(os.getenv("BUS_MAX_ENV_BYTES", "131072"))
+REQUIRE_SIGNATURES = os.getenv("BUS_REQUIRE_SIGNATURES", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 
 def _sizeof_env(env):
@@ -230,54 +245,32 @@ def _sizeof_env(env):
         return 0
 
 
-def _seen(idem):
-    """Check if an idempotency key has been seen before.
+_dedupe_lock = threading.Lock()
 
-    This function implements a TTL-based deduplication cache to prevent duplicate
-    processing of messages. It uses an OrderedDict to maintain insertion order and
-    efficiently expire old entries.
+
+def _seen(idem):
+    """Check if an idempotency key has been seen before (thread-safe).
+
+    Uses a TTL-based deduplication cache with a lock to prevent race conditions
+    under concurrent gRPC threads.
 
     Args:
-        idem: The idempotency key (typically a hash or UUID) to check. This should
-              be a unique identifier for each logical message.
+        idem: The idempotency key to check.
 
     Returns:
-        bool: True if this idempotency key was already seen within the TTL window,
-              False if this is the first time seeing this key.
-
-    Side Effects:
-        - Expires entries older than DEDUPE_TTL_SEC from the cache
-        - Moves existing keys to the end (updates LRU position)
-        - Adds new keys with current timestamp
-        - Removes oldest entry if cache exceeds DEDUPE_MAX size
-
-    Implementation:
-        The deduplication cache uses a sliding window approach:
-        1. On each call, expire entries older than TTL
-        2. If key exists, move to end (mark as recently used) and return True
-        3. If key is new, add with current timestamp
-        4. If cache is full, remove oldest entry
-
-    Performance:
-        - Time complexity: O(1) for lookups, O(k) for expiration where k is
-          number of expired entries
-        - Space complexity: O(DEDUPE_MAX) bounded by maximum cache size
-
-    Note:
-        This is not a distributed deduplication mechanism. In a multi-instance
-        deployment, each server maintains its own cache. For true distributed
-        deduplication, a shared cache (e.g., Redis) would be required.
+        bool: True if already seen within TTL window, False otherwise.
     """
-    now = time.time()
-    while _dedupe and (now - next(iter(_dedupe.values())) > DEDUPE_TTL_SEC):
-        _dedupe.popitem(last=False)
-    if idem in _dedupe:
-        _dedupe.move_to_end(idem, last=True)
-        return True
-    _dedupe[idem] = now
-    if len(_dedupe) > DEDUPE_MAX:
-        _dedupe.popitem(last=False)
-    return False
+    with _dedupe_lock:
+        now = time.time()
+        while _dedupe and (now - next(iter(_dedupe.values())) > DEDUPE_TTL_SEC):
+            _dedupe.popitem(last=False)
+        if idem in _dedupe:
+            _dedupe.move_to_end(idem, last=True)
+            return True
+        _dedupe[idem] = now
+        if len(_dedupe) > DEDUPE_MAX:
+            _dedupe.popitem(last=False)
+        return False
 
 
 def _on_hup(signum, frame):
@@ -312,6 +305,7 @@ def _on_hup(signum, frame):
 
 
 signal.signal(signal.SIGHUP, _on_hup)
+signal.signal(signal.SIGTERM, _on_hup)
 
 
 def _load_keys():
@@ -437,6 +431,123 @@ def _peer_cn_from_context(context):
         if k == "x509_subject_alternative_name" and v and v[0]:
             return v[0].decode()
     return None
+
+
+def _verify_envelope_signature(envelope):
+    """Verify Ed25519 signature on a UniversalEnvelope.
+
+    This function extracts the signature and signing algorithm from the envelope,
+    reconstructs the payload for verification, and validates the signature using
+    the stored public key.
+
+    Args:
+        envelope: UniversalEnvelope protobuf message with optional sig and
+                 signing_algorithm fields.
+
+    Returns:
+        tuple: (is_valid, error_message)
+            - (True, None) if signature is valid or absent (backward compat)
+            - (False, reason) if signature verification fails
+            - (False, reason) if REQUIRE_SIGNATURES=true and no signature present
+
+    Implementation:
+        1. Check if sig and signing_algorithm are present
+        2. If neither present and REQUIRE_SIGNATURES=false, return (True, None)
+        3. If neither present and REQUIRE_SIGNATURES=true, reject
+        4. Reconstruct payload by serializing the envelope without sig fields
+        5. Verify signature using stored public key (AGENT_PUBKEY from config)
+        6. Return result
+
+    Security:
+        - Uses Ed25519 verification from cryptography library
+        - Rejects envelopes with invalid signatures
+        - Logs all verification failures for audit
+        - Supports gradual migration with REQUIRE_SIGNATURES flag
+    """
+    # Check if signature fields are present
+    has_sig = bool(envelope.sig)
+    has_algorithm = bool(envelope.signing_algorithm)
+
+    # No signature present
+    if not has_sig and not has_algorithm:
+        if REQUIRE_SIGNATURES:
+            return (False, "Signature required but not present")
+        else:
+            logger.info(
+                "[PublishTelemetry] No signature present (backward compat mode)"
+            )
+            return (True, None)
+
+    # Signature present but incomplete
+    if has_sig != has_algorithm:
+        return (False, "Signature fields incomplete (sig or algorithm missing)")
+
+    # Only Ed25519 is currently supported
+    if envelope.signing_algorithm != "Ed25519":
+        return (False, f"Unsupported signing algorithm: {envelope.signing_algorithm}")
+
+    # Get the public key (currently use single AGENT_PUBKEY, could extend to TRUST)
+    if AGENT_PUBKEY is None:
+        return (False, "No public key configured for signature verification")
+
+    # Reconstruct payload: serialize envelope with sig/prev_sig cleared
+    # This matches how the client signs it (signs the canonical protobuf of the payload)
+    payload_copy = telemetry_pb2.UniversalEnvelope()
+    payload_copy.CopyFrom(envelope)
+    payload_copy.sig = b""
+    payload_copy.prev_sig = b""
+
+    payload_bytes = payload_copy.SerializeToString()
+
+    # Verify the signature
+    signature_valid = verify(AGENT_PUBKEY, payload_bytes, envelope.sig)
+
+    if not signature_valid:
+        return (False, "Signature verification failed (invalid signature or wrong key)")
+
+    logger.debug("[PublishTelemetry] Signature verified successfully")
+    return (True, None)
+
+
+def _verify_legacy_envelope_signature(envelope):
+    """Verify Ed25519 signature on a legacy Envelope (messaging_schema).
+
+    Follows the same contract as _verify_envelope_signature but for the legacy
+    pb.Envelope type used by the Publish RPC.
+
+    Args:
+        envelope: messaging_schema_pb2.Envelope with optional sig field.
+
+    Returns:
+        tuple: (is_valid, error_message) — same interface as _verify_envelope_signature.
+    """
+    has_sig = bool(envelope.sig)
+
+    if not has_sig:
+        if REQUIRE_SIGNATURES:
+            return (False, "Signature required but not present")
+        else:
+            logger.debug("[Publish] No signature present (backward compat mode)")
+            return (True, None)
+
+    # Signature present — verify
+    if AGENT_PUBKEY is None:
+        return (False, "No public key configured for signature verification")
+
+    # Reconstruct payload: serialize envelope with sig/prev_sig cleared
+    payload_copy = pb.Envelope()
+    payload_copy.CopyFrom(envelope)
+    payload_copy.sig = b""
+    payload_copy.prev_sig = b""
+
+    payload_bytes = payload_copy.SerializeToString()
+    signature_valid = verify(AGENT_PUBKEY, payload_bytes, envelope.sig)
+
+    if not signature_valid:
+        return (False, "Signature verification failed (invalid signature or wrong key)")
+
+    logger.debug("[Publish] Signature verified successfully")
+    return (True, None)
 
 
 def _inc_inflight():
@@ -932,6 +1043,27 @@ class EventBusServicer(pbrpc.EventBusServicer):
                 response.reason = f"Envelope too large ({_sizeof_env(request)} > {MAX_ENV_BYTES} bytes)"
                 return response
 
+            # Verify Ed25519 signature (P0-EB-1)
+            sig_valid, sig_error = _verify_legacy_envelope_signature(request)
+            if not sig_valid:
+                logger.warning("[Publish] Signature verification failed: %s", sig_error)
+                BUS_INVALID.inc()
+                return _ack_invalid(f"Signature verification failed: {sig_error}")
+
+            # Application-level dedup (P1-EB-1)
+            if hasattr(request, "idempotency_key") and request.idempotency_key:
+                pub_idem = request.idempotency_key
+            elif hasattr(request, "idem") and request.idem:
+                pub_idem = request.idem
+            else:
+                pub_idem = f"unknown_{getattr(request, 'ts_ns', 0)}"
+            if _seen(pub_idem):
+                BUS_DEDUP_HITS.inc()
+                logger.debug(
+                    "[Publish] Duplicate detected (idem=%s), skipping", pub_idem
+                )
+                return _ack_ok("duplicate")
+
             # Track inflight requests
             inflight = _inc_inflight()
             try:
@@ -951,18 +1083,13 @@ class EventBusServicer(pbrpc.EventBusServicer):
                     f"[Publish] src_ip={flow.src_ip} dst_ip={flow.dst_ip} bytes_tx={flow.bytes_tx}"
                 )
 
-                # Store in WAL for dashboard visibility
+                # Store in WAL for dashboard visibility (P0-EB-2: ACK after WAL)
+                wal_written = False
+                wal_duplicate = False
+
                 if wal_storage:
                     try:
                         with _wal_lock:
-                            # Create a new connection for this thread if needed
-                            conn = sqlite3.connect(
-                                WAL_PATH,
-                                timeout=5.0,
-                                isolation_level=None,
-                                check_same_thread=False,
-                            )
-
                             # Handle both UniversalEnvelope (idempotency_key) and Envelope (idem)
                             if hasattr(request, "idempotency_key"):
                                 idem = request.idempotency_key
@@ -973,28 +1100,28 @@ class EventBusServicer(pbrpc.EventBusServicer):
 
                             ts_ns = request.ts_ns
                             env_bytes = request.SerializeToString()
-                            checksum = hashlib.blake2b(
-                                env_bytes, digest_size=32
-                            ).digest()
 
-                            try:
-                                conn.execute(
-                                    "INSERT INTO wal (idem, ts_ns, bytes, checksum) VALUES (?, ?, ?, ?)",
-                                    (idem, ts_ns, env_bytes, checksum),
-                                )
+                            written = wal_storage.write_raw(idem, ts_ns, env_bytes)
+                            if written:
+                                wal_written = True
                                 logger.debug(
                                     "[Publish] Stored event in WAL (idem=%s)", idem
                                 )
-                            except sqlite3.IntegrityError:
+                            else:
+                                wal_duplicate = True
                                 logger.debug(
                                     "[Publish] Duplicate event (idem=%s), skipped", idem
                                 )
-                            finally:
-                                conn.close()
                     except Exception as wal_err:
-                        logger.error("[Publish] Failed to store in WAL: %s", wal_err)
+                        logger.error("AOC1_WAL_WRITE_FAILURE: [Publish] %s", wal_err)
+                        BUS_WAL_FAILURES.inc()
 
-                return _ack_ok("accepted")
+                # Only ACK OK if WAL write succeeded, was duplicate, or no WAL configured
+                if wal_written or wal_duplicate or not wal_storage:
+                    return _ack_ok("accepted")
+                else:
+                    BUS_RETRY_TOTAL.inc()
+                    return _ack_retry("WAL write failed, retry", 2000)
             finally:
                 _dec_inflight()
         except ValueError as e:
@@ -1091,6 +1218,32 @@ class UniversalEventBusServicer(telemetry_grpc.UniversalEventBusServicer):
                     reason=f"Envelope too large ({envelope_size} > {MAX_ENV_BYTES} bytes)",
                 )
 
+            # Verify Ed25519 signature
+            sig_valid, sig_error = _verify_envelope_signature(request)
+            if not sig_valid:
+                logger.warning(
+                    f"[PublishTelemetry] Signature verification failed: {sig_error}"
+                )
+                BUS_INVALID.inc()
+                return telemetry_pb2.UniversalAck(
+                    status=telemetry_pb2.UniversalAck.Status.SECURITY_VIOLATION,
+                    reason=f"Signature verification failed: {sig_error}",
+                )
+
+            # Application-level dedup (P1-EB-1)
+            tel_idem = request.idempotency_key or f"unknown_{request.ts_ns}"
+            if _seen(tel_idem):
+                BUS_DEDUP_HITS.inc()
+                logger.debug(
+                    "[PublishTelemetry] Duplicate (idem=%s), skipping", tel_idem
+                )
+                BUS_LAT.observe((time.time() - t0) * 1000.0)
+                return telemetry_pb2.UniversalAck(
+                    status=telemetry_pb2.UniversalAck.Status.OK,
+                    reason="duplicate",
+                    processed_timestamp_ns=int(time.time() * 1e9),
+                )
+
             # Track inflight
             inflight = _inc_inflight()
             try:
@@ -1124,51 +1277,52 @@ class UniversalEventBusServicer(telemetry_grpc.UniversalEventBusServicer):
                 else:
                     logger.warning("[PublishTelemetry] Empty envelope received")
 
-                # Store in WAL for dashboard visibility
+                # Store in WAL for dashboard visibility (P0-EB-2: ACK after WAL)
+                wal_written = False
+                wal_duplicate = False
+
                 if wal_storage:
                     try:
                         with _wal_lock:
-                            conn = sqlite3.connect(
-                                WAL_PATH,
-                                timeout=5.0,
-                                isolation_level=None,
-                                check_same_thread=False,
-                            )
-
                             idem = request.idempotency_key or f"unknown_{request.ts_ns}"
                             ts_ns = request.ts_ns
                             env_bytes = request.SerializeToString()
-                            checksum = hashlib.blake2b(
-                                env_bytes, digest_size=32
-                            ).digest()
 
-                            try:
-                                conn.execute(
-                                    "INSERT INTO wal (idem, ts_ns, bytes, checksum) VALUES (?, ?, ?, ?)",
-                                    (idem, ts_ns, env_bytes, checksum),
-                                )
+                            written = wal_storage.write_raw(idem, ts_ns, env_bytes)
+                            if written:
+                                wal_written = True
                                 logger.debug(
                                     "[PublishTelemetry] Stored in WAL (idem=%s)", idem
                                 )
-                            except sqlite3.IntegrityError:
+                            else:
+                                wal_duplicate = True
                                 logger.debug(
                                     "[PublishTelemetry] Duplicate (idem=%s), skipped",
                                     idem,
                                 )
-                            finally:
-                                conn.close()
                     except Exception as wal_err:
                         logger.error(
-                            "[PublishTelemetry] WAL storage failed: %s", wal_err
+                            "AOC1_WAL_WRITE_FAILURE: [PublishTelemetry] %s", wal_err
                         )
+                        BUS_WAL_FAILURES.inc()
 
-                BUS_LAT.observe((time.time() - t0) * 1000.0)
-                return telemetry_pb2.UniversalAck(
-                    status=telemetry_pb2.UniversalAck.Status.OK,
-                    reason="accepted",
-                    processed_timestamp_ns=int(time.time() * 1e9),
-                    events_accepted=1,
-                )
+                # Only ACK OK if WAL write succeeded, was duplicate, or no WAL configured
+                if wal_written or wal_duplicate or not wal_storage:
+                    BUS_LAT.observe((time.time() - t0) * 1000.0)
+                    return telemetry_pb2.UniversalAck(
+                        status=telemetry_pb2.UniversalAck.Status.OK,
+                        reason="accepted",
+                        processed_timestamp_ns=int(time.time() * 1e9),
+                        events_accepted=1,
+                    )
+                else:
+                    BUS_RETRY_TOTAL.inc()
+                    BUS_LAT.observe((time.time() - t0) * 1000.0)
+                    return telemetry_pb2.UniversalAck(
+                        status=telemetry_pb2.UniversalAck.Status.RETRY,
+                        reason="WAL write failed, retry",
+                        backoff_hint_ms=2000,
+                    )
             finally:
                 _dec_inflight()
 
@@ -1278,9 +1432,19 @@ def _start_health_server():
                 self.send_response(404)
                 self.end_headers()
                 return
+            # Return 503 during graceful shutdown (P1-EB-3)
+            if _SHOULD_EXIT:
+                self.send_response(503)
+                self.end_headers()
+                self.wfile.write(b"shutting down")
+                return
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"OK bus")
+
+        def log_message(self, format, *args):
+            """Suppress health check access logs."""
+            pass
 
     t = threading.Thread(
         target=lambda: HTTPServer(("0.0.0.0", 8080), H).serve_forever(), daemon=True
@@ -1432,9 +1596,9 @@ def serve():
             with open("certs/ca.crt", "rb") as f:
                 ca = f.read()
 
-            # Support optional client auth for CI/test environments
+            # mTLS enabled by default (P0-EB-3); set EVENTBUS_REQUIRE_CLIENT_AUTH=false for CI/test
             require_client_auth = (
-                os.getenv("EVENTBUS_REQUIRE_CLIENT_AUTH", "false").lower() == "true"
+                os.getenv("EVENTBUS_REQUIRE_CLIENT_AUTH", "true").lower() != "false"
             )
 
             creds = grpc.ssl_server_credentials(
@@ -1467,12 +1631,57 @@ def serve():
             logger.exception("Failed to register EventBus services: %s", e)
             raise
 
+        # Load Ed25519 keys for signature verification (P1-EB-5)
+        try:
+            _load_keys()
+            logger.info("Loaded Ed25519 public key for signature verification")
+        except FileNotFoundError:
+            logger.warning(
+                "AOC1_SIGNING_KEY_MISSING: certs/agent.ed25519.pub not found; "
+                "signature verification will reject signed envelopes"
+            )
+        except Exception as e:
+            logger.warning(
+                "AOC1_SIGNING_KEY_LOAD_FAILURE: %s; "
+                "signature verification may not work",
+                e,
+            )
+
+        # Load trust map for per-agent authorization (P1-EB-5)
+        try:
+            _load_trust()
+            logger.info("Loaded trust map with %d authorized agents", len(TRUST))
+        except FileNotFoundError:
+            logger.warning(
+                "AOC1_TRUST_MAP_MISSING: trust map file not found; "
+                "per-agent CN authorization disabled"
+            )
+        except Exception as e:
+            logger.warning(
+                "AOC1_TRUST_MAP_LOAD_FAILURE: %s; "
+                "per-agent CN authorization disabled",
+                e,
+            )
+
+        # Start health check HTTP server (P1-EB-4)
+        _start_health_server()
+        logger.info("Started health check server on :8080/healthz")
+
         logger.info("Starting gRPC server...")
         server.start()
         logger.info("gRPC server started successfully")
 
-        while True:
+        # Graceful shutdown loop (P1-EB-3)
+        GRACE_PERIOD = 10  # seconds
+        while not _SHOULD_EXIT:
             time.sleep(1)
+
+        logger.info(
+            "AOC1_GRACEFUL_SHUTDOWN: draining in-flight requests (grace=%ds)",
+            GRACE_PERIOD,
+        )
+        server.stop(GRACE_PERIOD)
+        logger.info("AOC1_GRACEFUL_SHUTDOWN: complete")
 
     except Exception as e:
         logger.exception("Unhandled exception during server initialization: %s", e)

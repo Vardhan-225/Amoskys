@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "amoskys"
-version = "1.0.0"
+version = "0.9.0-beta.1"
 description = "Neural Security Orchestration That Evolves - Real-time security intelligence platform"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -128,18 +128,24 @@ all = [
 ]
 
 [project.scripts]
-# Agent console entrypoints
-amoskys-flowagent = "amoskys.agents.flowagent.main:main"
-amoskys-procagent = "amoskys.agents.proc.proc_agent_v3:main"
-amoskys-authguard = "amoskys.agents.auth.auth_guard_agent_v2:main"
-amoskys-persistguard = "amoskys.agents.persistence.persistence_agent:main"
+# ─── Agent console entrypoints (canonical v2/v3) ───
+amoskys-proc = "amoskys.agents.proc.proc_agent_v3:main"
+amoskys-auth = "amoskys.agents.auth.auth_guard_agent_v2:main"
+amoskys-persist = "amoskys.agents.persistence.persistence_agent_v2:main"
+amoskys-dns = "amoskys.agents.dns.dns_agent_v2:main"
+amoskys-fim = "amoskys.agents.fim.fim_agent_v2:main"
+amoskys-flow = "amoskys.agents.flow.flow_agent_v2:main"
+amoskys-peripheral = "amoskys.agents.peripheral.peripheral_agent_v2:main"
 
-# EventBus & Intelligence
+# Legacy flow agent (WAL integration — retained for pipeline compatibility)
+amoskys-flowagent = "amoskys.agents.flowagent.main:main"
+
+# ─── EventBus & Intelligence ───
 amoskys-eventbus = "amoskys.eventbus.server:serve"
 amoskys-fusion = "amoskys.intel.fusion_engine:main"
 amoskys-ingest = "amoskys.intel.ingest:main"
 
-# Dashboard
+# ─── Dashboard ───
 amoskys-dashboard = "web.app:main"
 
 [project.urls]
@@ -269,11 +275,11 @@ module = [
     "amoskys.intel.rules",
     "amoskys.intel.advanced_rules",
     "amoskys.agents.common.threat_detection",
-    "amoskys.agents.peripheral.peripheral_agent",
-    "amoskys.agents.persistence.persistence_agent",
-    "amoskys.agents.kernel_audit.kernel_audit_agent",
-    "amoskys.agents.file_integrity.file_integrity_agent",
-    "amoskys.agents.dns.dns_agent",
+    "amoskys.agents.peripheral.peripheral_agent_v2",
+    "amoskys.agents.persistence.persistence_agent_v2",
+    "amoskys.agents.kernel_audit.kernel_audit_agent_v2",
+    "amoskys.agents.fim.fim_agent_v2",
+    "amoskys.agents.dns.dns_agent_v2",
     "amoskys.intelligence.score_junction",
     "amoskys.edge.edge_optimizer",
     "amoskys.agents.snmp.enhanced_collector",

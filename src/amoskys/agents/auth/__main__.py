@@ -1,12 +1,11 @@
-"""
-AMOSKYS Auth Agent - Module Entry Point
+"""AMOSKYS Auth Agent - Module Entry Point
 
 Run with: python -m amoskys.agents.auth [options]
 """
 
 from amoskys.agents.common.cli import agent_main
 
-from .auth_agent import AuthGuardAgent
+from .auth_guard_agent import AuthGuardAgent
 
 
 def main() -> None:

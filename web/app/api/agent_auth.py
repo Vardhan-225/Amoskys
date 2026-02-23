@@ -4,12 +4,15 @@ JWT-based authentication with role-based access control
 """
 
 import hmac
+import logging
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Dict, Optional
 
 import jwt
 from flask import Blueprint, current_app, g, jsonify, request
+
+logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint("agent_auth", __name__, url_prefix="/agent-auth")
 
@@ -58,8 +61,10 @@ def verify_jwt(token: str) -> Optional[Dict[str, Any]]:
         payload = jwt.decode(token, secret_key, algorithms=["HS256"])
         return payload
     except jwt.ExpiredSignatureError:
+        logger.info("JWT token expired")
         return None
     except jwt.InvalidTokenError:
+        logger.warning("Invalid JWT token presented")
         return None
 
 

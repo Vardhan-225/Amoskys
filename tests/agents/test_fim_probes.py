@@ -3,9 +3,11 @@
 
 import stat
 import time
+from unittest.mock import patch
 
 import pytest
 
+from amoskys.agents.common.probes import ProbeContext, Severity
 from amoskys.agents.fim.probes import (
     BootloaderTamperProbe,
     ChangeType,
@@ -20,16 +22,15 @@ from amoskys.agents.fim.probes import (
     WorldWritableSensitiveProbe,
     create_fim_probes,
 )
-from amoskys.agents.common.probes import ProbeContext, Severity
 
 
 class TestFIMProbes:
     """Test suite for FIM probes."""
 
     def test_create_fim_probes(self):
-        """Test probe factory creates all 8 probes."""
+        """Test probe factory creates all 9 probes."""
         probes = create_fim_probes()
-        assert len(probes) == 8
+        assert len(probes) == 9
 
         probe_names = [p.name for p in probes]
         assert "critical_system_file_change" in probe_names
@@ -236,7 +237,9 @@ class TestFIMProbes:
         assert len(events) == 1
         assert events[0].event_type == "service_created"
         assert events[0].severity == Severity.HIGH
-        assert events[0].data["path"] == "/Library/LaunchAgents/com.evil.persistence.plist"
+        assert (
+            events[0].data["path"] == "/Library/LaunchAgents/com.evil.persistence.plist"
+        )
 
     def test_service_creation_systemd(self):
         """Test detection of new systemd service creation."""
@@ -277,8 +280,8 @@ class TestFIMProbes:
 
     def test_webshell_detection_php(self):
         """Test detection of PHP webshell with obfuscated patterns."""
-        import tempfile
         import os
+        import tempfile
 
         probe = WebShellDropProbe()
         now_ns = int(time.time() * 1e9)
@@ -287,7 +290,7 @@ class TestFIMProbes:
         os.makedirs("/tmp/test_var_www", exist_ok=True)
         webshell_path = "/tmp/test_var_www/shell.php"
 
-        with open(webshell_path, 'w') as f:
+        with open(webshell_path, "w") as f:
             f.write('<?php eval(base64_decode($_POST["cmd"])); ?>')
 
         try:
@@ -306,19 +309,24 @@ class TestFIMProbes:
             # Temporarily override the path check by using the real test file
             # Since the probe checks if path starts with web roots, we need to mock it
             import amoskys.agents.fim.probes as probes_module
+
             original_web_roots = probes_module.WEB_ROOTS
             probes_module.WEB_ROOTS = {"/tmp/test_var_www"}
 
             context = ProbeContext(
                 device_id="test-device",
                 agent_name="test-agent",
-                shared_data={"file_changes": [FileChange(
-                    path=webshell_path,  # Use actual path for the test
-                    change_type=ChangeType.CREATED,
-                    old_state=None,
-                    new_state=new_state,
-                    timestamp_ns=now_ns,
-                )]},
+                shared_data={
+                    "file_changes": [
+                        FileChange(
+                            path=webshell_path,  # Use actual path for the test
+                            change_type=ChangeType.CREATED,
+                            old_state=None,
+                            new_state=new_state,
+                            timestamp_ns=now_ns,
+                        )
+                    ]
+                },
             )
             events = probe.scan(context)
 
@@ -338,16 +346,18 @@ class TestFIMProbes:
 
     def test_config_backdoor_sshd(self):
         """Test detection of SSH config modifications."""
-        import tempfile
         import os
+        import tempfile
 
         probe = ConfigBackdoorProbe()
         now_ns = int(time.time() * 1e9)
 
         # Create actual SSH config with dangerous setting
-        with tempfile.NamedTemporaryFile(mode='w', suffix='_sshd_config', delete=False) as f:
-            f.write('PermitRootLogin yes\n')
-            f.write('Port 22\n')
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix="_sshd_config", delete=False
+        ) as f:
+            f.write("PermitRootLogin yes\n")
+            f.write("Port 22\n")
             config_path = f.name
 
         try:
@@ -402,15 +412,17 @@ class TestFIMProbes:
 
     def test_config_backdoor_sudoers(self):
         """Test detection of sudoers file tampering."""
-        import tempfile
         import os
+        import tempfile
 
         probe = ConfigBackdoorProbe()
         now_ns = int(time.time() * 1e9)
 
         # Create actual sudoers with dangerous directive
-        with tempfile.NamedTemporaryFile(mode='w', suffix='_sudoers', delete=False) as f:
-            f.write('attacker ALL=(ALL) NOPASSWD: ALL\n')
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix="_sudoers", delete=False
+        ) as f:
+            f.write("attacker ALL=(ALL) NOPASSWD: ALL\n")
             sudoers_path = f.name
 
         try:
@@ -540,6 +552,7 @@ class TestFIMProbes:
         assert events[0].event_type == "new_system_library"
         assert events[0].severity == Severity.HIGH
 
+    @patch("sys.platform", "linux")
     def test_bootloader_tamper_detection(self):
         """Test detection of bootloader/kernel tampering."""
         probe = BootloaderTamperProbe()
@@ -648,7 +661,9 @@ class TestFIMProbes:
         probes = create_fim_probes()
 
         for probe in probes:
-            assert len(probe.mitre_techniques) > 0, f"{probe.name} missing MITRE techniques"
+            assert (
+                len(probe.mitre_techniques) > 0
+            ), f"{probe.name} missing MITRE techniques"
             assert len(probe.mitre_tactics) > 0, f"{probe.name} missing MITRE tactics"
 
     def test_file_state_suid_check(self):

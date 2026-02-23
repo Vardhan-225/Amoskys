@@ -10,6 +10,8 @@ This package provides shared functionality used across all agent implementations
 - Micro-probe architecture for "swarm of eyes" detection
 """
 
+from amoskys.agents.common.base import HardenedAgentBase
+
 # CLI Framework
 from amoskys.agents.common.cli import (
     agent_main,
@@ -18,14 +20,16 @@ from amoskys.agents.common.cli import (
     run_agent,
     write_heartbeat,
 )
-from amoskys.agents.common.hardened_base import (
-    EvasionTechnique,
-    HardenedAgentBase,
-    IntegrityState,
-    ThreatContext,
-    ThreatLevel,
-)
 from amoskys.agents.common.local_queue import LocalQueue
+
+# AOC-1 / EAC-1 Contracts (Phase 0 — Foundation Hardening)
+from amoskys.agents.common.metrics import (
+    SCHEMA_VERSION,
+    CircuitBreakerState,
+    ProbeStatus,
+    QueueAction,
+    SubprocessOutcome,
+)
 
 # Micro-Probe Architecture
 from amoskys.agents.common.probes import (
@@ -62,10 +66,6 @@ __all__ = [
     "LocalQueue",
     # Hardened base
     "HardenedAgentBase",
-    "ThreatLevel",
-    "EvasionTechnique",
-    "IntegrityState",
-    "ThreatContext",
     # Threat detection
     "ThreatAnalyzer",
     "ThreatIndicator",
@@ -86,4 +86,10 @@ __all__ = [
     "ProbeRegistry",
     "Severity",
     "TelemetryEvent",
+    # AOC-1 / EAC-1 Contracts
+    "CircuitBreakerState",
+    "ProbeStatus",
+    "QueueAction",
+    "SubprocessOutcome",
+    "SCHEMA_VERSION",
 ]

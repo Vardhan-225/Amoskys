@@ -32,7 +32,6 @@ from amoskys.agents.common.threat_detection import (
     ThreatIndicator,
 )
 
-
 # ---------------------------------------------------------------------------
 # AttackPhase
 # ---------------------------------------------------------------------------
@@ -86,7 +85,16 @@ class TestThreatIndicator:
 
     def test_to_dict_has_expected_keys(self):
         d = self._make().to_dict()
-        for key in ["type", "value", "confidence", "phase", "mitre", "description", "source", "timestamp"]:
+        for key in [
+            "type",
+            "value",
+            "confidence",
+            "phase",
+            "mitre",
+            "description",
+            "source",
+            "timestamp",
+        ]:
             assert key in d
 
     def test_to_dict_phase_is_string(self):
@@ -307,9 +315,7 @@ class TestPersistenceDetector:
         # Test the expanded form
         import os
 
-        result2 = PersistenceDetector.check_file_write(
-            os.path.expanduser("~/.bashrc")
-        )
+        result2 = PersistenceDetector.check_file_write(os.path.expanduser("~/.bashrc"))
         assert result2 is not None
 
     def test_normal_file_write_not_flagged(self):
@@ -317,7 +323,7 @@ class TestPersistenceDetector:
         assert result is None
 
     def test_suspicious_plist_content_increases_confidence(self):
-        content = b'<plist><key>RunAtLoad</key><true/></plist>'
+        content = b"<plist><key>RunAtLoad</key><true/></plist>"
         result = PersistenceDetector.check_file_write(
             "/Library/LaunchAgents/com.evil.plist", content=content
         )
@@ -365,10 +371,7 @@ class TestC2Detector:
 
     def test_beaconing_detection(self):
         now = datetime.now()
-        connections = [
-            self._conn(dst_ip="10.0.0.1", dst_port=4444)
-            for _ in range(10)
-        ]
+        connections = [self._conn(dst_ip="10.0.0.1", dst_port=4444) for _ in range(10)]
         # Create regular 60s intervals
         for i, conn in enumerate(connections):
             conn.timestamp = now + timedelta(seconds=60 * i)
@@ -423,9 +426,7 @@ class TestCredentialAccessDetector:
         assert result is not None
 
     def test_normal_file_not_flagged(self):
-        result = CredentialAccessDetector.check_file_access(
-            "/tmp/myfile.txt", "read"
-        )
+        result = CredentialAccessDetector.check_file_access("/tmp/myfile.txt", "read")
         assert result is None
 
     def test_keychain_dump_command(self):

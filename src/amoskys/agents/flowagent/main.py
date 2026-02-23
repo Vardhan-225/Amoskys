@@ -209,6 +209,7 @@ def make_envelope(flow: pb.FlowEvent) -> pb.Envelope:
         flow=flow,
         sig=b"",
         prev_sig=b"",
+        schema_version=1,
     )
     sk = load_private_key(ED25519_SK_PATH)
     env.sig = sign(sk, canonical_bytes(env))

@@ -14,8 +14,8 @@ from amoskys.agents.persistence.probes import (
     PersistenceChange,
     PersistenceChangeType,
     PersistenceEntry,
-    SSHKeyBackdoorProbe,
     ShellProfileHijackProbe,
+    SSHKeyBackdoorProbe,
     StartupFolderLoginItemProbe,
     SystemdServicePersistenceProbe,
     create_persistence_probes,
@@ -26,9 +26,9 @@ class TestPersistenceProbes:
     """Test suite for PersistenceGuard probes."""
 
     def test_create_persistence_probes(self):
-        """Test probe factory creates all 8 probes."""
+        """Test probe factory creates all 10 probes."""
         probes = create_persistence_probes()
-        assert len(probes) == 8
+        assert len(probes) == 10
 
         probe_names = [p.name for p in probes]
         assert "launchd_persistence" in probe_names
@@ -634,7 +634,9 @@ class TestPersistenceProbes:
         probes = create_persistence_probes()
 
         for probe in probes:
-            assert len(probe.mitre_techniques) > 0, f"{probe.name} missing MITRE techniques"
+            assert (
+                len(probe.mitre_techniques) > 0
+            ), f"{probe.name} missing MITRE techniques"
             assert len(probe.mitre_tactics) > 0, f"{probe.name} missing MITRE tactics"
 
 

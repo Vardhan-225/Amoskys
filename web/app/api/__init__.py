@@ -8,6 +8,16 @@ secure endpoints for agent communication, event ingestion, and system monitoring
 
 from flask import Blueprint, jsonify
 
+
+def escape_like(value: str) -> str:
+    """Escape special characters in SQL LIKE patterns.
+
+    Escapes %, _, and \\ so user input is treated literally.
+    Use with ``LIKE ? ESCAPE '\\\\'`` in the SQL query.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 # API Blueprint registration
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -19,6 +29,7 @@ from .docs import generate_openapi_spec
 from .events import events_bp
 from .health import health_bp  # Health API v1 for Command Center
 from .integration import integration_bp
+from .onboarding import onboarding_bp  # User onboarding
 from .peripheral_telemetry import peripheral_bp  # Peripheral telemetry API
 from .process_telemetry import process_bp  # Process telemetry API
 from .snmp_simple import snmp_simple_bp  # Simple SNMP telemetry API
@@ -39,6 +50,7 @@ api_bp.register_blueprint(peripheral_bp)  # Register peripheral telemetry API
 api_bp.register_blueprint(database_manager_bp)  # Register database manager API
 api_bp.register_blueprint(health_bp)  # Register health API v1
 api_bp.register_blueprint(telemetry_bp)  # Register telemetry API
+api_bp.register_blueprint(onboarding_bp)  # Register onboarding API
 
 
 # Add API documentation endpoint

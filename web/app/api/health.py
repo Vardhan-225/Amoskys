@@ -9,13 +9,16 @@ This module provides real-time health status for:
 - Event statistics (from telemetry database)
 """
 
+import logging
+import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List
 
 import psutil
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
 from ..dashboard.agent_discovery import (
     AGENT_CATALOG,
@@ -23,10 +26,88 @@ from ..dashboard.agent_discovery import (
     get_platform_name,
 )
 
+logger = logging.getLogger(__name__)
+
 health_bp = Blueprint("health", __name__, url_prefix="/v1/health")
 
+
+def _require_health_auth(f):
+    """Require either session cookie or API key for health endpoints.
+
+    Accepts:
+      - Valid session cookie (amoskys_session)
+      - X-API-Key header matching AMOSKYS_API_KEY env var
+
+    This allows both dashboard (session) and monitoring tools (API key)
+    to access detailed health data.
+    """
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        # Check API key first (stateless, fast)
+        api_key = request.headers.get("X-API-Key")
+        expected_key = os.environ.get("AMOSKYS_API_KEY")
+        if api_key and expected_key and api_key == expected_key:
+            return f(*args, **kwargs)
+
+        # Fall back to session cookie auth
+        from ..middleware.auth import SESSION_COOKIE_NAME
+
+        session_token = request.cookies.get(SESSION_COOKIE_NAME)
+        if not session_token:
+            return (
+                jsonify(
+                    {
+                        "error": "Authentication required",
+                        "error_code": "UNAUTHORIZED",
+                        "hint": "Provide X-API-Key header or session cookie",
+                    }
+                ),
+                401,
+            )
+
+        try:
+            from amoskys.auth import AuthService
+            from amoskys.db.web_db import get_web_session_context
+
+            with get_web_session_context() as db:
+                auth = AuthService(db)
+                result = auth.validate_and_refresh_session(
+                    token=session_token,
+                    ip_address=request.headers.get(
+                        "X-Forwarded-For", request.remote_addr
+                    ),
+                    user_agent=request.headers.get("User-Agent"),
+                )
+                if not result.is_valid:
+                    return (
+                        jsonify(
+                            {
+                                "error": "Session expired or invalid",
+                                "error_code": "SESSION_EXPIRED",
+                            }
+                        ),
+                        401,
+                    )
+        except Exception:
+            logger.exception("Health auth: session validation failed")
+            return (
+                jsonify(
+                    {
+                        "error": "Authentication error",
+                        "error_code": "AUTH_ERROR",
+                    }
+                ),
+                500,
+            )
+
+        return f(*args, **kwargs)
+
+    return decorated
+
+
 # Project paths
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 TELEMETRY_DB = DATA_DIR / "telemetry.db"
 FUSION_DB = DATA_DIR / "intel" / "fusion.db"
@@ -56,13 +137,20 @@ def _get_component_status(component_name: str) -> str:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
     except Exception:
+        logger.warning(
+            "Process iteration failed for component %s", component_name, exc_info=True
+        )
         return "unknown"
 
     return "stopped"
 
 
 def _get_events_last_24h() -> int:
-    """Count events in the last 24 hours from telemetry database"""
+    """Count events in the last 24 hours from telemetry database.
+
+    Queries all real event tables: security_events, process_events,
+    flow_events, peripheral_events.
+    """
     if not TELEMETRY_DB.exists():
         return 0
 
@@ -70,25 +158,30 @@ def _get_events_last_24h() -> int:
         conn = sqlite3.connect(str(TELEMETRY_DB))
         cursor = conn.cursor()
 
-        # Calculate 24 hours ago in epoch nanoseconds
         cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         cutoff_ns = int(cutoff.timestamp() * 1_000_000_000)
 
-        # Try different table structures
-        for table in ["telemetry_events", "events", "telemetry"]:
+        total = 0
+        for table in [
+            "security_events",
+            "process_events",
+            "flow_events",
+            "peripheral_events",
+        ]:
             try:
                 cursor.execute(
-                    f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns > ?", (cutoff_ns,)
+                    f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns > ?",
+                    (cutoff_ns,),
                 )
-                count = cursor.fetchone()[0]
-                conn.close()
-                return count
+                total += cursor.fetchone()[0]
             except sqlite3.OperationalError:
+                # Table may not exist yet — expected for fresh installs
                 continue
 
         conn.close()
-        return 0
+        return total
     except Exception:
+        logger.exception("Failed to count events from telemetry DB")
         return 0
 
 
@@ -136,11 +229,12 @@ def _get_current_threat_level() -> str:
                     conn.close()
                     return severity_map.get(severity, "LOW")
             except sqlite3.OperationalError:
-                pass
+                # incidents table may not exist yet
+                logger.debug("Fusion DB incidents table not available")
 
             conn.close()
         except Exception:
-            pass
+            logger.exception("Failed to query fusion DB for threat level")
 
     # Default to BENIGN if no recent incidents
     return "BENIGN"
@@ -169,6 +263,7 @@ def _calculate_health_score(
 
 
 @health_bp.route("/system", methods=["GET"])
+@_require_health_auth
 def system_health():
     """
     Comprehensive system health endpoint for Command Center
@@ -280,8 +375,9 @@ def system_health():
 
 
 @health_bp.route("/agents", methods=["GET"])
+@_require_health_auth
 def agents_health():
-    """Detailed health status for all agents"""
+    """Detailed health status for all agents — requires authentication."""
     from ..dashboard.agent_discovery import get_all_agents_status
 
     return jsonify(get_all_agents_status())
@@ -289,10 +385,8 @@ def agents_health():
 
 @health_bp.route("/ping", methods=["GET"])
 def ping():
-    """Simple ping endpoint for load balancer health checks"""
-    return jsonify(
-        {
-            "status": "ok",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-    )
+    """Simple ping endpoint for load balancer health checks.
+
+    Unauthenticated by design — returns minimal data only.
+    """
+    return jsonify({"status": "ok"})

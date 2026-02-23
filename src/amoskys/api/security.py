@@ -49,13 +49,18 @@ limiter = Limiter(
 @limiter.request_filter
 def rate_limit_exempt():
     """Exempt certain endpoints from rate limiting."""
-    # Exempt health check endpoints
-    if request.path.startswith("/api/health") or request.path == "/health":
+    # Only exempt the minimal ping endpoint (load balancer health check)
+    if request.path == "/v1/health/ping" or request.path == "/health":
         return True
 
-    # Exempt dashboard live endpoints (real-time polling)
-    # These endpoints need high-frequency access for dashboard updates
-    if request.path.startswith("/dashboard/api/live/"):
+    # Exempt all dashboard API endpoints (real-time polling, agent control,
+    # deep-overview, hunt, incidents, MITRE, network — these are authenticated
+    # by session cookie and need high-frequency access for dashboard updates)
+    if request.path.startswith("/dashboard/api/"):
+        return True
+
+    # Exempt static assets
+    if request.path.startswith("/static/"):
         return True
 
     return False
@@ -106,7 +111,8 @@ CSP = {
     "default-src": ["'self'"],
     "script-src": [
         "'self'",
-        "'unsafe-inline'",  # For inline scripts - ignored when nonce is present
+        # 'unsafe-inline' intentionally removed — nonces are enforced.
+        # All inline <script> blocks must include nonce="{{ csp_nonce() }}".
         "cdn.jsdelivr.net",  # Chart.js CDN
         "cdn.socket.io",  # Socket.IO CDN
     ],
@@ -243,18 +249,17 @@ def init_security(app: Flask) -> None:
         logger.info("✅ Security headers enabled (development mode)")
     else:
         # Strict settings for production
-        # NOTE: We disable nonces (content_security_policy_nonce_in=None) to allow
-        # 'unsafe-inline' to work. Many templates use inline onclick handlers which
-        # would be blocked if nonces are enabled (CSP spec ignores 'unsafe-inline'
-        # when nonces are present). This is a pragmatic trade-off until all handlers
-        # are converted to event listeners.
+        # Nonces are enabled: all inline <script> blocks MUST include
+        # nonce="{{ csp_nonce() }}". Inline event handlers (onclick, etc.)
+        # have been converted to addEventListener in external/nonce-protected
+        # script blocks. 'unsafe-inline' is removed from script-src.
         Talisman(
             app,
             force_https=force_https,
             strict_transport_security=True,
             strict_transport_security_max_age=31536000,  # 1 year
             content_security_policy=CSP,
-            content_security_policy_nonce_in=None,  # Disabled - allows 'unsafe-inline' to work
+            content_security_policy_nonce_in=["script-src"],  # CSP nonces active
             referrer_policy="strict-origin-when-cross-origin",
             feature_policy={
                 "geolocation": "'none'",

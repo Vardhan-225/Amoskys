@@ -6,15 +6,15 @@ Entry point for the Amoskys neural event bus server.
 Loads configuration and starts the gRPC server.
 """
 
-import sys
-import os
 import argparse
+import os
+import sys
 
 # Add src to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
+from amoskys.config import AmoskysConfig, get_config, init_config
 from amoskys.eventbus.server import serve
-from amoskys.config import get_config, init_config, AmoskysConfig
 
 
 def main():

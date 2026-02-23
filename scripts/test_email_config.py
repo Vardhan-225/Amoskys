@@ -71,7 +71,9 @@ def test_config() -> bool:
 
         # Validate required fields
         if not cfg.smtp_host or cfg.smtp_host == "localhost":
-            print("⚠️  WARNING: SMTP host is not configured (set AMOSKYS_EMAIL_SMTP_HOST)")
+            print(
+                "⚠️  WARNING: SMTP host is not configured (set AMOSKYS_EMAIL_SMTP_HOST)"
+            )
             return False
 
         if not cfg.username:

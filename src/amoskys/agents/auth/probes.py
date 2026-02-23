@@ -37,7 +37,6 @@ from amoskys.agents.common.probes import (
     TelemetryEvent,
 )
 
-
 # =============================================================================
 # Auth Event Model
 # =============================================================================
@@ -116,6 +115,12 @@ class SSHBruteForceProbe(MicroProbe):
     mitre_tactics = ["Credential Access", "Initial Access"]
     default_enabled = True
     scan_interval = 10.0
+    requires_fields = ["auth_events"]
+    field_semantics = {
+        "source_ip": "ipv4_or_ipv6",
+        "username": "os_username",
+        "timestamp_ns": "monotonic_ns",
+    }
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect SSH brute force attempts."""
@@ -179,6 +184,8 @@ class SSHPasswordSprayProbe(MicroProbe):
     mitre_tactics = ["Credential Access"]
     default_enabled = True
     scan_interval = 10.0
+    requires_fields = ["auth_events"]
+    field_semantics = {"source_ip": "ipv4_or_ipv6", "username": "os_username"}
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect password spray attacks."""
@@ -233,6 +240,11 @@ class SSHGeoImpossibleTravelProbe(MicroProbe):
     mitre_tactics = ["Initial Access", "Persistence"]
     default_enabled = True
     scan_interval = 10.0
+    requires_fields = ["auth_events"]
+    field_semantics = {
+        "src_latitude": "geo_coordinate",
+        "src_longitude": "geo_coordinate",
+    }
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect impossible travel."""
@@ -305,7 +317,9 @@ class SSHGeoImpossibleTravelProbe(MicroProbe):
         return events
 
     @staticmethod
-    def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    def _haversine_distance(
+        lat1: float, lon1: float, lat2: float, lon2: float
+    ) -> float:
         """Calculate great-circle distance between two points (km)."""
         R = 6371  # Earth radius in km
 
@@ -344,6 +358,8 @@ class SudoElevationProbe(MicroProbe):
     mitre_tactics = ["Privilege Escalation"]
     default_enabled = True
     scan_interval = 10.0
+    requires_fields = ["auth_events"]
+    field_semantics = {"username": "os_username", "event_type": "auth_event_type"}
 
     def __init__(self):
         super().__init__()
@@ -379,7 +395,9 @@ class SudoElevationProbe(MicroProbe):
         return events
 
     def _check_first_time_users(
-        self, first_time_users: Set[str], sudo_counts: Dict[str, int],
+        self,
+        first_time_users: Set[str],
+        sudo_counts: Dict[str, int],
     ) -> List[TelemetryEvent]:
         """Flag first-time sudo users."""
         events: List[TelemetryEvent] = []
@@ -399,7 +417,8 @@ class SudoElevationProbe(MicroProbe):
         return events
 
     def _check_denied_attempts(
-        self, sudo_denied: Dict[str, List[AuthEvent]],
+        self,
+        sudo_denied: Dict[str, List[AuthEvent]],
     ) -> List[TelemetryEvent]:
         """Flag denied sudo attempts (privilege escalation attempt)."""
         events: List[TelemetryEvent] = []
@@ -413,8 +432,12 @@ class SudoElevationProbe(MicroProbe):
                         data={
                             "username": user,
                             "denied_count": len(denied_events),
-                            "reasons": list({e.reason for e in denied_events if e.reason}),
-                            "commands": [e.command for e in denied_events[:5] if e.command],
+                            "reasons": list(
+                                {e.reason for e in denied_events if e.reason}
+                            ),
+                            "commands": [
+                                e.command for e in denied_events[:5] if e.command
+                            ],
                         },
                         mitre_techniques=["T1548.003"],
                     )
@@ -422,7 +445,8 @@ class SudoElevationProbe(MicroProbe):
         return events
 
     def _check_spikes(
-        self, sudo_counts: Dict[str, int],
+        self,
+        sudo_counts: Dict[str, int],
     ) -> List[TelemetryEvent]:
         """Flag sudden spikes in sudo usage."""
         events: List[TelemetryEvent] = []
@@ -469,6 +493,8 @@ class SudoSuspiciousCommandProbe(MicroProbe):
     mitre_tactics = ["Privilege Escalation", "Execution", "Persistence"]
     default_enabled = True
     scan_interval = 10.0
+    requires_fields = ["auth_events"]
+    field_semantics = {"command": "shell_command", "username": "os_username"}
 
     # Suspicious patterns (ordered from most specific to least specific)
     DANGEROUS_PATTERNS = [
@@ -542,6 +568,8 @@ class OffHoursLoginProbe(MicroProbe):
     mitre_tactics = ["Initial Access", "Persistence"]
     default_enabled = True
     scan_interval = 10.0
+    requires_fields = ["auth_events"]
+    field_semantics = {"timestamp_ns": "monotonic_ns", "username": "os_username"}
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect off-hours logins."""
@@ -602,6 +630,10 @@ class MFABypassOrAnomalyProbe(MicroProbe):
     mitre_tactics = ["Credential Access"]
     default_enabled = True
     scan_interval = 10.0
+    platforms = ["linux", "windows"]  # No MFA event source on macOS
+    requires_fields = ["auth_events"]
+    requires_event_types = ["MFA_CHALLENGE"]
+    field_semantics = {"event_type": "auth_event_type"}
 
     MFA_FATIGUE_THRESHOLD = 10  # MFA challenges before success
 
@@ -641,10 +673,7 @@ class MFABypassOrAnomalyProbe(MicroProbe):
 
         # Check for MFA fatigue (many challenges before success)
         for user, challenge_count in mfa_challenges.items():
-            if (
-                user in mfa_successes
-                and challenge_count >= self.MFA_FATIGUE_THRESHOLD
-            ):
+            if user in mfa_successes and challenge_count >= self.MFA_FATIGUE_THRESHOLD:
                 events.append(
                     TelemetryEvent(
                         event_type="mfa_fatigue_attack",
@@ -684,6 +713,9 @@ class AccountLockoutStormProbe(MicroProbe):
     mitre_tactics = ["Credential Access", "Impact"]
     default_enabled = True
     scan_interval = 10.0
+    requires_fields = ["auth_events"]
+    requires_event_types = ["ACCOUNT_LOCKED"]
+    field_semantics = {"event_type": "auth_event_type", "source_ip": "ipv4_or_ipv6"}
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect account lockout storms."""

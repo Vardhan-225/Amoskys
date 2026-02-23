@@ -1,0 +1,76 @@
+{
+  "agent": "auth",
+  "label": "AuthGuard V2.1",
+  "eoa_version": "1.0",
+  "timestamp": "2026-02-17T23:50:06Z",
+  "platform": "macOS (Darwin)",
+  "duration_s": 120,
+  "verdict": "PASS",
+  "mac_ready": true,
+  "collector": "MacOSAuthLogCollector (unified log broad predicate + last)",
+  "probes_declared": 8,
+  "probes_fired": 1,
+  "probes_fired_names": ["sudo_elevation"],
+  "analysis": {
+    "total_queue_rows": 11,
+    "decode_ok": 11,
+    "decode_fail": 0,
+    "total_events": 25,
+    "event_types": {
+      "METRIC": 23,
+      "SECURITY": 2
+    },
+    "severities": {
+      "INFO": 23,
+      "MEDIUM": 2
+    },
+    "probe_names": {
+      "auth_collector": 22,
+      "auth_guard_agent": 1,
+      "sudo_elevation": 2
+    },
+    "mitre_techniques_observed": ["T1548.003"],
+    "has_metric_data": 23,
+    "has_security_event": 2,
+    "has_alarm_data": 0,
+    "has_attributes": 2,
+    "empty_evidence_events": 0
+  },
+  "trigger_run": {
+    "triggers": [
+      {"action": "sudo -n ls /tmp", "result": "SUDO_DENIED captured, sudo_elevation probe fired (first_time_sudo_user + sudo_denied_attempt)"}
+    ],
+    "auth_events_captured": 7,
+    "auth_event_types": ["SUDO_DENIED", "LOCAL_LOGIN"],
+    "probes_fired": ["sudo_elevation"],
+    "security_events": 2,
+    "mitre_observed": ["T1548.003"],
+    "notes": "V2.1 broadened collector: unified log predicate includes sudo/sshd/loginwindow/coreauthd/SecurityAgent/authd/screensaver. JSON key fix: processImagePath (not process). Added --info flag. 2m overlapping query window with (processID, machTimestamp) dedup. 'last' command as secondary source. Sudo parser handles macOS format (user : reason ; TTY=... ; COMMAND=...). New event types: SUDO_DENIED, LOCAL_LOGIN, SCREEN_LOCK, SCREEN_UNLOCK, AUTH_PROMPT, BIOMETRIC_AUTH."
+  },
+  "resource_usage": {
+    "rss_min_kb": 3600,
+    "rss_max_kb": 57792,
+    "rss_final_kb": 57776,
+    "cpu_avg_pct": 0.0,
+    "cpu_max_pct": 0.0
+  },
+  "stability": {
+    "unexpected_tracebacks": 0,
+    "expected_circuit_breaker_tracebacks": 6,
+    "loop_crashes": 0,
+    "graceful_shutdown": true
+  },
+  "data_richness": {
+    "all_events_have_evidence": true,
+    "metric_events_have_metric_data": true,
+    "security_events_have_mitre": true,
+    "security_events_have_attributes": true
+  },
+  "improvements_over_v2_0": {
+    "auth_events_captured": "7 (was 0)",
+    "probes_fired": "1 (was 0)",
+    "security_events": "2 (was 0)",
+    "mitre_observed": "1 technique (was 0)",
+    "verdict": "PASS (was PASS_METRICS_ONLY)"
+  }
+}

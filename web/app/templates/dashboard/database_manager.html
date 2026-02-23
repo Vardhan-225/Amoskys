@@ -64,17 +64,24 @@
     <div class="neural-card">
         <div class="card-header">
             <h3 class="card-title">🔍 Raw Data Viewer (Read-Only)</h3>
-            <div style="display: flex; gap: 0.5rem;">
-                <select id="table-selector" class="table-select" onchange="dbManager.loadTableData()">
-                    <option value="">-- Select Table --</option>
-                    <option value="process_events">process_events</option>
-                    <option value="device_telemetry">device_telemetry</option>
-                    <option value="peripheral_events">peripheral_events</option>
-                    <option value="flow_events">flow_events</option>
-                    <option value="security_events">security_events</option>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <select id="table-selector" class="table-select" onchange="dbManager.loadTableData(1)">
+                    <option value="">-- Loading tables... --</option>
                 </select>
-                <button class="neural-button-sm" onclick="dbManager.loadTableData()">Load Data</button>
+                <button class="neural-button-sm" onclick="dbManager.loadTableData(1)">Load Data</button>
+                <button class="neural-button-sm" onclick="dbManager.exportData('csv')" title="Export CSV">CSV</button>
+                <button class="neural-button-sm" onclick="dbManager.exportData('json')" title="Export JSON">JSON</button>
             </div>
+        </div>
+        <!-- Search bar -->
+        <div id="search-bar" style="display: none; padding: 0.75rem 0; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <input type="text" id="search-input" class="table-select" placeholder="Search..." style="min-width: 200px;"
+                   onkeydown="if(event.key==='Enter') dbManager.searchTable()">
+            <select id="search-column-selector" class="table-select" style="min-width: 180px;">
+                <option value="">All columns</option>
+            </select>
+            <button class="neural-button-sm" onclick="dbManager.searchTable()">Search</button>
+            <button class="neural-button-sm" onclick="dbManager.clearSearch()">Clear</button>
         </div>
         <div class="data-viewer-container">
             <div id="data-viewer-content">
@@ -82,6 +89,16 @@
                     Select a table and click "Load Data" to view records
                 </p>
             </div>
+        </div>
+        <!-- Pagination -->
+        <div id="pagination-controls" style="display: none; padding: 0.75rem 0; gap: 0.5rem; align-items: center; justify-content: space-between;">
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="neural-button-sm" id="page-first" onclick="dbManager.loadTableData(1)">First</button>
+                <button class="neural-button-sm" id="page-prev" onclick="dbManager.prevPage()">Prev</button>
+                <button class="neural-button-sm" id="page-next" onclick="dbManager.nextPage()">Next</button>
+                <button class="neural-button-sm" id="page-last" onclick="dbManager.lastPage()">Last</button>
+            </div>
+            <span id="page-info" style="color: var(--text-secondary); font-size: 0.85rem;">Page 1 of 1</span>
         </div>
     </div>
 
@@ -109,12 +126,7 @@
                     </p>
                     <div style="display: flex; gap: 1rem; align-items: center; margin-top: 1rem;">
                         <select id="truncate-table-selector" class="table-select">
-                            <option value="">-- Select Table to Truncate --</option>
-                            <option value="process_events">process_events</option>
-                            <option value="device_telemetry">device_telemetry</option>
-                            <option value="peripheral_events">peripheral_events</option>
-                            <option value="flow_events">flow_events</option>
-                            <option value="security_events">security_events</option>
+                            <option value="">-- Loading tables... --</option>
                         </select>
                         <button class="danger-button" onclick="dbManager.confirmTruncateTable()">
                             🗑️ Truncate Table
@@ -348,11 +360,44 @@
 class DatabaseManager {
     constructor() {
         this.auditLog = [];
+        this.currentPage = 1;
+        this.totalPages = 1;
+        this.currentSearch = '';
+        this.currentSearchColumn = '';
         this.init();
     }
 
     init() {
+        this.loadTables();
         this.refreshAll();
+        this.loadAuditLog();
+    }
+
+    async loadTables() {
+        try {
+            const response = await fetch('/api/database-manager/tables');
+            const data = await response.json();
+            if (!data.tables) return;
+
+            // Populate both selectors
+            const selectors = [
+                { el: document.getElementById('table-selector'), prefix: '-- Select Table (' + data.tables.length + ' found) --' },
+                { el: document.getElementById('truncate-table-selector'), prefix: '-- Select Table to Truncate --' },
+            ];
+            for (const s of selectors) {
+                if (!s.el) continue;
+                s.el.innerHTML = '<option value="">' + s.prefix + '</option>';
+                for (const table of data.tables) {
+                    if (table === 'audit_log' && s.el.id === 'truncate-table-selector') continue;
+                    const opt = document.createElement('option');
+                    opt.value = table;
+                    opt.textContent = table;
+                    s.el.appendChild(opt);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load tables:', err);
+        }
     }
 
     async refreshAll() {
@@ -429,32 +474,62 @@ class DatabaseManager {
         }
     }
 
-    async loadTableData() {
+    async loadTableData(page) {
         const tableName = document.getElementById('table-selector').value;
 
         if (!tableName) {
-            alert('Please select a table');
+            document.getElementById('search-bar').style.display = 'none';
+            document.getElementById('pagination-controls').style.display = 'none';
             return;
         }
 
+        if (page !== undefined) this.currentPage = page;
+
         try {
-            const response = await fetch(`/api/database-manager/view-table/${tableName}?limit=100`);
+            const params = new URLSearchParams({
+                page: this.currentPage,
+                per_page: 50,
+            });
+            if (this.currentSearch) {
+                params.set('search', this.currentSearch);
+                if (this.currentSearchColumn) params.set('search_column', this.currentSearchColumn);
+            }
+
+            const response = await fetch(`/api/database-manager/view-table/${tableName}?${params}`);
             const data = await response.json();
+
+            // Show search bar and populate column selector
+            const searchBar = document.getElementById('search-bar');
+            searchBar.style.display = 'flex';
+            const colSelect = document.getElementById('search-column-selector');
+            if (data.columns) {
+                const prev = colSelect.value;
+                colSelect.innerHTML = '<option value="">All columns</option>' +
+                    data.columns.map(c => `<option value="${c}">${c}</option>`).join('');
+                if (prev) colSelect.value = prev;
+            }
 
             const container = document.getElementById('data-viewer-content');
 
             if (!data.records || data.records.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No records found in this table</p>';
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No records found</p>';
+                document.getElementById('pagination-controls').style.display = 'none';
                 return;
             }
 
-            // Build table HTML
             const columns = data.columns;
             const records = data.records;
+            const pg = data.pagination;
+            this.currentPage = pg.page;
+            this.totalPages = pg.total_pages;
 
-            const tableHtml = `
+            const filteredNote = data.filtered_count < data.total_count
+                ? ` (filtered from ${data.total_count.toLocaleString()})`
+                : '';
+
+            container.innerHTML = `
                 <div style="margin-bottom: 1rem; color: var(--text-secondary);">
-                    Showing ${records.length} of ${data.total_count.toLocaleString()} records (read-only)
+                    Showing ${records.length} of ${data.filtered_count.toLocaleString()} records${filteredNote} (read-only)
                 </div>
                 <table class="data-table">
                     <thead>
@@ -472,12 +547,42 @@ class DatabaseManager {
                 </table>
             `;
 
-            container.innerHTML = tableHtml;
+            // Update pagination
+            const paginationEl = document.getElementById('pagination-controls');
+            paginationEl.style.display = 'flex';
+            document.getElementById('page-info').textContent = `Page ${pg.page} of ${pg.total_pages}`;
+            document.getElementById('page-prev').disabled = !pg.has_prev;
+            document.getElementById('page-next').disabled = !pg.has_next;
+            document.getElementById('page-first').disabled = !pg.has_prev;
+            document.getElementById('page-last').disabled = !pg.has_next;
 
         } catch (error) {
             console.error('Load table data failed:', error);
-            alert('Failed to load table data: ' + error.message);
         }
+    }
+
+    prevPage() { if (this.currentPage > 1) this.loadTableData(this.currentPage - 1); }
+    nextPage() { if (this.currentPage < this.totalPages) this.loadTableData(this.currentPage + 1); }
+    lastPage() { this.loadTableData(this.totalPages); }
+
+    searchTable() {
+        this.currentSearch = document.getElementById('search-input').value.trim();
+        this.currentSearchColumn = document.getElementById('search-column-selector').value;
+        this.loadTableData(1);
+    }
+
+    clearSearch() {
+        document.getElementById('search-input').value = '';
+        document.getElementById('search-column-selector').value = '';
+        this.currentSearch = '';
+        this.currentSearchColumn = '';
+        this.loadTableData(1);
+    }
+
+    exportData(fmt) {
+        const tableName = document.getElementById('table-selector').value;
+        if (!tableName) { alert('Please select a table first'); return; }
+        window.open(`/api/database-manager/export/${tableName}?format=${fmt}&limit=10000`, '_blank');
     }
 
     async confirmTruncateTable() {
@@ -595,19 +700,33 @@ class DatabaseManager {
     }
 
     logAudit(action) {
-        const timestamp = new Date().toISOString();
-        this.auditLog.push({ timestamp, action });
+        // After a local action, reload the persistent audit log
+        console.log('Audit:', action);
+        setTimeout(() => this.loadAuditLog(), 500);
+    }
 
-        const container = document.getElementById('audit-log-container');
+    async loadAuditLog() {
+        try {
+            const response = await fetch('/api/database-manager/audit-log?limit=50');
+            const data = await response.json();
 
-        const auditHtml = this.auditLog.map(entry => `
-            <div class="audit-entry">
-                <div class="audit-timestamp">${new Date(entry.timestamp).toLocaleString()}</div>
-                <div class="audit-action">${entry.action}</div>
-            </div>
-        `).reverse().join('');
+            const container = document.getElementById('audit-log-container');
 
-        container.innerHTML = auditHtml;
+            if (!data.audit_log || data.audit_log.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No maintenance operations recorded</p>';
+                return;
+            }
+
+            container.innerHTML = data.audit_log.map(entry => `
+                <div class="audit-entry">
+                    <div class="audit-timestamp">${new Date(entry.timestamp).toLocaleString()}</div>
+                    <div class="audit-action"><strong>${entry.action}</strong> — ${entry.details || ''}</div>
+                </div>
+            `).join('');
+
+        } catch (error) {
+            console.error('Audit log load failed:', error);
+        }
     }
 
     formatBytes(bytes) {

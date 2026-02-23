@@ -29,6 +29,7 @@ Usage:
 import logging
 import os
 import sqlite3
+import threading
 import time
 from typing import Callable, Optional
 
@@ -92,10 +93,20 @@ class LocalQueue:
         self.path = path
         self.max_bytes = max_bytes
         self.max_retries = max_retries
-        self.db = sqlite3.connect(self.path, timeout=5.0, isolation_level=None)
+        self._lock = threading.RLock()
+        self.db = sqlite3.connect(
+            self.path, timeout=5.0, isolation_level=None, check_same_thread=False
+        )
         self.db.executescript(SCHEMA)
         self._migrate_schema()
         logger.info(f"LocalQueue initialized: path={path}, max_bytes={max_bytes}")
+
+        # AOC-1 observability callbacks (P0-10, P0-11, P0-12)
+        # Set by LocalQueueAdapter to wire into AgentMetrics.
+        self._on_backpressure_drop: Optional[Callable[[int], None]] = None
+        self._on_max_retry_drop: Optional[Callable[[str], None]] = None
+        self._on_drain_success: Optional[Callable[[int], None]] = None
+        self._on_drain_failure: Optional[Callable[[str, Exception], None]] = None
 
     def enqueue(
         self,
@@ -126,25 +137,26 @@ class LocalQueue:
         data = telemetry.SerializeToString()
         ts_ns = int(time.time() * 1e9)
 
-        try:
-            self.db.execute(
-                "INSERT INTO queue(idem, ts_ns, bytes, content_hash, sig, prev_sig) "
-                "VALUES(?,?,?,?,?,?)",
-                (
-                    idempotency_key,
-                    ts_ns,
-                    sqlite3.Binary(data),
-                    sqlite3.Binary(content_hash) if content_hash else None,
-                    sqlite3.Binary(sig) if sig else None,
-                    sqlite3.Binary(prev_sig) if prev_sig else None,
-                ),
-            )
-            logger.debug(f"Enqueued: {idempotency_key}")
-            self._enforce_backlog()
-            return True
-        except sqlite3.IntegrityError:
-            logger.debug(f"Duplicate skipped: {idempotency_key}")
-            return False
+        with self._lock:
+            try:
+                self.db.execute(
+                    "INSERT INTO queue(idem, ts_ns, bytes, content_hash, sig, prev_sig) "
+                    "VALUES(?,?,?,?,?,?)",
+                    (
+                        idempotency_key,
+                        ts_ns,
+                        sqlite3.Binary(data),
+                        sqlite3.Binary(content_hash) if content_hash else None,
+                        sqlite3.Binary(sig) if sig else None,
+                        sqlite3.Binary(prev_sig) if prev_sig else None,
+                    ),
+                )
+                logger.debug(f"Enqueued: {idempotency_key}")
+                self._enforce_backlog()
+                return True
+            except sqlite3.IntegrityError:
+                logger.debug(f"Duplicate skipped: {idempotency_key}")
+                return False
 
     def drain(
         self, publish_fn: Callable[[pb.DeviceTelemetry], object], limit: int = 100
@@ -181,7 +193,14 @@ class LocalQueue:
     def drain_signed(
         self,
         publish_fn: Callable[
-            [pb.DeviceTelemetry, str, int, Optional[bytes], Optional[bytes], Optional[bytes]],
+            [
+                pb.DeviceTelemetry,
+                str,
+                int,
+                Optional[bytes],
+                Optional[bytes],
+                Optional[bytes],
+            ],
             object,
         ],
         limit: int = 100,
@@ -204,12 +223,13 @@ class LocalQueue:
         limit: int,
     ) -> int:
         """Internal drain implementation shared by drain() and drain_signed()."""
-        cur = self.db.execute(
-            "SELECT id, bytes, retries, idem, ts_ns, content_hash, sig, prev_sig "
-            "FROM queue ORDER BY id LIMIT ?",
-            (limit,),
-        )
-        rows = cur.fetchall()
+        with self._lock:
+            cur = self.db.execute(
+                "SELECT id, bytes, retries, idem, ts_ns, content_hash, sig, prev_sig "
+                "FROM queue ORDER BY id LIMIT ?",
+                (limit,),
+            )
+            rows = cur.fetchall()
         drained = 0
 
         for rowid, blob, retries, idem, ts_ns, content_hash, sig, prev_sig in rows:
@@ -229,7 +249,8 @@ class LocalQueue:
                 # Check if publish was successful
                 if hasattr(ack, "status"):
                     if ack.status == 0:  # OK
-                        self.db.execute("DELETE FROM queue WHERE id = ?", (rowid,))
+                        with self._lock:
+                            self.db.execute("DELETE FROM queue WHERE id = ?", (rowid,))
                         drained += 1
                         logger.debug(f"Drained: {idem}")
                     elif ack.status == 1:  # RETRY - EventBus overloaded
@@ -237,7 +258,8 @@ class LocalQueue:
                         break  # Stop draining, try again later
                     else:  # ERROR - permanent failure
                         logger.warning(f"EventBus ERROR: {idem}, status={ack.status}")
-                        self.db.execute("DELETE FROM queue WHERE id = ?", (rowid,))
+                        with self._lock:
+                            self.db.execute("DELETE FROM queue WHERE id = ?", (rowid,))
                 else:
                     # No ack or unexpected response - treat as failure
                     raise Exception("No valid ack received")
@@ -246,19 +268,36 @@ class LocalQueue:
                 # RPC failure or network error
                 logger.warning(f"Publish failed: {idem}, error={e}")
 
+                # P0-11: Notify drain failure
+                if self._on_drain_failure:
+                    self._on_drain_failure(idem, e)
+
                 # Increment retry counter
                 new_retries = retries + 1
-                if new_retries > self.max_retries:
-                    logger.error(f"Max retries exceeded, dropping: {idem}")
-                    self.db.execute("DELETE FROM queue WHERE id = ?", (rowid,))
-                else:
-                    self.db.execute(
-                        "UPDATE queue SET retries = ? WHERE id = ?",
-                        (new_retries, rowid),
-                    )
+                with self._lock:
+                    if new_retries > self.max_retries:
+                        # P0-12: Track max-retry drops
+                        logger.error(
+                            "MAX_RETRY_DROP: %s exceeded %d retries, "
+                            "event permanently lost",
+                            idem,
+                            self.max_retries,
+                        )
+                        self.db.execute("DELETE FROM queue WHERE id = ?", (rowid,))
+                        if self._on_max_retry_drop:
+                            self._on_max_retry_drop(idem)
+                    else:
+                        self.db.execute(
+                            "UPDATE queue SET retries = ? WHERE id = ?",
+                            (new_retries, rowid),
+                        )
 
                 # Stop draining on first failure
                 break
+
+        # P0-11: Notify drain success
+        if drained > 0 and self._on_drain_success:
+            self._on_drain_success(drained)
 
         return drained
 
@@ -268,7 +307,8 @@ class LocalQueue:
         Returns:
             int: Count of pending events
         """
-        row = self.db.execute("SELECT COUNT(*) FROM queue").fetchone()
+        with self._lock:
+            row = self.db.execute("SELECT COUNT(*) FROM queue").fetchone()
         return int(row[0] or 0)
 
     def size_bytes(self) -> int:
@@ -277,9 +317,10 @@ class LocalQueue:
         Returns:
             int: Total bytes of all pending events
         """
-        row = self.db.execute(
-            "SELECT IFNULL(SUM(length(bytes)),0) FROM queue"
-        ).fetchone()
+        with self._lock:
+            row = self.db.execute(
+                "SELECT IFNULL(SUM(length(bytes)),0) FROM queue"
+            ).fetchone()
         return int(row[0] or 0)
 
     def clear(self) -> int:
@@ -305,23 +346,41 @@ class LocalQueue:
             except sqlite3.OperationalError:
                 pass  # Column already exists
 
-    def _enforce_backlog(self):
+    def _enforce_backlog(self) -> int:
         """Enforce maximum queue size by dropping oldest events.
 
         Called automatically after enqueue(). If queue exceeds max_bytes,
         deletes oldest events until under limit.
+
+        Returns:
+            int: Number of events dropped (P0-10: must be visible).
         """
         total = self.size_bytes()
         if total <= self.max_bytes:
-            return
+            return 0
 
         to_free = total - self.max_bytes
         freed = 0
+        dropped_count = 0
 
-        cur = self.db.execute("SELECT id, length(bytes), idem FROM queue ORDER BY id")
-        for rowid, sz, idem in cur:
+        cur = self.db.execute("SELECT id, length(bytes) FROM queue ORDER BY id")
+        for rowid, sz in cur:
             self.db.execute("DELETE FROM queue WHERE id=?", (rowid,))
             freed += sz
-            logger.warning(f"Backpressure: dropped {idem}")
+            dropped_count += 1
             if freed >= to_free:
                 break
+
+        if dropped_count > 0:
+            logger.error(
+                "BACKPRESSURE_DROP: queue=%s dropped %d events "
+                "(freed %d bytes, limit=%d bytes)",
+                self.path,
+                dropped_count,
+                freed,
+                self.max_bytes,
+            )
+            if self._on_backpressure_drop:
+                self._on_backpressure_drop(dropped_count)
+
+        return dropped_count

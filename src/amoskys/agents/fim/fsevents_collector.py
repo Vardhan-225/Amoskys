@@ -63,9 +63,7 @@ class _FSEventsHandler(FileSystemEventHandler):
             # Prune stale entries (older than 5s)
             if len(self._recent) > 5000:
                 cutoff = now - 5.0
-                self._recent = {
-                    k: v for k, v in self._recent.items() if v > cutoff
-                }
+                self._recent = {k: v for k, v in self._recent.items() if v > cutoff}
             return True
 
     def on_created(self, event: FileCreatedEvent) -> None:
@@ -183,9 +181,7 @@ class MacOSFSEventsCollector:
         if scheduled > 0:
             self._observer.daemon = True
             self._observer.start()
-            logger.info(
-                "FSEvents watcher started for %d directories", scheduled
-            )
+            logger.info("FSEvents watcher started for %d directories", scheduled)
         else:
             logger.warning("No valid directories to watch via FSEvents")
             self._observer = None

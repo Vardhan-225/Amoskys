@@ -38,11 +38,11 @@ from amoskys.agents.common.probes import (
     TelemetryEvent,
 )
 from amoskys.agents.kernel_audit.types import (
-    KernelAuditEvent,
     MODULE_SYSCALLS,
     PERMISSION_SYSCALLS,
     PRIVESC_SYSCALLS,
     PROCESS_SYSCALLS,
+    KernelAuditEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,83 +53,95 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # High-risk directories for process execution
-HIGH_RISK_EXEC_PATHS: frozenset[str] = frozenset({
-    "/tmp",
-    "/var/tmp",
-    "/dev/shm",
-    "/run/user",
-    "/home",  # subdirs like ~/.local, ~/.cache
-    "/Users",  # macOS home
-    "/Users/Shared",
-})
+HIGH_RISK_EXEC_PATHS: frozenset[str] = frozenset(
+    {
+        "/tmp",
+        "/var/tmp",
+        "/dev/shm",
+        "/run/user",
+        "/home",  # subdirs like ~/.local, ~/.cache
+        "/Users",  # macOS home
+        "/Users/Shared",
+    }
+)
 
 # Sensitive files that should not be chmod/chowned
-SENSITIVE_FILES: frozenset[str] = frozenset({
-    "/etc/passwd",
-    "/etc/shadow",
-    "/etc/sudoers",
-    "/etc/sudoers.d",
-    "/etc/group",
-    "/etc/gshadow",
-    "/etc/master.passwd",  # BSD
-    "/etc/security/passwd",  # AIX
-    "/etc/ssh/sshd_config",
-    "/etc/ssh/ssh_host_rsa_key",
-    "/etc/ssh/ssh_host_ed25519_key",
-    "/root/.ssh/authorized_keys",
-})
+SENSITIVE_FILES: frozenset[str] = frozenset(
+    {
+        "/etc/passwd",
+        "/etc/shadow",
+        "/etc/sudoers",
+        "/etc/sudoers.d",
+        "/etc/group",
+        "/etc/gshadow",
+        "/etc/master.passwd",  # BSD
+        "/etc/security/passwd",  # AIX
+        "/etc/ssh/sshd_config",
+        "/etc/ssh/ssh_host_rsa_key",
+        "/etc/ssh/ssh_host_ed25519_key",
+        "/root/.ssh/authorized_keys",
+    }
+)
 
 # Sensitive processes that shouldn't be ptraced
-PROTECTED_PROCESSES: frozenset[str] = frozenset({
-    "sshd",
-    "sudo",
-    "su",
-    "passwd",
-    "login",
-    "cron",
-    "systemd",
-    "init",
-    "klogd",
-    "syslogd",
-    "rsyslogd",
-    "journald",
-    "auditd",
-    "polkitd",
-    "dbus-daemon",
-    "gdm",
-    "lightdm",
-    "sddm",
-    "Xorg",
-    "gnome-shell",
-})
+PROTECTED_PROCESSES: frozenset[str] = frozenset(
+    {
+        "sshd",
+        "sudo",
+        "su",
+        "passwd",
+        "login",
+        "cron",
+        "systemd",
+        "init",
+        "klogd",
+        "syslogd",
+        "rsyslogd",
+        "journald",
+        "auditd",
+        "polkitd",
+        "dbus-daemon",
+        "gdm",
+        "lightdm",
+        "sddm",
+        "Xorg",
+        "gnome-shell",
+    }
+)
 
 # Paths indicating module load from suspicious locations
-SUSPICIOUS_MODULE_PATHS: frozenset[str] = frozenset({
-    "/tmp",
-    "/var/tmp",
-    "/dev/shm",
-    "/home",
-    "/root",
-    "/Users",
-})
+SUSPICIOUS_MODULE_PATHS: frozenset[str] = frozenset(
+    {
+        "/tmp",
+        "/var/tmp",
+        "/dev/shm",
+        "/home",
+        "/root",
+        "/Users",
+    }
+)
 
 # Audit-related processes and files
-AUDIT_BINARIES: frozenset[str] = frozenset({
-    "auditd",
-    "auditctl",
-    "ausearch",
-    "aureport",
-    "augenrules",
-    "audispd",
-})
+AUDIT_BINARIES: frozenset[str] = frozenset(
+    {
+        "auditd",
+        "auditctl",
+        "ausearch",
+        "aureport",
+        "augenrules",
+        "audispd",
+    }
+)
 
-AUDIT_FILES: frozenset[str] = frozenset({
-    "/etc/audit",
-    "/etc/audit/audit.rules",
-    "/etc/audit/auditd.conf",
-    "/var/log/audit",
-    "/var/log/audit/audit.log",
-})
+AUDIT_FILES: frozenset[str] = frozenset(
+    {
+        "/etc/audit",
+        "/etc/audit/audit.rules",
+        "/etc/audit/auditd.conf",
+        "/var/log/audit",
+        "/var/log/audit/audit.log",
+    }
+)
 
 
 def _path_starts_with_any(path: Optional[str], prefixes: frozenset[str]) -> bool:
@@ -173,6 +185,7 @@ class ExecveHighRiskProbe(MicroProbe):
     mitre_techniques = ["T1059", "T1204.002"]
     mitre_tactics = ["Execution", "Defense Evasion"]
     platforms = ["linux", "darwin"]
+    requires_fields = ["kernel_events"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for high-risk execve calls."""
@@ -255,6 +268,7 @@ class PrivEscSyscallProbe(MicroProbe):
     mitre_techniques = ["T1068", "T1548.001"]
     mitre_tactics = ["Privilege Escalation"]
     platforms = ["linux", "darwin"]
+    requires_fields = ["kernel_events"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for privilege escalation syscalls."""
@@ -277,7 +291,9 @@ class PrivEscSyscallProbe(MicroProbe):
 
             if ke.uid != 0 and ke.euid == 0:
                 severity = Severity.CRITICAL
-                reason = f"Privilege escalation: UID {ke.uid} gained EUID 0 via {ke.syscall}"
+                reason = (
+                    f"Privilege escalation: UID {ke.uid} gained EUID 0 via {ke.syscall}"
+                )
             elif ke.uid != ke.euid:
                 severity = Severity.HIGH
                 reason = f"UID/EUID mismatch after {ke.syscall}: uid={ke.uid}, euid={ke.euid}"
@@ -331,6 +347,7 @@ class KernelModuleLoadProbe(MicroProbe):
     mitre_techniques = ["T1014", "T1547.006"]
     mitre_tactics = ["Persistence", "Defense Evasion"]
     platforms = ["linux", "darwin"]
+    requires_fields = ["kernel_events"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for module load/unload syscalls."""
@@ -412,6 +429,7 @@ class PtraceAbuseProbe(MicroProbe):
     mitre_techniques = ["T1055", "T1055.008"]
     mitre_tactics = ["Defense Evasion", "Privilege Escalation"]
     platforms = ["linux", "darwin"]
+    requires_fields = ["kernel_events"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for suspicious ptrace activity."""
@@ -440,7 +458,9 @@ class PtraceAbuseProbe(MicroProbe):
 
             if target_comm and target_comm in PROTECTED_PROCESSES:
                 severity = Severity.CRITICAL
-                reason = f"ptrace on protected process: {target_comm} (pid={ke.dest_pid})"
+                reason = (
+                    f"ptrace on protected process: {target_comm} (pid={ke.dest_pid})"
+                )
             elif ke.dest_pid == 1:
                 severity = Severity.CRITICAL
                 reason = "ptrace on init/systemd (pid=1)"
@@ -496,6 +516,7 @@ class FilePermissionTamperProbe(MicroProbe):
     mitre_techniques = ["T1222", "T1222.002"]
     mitre_tactics = ["Defense Evasion", "Credential Access"]
     platforms = ["linux", "darwin"]
+    requires_fields = ["kernel_events"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for sensitive file permission changes."""
@@ -576,6 +597,7 @@ class AuditTamperProbe(MicroProbe):
     mitre_techniques = ["T1562.001", "T1070.002"]
     mitre_tactics = ["Defense Evasion"]
     platforms = ["linux", "darwin"]
+    requires_fields = ["kernel_events"]
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Scan kernel events for audit tampering attempts."""
@@ -674,6 +696,7 @@ class SyscallFloodProbe(MicroProbe):
     mitre_techniques = ["T1592", "T1083"]
     mitre_tactics = ["Reconnaissance", "Discovery"]
     platforms = ["linux", "darwin"]
+    requires_fields = ["kernel_events"]
 
     # Thresholds
     FLOOD_THRESHOLD = 100  # syscalls per window

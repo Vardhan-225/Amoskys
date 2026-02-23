@@ -63,31 +63,31 @@ def drain_agent_queue(
     dry_run: bool = False,
 ) -> dict:
     """Drain events from an agent's queue.
-    
+
     Args:
         agent_name: Name of agent (kernel_audit, protocol_collectors, etc.)
         batch_size: Number of rows to process per batch
         vacuum: Whether to VACUUM after draining
         dry_run: If True, don't actually delete rows
-        
+
     Returns:
         Dict with drain statistics
     """
     if agent_name not in AGENT_CONFIGS:
         logger.error(f"Unknown agent: {agent_name}")
         return {"error": f"Unknown agent: {agent_name}"}
-    
+
     config = AGENT_CONFIGS[agent_name]
     db_path = config["queue_path"] / config["db_name"]
     drain_path = config["drain_path"]
-    
+
     if not db_path.exists():
         logger.warning(f"Queue DB not found: {db_path}")
         return {"error": f"DB not found: {db_path}"}
-    
+
     # Ensure drain directory exists
     drain_path.mkdir(parents=True, exist_ok=True)
-    
+
     stats = {
         "agent": agent_name,
         "rows_drained": 0,
@@ -97,79 +97,81 @@ def drain_agent_queue(
         "vacuum": vacuum,
         "dry_run": dry_run,
     }
-    
+
     try:
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
-        
+
         # Check current count
         cursor.execute("SELECT COUNT(*) FROM queue")
         initial_count = cursor.fetchone()[0]
         logger.info(f"[{agent_name}] Starting drain: {initial_count} events in queue")
-        
+
         if initial_count == 0:
             logger.info(f"[{agent_name}] Queue empty, nothing to drain")
             conn.close()
             return stats
-        
+
         # Create output file
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         out_file = drain_path / f"batch_{ts}.log.gz"
         stats["output_file"] = str(out_file)
-        
+
         total_drained = 0
-        
+
         with gzip.open(out_file, "wt", encoding="utf-8") as f:
             # Write header
             f.write(f"# AMOSKYS Queue Drain - {agent_name}\n")
             f.write(f"# Timestamp: {ts}\n")
             f.write(f"# Format: id|ts_ns|idem|len|hex_prefix\n")
             f.write("#\n")
-            
+
             while True:
                 cursor.execute(
                     "SELECT id, ts_ns, idem, bytes FROM queue ORDER BY id ASC LIMIT ?",
-                    (batch_size,)
+                    (batch_size,),
                 )
                 rows = cursor.fetchall()
-                
+
                 if not rows:
                     break
-                
+
                 max_id = 0
                 for row_id, ts_ns, idem, data in rows:
                     # Write: id | timestamp | idempotency key | length | first 100 bytes hex
                     hex_prefix = data[:100].hex() if data else ""
-                    f.write(f"{row_id}|{ts_ns}|{idem}|{len(data) if data else 0}|{hex_prefix}\n")
+                    f.write(
+                        f"{row_id}|{ts_ns}|{idem}|{len(data) if data else 0}|{hex_prefix}\n"
+                    )
                     max_id = max(max_id, row_id)
                     stats["bytes_archived"] += len(data) if data else 0
-                
+
                 if not dry_run:
                     cursor.execute("DELETE FROM queue WHERE id <= ?", (max_id,))
                     conn.commit()
-                
+
                 total_drained += len(rows)
                 stats["batches"] += 1
-                
+
                 if len(rows) < batch_size:
                     break  # Last batch
-        
+
         stats["rows_drained"] = total_drained
         logger.info(f"[{agent_name}] Drained {total_drained} events to {out_file}")
-        
+
         # Vacuum if requested
         if vacuum and not dry_run and total_drained > 0:
             logger.info(f"[{agent_name}] Running VACUUM...")
             cursor.execute("VACUUM")
             conn.commit()
             logger.info(f"[{agent_name}] VACUUM complete")
-        
+
         conn.close()
-        
+
     except Exception as e:
         logger.error(f"[{agent_name}] Drain failed: {e}")
         stats["error"] = str(e)
-    
+
     return stats
 
 
@@ -178,45 +180,41 @@ def main():
         description="Drain AMOSKYS agent queues to prevent disk overflow"
     )
     parser.add_argument(
-        "--agent",
-        choices=list(AGENT_CONFIGS.keys()),
-        help="Agent queue to drain"
+        "--agent", choices=list(AGENT_CONFIGS.keys()), help="Agent queue to drain"
     )
-    parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Drain all agent queues"
-    )
+    parser.add_argument("--all", action="store_true", help="Drain all agent queues")
     parser.add_argument(
         "--batch",
         type=int,
         default=1000,
-        help="Batch size for processing (default: 1000)"
+        help="Batch size for processing (default: 1000)",
     )
     parser.add_argument(
         "--vacuum",
         action="store_true",
-        help="Run VACUUM after draining to reclaim disk space"
+        help="Run VACUUM after draining to reclaim disk space",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Don't actually delete rows, just archive"
+        help="Don't actually delete rows, just archive",
     )
-    
+
     args = parser.parse_args()
-    
+
     if not args.agent and not args.all:
         parser.error("Must specify --agent or --all")
-    
+
     agents = list(AGENT_CONFIGS.keys()) if args.all else [args.agent]
-    
+
     results = []
     for agent in agents:
-        if not (AGENT_CONFIGS[agent]["queue_path"] / AGENT_CONFIGS[agent]["db_name"]).exists():
+        if not (
+            AGENT_CONFIGS[agent]["queue_path"] / AGENT_CONFIGS[agent]["db_name"]
+        ).exists():
             logger.info(f"[{agent}] Skipping - queue not found")
             continue
-            
+
         result = drain_agent_queue(
             agent_name=agent,
             batch_size=args.batch,
@@ -224,7 +222,7 @@ def main():
             dry_run=args.dry_run,
         )
         results.append(result)
-    
+
     # Summary
     print("\n" + "=" * 60)
     print("DRAIN SUMMARY")

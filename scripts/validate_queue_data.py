@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
     from amoskys.proto import universal_telemetry_pb2 as pb
+
     PROTO_AVAILABLE = True
 except ImportError:
     PROTO_AVAILABLE = False
@@ -49,11 +50,11 @@ def read_queue_raw(queue_name: str, limit: int = 10) -> list:
     db_path = get_queue_db_path(queue_name)
     if not os.path.exists(db_path):
         return []
-    
+
     conn = sqlite3.connect(db_path, timeout=5.0)
     cur = conn.execute(
         "SELECT id, idem, ts_ns, bytes, retries FROM queue ORDER BY id DESC LIMIT ?",
-        (limit,)
+        (limit,),
     )
     rows = cur.fetchall()
     conn.close()
@@ -64,11 +65,11 @@ def decode_telemetry(blob: bytes) -> dict:
     """Decode DeviceTelemetry protobuf to dict."""
     if not PROTO_AVAILABLE:
         return {"error": "protobuf not available"}
-    
+
     try:
         telemetry = pb.DeviceTelemetry()
         telemetry.ParseFromString(bytes(blob))
-        
+
         # Convert to dict manually for analysis
         result = {
             "device_id": telemetry.device_id,
@@ -79,7 +80,7 @@ def decode_telemetry(blob: bytes) -> dict:
             "timestamp_ns": telemetry.timestamp_ns,
             "events": [],
         }
-        
+
         # Decode nested events
         for event in telemetry.events:
             ev = {
@@ -91,7 +92,7 @@ def decode_telemetry(blob: bytes) -> dict:
                 "attributes": dict(event.attributes),
                 "confidence_score": event.confidence_score,
             }
-            
+
             # Check which data field is populated
             if event.HasField("metric_data"):
                 ev["data_type"] = "metric"
@@ -109,11 +110,11 @@ def decode_telemetry(blob: bytes) -> dict:
                 ev["data_type"] = "audit"
             else:
                 ev["data_type"] = "unknown"
-            
+
             result["events"].append(ev)
-        
+
         return result
-        
+
     except Exception as e:
         return {"error": str(e)}
 
@@ -133,44 +134,52 @@ def analyze_data_quality(events: list) -> dict:
         "heartbeat_only": 0,
         "issues": [],
     }
-    
+
     for ev in events:
         if "error" in ev:
             analysis["decode_errors"] += 1
             continue
-        
+
         if not ev.get("device_id"):
             analysis["empty_device_id"] += 1
-        
+
         if not ev.get("events"):
             analysis["empty_events"] += 1
             continue
-        
+
         analysis["agents"][ev.get("collection_agent", "unknown")] += 1
-        
+
         for event in ev.get("events", []):
             analysis["event_types"][event.get("event_type", "unknown")] += 1
             analysis["data_types"][event.get("data_type", "unknown")] += 1
             analysis["severities"][event.get("severity", "unknown")] += 1
-            
+
             # Check if it's just a heartbeat/metrics vs real security data
             etype = event.get("event_type", "")
             if etype in ("METRIC", "agent_metrics", "STATUS"):
                 analysis["heartbeat_only"] += 1
-            elif etype in ("SECURITY", "ALARM", "AUDIT", "threat_detected", 
-                          "device_discovered", "anomaly_detected"):
+            elif etype in (
+                "SECURITY",
+                "ALARM",
+                "AUDIT",
+                "threat_detected",
+                "device_discovered",
+                "anomaly_detected",
+            ):
                 analysis["meaningful_events"] += 1
-    
+
     # Quality assessment
     if analysis["decode_errors"] > 0:
         analysis["issues"].append(f"⚠️  {analysis['decode_errors']} decode errors")
-    
+
     if analysis["empty_device_id"] > analysis["total_events"] * 0.1:
         analysis["issues"].append("⚠️  Many events missing device_id")
-    
+
     if analysis["meaningful_events"] == 0 and analysis["total_events"] > 0:
-        analysis["issues"].append("ℹ️  No threat/security events (only metrics) - expected on quiet server")
-    
+        analysis["issues"].append(
+            "ℹ️  No threat/security events (only metrics) - expected on quiet server"
+        )
+
     return analysis
 
 
@@ -195,22 +204,22 @@ def format_complexity_analysis() -> dict:
             {
                 "format": "JSON + SQLite",
                 "effort": "Low",
-                "trade_off": "Larger files, slower parsing, but readable"
+                "trade_off": "Larger files, slower parsing, but readable",
             },
             {
                 "format": "JSONL files",
-                "effort": "Minimal", 
-                "trade_off": "No schema validation, but very simple"
+                "effort": "Minimal",
+                "trade_off": "No schema validation, but very simple",
             },
             {
                 "format": "MessagePack + SQLite",
                 "effort": "Low",
-                "trade_off": "Binary like protobuf but schemaless"
+                "trade_off": "Binary like protobuf but schemaless",
             },
         ],
         "recommendation": None,
     }
-    
+
     return analysis
 
 
@@ -220,7 +229,7 @@ def print_sample(decoded: dict, idx: int):
     print(f"  Device: {decoded.get('device_id', 'N/A')}")
     print(f"  Agent: {decoded.get('collection_agent', 'N/A')}")
     print(f"  Events: {len(decoded.get('events', []))}")
-    
+
     for i, ev in enumerate(decoded.get("events", [])[:3]):
         print(f"    Event {i+1}:")
         print(f"      Type: {ev.get('event_type')} ({ev.get('data_type')})")
@@ -234,21 +243,25 @@ def print_sample(decoded: dict, idx: int):
 def main():
     parser = argparse.ArgumentParser(description="Validate queue data quality")
     parser.add_argument("--queue", "-q", help="Specific queue to analyze")
-    parser.add_argument("--samples", "-n", type=int, default=5, help="Number of samples")
+    parser.add_argument(
+        "--samples", "-n", type=int, default=5, help="Number of samples"
+    )
     parser.add_argument("--queue-root", type=str, help="Override queue root directory")
     parser.add_argument("--raw", action="store_true", help="Show raw byte inspection")
-    parser.add_argument("--format-analysis", action="store_true", help="Analyze format complexity")
+    parser.add_argument(
+        "--format-analysis", action="store_true", help="Analyze format complexity"
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
-    
+
     global QUEUE_DIR
     if args.queue_root:
         QUEUE_DIR = args.queue_root
-    
+
     print("╔══════════════════════════════════════════════════════════════════════╗")
     print("║            AMOSKYS QUEUE DATA VALIDATION                             ║")
     print("╚══════════════════════════════════════════════════════════════════════╝")
-    
+
     # Format complexity analysis
     if args.format_analysis:
         print("\n📊 FORMAT COMPLEXITY ANALYSIS")
@@ -265,21 +278,21 @@ def main():
         for alt in analysis["simpler_alternatives"]:
             print(f"  • {alt['format']}: {alt['trade_off']}")
         return
-    
+
     queues = [args.queue] if args.queue else QUEUES
-    
+
     for queue_name in queues:
         print(f"\n{'='*60}")
         print(f"📦 QUEUE: {queue_name}")
         print("=" * 60)
-        
+
         rows = read_queue_raw(queue_name, args.samples)
         if not rows:
             print("  (empty or not found)")
             continue
-        
+
         print(f"  Rows fetched: {len(rows)}")
-        
+
         # Raw inspection
         if args.raw:
             print("\n  RAW BYTES INSPECTION:")
@@ -290,9 +303,9 @@ def main():
                 print(f"    Retries: {retries}")
                 # Show first 200 bytes as escaped string
                 preview = bytes(blob)[:200]
-                printable = ''.join(chr(b) if 32 <= b < 127 else '.' for b in preview)
+                printable = "".join(chr(b) if 32 <= b < 127 else "." for b in preview)
                 print(f"    Preview: {printable[:100]}...")
-        
+
         # Decode and analyze
         decoded_events = []
         for row_id, idem, ts_ns, blob, retries in rows:
@@ -301,15 +314,15 @@ def main():
             decoded["_idem"] = idem
             decoded["_size"] = len(blob)
             decoded_events.append(decoded)
-        
+
         # Show samples
         print(f"\n  DECODED SAMPLES ({len(decoded_events)}):")
-        for i, decoded in enumerate(decoded_events[:args.samples], 1):
+        for i, decoded in enumerate(decoded_events[: args.samples], 1):
             if "error" in decoded:
                 print(f"\n  ─── Sample {i} ─── ❌ DECODE ERROR: {decoded['error']}")
             else:
                 print_sample(decoded, i)
-        
+
         # Quality analysis
         analysis = analyze_data_quality(decoded_events)
         print(f"\n  DATA QUALITY ANALYSIS:")
@@ -319,22 +332,23 @@ def main():
         print(f"    Data types: {dict(analysis['data_types'])}")
         print(f"    Meaningful events: {analysis['meaningful_events']}")
         print(f"    Heartbeat/metrics only: {analysis['heartbeat_only']}")
-        
+
         if analysis["issues"]:
             print(f"\n  ISSUES:")
             for issue in analysis["issues"]:
                 print(f"    {issue}")
-        
+
         if args.json:
             print(f"\n  JSON OUTPUT:")
             for decoded in decoded_events[:3]:
                 print(json.dumps(decoded, indent=2, default=str))
-    
+
     # Final recommendation
     print("\n" + "=" * 60)
     print("📋 VALIDATION SUMMARY")
     print("=" * 60)
-    print("""
+    print(
+        """
 The protobuf + SQLite WAL format is working correctly:
   ✅ Data is being serialized and stored properly
   ✅ Protobuf decodes without errors
@@ -349,7 +363,8 @@ Recommendation: Keep current format, but add:
   1. This validation script for debugging
   2. Optional JSON export for human inspection
   3. Schema documentation in docs/
-""")
+"""
+    )
 
 
 if __name__ == "__main__":

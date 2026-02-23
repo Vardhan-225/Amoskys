@@ -1,0 +1,671 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Threat Hunting - AMOSKYS{% endblock %}
+
+{% block content %}
+<div style="padding: 2rem;">
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">Threat Hunting Console</h2>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+                <div class="card-badge badge-success">Live Search</div>
+                <button id="export-json-btn" class="neural-button" style="padding:0.3rem 0.8rem;font-size:0.75rem;cursor:pointer;" title="Export JSON">Export JSON</button>
+                <button id="export-csv-btn" class="neural-button" style="padding:0.3rem 0.8rem;font-size:0.75rem;cursor:pointer;" title="Export CSV">Export CSV</button>
+            </div>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 0;">
+            Search across all event tables for indicators, patterns, and anomalies. Save queries for reuse.
+            <span style="display:inline-block;margin-left:0.75rem;font-size:0.75rem;color:var(--text-muted);background:rgba(0,217,255,0.08);border:1px solid rgba(0,217,255,0.15);border-radius:4px;padding:0.1rem 0.4rem;">Press Enter to search</span>
+        </p>
+    </div>
+
+    <!-- Query Builder -->
+    <div class="neural-card" style="margin-top: 1.5rem;">
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+            <div style="flex: 2; min-width: 250px;">
+                <label class="hunt-label">Search Query</label>
+                <input type="text" id="hunt-query" placeholder="e.g. bash, 127.0.0.1, suid_bit, ssh..."
+                    style="width:100%;padding:0.6rem 1rem;background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--neural-primary);border-radius:6px;font-size:0.95rem;">
+            </div>
+            <div style="min-width: 150px;">
+                <label class="hunt-label">Event Table</label>
+                <select id="hunt-table" class="hunt-select">
+                    <option value="security_events">Security Events</option>
+                    <option value="process_events">Process Events</option>
+                    <option value="flow_events">Flow Events</option>
+                    <option value="peripheral_events">Peripheral Events</option>
+                    <option value="dns_events">DNS Events</option>
+                    <option value="audit_events">Kernel Audit Events</option>
+                    <option value="persistence_events">Persistence Events</option>
+                    <option value="fim_events">FIM Events</option>
+                </select>
+            </div>
+            <div style="min-width: 100px;">
+                <label class="hunt-label">Time Window</label>
+                <select id="hunt-hours" class="hunt-select">
+                    <option value="1">1 hour</option>
+                    <option value="6">6 hours</option>
+                    <option value="24" selected>24 hours</option>
+                    <option value="168">7 days</option>
+                    <option value="720">30 days</option>
+                    <option value="8760">All Time</option>
+                </select>
+            </div>
+            <div style="min-width: 100px;">
+                <label class="hunt-label">Min Risk</label>
+                <input type="number" id="hunt-risk" placeholder="0.0" min="0" max="1" step="0.1"
+                    style="width:100%;padding:0.6rem;background:var(--bg-tertiary);color:var(--text-primary);border:1px solid rgba(0,217,255,0.3);border-radius:6px;">
+            </div>
+            <div style="min-width: 120px;">
+                <label class="hunt-label">Category</label>
+                <input type="text" id="hunt-category" placeholder="e.g. ssh_bruteforce"
+                    style="width:100%;padding:0.6rem;background:var(--bg-tertiary);color:var(--text-primary);border:1px solid rgba(0,217,255,0.3);border-radius:6px;font-size:0.85rem;">
+            </div>
+            <div style="display:flex;gap:0.5rem;">
+                <button id="hunt-search-btn" class="neural-button" style="padding:0.6rem 1.5rem;white-space:nowrap;cursor:pointer;">Search</button>
+                <button id="save-query-btn" class="neural-button" style="padding:0.6rem 0.8rem;cursor:pointer;background:rgba(0,255,136,0.1);border-color:rgba(0,255,136,0.3);" title="Save Query">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Saved Queries -->
+    <div id="saved-queries-bar" style="display:none;margin-top:0.75rem;">
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <span style="font-size:0.75rem;color:var(--text-muted);font-weight:600;">SAVED:</span>
+            <div id="saved-queries-list" style="display:flex;gap:0.4rem;flex-wrap:wrap;"></div>
+        </div>
+    </div>
+
+    <!-- Results Summary + View Toggle -->
+    <div style="display:flex;gap:1rem;margin-top:1rem;align-items:center;">
+        <div id="hunt-summary" style="color:var(--text-secondary);font-size:0.9rem;">Enter a query to begin hunting.</div>
+        <div style="margin-left:auto;display:flex;gap:0.5rem;align-items:center;">
+            <button class="view-btn active" id="view-table-btn" data-view="table" style="padding:0.25rem 0.6rem;font-size:0.75rem;cursor:pointer;">Table</button>
+            <button class="view-btn" id="view-timeline-btn" data-view="timeline" style="padding:0.25rem 0.6rem;font-size:0.75rem;cursor:pointer;">Timeline</button>
+            <div id="hunt-pagination" style="display:flex;gap:0.5rem;"></div>
+        </div>
+    </div>
+
+    <!-- Results - Table View -->
+    <div class="neural-card" style="margin-top:1rem;" id="results-table-view">
+        <div id="hunt-results" style="max-height:600px;overflow-y:auto;">
+            <div class="hunt-empty-state">
+                <div style="font-size:3rem;margin-bottom:0.75rem;opacity:0.25;">&#128269;</div>
+                <div style="font-size:1.05rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.4rem;">Start a Threat Hunt</div>
+                <div style="font-size:0.85rem;max-width:400px;margin:0 auto;">Enter a query above to search across all telemetry data. Try searching for <span class="hunt-example-chip" data-example-query="bash">bash</span> <span class="hunt-example-chip" data-example-query="ssh">ssh</span> <span class="hunt-example-chip" data-example-query="suid">suid</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results - Timeline View -->
+    <div class="neural-card" style="margin-top:1rem;display:none;" id="results-timeline-view">
+        <div id="hunt-timeline" style="max-height:600px;overflow-y:auto;padding:0.5rem;">
+            <div style="color:var(--text-muted);text-align:center;padding:3rem;">No data to display.</div>
+        </div>
+    </div>
+
+    <!-- Event Detail Modal -->
+    <div id="hunt-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:2000;justify-content:center;align-items:center;">
+        <div style="background:var(--bg-secondary);border:2px solid var(--neural-primary);border-radius:10px;max-width:800px;width:90%;max-height:80vh;overflow-y:auto;padding:1.5rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <h3 style="color:var(--neural-primary);margin:0;">Event Details</h3>
+                <span id="close-hunt-modal-btn" style="font-size:1.5rem;cursor:pointer;color:var(--text-muted);">&times;</span>
+            </div>
+            <div id="hunt-modal-content"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+.hunt-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 0.3rem;
+}
+.hunt-select {
+    width: 100%;
+    padding: 0.6rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid rgba(0,217,255,0.3);
+    border-radius: 6px;
+}
+.view-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-secondary);
+    border-radius: 4px;
+}
+.view-btn.active {
+    background: rgba(0,217,255,0.15);
+    border-color: var(--neural-primary);
+    color: var(--neural-primary);
+}
+.saved-chip {
+    padding: 0.2rem 0.6rem;
+    background: rgba(0,217,255,0.08);
+    border: 1px solid rgba(0,217,255,0.2);
+    border-radius: 12px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    color: var(--neural-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    transition: background 0.15s;
+}
+.saved-chip:hover {
+    background: rgba(0,217,255,0.15);
+}
+.saved-chip-del {
+    color: #ff3366;
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-left: 0.2rem;
+}
+.hunt-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.hunt-table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    padding: 0.5rem;
+    text-align: left;
+    border-bottom: 2px solid rgba(0,217,255,0.2);
+    cursor: pointer;
+}
+.hunt-table th:hover {
+    color: var(--neural-primary);
+}
+.hunt-table td {
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hunt-table tr {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.hunt-table tr:hover {
+    background: rgba(0,217,255,0.08);
+}
+.risk-badge {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+.tl-item {
+    display: flex;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.tl-item:hover {
+    background: rgba(0,217,255,0.05);
+    border-radius: 6px;
+}
+.tl-time {
+    min-width: 80px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding-top: 0.1rem;
+}
+.tl-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 0.2rem;
+    flex-shrink: 0;
+}
+.tl-body {
+    flex: 1;
+}
+.tl-title {
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 0.2rem;
+}
+.tl-desc {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 600px;
+}
+.hunt-empty-state {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 4rem 2rem;
+}
+.hunt-example-chip {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    background: rgba(0, 217, 255, 0.1);
+    border: 1px solid rgba(0, 217, 255, 0.25);
+    border-radius: 10px;
+    font-size: 0.78rem;
+    color: var(--neural-primary);
+    cursor: pointer;
+    margin: 0.15rem;
+    transition: all 0.15s ease;
+    font-family: 'Courier New', monospace;
+}
+.hunt-example-chip:hover {
+    background: rgba(0, 217, 255, 0.2);
+    border-color: var(--neural-primary);
+}
+.hunt-stats-bar {
+    display: flex;
+    gap: 1.5rem;
+    padding: 0.5rem 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.hunt-stats-bar span {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+.hunt-stats-val {
+    color: var(--neural-primary);
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+}
+</style>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce() }}">
+var currentOffset = 0;
+var PAGE_SIZE = 50;
+var lastResults = [];
+var currentView = 'table';
+var sortCol = null;
+var sortDir = 'desc';
+
+document.getElementById('hunt-query').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') huntSearch();
+});
+
+loadSavedQueries();
+
+async function huntSearch(offset) {
+    if (offset === undefined) offset = 0;
+    currentOffset = offset;
+
+    var q = document.getElementById('hunt-query').value;
+    var table = document.getElementById('hunt-table').value;
+    var hours = document.getElementById('hunt-hours').value;
+    var minRisk = document.getElementById('hunt-risk').value;
+    var category = document.getElementById('hunt-category').value;
+
+    var url = '/dashboard/api/hunt/search?table=' + table + '&hours=' + hours + '&limit=' + PAGE_SIZE + '&offset=' + offset;
+    if (q) url += '&q=' + encodeURIComponent(q);
+    if (minRisk) url += '&min_risk=' + minRisk;
+    if (category) url += '&category=' + encodeURIComponent(category);
+
+    var t0 = performance.now();
+    try {
+        var resp = await fetch(url);
+        var data = await resp.json();
+        var elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+        lastResults = data.results || [];
+
+        var range = data.has_more ? ' (showing ' + (offset + 1) + '-' + (offset + data.results.length) + ')' : '';
+        var highRisk = lastResults.filter(function(r) { return (r.risk_score || 0) > 0.7; }).length;
+        document.getElementById('hunt-summary').innerHTML =
+            '<span class="hunt-stats-val">' + data.total_count + '</span> results found' + range +
+            '<span class="hunt-stats-bar" style="display:inline-flex;margin-left:1rem;">' +
+            '<span>&#9201; <span class="hunt-stats-val">' + elapsed + 's</span></span>' +
+            (highRisk > 0 ? '<span>&#128308; <span class="hunt-stats-val" style="color:#ff3366;">' + highRisk + '</span> high-risk</span>' : '') +
+            '</span>';
+
+        renderResults(data.results, table);
+        renderTimeline(data.results, table);
+        renderPagination(data.total_count, offset);
+    } catch (err) {
+        document.getElementById('hunt-summary').textContent = 'Search failed: ' + err.message;
+    }
+}
+
+function renderResults(rows, table) {
+    var container = document.getElementById('hunt-results');
+    if (rows.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No results found.</div>';
+        return;
+    }
+
+    var cols;
+    if (table === 'security_events') {
+        cols = ['id', 'timestamp_dt', 'event_category', 'risk_score', 'final_classification', 'description'];
+    } else if (table === 'process_events') {
+        cols = ['id', 'timestamp_dt', 'pid', 'exe', 'username', 'is_suspicious', 'anomaly_score'];
+    } else if (table === 'flow_events') {
+        cols = ['id', 'timestamp_dt', 'src_ip', 'dst_ip', 'dst_port', 'protocol', 'is_suspicious'];
+    } else if (table === 'dns_events') {
+        cols = ['id', 'timestamp_dt', 'query_name', 'query_type', 'response_code', 'risk_score', 'is_suspicious'];
+    } else if (table === 'audit_events') {
+        cols = ['id', 'timestamp_dt', 'event_type', 'subject_user', 'object_path', 'risk_score', 'is_suspicious'];
+    } else if (table === 'persistence_events') {
+        cols = ['id', 'timestamp_dt', 'mechanism_type', 'path', 'risk_score', 'is_suspicious', 'description'];
+    } else if (table === 'fim_events') {
+        cols = ['id', 'timestamp_dt', 'file_path', 'change_type', 'risk_score', 'is_suspicious', 'description'];
+    } else {
+        cols = rows.length > 0 ? Object.keys(rows[0]).slice(0, 7) : ['id', 'timestamp_dt', 'event_type', 'risk_score'];
+    }
+
+    var html = '<table class="hunt-table"><thead><tr>';
+    for (var ci = 0; ci < cols.length; ci++) {
+        var c = cols[ci];
+        var arrow = sortCol === c ? (sortDir === 'asc' ? ' &uarr;' : ' &darr;') : '';
+        html += '<th data-sort-col="' + c + '">' + c.replace(/_/g, ' ') + arrow + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+
+    for (var ri = 0; ri < rows.length; ri++) {
+        var row = rows[ri];
+        html += '<tr data-event-idx="' + ri + '">';
+        for (var ci2 = 0; ci2 < cols.length; ci2++) {
+            var c2 = cols[ci2];
+            var val = row[c2];
+            if (c2 === 'risk_score' && val !== null && val !== undefined) {
+                var pct = Math.round(val * 100);
+                var color = pct > 70 ? '#ff3366' : pct > 40 ? '#ffaa00' : '#00ff88';
+                val = '<span class="risk-badge" style="background:' + color + '22;color:' + color + ';border:1px solid ' + color + '55;">' + pct + '%</span>';
+            } else if (c2 === 'anomaly_score' && val !== null && val !== undefined) {
+                var apct = Math.round(val * 100);
+                var acolor = apct > 70 ? '#ff3366' : apct > 40 ? '#ffaa00' : '#00ff88';
+                val = '<span class="risk-badge" style="background:' + acolor + '22;color:' + acolor + ';border:1px solid ' + acolor + '55;">' + apct + '%</span>';
+            } else if (c2 === 'is_suspicious') {
+                val = val ? '<span style="color:#ff3366;font-weight:700;">YES</span>' : '<span style="color:#00ff88;">no</span>';
+            } else if (c2 === 'timestamp_dt' && val) {
+                val = val.substring(0, 19);
+            } else if (val === null || val === undefined) {
+                val = '<span style="color:var(--text-muted);">-</span>';
+            } else if (typeof val === 'string' && val.length > 60) {
+                val = val.substring(0, 60) + '...';
+            }
+            html += '<td>' + val + '</td>';
+        }
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function renderTimeline(rows, table) {
+    var container = document.getElementById('hunt-timeline');
+    if (rows.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No events.</div>';
+        return;
+    }
+
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var ts = (row.timestamp_dt || '').substring(11, 19);
+        var risk = row.risk_score || row.anomaly_score || 0;
+        var dotColor = risk > 0.7 ? '#ff3366' : risk > 0.4 ? '#ffaa00' : '#00ff88';
+        var title = row.event_category || row.exe || row.event_type || row.protocol || 'Event';
+        var desc = row.description || row.final_classification || (row.src_ip ? row.src_ip + ' -> ' + row.dst_ip : '') || '';
+
+        html += '<div class="tl-item" data-event-idx="' + i + '">'
+            + '<div class="tl-time">' + ts + '</div>'
+            + '<div class="tl-dot" style="background:' + dotColor + ';"></div>'
+            + '<div class="tl-body">'
+            + '<div class="tl-title">' + escapeHtml(title) + '</div>'
+            + '<div class="tl-desc">' + escapeHtml(desc) + '</div>'
+            + '</div></div>';
+    }
+    container.innerHTML = html;
+}
+
+function sortResults(col) {
+    if (sortCol === col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortCol = col;
+        sortDir = 'desc';
+    }
+    lastResults.sort(function(a, b) {
+        var av = a[col], bv = b[col];
+        if (av === null || av === undefined) av = '';
+        if (bv === null || bv === undefined) bv = '';
+        if (typeof av === 'number' && typeof bv === 'number') {
+            return sortDir === 'asc' ? av - bv : bv - av;
+        }
+        return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
+    renderResults(lastResults, document.getElementById('hunt-table').value);
+}
+
+function setView(view) {
+    currentView = view;
+    document.getElementById('results-table-view').style.display = view === 'table' ? 'block' : 'none';
+    document.getElementById('results-timeline-view').style.display = view === 'timeline' ? 'block' : 'none';
+    document.getElementById('view-table-btn').classList.toggle('active', view === 'table');
+    document.getElementById('view-timeline-btn').classList.toggle('active', view === 'timeline');
+}
+
+function renderPagination(total, offset) {
+    var container = document.getElementById('hunt-pagination');
+    var totalPages = Math.ceil(total / PAGE_SIZE);
+    var currentPage = Math.floor(offset / PAGE_SIZE) + 1;
+    if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+    var html = '';
+    if (currentPage > 1)
+        html += '<button data-hunt-offset="' + ((currentPage-2)*PAGE_SIZE) + '" class="neural-button" style="padding:0.3rem 0.7rem;font-size:0.8rem;cursor:pointer;">Prev</button>';
+    html += '<span style="color:var(--text-secondary);font-size:0.85rem;padding:0.3rem 0.5rem;">' + currentPage + '/' + totalPages + '</span>';
+    if (currentPage < totalPages)
+        html += '<button data-hunt-offset="' + (currentPage*PAGE_SIZE) + '" class="neural-button" style="padding:0.3rem 0.7rem;font-size:0.8rem;cursor:pointer;">Next</button>';
+    container.innerHTML = html;
+}
+
+function showEventDetail(row) {
+    var modal = document.getElementById('hunt-modal');
+    var content = document.getElementById('hunt-modal-content');
+
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">';
+    for (var k in row) {
+        var v = row[k];
+        var display;
+        if (v === null || v === undefined) {
+            display = '<span style="color:var(--text-muted);">null</span>';
+        } else if (typeof v === 'string' && (v.charAt(0) === '{' || v.charAt(0) === '[')) {
+            try {
+                display = '<pre style="margin:0;font-size:0.8rem;color:#00aaff;white-space:pre-wrap;">' + JSON.stringify(JSON.parse(v), null, 2) + '</pre>';
+            } catch(e) { display = escapeHtml(v); }
+        } else {
+            display = escapeHtml(String(v));
+        }
+        html += '<div style="padding:0.4rem;"><div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;">' + k + '</div><div style="font-size:0.85rem;word-break:break-all;">' + display + '</div></div>';
+    }
+    html += '</div>';
+    content.innerHTML = html;
+    modal.style.display = 'flex';
+}
+
+/* Saved Queries */
+function getSavedQueries() {
+    try { return JSON.parse(localStorage.getItem('amoskys_hunt_queries') || '[]'); }
+    catch(e) { return []; }
+}
+function saveSavedQueries(queries) {
+    localStorage.setItem('amoskys_hunt_queries', JSON.stringify(queries));
+}
+
+function saveCurrentQuery() {
+    var q = document.getElementById('hunt-query').value;
+    var table = document.getElementById('hunt-table').value;
+    var hours = document.getElementById('hunt-hours').value;
+    var risk = document.getElementById('hunt-risk').value;
+    var category = document.getElementById('hunt-category').value;
+    var label = q || table;
+    if (!label) { return; }
+
+    var queries = getSavedQueries();
+    queries.push({label: label.substring(0, 30), q: q, table: table, hours: hours, risk: risk, category: category});
+    if (queries.length > 20) queries = queries.slice(-20);
+    saveSavedQueries(queries);
+    loadSavedQueries();
+}
+
+function loadSavedQueries() {
+    var queries = getSavedQueries();
+    var bar = document.getElementById('saved-queries-bar');
+    var list = document.getElementById('saved-queries-list');
+    if (queries.length === 0) { bar.style.display = 'none'; return; }
+
+    bar.style.display = 'block';
+    var html = '';
+    for (var i = 0; i < queries.length; i++) {
+        html += '<span class="saved-chip" data-saved-idx="' + i + '">' + escapeHtml(queries[i].label) + '<span class="saved-chip-del" data-delete-idx="' + i + '">&times;</span></span>';
+    }
+    list.innerHTML = html;
+}
+
+function applySavedQuery(idx) {
+    var queries = getSavedQueries();
+    var sq = queries[idx];
+    if (!sq) return;
+    document.getElementById('hunt-query').value = sq.q || '';
+    document.getElementById('hunt-table').value = sq.table || 'security_events';
+    document.getElementById('hunt-hours').value = sq.hours || '24';
+    document.getElementById('hunt-risk').value = sq.risk || '';
+    document.getElementById('hunt-category').value = sq.category || '';
+    huntSearch();
+}
+
+function deleteSavedQuery(idx) {
+    var queries = getSavedQueries();
+    queries.splice(idx, 1);
+    saveSavedQueries(queries);
+    loadSavedQueries();
+}
+
+/* Export */
+function exportResults(format) {
+    if (!lastResults || lastResults.length === 0) { return; }
+
+    var content, filename, mime;
+    if (format === 'json') {
+        content = JSON.stringify(lastResults, null, 2);
+        filename = 'amoskys_hunt_' + Date.now() + '.json';
+        mime = 'application/json';
+    } else {
+        var cols = Object.keys(lastResults[0]);
+        var lines = [cols.join(',')];
+        for (var i = 0; i < lastResults.length; i++) {
+            var row = lastResults[i];
+            var vals = [];
+            for (var ci = 0; ci < cols.length; ci++) {
+                var v = row[cols[ci]];
+                if (v === null || v === undefined) v = '';
+                v = String(v).replace(/"/g, '""');
+                vals.push('"' + v + '"');
+            }
+            lines.push(vals.join(','));
+        }
+        content = lines.join('\n');
+        filename = 'amoskys_hunt_' + Date.now() + '.csv';
+        mime = 'text/csv';
+    }
+
+    var blob = new Blob([content], {type: mime});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('export-json-btn').addEventListener('click', function() { exportResults('json'); });
+    document.getElementById('export-csv-btn').addEventListener('click', function() { exportResults('csv'); });
+    document.getElementById('hunt-search-btn').addEventListener('click', function() { huntSearch(); });
+    document.getElementById('save-query-btn').addEventListener('click', saveCurrentQuery);
+    document.getElementById('view-table-btn').addEventListener('click', function() { setView('table'); });
+    document.getElementById('view-timeline-btn').addEventListener('click', function() { setView('timeline'); });
+    document.getElementById('hunt-modal').addEventListener('click', function(e) {
+        if (e.target === this) this.style.display = 'none';
+    });
+    document.getElementById('close-hunt-modal-btn').addEventListener('click', function() {
+        document.getElementById('hunt-modal').style.display = 'none';
+    });
+    /* Event delegation for example chips in empty state */
+    document.getElementById('hunt-results').addEventListener('click', function(e) {
+        var chip = e.target.closest('[data-example-query]');
+        if (chip) {
+            document.getElementById('hunt-query').value = chip.getAttribute('data-example-query');
+            huntSearch();
+            return;
+        }
+        var row = e.target.closest('[data-event-idx]');
+        if (row) {
+            var idx = parseInt(row.getAttribute('data-event-idx'), 10);
+            if (lastResults[idx]) showEventDetail(lastResults[idx]);
+            return;
+        }
+        var th = e.target.closest('[data-sort-col]');
+        if (th) {
+            sortResults(th.getAttribute('data-sort-col'));
+            return;
+        }
+    });
+    /* Event delegation for timeline view */
+    document.getElementById('hunt-timeline').addEventListener('click', function(e) {
+        var item = e.target.closest('[data-event-idx]');
+        if (item) {
+            var idx = parseInt(item.getAttribute('data-event-idx'), 10);
+            if (lastResults[idx]) showEventDetail(lastResults[idx]);
+        }
+    });
+    /* Event delegation for pagination */
+    document.getElementById('hunt-pagination').addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-hunt-offset]');
+        if (btn) {
+            huntSearch(parseInt(btn.getAttribute('data-hunt-offset'), 10));
+        }
+    });
+    /* Event delegation for saved queries */
+    document.getElementById('saved-queries-list').addEventListener('click', function(e) {
+        var del = e.target.closest('[data-delete-idx]');
+        if (del) {
+            e.stopPropagation();
+            deleteSavedQuery(parseInt(del.getAttribute('data-delete-idx'), 10));
+            return;
+        }
+        var chip = e.target.closest('[data-saved-idx]');
+        if (chip) {
+            applySavedQuery(parseInt(chip.getAttribute('data-saved-idx'), 10));
+        }
+    });
+});
+</script>
+{% endblock %}

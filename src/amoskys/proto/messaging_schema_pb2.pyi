@@ -2,7 +2,8 @@ from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -61,7 +62,7 @@ class FlowEvent(_message.Message):
     def __init__(self, src_ip: _Optional[str] = ..., dst_ip: _Optional[str] = ..., src_port: _Optional[int] = ..., dst_port: _Optional[int] = ..., protocol: _Optional[str] = ..., bytes_sent: _Optional[int] = ..., bytes_recv: _Optional[int] = ..., flags: _Optional[int] = ..., start_time: _Optional[int] = ..., end_time: _Optional[int] = ..., bytes_tx: _Optional[int] = ..., bytes_rx: _Optional[int] = ..., proto: _Optional[str] = ..., duration_ms: _Optional[int] = ...) -> None: ...
 
 class Envelope(_message.Message):
-    __slots__ = ("version", "ts_ns", "idempotency_key", "flow", "sig", "prev_sig", "payload")
+    __slots__ = ("version", "ts_ns", "idempotency_key", "flow", "sig", "prev_sig", "payload", "schema_version")
     VERSION_FIELD_NUMBER: _ClassVar[int]
     TS_NS_FIELD_NUMBER: _ClassVar[int]
     IDEMPOTENCY_KEY_FIELD_NUMBER: _ClassVar[int]
@@ -69,6 +70,7 @@ class Envelope(_message.Message):
     SIG_FIELD_NUMBER: _ClassVar[int]
     PREV_SIG_FIELD_NUMBER: _ClassVar[int]
     PAYLOAD_FIELD_NUMBER: _ClassVar[int]
+    SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
     version: str
     ts_ns: int
     idempotency_key: str
@@ -76,7 +78,8 @@ class Envelope(_message.Message):
     sig: bytes
     prev_sig: bytes
     payload: bytes
-    def __init__(self, version: _Optional[str] = ..., ts_ns: _Optional[int] = ..., idempotency_key: _Optional[str] = ..., flow: _Optional[_Union[FlowEvent, _Mapping]] = ..., sig: _Optional[bytes] = ..., prev_sig: _Optional[bytes] = ..., payload: _Optional[bytes] = ...) -> None: ...
+    schema_version: int
+    def __init__(self, version: _Optional[str] = ..., ts_ns: _Optional[int] = ..., idempotency_key: _Optional[str] = ..., flow: _Optional[_Union[FlowEvent, _Mapping]] = ..., sig: _Optional[bytes] = ..., prev_sig: _Optional[bytes] = ..., payload: _Optional[bytes] = ..., schema_version: _Optional[int] = ...) -> None: ...
 
 class PublishAck(_message.Message):
     __slots__ = ("status", "reason", "backoff_hint_ms")

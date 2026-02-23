@@ -155,7 +155,7 @@ class MacOSNettopCollector:
             return None
 
         process_name = name_pid[:dot_idx].strip()
-        pid_str = name_pid[dot_idx + 1:]
+        pid_str = name_pid[dot_idx + 1 :]
 
         try:
             pid = int(pid_str)

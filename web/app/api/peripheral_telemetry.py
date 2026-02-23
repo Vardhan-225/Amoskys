@@ -3,11 +3,16 @@ AMOSKYS Peripheral Telemetry API
 Fetches and displays USB/Bluetooth/peripheral device events
 """
 
+import logging
 import os
 import sqlite3
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request
+
+from . import escape_like
+
+logger = logging.getLogger(__name__)
 
 from .rate_limiter import require_rate_limit
 
@@ -76,6 +81,7 @@ def get_recent_events():
             }
         )
     except Exception as e:
+        logger.exception("Failed to fetch recent peripheral events")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -130,6 +136,7 @@ def get_connected_devices():
             }
         )
     except Exception as e:
+        logger.exception("Failed to fetch connected peripheral devices")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -236,6 +243,7 @@ def get_peripheral_stats():
             }
         )
     except Exception as e:
+        logger.exception("Failed to aggregate peripheral statistics")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -291,6 +299,7 @@ def get_connection_timeline():
             }
         )
     except Exception as e:
+        logger.exception("Failed to fetch peripheral connection timeline")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -339,6 +348,7 @@ def get_high_risk_devices():
             }
         )
     except Exception as e:
+        logger.exception("Failed to fetch high-risk peripheral devices")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -386,6 +396,7 @@ def get_unauthorized_devices():
             }
         )
     except Exception as e:
+        logger.exception("Failed to fetch unauthorized peripheral devices")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -421,6 +432,7 @@ def get_device_history(device_id):
             }
         )
     except Exception as e:
+        logger.exception("Failed to fetch peripheral device history for %s", device_id)
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -446,16 +458,16 @@ def search_devices():
         params = []
 
         if device_name:
-            query += " AND device_name LIKE ?"
-            params.append(f"%{device_name}%")
+            query += " AND device_name LIKE ? ESCAPE '\\'"
+            params.append(f"%{escape_like(device_name)}%")
 
         if device_type:
             query += " AND device_type = ?"
             params.append(device_type)
 
         if manufacturer:
-            query += " AND manufacturer LIKE ?"
-            params.append(f"%{manufacturer}%")
+            query += " AND manufacturer LIKE ? ESCAPE '\\'"
+            params.append(f"%{escape_like(manufacturer)}%")
 
         query += " ORDER BY timestamp_ns DESC LIMIT ?"
         params.append(limit)
@@ -476,6 +488,7 @@ def search_devices():
             }
         )
     except Exception as e:
+        logger.exception("Failed to search peripheral devices")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()

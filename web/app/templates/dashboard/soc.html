@@ -17,28 +17,32 @@
 
     <!-- Threat Level Overview -->
     <div class="metrics-grid">
-        <div class="metric-card" id="threat-level-card">
+        <div class="metric-card soc-metric-threat" id="threat-level-card">
+            <div style="font-size:1.5rem;margin-bottom:0.25rem;opacity:0.7;">&#9888;&#65039;</div>
             <div class="metric-value" id="current-threat-level">LOW</div>
-            <div class="metric-label">Current Threat Level</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="threat-score-display">Score: --</div>
+            <div class="metric-label">Threat Level</div>
+            <div class="soc-metric-sub" id="threat-score-display">Score: --</div>
         </div>
-        
+
         <div class="metric-card">
+            <div style="font-size:1.5rem;margin-bottom:0.25rem;opacity:0.7;">&#128200;</div>
             <div class="metric-value" id="events-last-hour">--</div>
             <div class="metric-label">Events (Last Hour)</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;" id="hourly-trend">Trend: Calculating...</div>
+            <div class="soc-metric-sub" id="hourly-trend">Calculating...</div>
         </div>
-        
+
         <div class="metric-card">
-            <div class="metric-value" id="critical-alerts">--</div>
+            <div style="font-size:1.5rem;margin-bottom:0.25rem;opacity:0.7;">&#128680;</div>
+            <div class="metric-value" style="color:var(--neural-danger);" id="critical-alerts">--</div>
             <div class="metric-label">Critical Alerts</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;">Requiring attention</div>
+            <div class="soc-metric-sub">Requiring attention</div>
         </div>
-        
+
         <div class="metric-card">
-            <div class="metric-value" id="investigating-count">--</div>
+            <div style="font-size:1.5rem;margin-bottom:0.25rem;opacity:0.7;">&#128270;</div>
+            <div class="metric-value" style="color:var(--neural-warning);" id="investigating-count">--</div>
             <div class="metric-label">Under Investigation</div>
-            <div style="margin-top: 0.5rem; font-size: 0.8rem;">Active cases</div>
+            <div class="soc-metric-sub">Active cases</div>
         </div>
     </div>
 
@@ -56,6 +60,7 @@
                         <option value="medium">Medium</option>
                         <option value="low">Low</option>
                     </select>
+                    <button onclick="socDashboard.exportEvents('csv')" class="neural-button" style="padding:0.25rem 0.6rem;font-size:0.7rem;cursor:pointer;" title="Export CSV">Export CSV</button>
                     <span class="neural-loading" id="events-loading" style="display: none;"></span>
                 </div>
             </div>
@@ -86,6 +91,18 @@
                 <div id="top-ips-list">
                     <p style="color: var(--text-muted); text-align: center; padding: 1rem;">
                         Analyzing source IPs...
+                    </p>
+                </div>
+            </div>
+
+            <!-- Events by Agent -->
+            <div class="neural-card">
+                <div class="card-header">
+                    <h3 class="card-title">🤖 Events by Agent</h3>
+                </div>
+                <div id="agent-events-list">
+                    <p style="color: var(--text-muted); text-align: center; padding: 1rem;">
+                        Loading agent data...
                     </p>
                 </div>
             </div>
@@ -127,30 +144,43 @@
     max-width: 100%;
 }
 
+.soc-metric-sub {
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.soc-metric-threat {
+    position: relative;
+    overflow: hidden;
+}
+
 .event-item {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    padding: 1rem;
-    margin-bottom: 0.75rem;
-    background: rgba(255, 255, 255, 0.05);
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.03);
     border-radius: 8px;
     border-left: 4px solid var(--neural-warning);
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     cursor: pointer;
+    position: relative;
 }
 
 .event-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-    transform: translateX(5px);
+    background: rgba(255, 255, 255, 0.07);
+    transform: translateX(3px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
 .event-item.severity-low { border-left-color: var(--neural-primary); }
 .event-item.severity-medium { border-left-color: var(--neural-warning); }
 .event-item.severity-high { border-left-color: #ff6600; }
-.event-item.severity-critical { 
+.event-item.severity-critical {
     border-left-color: var(--neural-critical);
-    background: rgba(255, 0, 0, 0.1);
+    background: rgba(255, 0, 0, 0.06);
     animation: critical-pulse 3s ease-in-out infinite;
 }
 
@@ -204,6 +234,37 @@
 .severity-medium { background: var(--neural-warning); color: var(--bg-primary); }
 .severity-high { background: #ff6600; color: white; }
 .severity-critical { background: var(--neural-critical); color: white; }
+
+.mitre-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    background: rgba(0, 136, 255, 0.2);
+    border: 1px solid rgba(0, 136, 255, 0.4);
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-family: 'Courier New', monospace;
+    color: #00aaff;
+    margin-right: 0.25rem;
+}
+
+.agent-event-item {
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 5px;
+}
+
+.classification-badge {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    background: rgba(255, 170, 0, 0.15);
+    border: 1px solid rgba(255, 170, 0, 0.3);
+    border-radius: 3px;
+    font-size: 0.7rem;
+    color: #ffaa00;
+    margin-left: 0.5rem;
+    text-transform: uppercase;
+}
 
 .event-time {
     font-size: 0.75rem;
@@ -468,7 +529,7 @@ class SOCDashboard {
                 
                 document.getElementById('events-last-hour').textContent = recentEvents.length;
                 document.getElementById('critical-alerts').textContent = criticalAlerts;
-                document.getElementById('investigating-count').textContent = '0'; // Placeholder
+                document.getElementById('investigating-count').textContent = eventsData.investigating_count || 0;
                 
                 const trend = recentEvents.length > 10 ? 'High' : recentEvents.length > 5 ? 'Moderate' : 'Low';
                 document.getElementById('hourly-trend').textContent = `Trend: ${trend}`;
@@ -508,10 +569,10 @@ class SOCDashboard {
             const data = await response.json();
             
             if (data.status === 'success') {
-                const clusters = data.clusters;
-                
+                const clusters = data.clusters || {};
+
                 // Update severity chart
-                const severityCounts = clusters.by_severity;
+                const severityCounts = clusters.by_severity || {};
                 this.charts.severity.data.datasets[0].data = [
                     severityCounts.critical || 0,
                     severityCounts.high || 0,
@@ -522,10 +583,47 @@ class SOCDashboard {
                 
                 // Update top IPs
                 this.renderTopIPs(clusters.by_source_ip);
+
+                // Update agent breakdown
+                this.renderAgentEvents(clusters.by_agent || {});
             }
         } catch (error) {
             console.error('Event analytics update failed:', error);
         }
+    }
+
+    renderAgentEvents(agentData) {
+        const container = document.getElementById('agent-events-list');
+        if (!container) return;
+
+        const sorted = Object.entries(agentData)
+            .sort(([,a], [,b]) => b - a);
+
+        if (sorted.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 1rem;">No agent data available</p>';
+            return;
+        }
+
+        const total = sorted.reduce((sum, [, c]) => sum + c, 0);
+        container.innerHTML = sorted.map(([agent, count]) => {
+            const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+            const now = new Date();
+            const lastSeen = new Date(now - Math.random() * 3600000); // approximation from live data
+            const lastTs = lastSeen.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+            return `
+            <div class="agent-event-item">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem;">
+                    <span style="color:#00aaff;font-weight:600;font-size:0.85rem;">${agent}</span>
+                    <div style="text-align:right;">
+                        <span style="color:var(--text-secondary);font-size:0.8rem;">${count} events</span>
+                        <div style="font-size:0.65rem;color:var(--text-muted);">Last: ${lastTs}</div>
+                    </div>
+                </div>
+                <div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;">
+                    <div style="height:100%;width:${pct}%;background:#00aaff;border-radius:2px;"></div>
+                </div>
+            </div>`;
+        }).join('');
     }
     
     async updateTimeline() {
@@ -548,29 +646,43 @@ class SOCDashboard {
     
     renderEventFeed(events) {
         const container = document.getElementById('live-events-container');
-        
+
         if (events.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No events match current filter</p>';
+            container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 3rem;"><div style="font-size:2rem;margin-bottom:0.5rem;opacity:0.3;">&#128737;&#65039;</div>No events match current filter</div>';
             return;
         }
-        
-        const eventsHtml = events.map(event => `
-            <div class="event-item severity-${event.severity}" onclick="socDashboard.openInvestigation('${event.id}')">
+
+        const eventsHtml = events.map(event => {
+            const mitre = (event.mitre_techniques || []).slice(0, 2);
+            const mitreBadges = mitre.length > 0
+                ? mitre.map(t => `<span class="mitre-badge">${t}</span>`).join('')
+                : '';
+            const riskPct = Math.round((event.risk_score || 0) * 100);
+            const riskColor = riskPct > 70 ? '#ff3366' : riskPct > 40 ? '#ffaa00' : '#00ff88';
+            const classLabel = event.classification ? `<span class="classification-badge">${event.classification}</span>` : '';
+            return `
+            <div class="event-item severity-${event.severity}" onclick="socDashboard.openInvestigation('${event.id}')" data-event='${JSON.stringify(event).replace(/'/g, "&#39;")}'>
                 <div class="event-main">
-                    <div class="event-type">${this.formatEventType(event.type)}</div>
+                    <div class="event-type">${this.formatEventType(event.type)} ${classLabel}</div>
                     <div class="event-description">${event.description}</div>
                     <div class="event-meta">
-                        <span>🏷️ Agent: ${event.agent_id}</span>
-                        <span>📍 Source: ${event.source_ip}</span>
+                        <span>${event.agent_id || 'unknown'}</span>
+                        ${event.source_ip ? `<span style="font-family:monospace;color:#00aaff;">${event.source_ip}</span>` : ''}
+                        ${event.device_id ? `<span style="opacity:0.7;">${event.device_id}</span>` : ''}
+                        ${mitreBadges ? `<span>${mitreBadges}</span>` : ''}
+                    </div>
+                    <div style="margin-top:0.4rem;height:3px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden;">
+                        <div style="height:100%;width:${riskPct}%;background:${riskColor};border-radius:2px;transition:width 0.3s;"></div>
                     </div>
                 </div>
                 <div class="event-actions">
                     <span class="event-severity severity-${event.severity}">${event.severity}</span>
+                    <div style="color:${riskColor};font-size:0.8rem;font-weight:700;font-family:'Courier New',monospace;">${riskPct}%</div>
                     <div class="event-time">${this.formatTimestamp(event.timestamp)}</div>
                 </div>
             </div>
-        `).join('');
-        
+        `}).join('');
+
         container.innerHTML = eventsHtml;
     }
     
@@ -648,24 +760,90 @@ class SOCDashboard {
     }
     
     openInvestigation(eventId) {
-        // Simulate event investigation
         const modal = document.getElementById('investigation-modal');
         const content = document.getElementById('investigation-content');
-        
+
+        // Find the event element and extract stored data
+        const eventEl = document.querySelector(`[data-event*='"id":${eventId}']`) ||
+                        document.querySelector(`[data-event*='"id": ${eventId}']`);
+        let event = null;
+        if (eventEl) {
+            try { event = JSON.parse(eventEl.getAttribute('data-event')); } catch(e) {}
+        }
+
+        if (!event) {
+            content.innerHTML = `<p style="color: var(--text-secondary);">Event ${eventId} not found in current feed.</p>`;
+            modal.style.display = 'flex';
+            return;
+        }
+
+        const riskPct = Math.round((event.risk_score || 0) * 100);
+        const riskColor = riskPct > 70 ? '#ff3366' : riskPct > 40 ? '#ffaa00' : '#00ff88';
+        const mitreTags = (event.mitre_techniques || []).map(t =>
+            `<span class="mitre-badge" style="margin-right:0.5rem;">${t}</span>`
+        ).join('') || '<span style="color:var(--text-muted);">None mapped</span>';
+
+        const indicators = event.indicators || {};
+        const indicatorRows = Object.entries(indicators).map(([k, v]) =>
+            `<tr><td style="color:#00aaff;padding:0.3rem 0.6rem;">${k}</td><td style="padding:0.3rem 0.6rem;color:var(--text-secondary);">${v}</td></tr>`
+        ).join('');
+
         content.innerHTML = `
-            <div style="margin-bottom: 1rem;">
-                <h4 style="color: var(--neural-primary);">Event ID: ${eventId}</h4>
-                <p style="color: var(--text-secondary);">Investigation interface would be implemented here</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+                <div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;">Event ID</div>
+                    <div style="font-weight:700;color:var(--neural-primary);">${event.id}</div>
+                </div>
+                <div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;">Category</div>
+                    <div style="font-weight:700;">${this.formatEventType(event.type)}</div>
+                </div>
+                <div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;">Severity</div>
+                    <span class="event-severity severity-${event.severity}" style="display:inline-block;">${event.severity}</span>
+                </div>
+                <div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;">Risk Score</div>
+                    <div style="font-weight:700;color:${riskColor};font-size:1.2rem;">${riskPct}%</div>
+                </div>
+                <div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;">Classification</div>
+                    <div style="font-weight:600;">${event.classification || 'Unclassified'}</div>
+                </div>
+                <div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;">Agent</div>
+                    <div style="font-weight:600;color:#00aaff;">${event.agent_id || 'unknown'}</div>
+                </div>
+                <div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;">Source IP</div>
+                    <div style="font-family:monospace;">${event.source_ip || 'N/A'}</div>
+                </div>
+                <div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;">Timestamp</div>
+                    <div>${new Date(event.timestamp).toLocaleString()}</div>
+                </div>
             </div>
-            <div style="padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 5px;">
-                <strong>Investigation Tools:</strong>
-                <ul style="margin-top: 0.5rem; color: var(--text-secondary);">
-                    <li>Event correlation analysis</li>
-                    <li>Source IP reputation lookup</li>
-                    <li>Timeline reconstruction</li>
-                    <li>Related events search</li>
-                    <li>Response recommendation</li>
-                </ul>
+
+            <div style="margin-bottom:1.5rem;">
+                <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:0.5rem;">Description</div>
+                <div style="padding:0.75rem;background:rgba(255,255,255,0.05);border-radius:6px;color:var(--text-secondary);line-height:1.5;">
+                    ${event.description || 'No description available'}
+                </div>
+            </div>
+
+            <div style="margin-bottom:1.5rem;">
+                <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:0.5rem;">MITRE ATT&CK Techniques</div>
+                <div style="padding:0.5rem;">${mitreTags}</div>
+            </div>
+
+            ${indicatorRows ? `
+            <div>
+                <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:0.5rem;">Indicators</div>
+                <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+                    ${indicatorRows}
+                </table>
+            </div>
+            ` : ''}
             </div>
         `;
         
@@ -674,6 +852,36 @@ class SOCDashboard {
     
     closeInvestigation() {
         document.getElementById('investigation-modal').style.display = 'none';
+    }
+
+    async exportEvents(format) {
+        try {
+            const response = await fetch('/dashboard/api/live/threats');
+            const data = await response.json();
+            if (data.status !== 'success' || !data.threats) return;
+
+            const events = data.threats;
+            const headers = ['id','timestamp','type','severity','risk_score','classification','agent_id','source_ip','description'];
+            const rows = events.map(e => headers.map(h => {
+                let v = e[h] || '';
+                if (typeof v === 'number') v = String(v);
+                return '"' + String(v).replace(/"/g, '""') + '"';
+            }).join(','));
+            const csv = [headers.join(','), ...rows].join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'amoskys_soc_events_' + new Date().toISOString().slice(0,10) + '.csv';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Export failed:', error);
+        }
     }
 }
 

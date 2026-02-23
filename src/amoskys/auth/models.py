@@ -232,6 +232,19 @@ class User(TimestampMixin, Base):
     )
     locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
+    # Onboarding
+    account_type: Mapped[Optional[str]] = mapped_column(
+        String(20),
+    )  # "enterprise" or "individual"
+    device_os: Mapped[Optional[str]] = mapped_column(
+        String(20),
+    )  # "macos", "linux", "windows"
+    setup_completed: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
     # Relationships
     sessions: Mapped[List["Session"]] = relationship(
         "Session",

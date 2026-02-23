@@ -5,11 +5,12 @@ Build Canonical Process Table from WAL
 Extracts all ProcessEvent data from WAL and creates a normalized canonical table.
 This is Stage 7: Raw validated neurons → Structured neuron table
 """
-import sys
 import sqlite3
-import pandas as pd
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -20,12 +21,13 @@ from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 DB_PATH = project_root / "data/wal/flowagent.db"
 OUTPUT_DIR = project_root / "data/ml_pipeline"
 
+
 def extract_process_events_from_wal():
     """Extract all ProcessEvent data from WAL"""
 
-    print("="*70)
+    print("=" * 70)
     print("Building Canonical Process Table from WAL")
-    print("="*70)
+    print("=" * 70)
     print(f"Input:  {DB_PATH}")
     print(f"Output: {OUTPUT_DIR}/process_canonical_full.parquet")
     print()
@@ -82,23 +84,25 @@ def extract_process_events_from_wal():
             else:
                 process_class = "unknown"
 
-            records.append({
-                'wal_id': row_id,
-                'ts_ns': ts_ns,
-                'idempotency_key': idem_key,
-                'pid': p.pid,
-                'ppid': p.ppid,
-                'exe': p.exe,
-                'exe_basename': exe_basename,
-                'args_count': len(p.args),
-                'args_str': ' '.join(p.args) if p.args else "",
-                'uid': p.uid,
-                'gid': p.gid,
-                'user_type': user_type,
-                'process_class': process_class,
-                'cgroup': p.cgroup,
-                'container_id': p.container_id
-            })
+            records.append(
+                {
+                    "wal_id": row_id,
+                    "ts_ns": ts_ns,
+                    "idempotency_key": idem_key,
+                    "pid": p.pid,
+                    "ppid": p.ppid,
+                    "exe": p.exe,
+                    "exe_basename": exe_basename,
+                    "args_count": len(p.args),
+                    "args_str": " ".join(p.args) if p.args else "",
+                    "uid": p.uid,
+                    "gid": p.gid,
+                    "user_type": user_type,
+                    "process_class": process_class,
+                    "cgroup": p.cgroup,
+                    "container_id": p.container_id,
+                }
+            )
         else:
             other_count += 1
 
@@ -118,12 +122,12 @@ def extract_process_events_from_wal():
     df = pd.DataFrame(records)
 
     # Add derived time columns
-    df['timestamp'] = pd.to_datetime(df['ts_ns'], unit='ns')
-    df['hour'] = df['timestamp'].dt.hour
-    df['day_of_week'] = df['timestamp'].dt.dayofweek
+    df["timestamp"] = pd.to_datetime(df["ts_ns"], unit="ns")
+    df["hour"] = df["timestamp"].dt.hour
+    df["day_of_week"] = df["timestamp"].dt.dayofweek
 
     # Sort by timestamp
-    df = df.sort_values('ts_ns').reset_index(drop=True)
+    df = df.sort_values("ts_ns").reset_index(drop=True)
 
     # Print summary statistics
     print("📈 Canonical Table Statistics:")
@@ -134,11 +138,11 @@ def extract_process_events_from_wal():
     print()
 
     print("👥 User Type Distribution:")
-    print(df['user_type'].value_counts())
+    print(df["user_type"].value_counts())
     print()
 
     print("🏷️  Process Class Distribution:")
-    print(df['process_class'].value_counts())
+    print(df["process_class"].value_counts())
     print()
 
     # Save to parquet and CSV
@@ -155,14 +159,19 @@ def extract_process_events_from_wal():
 
     # Sample rows
     print("🔍 Sample rows (first 5):")
-    print(df[['timestamp', 'pid', 'ppid', 'exe_basename', 'user_type', 'process_class']].head())
+    print(
+        df[
+            ["timestamp", "pid", "ppid", "exe_basename", "user_type", "process_class"]
+        ].head()
+    )
     print()
 
-    print("="*70)
+    print("=" * 70)
     print("✅ Canonical process table build complete!")
-    print("="*70)
+    print("=" * 70)
 
     return True
+
 
 if __name__ == "__main__":
     success = extract_process_events_from_wal()

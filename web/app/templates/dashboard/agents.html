@@ -1,921 +1,1074 @@
 {% extends "dashboard/base.html" %}
 
-{% block title %}Agent Management - AMOSKYS Cortex{% endblock %}
+{% block title %}Agent Network - AMOSKYS{% endblock %}
 
 {% block content %}
-<div class="agents-dashboard">
-    <!-- Agents Header -->
-    <div class="neural-card">
+<div style="padding: 1.5rem 2rem;">
+    <!-- Header -->
+    <div class="neural-card" style="margin-bottom: 1rem;">
         <div class="card-header">
-            <h2 class="card-title">🤖 Neural Agent Network</h2>
-            <div class="card-badge badge-success">Network Active</div>
+            <h2 class="card-title">Agent Network Command Center</h2>
+            <div class="card-badge badge-success" id="net-badge">Loading...</div>
         </div>
-        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-            Monitor and manage the distributed AMOSKYS agent network. Track agent health,
-            performance metrics, and deployment status across your infrastructure.
+        <p style="color: var(--text-secondary); margin-bottom: 0; font-size: 0.85rem;">
+            Unified view of all AMOSKYS security agents, 85+ micro-probes, real-time health, MITRE ATT&CK coverage, and telemetry collection status.
+            <a href="/dashboard/probe-explorer" style="color: var(--neural-primary); text-decoration: none; margin-left: 0.5rem;">Open Probe Explorer &rarr;</a>
         </p>
     </div>
 
-    <!-- Agent Network Overview -->
-    <div class="metrics-grid">
-        <div class="metric-card">
-            <div class="metric-value" id="total-agents">--</div>
-            <div class="metric-label">Total Agents</div>
-            <div class="metric-status" id="agents-status">Status: Loading...</div>
+    <!-- Summary Metrics + Probe Health — compact row -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <!-- Summary Metrics -->
+        <div class="neural-card" style="margin: 0;">
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
+                <div style="text-align: center; padding: 0.5rem 0;">
+                    <div class="metric-value" id="s-agents" style="font-size: 1.5rem;">--</div>
+                    <div class="metric-label" style="font-size: 0.65rem;">Agents</div>
+                </div>
+                <div style="text-align: center; padding: 0.5rem 0;">
+                    <div class="metric-value" id="s-probes" style="color: #00ff88; font-size: 1.5rem;">--</div>
+                    <div class="metric-label" style="font-size: 0.65rem;">Active Probes</div>
+                </div>
+                <div style="text-align: center; padding: 0.5rem 0;">
+                    <div class="metric-value" id="s-events" style="color: #ffaa00; font-size: 1.5rem;">--</div>
+                    <div class="metric-label" style="font-size: 0.65rem;">Events</div>
+                </div>
+                <div style="text-align: center; padding: 0.5rem 0;">
+                    <div class="metric-value" id="s-mitre" style="color: #ff6b9d; font-size: 1.5rem;">--</div>
+                    <div class="metric-label" style="font-size: 0.65rem;">MITRE Techniques</div>
+                </div>
+            </div>
         </div>
 
-        <div class="metric-card">
-            <div class="metric-value" id="online-agents">--</div>
-            <div class="metric-label">Online Agents</div>
-            <div class="metric-status" id="online-percentage">--% of network</div>
-        </div>
-
-        <div class="metric-card">
-            <div class="metric-value" id="network-health">--</div>
-            <div class="metric-label">Network Health</div>
-            <div class="metric-status" id="health-status">Calculating...</div>
-        </div>
-
-        <div class="metric-card">
-            <div class="metric-value" id="avg-response">--</div>
-            <div class="metric-label">Avg Response Time</div>
-            <div class="metric-status">Network latency</div>
+        <!-- Probe Health Bar -->
+        <div class="neural-card" style="margin: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-primary);">Observability Contract</span>
+                <span id="probe-pct" style="color: #00ff88; font-weight: 700; font-size: 0.85rem;">--% Active</span>
+            </div>
+            <div id="probe-bar" style="display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: rgba(255,255,255,0.05); margin-bottom: 0.5rem;"></div>
+            <div id="probe-legend" style="display: flex; gap: 1rem; font-size: 0.72rem; color: var(--text-secondary);"></div>
         </div>
     </div>
 
-    <!-- Agent Lifecycle Management Control Panel -->
+    <!-- Data Pipeline Flow — compact -->
+    <div class="neural-card" style="margin-bottom: 1rem; padding: 0.75rem 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-primary);">Agent Data Pipeline</span>
+            <span style="font-size: 0.68rem; color: var(--text-muted);">Ed25519 signed envelopes</span>
+        </div>
+        <div class="pipeline-flow">
+            <div class="pipeline-node">
+                <div class="pipeline-icon">&#x1F916;</div>
+                <div class="pipeline-label" style="color:#00aaff;">10 Agents</div>
+                <div class="pipeline-sub">85 Probes</div>
+            </div>
+            <div class="pipeline-arrow"><span class="pipeline-arrow-dot"></span></div>
+            <div class="pipeline-node">
+                <div class="pipeline-icon">&#x1F510;</div>
+                <div class="pipeline-label" style="color:#a78bfa;">Ed25519</div>
+                <div class="pipeline-sub">Signing</div>
+            </div>
+            <div class="pipeline-arrow"><span class="pipeline-arrow-dot"></span></div>
+            <div class="pipeline-node">
+                <div class="pipeline-icon">&#x1F4E1;</div>
+                <div class="pipeline-label" style="color:#FF6B35;">EventBus</div>
+                <div class="pipeline-sub">gRPC/mTLS</div>
+            </div>
+            <div class="pipeline-arrow"><span class="pipeline-arrow-dot"></span></div>
+            <div class="pipeline-node">
+                <div class="pipeline-icon">&#x1F4DD;</div>
+                <div class="pipeline-label" style="color:#ffaa00;">WAL</div>
+                <div class="pipeline-sub">Write-Ahead</div>
+            </div>
+            <div class="pipeline-arrow"><span class="pipeline-arrow-dot"></span></div>
+            <div class="pipeline-node">
+                <div class="pipeline-icon">&#x1F5C4;</div>
+                <div class="pipeline-label" style="color:#00ff88;">TelemetryStore</div>
+                <div class="pipeline-sub">SQLite DB</div>
+            </div>
+            <div class="pipeline-arrow"><span class="pipeline-arrow-dot"></span></div>
+            <div class="pipeline-node">
+                <div class="pipeline-icon">&#x1F9E0;</div>
+                <div class="pipeline-label" style="color:#ff6b9d;">Score Junction</div>
+                <div class="pipeline-sub">Risk Fusion</div>
+            </div>
+            <div class="pipeline-arrow"><span class="pipeline-arrow-dot"></span></div>
+            <div class="pipeline-node">
+                <div class="pipeline-icon">&#x1F4CA;</div>
+                <div class="pipeline-label" style="color:var(--neural-primary);">Dashboard</div>
+                <div class="pipeline-sub">Real-time UI</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agent Lifecycle Control Panel -->
     {% include 'dashboard/agent-control-panel.html' %}
 
-    <!-- Agent Status Distribution & Performance -->
-    <div class="chart-grid">
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">📊 Agent Status Distribution</h3>
-            </div>
-            <div class="chart-container">
-                <canvas id="agent-status-chart"></canvas>
-            </div>
-        </div>
-
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">📈 Network Performance Timeline</h3>
-            </div>
-            <div class="chart-container">
-                <canvas id="performance-timeline"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <!-- Available Agents -->
-    <div class="neural-card">
+    <!-- Agent Cards Grid (Deep Overview) -->
+    <div class="neural-card" style="margin-top: 1rem;">
         <div class="card-header">
-            <h3 class="card-title">📋 Available Agents</h3>
-        </div>
-        <div id="available-agents-grid" class="agents-grid">
-            <p class="loading-message">Loading available agent types...</p>
-        </div>
-    </div>
-
-    <!-- Registered Agents Management -->
-    <div class="neural-card">
-        <div class="card-header">
-            <h3 class="card-title">🔧 Registered Agents</h3>
-            <div class="card-actions">
-                <select id="status-filter" class="filter-select">
-                    <option value="">All Agents</option>
-                    <option value="online">Online</option>
-                    <option value="active">Active</option>
-                    <option value="stale">Stale</option>
-                    <option value="offline">Offline</option>
+            <h3 class="card-title">Security Agent Fleet</h3>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <select id="agent-filter" style="padding: 0.3rem 0.6rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; font-size: 0.78rem; cursor: pointer;">
+                    <option value="">All Categories</option>
+                    <option value="Endpoint">Endpoint</option>
+                    <option value="Network">Network</option>
+                    <option value="Identity">Identity</option>
+                    <option value="Physical">Physical</option>
+                    <option value="Kernel">Kernel</option>
                 </select>
-                <button class="neural-button" onclick="agentDashboard.refreshAgents()">
-                    🔄 Refresh
-                </button>
-                <span class="neural-loading" id="agents-loading" style="display: none;"></span>
+                <button onclick="loadAgentData()" class="neural-button" style="padding: 0.3rem 0.7rem; font-size: 0.78rem;">Refresh</button>
             </div>
         </div>
-        <div id="agents-grid" class="agents-grid">
-            <p class="loading-message">Loading agent network data...</p>
+        <div id="agents-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1rem; margin-top: 0.75rem;">
+            <div style="grid-column: 1/-1; color: var(--text-muted); text-align: center; padding: 2rem;">Loading agent fleet...</div>
         </div>
     </div>
 
-    <!-- Agent Details Modal -->
-    <div id="agent-details-modal" class="modal" style="display: none;">
-        <div class="modal-content modal-large">
-            <div class="modal-header">
-                <h3>🤖 Agent Details</h3>
-                <span class="modal-close" onclick="agentDashboard.closeAgentDetails()">&times;</span>
+    <!-- Agent Live Data Modal -->
+    <div id="agent-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; justify-content: center; align-items: flex-start; overflow-y: auto; padding: 1.5rem 0;">
+        <div style="background: var(--bg-secondary); border: 2px solid var(--neural-primary); border-radius: 12px; max-width: 1100px; width: 96%; margin: 0 auto; padding: 0; overflow: hidden;">
+            <!-- Modal Header -->
+            <div id="modal-header" style="padding: 1rem 1.5rem; border-bottom: 1px solid rgba(0,217,255,0.2); display: flex; justify-content: space-between; align-items: center; background: rgba(0,217,255,0.03);">
+                <div>
+                    <h3 style="color: var(--neural-primary); margin: 0; font-size: 1.1rem;" id="modal-title">Agent Details</h3>
+                    <div id="modal-subtitle" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;"></div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span id="modal-live-badge" style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;color:#00ff88;font-weight:600;"><span style="width:6px;height:6px;border-radius:50%;background:#00ff88;animation:pulse-dot 2s infinite;"></span> LIVE</span>
+                    <span onclick="closeAgentModal()" style="font-size: 1.3rem; cursor: pointer; color: var(--text-muted); line-height: 1; padding: 0.25rem;">&times;</span>
+                </div>
             </div>
-            <div class="modal-body" id="agent-details-content">
-                <!-- Agent details populated dynamically -->
+            <!-- Tab Navigation -->
+            <div id="modal-tabs" style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 0 1.5rem; background: rgba(0,0,0,0.15);">
+                <button class="modal-tab active" data-tab="overview" onclick="switchModalTab('overview')">Overview</button>
+                <button class="modal-tab" data-tab="events" onclick="switchModalTab('events')">Events</button>
+                <button class="modal-tab" data-tab="probes" onclick="switchModalTab('probes')">Probes</button>
+                <button class="modal-tab" data-tab="logs" onclick="switchModalTab('logs')">Logs</button>
             </div>
-        </div>
-    </div>
-
-    <!-- Agent Registration Modal -->
-    <div id="agent-registration-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>➕ Register New Agent</h3>
-                <span class="modal-close" onclick="agentDashboard.closeRegistration()">&times;</span>
-            </div>
-            <div class="modal-body">
-                <form id="agent-registration-form">
-                    <div class="form-group">
-                        <label for="agent-id">Agent ID</label>
-                        <input type="text" id="agent-id" name="agent_id" required
-                               placeholder="e.g., flowagent-002"
-                               class="form-input">
-                    </div>
-                    <div class="form-group">
-                        <label for="hostname">Hostname</label>
-                        <input type="text" id="hostname" name="hostname" required
-                               placeholder="e.g., server-002"
-                               class="form-input">
-                    </div>
-                    <div class="form-group">
-                        <label for="capabilities">Capabilities (comma-separated)</label>
-                        <input type="text" id="capabilities" name="capabilities"
-                               placeholder="e.g., network_monitoring, log_analysis"
-                               class="form-input">
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" onclick="agentDashboard.closeRegistration()"
-                                class="button-secondary">
-                            Cancel
-                        </button>
-                        <button type="submit" class="neural-button">Register Agent</button>
-                    </div>
-                </form>
-            </div>
+            <!-- Modal Body -->
+            <div id="modal-body" style="padding: 1.25rem 1.5rem; max-height: 75vh; overflow-y: auto;"></div>
         </div>
     </div>
 </div>
 
 <style>
-.agents-dashboard {
-    max-width: 100%;
-}
-
-.metric-status {
-    margin-top: 0.5rem;
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-.chart-grid {
-    display: grid;
-    grid-template-columns: 1fr 2fr;
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-}
-
-.chart-container {
-    position: relative;
-    width: 100%;
-    height: 300px;
-}
-
-.agents-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 1rem;
-    margin-top: 1rem;
-}
-
-.loading-message {
-    color: var(--text-muted);
-    text-align: center;
-    padding: 2rem;
-    grid-column: 1 / -1;
-}
-
-.card-actions {
+/* Pipeline Flow Animation */
+.pipeline-flow {
     display: flex;
-    gap: 1rem;
     align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 0.75rem 0;
+    overflow-x: auto;
 }
-
-.filter-select {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: 1px solid var(--neural-primary);
-    border-radius: 5px;
-    padding: 0.5rem;
-    font-size: 0.9rem;
-    cursor: pointer;
-}
-
-.filter-select:focus {
-    outline: none;
-    border-color: var(--neural-secondary);
-}
-
-.agent-card {
-    background: rgba(26, 31, 58, 0.3);
-    border: 1px solid rgba(0, 217, 255, 0.15);
+.pipeline-node {
+    text-align: center;
+    min-width: 85px;
+    padding: 0.5rem 0.25rem;
     border-radius: 8px;
-    padding: 1.5rem;
-    transition: all 0.3s ease;
+    transition: background 0.2s;
+}
+.pipeline-node:hover {
+    background: rgba(0, 217, 255, 0.06);
+}
+.pipeline-icon {
+    font-size: 1.4rem;
+    margin-bottom: 0.2rem;
+}
+.pipeline-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+.pipeline-sub {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+}
+.pipeline-arrow {
+    position: relative;
+    width: 30px;
+    height: 2px;
+    background: rgba(0, 217, 255, 0.2);
+    flex-shrink: 0;
+    margin: 0 2px;
+}
+.pipeline-arrow-dot {
+    position: absolute;
+    top: -2px;
+    left: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--neural-primary);
+    animation: pipeline-dot-flow 2s ease-in-out infinite;
+    box-shadow: 0 0 6px var(--neural-primary);
+}
+@keyframes pipeline-dot-flow {
+    0% { left: 0; opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { left: calc(100% - 6px); opacity: 0; }
+}
+.pipeline-arrow:nth-child(4) .pipeline-arrow-dot { animation-delay: 0.3s; }
+.pipeline-arrow:nth-child(6) .pipeline-arrow-dot { animation-delay: 0.6s; }
+.pipeline-arrow:nth-child(8) .pipeline-arrow-dot { animation-delay: 0.9s; }
+.pipeline-arrow:nth-child(10) .pipeline-arrow-dot { animation-delay: 1.2s; }
+.pipeline-arrow:nth-child(12) .pipeline-arrow-dot { animation-delay: 1.5s; }
+
+/* Signing badge */
+.signing-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 8px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.signing-badge.enabled {
+    background: rgba(167, 139, 250, 0.15);
+    color: #a78bfa;
+    border: 1px solid rgba(167, 139, 250, 0.3);
+}
+.signing-badge.disabled {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.agent-fleet-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 1.25rem;
     cursor: pointer;
+    transition: all 0.25s ease;
     position: relative;
     overflow: hidden;
 }
-
-.agent-card::before {
+.agent-fleet-card::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
-    width: 3px;
+    width: 4px;
     height: 100%;
-    background: var(--neural-primary);
 }
-
-.agent-card.status-offline::before { background: var(--neural-critical); }
-.agent-card.status-stale::before { background: var(--neural-warning); }
-.agent-card.status-active::before { background: #ffaa00; }
-.agent-card.status-online::before { background: var(--neural-primary); }
-.agent-card.available-agent::before { background: #5cb85c; }
-
-.agent-card:hover {
+.agent-fleet-card:hover {
+    background: rgba(0,217,255,0.04);
+    border-color: rgba(0,217,255,0.25);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 217, 255, 0.08);
-    border-color: rgba(0, 217, 255, 0.25);
-    background: rgba(26, 31, 58, 0.4);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
 }
-
-.agent-header {
+.agent-card-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
 }
-
-.agent-name {
+.agent-card-name {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 0.15rem;
+}
+.agent-card-desc {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-bottom: 0.75rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.agent-card-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    padding: 0.75rem 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    margin-bottom: 0.75rem;
+}
+.agent-stat {
+    text-align: center;
+}
+.agent-stat-val {
     font-size: 1.1rem;
     font-weight: 700;
-    color: var(--neural-primary);
-    margin-bottom: 0.25rem;
 }
-
-.agent-hostname {
-    font-size: 0.9rem;
-    color: var(--text-secondary);
+.agent-stat-lbl {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
 }
-
-.agent-status-badge {
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
+.probe-mini-bar {
+    display: flex;
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.05);
+}
+.category-pill {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.mitre-chip {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    background: rgba(255,107,157,0.15);
+    color: #ff6b9d;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    margin: 0.1rem;
+}
+/* Modal probe table */
+.probe-row {
+    display: grid;
+    grid-template-columns: 24px 1fr 70px auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.5rem 0.6rem;
+    border-radius: 6px;
+    margin-bottom: 0.3rem;
+    font-size: 0.82rem;
+    transition: background 0.15s;
+}
+.probe-row:hover {
+    background: rgba(0,217,255,0.06);
+}
+.probe-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.probe-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.probe-verdict {
     font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.status-online {
-    background: rgba(0, 217, 255, 0.15);
-    color: var(--neural-primary);
-    border: 1px solid rgba(0, 217, 255, 0.3);
-}
-.status-active {
-    background: rgba(255, 170, 0, 0.15);
-    color: var(--neural-warning);
-    border: 1px solid rgba(255, 170, 0, 0.3);
-}
-.status-stale {
-    background: rgba(255, 102, 0, 0.15);
-    color: #ff6600;
-    border: 1px solid rgba(255, 102, 0, 0.3);
-}
-.status-offline {
-    background: rgba(255, 51, 102, 0.15);
-    color: var(--neural-critical);
-    border: 1px solid rgba(255, 51, 102, 0.3);
-}
-
-.agent-metrics {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.agent-metric {
+    padding: 0.1rem 0.4rem;
+    border-radius: 8px;
     text-align: center;
 }
-
-.metric-value-small {
-    font-size: 1.2rem;
-    font-weight: 600;
-    color: var(--neural-secondary);
-    margin-bottom: 0.25rem;
-}
-
-.metric-label-small {
-    font-size: 0.7rem;
-    color: var(--text-muted);
+.modal-section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-}
-
-.agent-capabilities {
-    margin-top: 1rem;
-}
-
-.capability-tag {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    margin: 0.25rem 0.25rem 0 0;
-    background: rgba(0, 136, 255, 0.2);
-    color: var(--neural-secondary);
-    border-radius: 10px;
-    font-size: 0.7rem;
-    border: 1px solid rgba(0, 136, 255, 0.3);
-}
-
-.agent-last-seen {
-    font-size: 0.8rem;
     color: var(--text-muted);
-    margin-top: 1rem;
-    text-align: center;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin: 1.25rem 0 0.5rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
 }
-
-.form-input {
-    width: 100%;
-    padding: 0.5rem;
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: 1px solid var(--neural-primary);
-    border-radius: 5px;
-    font-size: 0.9rem;
-}
-
-.form-input:focus {
-    outline: none;
-    border-color: var(--neural-secondary);
-}
-
-.form-actions {
-    display: flex;
-    gap: 1rem;
-    justify-content: flex-end;
-    margin-top: 1rem;
-}
-
-.button-secondary {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: 1px solid var(--neural-primary);
-    padding: 0.5rem 1rem;
-    border-radius: 5px;
+/* Modal Tabs */
+.modal-tab {
+    padding: 0.6rem 1rem;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
 }
-
-.button-secondary:hover {
-    background: rgba(0, 217, 255, 0.1);
+.modal-tab:hover { color: var(--text-primary); background: rgba(0,217,255,0.05); }
+.modal-tab.active { color: var(--neural-primary); border-bottom-color: var(--neural-primary); }
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
 }
-
-.modal-large {
-    max-width: 900px;
+/* Event rows in modal */
+.event-row {
+    padding: 0.6rem 0.75rem;
+    border-radius: 6px;
+    margin-bottom: 0.25rem;
+    font-size: 0.82rem;
+    transition: background 0.15s;
+    border-left: 3px solid transparent;
 }
-
-.performance-metric {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.performance-metric:last-child {
-    border-bottom: none;
-}
-
-.performance-label {
+.event-row:hover { background: rgba(0,217,255,0.06); }
+.event-row.risk-high { border-left-color: #ff3366; }
+.event-row.risk-medium { border-left-color: #ffaa00; }
+.event-row.risk-low { border-left-color: #00ff88; }
+/* Log viewer */
+.log-viewer {
+    background: rgba(0,0,0,0.4);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.72rem;
+    line-height: 1.5;
     color: var(--text-secondary);
-    font-size: 0.9rem;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
 }
-
-.performance-value {
-    color: var(--neural-primary);
+.log-line { padding: 0.1rem 0; }
+.log-line:hover { background: rgba(0,217,255,0.05); }
+.log-line .log-ts { color: #00aaff; }
+.log-line .log-level-info { color: #00ff88; }
+.log-line .log-level-warn { color: #ffaa00; }
+.log-line .log-level-err { color: #ff3366; }
+/* Stat pill */
+.stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.78rem;
     font-weight: 600;
 }
-
-@media (max-width: 1024px) {
-    .chart-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .agents-grid {
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    }
-}
-
-@media (max-width: 768px) {
-    .agents-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .agent-metrics {
-        grid-template-columns: 1fr;
-    }
-}
+.stat-pill .stat-val { font-size: 1.1rem; font-weight: 700; }
+.stat-pill .stat-lbl { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
 </style>
+
 {% endblock %}
 
 {% block extra_scripts %}
 <script nonce="{{ csp_nonce() }}">
-class AgentDashboard {
-    constructor() {
-        this.updateInterval = 5000;
-        this.charts = {};
-        this.agents = [];
-        this.init();
-    }
+let agentData = null;
+let agentStatusData = {};
+let currentFilter = '';
 
-    init() {
-        this.initCharts();
-        this.initEventListeners();
-        this.startRealTimeUpdates();
-    }
+document.getElementById('agent-filter').addEventListener('change', function() {
+    currentFilter = this.value;
+    if (agentData) renderAgentGrid(agentData.agents);
+});
 
-    initCharts() {
-        const chartDefaults = {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    labels: { color: '#cccccc', font: { size: 12 } }
+async function loadAgentData() {
+    try {
+        // Fetch deep overview and agent status in parallel
+        const [overviewResp, statusResp] = await Promise.all([
+            fetch('/dashboard/api/agents/deep-overview'),
+            fetch('/dashboard/api/agents/status'),
+        ]);
+        const data = await overviewResp.json();
+        if (data.status !== 'success') return;
+        agentData = data;
+
+        // Parse agent status
+        try {
+            const statusData = await statusResp.json();
+            if (statusData.status === 'success' && statusData.data && statusData.data.agents) {
+                for (const agent of statusData.data.agents) {
+                    agentStatusData[agent.agent_id] = agent;
                 }
             }
-        };
+        } catch (e) { /* ignore status fetch failure */ }
 
-        this.charts.status = new Chart(
-            document.getElementById('agent-status-chart'),
-            {
-                type: 'doughnut',
-                data: {
-                    labels: ['Online', 'Active', 'Stale', 'Offline'],
-                    datasets: [{
-                        data: [0, 0, 0, 0],
-                        backgroundColor: ['#5cb85c', '#f0ad4e', '#ff6600', '#d9534f'],
-                        borderWidth: 2,
-                        borderColor: '#1a1f3a'
-                    }]
-                },
-                options: {
-                    ...chartDefaults,
-                    plugins: {
-                        ...chartDefaults.plugins,
-                        legend: { position: 'bottom', ...chartDefaults.plugins.legend }
-                    }
-                }
-            }
-        );
+        // Count actually running agents
+        const runningCount = Object.values(agentStatusData).filter(a => a.status === 'running' || a.status === 'online').length;
 
-        this.charts.performance = new Chart(
-            document.getElementById('performance-timeline'),
-            {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [
-                        {
-                            label: 'Online Agents',
-                            data: [],
-                            borderColor: '#00ff88',
-                            backgroundColor: 'rgba(0, 255, 136, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.4
-                        },
-                        {
-                            label: 'Total Agents',
-                            data: [],
-                            borderColor: '#0088ff',
-                            backgroundColor: 'rgba(0, 136, 255, 0.1)',
-                            borderWidth: 2,
-                            fill: false,
-                            tension: 0.4
-                        }
-                    ]
-                },
-                options: {
-                    ...chartDefaults,
-                    scales: {
-                        x: {
-                            ticks: { color: '#cccccc' },
-                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                        },
-                        y: {
-                            ticks: { color: '#cccccc' },
-                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                            beginAtZero: true
-                        }
-                    }
-                }
-            }
-        );
-    }
+        // Summary metrics
+        document.getElementById('s-agents').textContent = data.summary.total_agents;
+        document.getElementById('s-probes').textContent = data.summary.active_probes + '/' + data.summary.total_probes;
+        document.getElementById('s-events').textContent = formatNumber(data.summary.total_events);
+        document.getElementById('s-mitre').textContent = data.summary.total_mitre;
+        document.getElementById('net-badge').textContent = runningCount + '/' + data.summary.total_agents + ' Running';
+        document.getElementById('net-badge').className = runningCount >= data.summary.total_agents ? 'card-badge badge-success' : 'card-badge badge-warning';
 
-    initEventListeners() {
-        const statusFilter = document.getElementById('status-filter');
-        statusFilter.addEventListener('change', () => this.renderAgents());
+        // Probe health bar
+        renderProbeBar(data.agents);
 
-        const registrationForm = document.getElementById('agent-registration-form');
-        registrationForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.registerAgent();
-        });
-
-        document.addEventListener('click', (e) => {
-            if (e.target.id === 'agent-details-modal') {
-                this.closeAgentDetails();
-            }
-            if (e.target.id === 'agent-registration-modal') {
-                this.closeRegistration();
-            }
-        });
-    }
-
-    async startRealTimeUpdates() {
-        try {
-            await Promise.all([
-                this.updateAgentMetrics(),
-                this.updateAgentData(),
-                this.updatePerformanceTimeline(),
-                this.updateAvailableAgents()
-            ]);
-        } catch (error) {
-            console.error('Agent dashboard update error:', error);
-        }
-
-        setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
-    }
-
-    async updateAgentMetrics() {
-        try {
-            const response = await fetch('/dashboard/api/live/agents');
-            const data = await response.json();
-
-            if (data.status !== 'success') return;
-
-            const agents = data.agents;
-            const statusCounts = this.calculateStatusCounts(agents);
-            const metrics = this.calculateMetrics(agents, statusCounts);
-
-            this.updateMetricsUI(metrics);
-            this.updateStatusChart(statusCounts);
-        } catch (error) {
-            console.error('Agent metrics update failed:', error);
-        }
-    }
-
-    calculateStatusCounts(agents) {
-        return {
-            online: agents.filter(a => a.status === 'online').length,
-            active: agents.filter(a => a.status === 'active').length,
-            stale: agents.filter(a => a.status === 'stale').length,
-            offline: agents.filter(a => a.status === 'offline').length
-        };
-    }
-
-    calculateMetrics(agents, statusCounts) {
-        const totalAgents = agents.length;
-        const onlineAgents = statusCounts.online;
-        const healthScore = totalAgents > 0 ? Math.round((onlineAgents / totalAgents) * 100) : 0;
-        const avgResponse = agents.length > 0
-            ? Math.round(agents.reduce((sum, a) => sum + a.seconds_since_ping, 0) / agents.length)
-            : 0;
-
-        return { totalAgents, onlineAgents, healthScore, avgResponse };
-    }
-
-    updateMetricsUI(metrics) {
-        const { totalAgents, onlineAgents, healthScore, avgResponse } = metrics;
-
-        document.getElementById('total-agents').textContent = totalAgents;
-        document.getElementById('online-agents').textContent = onlineAgents;
-        document.getElementById('online-percentage').textContent =
-            `${Math.round((onlineAgents / totalAgents) * 100)}% of network`;
-        document.getElementById('network-health').textContent = `${healthScore}%`;
-        document.getElementById('avg-response').textContent = this.formatDuration(avgResponse);
-
-        document.getElementById('agents-status').textContent =
-            healthScore >= 80 ? 'Status: Healthy' :
-            healthScore >= 60 ? 'Status: Warning' : 'Status: Critical';
-
-        document.getElementById('health-status').textContent =
-            healthScore >= 80 ? 'Excellent' :
-            healthScore >= 60 ? 'Good' : 'Needs Attention';
-    }
-
-    updateStatusChart(statusCounts) {
-        this.charts.status.data.datasets[0].data = [
-            statusCounts.online,
-            statusCounts.active,
-            statusCounts.stale,
-            statusCounts.offline
-        ];
-        this.charts.status.update();
-    }
-
-    async updateAgentData() {
-        const loadingElement = document.getElementById('agents-loading');
-        try {
-            loadingElement.style.display = 'inline-block';
-
-            const response = await fetch('/dashboard/api/live/agents');
-            const data = await response.json();
-
-            if (data.status === 'success') {
-                this.agents = data.agents;
-                this.renderAgents();
-            }
-        } catch (error) {
-            console.error('Agent data update failed:', error);
-        } finally {
-            loadingElement.style.display = 'none';
-        }
-    }
-
-    async updatePerformanceTimeline() {
-        try {
-            const now = new Date();
-            const { labels, onlineData, totalData } = this.generateTimelineData(now);
-
-            this.charts.performance.data.labels = labels;
-            this.charts.performance.data.datasets[0].data = onlineData;
-            this.charts.performance.data.datasets[1].data = totalData;
-            this.charts.performance.update();
-        } catch (error) {
-            console.error('Performance timeline update failed:', error);
-        }
-    }
-
-    generateTimelineData(now) {
-        const labels = [];
-        const onlineData = [];
-        const totalData = [];
-
-        for (let i = 11; i >= 0; i--) {
-            const time = new Date(now.getTime() - i * 5 * 60 * 1000);
-            labels.push(time.toLocaleTimeString().slice(0, 5));
-
-            const totalAgents = this.agents.length;
-            const onlineAgents = Math.max(0, totalAgents - Math.floor(Math.random() * 3));
-
-            onlineData.push(onlineAgents);
-            totalData.push(totalAgents);
-        }
-
-        return { labels, onlineData, totalData };
-    }
-
-    async updateAvailableAgents() {
-        try {
-            const response = await fetch('/dashboard/api/available-agents');
-            const data = await response.json();
-
-            if (data.status === 'success' && data.agents) {
-                this.renderAvailableAgents(data.agents);
-            }
-        } catch (error) {
-            console.error('Available agents update failed:', error);
-        }
-    }
-
-    renderAvailableAgents(agents) {
-        const container = document.getElementById('available-agents-grid');
-
-        if (!agents || agents.length === 0) {
-            container.innerHTML = '<p class="loading-message">No agents available</p>';
-            return;
-        }
-
-        container.innerHTML = agents.map(agent => this.createAvailableAgentCard(agent)).join('');
-    }
-
-    createAvailableAgentCard(agent) {
-        return `
-            <div class="agent-card available-agent" onclick="agentDashboard.showAgentInfo('${agent.id}', '${agent.name}')">
-                <div class="agent-header">
-                    <div class="agent-name">${agent.name}</div>
-                    <div class="agent-status-badge" style="background: #5cb85c; color: #000;">Available</div>
-                </div>
-                <p style="margin: 0.5rem 0; color: var(--text-secondary); font-size: 0.85rem;">
-                    ${agent.description}
-                </p>
-                <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.5rem;">
-                        <span>Type: ${agent.type}</span>
-                        <span>Port: ${agent.port}</span>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        ${agent.platform.map(p =>
-                            `<span class="capability-tag" style="background: rgba(0, 255, 136, 0.2);">${p}</span>`
-                        ).join('')}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    renderAgents() {
-        const container = document.getElementById('agents-grid');
-        const statusFilter = document.getElementById('status-filter').value;
-
-        const filteredAgents = statusFilter
-            ? this.agents.filter(agent => agent.status === statusFilter)
-            : this.agents;
-
-        if (filteredAgents.length === 0) {
-            container.innerHTML = '<p class="loading-message">No agents match current filter</p>';
-            return;
-        }
-
-        container.innerHTML = filteredAgents.map(agent => this.createAgentCard(agent)).join('');
-    }
-
-    createAgentCard(agent) {
-        return `
-            <div class="agent-card status-${agent.status}" onclick="agentDashboard.showAgentDetails('${agent.agent_id}')">
-                <div class="agent-header">
-                    <div>
-                        <div class="agent-name">${agent.agent_id}</div>
-                        <div class="agent-hostname">${agent.hostname}</div>
-                    </div>
-                    <div class="agent-status-badge status-${agent.status}">${agent.status}</div>
-                </div>
-
-                <div class="agent-metrics">
-                    <div class="agent-metric">
-                        <div class="metric-value-small">${agent.platform}</div>
-                        <div class="metric-label-small">Platform</div>
-                    </div>
-                    <div class="agent-metric">
-                        <div class="metric-value-small">${this.formatDuration(agent.seconds_since_ping)}</div>
-                        <div class="metric-label-small">Last Ping</div>
-                    </div>
-                </div>
-
-                <div class="agent-capabilities">
-                    ${agent.capabilities.map(cap => `<span class="capability-tag">${cap}</span>`).join('')}
-                </div>
-
-                <div class="agent-last-seen">
-                    Last seen: ${new Date(agent.last_seen).toLocaleString()}
-                </div>
-            </div>
-        `;
-    }
-
-    showAgentDetails(agentId) {
-        const agent = this.agents.find(a => a.agent_id === agentId);
-        if (!agent) return;
-
-        const modal = document.getElementById('agent-details-modal');
-        const content = document.getElementById('agent-details-content');
-
-        content.innerHTML = this.createAgentDetailsHTML(agent);
-        modal.style.display = 'flex';
-    }
-
-    createAgentDetailsHTML(agent) {
-        return `
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
-                <div>
-                    <h4 style="color: var(--neural-primary); margin-bottom: 1rem;">Agent Information</h4>
-                    ${this.createPerformanceMetric('Agent ID:', agent.agent_id)}
-                    ${this.createPerformanceMetric('Hostname:', agent.hostname)}
-                    ${this.createPerformanceMetric('Platform:', agent.platform)}
-                    ${this.createPerformanceMetric('Status:', agent.status, `status-${agent.status}`)}
-                </div>
-
-                <div>
-                    <h4 style="color: var(--neural-primary); margin-bottom: 1rem;">Performance Metrics</h4>
-                    ${this.createPerformanceMetric('Last Ping:', `${this.formatDuration(agent.seconds_since_ping)} ago`)}
-                    ${this.createPerformanceMetric('Response Time:', `${agent.seconds_since_ping}s`)}
-                    ${this.createPerformanceMetric('Last Seen:', new Date(agent.last_seen).toLocaleString())}
-                </div>
-            </div>
-
-            <div>
-                <h4 style="color: var(--neural-primary); margin-bottom: 1rem;">Capabilities</h4>
-                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                    ${agent.capabilities.map(cap => `<span class="capability-tag">${cap}</span>`).join('')}
-                </div>
-            </div>
-
-            <div style="margin-top: 2rem; display: flex; gap: 1rem;">
-                <button class="neural-button" onclick="agentDashboard.pingAgent('${agent.agent_id}')">
-                    🔄 Ping Agent
-                </button>
-                <button class="neural-button" onclick="agentDashboard.configureAgent('${agent.agent_id}')">
-                    ⚙️ Configure
-                </button>
-                <button class="neural-button" style="background: var(--neural-danger);"
-                        onclick="agentDashboard.removeAgent('${agent.agent_id}')">
-                    🗑️ Remove
-                </button>
-            </div>
-        `;
-    }
-
-    createPerformanceMetric(label, value, className = '') {
-        return `
-            <div class="performance-metric">
-                <span class="performance-label">${label}</span>
-                <span class="performance-value ${className}">${value}</span>
-            </div>
-        `;
-    }
-
-    closeAgentDetails() {
-        document.getElementById('agent-details-modal').style.display = 'none';
-    }
-
-    showRegistration() {
-        document.getElementById('agent-registration-modal').style.display = 'flex';
-    }
-
-    closeRegistration() {
-        document.getElementById('agent-registration-modal').style.display = 'none';
-        document.getElementById('agent-registration-form').reset();
-    }
-
-    async registerAgent() {
-        const form = document.getElementById('agent-registration-form');
-        const formData = new FormData(form);
-
-        const agentData = {
-            agent_id: formData.get('agent_id'),
-            hostname: formData.get('hostname'),
-            capabilities: formData.get('capabilities')
-                .split(',')
-                .map(c => c.trim())
-                .filter(c => c)
-        };
-
-        try {
-            console.log('Registering agent:', agentData);
-            alert('Agent registration request sent. The agent will appear once it connects.');
-            this.closeRegistration();
-        } catch (error) {
-            alert('Failed to register agent: ' + error.message);
-        }
-    }
-
-    async refreshAgents() {
-        await this.updateAgentData();
-    }
-
-    async pingAgent(agentId) {
-        try {
-            console.log('Pinging agent:', agentId);
-            alert('Ping request sent to ' + agentId);
-        } catch (error) {
-            alert('Failed to ping agent: ' + error.message);
-        }
-    }
-
-    configureAgent(agentId) {
-        alert('Agent configuration interface would open for: ' + agentId);
-    }
-
-    async removeAgent(agentId) {
-        if (confirm(`Are you sure you want to remove agent ${agentId}?`)) {
-            try {
-                console.log('Removing agent:', agentId);
-                alert('Agent removal request sent for ' + agentId);
-                this.closeAgentDetails();
-            } catch (error) {
-                alert('Failed to remove agent: ' + error.message);
-            }
-        }
-    }
-
-    showAgentInfo(agentId, agentName) {
-        alert(`Agent: ${agentName}\n\nID: ${agentId}\n\nThis agent can be deployed to monitor your infrastructure.`);
-    }
-
-    formatDuration(seconds) {
-        if (seconds < 60) return `${seconds}s`;
-        if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-        return `${Math.floor(seconds / 86400)}d`;
+        // Agent grid
+        renderAgentGrid(data.agents);
+    } catch (err) {
+        console.error('Agent data load failed:', err);
+        document.getElementById('net-badge').textContent = 'Error';
     }
 }
 
-// Initialize Agent Dashboard
-let agentDashboard;
+function renderProbeBar(agents) {
+    let real = 0, degraded = 0, broken = 0, disabled = 0;
+    for (const a of agents) {
+        real += a.probe_summary.real;
+        degraded += a.probe_summary.degraded;
+        broken += a.probe_summary.broken;
+        disabled += a.probe_summary.disabled;
+    }
+    const total = real + degraded + broken + disabled;
+    if (total === 0) return;
+
+    const active = real + degraded;
+    const pct = ((active / total) * 100).toFixed(1);
+    document.getElementById('probe-pct').textContent = pct + '% Active';
+
+    const bar = document.getElementById('probe-bar');
+    bar.innerHTML = [
+        { count: real, color: '#00ff88', label: 'REAL' },
+        { count: degraded, color: '#ffaa00', label: 'DEGRADED' },
+        { count: broken, color: '#ff3366', label: 'BROKEN' },
+        { count: disabled, color: '#555', label: 'DISABLED' },
+    ].map(s => s.count > 0 ? `<div style="width:${(s.count/total)*100}%;background:${s.color};transition:width 0.5s;" title="${s.label}: ${s.count}"></div>` : '').join('');
+
+    document.getElementById('probe-legend').innerHTML = [
+        { count: real, color: '#00ff88', label: 'REAL' },
+        { count: degraded, color: '#ffaa00', label: 'DEGRADED' },
+        { count: broken, color: '#ff3366', label: 'BROKEN' },
+        { count: disabled, color: '#555', label: 'DISABLED' },
+    ].map(s => `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color};margin-right:4px;"></span>${s.label}: ${s.count}</span>`).join('');
+}
+
+function renderAgentGrid(agents) {
+    const grid = document.getElementById('agents-grid');
+    let filtered = agents;
+    if (currentFilter) {
+        filtered = agents.filter(a => a.category === currentFilter);
+    }
+
+    if (filtered.length === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1;color:var(--text-muted);text-align:center;padding:2rem;">No agents match filter.</div>';
+        return;
+    }
+
+    grid.innerHTML = filtered.map(a => createAgentCard(a)).join('');
+}
+
+function createAgentCard(a) {
+    const probeTotal = a.probe_summary.total;
+    const realPct = probeTotal > 0 ? (a.probe_summary.real / probeTotal) * 100 : 0;
+    const degPct = probeTotal > 0 ? (a.probe_summary.degraded / probeTotal) * 100 : 0;
+    const brkPct = probeTotal > 0 ? (a.probe_summary.broken / probeTotal) * 100 : 0;
+    const disPct = probeTotal > 0 ? (a.probe_summary.disabled / probeTotal) * 100 : 0;
+
+    const catColors = {
+        'Endpoint': 'rgba(0,255,136,0.15);color:#00ff88',
+        'Network': 'rgba(0,170,255,0.15);color:#00aaff',
+        'Identity': 'rgba(255,107,53,0.15);color:#FF6B35',
+        'Physical': 'rgba(255,107,157,0.15);color:#ff6b9d',
+        'Kernel': 'rgba(255,217,61,0.15);color:#FFD93D',
+    };
+    const catStyle = catColors[a.category] || 'rgba(255,255,255,0.1);color:#fff';
+
+    // Top MITRE techniques
+    const topMitre = a.mitre_techniques.slice(0, 4);
+
+    // Get process status from agent status data
+    // Map deep-overview IDs to catalog IDs
+    const idMap = {
+        'proc':'proc_agent','dns':'dns_agent','auth':'auth_agent',
+        'fim':'fim_agent','flow':'flow_agent','persistence':'persistence_agent',
+        'peripheral':'peripheral_agent','kernel_audit':'kernel_audit_agent',
+        'device_discovery':'device_discovery_agent','protocol_collectors':'protocol_collectors_agent',
+    };
+    const catalogId = idMap[a.id] || a.id;
+    const procStatus = agentStatusData[catalogId] || {};
+    const isRunning = procStatus.status === 'running';
+    const statusDot = isRunning ? '#00ff88' : '#ff3366';
+    const statusText = isRunning ? 'ONLINE' : 'OFFLINE';
+    const pid = procStatus.pid || '--';
+    const upSec = procStatus.uptime_seconds || 0;
+    const uptime = upSec > 3600 ? (upSec / 3600).toFixed(1) + 'h' : upSec > 60 ? Math.floor(upSec / 60) + 'm' : upSec > 0 ? upSec + 's' : '--';
+    const lastCheck = procStatus.timestamp ? formatTimestamp(procStatus.timestamp) : '--';
+
+    return `
+    <div class="agent-fleet-card" style="border-left: none;" onclick="openAgentModal('${a.id}')">
+        <div style="position:absolute;top:0;left:0;width:4px;height:100%;background:${a.color};"></div>
+        <div class="agent-card-header">
+            <div>
+                <div class="agent-card-name" style="color:${a.color};">${a.name}</div>
+                <div style="display:flex;gap:0.35rem;align-items:center;margin-top:0.2rem;">
+                    <span class="category-pill" style="background:${catStyle};">${a.category}</span>
+                    <span class="signing-badge ${a.signing_enabled ? 'enabled' : 'disabled'}">${a.signing_enabled ? 'Signed' : 'Unsigned'}</span>
+                </div>
+            </div>
+            <div style="text-align:right;">
+                <div style="display:flex;align-items:center;gap:0.3rem;justify-content:flex-end;">
+                    <span style="width:7px;height:7px;border-radius:50%;background:${statusDot};box-shadow:0 0 6px ${statusDot};${isRunning ? 'animation:pulse-dot 2s infinite;' : ''}"></span>
+                    <span style="font-size:0.68rem;font-weight:700;color:${statusDot};">${statusText}</span>
+                </div>
+                <div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.15rem;font-family:monospace;">PID ${pid}</div>
+            </div>
+        </div>
+        <div class="agent-card-desc">${a.description}</div>
+
+        <div class="agent-card-stats">
+            <div class="agent-stat">
+                <div class="agent-stat-val" style="color:#00ff88;">${a.probe_summary.real}</div>
+                <div class="agent-stat-lbl">Probes</div>
+            </div>
+            <div class="agent-stat">
+                <div class="agent-stat-val" style="color:#ffaa00;">${formatNumber(a.event_count)}</div>
+                <div class="agent-stat-lbl">Events</div>
+            </div>
+            <div class="agent-stat">
+                <div class="agent-stat-val" style="color:#ff6b9d;">${a.mitre_count}</div>
+                <div class="agent-stat-lbl">MITRE</div>
+            </div>
+            <div class="agent-stat">
+                <div class="agent-stat-val" style="color:#4ECDC4;">${uptime}</div>
+                <div class="agent-stat-lbl">Uptime</div>
+            </div>
+        </div>
+
+        <div class="probe-mini-bar" title="${a.probe_summary.real} REAL / ${a.probe_summary.degraded} DEGRADED / ${a.probe_summary.broken} BROKEN / ${a.probe_summary.disabled} DISABLED">
+            <div style="width:${realPct}%;background:#00ff88;"></div>
+            <div style="width:${degPct}%;background:#ffaa00;"></div>
+            <div style="width:${brkPct}%;background:#ff3366;"></div>
+            <div style="width:${disPct}%;background:#555;"></div>
+        </div>
+
+        <div style="margin-top:0.6rem;display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;flex-wrap:wrap;gap:0;">
+                ${topMitre.map(t => `<span class="mitre-chip">${t}</span>`).join('')}
+                ${a.mitre_techniques.length > 4 ? `<span class="mitre-chip" style="background:rgba(255,255,255,0.08);color:var(--text-muted);">+${a.mitre_techniques.length - 4}</span>` : ''}
+            </div>
+            <span style="font-size:0.62rem;color:var(--text-muted);white-space:nowrap;">Click for live data</span>
+        </div>
+    </div>`;
+}
+
+let currentModalAgent = null;
+let currentModalLiveData = null;
+let currentModalTab = 'overview';
+let modalRefreshTimer = null;
+
+function openAgentModal(agentId) {
+    if (!agentData) return;
+    const agent = agentData.agents.find(a => a.id === agentId);
+    if (!agent) return;
+
+    currentModalAgent = agent;
+    currentModalTab = 'overview';
+
+    // Set header
+    document.getElementById('modal-title').innerHTML = `<span style="color:${agent.color};">${agent.name}</span>`;
+    document.getElementById('modal-subtitle').innerHTML = `${agent.short} &middot; ${agent.category} &middot; ${agent.probe_summary.total} probes`;
+
+    // Reset tabs
+    document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.modal-tab[data-tab="overview"]').classList.add('active');
+
+    // Show modal with loading state
+    const body = document.getElementById('modal-body');
+    body.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text-muted);">Loading live data...</div>';
+    document.getElementById('agent-modal').style.display = 'flex';
+
+    // Fetch live data
+    fetchAgentLiveData(agentId);
+
+    // Auto-refresh every 5 seconds
+    if (modalRefreshTimer) clearInterval(modalRefreshTimer);
+    modalRefreshTimer = setInterval(() => fetchAgentLiveData(agentId), 5000);
+}
+
+function closeAgentModal() {
+    document.getElementById('agent-modal').style.display = 'none';
+    if (modalRefreshTimer) { clearInterval(modalRefreshTimer); modalRefreshTimer = null; }
+    currentModalAgent = null;
+    currentModalLiveData = null;
+}
+
+async function fetchAgentLiveData(agentId) {
+    try {
+        const resp = await fetch(`/dashboard/api/agents/${agentId}/live-data?limit=50`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (data.status !== 'success') throw new Error(data.message || 'API error');
+        currentModalLiveData = data;
+
+        // Update tab badges
+        const evtTab = document.querySelector('.modal-tab[data-tab="events"]');
+        if (evtTab) evtTab.textContent = `Events (${data.event_count})`;
+
+        const logTab = document.querySelector('.modal-tab[data-tab="logs"]');
+        if (logTab) logTab.textContent = `Logs (${data.log_tail.length})`;
+
+        // Update subtitle with last refresh time
+        const sub = document.getElementById('modal-subtitle');
+        if (sub && currentModalAgent) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+            sub.innerHTML = `${currentModalAgent.short} &middot; ${currentModalAgent.category} &middot; ${currentModalAgent.probe_summary.total} probes &middot; <span style="color:#00ff88;">Updated ${timeStr}</span>`;
+        }
+
+        renderModalTab(currentModalTab);
+    } catch (err) {
+        console.error('Live data fetch failed:', err);
+        // Still render with whatever data we have — don't blank out the modal
+        if (!currentModalLiveData && currentModalAgent) {
+            const body = document.getElementById('modal-body');
+            if (body) body.innerHTML = `<div style="text-align:center;padding:2rem;">
+                <div style="font-size:1.5rem;margin-bottom:0.5rem;opacity:0.4;">&#9888;</div>
+                <div style="color:var(--text-muted);font-size:0.85rem;">Failed to fetch live data: ${err.message}</div>
+                <div style="color:var(--text-muted);font-size:0.75rem;margin-top:0.5rem;">Retrying in 5 seconds...</div>
+            </div>`;
+        }
+    }
+}
+
+function switchModalTab(tab) {
+    currentModalTab = tab;
+    document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.modal-tab[data-tab="${tab}"]`).classList.add('active');
+    renderModalTab(tab);
+}
+
+function renderModalTab(tab) {
+    const body = document.getElementById('modal-body');
+    const a = currentModalAgent;
+    const live = currentModalLiveData;
+    if (!a) return;
+
+    switch (tab) {
+        case 'overview': body.innerHTML = buildOverviewTab(a, live); break;
+        case 'events': body.innerHTML = buildEventsTab(a, live); break;
+        case 'probes': body.innerHTML = buildProbesTab(a); break;
+        case 'logs': body.innerHTML = buildLogsTab(a, live); break;
+    }
+}
+
+function buildOverviewTab(a, live) {
+    const proc = live ? live.process : {};
+    const device = live ? live.device : {};
+    const pid = proc.pid || '--';
+    const cpu = proc.cpu_percent != null ? proc.cpu_percent.toFixed(1) + '%' : '--';
+    const mem = proc.memory_mb != null ? proc.memory_mb.toFixed(1) + ' MB' : '--';
+    const threads = proc.threads || '--';
+    const upSec = proc.uptime_seconds || 0;
+    const uptime = upSec > 3600 ? (upSec / 3600).toFixed(1) + 'h' : upSec > 60 ? Math.floor(upSec / 60) + 'm' : upSec + 's';
+    const statusColor = proc.status === 'running' ? '#00ff88' : '#ff3366';
+    const statusLabel = proc.status === 'running' ? 'ONLINE' : 'OFFLINE';
+    const ip = device.ip_address || '127.0.0.1';
+    const hostname = device.hostname || device.device_id || '--';
+
+    const signBadge = a.signing_enabled
+        ? '<span class="signing-badge enabled" style="font-size:0.72rem;">Ed25519 Signed</span>'
+        : '<span class="signing-badge disabled" style="font-size:0.72rem;">Unsigned</span>';
+
+    // Health percentage
+    const healthPct = ((a.probe_summary.real / Math.max(a.probe_summary.total, 1)) * 100).toFixed(0);
+
+    let html = `
+    <!-- Status Banner -->
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem 1rem;padding:0.75rem 1rem;background:rgba(0,0,0,0.2);border-radius:8px;margin-bottom:1rem;border-left:4px solid ${statusColor};">
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+            <span style="width:10px;height:10px;border-radius:50%;background:${statusColor};box-shadow:0 0 8px ${statusColor};${proc.status === 'running' ? 'animation:pulse-dot 2s infinite;' : ''}"></span>
+            <span style="font-weight:700;color:${statusColor};font-size:0.85rem;">${statusLabel}</span>
+        </div>
+        <span style="color:var(--text-secondary);font-size:0.8rem;">PID <span style="font-family:monospace;color:var(--text-primary);">${pid}</span></span>
+        <span style="color:var(--text-secondary);font-size:0.8rem;">Uptime <span style="color:var(--text-primary);">${uptime}</span></span>
+        <span style="color:var(--text-secondary);font-size:0.8rem;">IP <span style="font-family:monospace;color:#00aaff;">${ip}</span></span>
+        <span style="color:var(--text-secondary);font-size:0.8rem;font-family:monospace;">${hostname}</span>
+        <div style="margin-left:auto;">${signBadge}</div>
+    </div>
+
+    <!-- Metric cards -->
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0.5rem;margin-bottom:1rem;">
+        <div style="text-align:center;padding:0.65rem 0.4rem;background:rgba(0,255,136,0.06);border-radius:8px;border:1px solid rgba(0,255,136,0.15);">
+            <div style="font-size:1.3rem;font-weight:700;color:#00ff88;">${a.probe_summary.real}</div>
+            <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;">Probes</div>
+        </div>
+        <div style="text-align:center;padding:0.65rem 0.4rem;background:rgba(255,170,0,0.06);border-radius:8px;border:1px solid rgba(255,170,0,0.15);">
+            <div style="font-size:1.3rem;font-weight:700;color:#ffaa00;">${formatNumber(a.event_count)}</div>
+            <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;">Events</div>
+        </div>
+        <div style="text-align:center;padding:0.65rem 0.4rem;background:rgba(255,107,157,0.06);border-radius:8px;border:1px solid rgba(255,107,157,0.15);">
+            <div style="font-size:1.3rem;font-weight:700;color:#ff6b9d;">${a.mitre_count}</div>
+            <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;">MITRE</div>
+        </div>
+        <div style="text-align:center;padding:0.65rem 0.4rem;background:rgba(0,217,255,0.06);border-radius:8px;border:1px solid rgba(0,217,255,0.15);">
+            <div style="font-size:1.3rem;font-weight:700;color:${a.color};">${healthPct}%</div>
+            <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;">Health</div>
+        </div>
+        <div style="text-align:center;padding:0.65rem 0.4rem;background:rgba(78,205,196,0.06);border-radius:8px;border:1px solid rgba(78,205,196,0.15);">
+            <div style="font-size:1.3rem;font-weight:700;color:#4ECDC4;">${cpu}</div>
+            <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;">CPU</div>
+        </div>
+        <div style="text-align:center;padding:0.65rem 0.4rem;background:rgba(170,150,218,0.06);border-radius:8px;border:1px solid rgba(170,150,218,0.15);">
+            <div style="font-size:1.3rem;font-weight:700;color:#AA96DA;">${mem}</div>
+            <div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;">Memory</div>
+        </div>
+    </div>
+
+    <!-- Description -->
+    <div style="padding:0.7rem 0.9rem;background:rgba(255,255,255,0.02);border-radius:8px;border-left:3px solid ${a.color};margin-bottom:1rem;font-size:0.82rem;color:var(--text-secondary);line-height:1.5;">
+        ${a.description}
+    </div>
+
+    <!-- Probe Health Bar -->
+    <div class="modal-section-title">Probe Health</div>`;
+    const total = a.probe_summary.total || 1;
+    html += `
+    <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,0.05);margin-bottom:0.5rem;">
+        <div style="width:${(a.probe_summary.real/total)*100}%;background:#00ff88;"></div>
+        <div style="width:${(a.probe_summary.degraded/total)*100}%;background:#ffaa00;"></div>
+        <div style="width:${(a.probe_summary.broken/total)*100}%;background:#ff3366;"></div>
+        <div style="width:${(a.probe_summary.disabled/total)*100}%;background:#555;"></div>
+    </div>
+    <div style="display:flex;gap:1rem;font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.75rem;">
+        <span style="color:#00ff88;font-weight:600;">${a.probe_summary.real} REAL</span>
+        <span style="color:#ffaa00;font-weight:600;">${a.probe_summary.degraded} DEGRADED</span>
+        <span style="color:#ff3366;font-weight:600;">${a.probe_summary.broken} BROKEN</span>
+        <span style="color:#555;font-weight:600;">${a.probe_summary.disabled} DISABLED</span>
+    </div>`;
+
+    // Recent events preview (top 5)
+    if (live && live.recent_events.length > 0) {
+        html += '<div class="modal-section-title">Recent Events</div>';
+        html += '<div style="background:rgba(0,0,0,0.15);border-radius:8px;padding:0.4rem;">';
+        for (const evt of live.recent_events.slice(0, 5)) {
+            const riskClass = evt.risk_score > 0.7 ? 'risk-high' : evt.risk_score > 0.4 ? 'risk-medium' : 'risk-low';
+            const ts = formatTimestamp(evt.timestamp_dt);
+            const mitreChips = Array.isArray(evt.mitre_techniques) ? evt.mitre_techniques.map(t => `<span class="mitre-chip">${t}</span>`).join('') : '';
+            html += `<div class="event-row ${riskClass}">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-weight:600;color:var(--text-primary);">${evt.event_category}</span>
+                    <span style="font-size:0.7rem;color:var(--text-muted);">${ts}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.2rem;">
+                    <span style="font-size:0.75rem;color:var(--text-secondary);max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${truncate(evt.description || '', 80)}</span>
+                    <div style="display:flex;align-items:center;gap:0.4rem;">
+                        ${mitreChips}
+                        <span style="font-size:0.68rem;padding:0.1rem 0.4rem;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--text-muted);">Risk: ${(evt.risk_score * 100).toFixed(0)}%</span>
+                    </div>
+                </div>
+            </div>`;
+        }
+        html += '</div>';
+        if (live.recent_events.length > 5) {
+            html += `<div style="text-align:center;margin-top:0.5rem;"><button onclick="switchModalTab('events')" style="background:none;border:1px solid rgba(0,217,255,0.3);color:var(--neural-primary);padding:0.3rem 1rem;border-radius:6px;font-size:0.78rem;cursor:pointer;">View All ${live.event_count} Events &rarr;</button></div>`;
+        }
+    }
+
+    // MITRE ATT&CK
+    if (a.mitre_techniques.length > 0) {
+        html += `<div class="modal-section-title">MITRE ATT&CK Coverage (${a.mitre_count})</div>`;
+        html += '<div style="display:flex;flex-wrap:wrap;gap:0.2rem;">';
+        for (const t of a.mitre_techniques) {
+            html += `<span class="mitre-chip" style="font-size:0.72rem;padding:0.12rem 0.45rem;">${t}</span>`;
+        }
+        html += '</div>';
+    }
+
+    // Links
+    html += `<div style="display:flex;gap:1rem;margin-top:1rem;justify-content:center;">
+        <a href="/dashboard/probe-explorer#${a.id}" style="color:var(--neural-primary);text-decoration:none;font-size:0.82rem;font-weight:600;">Probe Explorer &rarr;</a>
+        <a href="/dashboard/soc" style="color:var(--neural-primary);text-decoration:none;font-size:0.82rem;font-weight:600;">SOC Dashboard &rarr;</a>
+    </div>`;
+
+    return html;
+}
+
+function buildEventsTab(a, live) {
+    if (!live || live.recent_events.length === 0) {
+        return '<div style="text-align:center;padding:3rem;color:var(--text-muted);">No events collected yet for this agent.</div>';
+    }
+
+    let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <span style="font-size:0.85rem;font-weight:600;color:var(--text-primary);">${live.event_count} Security Events</span>
+        <span style="font-size:0.72rem;color:var(--text-muted);">Device: ${live.device.hostname || '--'} &middot; IP: ${live.device.ip_address || '--'}</span>
+    </div>`;
+
+    // Column headers
+    html += `<div style="display:grid;grid-template-columns:180px 1fr 100px 80px 60px;gap:0.5rem;padding:0.4rem 0.75rem;font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08);">
+        <span>Timestamp</span><span>Event</span><span>MITRE</span><span>Confidence</span><span>Risk</span>
+    </div>`;
+
+    html += '<div style="background:rgba(0,0,0,0.1);border-radius:0 0 8px 8px;">';
+    for (const evt of live.recent_events) {
+        const riskClass = evt.risk_score > 0.7 ? 'risk-high' : evt.risk_score > 0.4 ? 'risk-medium' : 'risk-low';
+        const ts = formatTimestamp(evt.timestamp_dt);
+        const mitreChips = Array.isArray(evt.mitre_techniques)
+            ? evt.mitre_techniques.slice(0, 2).map(t => `<span class="mitre-chip">${t}</span>`).join('')
+            : '';
+        const riskPct = (evt.risk_score * 100).toFixed(0);
+        const confPct = (evt.confidence * 100).toFixed(0);
+        const riskColor = evt.risk_score > 0.7 ? '#ff3366' : evt.risk_score > 0.4 ? '#ffaa00' : '#00ff88';
+
+        html += `<div class="event-row ${riskClass}" style="display:grid;grid-template-columns:180px 1fr 100px 80px 60px;gap:0.5rem;align-items:center;">
+            <span style="font-size:0.72rem;color:#00aaff;font-family:monospace;">${ts}</span>
+            <div>
+                <div style="font-weight:600;font-size:0.8rem;color:var(--text-primary);">${evt.event_category}</div>
+                <div style="font-size:0.7rem;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${truncate(evt.description || '', 60)}</div>
+            </div>
+            <div>${mitreChips}</div>
+            <span style="font-size:0.75rem;color:var(--text-secondary);">${confPct}%</span>
+            <span style="font-size:0.75rem;font-weight:700;color:${riskColor};">${riskPct}%</span>
+        </div>`;
+    }
+    html += '</div>';
+
+    // Process events table (for proc agent)
+    if (live.recent_processes && live.recent_processes.length > 0) {
+        html += '<div class="modal-section-title">Process Events</div>';
+        html += `<div style="display:grid;grid-template-columns:150px 60px 1fr 90px 60px;gap:0.5rem;padding:0.4rem 0.75rem;font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08);">
+            <span>Time</span><span>PID</span><span>Executable</span><span>User</span><span>Susp.</span>
+        </div>`;
+        html += '<div style="background:rgba(0,0,0,0.1);border-radius:0 0 8px 8px;">';
+        for (const p of live.recent_processes) {
+            const ts = formatTimestamp(p.timestamp_dt);
+            const exe = (p.exe || '').split('/').pop() || '--';
+            const suspColor = p.is_suspicious ? '#ff3366' : '#00ff88';
+            const suspLabel = p.is_suspicious ? 'YES' : 'NO';
+            html += `<div class="event-row" style="display:grid;grid-template-columns:150px 60px 1fr 90px 60px;gap:0.5rem;align-items:center;">
+                <span style="font-size:0.72rem;color:#00aaff;font-family:monospace;">${ts}</span>
+                <span style="font-size:0.78rem;color:var(--text-primary);font-family:monospace;">${p.pid}</span>
+                <span style="font-size:0.78rem;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.exe || ''}">${exe}</span>
+                <span style="font-size:0.75rem;color:var(--text-secondary);">${p.username || '--'}</span>
+                <span style="font-size:0.72rem;font-weight:600;color:${suspColor};">${suspLabel}</span>
+            </div>`;
+        }
+        html += '</div>';
+    }
+
+    return html;
+}
+
+function buildProbesTab(a) {
+    let html = '';
+    const total = a.probe_summary.total || 1;
+
+    // Probe Health Bar
+    html += `
+    <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,0.05);margin-bottom:0.5rem;">
+        <div style="width:${(a.probe_summary.real/total)*100}%;background:#00ff88;"></div>
+        <div style="width:${(a.probe_summary.degraded/total)*100}%;background:#ffaa00;"></div>
+        <div style="width:${(a.probe_summary.broken/total)*100}%;background:#ff3366;"></div>
+        <div style="width:${(a.probe_summary.disabled/total)*100}%;background:#555;"></div>
+    </div>
+    <div style="display:flex;gap:1rem;font-size:0.72rem;color:var(--text-secondary);margin-bottom:1rem;">
+        <span style="color:#00ff88;font-weight:600;">${a.probe_summary.real} REAL</span>
+        <span style="color:#ffaa00;font-weight:600;">${a.probe_summary.degraded} DEGRADED</span>
+        <span style="color:#ff3366;font-weight:600;">${a.probe_summary.broken} BROKEN</span>
+        <span style="color:#555;font-weight:600;">${a.probe_summary.disabled} DISABLED</span>
+    </div>`;
+
+    // Probes Table
+    html += '<div style="background:rgba(0,0,0,0.15);border-radius:8px;padding:0.5rem;">';
+    const verdictColors = {
+        'REAL': { bg: 'rgba(0,255,136,0.15)', color: '#00ff88', dot: '#00ff88' },
+        'DEGRADED': { bg: 'rgba(255,170,0,0.15)', color: '#ffaa00', dot: '#ffaa00' },
+        'BROKEN': { bg: 'rgba(255,51,102,0.15)', color: '#ff3366', dot: '#ff3366' },
+        'DISABLED': { bg: 'rgba(85,85,85,0.15)', color: '#555', dot: '#555' },
+    };
+
+    for (const probe of a.probes) {
+        const vc = verdictColors[probe.status] || verdictColors['DISABLED'];
+        const mitreHtml = probe.mitre.length > 0
+            ? probe.mitre.map(t => `<span class="mitre-chip">${t}</span>`).join('')
+            : '<span style="font-size:0.7rem;color:var(--text-muted);">-</span>';
+        const descLine = probe.description
+            ? `<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:2px;">${probe.description}</div>`
+            : '';
+        const fieldsLine = probe.fields.length > 0
+            ? `<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">Fields: ${probe.fields.slice(0, 6).join(', ')}${probe.fields.length > 6 ? ' +' + (probe.fields.length - 6) : ''}</div>`
+            : '';
+
+        html += `
+        <div class="probe-row">
+            <span class="probe-status-dot" style="background:${vc.dot};box-shadow:0 0 6px ${vc.dot};"></span>
+            <div>
+                <div class="probe-name">${probe.name}</div>
+                ${descLine}
+                ${fieldsLine}
+            </div>
+            <span class="probe-verdict" style="background:${vc.bg};color:${vc.color};">${probe.status}</span>
+            <div style="min-width:80px;">${mitreHtml}</div>
+        </div>`;
+    }
+    html += '</div>';
+    return html;
+}
+
+function buildLogsTab(a, live) {
+    if (!live || live.log_tail.length === 0) {
+        return '<div style="text-align:center;padding:3rem;color:var(--text-muted);">No log output available. Agent may not have started collecting yet.</div>';
+    }
+
+    let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <span style="font-size:0.85rem;font-weight:600;color:var(--text-primary);">Agent Log Output</span>
+        <span style="font-size:0.72rem;color:var(--text-muted);">${live.log_tail.length} lines (tail)</span>
+    </div>`;
+
+    html += '<div class="log-viewer">';
+    for (const line of live.log_tail) {
+        let coloredLine = line
+            .replace(/([\d]{4}-[\d]{2}-[\d]{2}[T ][\d]{2}:[\d]{2}:[\d]{2}[.,\d]*)/g, '<span class="log-ts">$1</span>')
+            .replace(/\bINFO\b/g, '<span class="log-level-info">INFO</span>')
+            .replace(/\bWARNING\b/g, '<span class="log-level-warn">WARNING</span>')
+            .replace(/\bERROR\b/g, '<span class="log-level-err">ERROR</span>')
+            .replace(/\bCRITICAL\b/g, '<span class="log-level-err">CRITICAL</span>');
+        html += `<div class="log-line">${coloredLine}</div>`;
+    }
+    html += '</div>';
+    return html;
+}
+
+function formatTimestamp(dt) {
+    if (!dt) return '--';
+    try {
+        const d = new Date(dt);
+        if (isNaN(d.getTime())) return dt;
+        const now = new Date();
+        const diffMs = now - d;
+        const diffMin = Math.floor(diffMs / 60000);
+        const diffHr = Math.floor(diffMs / 3600000);
+        const diffDay = Math.floor(diffMs / 86400000);
+
+        // Relative time for recent events
+        let relative = '';
+        if (diffMin < 1) relative = 'just now';
+        else if (diffMin < 60) relative = diffMin + 'm ago';
+        else if (diffHr < 24) relative = diffHr + 'h ago';
+        else relative = diffDay + 'd ago';
+
+        // Absolute time
+        const pad = n => String(n).padStart(2, '0');
+        const abs = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        return `${abs} (${relative})`;
+    } catch (e) {
+        return dt;
+    }
+}
+
+function truncate(str, max) {
+    if (!str) return '';
+    return str.length > max ? str.slice(0, max) + '...' : str;
+}
+
+function formatNumber(n) {
+    if (n === undefined || n === null) return '--';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
+}
+
+// Close modal on background click
+document.getElementById('agent-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeAgentModal();
+});
+
+// Close modal on Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeAgentModal();
+});
+
+// Auto-refresh every 30 seconds
+let refreshTimer = null;
 document.addEventListener('DOMContentLoaded', () => {
-    agentDashboard = new AgentDashboard();
+    loadAgentData();
+    refreshTimer = setInterval(loadAgentData, 30000);
 });
 </script>
 {% endblock %}

@@ -24,6 +24,7 @@ message DeviceTelemetry {
   string compression_algorithm = 11;
   uint32 batch_size = 12;
   uint64 collection_interval_ms = 13;
+  uint32 schema_version = 14;        // A3.1: Schema version for forward compatibility
 }
 
 message DeviceMetadata {
@@ -63,7 +64,7 @@ message TelemetryEvent {
   string event_type = 2;            // METRIC, LOG, ALARM, STATUS, SECURITY, AUDIT
   string severity = 3;              // INFO, WARN, ERROR, CRITICAL
   uint64 event_timestamp_ns = 4;
-  
+
   // Event data (one of these will be populated)
   MetricData metric_data = 5;
   LogData log_data = 6;
@@ -71,16 +72,22 @@ message TelemetryEvent {
   StatusData status_data = 8;
   SecurityEvent security_event = 9;
   AuditEvent audit_event = 10;
-  
+
   // Event metadata
   repeated string tags = 11;
   map<string, string> attributes = 12;
   string source_component = 13;
-  
+
   // Quality and reliability
   float confidence_score = 14;      // 0.0 to 1.0
   bool is_synthetic = 15;           // Generated vs real event
   uint32 retry_count = 16;
+
+  // AMRDR Integration Fields (for adaptive multi-agent fusion)
+  // See: src/amoskys/intel/reliability.py and AMRDR_Mechanism_Specification_v0.1.docx
+  float reliability_score = 17;     // 0.0 to 1.0 - Agent's assessed reliability
+  string drift_indicator = 18;      // NONE, ABRUPT, GRADUAL - Reliability drift status
+  string agent_id = 19;             // Source agent for fusion weighting
 }
 
 message MetricData {
@@ -324,6 +331,7 @@ message UniversalEnvelope {
   uint32 retry_count = 15;
   uint64 max_processing_time_ns = 16;
   bool requires_acknowledgment = 17;
+  uint32 schema_version = 18;       // A3.1: Schema version for forward compatibility
 }
 
 // Acknowledgment for universal telemetry

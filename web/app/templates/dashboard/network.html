@@ -1,0 +1,489 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Network Topology - AMOSKYS{% endblock %}
+
+{% block content %}
+<div style="padding: 2rem;">
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">Network Topology</h2>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+                <div class="card-badge badge-success" id="net-status">Loading...</div>
+                <button id="export-network-btn" class="neural-button" style="padding:0.3rem 0.8rem;font-size:0.75rem;cursor:pointer;">Export CSV</button>
+                <button id="refresh-topology-btn" class="neural-button" style="padding:0.3rem 0.8rem;font-size:0.75rem;cursor:pointer;">Refresh</button>
+            </div>
+        </div>
+        <p style="color: var(--text-secondary);">
+            Discovered devices, network flows, and endpoint connections from agent telemetry. Click nodes for details.
+        </p>
+    </div>
+
+    <!-- Network Summary -->
+    <div class="metrics-grid" style="margin: 1.5rem 0;">
+        <div class="metric-card">
+            <div class="metric-value" id="node-count">--</div>
+            <div class="metric-label">Endpoints</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value" id="edge-count">--</div>
+            <div class="metric-label">Connections</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value" id="protocol-count">--</div>
+            <div class="metric-label">Protocols</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value" id="total-bytes">--</div>
+            <div class="metric-label">Total Traffic</div>
+        </div>
+    </div>
+
+    <!-- Network Visualization -->
+    <div class="neural-card" style="margin-top: 1.5rem;">
+        <div class="card-header">
+            <h3 class="card-title">Topology View</h3>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+                <span style="font-size:0.7rem;color:var(--text-muted);">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#00aaff;margin-right:0.2rem;vertical-align:middle;"></span>Host
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#00ff88;margin-left:0.5rem;margin-right:0.2rem;vertical-align:middle;"></span>Endpoint
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff3366;margin-left:0.5rem;margin-right:0.2rem;vertical-align:middle;"></span>Suspicious
+                </span>
+            </div>
+        </div>
+        <div id="network-canvas" style="min-height:450px;position:relative;background:rgba(0,0,0,0.2);border-radius:8px;overflow:hidden;">
+            <svg id="network-svg" width="100%" height="450" style="display:block;"></svg>
+        </div>
+    </div>
+
+    <!-- Node Detail Panel -->
+    <div id="node-detail" class="neural-card" style="display:none;margin-top:1.5rem;">
+        <div class="card-header">
+            <h3 class="card-title" id="node-detail-title">Node Details</h3>
+            <span id="close-node-detail-btn" style="cursor:pointer;color:var(--text-muted);font-size:1.2rem;">&times;</span>
+        </div>
+        <div id="node-detail-content"></div>
+    </div>
+
+    <!-- Traffic Heatmap + Tables -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1.5rem;">
+        <!-- Traffic Heatmap -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">Traffic Heatmap</h3>
+            </div>
+            <div id="traffic-heatmap" style="max-height:400px;overflow:auto;">
+                <div style="color:var(--text-muted);text-align:center;padding:2rem;">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Endpoints -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">Endpoints</h3>
+            </div>
+            <div id="nodes-list" style="max-height:400px;overflow-y:auto;">
+                <div style="color:var(--text-muted);text-align:center;padding:2rem;">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Table -->
+    <div class="neural-card" style="margin-top:1.5rem;">
+        <div class="card-header">
+            <h3 class="card-title">All Connections</h3>
+            <span style="font-size:0.75rem;color:var(--text-muted);" id="conn-count">0 connections</span>
+        </div>
+        <div id="edges-table" style="max-height:400px;overflow-y:auto;">
+            <div style="color:var(--text-muted);text-align:center;padding:2rem;">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<style>
+.net-node {
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
+    border-left: 3px solid #00aaff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.net-node:hover {
+    background: rgba(0,217,255,0.06);
+}
+.net-node-name {
+    font-weight: 600;
+    color: #00aaff;
+    font-size: 0.85rem;
+}
+.net-node-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+.conn-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.conn-table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    padding: 0.5rem;
+    text-align: left;
+    border-bottom: 2px solid rgba(0,217,255,0.2);
+}
+.conn-table td {
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.conn-table tr:hover {
+    background: rgba(0,217,255,0.05);
+}
+.proto-badge {
+    padding: 0.15rem 0.4rem;
+    background: rgba(0,255,136,0.15);
+    color: #00ff88;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+.heatmap-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.7rem;
+}
+.heatmap-table th {
+    padding: 0.3rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    max-width: 30px;
+}
+.heatmap-table td {
+    padding: 0.2rem;
+    text-align: center;
+    min-width: 28px;
+    min-height: 28px;
+}
+.hm-cell {
+    width: 100%;
+    height: 24px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    cursor: default;
+}
+</style>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce() }}">
+var allNodes = [];
+var allEdges = [];
+var selectedNode = null;
+
+function exportNetwork() {
+    if (allNodes.length === 0 && allEdges.length === 0) { alert('No network data to export'); return; }
+    var lines = ['type,id,label,ip,os,status,protocol,bytes,packets'];
+    for (var n = 0; n < allNodes.length; n++) {
+        var nd = allNodes[n];
+        lines.push(['node', nd.id||'', '"'+(nd.label||'').replace(/"/g,'""')+'"', nd.ip||'', nd.os||'', nd.status||'', '', '', ''].join(','));
+    }
+    for (var e = 0; e < allEdges.length; e++) {
+        var ed = allEdges[e];
+        lines.push(['edge', ed.source+'->'+ed.target, '', '', '', '', ed.protocol||'', ed.bytes||0, ed.packets||0].join(','));
+    }
+    var blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'amoskys_network_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.style.display = 'none'; document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+async function loadTopology() {
+    try {
+        var resp = await fetch('/dashboard/api/network/topology');
+        var data = await resp.json();
+        if (data.status !== 'success') return;
+
+        allNodes = data.nodes || [];
+        allEdges = data.edges || [];
+
+        document.getElementById('node-count').textContent = allNodes.length;
+        document.getElementById('edge-count').textContent = allEdges.length;
+        document.getElementById('net-status').textContent = allNodes.length + ' nodes';
+        document.getElementById('conn-count').textContent = allEdges.length + ' connections';
+
+        var protocols = {};
+        var totalBytes = 0;
+        for (var i = 0; i < allEdges.length; i++) {
+            protocols[allEdges[i].protocol] = true;
+            totalBytes += allEdges[i].bytes || 0;
+        }
+        document.getElementById('protocol-count').textContent = Object.keys(protocols).length;
+        document.getElementById('total-bytes').textContent = formatBytes(totalBytes);
+
+        renderTopology(allNodes, allEdges);
+        renderNodesList(allNodes);
+        renderEdgesTable(allEdges);
+        renderHeatmap(allNodes, allEdges);
+    } catch (err) {
+        document.getElementById('net-status').textContent = 'Error';
+    }
+}
+
+function formatBytes(bytes) {
+    if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+    if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+    if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return bytes + ' B';
+}
+
+function renderTopology(nodes, edges) {
+    var svg = document.getElementById('network-svg');
+    var width = svg.clientWidth || 800;
+    var height = 450;
+
+    if (nodes.length === 0) {
+        svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#6b7a99" font-size="14">No network data. Deploy Flow Agent and Device Discovery to populate.</text>';
+        return;
+    }
+
+    var nodeMap = {};
+    var angleStep = (2 * Math.PI) / Math.max(nodes.length, 1);
+    var cx = width / 2;
+    var cy = height / 2;
+    var radius = Math.min(width, height) * 0.35;
+
+    // Count connections per node for sizing
+    var connCounts = {};
+    for (var i = 0; i < edges.length; i++) {
+        connCounts[edges[i].source] = (connCounts[edges[i].source] || 0) + 1;
+        connCounts[edges[i].target] = (connCounts[edges[i].target] || 0) + 1;
+    }
+
+    for (var ni = 0; ni < nodes.length; ni++) {
+        var node = nodes[ni];
+        var angle = ni * angleStep;
+        node.x = cx + radius * Math.cos(angle);
+        node.y = cy + radius * Math.sin(angle);
+        nodeMap[node.id] = node;
+        if (node.ip) nodeMap[node.ip] = node;
+    }
+
+    var svgContent = '<defs><filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+
+    // Draw edges
+    for (var ei = 0; ei < edges.length; ei++) {
+        var edge = edges[ei];
+        var src = nodeMap[edge.source];
+        var tgt = nodeMap[edge.target];
+        if (src && tgt) {
+            var opacity = Math.min(0.8, 0.15 + (edge.count || 1) * 0.08);
+            var strokeW = Math.min(3, 1 + (edge.count || 1) * 0.2);
+            var edgeColor = edge.suspicious ? '#ff3366' : '#00ff88';
+            svgContent += '<line x1="' + src.x + '" y1="' + src.y + '" x2="' + tgt.x + '" y2="' + tgt.y + '" stroke="' + edgeColor + '" stroke-opacity="' + opacity + '" stroke-width="' + strokeW + '"/>';
+        }
+    }
+
+    // Draw nodes
+    for (var dni = 0; dni < nodes.length; dni++) {
+        var dn = nodes[dni];
+        var color = dn.suspicious ? '#ff3366' : (dn.type === 'host' ? '#00aaff' : '#00ff88');
+        var r = Math.min(14, 6 + (connCounts[dn.id] || 0) * 1.5);
+        svgContent += '<circle cx="' + dn.x + '" cy="' + dn.y + '" r="' + r + '" fill="' + color + '" stroke="' + color + '" stroke-opacity="0.3" stroke-width="4" style="cursor:pointer;" filter="url(#glow)" data-node-id="' + dn.id.replace(/"/g, '') + '"/>';
+        var label = dn.label.length > 18 ? dn.label.substring(0, 16) + '..' : dn.label;
+        svgContent += '<text x="' + dn.x + '" y="' + (dn.y + r + 14) + '" text-anchor="middle" fill="#b4bcd0" font-size="10" font-family="Inter, sans-serif">' + escapeHtml(label) + '</text>';
+    }
+
+    svg.innerHTML = svgContent;
+}
+
+function selectNode(nodeId) {
+    var node = null;
+    for (var i = 0; i < allNodes.length; i++) {
+        if (allNodes[i].id === nodeId) { node = allNodes[i]; break; }
+    }
+    if (!node) return;
+
+    selectedNode = node;
+    var panel = document.getElementById('node-detail');
+    panel.style.display = 'block';
+    panel.style.marginTop = '1.5rem';
+    document.getElementById('node-detail-title').textContent = node.label;
+
+    // Find connections for this node
+    var nodeConns = [];
+    for (var i = 0; i < allEdges.length; i++) {
+        var e = allEdges[i];
+        if (e.source === nodeId || e.target === nodeId || e.source === node.ip || e.target === node.ip) {
+            nodeConns.push(e);
+        }
+    }
+
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;font-size:0.85rem;margin-bottom:1rem;">'
+        + '<div><span style="color:var(--text-muted);">ID</span><div style="font-weight:600;">' + escapeHtml(node.id) + '</div></div>'
+        + '<div><span style="color:var(--text-muted);">IP</span><div>' + (node.ip || 'N/A') + '</div></div>'
+        + '<div><span style="color:var(--text-muted);">Type</span><div>' + (node.type || 'unknown') + '</div></div>'
+        + '<div><span style="color:var(--text-muted);">Manufacturer</span><div>' + (node.manufacturer || 'Unknown') + '</div></div>'
+        + '<div><span style="color:var(--text-muted);">Connections</span><div style="font-weight:700;color:#00aaff;">' + nodeConns.length + '</div></div>'
+        + '</div>';
+
+    if (nodeConns.length > 0) {
+        html += '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;">Connected to:</div>';
+        html += '<div style="max-height:200px;overflow-y:auto;">';
+        for (var ci = 0; ci < nodeConns.length; ci++) {
+            var c = nodeConns[ci];
+            var peer = c.source === nodeId || c.source === node.ip ? c.target : c.source;
+            html += '<div style="display:flex;justify-content:space-between;padding:0.3rem 0.5rem;margin-bottom:0.2rem;background:rgba(255,255,255,0.03);border-radius:4px;font-size:0.8rem;">'
+                + '<span style="color:var(--text-secondary);">' + escapeHtml(peer) + '</span>'
+                + '<span><span class="proto-badge">' + (c.protocol || 'TCP') + '</span> <span style="color:var(--text-muted);">' + formatBytes(c.bytes || 0) + '</span></span>'
+                + '</div>';
+        }
+        html += '</div>';
+    }
+
+    document.getElementById('node-detail-content').innerHTML = html;
+}
+
+function renderNodesList(nodes) {
+    var container = document.getElementById('nodes-list');
+    if (nodes.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No endpoints discovered</div>';
+        return;
+    }
+    var html = '';
+    for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        html += '<div class="net-node" data-node-id="' + n.id.replace(/"/g, '') + '">'
+            + '<div><div class="net-node-name">' + escapeHtml(n.label) + '</div>'
+            + '<div class="net-node-meta">' + (n.ip || 'No IP') + ' &middot; ' + n.type + (n.manufacturer ? ' &middot; ' + escapeHtml(n.manufacturer) : '') + '</div></div>'
+            + '<span style="font-size:0.7rem;padding:0.15rem 0.5rem;background:rgba(0,170,255,0.15);color:#00aaff;border-radius:4px;">' + n.type + '</span></div>';
+    }
+    container.innerHTML = html;
+}
+
+function renderEdgesTable(edges) {
+    var container = document.getElementById('edges-table');
+    if (edges.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No connections recorded</div>';
+        return;
+    }
+
+    var html = '<table class="conn-table"><thead><tr>'
+        + '<th>Source</th><th>Target</th><th>Protocol</th><th>Traffic</th><th>Count</th></tr></thead><tbody>';
+    for (var i = 0; i < edges.length; i++) {
+        var e = edges[i];
+        var rowColor = e.suspicious ? 'color:#ff3366;' : '';
+        html += '<tr style="' + rowColor + '">'
+            + '<td>' + escapeHtml(e.source) + '</td>'
+            + '<td>' + escapeHtml(e.target) + '</td>'
+            + '<td><span class="proto-badge">' + (e.protocol || 'TCP') + '</span></td>'
+            + '<td>' + formatBytes(e.bytes || 0) + '</td>'
+            + '<td style="font-weight:600;">' + (e.count || 1) + '</td></tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function renderHeatmap(nodes, edges) {
+    var container = document.getElementById('traffic-heatmap');
+    if (nodes.length === 0 || edges.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No traffic data for heatmap</div>';
+        return;
+    }
+
+    // Get unique IPs/IDs (limit to top 12 for readability)
+    var ips = {};
+    for (var i = 0; i < edges.length; i++) {
+        ips[edges[i].source] = true;
+        ips[edges[i].target] = true;
+    }
+    var ipList = Object.keys(ips).slice(0, 12);
+
+    // Build traffic matrix
+    var matrix = {};
+    var maxTraffic = 1;
+    for (var ei = 0; ei < edges.length; ei++) {
+        var e = edges[ei];
+        var key = e.source + '|' + e.target;
+        matrix[key] = (matrix[key] || 0) + (e.bytes || 0);
+        if (matrix[key] > maxTraffic) maxTraffic = matrix[key];
+    }
+
+    var html = '<table class="heatmap-table"><thead><tr><th></th>';
+    for (var hi = 0; hi < ipList.length; hi++) {
+        var shortLabel = ipList[hi].length > 10 ? ipList[hi].substring(0, 8) + '..' : ipList[hi];
+        html += '<th title="' + escapeHtml(ipList[hi]) + '">' + escapeHtml(shortLabel) + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+
+    for (var ri = 0; ri < ipList.length; ri++) {
+        var shortRow = ipList[ri].length > 10 ? ipList[ri].substring(0, 8) + '..' : ipList[ri];
+        html += '<tr><td style="color:var(--text-muted);font-weight:600;padding-right:0.5rem;white-space:nowrap;" title="' + escapeHtml(ipList[ri]) + '">' + escapeHtml(shortRow) + '</td>';
+        for (var ci = 0; ci < ipList.length; ci++) {
+            var key = ipList[ri] + '|' + ipList[ci];
+            var val = matrix[key] || 0;
+            if (ri === ci) {
+                html += '<td><div class="hm-cell" style="background:rgba(255,255,255,0.02);">-</div></td>';
+            } else if (val > 0) {
+                var intensity = Math.min(1, val / (maxTraffic || 1));
+                var r = Math.round(intensity * 50);
+                var g = Math.round(255 * intensity);
+                var b = Math.round(136 * intensity);
+                html += '<td><div class="hm-cell" style="background:rgba(' + r + ',' + g + ',' + b + ',0.3);color:#00ff88;" title="' + formatBytes(val) + '">' + formatBytes(val) + '</div></td>';
+            } else {
+                html += '<td><div class="hm-cell" style="background:rgba(255,255,255,0.02);color:var(--text-muted);opacity:0.3;">0</div></td>';
+            }
+        }
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('export-network-btn').addEventListener('click', exportNetwork);
+    document.getElementById('refresh-topology-btn').addEventListener('click', loadTopology);
+    document.getElementById('close-node-detail-btn').addEventListener('click', function() {
+        document.getElementById('node-detail').style.display = 'none';
+    });
+
+    // Event delegation for dynamically generated SVG nodes
+    document.getElementById('network-svg').addEventListener('click', function(e) {
+        var circle = e.target.closest('circle[data-node-id]');
+        if (circle) selectNode(circle.getAttribute('data-node-id'));
+    });
+
+    // Event delegation for dynamically generated node list items
+    document.getElementById('nodes-list').addEventListener('click', function(e) {
+        var node = e.target.closest('.net-node[data-node-id]');
+        if (node) selectNode(node.getAttribute('data-node-id'));
+    });
+
+    loadTopology();
+});
+</script>
+{% endblock %}

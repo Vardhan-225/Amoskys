@@ -24,7 +24,7 @@ class BaseProtocolCollector(ABC):
     @abstractmethod
     def collect(self) -> List[ProtocolEvent]:
         """Collect and return protocol events.
-        
+
         Returns:
             List of ProtocolEvent objects
         """
@@ -33,7 +33,7 @@ class BaseProtocolCollector(ABC):
 
 class NetworkLogCollector(BaseProtocolCollector):
     """Collector that parses network/protocol logs.
-    
+
     Supports multiple log formats:
         - Syslog with network events
         - Connection logs
@@ -46,7 +46,7 @@ class NetworkLogCollector(BaseProtocolCollector):
         tail_lines: int = 1000,
     ):
         """Initialize the collector.
-        
+
         Args:
             log_path: Path to log file
             tail_lines: Number of lines to read from end of file
@@ -58,12 +58,12 @@ class NetworkLogCollector(BaseProtocolCollector):
 
     def collect(self) -> List[ProtocolEvent]:
         """Collect protocol events from log file.
-        
+
         Returns:
             List of parsed ProtocolEvent objects
         """
         events = []
-        
+
         if not os.path.exists(self.log_path):
             logger.warning(f"Log file not found: {self.log_path}")
             return events
@@ -78,12 +78,12 @@ class NetworkLogCollector(BaseProtocolCollector):
             with open(self.log_path, "r", errors="ignore") as f:
                 # Seek to last position
                 f.seek(self._last_position)
-                
+
                 for line in f:
                     event = self._parse_log_line(line.strip())
                     if event:
                         events.append(event)
-                
+
                 self._last_position = f.tell()
 
         except PermissionError:
@@ -95,10 +95,10 @@ class NetworkLogCollector(BaseProtocolCollector):
 
     def _parse_log_line(self, line: str) -> Optional[ProtocolEvent]:
         """Parse a log line into a ProtocolEvent.
-        
+
         Args:
             line: Raw log line
-            
+
         Returns:
             ProtocolEvent if parseable, None otherwise
         """
@@ -111,16 +111,16 @@ class NetworkLogCollector(BaseProtocolCollector):
             return None
 
         # Extract IP addresses if present
-        ip_pattern = r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'
+        ip_pattern = r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"
         ips = re.findall(ip_pattern, line)
-        
+
         src_ip = ips[0] if len(ips) > 0 else "0.0.0.0"
         dst_ip = ips[1] if len(ips) > 1 else "0.0.0.0"
 
         # Extract ports if present
-        port_pattern = r':(\d{1,5})'
+        port_pattern = r":(\d{1,5})"
         ports = re.findall(port_pattern, line)
-        
+
         src_port = int(ports[0]) if len(ports) > 0 else 0
         dst_port = int(ports[1]) if len(ports) > 1 else 0
 
@@ -138,7 +138,7 @@ class NetworkLogCollector(BaseProtocolCollector):
     def _detect_protocol(self, line: str) -> ProtocolType:
         """Detect protocol type from log line content."""
         line_lower = line.lower()
-        
+
         if "sshd" in line_lower or "ssh" in line_lower:
             return ProtocolType.SSH
         elif "http" in line_lower:
@@ -153,19 +153,24 @@ class NetworkLogCollector(BaseProtocolCollector):
             return ProtocolType.FTP
         elif "rdp" in line_lower or ":3389" in line:
             return ProtocolType.RDP
-        elif "mysql" in line_lower or "postgres" in line_lower or ":3306" in line or ":5432" in line:
+        elif (
+            "mysql" in line_lower
+            or "postgres" in line_lower
+            or ":3306" in line
+            or ":5432" in line
+        ):
             return ProtocolType.SQL
         elif "irc" in line_lower or ":6667" in line:
             return ProtocolType.IRC
         elif "tls" in line_lower or "ssl" in line_lower:
             return ProtocolType.TLS
-            
+
         return ProtocolType.UNKNOWN
 
     def _extract_metadata(self, line: str, protocol: ProtocolType) -> Dict[str, Any]:
         """Extract protocol-specific metadata from log line."""
         metadata: Dict[str, Any] = {}
-        
+
         if protocol == ProtocolType.SSH:
             if "failed" in line.lower():
                 metadata["auth_result"] = "failed"
@@ -173,7 +178,7 @@ class NetworkLogCollector(BaseProtocolCollector):
                 metadata["auth_result"] = "accepted"
             if "invalid user" in line.lower():
                 metadata["invalid_user"] = True
-                
+
         elif protocol == ProtocolType.HTTP or protocol == ProtocolType.HTTPS:
             # Extract HTTP method
             for method in ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"]:
@@ -181,10 +186,10 @@ class NetworkLogCollector(BaseProtocolCollector):
                     metadata["method"] = method
                     break
             # Extract status code
-            status_match = re.search(r'\s(\d{3})\s', line)
+            status_match = re.search(r"\s(\d{3})\s", line)
             if status_match:
                 metadata["status_code"] = int(status_match.group(1))
-                
+
         elif protocol == ProtocolType.DNS:
             # Check for query type
             for qtype in ["A", "AAAA", "MX", "TXT", "CNAME", "NS", "PTR"]:
@@ -197,13 +202,13 @@ class NetworkLogCollector(BaseProtocolCollector):
 
 class StubProtocolCollector(BaseProtocolCollector):
     """Stub collector for testing without real protocol sources.
-    
+
     Generates simulated protocol events for development and testing.
     """
 
     def __init__(self, events_per_cycle: int = 5):
         """Initialize stub collector.
-        
+
         Args:
             events_per_cycle: Number of events to generate per collect() call
         """
@@ -219,13 +224,13 @@ class StubProtocolCollector(BaseProtocolCollector):
 
     def collect(self) -> List[ProtocolEvent]:
         """Generate simulated protocol events.
-        
+
         Returns:
             List of simulated ProtocolEvent objects
         """
         events = []
         self._cycle_count += 1
-        
+
         for i in range(self.events_per_cycle):
             scenario = self._scenarios[i % len(self._scenarios)]
             events.append(scenario())
@@ -316,16 +321,16 @@ def create_protocol_collector(
     **kwargs,
 ) -> BaseProtocolCollector:
     """Factory function to create appropriate protocol collector.
-    
+
     Args:
         use_stub: Use stub collector for testing
         log_path: Path to network log file
         **kwargs: Additional collector-specific arguments
-        
+
     Returns:
         Configured protocol collector instance
     """
     if use_stub:
         return StubProtocolCollector(**kwargs)
-    
+
     return NetworkLogCollector(log_path=log_path, **kwargs)

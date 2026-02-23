@@ -15,10 +15,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from amoskys.intel.fusion_engine import FusionEngine
-from amoskys.intel.models import TelemetryEventView, Severity
+from amoskys.intel.models import Severity, TelemetryEventView
 
 
 def create_sudo_event(device_id: str, timestamp: datetime) -> TelemetryEventView:
@@ -29,26 +29,23 @@ def create_sudo_event(device_id: str, timestamp: datetime) -> TelemetryEventView
         timestamp=timestamp,
         event_type="SECURITY",
         severity="INFO",
-        attributes={
-            'sudo_command': 'sudo ls /tmp',
-            'auth_method': 'password'
-        },
+        attributes={"sudo_command": "sudo ls /tmp", "auth_method": "password"},
         security_event={
-            'event_category': 'AUTHENTICATION',
-            'event_action': 'SUDO',
-            'event_outcome': 'SUCCESS',
-            'user_name': 'athanneeru',
-            'source_ip': '127.0.0.1',
-            'risk_score': 0.3,
-            'mitre_techniques': ['T1548.003'],
-            'requires_investigation': False
-        }
+            "event_category": "AUTHENTICATION",
+            "event_action": "SUDO",
+            "event_outcome": "SUCCESS",
+            "user_name": "athanneeru",
+            "source_ip": "127.0.0.1",
+            "risk_score": 0.3,
+            "mitre_techniques": ["T1548.003"],
+            "requires_investigation": False,
+        },
     )
 
 
 def create_launchagent_event(device_id: str, timestamp: datetime) -> TelemetryEventView:
     """Create a synthetic LaunchAgent persistence event"""
-    file_path = '/Users/athanneeru/Library/LaunchAgents/com.amoskys.test.plist'
+    file_path = "/Users/athanneeru/Library/LaunchAgents/com.amoskys.test.plist"
     return TelemetryEventView(
         event_id=f"test_persistence_{int(timestamp.timestamp())}",
         device_id=device_id,
@@ -56,18 +53,18 @@ def create_launchagent_event(device_id: str, timestamp: datetime) -> TelemetryEv
         event_type="AUDIT",
         severity="WARN",
         attributes={
-            'persistence_type': 'LAUNCH_AGENT',
-            'file_path': file_path,
-            'risk_score': '0.7'
+            "persistence_type": "LAUNCH_AGENT",
+            "file_path": file_path,
+            "risk_score": "0.7",
         },
         audit_event={
-            'audit_category': 'CHANGE',
-            'action_performed': 'CREATED',
-            'object_type': 'LAUNCH_AGENT',
-            'object_id': file_path,
-            'before_value': '',
-            'after_value': '{"Label": "com.amoskys.test", "ProgramArguments": ["/bin/echo", "test"]}'
-        }
+            "audit_category": "CHANGE",
+            "action_performed": "CREATED",
+            "object_type": "LAUNCH_AGENT",
+            "object_id": file_path,
+            "before_value": "",
+            "after_value": '{"Label": "com.amoskys.test", "ProgramArguments": ["/bin/echo", "test"]}',
+        },
     )
 
 
@@ -78,7 +75,7 @@ def main():
     print()
 
     # Use temporary database for clean test
-    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         test_db = tmp.name
 
     print(f"[1] Initializing FusionEngine (test DB: {test_db})")
@@ -96,7 +93,9 @@ def main():
 
     # LaunchAgent event 90 seconds later (well within 5-minute correlation window)
     persistence_event = create_launchagent_event(device_id, now + timedelta(seconds=90))
-    print(f"    ✓ LAUNCH_AGENT created at {persistence_event.timestamp.strftime('%H:%M:%S')}")
+    print(
+        f"    ✓ LAUNCH_AGENT created at {persistence_event.timestamp.strftime('%H:%M:%S')}"
+    )
     print(f"    → Time delta: 90 seconds (within 5-minute correlation window)")
 
     # Add events to FusionEngine
@@ -112,7 +111,7 @@ def main():
     print(f"\n[5] Checking for incidents...")
     incidents = fusion.db.execute(
         "SELECT rule_name, severity, summary FROM incidents WHERE device_id = ?",
-        (device_id,)
+        (device_id,),
     ).fetchall()
 
     if incidents:
@@ -130,8 +129,7 @@ def main():
     # Check device risk
     print(f"[6] Checking device risk...")
     risk = fusion.db.execute(
-        "SELECT score, level FROM device_risk WHERE device_id = ?",
-        (device_id,)
+        "SELECT score, level FROM device_risk WHERE device_id = ?", (device_id,)
     ).fetchone()
 
     if risk:
@@ -164,5 +162,5 @@ def main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

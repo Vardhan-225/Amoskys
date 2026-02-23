@@ -20,9 +20,11 @@ Design:
     is durable and crash-resistant.
 """
 
+import hashlib
 import logging
 import os
 import sqlite3
+import threading
 import time
 from typing import Callable
 
@@ -38,11 +40,25 @@ CREATE TABLE IF NOT EXISTS wal (
   idem TEXT NOT NULL,
   ts_ns INTEGER NOT NULL,
   bytes BLOB NOT NULL,
-  checksum BLOB NOT NULL
+  checksum BLOB NOT NULL,
+  sig BLOB,
+  prev_sig BLOB
 );
 CREATE UNIQUE INDEX IF NOT EXISTS wal_idem ON wal(idem);
 CREATE INDEX IF NOT EXISTS wal_ts ON wal(ts_ns);
 """
+
+# Genesis signature: 32 zero bytes (well-known chain start)
+GENESIS_SIG = b"\x00" * 32
+
+
+def _compute_chain_sig(env_bytes: bytes, prev_sig: bytes) -> bytes:
+    """Compute hash chain signature: BLAKE2b(env_bytes || prev_sig).
+
+    Each WAL row's signature chains to the previous, creating a tamper-evident
+    log. If any row is modified, deleted, or reordered, the chain breaks.
+    """
+    return hashlib.blake2b(env_bytes + prev_sig, digest_size=32).digest()
 
 
 class SQLiteWAL:
@@ -83,8 +99,62 @@ class SQLiteWAL:
         self.vacuum_threshold = vacuum_threshold
         self.last_vacuum_time = 0
         self.deleted_since_vacuum = 0
-        self.db = sqlite3.connect(self.path, timeout=5.0, isolation_level=None)
+        self._lock = threading.RLock()
+        self.db = sqlite3.connect(
+            self.path, timeout=5.0, isolation_level=None, check_same_thread=False
+        )
         self.db.executescript(SCHEMA)
+        self._migrate_chain_columns()
+
+    def _migrate_chain_columns(self) -> None:
+        """Add sig/prev_sig columns to existing WAL databases (idempotent)."""
+        try:
+            cols = {
+                row[1] for row in self.db.execute("PRAGMA table_info(wal)").fetchall()
+            }
+            if "sig" not in cols:
+                self.db.execute("ALTER TABLE wal ADD COLUMN sig BLOB")
+                logger.info("Migrated WAL: added sig column")
+            if "prev_sig" not in cols:
+                self.db.execute("ALTER TABLE wal ADD COLUMN prev_sig BLOB")
+                logger.info("Migrated WAL: added prev_sig column")
+        except Exception as e:
+            logger.warning("WAL chain migration skipped: %s", e)
+
+    def _get_last_sig(self) -> bytes:
+        """Return the sig of the most recent WAL entry, or GENESIS_SIG if empty."""
+        row = self.db.execute("SELECT sig FROM wal ORDER BY id DESC LIMIT 1").fetchone()
+        if row and row[0]:
+            return bytes(row[0])
+        return GENESIS_SIG
+
+    def write_raw(self, idem: str, ts_ns: int, env_bytes: bytes) -> bool:
+        """Write raw bytes to WAL with BLAKE2b checksum and hash chain.
+
+        This is the canonical write path. Both append() and external callers
+        (EventBus server) should use this method to ensure chain integrity.
+
+        Args:
+            idem: Idempotency key (duplicate writes are silently ignored)
+            ts_ns: Event timestamp in nanoseconds
+            env_bytes: Serialized protobuf bytes
+
+        Returns:
+            True if written, False if duplicate
+        """
+        checksum = hashlib.blake2b(env_bytes, digest_size=32).digest()
+        with self._lock:
+            prev_sig = self._get_last_sig()
+            sig = _compute_chain_sig(env_bytes, prev_sig)
+            try:
+                self.db.execute(
+                    "INSERT INTO wal(idem, ts_ns, bytes, checksum, sig, prev_sig) "
+                    "VALUES(?, ?, ?, ?, ?, ?)",
+                    (idem, ts_ns, sqlite3.Binary(env_bytes), checksum, sig, prev_sig),
+                )
+                return True
+            except sqlite3.IntegrityError:
+                return False
 
     def append(self, env: pb.Envelope) -> None:
         """Append envelope to WAL with idempotency guarantees.
@@ -105,15 +175,10 @@ class SQLiteWAL:
             sqlite3.DatabaseError: On database corruption or disk full
         """
         data = env.SerializeToString()
-        checksum = sqlite3.Binary(bytes(memoryview(data)))
-        try:
-            self.db.execute(
-                "INSERT INTO wal(idem, ts_ns, bytes, checksum) VALUES(?,?,?,?)",
-                (env.idempotency_key, env.ts_ns, sqlite3.Binary(data), checksum),
-            )
-        except sqlite3.IntegrityError:
-            return
-        self._enforce_backlog()
+        written = self.write_raw(env.idempotency_key, env.ts_ns, data)
+        if written:
+            with self._lock:
+                self._enforce_backlog()
 
     def backlog_bytes(self) -> int:
         """Calculate total size of pending events in WAL.
@@ -124,7 +189,10 @@ class SQLiteWAL:
         Returns:
             int: Total bytes of all pending envelopes (0 if empty)
         """
-        row = self.db.execute("SELECT IFNULL(SUM(length(bytes)),0) FROM wal").fetchone()
+        with self._lock:
+            row = self.db.execute(
+                "SELECT IFNULL(SUM(length(bytes)),0) FROM wal"
+            ).fetchone()
         return int(row[0] or 0)
 
     def file_size_bytes(self) -> int:
@@ -167,12 +235,44 @@ class SQLiteWAL:
             ...     return stub.Publish(env, timeout=2.0)
             >>> drained = wal.drain(publish, limit=500)
         """
-        cur = self.db.execute("SELECT id, bytes FROM wal ORDER BY id LIMIT ?", (limit,))
-        rows = cur.fetchall()
+        with self._lock:
+            cur = self.db.execute(
+                "SELECT id, bytes, checksum FROM wal ORDER BY id LIMIT ?", (limit,)
+            )
+            rows = cur.fetchall()
         drained = 0
-        for rowid, blob in rows:
+        for rowid, blob, stored_checksum in rows:
+            blob_bytes = bytes(blob)
+
+            # Verify BLAKE2b checksum (P1-EB-2)
+            if stored_checksum is not None:
+                expected = hashlib.blake2b(blob_bytes, digest_size=32).digest()
+                stored_bytes = bytes(stored_checksum)
+                # Detect legacy entries where "checksum" is corrupted or wrong size
+                if len(stored_bytes) != 32:
+                    logger.error(
+                        "AOC1_WAL_LEGACY_CHECKSUM: rowid=%d has %d-byte checksum "
+                        "(expected 32), skipping event",
+                        rowid,
+                        len(stored_bytes),
+                    )
+                    with self._lock:
+                        self.db.execute("DELETE FROM wal WHERE id = ?", (rowid,))
+                    drained += 1
+                    continue
+                elif stored_bytes != expected:
+                    logger.error(
+                        "AOC1_WAL_CHECKSUM_MISMATCH: rowid=%d data corrupted, "
+                        "quarantining entry",
+                        rowid,
+                    )
+                    with self._lock:
+                        self.db.execute("DELETE FROM wal WHERE id = ?", (rowid,))
+                    drained += 1
+                    continue
+
             env = pb.Envelope()
-            env.ParseFromString(bytes(blob))
+            env.ParseFromString(blob_bytes)
             ack = publish_fn(env)
             status = getattr(ack, "status", None)
             if status is None:
@@ -182,7 +282,8 @@ class SQLiteWAL:
                 break
 
             # For OK (0) or error statuses (2, 3, etc.), delete the record
-            self.db.execute("DELETE FROM wal WHERE id = ?", (rowid,))
+            with self._lock:
+                self.db.execute("DELETE FROM wal WHERE id = ?", (rowid,))
             drained += 1
         return drained
 

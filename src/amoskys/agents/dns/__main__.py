@@ -1,5 +1,4 @@
-"""
-AMOSKYS DNS Agent - Module Entry Point
+"""AMOSKYS DNS Agent - Module Entry Point
 
 Run with: python -m amoskys.agents.dns [options]
 """

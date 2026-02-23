@@ -3,11 +3,14 @@ AMOSKYS API System Module
 System health, metrics, and administrative endpoints
 """
 
+import logging
 import platform
 from datetime import datetime, timezone
 
 import psutil
 from flask import Blueprint, jsonify, request
+
+logger = logging.getLogger(__name__)
 
 from .agent_auth import require_auth
 from .rate_limiter import require_rate_limit
@@ -53,6 +56,7 @@ def system_health():
             }
         )
     except Exception as e:
+        logger.exception("System health check failed")
         return (
             jsonify(
                 {
@@ -110,6 +114,7 @@ def system_info():
             }
         )
     except Exception as e:
+        logger.exception("System info query failed")
         return (
             jsonify(
                 {
@@ -178,6 +183,7 @@ def system_metrics():
             }
         )
     except Exception as e:
+        logger.exception("System metrics collection failed")
         return (
             jsonify(
                 {
@@ -394,6 +400,7 @@ def system_health_stats():
         return jsonify(stats), 200
 
     except Exception as e:
+        logger.exception("System health stats collection failed")
         return (
             jsonify(
                 {
@@ -457,6 +464,7 @@ def system_processes():
         )
 
     except Exception as e:
+        logger.exception("System process listing failed")
         return (
             jsonify(
                 {
@@ -513,6 +521,7 @@ def system_disk_usage():
         )
 
     except Exception as e:
+        logger.exception("Disk usage query failed")
         return (
             jsonify(
                 {

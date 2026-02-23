@@ -22,8 +22,8 @@ from amoskys.agents.kernel_audit.probes import (
     ExecveHighRiskProbe,
     FilePermissionTamperProbe,
     KernelModuleLoadProbe,
-    PtraceAbuseProbe,
     PrivEscSyscallProbe,
+    PtraceAbuseProbe,
     SyscallFloodProbe,
     create_kernel_audit_probes,
 )
@@ -283,7 +283,9 @@ class TestKernelModuleLoadProbe:
     def test_escalates_for_suspicious_path(self):
         """Module from /tmp should be CRITICAL."""
         probe = KernelModuleLoadProbe()
-        events = [make_event(syscall="init_module", uid=0, euid=0, path="/tmp/rootkit.ko")]
+        events = [
+            make_event(syscall="init_module", uid=0, euid=0, path="/tmp/rootkit.ko")
+        ]
         context = make_context(events)
 
         results = probe.scan(context)
@@ -296,7 +298,9 @@ class TestKernelModuleLoadProbe:
         """Non-root module load attempt should be CRITICAL."""
         probe = KernelModuleLoadProbe()
         # Use non-suspicious cwd so non-root check triggers first
-        events = [make_event(syscall="init_module", uid=1000, euid=1000, cwd="/usr/lib")]
+        events = [
+            make_event(syscall="init_module", uid=1000, euid=1000, cwd="/usr/lib")
+        ]
         context = make_context(events)
 
         results = probe.scan(context)

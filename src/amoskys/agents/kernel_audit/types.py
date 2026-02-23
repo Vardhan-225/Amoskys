@@ -123,66 +123,78 @@ class KernelAuditEvent:
 # =============================================================================
 
 # Privilege escalation syscalls
-PRIVESC_SYSCALLS = frozenset({
-    "setuid",
-    "seteuid",
-    "setreuid",
-    "setresuid",
-    "setgid",
-    "setegid",
-    "setregid",
-    "setresgid",
-    "setfsuid",
-    "setfsgid",
-    "capset",
-})
+PRIVESC_SYSCALLS = frozenset(
+    {
+        "setuid",
+        "seteuid",
+        "setreuid",
+        "setresuid",
+        "setgid",
+        "setegid",
+        "setregid",
+        "setresgid",
+        "setfsuid",
+        "setfsgid",
+        "capset",
+    }
+)
 
 # Process manipulation syscalls
-PROCESS_SYSCALLS = frozenset({
-    "execve",
-    "execveat",
-    "fork",
-    "vfork",
-    "clone",
-    "clone3",
-    "ptrace",
-    "process_vm_readv",
-    "process_vm_writev",
-})
+PROCESS_SYSCALLS = frozenset(
+    {
+        "execve",
+        "execveat",
+        "fork",
+        "vfork",
+        "clone",
+        "clone3",
+        "ptrace",
+        "process_vm_readv",
+        "process_vm_writev",
+    }
+)
 
 # Module/driver syscalls
-MODULE_SYSCALLS = frozenset({
-    "init_module",
-    "finit_module",
-    "delete_module",
-})
+MODULE_SYSCALLS = frozenset(
+    {
+        "init_module",
+        "finit_module",
+        "delete_module",
+    }
+)
 
 # File permission syscalls
-PERMISSION_SYSCALLS = frozenset({
-    "chmod",
-    "fchmod",
-    "fchmodat",
-    "chown",
-    "fchown",
-    "lchown",
-    "fchownat",
-})
+PERMISSION_SYSCALLS = frozenset(
+    {
+        "chmod",
+        "fchmod",
+        "fchmodat",
+        "chown",
+        "fchown",
+        "lchown",
+        "fchownat",
+    }
+)
 
 # Memory mapping syscalls (relevant for injection)
-MEMORY_SYSCALLS = frozenset({
-    "mmap",
-    "mprotect",
-    "mremap",
-})
+MEMORY_SYSCALLS = frozenset(
+    {
+        "mmap",
+        "mprotect",
+        "mremap",
+    }
+)
 
 # Network syscalls
-NETWORK_SYSCALLS = frozenset({
-    "connect",
-    "accept",
-    "accept4",
-    "bind",
-    "listen",
-})
+NETWORK_SYSCALLS = frozenset(
+    {
+        "connect",
+        "accept",
+        "accept4",
+        "bind",
+        "listen",
+    }
+)
 
 
 # =============================================================================

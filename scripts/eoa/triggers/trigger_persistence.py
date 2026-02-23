@@ -53,6 +53,7 @@ def cleanup_sandbox() -> None:
 
 # ── Trigger 1: CronJobPersistenceProbe ────────────────────────────────────
 
+
 def trigger_cron_persistence(dry_run: bool = False) -> None:
     """Create @reboot cron entry (in sandbox)."""
     log("Trigger: CronJobPersistenceProbe")
@@ -74,6 +75,7 @@ def trigger_cron_persistence(dry_run: bool = False) -> None:
 
 
 # ── Trigger 2: SSHKeyBackdoorProbe ────────────────────────────────────────
+
 
 def trigger_ssh_key_backdoor(dry_run: bool = False) -> None:
     """Add unauthorized SSH key to authorized_keys (in sandbox)."""
@@ -100,6 +102,7 @@ command="/tmp/exfil.sh" ssh-rsa AAAAB3NzaC1yc2EAAA... forced@cmd
 
 
 # ── Trigger 3: ShellProfileHijackProbe ────────────────────────────────────
+
 
 def trigger_shell_profile_hijack(dry_run: bool = False) -> None:
     """Create .bashrc and .zshrc with suspicious patterns (in sandbox)."""
@@ -139,6 +142,7 @@ python3 -c 'import socket,subprocess; s=socket.socket()' &
 
 # ── Trigger 4: BrowserExtensionPersistenceProbe ──────────────────────────
 
+
 def trigger_browser_extension(dry_run: bool = False) -> None:
     """Create fake Chrome extension manifest with dangerous permissions."""
     log("Trigger: BrowserExtensionPersistenceProbe")
@@ -172,6 +176,7 @@ def trigger_browser_extension(dry_run: bool = False) -> None:
 
 # ── Trigger 5: HiddenFilePersistenceProbe ────────────────────────────────
 
+
 def trigger_hidden_file(dry_run: bool = False) -> None:
     """Create hidden executable files (dot-prefixed) in sandbox."""
     log("Trigger: HiddenFilePersistenceProbe")
@@ -193,6 +198,7 @@ def trigger_hidden_file(dry_run: bool = False) -> None:
 
 
 # ── Trigger 6: StartupFolderLoginItemProbe ───────────────────────────────
+
 
 def trigger_startup_item(dry_run: bool = False) -> None:
     """Create a Login Item plist (macOS sandbox)."""
@@ -231,6 +237,7 @@ def trigger_startup_item(dry_run: bool = False) -> None:
 
 # ── Trigger 7: LaunchAgentDaemonProbe ────────────────────────────────────
 
+
 def trigger_launch_daemon(dry_run: bool = False) -> None:
     """Create a suspicious LaunchDaemon plist (sandbox)."""
     log("Trigger: LaunchAgentDaemonProbe")
@@ -265,8 +272,12 @@ def trigger_launch_daemon(dry_run: bool = False) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Trigger Pack: PersistenceGuard probes")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without executing")
+    parser = argparse.ArgumentParser(
+        description="Trigger Pack: PersistenceGuard probes"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without executing"
+    )
     args = parser.parse_args()
 
     print("\n═══ PersistenceGuard Trigger Pack ═══")

@@ -24,9 +24,9 @@ class TestFlowProbes:
     """Test suite for FlowAgent probes."""
 
     def test_create_flow_probes(self):
-        """Test probe factory creates all 8 probes."""
+        """Test probe factory creates all 9 probes."""
         probes = create_flow_probes()
-        assert len(probes) == 8
+        assert len(probes) == 9
 
         probe_names = [p.name for p in probes]
         assert "port_scan_sweep" in probe_names
@@ -224,7 +224,7 @@ class TestFlowProbes:
         flows = [
             FlowEvent(
                 src_ip="192.168.1.75",
-                dst_ip="198.51.100.10",
+                dst_ip="8.8.8.8",
                 src_port=50000,
                 dst_port=80,  # HTTP
                 protocol="TCP",
@@ -362,7 +362,7 @@ class TestFlowProbes:
         flows = [
             FlowEvent(
                 src_ip="192.168.1.100",
-                dst_ip="203.0.113.25",  # External
+                dst_ip="1.2.3.4",  # External (non-private)
                 src_port=50000,
                 dst_port=8888,  # Non-standard
                 protocol="TCP",
@@ -385,7 +385,7 @@ class TestFlowProbes:
         assert len(events) == 1
         assert events[0].event_type == "flow_new_external_service_seen"
         assert events[0].severity == Severity.INFO
-        assert events[0].data["dst_ip"] == "203.0.113.25"
+        assert events[0].data["dst_ip"] == "1.2.3.4"
         assert events[0].data["dst_port"] == 8888
 
         # Second scan should not emit (already seen)
@@ -438,7 +438,9 @@ class TestFlowProbes:
         probes = create_flow_probes()
 
         for probe in probes:
-            assert len(probe.mitre_techniques) > 0, f"{probe.name} missing MITRE techniques"
+            assert (
+                len(probe.mitre_techniques) > 0
+            ), f"{probe.name} missing MITRE techniques"
             assert len(probe.mitre_tactics) > 0, f"{probe.name} missing MITRE tactics"
 
 

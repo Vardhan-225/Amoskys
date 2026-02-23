@@ -3,11 +3,16 @@ AMOSKYS Process Telemetry API
 Fetches and displays process telemetry from permanent storage
 """
 
+import logging
 import os
 import sqlite3
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
+
+from . import escape_like
+
+logger = logging.getLogger(__name__)
 
 from .rate_limiter import require_rate_limit
 
@@ -84,6 +89,7 @@ def get_recent_processes():
             }
         )
     except Exception as e:
+        logger.exception("Failed to fetch recent processes")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -177,6 +183,7 @@ def get_process_stats():
             }
         )
     except Exception as e:
+        logger.exception("Failed to aggregate process statistics")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -229,6 +236,7 @@ def get_top_executables():
             }
         )
     except Exception as e:
+        logger.exception("Failed to fetch top executables")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -254,8 +262,8 @@ def search_processes():
         params = []
 
         if exe_filter:
-            query += " AND exe LIKE ?"
-            params.append(f"%{exe_filter}%")
+            query += " AND exe LIKE ? ESCAPE '\\'"
+            params.append(f"%{escape_like(exe_filter)}%")
 
         if user_type:
             query += " AND user_type = ?"
@@ -284,6 +292,7 @@ def search_processes():
             }
         )
     except Exception as e:
+        logger.exception("Failed to search processes")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -322,6 +331,7 @@ def get_device_telemetry():
             }
         )
     except Exception as e:
+        logger.exception("Failed to fetch device telemetry")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -359,6 +369,7 @@ def get_database_stats():
 
         return jsonify({"statistics": stats, "timestamp": datetime.now().isoformat()})
     except Exception as e:
+        logger.exception("Failed to fetch database statistics")
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -420,6 +431,7 @@ def get_canonical_summary():
             }
         )
     except Exception as e:
+        logger.exception("Canonical summary query failed")
         return jsonify({"total_rows": 0, "status": "error", "error": str(e)}), 500
     finally:
         conn.close()
@@ -479,6 +491,7 @@ def get_features_summary():
             }
         )
     except Exception as e:
+        logger.exception("ML features summary query failed")
         return (
             jsonify(
                 {

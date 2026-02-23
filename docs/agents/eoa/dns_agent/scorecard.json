@@ -1,0 +1,71 @@
+{
+  "agent": "dns",
+  "label": "DNSAgent V2",
+  "eoa_version": "1.0",
+  "timestamp": "2026-02-16T23:44:30Z",
+  "platform": "macOS (Darwin)",
+  "duration_s": 90,
+  "verdict": "PASS",
+  "mac_ready": true,
+  "collector": "MacOSDNSCollector (log show mDNSResponder)",
+  "probes_declared": 9,
+  "probes_fired": 1,
+  "analysis": {
+    "total_queue_rows": 9,
+    "decode_ok": 9,
+    "decode_fail": 0,
+    "total_events": 20,
+    "event_types": {
+      "METRIC": 14,
+      "SECURITY": 6
+    },
+    "severities": {
+      "INFO": 14,
+      "DEBUG": 6
+    },
+    "probe_names": {
+      "dns_collector": 9,
+      "raw_dns_query": 6,
+      "dns_agent": 5
+    },
+    "mitre_techniques_observed": ["T1071.004"],
+    "has_metric_data": 14,
+    "has_security_event": 6,
+    "has_alarm_data": 0,
+    "has_attributes": 6,
+    "empty_evidence_events": 0
+  },
+  "trigger_run": {
+    "triggers": [
+      {"action": "nslookup", "target": "google.com"},
+      {"action": "nslookup", "target": "github.com"},
+      {"action": "curl", "target": "https://example.com"}
+    ],
+    "dns_queries_captured": 6,
+    "probes_fired": ["raw_dns_query"],
+    "probes_silent": [
+      "dga_score", "beaconing_pattern", "suspicious_tld",
+      "nxdomain_burst", "large_txt_tunneling", "fast_flux_rebinding",
+      "new_domain_for_process", "blocked_domain_hit"
+    ],
+    "notes": "Only raw_dns_query fired — higher-order probes (DGA, beaconing, tunneling) require more data points or specific patterns (high-entropy domains, repeated intervals, TXT records). Normal DNS queries correctly captured as baseline."
+  },
+  "resource_usage": {
+    "rss_min_kb": 4816,
+    "rss_max_kb": 51360,
+    "rss_final_kb": 51104,
+    "cpu_avg_pct": 0.1,
+    "cpu_max_pct": 1.3
+  },
+  "stability": {
+    "unexpected_tracebacks": 0,
+    "expected_circuit_breaker_tracebacks": 6,
+    "loop_crashes": 0
+  },
+  "data_richness": {
+    "all_events_have_evidence": true,
+    "security_events_have_mitre": true,
+    "security_events_have_attributes": true,
+    "metric_events_have_metric_data": true
+  }
+}

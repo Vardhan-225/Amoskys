@@ -4,6 +4,12 @@ Amoskys Configuration Management
 
 This module provides centralized configuration for the entire Amoskys system.
 It loads configuration from environment variables, YAML files, and provides validation.
+
+Security Best Practices:
+  - All sensitive values (API keys, secrets) must come from environment variables
+  - No hardcoded secrets in config files or code
+  - Use AMOSKYS_* prefixed environment variables for configuration overrides
+  - Configuration files (YAML) should not contain secrets
 """
 
 import os
@@ -16,11 +22,28 @@ import yaml
 
 @dataclass
 class EventBusConfig:
-    """EventBus server configuration"""
+    """EventBus server configuration.
+
+    Security-sensitive settings:
+      - secret_key: Should come from AMOSKYS_SECRET_KEY environment variable
+      - tls_cert_path, tls_key_path: Paths to TLS certificates (should have restricted permissions)
+      - agent_pubkey_path: Path to agent's Ed25519 public key for signature verification
+    """
 
     host: str = "0.0.0.0"
     port: int = 50051
+    max_envelope_size: int = 10_485_760  # 10MB default
+    dedup_ttl_seconds: int = 300
+    dedup_max_entries: int = 50_000
+    require_signatures: bool = False
+    # CRITICAL: secret_key must come from environment variable, never hardcoded
+    secret_key: str = field(
+        default_factory=lambda: os.environ.get("AMOSKYS_SECRET_KEY", "")
+    )
     tls_enabled: bool = True
+    tls_cert_path: str = "certs/server.crt"
+    tls_key_path: str = "certs/server.key"
+    agent_pubkey_path: str = "certs/agent.ed25519.pub"
     cert_dir: str = "certs"
     overload_mode: bool = False
     max_inflight: int = 100
@@ -62,6 +85,16 @@ class CryptoConfig:
 
 
 @dataclass
+class WALConfig:
+    """Write-Ahead Log (WAL) configuration for persistent event storage"""
+
+    db_path: str = "data/wal.db"
+    sync_mode: str = "FULL"  # FULL, NORMAL, or OFF - affects durability vs performance
+    max_entries: int = 1_000_000
+    checkpoint_interval: int = 300  # seconds
+
+
+@dataclass
 class StorageConfig:
     """Storage configuration"""
 
@@ -79,14 +112,27 @@ class AmoskysConfig:
     eventbus: EventBusConfig = field(default_factory=EventBusConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     crypto: CryptoConfig = field(default_factory=CryptoConfig)
+    wal: WALConfig = field(default_factory=WALConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
 
     @classmethod
     def from_env(cls) -> "AmoskysConfig":
-        """Load configuration from environment variables"""
+        """Load configuration from environment variables.
+
+        Supports the following AMOSKYS_* prefixed variables:
+          - AMOSKYS_SECRET_KEY: Secret key for cryptographic operations
+          - AMOSKYS_EVENTBUS_HOST: EventBus host
+          - AMOSKYS_EVENTBUS_PORT: EventBus port
+          - AMOSKYS_EVENTBUS_MAX_INFLIGHT: Max in-flight requests
+          - And many more...
+
+        Note: All sensitive values should be provided via environment variables,
+        never hardcoded in config files.
+        """
         config = cls()
 
         # EventBus configuration
+        # Note: secret_key is set via field default_factory which reads from env
         config.eventbus.host = os.getenv("BUS_HOST", config.eventbus.host)
         config.eventbus.port = int(
             os.getenv("BUS_SERVER_PORT", str(config.eventbus.port))
@@ -181,6 +227,11 @@ class AmoskysConfig:
             for key, value in data["crypto"].items():
                 if hasattr(config.crypto, key):
                     setattr(config.crypto, key, value)
+
+        if "wal" in data:
+            for key, value in data["wal"].items():
+                if hasattr(config.wal, key):
+                    setattr(config.wal, key, value)
 
         if "storage" in data:
             for key, value in data["storage"].items():

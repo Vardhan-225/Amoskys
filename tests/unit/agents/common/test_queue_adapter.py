@@ -23,7 +23,6 @@ import pytest
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
 from amoskys.proto import universal_telemetry_pb2 as pb
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -794,11 +793,12 @@ class TestEnvelopeSigning:
 
     def test_signature_verifies(self, signed_adapter, ed25519_key_path):
         """Stored signature should verify against stored content_hash."""
-        from amoskys.common.crypto.signing import load_public_key, verify
+        from cryptography.hazmat.primitives import serialization
 
         # We need the public key — derive from private key
         from cryptography.hazmat.primitives.asymmetric import ed25519 as ed_mod
-        from cryptography.hazmat.primitives import serialization
+
+        from amoskys.common.crypto.signing import load_public_key, verify
 
         with open(ed25519_key_path, "rb") as f:
             sk = ed_mod.Ed25519PrivateKey.from_private_bytes(f.read())

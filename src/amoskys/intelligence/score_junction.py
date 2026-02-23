@@ -78,14 +78,28 @@ class ThreatScore:
 class EventBuffer:
     """Time-windowed buffer for event correlation"""
 
-    def __init__(self, window_seconds: int = 300):
+    # Bounds for correlation window to prevent resource exhaustion
+    MIN_WINDOW_SECONDS = 60
+    MAX_WINDOW_SECONDS = 3600
+
+    def __init__(self, window_seconds: int = 300, max_entities: int = 10000):
         """Initialize event buffer
 
         Args:
             window_seconds: Time window for correlation (default 5 minutes)
+            max_entities: Maximum tracked entities before oldest is evicted
+
+        Raises:
+            ValueError: If window_seconds is outside [60, 3600]
         """
+        if not (self.MIN_WINDOW_SECONDS <= window_seconds <= self.MAX_WINDOW_SECONDS):
+            raise ValueError(
+                f"window_seconds must be between {self.MIN_WINDOW_SECONDS} and "
+                f"{self.MAX_WINDOW_SECONDS}, got {window_seconds}"
+            )
         self.window_seconds = window_seconds
         self.window_ns = window_seconds * 1_000_000_000
+        self.max_entities = max_entities
 
         # Buffer organized by entity (device_id, IP, etc.)
         self.events_by_entity: Dict[str, deque] = defaultdict(
@@ -103,6 +117,24 @@ class EventBuffer:
         """
         self.all_events.append(event)
         self.events_by_entity[event.device_id].append(event)
+
+        # Evict oldest entity if over limit
+        if len(self.events_by_entity) > self.max_entities:
+            self._evict_oldest_entity()
+
+    def _evict_oldest_entity(self):
+        """Remove the entity with the oldest most-recent event."""
+        if not self.events_by_entity:
+            return
+        oldest = min(
+            self.events_by_entity,
+            key=lambda k: (
+                self.events_by_entity[k][-1].timestamp_ns
+                if self.events_by_entity[k]
+                else 0
+            ),
+        )
+        del self.events_by_entity[oldest]
 
     def get_events_in_window(
         self, entity_id: str, current_time_ns: int
@@ -275,8 +307,20 @@ class ScoreJunction:
         """
         self.config = config or {}
 
-        # Time window for correlation (5 minutes default)
-        self.correlation_window = self.config.get("correlation_window_seconds", 300)
+        # Time window for correlation (5 minutes default), clamped to safe bounds
+        raw_window = self.config.get("correlation_window_seconds", 300)
+        self.correlation_window = max(
+            EventBuffer.MIN_WINDOW_SECONDS,
+            min(EventBuffer.MAX_WINDOW_SECONDS, raw_window),
+        )
+        if self.correlation_window != raw_window:
+            logger.warning(
+                "correlation_window_seconds=%d out of bounds [%d, %d], clamped to %d",
+                raw_window,
+                EventBuffer.MIN_WINDOW_SECONDS,
+                EventBuffer.MAX_WINDOW_SECONDS,
+                self.correlation_window,
+            )
 
         # Event buffer
         self.event_buffer = EventBuffer(self.correlation_window)
@@ -397,9 +441,7 @@ class ScoreJunction:
             metric_name=metric_name,
             metric_value=metric_value,
             alert_type=alert_type,
-            additional_context=(
-                dict(event.attributes) if event.attributes else {}
-            ),
+            additional_context=(dict(event.attributes) if event.attributes else {}),
         )
 
     def _compute_threat_score(

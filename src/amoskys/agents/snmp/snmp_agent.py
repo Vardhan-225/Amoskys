@@ -289,6 +289,7 @@ def create_universal_envelope(
         signing_algorithm="Ed25519",
         priority="NORMAL",
         requires_acknowledgment=True,
+        schema_version=1,
     )
 
     # Sign the envelope using SerializeToString (since canonical_bytes only works with old Envelope)

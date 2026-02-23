@@ -3,6 +3,7 @@ AMOSKYS Agent Control and Auto-Start Management
 Provides lifecycle management for discovered agents with health monitoring
 """
 
+import logging
 import os
 import platform
 import signal
@@ -15,6 +16,8 @@ from typing import Any, Dict, List, Optional
 import psutil
 
 from .agent_discovery import AGENT_CATALOG, get_platform_name
+
+logger = logging.getLogger(__name__)
 
 # Agent process tracking
 RUNNING_PROCESSES = {}
@@ -33,7 +36,7 @@ def find_process_by_pattern(pattern: str) -> Optional[psutil.Process]:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
     except Exception:
-        pass
+        logger.warning("Process search failed for pattern %s", pattern, exc_info=True)
     return None
 
 
@@ -48,6 +51,7 @@ def is_port_open(port: int) -> bool:
         sock.close()
         return result == 0
     except Exception:
+        logger.debug("Port check failed for port %d", port, exc_info=True)
         return False
 
 
@@ -104,11 +108,20 @@ def start_agent(agent_id: str) -> Dict[str, Any]:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
-        # Start the process
+        # Start the process — redirect output to log files instead of PIPE
+        # (PIPE without reader causes buffer fill → process death)
+        # Set cwd to repo root so agents find certs/ and config/
+        repo_root = Path(__file__).parent.parent.parent.parent
+        log_dir = repo_root / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_out = open(log_dir / f"{agent_id}.log", "a")
+        log_err = open(log_dir / f"{agent_id}.err.log", "a")
+
         proc = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=log_out,
+            stderr=log_err,
+            cwd=str(repo_root),
             preexec_fn=os.setsid if hasattr(os, "setsid") else None,
         )
 
@@ -127,6 +140,7 @@ def start_agent(agent_id: str) -> Dict[str, Any]:
         }
 
     except FileNotFoundError as e:
+        logger.error("Startup script not found for agent %s: %s", agent_id, e)
         return {
             "status": "error",
             "agent_id": agent_id,
@@ -134,6 +148,7 @@ def start_agent(agent_id: str) -> Dict[str, Any]:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     except Exception as e:
+        logger.exception("Failed to start agent %s", agent_id)
         return {
             "status": "error",
             "agent_id": agent_id,
@@ -196,6 +211,11 @@ def stop_agent(agent_id: str) -> Dict[str, Any]:
 
     except psutil.TimeoutExpired:
         # Force kill if graceful shutdown fails
+        logger.warning(
+            "Agent %s did not stop gracefully, force killing (pid=%d)",
+            agent_id,
+            proc.pid,
+        )
         try:
             proc.kill()
             if agent_id in RUNNING_PROCESSES:
@@ -209,6 +229,7 @@ def stop_agent(agent_id: str) -> Dict[str, Any]:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as e:
+            logger.exception("Failed to force kill agent %s", agent_id)
             return {
                 "status": "error",
                 "agent_id": agent_id,
@@ -217,6 +238,7 @@ def stop_agent(agent_id: str) -> Dict[str, Any]:
             }
 
     except Exception as e:
+        logger.exception("Failed to stop agent %s", agent_id)
         return {
             "status": "error",
             "agent_id": agent_id,
@@ -263,7 +285,7 @@ def get_agent_status(agent_id: str) -> Dict[str, Any]:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
+            logger.debug("Agent %s process vanished during status check", agent_id)
 
     # Not running
     return {
@@ -352,60 +374,26 @@ def health_check_agent(agent_id: str) -> Dict[str, Any]:
 def _build_startup_command(
     agent_id: str, config: Dict[str, Any]
 ) -> Optional[List[str]]:
-    """Build the appropriate startup command for an agent"""
-    repo_root = Path(__file__).parent.parent.parent.parent
+    """Build the appropriate startup command for an agent.
 
+    Uses the 'module' field from AGENT_CATALOG to run agents via
+    `python -m <module> --no-heartbeat` (standardized CLI framework).
+    EventBus uses a dedicated entrypoint binary.
+    """
+    import sys
+
+    python_exe = sys.executable  # Use the same Python running the web server
+
+    # EventBus uses its own entrypoint
     if agent_id == "eventbus":
-        # EventBus: Check if it's available in PATH or in repo
         if _check_command_exists("amoskys-eventbus"):
             return ["amoskys-eventbus"]
-        eventbus_path = repo_root / "amoskys-eventbus"
-        if eventbus_path.exists():
-            return [str(eventbus_path)]
         return None
 
-    elif agent_id == "proc_agent":
-        # Process Agent: Python script
-        proc_path = repo_root / "src" / "amoskys" / "agents" / "proc" / "proc_agent.py"
-        if proc_path.exists():
-            return ["python", str(proc_path)]
-        return None
-
-    elif agent_id == "mac_telemetry":
-        # Mac Telemetry: Python script
-        telemetry_path = repo_root / "generate_mac_telemetry.py"
-        if telemetry_path.exists():
-            return ["python", str(telemetry_path)]
-        return None
-
-    elif agent_id == "flow_agent":
-        # Flow Agent: Python script
-        flow_path = repo_root / "src" / "amoskys" / "agents" / "flowagent" / "main.py"
-        if flow_path.exists():
-            return ["python", str(flow_path)]
-        return None
-
-    elif agent_id == "snmp_agent":
-        # SNMP Agent: Binary or Python
-        if _check_command_exists("amoskys-snmp-agent"):
-            return ["amoskys-snmp-agent"]
-        snmp_path = repo_root / "amoskys-snmp-agent"
-        if snmp_path.exists():
-            return [str(snmp_path)]
-        # Try Python script as fallback
-        snmp_py = repo_root / "src" / "amoskys" / "agents" / "snmp" / "snmp_agent.py"
-        if snmp_py.exists():
-            return ["python", str(snmp_py)]
-        return None
-
-    elif agent_id == "device_scanner":
-        # Device Scanner: Python script
-        scanner_path = (
-            repo_root / "src" / "amoskys" / "agents" / "discovery" / "device_scanner.py"
-        )
-        if scanner_path.exists():
-            return ["python", str(scanner_path)]
-        return None
+    # All other agents use python -m <module>
+    module = config.get("module")
+    if module:
+        return [python_exe, "-m", module]
 
     return None
 
@@ -445,6 +433,7 @@ def get_startup_logs(agent_id: str, lines: int = 50) -> Dict[str, Any]:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     except Exception as e:
+        logger.exception("Failed to read startup logs for agent %s", agent_id)
         return {
             "agent_id": agent_id,
             "available": False,

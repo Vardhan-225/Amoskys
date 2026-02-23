@@ -94,7 +94,7 @@ def make_valid_envelope():
     env = pb.Envelope(
         version="v1",
         ts_ns=int(time.time_ns()),
-        idempotency_key="z1",
+        idempotency_key=f"z1_{time.time_ns()}",
         flow=flow,
         sig=b"",
         prev_sig=b"",

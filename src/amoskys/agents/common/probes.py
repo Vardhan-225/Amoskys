@@ -5,7 +5,7 @@ micro-probes. Each probe watches ONE specific "door" or perspective:
 
     - Probe = lightweight, single-responsibility detector
     - Agent = orchestrator that manages probes, queue, circuit breaker
-    - "If you breathe, we see it" - 77+ probes across 11 agents
+    - "If you breathe, we see it" - 62+ probes across 8 agents
 
 Design Principles:
     1. Probes are DUMB - they only observe and return TelemetryEvents
@@ -14,33 +14,56 @@ Design Principles:
     4. Probes declare their capabilities via class attributes
     5. Probes can be enabled/disabled individually
 
+Observability Contract:
+    Every probe declares an Observability Contract — the fields it requires,
+    the event types it filters on, and the semantic guarantees it expects.
+    The system enforces contracts at runtime and refuses to run probes whose
+    dependencies are unmet. This ensures:
+        - No phantom fields (hardcoded/stubbed data)
+        - No false confidence (BROKEN probes never fire)
+        - No silent degradation (DEGRADED probes tag their output)
+        - No trust-burners (false-positive factories are blocked)
+
+    Contract attributes (override in subclasses):
+        requires_fields: shared_data keys this probe reads
+        requires_event_types: event types this probe filters on
+        field_semantics: expected semantic guarantees per field
+        degraded_without: fields that cause DEGRADED (not BROKEN) if missing
+
 Example Usage:
-    >>> class HighCPUProbe(MicroProbe):
-    ...     name = "high_cpu"
-    ...     description = "Detects processes consuming excessive CPU"
-    ...     mitre_techniques = ["T1496"]  # Resource Hijacking
+    >>> class NXDOMAINBurstProbe(MicroProbe):
+    ...     name = "nxdomain_burst"
+    ...     description = "Detects NXDOMAIN storms indicating DGA or scanning"
+    ...     mitre_techniques = ["T1568.002"]
+    ...     requires_fields = ["dns_queries"]
+    ...     field_semantics = {"response_code": "dns_rcode"}
+    ...     degraded_without = []  # response_code is critical
     ...
     ...     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
-    ...         events = []
-    ...         for proc in psutil.process_iter(['pid', 'cpu_percent']):
-    ...             if proc.info['cpu_percent'] > 80:
-    ...                 events.append(TelemetryEvent(
-    ...                     event_type="high_cpu_process",
-    ...                     severity="WARN",
-    ...                     data={"pid": proc.info['pid'], "cpu": proc.info['cpu_percent']}
-    ...                 ))
-    ...         return events
+    ...         ...
 """
 
 from __future__ import annotations
 
 import abc
 import logging
+import platform as _platform
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, Sequence, Set, Type
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+)
 
 if TYPE_CHECKING:
     from amoskys.agents.common.base import HardenedAgentBase
@@ -170,6 +193,47 @@ class ProbeContext:
 
 
 # =============================================================================
+# Probe Readiness (Observability Contract Result)
+# =============================================================================
+
+
+_VALID_PROBE_STATUSES = frozenset({"REAL", "DEGRADED", "BROKEN", "DISABLED"})
+
+
+@dataclass
+class ProbeReadiness:
+    """Result of validating a probe's Observability Contract.
+
+    Produced by MicroProbe.validate_contract() to indicate whether the
+    probe's field dependencies are satisfied by the current shared_data.
+
+    Attributes:
+        probe_name: Name of the probe
+        status: REAL, DEGRADED, BROKEN, or DISABLED (P0-5: validated)
+        missing_fields: Required fields not found in shared_data
+        degraded_fields: Fields in degraded_without that are missing
+        message: Human-readable explanation
+    """
+
+    probe_name: str
+    status: str  # "REAL", "DEGRADED", "BROKEN", "DISABLED"
+    missing_fields: List[str] = field(default_factory=list)
+    degraded_fields: List[str] = field(default_factory=list)
+    message: str = ""
+
+    def __post_init__(self) -> None:
+        """P0-5: Validate status against ProbeStatus enum values."""
+        if self.status not in _VALID_PROBE_STATUSES:
+            logger.warning(
+                "AOC1_INVALID_PROBE_STATUS: probe=%s status=%r "
+                "is not a valid ProbeStatus value, defaulting to BROKEN",
+                self.probe_name,
+                self.status,
+            )
+            self.status = "BROKEN"
+
+
+# =============================================================================
 # MicroProbe Base Class
 # =============================================================================
 
@@ -211,6 +275,28 @@ class MicroProbe(abc.ABC):
     requires_root: bool = False
     platforms: List[str] = ["linux", "darwin", "windows"]
 
+    # --- Observability Contract (override in subclasses) ---
+    # These declarations form the probe's dependency graph.
+    # The system enforces them at runtime, blocking BROKEN probes
+    # and tagging DEGRADED probes.
+
+    requires_fields: List[str] = []
+    """shared_data keys this probe reads (e.g., ["flows", "dns_queries"]).
+    If a required field is missing from shared_data AND is not in
+    degraded_without, the probe is BROKEN and will not run."""
+
+    requires_event_types: List[str] = []
+    """Event types this probe filters on (e.g., ["MFA_CHALLENGE", "ACCOUNT_LOCKED"]).
+    If the collector never generates these event types, the probe is BROKEN."""
+
+    field_semantics: Dict[str, str] = {}
+    """Expected semantic guarantee per field (e.g., {"bytes_tx": "per_flow_delta"}).
+    Used by the Attribute Audit Runner for CI-time validation."""
+
+    degraded_without: List[str] = []
+    """Fields that cause DEGRADED status if missing, but don't block the probe.
+    The probe can still fire with reduced detection quality."""
+
     # --- Instance State ---
 
     def __init__(self) -> None:
@@ -220,7 +306,87 @@ class MicroProbe(abc.ABC):
         self.scan_count: int = 0
         self.error_count: int = 0
         self.last_error: Optional[str] = None
+        self.readiness: Optional[ProbeReadiness] = None
         self._logger = logging.getLogger(f"probe.{self.name}")
+
+    # --- Observability Contract Validation ---
+
+    def validate_contract(self, context: ProbeContext) -> ProbeReadiness:
+        """Check if shared_data satisfies this probe's field requirements.
+
+        Evaluates the probe's Observability Contract against the actual
+        data available in context.shared_data. Returns a ProbeReadiness
+        indicating whether the probe can run at full fidelity.
+
+        Decision logic:
+            1. Platform not supported → DISABLED
+            2. Any requires_fields missing AND not in degraded_without → BROKEN
+            3. Any requires_event_types not satisfiable → BROKEN
+            4. Any degraded_without fields missing → DEGRADED
+            5. All requirements met → REAL
+
+        Args:
+            context: ProbeContext with shared_data from collector
+
+        Returns:
+            ProbeReadiness with status and diagnostics
+        """
+        current_platform = _platform.system().lower()
+
+        # Check platform support
+        if current_platform not in self.platforms:
+            return ProbeReadiness(
+                probe_name=self.name,
+                status="DISABLED",
+                message=f"Platform {current_platform} not in {self.platforms}",
+            )
+
+        shared_keys = set(context.shared_data.keys()) if context.shared_data else set()
+        missing_critical: List[str] = []
+        missing_degraded: List[str] = []
+
+        # Check requires_fields
+        for req_field in self.requires_fields:
+            if req_field not in shared_keys:
+                if req_field in self.degraded_without:
+                    missing_degraded.append(req_field)
+                else:
+                    missing_critical.append(req_field)
+
+        # Check requires_event_types — these are checked against collector
+        # capabilities declared in context.config.get("collector_event_types")
+        collector_event_types: Set[str] = set(
+            context.config.get("collector_event_types", [])
+        )
+        if self.requires_event_types and collector_event_types:
+            for evt_type in self.requires_event_types:
+                if evt_type not in collector_event_types:
+                    missing_critical.append(f"event_type:{evt_type}")
+
+        # Determine status
+        if missing_critical:
+            return ProbeReadiness(
+                probe_name=self.name,
+                status="BROKEN",
+                missing_fields=missing_critical,
+                degraded_fields=missing_degraded,
+                message=f"Missing critical fields: {', '.join(missing_critical)}",
+            )
+
+        if missing_degraded:
+            return ProbeReadiness(
+                probe_name=self.name,
+                status="DEGRADED",
+                missing_fields=[],
+                degraded_fields=missing_degraded,
+                message=f"Missing enrichment fields: {', '.join(missing_degraded)}",
+            )
+
+        return ProbeReadiness(
+            probe_name=self.name,
+            status="REAL",
+            message="All contract requirements satisfied",
+        )
 
     # --- Abstract Methods ---
 
@@ -258,12 +424,12 @@ class MicroProbe(abc.ABC):
         return True
 
     def get_health(self) -> Dict[str, Any]:
-        """Return probe health status.
+        """Return probe health status including contract readiness.
 
         Returns:
-            Dict with health metrics
+            Dict with health metrics and contract status
         """
-        return {
+        health: Dict[str, Any] = {
             "name": self.name,
             "enabled": self.enabled,
             "last_scan": self.last_scan.isoformat() if self.last_scan else None,
@@ -271,6 +437,14 @@ class MicroProbe(abc.ABC):
             "error_count": self.error_count,
             "last_error": self.last_error,
         }
+        if self.readiness:
+            health["contract_status"] = self.readiness.status
+            health["contract_message"] = self.readiness.message
+        if self.requires_fields:
+            health["requires_fields"] = self.requires_fields
+        if self.requires_event_types:
+            health["requires_event_types"] = self.requires_event_types
+        return health
 
     # --- Utility Methods ---
 
@@ -442,7 +616,9 @@ class MicroProbeAgentMixin:
     # Type hint for metrics - will be provided by HardenedAgentBase when mixed
     metrics: "AgentMetrics"
 
-    def __init__(self, *args, probes: Optional[List[MicroProbe]] = None, **kwargs) -> None:
+    def __init__(
+        self, *args, probes: Optional[List[MicroProbe]] = None, **kwargs
+    ) -> None:
         """Initialize mixin state.
 
         Args:
@@ -476,30 +652,148 @@ class MicroProbeAgentMixin:
         for probe in probes:
             self.register_probe(probe)
 
-    def setup_probes(self) -> bool:
-        """Initialize all registered probes.
+    def setup_probes(
+        self,
+        collector_event_types: Optional[List[str]] = None,
+        collector_shared_data_keys: Optional[List[str]] = None,
+    ) -> bool:
+        """Initialize all registered probes with contract validation.
 
-        Calls setup() on each probe. Probes that fail setup are disabled.
+        For each probe:
+            1. Check platform support → disable if unsupported
+            2. Validate Observability Contract → disable BROKEN probes
+            3. Call setup() → disable if setup fails
+            4. Print Probe Capability Banner
+
+        Args:
+            collector_event_types: Event types this agent's collector generates.
+                Used for contract validation of requires_event_types.
+            collector_shared_data_keys: Top-level shared_data keys the collector
+                will populate at runtime (e.g. ["flows", "dns_queries"]).
+                Pre-populated with sentinel values for contract validation.
 
         Returns:
             True if at least one probe initialized successfully
         """
-        success_count = 0
+        current_platform = _platform.system().lower()
+
+        # Pre-populate shared_data with sentinel values for keys the collector
+        # will provide at runtime, so contract validation can succeed.
+        setup_shared_data: Dict[str, Any] = {}
+        for key in collector_shared_data_keys or []:
+            setup_shared_data[key] = []  # sentinel — not real data
+
+        contract_context = ProbeContext(
+            device_id=getattr(self, "device_id", "unknown"),
+            agent_name=getattr(self, "agent_name", "unknown"),
+            config={"collector_event_types": collector_event_types or []},
+            shared_data=setup_shared_data,
+        )
+
+        counts: Dict[str, int] = {"REAL": 0, "DEGRADED": 0, "BROKEN": 0, "DISABLED": 0}
+        broken_details: List[str] = []
+        degraded_details: List[str] = []
+
         for probe in self._probes:
+            # 1. Platform check
+            if current_platform not in probe.platforms:
+                probe.enabled = False
+                probe.readiness = ProbeReadiness(
+                    probe_name=probe.name,
+                    status="DISABLED",
+                    message=f"Platform {current_platform} not supported",
+                )
+                counts["DISABLED"] += 1
+                continue
+
+            # 2. Contract validation
+            readiness = probe.validate_contract(contract_context)
+            probe.readiness = readiness
+
+            if readiness.status == "BROKEN":
+                probe.enabled = False
+                counts["BROKEN"] += 1
+                broken_details.append(f"  BROKEN: {probe.name} ({readiness.message})")
+                logger.warning(
+                    "Probe %s disabled: contract BROKEN — %s",
+                    probe.name,
+                    readiness.message,
+                )
+                continue
+
+            if readiness.status == "DEGRADED":
+                counts["DEGRADED"] += 1
+                degraded_details.append(
+                    f"  DEGRADED: {probe.name} ({readiness.message})"
+                )
+                logger.info(
+                    "Probe %s running DEGRADED — %s",
+                    probe.name,
+                    readiness.message,
+                )
+
+            # 3. Normal setup
             try:
                 if probe.setup():
-                    success_count += 1
+                    if readiness.status != "DEGRADED":
+                        counts["REAL"] += 1
                     logger.info(f"Probe {probe.name} initialized")
                 else:
                     probe.enabled = False
-                    logger.warning(f"Probe {probe.name} setup returned False, disabled")
+                    counts["DISABLED"] += 1
+                    # P0-6: Track silent probe disabling
+                    if hasattr(self, "metrics"):
+                        self.metrics.probes_silently_disabled += 1
+                    logger.error(
+                        "AOC1_PROBE_DISABLED: probe=%s reason=setup_returned_false",
+                        probe.name,
+                    )
             except Exception as e:
                 probe.enabled = False
                 probe.last_error = str(e)
-                logger.error(f"Probe {probe.name} setup failed: {e}")
+                counts["DISABLED"] += 1
+                # P0-6: Track silent probe disabling
+                if hasattr(self, "metrics"):
+                    self.metrics.probes_silently_disabled += 1
+                logger.error(
+                    "AOC1_PROBE_DISABLED: probe=%s reason=setup_exception error=%s",
+                    probe.name,
+                    e,
+                )
 
-        logger.info(f"Initialized {success_count}/{len(self._probes)} probes")
-        return success_count > 0
+        # P0-6: Update probe metrics counters
+        total = len(self._probes)
+        if hasattr(self, "metrics"):
+            self.metrics.probes_total = total
+            self.metrics.probes_real = counts["REAL"]
+            self.metrics.probes_degraded = counts["DEGRADED"]
+            self.metrics.probes_broken = counts["BROKEN"]
+            self.metrics.probes_disabled = counts["DISABLED"]
+
+        # 4. Print Probe Capability Banner
+        agent_name = getattr(self, "agent_name", "unknown")
+        banner_lines = [
+            "",
+            f"{'=' * 50}",
+            f" Probe Capability Banner: {agent_name}",
+            f"{'=' * 50}",
+            f" {current_platform}: enabled={counts['REAL'] + counts['DEGRADED']}"
+            f", degraded={counts['DEGRADED']}"
+            f", disabled(broken)={counts['BROKEN']}"
+            f", disabled(platform)={counts['DISABLED']}"
+            f", total={total}",
+        ]
+        for line in broken_details:
+            banner_lines.append(line)
+        for line in degraded_details:
+            banner_lines.append(line)
+        banner_lines.append(f"{'=' * 50}")
+
+        banner = "\n".join(banner_lines)
+        logger.info(banner)
+
+        enabled_count = counts["REAL"] + counts["DEGRADED"]
+        return enabled_count > 0
 
     def scan_all_probes(self) -> List[TelemetryEvent]:
         """Execute all enabled probes and collect events.
@@ -526,6 +820,13 @@ class MicroProbeAgentMixin:
                 # Update probe metrics
                 probe.last_scan = datetime.now(timezone.utc)
                 probe.scan_count += 1
+
+                # P0-7: Tag DEGRADED probe events in scan_all_probes too
+                if probe.readiness and probe.readiness.status == "DEGRADED":
+                    for event in events:
+                        event.tags.append("quality_degraded")
+                        for df in probe.readiness.degraded_fields:
+                            event.tags.append(f"missing_{df}")
 
                 # Track probe events emitted (if agent has metrics)
                 if events and hasattr(self, "metrics"):
@@ -622,12 +923,15 @@ class MicroProbeAgentMixin:
         return self._probes
 
     def run_probes(self, context: ProbeContext) -> List[TelemetryEvent]:
-        """Run all enabled probes with given context.
+        """Run all enabled probes with contract validation.
 
-        This is a convenience method for v2 agents that build their own context.
+        For each enabled probe, validates its Observability Contract against
+        the current context.shared_data before running scan(). BROKEN probes
+        are skipped and emit a contract_violation event. DEGRADED probes run
+        but their events are tagged.
 
         Args:
-            context: ProbeContext with shared data
+            context: ProbeContext with shared data from collector
 
         Returns:
             List of TelemetryEvents from all probes
@@ -639,6 +943,29 @@ class MicroProbeAgentMixin:
                 continue
 
             try:
+                # Runtime contract validation
+                if probe.requires_fields or probe.requires_event_types:
+                    readiness = probe.validate_contract(context)
+                    probe.readiness = readiness
+
+                    if readiness.status == "BROKEN":
+                        # Emit blindness telemetry — system reports its own gaps
+                        all_events.append(
+                            TelemetryEvent(
+                                event_type="probe_contract_violation",
+                                severity=Severity.DEBUG,
+                                probe_name=probe.name,
+                                data={
+                                    "probe": probe.name,
+                                    "status": "BROKEN",
+                                    "missing_fields": readiness.missing_fields,
+                                    "message": readiness.message,
+                                },
+                                tags=["observability_contract", "self_audit"],
+                            )
+                        )
+                        continue  # Skip scan — contract unsatisfied
+
                 # Update context with probe-specific state
                 context.previous_state = self._probe_state.get(probe.name, {})
 
@@ -646,6 +973,28 @@ class MicroProbeAgentMixin:
                 start_time = time.time()
                 events = probe.scan(context)
                 scan_duration = time.time() - start_time
+
+                # P0-7: Tag DEGRADED probe events + emit companion event
+                if probe.readiness and probe.readiness.status == "DEGRADED":
+                    for event in events:
+                        event.tags.append("degraded_probe")
+                        for df in probe.readiness.degraded_fields:
+                            event.tags.append(f"missing_{df}")
+
+                    if events:
+                        all_events.append(
+                            TelemetryEvent(
+                                event_type="aoc1_probe_degraded_firing",
+                                severity=Severity.INFO,
+                                probe_name=probe.name,
+                                data={
+                                    "probe": probe.name,
+                                    "degraded_fields": probe.readiness.degraded_fields,
+                                    "event_count": len(events),
+                                },
+                                tags=["aoc1", "probe_quality"],
+                            )
+                        )
 
                 # Update probe metrics
                 probe.last_scan = datetime.now(timezone.utc)
@@ -687,6 +1036,7 @@ __all__ = [
     "MicroProbe",
     "MicroProbeAgentMixin",
     "ProbeContext",
+    "ProbeReadiness",
     "ProbeRegistry",
     "Severity",
     "TelemetryEvent",

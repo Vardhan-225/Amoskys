@@ -1,0 +1,324 @@
+{% extends "auth/base.html" %}
+
+{% block title %}Setup{% endblock %}
+{% block header_title %}Welcome to AMOSKYS{% endblock %}
+{% block header_subtitle %}Let's set up your security command center{% endblock %}
+
+{% block extra_css %}
+<style>
+    .auth-container { max-width: 600px; }
+    .setup-steps { display: flex; gap: 0.5rem; margin-bottom: 2rem; }
+    .step-dot {
+        flex: 1; height: 4px; border-radius: 2px;
+        background: rgba(0,217,255,0.15); transition: background 0.4s;
+    }
+    .step-dot.active { background: var(--cyan-bright); }
+    .step-dot.done { background: var(--green-secure); }
+    .step-panel { display: none; animation: fade-in 0.4s ease; }
+    .step-panel.active { display: block; }
+    .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.5rem 0; }
+    .choice-card {
+        padding: 1.5rem; border-radius: 12px; cursor: pointer;
+        background: rgba(10,14,39,0.6); border: 2px solid rgba(0,217,255,0.15);
+        transition: all 0.3s; text-align: center;
+    }
+    .choice-card:hover { border-color: var(--cyan-bright); transform: translateY(-2px); }
+    .choice-card.selected { border-color: var(--green-secure); background: rgba(0,255,136,0.08); }
+    .choice-icon { font-size: 2.5rem; margin-bottom: 0.75rem; display: block; }
+    .choice-title { font-weight: 700; font-size: 1rem; margin-bottom: 0.3rem; }
+    .choice-desc { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; }
+    .platform-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1.5rem 0; }
+    .platform-card { padding: 1.25rem 0.75rem; }
+    .detected-badge {
+        display: inline-block; padding: 0.15rem 0.5rem; border-radius: 8px;
+        font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+        background: rgba(0,255,136,0.2); color: var(--green-secure); margin-top: 0.3rem;
+    }
+    .btn-row { display: flex; gap: 1rem; margin-top: 2rem; }
+    .btn-row .btn { flex: 1; }
+    .btn-secondary {
+        background: rgba(0,217,255,0.1); color: var(--cyan-bright);
+        border: 1px solid rgba(0,217,255,0.3);
+    }
+    .btn-secondary:hover { background: rgba(0,217,255,0.2); }
+    .step-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .step-subtitle { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem; }
+    .deploy-info {
+        background: rgba(0,217,255,0.06); border: 1px solid rgba(0,217,255,0.15);
+        border-radius: 10px; padding: 1.25rem; margin: 1rem 0;
+    }
+    .deploy-info code {
+        display: block; padding: 0.75rem; margin-top: 0.5rem;
+        background: rgba(10,14,39,0.8); border-radius: 6px;
+        font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+        color: var(--green-secure); word-break: break-all;
+    }
+    .complete-icon { font-size: 4rem; text-align: center; margin: 1rem 0; }
+    .complete-stats {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin: 1.5rem 0;
+    }
+    .stat-item {
+        text-align: center; padding: 0.75rem;
+        background: rgba(0,217,255,0.06); border-radius: 8px;
+    }
+    .stat-value { font-size: 1.3rem; font-weight: 700; color: var(--cyan-bright); }
+    .stat-label { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Progress Steps -->
+<div class="setup-steps" id="step-dots">
+    <div class="step-dot active" data-step="0"></div>
+    <div class="step-dot" data-step="1"></div>
+    <div class="step-dot" data-step="2"></div>
+    <div class="step-dot" data-step="3"></div>
+    <div class="step-dot" data-step="4"></div>
+</div>
+
+<!-- Step 0: Welcome -->
+<div class="step-panel active" id="step-0">
+    <div class="step-title">Welcome to AMOSKYS</div>
+    <div class="step-subtitle">
+        Your Neural Security Command Platform. AMOSKYS monitors every layer of your
+        system — processes, network flows, file integrity, authentication, persistence
+        mechanisms, and more — with 85+ micro-probes and Ed25519 cryptographic integrity.
+    </div>
+    <div style="margin: 1.5rem 0;">
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <span style="padding: 0.3rem 0.6rem; background: rgba(0,255,136,0.1); color: var(--green-secure); border-radius: 6px; font-size: 0.8rem;">10 Security Agents</span>
+            <span style="padding: 0.3rem 0.6rem; background: rgba(0,217,255,0.1); color: var(--cyan-bright); border-radius: 6px; font-size: 0.8rem;">85+ Micro-Probes</span>
+            <span style="padding: 0.3rem 0.6rem; background: rgba(255,107,157,0.1); color: #ff6b9d; border-radius: 6px; font-size: 0.8rem;">90 MITRE Techniques</span>
+            <span style="padding: 0.3rem 0.6rem; background: rgba(255,170,0,0.1); color: var(--orange-warning); border-radius: 6px; font-size: 0.8rem;">Ed25519 Signed</span>
+        </div>
+    </div>
+    <div class="btn-row">
+        <button class="btn btn-primary" id="btn-get-started">Get Started</button>
+    </div>
+</div>
+
+<!-- Step 1: Account Type -->
+<div class="step-panel" id="step-1">
+    <div class="step-title">How will you use AMOSKYS?</div>
+    <div class="step-subtitle">This helps us tailor your experience.</div>
+    <div class="choice-grid">
+        <div class="choice-card" data-account-type="individual" id="choice-individual">
+            <span class="choice-icon">🖥</span>
+            <div class="choice-title">Individual</div>
+            <div class="choice-desc">Monitor a single device. Perfect for personal security awareness and threat detection.</div>
+        </div>
+        <div class="choice-card" data-account-type="enterprise" id="choice-enterprise">
+            <span class="choice-icon">🏢</span>
+            <div class="choice-title">Enterprise</div>
+            <div class="choice-desc">Multi-device fleet management. Deploy agents across your infrastructure with centralized control.</div>
+        </div>
+    </div>
+    <div class="btn-row">
+        <button class="btn btn-secondary" data-nav-step="0" id="btn-step1-back">Back</button>
+        <button class="btn btn-primary" id="btn-step1-next" disabled>Continue</button>
+    </div>
+</div>
+
+<!-- Step 2: Platform Detection -->
+<div class="step-panel" id="step-2">
+    <div class="step-title">Select Your Platform</div>
+    <div class="step-subtitle">We detected your system automatically. Confirm or select the correct platform.</div>
+    <div class="platform-grid">
+        <div class="choice-card platform-card" data-platform="macos" id="plat-macos">
+            <span class="choice-icon">🍎</span>
+            <div class="choice-title">macOS</div>
+            <div id="detect-macos"></div>
+        </div>
+        <div class="choice-card platform-card" data-platform="linux" id="plat-linux">
+            <span class="choice-icon">🐧</span>
+            <div class="choice-title">Linux</div>
+            <div id="detect-linux"></div>
+        </div>
+        <div class="choice-card platform-card" data-platform="windows" id="plat-windows">
+            <span class="choice-icon">🪟</span>
+            <div class="choice-title">Windows</div>
+            <div id="detect-windows"></div>
+        </div>
+    </div>
+    <div class="btn-row">
+        <button class="btn btn-secondary" data-nav-step="1" id="btn-step2-back">Back</button>
+        <button class="btn btn-primary" id="btn-step2-next" disabled>Continue</button>
+    </div>
+</div>
+
+<!-- Step 3: Deploy Agent -->
+<div class="step-panel" id="step-3">
+    <div class="step-title">Deploy Your First Agent</div>
+    <div class="step-subtitle">Install the AMOSKYS agent on your device to start monitoring.</div>
+    <div class="deploy-info">
+        <div style="font-weight: 600; margin-bottom: 0.25rem;">Quick Install</div>
+        <div style="font-size: 0.8rem; color: var(--text-secondary);">Run this command in your terminal:</div>
+        <code id="install-cmd">pip install amoskys && amoskys-install</code>
+    </div>
+    <div class="deploy-info">
+        <div style="font-weight: 600; margin-bottom: 0.25rem;">Or use the Marketplace</div>
+        <div style="font-size: 0.8rem; color: var(--text-secondary);">
+            Browse agent bundles with pre-configured probe sets for different security use cases.
+        </div>
+        <a href="/dashboard/marketplace" style="display: inline-block; margin-top: 0.5rem; color: var(--cyan-bright); text-decoration: none; font-weight: 600; font-size: 0.85rem;">
+            Open Marketplace →
+        </a>
+    </div>
+    <div class="btn-row">
+        <button class="btn btn-secondary" data-nav-step="2" id="btn-step3-back">Back</button>
+        <button class="btn btn-primary" data-nav-step="4" id="btn-step3-next">Continue</button>
+    </div>
+</div>
+
+<!-- Step 4: Complete -->
+<div class="step-panel" id="step-4">
+    <div class="complete-icon">🛡</div>
+    <div class="step-title" style="text-align: center;">You're All Set!</div>
+    <div class="step-subtitle" style="text-align: center;">
+        Your AMOSKYS security command center is ready. Start monitoring your system.
+    </div>
+    <div class="complete-stats">
+        <div class="stat-item">
+            <div class="stat-value">10</div>
+            <div class="stat-label">Security Agents</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">85+</div>
+            <div class="stat-label">Micro-Probes</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">90</div>
+            <div class="stat-label">MITRE Techniques</div>
+        </div>
+    </div>
+    <button class="btn btn-primary" id="btn-complete">Enter Command Center</button>
+</div>
+{% endblock %}
+
+{% block footer %}{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce() }}">
+let currentStep = 0;
+let selectedAccountType = null;
+let selectedPlatform = null;
+let detectedOS = null;
+
+// Auto-detect platform on load
+(async function() {
+    try {
+        const resp = await fetch('/api/onboarding/preflight');
+        const data = await resp.json();
+        if (data.status === 'success') {
+            detectedOS = data.detected_os;
+            const el = document.getElementById('detect-' + detectedOS);
+            if (el) el.innerHTML = '<span class="detected-badge">Detected</span>';
+            selectPlatform(detectedOS);
+        }
+    } catch(e) {
+        // Fallback to JS detection
+        const ua = navigator.platform.toLowerCase();
+        if (ua.includes('mac')) selectPlatform('macos');
+        else if (ua.includes('linux')) selectPlatform('linux');
+        else if (ua.includes('win')) selectPlatform('windows');
+    }
+})();
+
+// --- Event listeners (CSP-safe, no inline handlers) ---
+
+// Step 0: "Get Started" button
+document.getElementById('btn-get-started').addEventListener('click', () => goToStep(1));
+
+// Step 1: Account type selection cards
+document.querySelectorAll('[data-account-type]').forEach(card => {
+    card.addEventListener('click', () => selectAccountType(card.dataset.accountType));
+});
+
+// Step 1: Back and Continue buttons
+document.getElementById('btn-step1-back').addEventListener('click', () => goToStep(0));
+document.getElementById('btn-step1-next').addEventListener('click', () => saveProfileAndNext());
+
+// Step 2: Platform selection cards
+document.querySelectorAll('[data-platform]').forEach(card => {
+    card.addEventListener('click', () => selectPlatform(card.dataset.platform));
+});
+
+// Step 2: Back and Continue buttons
+document.getElementById('btn-step2-back').addEventListener('click', () => goToStep(1));
+document.getElementById('btn-step2-next').addEventListener('click', () => savePlatformAndNext());
+
+// Step 3: Back and Continue buttons
+document.getElementById('btn-step3-back').addEventListener('click', () => goToStep(2));
+document.getElementById('btn-step3-next').addEventListener('click', () => goToStep(4));
+
+// Step 4: Complete button
+document.getElementById('btn-complete').addEventListener('click', () => completeSetup());
+
+function goToStep(step) {
+    document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('step-' + step).classList.add('active');
+    document.querySelectorAll('.step-dot').forEach((d, i) => {
+        d.classList.remove('active', 'done');
+        if (i < step) d.classList.add('done');
+        else if (i === step) d.classList.add('active');
+    });
+    currentStep = step;
+}
+
+function selectAccountType(type) {
+    selectedAccountType = type;
+    document.querySelectorAll('.choice-grid .choice-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('choice-' + type).classList.add('selected');
+    document.getElementById('btn-step1-next').disabled = false;
+}
+
+function selectPlatform(plat) {
+    selectedPlatform = plat;
+    document.querySelectorAll('.platform-grid .choice-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('plat-' + plat).classList.add('selected');
+    const btn = document.getElementById('btn-step2-next');
+    if (btn) btn.disabled = false;
+    // Update install command
+    const cmd = document.getElementById('install-cmd');
+    if (cmd) {
+        if (plat === 'macos') cmd.textContent = 'pip install amoskys && amoskys-install';
+        else if (plat === 'linux') cmd.textContent = 'pip install amoskys && sudo amoskys-install';
+        else cmd.textContent = 'pip install amoskys && amoskys-install';
+    }
+}
+
+async function saveProfileAndNext() {
+    if (!selectedAccountType) return;
+    try {
+        await fetch('/api/onboarding/profile', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({account_type: selectedAccountType}),
+        });
+    } catch(e) {}
+    goToStep(2);
+}
+
+async function savePlatformAndNext() {
+    if (!selectedPlatform) return;
+    try {
+        await fetch('/api/onboarding/profile', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({device_os: selectedPlatform}),
+        });
+    } catch(e) {}
+    goToStep(3);
+}
+
+async function completeSetup() {
+    const btn = document.getElementById('btn-complete');
+    btn.classList.add('btn-loading');
+    btn.textContent = '';
+    try {
+        await fetch('/api/onboarding/complete', {method: 'POST'});
+    } catch(e) {}
+    window.location.href = '/dashboard/cortex';
+}
+</script>
+{% endblock %}

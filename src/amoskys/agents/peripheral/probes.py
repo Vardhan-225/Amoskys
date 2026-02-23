@@ -240,6 +240,8 @@ class USBInventoryProbe(MicroProbe):
     mitre_techniques = ["T1200"]
     mitre_tactics = ["initial_access"]
     scan_interval = 60.0  # Full inventory every minute
+    requires_fields = []
+    field_semantics = {"usb_devices": "usb_device_list"}
 
     def __init__(self) -> None:
         super().__init__()
@@ -298,6 +300,8 @@ class USBConnectionEdgeProbe(MicroProbe):
     mitre_techniques = ["T1200", "T1091"]
     mitre_tactics = ["initial_access", "lateral_movement"]
     scan_interval = 5.0
+    requires_fields = []
+    field_semantics = {"usb_devices": "usb_device_list"}
 
     def __init__(self) -> None:
         super().__init__()
@@ -378,6 +382,9 @@ class USBStorageProbe(MicroProbe):
     mitre_techniques = ["T1052", "T1091"]
     mitre_tactics = ["exfiltration", "lateral_movement"]
     scan_interval = 10.0
+    requires_fields = []
+    field_semantics = {"device_class": "usb_class_code"}
+    degraded_without = ["device_class"]
 
     # USB Mass Storage class code
     STORAGE_CLASS_CODES = {"08", "8"}  # Mass Storage
@@ -469,6 +476,8 @@ class USBNetworkAdapterProbe(MicroProbe):
     mitre_techniques = ["T1557", "T1200"]
     mitre_tactics = ["credential_access", "initial_access"]
     scan_interval = 30.0
+    requires_fields = []
+    field_semantics = {"vendor_id": "usb_vendor_id"}
 
     # Known network adapter vendor IDs (partial list)
     NETWORK_PATTERNS = [
@@ -562,6 +571,8 @@ class HIDKeyboardMouseAnomalyProbe(MicroProbe):
     mitre_techniques = ["T1200", "T1056.001"]
     mitre_tactics = ["initial_access", "collection"]
     scan_interval = 10.0
+    requires_fields = []
+    field_semantics = {"name": "usb_device_name", "vendor_id": "usb_vendor_id"}
 
     # Known attack device vendor/product IDs
     KNOWN_ATTACK_DEVICES = {
@@ -653,6 +664,9 @@ class BluetoothDeviceProbe(MicroProbe):
     mitre_tactics = ["initial_access"]
     scan_interval = 30.0
     platforms = ["darwin", "linux"]  # Windows needs different approach
+    requires_fields = []
+    field_semantics = {"address": "bt_mac_address", "device_type": "bt_device_class"}
+    degraded_without = ["device_type"]
 
     def __init__(self) -> None:
         super().__init__()
@@ -757,6 +771,9 @@ class HighRiskPeripheralScoreProbe(MicroProbe):
     mitre_techniques = ["T1200", "T1091", "T1052"]
     mitre_tactics = ["initial_access", "exfiltration"]
     scan_interval = 60.0
+    requires_fields = []
+    field_semantics = {"device_class": "usb_class_code"}
+    degraded_without = ["device_class"]
 
     def __init__(self) -> None:
         super().__init__()

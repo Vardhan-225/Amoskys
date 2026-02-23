@@ -3,12 +3,15 @@ AMOSKYS API Telemetry Module
 Real-time agent telemetry from EventBus WAL storage
 """
 
+import logging
 import os
 import sqlite3
 import sys
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
+
+logger = logging.getLogger(__name__)
 
 # Add src to path for protobuf imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
@@ -116,12 +119,13 @@ def get_recent_telemetry():
                 events.append(event_data)
 
             except Exception as parse_err:
-                # Skip events that fail to parse
+                logger.debug("Skipping unparseable WAL event %s: %s", row_id, parse_err)
                 continue
 
         return jsonify({"status": "success", "count": len(events), "events": events})
 
     except Exception as e:
+        logger.exception("Failed to fetch recent telemetry from WAL")
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
@@ -197,6 +201,7 @@ def get_agent_summary():
         )
 
     except Exception as e:
+        logger.exception("Failed to fetch agent telemetry summary")
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
@@ -259,6 +264,7 @@ def get_device_metrics(device_id):
         )
 
     except Exception as e:
+        logger.exception("Failed to fetch metrics for device %s", device_id)
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
@@ -292,4 +298,5 @@ def get_telemetry_stats():
         return jsonify({"status": "success", "stats": stats})
 
     except Exception as e:
+        logger.exception("Failed to fetch telemetry statistics")
         return jsonify({"status": "error", "error": str(e)}), 500

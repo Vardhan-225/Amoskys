@@ -1,9 +1,5 @@
-"""AMOSKYS File Integrity Monitoring Agent"""
+"""AMOSKYS File Integrity Monitoring Agent (Legacy Module).
 
-from amoskys.agents.file_integrity.file_integrity_agent import (
-    FileChange,
-    FileState,
-    FIMAgent,
-)
-
-__all__ = ["FIMAgent", "FileState", "FileChange"]
+This module has been superseded by amoskys.agents.fim (FIMAgentV2).
+Kept as a stub for backwards-compatible entry points.
+"""

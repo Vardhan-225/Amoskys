@@ -53,6 +53,7 @@ def cleanup_sandbox() -> None:
 
 # ── Trigger 1: ExecveHighRiskProbe ────────────────────────────────────────
 
+
 def trigger_execve_from_tmp(dry_run: bool = False) -> None:
     """Execute a binary from /tmp (triggers execve audit event)."""
     log("Trigger: ExecveHighRiskProbe")
@@ -81,13 +82,16 @@ def trigger_execve_from_tmp(dry_run: bool = False) -> None:
     os.chmod(py_path, 0o755)
 
     try:
-        result = subprocess.run([sys.executable, py_path], capture_output=True, timeout=5)
+        result = subprocess.run(
+            [sys.executable, py_path], capture_output=True, timeout=5
+        )
         log(f"  Executed Python from /tmp: {py_path}")
     except Exception as e:
         log(f"  Execution failed: {e}")
 
 
 # ── Trigger 2: PrivEscSyscallProbe (simulated) ───────────────────────────
+
 
 def trigger_privesc_simulation(dry_run: bool = False) -> None:
     """Create files that mimic privilege escalation patterns.
@@ -119,6 +123,7 @@ def trigger_privesc_simulation(dry_run: bool = False) -> None:
 
 # ── Trigger 3: KernelModuleLoadProbe (simulated) ─────────────────────────
 
+
 def trigger_module_load_simulation(dry_run: bool = False) -> None:
     """Create a fake .kext bundle in sandbox (macOS kernel extension pattern)."""
     log("Trigger: KernelModuleLoadProbe (simulated)")
@@ -132,7 +137,8 @@ def trigger_module_load_simulation(dry_run: bool = False) -> None:
     os.makedirs(kext_dir, exist_ok=True)
     info_plist = f"{kext_dir}/Info.plist"
     with open(info_plist, "w") as f:
-        f.write("""\
+        f.write(
+            """\
 <?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
 <dict>
@@ -142,11 +148,13 @@ def trigger_module_load_simulation(dry_run: bool = False) -> None:
     <string>EOA Test Kext</string>
 </dict>
 </plist>
-""")
+"""
+        )
     log(f"  Created fake kext bundle: {SANDBOX}/eoa_test.kext")
 
 
 # ── Trigger 4: PtraceAbuseProbe (simulated) ──────────────────────────────
+
 
 def trigger_ptrace_simulation(dry_run: bool = False) -> None:
     """Use lldb/dtruss-like patterns to trigger ptrace audit events.
@@ -176,6 +184,7 @@ def trigger_ptrace_simulation(dry_run: bool = False) -> None:
 
 # ── Trigger 5: FilePermissionTamperProbe ──────────────────────────────────
 
+
 def trigger_permission_tamper(dry_run: bool = False) -> None:
     """chmod sensitive files in sandbox (triggers audit events)."""
     log("Trigger: FilePermissionTamperProbe")
@@ -202,6 +211,7 @@ def trigger_permission_tamper(dry_run: bool = False) -> None:
 
 # ── Trigger 6: AuditTamperProbe (simulated) ──────────────────────────────
 
+
 def trigger_audit_tamper(dry_run: bool = False) -> None:
     """Access audit configuration files in sandbox."""
     log("Trigger: AuditTamperProbe (simulated)")
@@ -226,6 +236,7 @@ def trigger_audit_tamper(dry_run: bool = False) -> None:
 
 # ── Trigger 7: SyscallFloodProbe ──────────────────────────────────────────
 
+
 def trigger_syscall_flood(dry_run: bool = False) -> None:
     """Generate rapid syscalls (stat/open/close burst)."""
     log("Trigger: SyscallFloodProbe")
@@ -247,7 +258,9 @@ def trigger_syscall_flood(dry_run: bool = False) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Trigger Pack: KernelAudit probes")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without executing")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without executing"
+    )
     args = parser.parse_args()
 
     print("\n═══ KernelAudit Trigger Pack ═══")

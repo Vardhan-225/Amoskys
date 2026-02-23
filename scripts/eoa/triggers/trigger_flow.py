@@ -30,6 +30,7 @@ def log(msg: str) -> None:
 
 # ── Trigger 1: PortScanSweepProbe ─────────────────────────────────────────
 
+
 def trigger_port_scan(dry_run: bool = False) -> None:
     """Sweep 25 ports on localhost to trigger vertical scan detection."""
     log("Trigger: PortScanSweepProbe (25 ports on localhost)")
@@ -50,6 +51,7 @@ def trigger_port_scan(dry_run: bool = False) -> None:
 
 
 # ── Trigger 2: LateralSMBWinRMProbe ──────────────────────────────────────
+
 
 def trigger_lateral_movement(dry_run: bool = False) -> None:
     """Connect to admin protocol ports on localhost (SSH=22, SMB=445)."""
@@ -72,6 +74,7 @@ def trigger_lateral_movement(dry_run: bool = False) -> None:
 
 # ── Trigger 3: DataExfilVolumeSpikeProbe ──────────────────────────────────
 
+
 def trigger_data_exfil(dry_run: bool = False) -> None:
     """Large download to exercise exfil byte-counting (via curl to localhost)."""
     log("Trigger: DataExfilVolumeSpikeProbe")
@@ -84,7 +87,10 @@ def trigger_data_exfil(dry_run: bool = False) -> None:
     try:
         # Just create a large temp file — the flow collector tracks bytes via nettop
         import tempfile
-        with tempfile.NamedTemporaryFile(dir="/tmp", prefix="eoa_exfil_", suffix=".dat", delete=True) as f:
+
+        with tempfile.NamedTemporaryFile(
+            dir="/tmp", prefix="eoa_exfil_", suffix=".dat", delete=True
+        ) as f:
             f.write(b"X" * (1024 * 1024))  # 1 MB test data
             f.flush()
             log(f"  Generated 1 MB test data: {f.name}")
@@ -93,6 +99,7 @@ def trigger_data_exfil(dry_run: bool = False) -> None:
 
 
 # ── Trigger 4: C2BeaconFlowProbe ──────────────────────────────────────────
+
 
 def trigger_c2_beacon(dry_run: bool = False) -> None:
     """Periodic small connections (beacon-like pattern) to localhost."""
@@ -121,6 +128,7 @@ def trigger_c2_beacon(dry_run: bool = False) -> None:
 
 # ── Trigger 5: CleartextCredentialLeakProbe ───────────────────────────────
 
+
 def trigger_cleartext_creds(dry_run: bool = False) -> None:
     """Connect to cleartext protocol ports (FTP=21, Telnet=23, HTTP=80)."""
     log("Trigger: CleartextCredentialLeakProbe")
@@ -141,6 +149,7 @@ def trigger_cleartext_creds(dry_run: bool = False) -> None:
 
 
 # ── Trigger 6: SuspiciousTunnelProbe ──────────────────────────────────────
+
 
 def trigger_tunnel(dry_run: bool = False) -> None:
     """Open a long-lived TCP connection on non-standard port."""
@@ -163,6 +172,7 @@ def trigger_tunnel(dry_run: bool = False) -> None:
 
 # ── Trigger 7: InternalReconDNSFlowProbe ──────────────────────────────────
 
+
 def trigger_dns_recon(dry_run: bool = False) -> None:
     """Rapid DNS queries to exercise DNS flow recon detection."""
     log("Trigger: InternalReconDNSFlowProbe")
@@ -184,7 +194,9 @@ def trigger_dns_recon(dry_run: bool = False) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Trigger Pack: FlowAgent probes")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without executing")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without executing"
+    )
     args = parser.parse_args()
 
     print("\n═══ FlowAgent Trigger Pack ═══")

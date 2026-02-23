@@ -1,0 +1,57 @@
+{
+  "agent": "flow_agent_v2",
+  "label": "FlowAgent V2",
+  "platform": "macOS (Darwin / Apple Silicon)",
+  "eoa_version": "1.0",
+  "timestamp": "2026-02-17T16:46:51Z",
+  "duration_s": 120,
+  "collection_interval_s": 15,
+  "collector": "MacOSFlowCollector (lsof -i -n -P)",
+  "verdict": "PASS",
+  "events": {
+    "total": 18,
+    "METRIC": 17,
+    "SECURITY": 1
+  },
+  "queue_rows": 8,
+  "mitre_techniques_observed": ["T1041", "T1595"],
+  "mitre_technique_count": 2,
+  "probes": {
+    "total": 8,
+    "fired": 1,
+    "fired_names": ["new_external_service"],
+    "silent_names": [
+      "port_scan_sweep",
+      "lateral_smb_winrm",
+      "data_exfil_volume_spike",
+      "c2_beacon_flow",
+      "cleartext_credential_leak",
+      "suspicious_tunnel",
+      "internal_recon_dns_flow"
+    ]
+  },
+  "resource": {
+    "rss_min_kb": 5808,
+    "rss_max_kb": 59744,
+    "rss_final_kb": 59744,
+    "cpu_max_pct": 0.0
+  },
+  "stability": {
+    "unexpected_tracebacks": 0,
+    "circuit_breaker_tracebacks": 6,
+    "loop_crashes": 0,
+    "decode_failures": 0,
+    "graceful_shutdown": true
+  },
+  "flows_collected_per_cycle": {
+    "min": 11,
+    "max": 13,
+    "typical": 12
+  },
+  "flows_collected_total": 105,
+  "artifacts": {
+    "scorecard_json": true,
+    "fields_contract_md": true,
+    "sample_events_ndjson": true
+  }
+}

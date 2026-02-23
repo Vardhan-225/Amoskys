@@ -1,20 +1,9 @@
 """Network flow monitoring agent.
 
-This module provides network traffic monitoring with micro-probe architecture:
-    - FlowAgentV2: Micro-probe architecture with 8 specialized detectors
-
-The v2 agent uses the "swarm of eyes" pattern with probes for:
-    - Port scanning and reconnaissance
-    - Lateral movement via admin protocols (SMB, RDP, WinRM, SSH)
-    - Data exfiltration volume spikes
-    - C2 beaconing patterns
-    - Cleartext credential leaks
-    - Suspicious tunnels and proxies
-    - DNS-based internal reconnaissance
-    - New external service connections
+Micro-probe architecture with 8 specialized detectors.
 """
 
-from amoskys.agents.flow.flow_agent_v2 import FlowAgentV2, MacOSFlowCollector
+from amoskys.agents.flow.flow_agent import FlowAgent, MacOSFlowCollector
 from amoskys.agents.flow.probes import (
     C2BeaconFlowProbe,
     CleartextCredentialLeakProbe,
@@ -28,7 +17,11 @@ from amoskys.agents.flow.probes import (
     create_flow_probes,
 )
 
+# B5.1: Deprecated alias
+FlowAgentV2 = FlowAgent
+
 __all__ = [
+    "FlowAgent",
     "FlowAgentV2",
     "MacOSFlowCollector",
     "FlowEvent",

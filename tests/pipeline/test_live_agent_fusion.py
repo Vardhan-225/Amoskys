@@ -61,13 +61,19 @@ def lab_env(tmp_path):
 
     proc = subprocess.Popen(
         [
-            sys.executable, "-m",
+            sys.executable,
+            "-m",
             "amoskys.agents.protocol_collectors.run_agent_v2",
-            "--device-id", DEVICE_ID,
-            "--queue-path", str(queue_dir),
-            "--collection-interval", "5",   # Fast cycle for test
-            "--metrics-interval", "10",
-            "--log-level", "DEBUG",
+            "--device-id",
+            DEVICE_ID,
+            "--queue-path",
+            str(queue_dir),
+            "--collection-interval",
+            "5",  # Fast cycle for test
+            "--metrics-interval",
+            "10",
+            "--log-level",
+            "DEBUG",
         ],
         cwd=str(PROJECT_ROOT),
         env=env,
@@ -113,11 +119,13 @@ def _drain_queue(db_path: str) -> list:
     for row_id, idem, ts_ns, blob in rows:
         telemetry = pb.DeviceTelemetry()
         telemetry.ParseFromString(bytes(blob))
-        decoded.append({
-            "row_id": row_id,
-            "idem": idem,
-            "telemetry": telemetry,
-        })
+        decoded.append(
+            {
+                "row_id": row_id,
+                "idem": idem,
+                "telemetry": telemetry,
+            }
+        )
     return decoded
 
 
@@ -142,9 +150,9 @@ class TestLiveAgentPipeline:
 
     def test_agent_produced_queue_data(self, lab_env):
         """Agent actually wrote data to queue DB."""
-        assert os.path.exists(lab_env["db_path"]), (
-            "Queue DB not created — agent may have crashed"
-        )
+        assert os.path.exists(
+            lab_env["db_path"]
+        ), "Queue DB not created — agent may have crashed"
 
         conn = sqlite3.connect(lab_env["db_path"], timeout=5)
         count = conn.execute("SELECT COUNT(*) FROM queue").fetchone()[0]
@@ -163,9 +171,9 @@ class TestLiveAgentPipeline:
         for item in decoded:
             telemetry = item["telemetry"]
             assert telemetry.device_id == DEVICE_ID
-            assert telemetry.collection_agent != "", (
-                f"GAP-07: collection_agent is empty on row {item['row_id']}"
-            )
+            assert (
+                telemetry.collection_agent != ""
+            ), f"GAP-07: collection_agent is empty on row {item['row_id']}"
 
     def test_collection_agent_set_on_all_events(self, lab_env):
         """GAP-07 regression: collection_agent populated on every message."""
@@ -173,13 +181,11 @@ class TestLiveAgentPipeline:
 
         for item in decoded:
             agent_name = item["telemetry"].collection_agent
-            assert agent_name, (
-                f"collection_agent empty on idem={item['idem']}"
-            )
+            assert agent_name, f"collection_agent empty on idem={item['idem']}"
             # Agent class name is ProtocolCollectorsV2 — case-insensitive check
-            assert "protocolcollectors" in agent_name.lower().replace("_", ""), (
-                f"Unexpected collection_agent: {agent_name}"
-            )
+            assert "protocolcollectors" in agent_name.lower().replace(
+                "_", ""
+            ), f"Unexpected collection_agent: {agent_name}"
 
     def test_events_convert_to_telemetry_event_views(self, lab_env):
         """Protobuf events convert to TelemetryEventView for fusion."""
@@ -191,8 +197,7 @@ class TestLiveAgentPipeline:
         error_views = [v for v in views if isinstance(v, dict)]
 
         assert len(valid_views) > 0, (
-            f"No valid TelemetryEventViews produced. "
-            f"Errors: {error_views}"
+            f"No valid TelemetryEventViews produced. " f"Errors: {error_views}"
         )
 
         # Every valid view should have device_id and event_type
@@ -209,9 +214,7 @@ class TestLiveAgentPipeline:
         views = _telemetry_to_event_views(decoded)
         valid_views = [v for v in views if isinstance(v, TelemetryEventView)]
 
-        security_views = [
-            v for v in valid_views if v.security_event is not None
-        ]
+        security_views = [v for v in valid_views if v.security_event is not None]
 
         # ProtocolCollectors stub should produce at least some security events
         # (SSHBruteForce, HTTPSuspiciousHeaders, etc.)
@@ -274,29 +277,27 @@ class TestLiveAgentPipeline:
 
         results = []
         for run in range(2):
-            fusion_db = str(
-                Path(lab_env["tmp_path"]) / f"fusion_determ_{run}.db"
-            )
+            fusion_db = str(Path(lab_env["tmp_path"]) / f"fusion_determ_{run}.db")
             fusion = FusionEngine(db_path=fusion_db, window_minutes=30)
             for v in valid_views:
                 fusion.add_event(v)
             incidents, snapshot = fusion.evaluate_device(DEVICE_ID)
-            results.append({
-                "incident_count": len(incidents),
-                "risk_score": snapshot.score,
-                "risk_level": snapshot.level.value,
-            })
+            results.append(
+                {
+                    "incident_count": len(incidents),
+                    "risk_score": snapshot.score,
+                    "risk_level": snapshot.level.value,
+                }
+            )
 
-        assert results[0] == results[1], (
-            f"Non-deterministic: run1={results[0]}, run2={results[1]}"
-        )
+        assert (
+            results[0] == results[1]
+        ), f"Non-deterministic: run1={results[0]}, run2={results[1]}"
 
     def test_full_pipeline_no_data_loss(self, lab_env):
         """Events emitted by agent all arrive in fusion (no silent drops)."""
         decoded = _drain_queue(lab_env["db_path"])
-        total_events_in_queue = sum(
-            len(item["telemetry"].events) for item in decoded
-        )
+        total_events_in_queue = sum(len(item["telemetry"].events) for item in decoded)
 
         views = _telemetry_to_event_views(decoded)
         valid_views = [v for v in views if isinstance(v, TelemetryEventView)]
@@ -317,6 +318,4 @@ class TestLiveAgentPipeline:
         """Agent log should be clean — no Python exceptions."""
         log_content = Path(lab_env["log_path"]).read_text()
         tb_count = log_content.count("Traceback")
-        assert tb_count == 0, (
-            f"Agent log has {tb_count} traceback(s)"
-        )
+        assert tb_count == 0, f"Agent log has {tb_count} traceback(s)"
