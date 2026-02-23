@@ -726,7 +726,7 @@ class AgentControlPanel {
         grid.innerHTML = '<div class="acp-loading">' +
             '<div style="color:#ff3366;">Failed to load agents</div>' +
             '<div style="font-size:0.75rem;color:var(--text-muted);">' + message + '</div>' +
-            '<button onclick="window.agentControlPanel.loadAgents()" class="acp-batch-btn acp-batch-refresh" style="margin-top:0.5rem;">Retry</button>' +
+            '<button data-action="acp-retry" class="acp-batch-btn acp-batch-refresh" style="margin-top:0.5rem;">Retry</button>' +
             '</div>';
     }
 
@@ -744,6 +744,12 @@ class AgentControlPanel {
 document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('agent-controls-grid')) {
         window.agentControlPanel = new AgentControlPanel();
+
+        // Event delegation for dynamically rendered retry button
+        document.getElementById('agent-controls-grid').addEventListener('click', function(e) {
+            var btn = e.target.closest('[data-action="acp-retry"]');
+            if (btn) window.agentControlPanel.loadAgents();
+        });
     }
 });
 </script>

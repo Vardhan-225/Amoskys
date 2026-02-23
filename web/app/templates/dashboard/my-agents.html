@@ -9,7 +9,7 @@
         <div class="card-header">
             <h2 class="card-title">My Agents</h2>
             <div style="display: flex; gap: 0.5rem;">
-                <button class="neural-button" onclick="refreshAgents()" style="padding: 0.4rem 1rem; font-size: 0.8rem; cursor: pointer;">Refresh</button>
+                <button class="neural-button" id="refresh-agents-btn" style="padding: 0.4rem 1rem; font-size: 0.8rem; cursor: pointer;">Refresh</button>
                 <a href="/dashboard/deploy" class="neural-button" style="padding: 0.4rem 1rem; font-size: 0.8rem; text-decoration: none; background: linear-gradient(135deg, var(--neural-primary), var(--neural-secondary)); color: var(--bg-primary);">+ Deploy New Agent</a>
             </div>
         </div>
@@ -45,14 +45,14 @@
         <div class="card-header" style="margin-bottom: 1rem;">
             <h3 class="card-title" style="font-size: 1rem;">Deployed Agents</h3>
             <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <select id="filter-status" onchange="applyFilters()" style="padding: 0.3rem 0.6rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 4px; font-size: 0.75rem;">
+                <select id="filter-status" style="padding: 0.3rem 0.6rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 4px; font-size: 0.75rem;">
                     <option value="all">All Status</option>
                     <option value="online">Online</option>
                     <option value="stale">Stale</option>
                     <option value="offline">Offline</option>
                     <option value="revoked">Revoked</option>
                 </select>
-                <select id="filter-platform" onchange="applyFilters()" style="padding: 0.3rem 0.6rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 4px; font-size: 0.75rem;">
+                <select id="filter-platform" style="padding: 0.3rem 0.6rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 4px; font-size: 0.75rem;">
                     <option value="all">All Platforms</option>
                     <option value="macos">macOS</option>
                     <option value="linux">Linux</option>
@@ -79,7 +79,7 @@
     <!-- Agent Detail Modal -->
     <div id="agent-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center;">
         <div style="background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2); border-radius: 12px; width: 90%; max-width: 550px; max-height: 80vh; overflow-y: auto; padding: 2rem; position: relative;">
-            <button onclick="closeModal()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer;">&times;</button>
+            <button id="close-modal-btn" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer;">&times;</button>
             <div id="agent-modal-content"></div>
         </div>
     </div>
@@ -160,16 +160,16 @@ function renderAgents(agents) {
         var statusColor = {'online':'#00ff88','stale':'#ffaa00','offline':'#ff3366','pending':'#6b7a99','revoked':'#666'}[a.status] || '#6b7a99';
         var platformIcon = {'macos':'&#127822;','linux':'&#128039;','windows':'&#128187;','docker':'&#128230;'}[a.platform] || '&#128421;';
         var heartbeat = a.last_heartbeat_at ? timeAgo(a.last_heartbeat_at) : 'Never';
-        html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.15s;" onmouseover="this.style.background=\'rgba(0,217,255,0.03)\'" onmouseout="this.style.background=\'none\'">'
+        html += '<tr class="agent-row-hover" style="border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.15s;">'
             + '<td style="padding:0.6rem;color:var(--text-primary);font-weight:500;">' + escapeHtml(a.hostname) + '</td>'
             + '<td style="padding:0.6rem;">' + platformIcon + ' ' + a.platform + '</td>'
             + '<td style="padding:0.6rem;"><span style="display:inline-flex;align-items:center;gap:0.3rem;"><span style="width:8px;height:8px;border-radius:50%;background:' + statusColor + ';display:inline-block;"></span><span style="color:' + statusColor + ';font-weight:600;text-transform:capitalize;">' + a.status + '</span></span></td>'
             + '<td style="padding:0.6rem;color:var(--text-muted);">' + heartbeat + '</td>'
             + '<td style="padding:0.6rem;color:var(--text-muted);">' + escapeHtml(a.version) + '</td>'
             + '<td style="padding:0.6rem;text-align:right;">'
-            + '<button onclick="showAgentDetail(\'' + a.id + '\')" style="padding:0.2rem 0.5rem;background:rgba(0,217,255,0.1);color:var(--neural-primary);border:1px solid rgba(0,217,255,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;margin-right:0.3rem;">Details</button>';
+            + '<button data-action="show-detail" data-agent-id="' + a.id + '" style="padding:0.2rem 0.5rem;background:rgba(0,217,255,0.1);color:var(--neural-primary);border:1px solid rgba(0,217,255,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;margin-right:0.3rem;">Details</button>';
         if (a.status !== 'revoked') {
-            html += '<button onclick="revokeAgent(\'' + a.id + '\')" style="padding:0.2rem 0.5rem;background:rgba(255,51,102,0.1);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;">Revoke</button>';
+            html += '<button data-action="revoke-agent" data-agent-id="' + a.id + '" style="padding:0.2rem 0.5rem;background:rgba(255,51,102,0.1);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;">Revoke</button>';
         }
         html += '</td></tr>';
     }
@@ -210,7 +210,7 @@ async function loadTokens() {
                     + '<td style="padding:0.5rem;color:var(--text-muted);">' + expires + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">';
                 if (!t.is_consumed) {
-                    html += '<button onclick="revokeToken(\'' + t.id + '\')" style="padding:0.2rem 0.5rem;background:rgba(255,51,102,0.1);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;">Revoke</button>';
+                    html += '<button data-action="revoke-token" data-token-id="' + t.id + '" style="padding:0.2rem 0.5rem;background:rgba(255,51,102,0.1);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;">Revoke</button>';
                 }
                 html += '</td></tr>';
             }
@@ -248,7 +248,7 @@ function showAgentDetail(agentId) {
     if (caps) html += '<div style="margin-top:1rem;"><span style="color:var(--text-muted);font-size:0.8rem;">Capabilities</span>' + caps + '</div>';
     if (agent.status !== 'revoked') {
         html += '<div style="margin-top:1.5rem;border-top:1px solid rgba(255,255,255,0.08);padding-top:1rem;">'
-            + '<button onclick="revokeAgent(\'' + agent.id + '\');closeModal();" style="padding:0.4rem 1rem;background:rgba(255,51,102,0.15);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:6px;cursor:pointer;font-size:0.8rem;">Revoke Agent</button></div>';
+            + '<button data-action="revoke-agent-modal" data-agent-id="' + agent.id + '" style="padding:0.4rem 1rem;background:rgba(255,51,102,0.15);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:6px;cursor:pointer;font-size:0.8rem;">Revoke Agent</button></div>';
     }
     document.getElementById('agent-modal-content').innerHTML = html;
     document.getElementById('agent-modal').style.display = 'flex';
@@ -299,6 +299,46 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-document.addEventListener('DOMContentLoaded', refreshAgents);
+document.addEventListener('DOMContentLoaded', function() {
+    refreshAgents();
+
+    // Refresh button
+    document.getElementById('refresh-agents-btn').addEventListener('click', refreshAgents);
+
+    // Filter selects
+    document.getElementById('filter-status').addEventListener('change', applyFilters);
+    document.getElementById('filter-platform').addEventListener('change', applyFilters);
+
+    // Close modal button
+    document.getElementById('close-modal-btn').addEventListener('click', closeModal);
+
+    // Event delegation on agents list (dynamic rows)
+    document.getElementById('agents-list').addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-action="show-detail"]');
+        if (btn) { showAgentDetail(btn.dataset.agentId); return; }
+        btn = e.target.closest('[data-action="revoke-agent"]');
+        if (btn) { revokeAgent(btn.dataset.agentId); return; }
+    });
+    document.getElementById('agents-list').addEventListener('mouseover', function(e) {
+        var row = e.target.closest('.agent-row-hover');
+        if (row) row.style.background = 'rgba(0,217,255,0.03)';
+    });
+    document.getElementById('agents-list').addEventListener('mouseout', function(e) {
+        var row = e.target.closest('.agent-row-hover');
+        if (row) row.style.background = 'none';
+    });
+
+    // Event delegation on tokens list (dynamic rows)
+    document.getElementById('tokens-list').addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-action="revoke-token"]');
+        if (btn) revokeToken(btn.dataset.tokenId);
+    });
+
+    // Event delegation on agent modal content (dynamic revoke button)
+    document.getElementById('agent-modal-content').addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-action="revoke-agent-modal"]');
+        if (btn) { revokeAgent(btn.dataset.agentId); closeModal(); }
+    });
+});
 </script>
 {% endblock %}

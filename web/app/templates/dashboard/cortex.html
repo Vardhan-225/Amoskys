@@ -125,7 +125,7 @@
         <div class="cc-card-hdr">
             <h3>Agent Fleet</h3>
             <div style="display:flex;gap:0.5rem;align-items:center;">
-                <button class="cc-export-btn" onclick="cortex.exportAgents()" title="Export Agents CSV">Export</button>
+                <button class="cc-export-btn" id="cortex-export-agents-btn" title="Export Agents CSV">Export</button>
                 <a href="/dashboard/agents" class="cc-link">Manage</a>
             </div>
         </div>
@@ -742,9 +742,9 @@ class CortexCommandCenter {
                         '</div>' +
                     '</div>' +
                     '<div class="tf-triage">' +
-                        '<button class="triage-btn triage-legit" onclick="event.stopPropagation();cortex.triage(' + idx + ',\'legit\')" title="Mark Legitimate">&#10003;</button>' +
-                        '<button class="triage-btn triage-inv" onclick="event.stopPropagation();cortex.triage(' + idx + ',\'investigate\')" title="Investigate">&#128269;</button>' +
-                        '<button class="triage-btn triage-inc" onclick="event.stopPropagation();cortex.triage(' + idx + ',\'incident\')" title="Create Incident">&#9888;</button>' +
+                        '<button class="triage-btn triage-legit" data-action="triage" data-triage-idx="' + idx + '" data-triage-action="legit" title="Mark Legitimate">&#10003;</button>' +
+                        '<button class="triage-btn triage-inv" data-action="triage" data-triage-idx="' + idx + '" data-triage-action="investigate" title="Investigate">&#128269;</button>' +
+                        '<button class="triage-btn triage-inc" data-action="triage" data-triage-idx="' + idx + '" data-triage-action="incident" title="Create Incident">&#9888;</button>' +
                     '</div>' +
                 '</div>';
             }).join('');
@@ -839,7 +839,7 @@ class CortexCommandCenter {
                     probeDots += '<div class="af-probe-dot" style="background:' + c + ';" title="' + this.esc(p.name || '') + ' (' + p.status + ')"></div>';
                 });
                 const sparkline = this.buildSparkline(a);
-                return '<div class="af-card" onclick="window.location=\'/dashboard/agents\'">' +
+                return '<div class="af-card" data-action="navigate-agents">' +
                     '<div class="af-header"><span class="af-name">' + this.esc(a.name || a.id || 'Unknown') + '</span><span class="af-dot ' + status + '"></span></div>' +
                     '<div class="af-stats"><span>' + real + '/' + total + ' probes</span><span>' + this.fmtNum(evts) + ' events</span>' + signed + '</div>' +
                     '<div class="af-probes">' + probeDots + '</div>' +
@@ -1143,6 +1143,26 @@ class CortexCommandCenter {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => { window.cortex = new CortexCommandCenter(); });
+document.addEventListener('DOMContentLoaded', () => {
+    window.cortex = new CortexCommandCenter();
+
+    // Export agents button
+    document.getElementById('cortex-export-agents-btn').addEventListener('click', () => cortex.exportAgents());
+
+    // Event delegation for dynamically rendered agent fleet cards
+    document.getElementById('agent-fleet').addEventListener('click', (e) => {
+        const card = e.target.closest('[data-action="navigate-agents"]');
+        if (card) window.location = '/dashboard/agents';
+    });
+
+    // Event delegation for dynamically rendered triage buttons in threat feed
+    document.getElementById('threat-feed').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="triage"]');
+        if (btn) {
+            e.stopPropagation();
+            cortex.triage(parseInt(btn.dataset.triageIdx, 10), btn.dataset.triageAction);
+        }
+    });
+});
 </script>
 {% endblock %}

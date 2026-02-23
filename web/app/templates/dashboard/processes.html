@@ -16,8 +16,8 @@
         </p>
         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
             <a href="/dashboard/cortex" class="neural-button">← Back to Cortex</a>
-            <button class="neural-button" onclick="processDashboard.refreshAll()">🔄 Refresh Data</button>
-            <button class="neural-button" onclick="processDashboard.toggleAutoRefresh()">
+            <button class="neural-button" id="proc-refresh-btn">🔄 Refresh Data</button>
+            <button class="neural-button" id="proc-toggle-auto-refresh-btn">
                 <span id="auto-refresh-btn">⏸️ Pause Auto-Refresh</span>
             </button>
         </div>
@@ -93,10 +93,10 @@
         <div class="card-header">
             <h3 class="card-title">📡 Live Process Stream (Last 50)</h3>
             <div style="display: flex; gap: 0.5rem;">
-                <button class="neural-button-sm" onclick="processDashboard.filterByUserType('all')">All</button>
-                <button class="neural-button-sm" onclick="processDashboard.filterByUserType('root')">Root</button>
-                <button class="neural-button-sm" onclick="processDashboard.filterByUserType('system')">System</button>
-                <button class="neural-button-sm" onclick="processDashboard.filterByUserType('user')">User</button>
+                <button class="neural-button-sm" data-action="filter-user-type" data-user-type="all">All</button>
+                <button class="neural-button-sm" data-action="filter-user-type" data-user-type="root">Root</button>
+                <button class="neural-button-sm" data-action="filter-user-type" data-user-type="system">System</button>
+                <button class="neural-button-sm" data-action="filter-user-type" data-user-type="user">User</button>
             </div>
         </div>
         <div class="process-stream-container">
@@ -617,6 +617,15 @@ class ProcessDashboard {
 let processDashboard;
 document.addEventListener('DOMContentLoaded', () => {
     processDashboard = new ProcessDashboard();
+
+    // Refresh and auto-refresh toggle buttons
+    document.getElementById('proc-refresh-btn').addEventListener('click', () => processDashboard.refreshAll());
+    document.getElementById('proc-toggle-auto-refresh-btn').addEventListener('click', () => processDashboard.toggleAutoRefresh());
+
+    // User type filter buttons via event delegation
+    document.querySelectorAll('[data-action="filter-user-type"]').forEach(btn => {
+        btn.addEventListener('click', () => processDashboard.filterByUserType(btn.dataset.userType));
+    });
 });
 </script>
 {% endblock %}

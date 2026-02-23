@@ -25,15 +25,15 @@
                 <h3 style="margin: 0; font-size: 1rem;">Select Platform</h3>
             </div>
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
-                <div class="deploy-plat-card" data-platform="macos" onclick="selectDeployPlatform('macos')" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
+                <div class="deploy-plat-card" data-platform="macos" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
                     <div style="font-size: 2rem;">&#127822;</div>
                     <div style="font-size: 0.8rem; font-weight: 600; margin-top: 0.3rem;">macOS</div>
                 </div>
-                <div class="deploy-plat-card" data-platform="linux" onclick="selectDeployPlatform('linux')" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
+                <div class="deploy-plat-card" data-platform="linux" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
                     <div style="font-size: 2rem;">&#128039;</div>
                     <div style="font-size: 0.8rem; font-weight: 600; margin-top: 0.3rem;">Linux</div>
                 </div>
-                <div class="deploy-plat-card" data-platform="windows" onclick="selectDeployPlatform('windows')" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
+                <div class="deploy-plat-card" data-platform="windows" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
                     <div style="font-size: 2rem;">&#128187;</div>
                     <div style="font-size: 0.8rem; font-weight: 600; margin-top: 0.3rem;">Windows</div>
                 </div>
@@ -51,13 +51,13 @@
                 <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.3rem;">Label (e.g., "Production Server 1")</label>
                 <input type="text" id="token-label" placeholder="My Device" style="width: 100%; padding: 0.5rem 0.8rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; font-size: 0.85rem;">
             </div>
-            <button class="neural-button" id="btn-gen-token" onclick="generateToken()" style="width: 100%; padding: 0.6rem; cursor: pointer;">Generate Deployment Token</button>
+            <button class="neural-button" id="btn-gen-token" style="width: 100%; padding: 0.6rem; cursor: pointer;">Generate Deployment Token</button>
 
             <div id="token-display" style="display: none; margin-top: 1rem;">
                 <div style="background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.25); border-radius: 8px; padding: 1rem;">
                     <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.3rem;">Your deployment token (shown once):</div>
                     <div style="font-family: 'Courier New', monospace; font-size: 0.8rem; color: #00ff88; word-break: break-all; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 4px;" id="token-value"></div>
-                    <button onclick="copyToken()" style="margin-top: 0.5rem; padding: 0.3rem 0.8rem; background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); border-radius: 4px; cursor: pointer; font-size: 0.75rem;" id="btn-copy">Copy Token</button>
+                    <button style="margin-top: 0.5rem; padding: 0.3rem 0.8rem; background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); border-radius: 4px; cursor: pointer; font-size: 0.75rem;" id="btn-copy">Copy Token</button>
                 </div>
             </div>
         </div>
@@ -78,7 +78,7 @@
     <div class="neural-card" style="margin-top: 1.5rem;">
         <div class="card-header">
             <h3 class="card-title" style="font-size: 1rem;">Active Deployment Tokens</h3>
-            <button class="neural-button" onclick="loadTokens()" style="padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer;">Refresh</button>
+            <button class="neural-button" id="refresh-tokens-btn" style="padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer;">Refresh</button>
         </div>
         <div id="tokens-list" style="margin-top: 1rem;">
             <div style="color: var(--text-muted); text-align: center; padding: 1.5rem; font-size: 0.85rem;">Loading tokens...</div>
@@ -180,7 +180,7 @@ function cmdBlock(cmd, label) {
         + '<div style="font-size:0.7rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.2rem;">' + label + '</div>'
         + '<div style="display:flex;align-items:center;gap:0.4rem;">'
         + '<code id="' + id + '" style="flex:1;display:block;padding:0.5rem 0.7rem;background:rgba(0,0,0,0.35);border-radius:6px;font-size:0.78rem;color:#00ff88;font-family:monospace;word-break:break-all;border:1px solid rgba(0,255,136,0.1);">' + escapeHtml(cmd) + '</code>'
-        + '<button onclick="copyCmd(\'' + id + '\')" style="flex-shrink:0;padding:0.35rem 0.6rem;background:rgba(0,255,136,0.1);color:#00ff88;border:1px solid rgba(0,255,136,0.2);border-radius:5px;cursor:pointer;font-size:0.65rem;font-weight:700;white-space:nowrap;transition:all 0.15s;" title="Copy command">Copy</button>'
+        + '<button data-action="copy-cmd" data-cmd-id="' + id + '" style="flex-shrink:0;padding:0.35rem 0.6rem;background:rgba(0,255,136,0.1);color:#00ff88;border:1px solid rgba(0,255,136,0.2);border-radius:5px;cursor:pointer;font-size:0.65rem;font-weight:700;white-space:nowrap;transition:all 0.15s;" title="Copy command">Copy</button>'
         + '</div></div>';
 }
 
@@ -265,7 +265,7 @@ async function loadTokens() {
                     + '<td style="padding:0.5rem;color:var(--text-muted);">' + created + '</td>'
                     + '<td style="padding:0.5rem;text-align:right;">';
                 if (!t.is_consumed) {
-                    html += '<button onclick="revokeToken(\'' + t.id + '\')" style="padding:0.2rem 0.5rem;background:rgba(255,51,102,0.15);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;">Revoke</button>';
+                    html += '<button data-action="revoke-token" data-token-id="' + t.id + '" style="padding:0.2rem 0.5rem;background:rgba(255,51,102,0.15);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;">Revoke</button>';
                 }
                 html += '</td></tr>';
             }
@@ -297,6 +297,36 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-document.addEventListener('DOMContentLoaded', loadTokens);
+document.addEventListener('DOMContentLoaded', function() {
+    loadTokens();
+
+    // Platform selection cards
+    document.querySelectorAll('.deploy-plat-card[data-platform]').forEach(function(card) {
+        card.addEventListener('click', function() {
+            selectDeployPlatform(card.dataset.platform);
+        });
+    });
+
+    // Generate token button
+    document.getElementById('btn-gen-token').addEventListener('click', generateToken);
+
+    // Copy token button
+    document.getElementById('btn-copy').addEventListener('click', copyToken);
+
+    // Refresh tokens button
+    document.getElementById('refresh-tokens-btn').addEventListener('click', loadTokens);
+
+    // Event delegation on install instructions (dynamic copy-cmd buttons)
+    document.getElementById('install-instructions').addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-action="copy-cmd"]');
+        if (btn) copyCmd(btn.dataset.cmdId);
+    });
+
+    // Event delegation on tokens list (dynamic revoke-token buttons)
+    document.getElementById('tokens-list').addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-action="revoke-token"]');
+        if (btn) revokeToken(btn.dataset.tokenId);
+    });
+});
 </script>
 {% endblock %}

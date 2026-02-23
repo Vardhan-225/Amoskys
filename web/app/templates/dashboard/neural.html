@@ -180,9 +180,9 @@
             <div class="card-header">
                 <h3 class="card-title">📈 Event Intelligence Timeline</h3>
                 <div style="display: flex; gap: 1rem;">
-                    <button class="neural-button" onclick="neuralDashboard.changeTimeWindow(6)">6H</button>
-                    <button class="neural-button" onclick="neuralDashboard.changeTimeWindow(24)" style="background: var(--neural-primary);">24H</button>
-                    <button class="neural-button" onclick="neuralDashboard.changeTimeWindow(168)">7D</button>
+                    <button class="neural-button" id="neural-btn-6h">6H</button>
+                    <button class="neural-button" id="neural-btn-24h" style="background: var(--neural-primary);">24H</button>
+                    <button class="neural-button" id="neural-btn-7d">7D</button>
                 </div>
             </div>
             <div style="position: relative; width: 100%; height: 300px;">
@@ -1087,15 +1087,15 @@ class NeuralDashboard {
         return { labels, volumes, threats, anomalies };
     }
     
-    changeTimeWindow(hours) {
+    changeTimeWindow(hours, btnEl) {
         this.timeWindow = hours;
         this.updateIntelligenceTimeline();
-        
+
         // Update button styles
-        document.querySelectorAll('.neural-button').forEach(btn => {
+        document.querySelectorAll('#neural-btn-6h, #neural-btn-24h, #neural-btn-7d').forEach(btn => {
             btn.style.background = '';
         });
-        event.target.style.background = 'var(--neural-primary)';
+        if (btnEl) btnEl.style.background = 'var(--neural-primary)';
     }
 }
 
@@ -1103,6 +1103,11 @@ class NeuralDashboard {
 let neuralDashboard;
 document.addEventListener('DOMContentLoaded', () => {
     neuralDashboard = new NeuralDashboard();
+
+    // Time window buttons
+    document.getElementById('neural-btn-6h').addEventListener('click', function() { neuralDashboard.changeTimeWindow(6, this); });
+    document.getElementById('neural-btn-24h').addEventListener('click', function() { neuralDashboard.changeTimeWindow(24, this); });
+    document.getElementById('neural-btn-7d').addEventListener('click', function() { neuralDashboard.changeTimeWindow(168, this); });
 });
 </script>
 {% endblock %}

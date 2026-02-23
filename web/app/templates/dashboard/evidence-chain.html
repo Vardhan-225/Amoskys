@@ -12,8 +12,8 @@
             <p class="ec-subtitle">Full-fidelity attack reconstruction correlating signals across perspectives</p>
         </div>
         <div class="ec-header-actions">
-            <button class="ec-action-btn" onclick="chain.exportChain()">Export Chain</button>
-            <button class="ec-action-btn ec-action-primary" onclick="chain.loadDemo()">Load Demo</button>
+            <button class="ec-action-btn" id="ec-export-btn">Export Chain</button>
+            <button class="ec-action-btn ec-action-primary" id="ec-load-demo-btn">Load Demo</button>
         </div>
     </div>
 
@@ -469,6 +469,12 @@ class EvidenceChainViewer {
 }
 
 let chain;
-document.addEventListener('DOMContentLoaded', () => { chain = new EvidenceChainViewer(); });
+document.addEventListener('DOMContentLoaded', () => {
+    chain = new EvidenceChainViewer();
+
+    // Export and load demo buttons
+    document.getElementById('ec-export-btn').addEventListener('click', () => chain.exportChain());
+    document.getElementById('ec-load-demo-btn').addEventListener('click', () => chain.loadDemo());
+});
 </script>
 {% endblock %}

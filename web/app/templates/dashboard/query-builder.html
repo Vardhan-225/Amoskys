@@ -14,10 +14,10 @@
         </p>
     </div>
     <div style="display: flex; gap: 1rem; align-items: center;">
-        <button class="neural-button" onclick="queryBuilder.executeQuery()">
+        <button class="neural-button" id="execute-query-btn">
             ▶ Execute Query
         </button>
-        <button class="neural-button" onclick="queryBuilder.saveQuery()">
+        <button class="neural-button" id="save-query-btn">
             💾 Save Query
         </button>
     </div>
@@ -26,23 +26,23 @@
 <!-- Query Templates -->
 <div class="neural-card" style="margin-bottom: 1.5rem;">
     <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">Quick Start Templates</h3>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
-        <div class="template-card" onclick="queryBuilder.loadTemplate('critical-events')">
+    <div id="template-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+        <div class="template-card" data-action="load-template" data-template="critical-events">
             <div class="template-icon">🚨</div>
             <div class="template-name">Critical Events</div>
             <div class="template-desc">All critical severity events in last 24h</div>
         </div>
-        <div class="template-card" onclick="queryBuilder.loadTemplate('failed-auth')">
+        <div class="template-card" data-action="load-template" data-template="failed-auth">
             <div class="template-icon">🔐</div>
             <div class="template-name">Failed Authentication</div>
             <div class="template-desc">Failed login attempts from external IPs</div>
         </div>
-        <div class="template-card" onclick="queryBuilder.loadTemplate('lateral-movement')">
+        <div class="template-card" data-action="load-template" data-template="lateral-movement">
             <div class="template-icon">↔️</div>
             <div class="template-name">Lateral Movement</div>
             <div class="template-desc">Suspicious internal network connections</div>
         </div>
-        <div class="template-card" onclick="queryBuilder.loadTemplate('data-exfil')">
+        <div class="template-card" data-action="load-template" data-template="data-exfil">
             <div class="template-icon">📤</div>
             <div class="template-name">Data Exfiltration</div>
             <div class="template-desc">Large outbound transfers to unknown hosts</div>
@@ -56,7 +56,7 @@
     <div class="neural-card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h3 style="margin: 0; color: #00d9ff; font-size: 1.1rem;">Query Conditions</h3>
-            <button class="neural-button-small" onclick="queryBuilder.addCondition()">
+            <button class="neural-button-small" id="add-condition-btn">
                 + Add Condition
             </button>
         </div>
@@ -69,7 +69,7 @@
             <label style="color: var(--text-secondary); font-size: 0.9rem; margin-right: 1rem;">
                 Logical Operator:
             </label>
-            <select id="logical-operator" class="neural-select" onchange="queryBuilder.updatePreview()">
+            <select id="logical-operator" class="neural-select">
                 <option value="AND">AND (all conditions must match)</option>
                 <option value="OR">OR (any condition can match)</option>
             </select>
@@ -320,6 +320,36 @@ class QueryBuilder {
     }
 
     init() {
+        // Static button listeners
+        document.getElementById('execute-query-btn').addEventListener('click', () => this.executeQuery());
+        document.getElementById('save-query-btn').addEventListener('click', () => this.saveQuery());
+        document.getElementById('add-condition-btn').addEventListener('click', () => this.addCondition());
+        document.getElementById('logical-operator').addEventListener('change', () => this.updatePreview());
+
+        // Template cards — event delegation on the parent grid
+        document.getElementById('template-cards-grid').addEventListener('click', (e) => {
+            const card = e.target.closest('[data-action="load-template"]');
+            if (card) this.loadTemplate(card.dataset.template);
+        });
+
+        // Event delegation for dynamically rendered condition rows
+        const conditionsContainer = document.getElementById('query-conditions');
+
+        conditionsContainer.addEventListener('change', (e) => {
+            const el = e.target.closest('[data-action]');
+            if (!el) return;
+            const action = el.dataset.action;
+            const conditionId = parseInt(el.dataset.conditionId, 10);
+            if (action === 'update-field') this.updateConditionField(conditionId, el.value);
+            else if (action === 'update-operator') this.updateConditionOperator(conditionId, el.value);
+            else if (action === 'update-value') this.updateConditionValue(conditionId, el.value);
+        });
+
+        conditionsContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action="remove-condition"]');
+            if (btn) this.removeCondition(parseInt(btn.dataset.conditionId, 10));
+        });
+
         // Add initial condition
         this.addCondition();
     }
@@ -361,8 +391,8 @@ class QueryBuilder {
             const operators = this.operators[field.type];
 
             return `
-                <div class="condition-row">
-                    <select class="neural-select" onchange="queryBuilder.updateConditionField(${condition.id}, this.value)">
+                <div class="condition-row" data-condition-id="${condition.id}">
+                    <select class="neural-select" data-action="update-field" data-condition-id="${condition.id}">
                         ${this.fields.map(f => `
                             <option value="${f.value}" ${f.value === condition.field ? 'selected' : ''}>
                                 ${f.label}
@@ -370,7 +400,7 @@ class QueryBuilder {
                         `).join('')}
                     </select>
 
-                    <select class="neural-select" onchange="queryBuilder.updateConditionOperator(${condition.id}, this.value)">
+                    <select class="neural-select" data-action="update-operator" data-condition-id="${condition.id}">
                         ${operators.map(op => `
                             <option value="${op.value}" ${op.value === condition.operator ? 'selected' : ''}>
                                 ${op.label}
@@ -380,7 +410,7 @@ class QueryBuilder {
 
                     ${this.renderValueInput(condition, field)}
 
-                    <button class="neural-button-small" onclick="queryBuilder.removeCondition(${condition.id})" style="color: #ff6600; border-color: rgba(255, 102, 0, 0.3);">
+                    <button class="neural-button-small" data-action="remove-condition" data-condition-id="${condition.id}" style="color: #ff6600; border-color: rgba(255, 102, 0, 0.3);">
                         ✕
                     </button>
                 </div>
@@ -391,7 +421,7 @@ class QueryBuilder {
     renderValueInput(condition, field) {
         if (field.type === 'enum') {
             return `
-                <select class="neural-select" onchange="queryBuilder.updateConditionValue(${condition.id}, this.value)">
+                <select class="neural-select" data-action="update-value" data-condition-id="${condition.id}">
                     ${field.options.map(opt => `
                         <option value="${opt}" ${opt === condition.value ? 'selected' : ''}>
                             ${opt}
@@ -403,7 +433,7 @@ class QueryBuilder {
             const placeholder = field.type === 'datetime' ? 'e.g., 24' : `Enter ${field.label.toLowerCase()}`;
             return `
                 <input type="text" class="neural-select" placeholder="${placeholder}" value="${condition.value}"
-                    onchange="queryBuilder.updateConditionValue(${condition.id}, this.value)"
+                    data-action="update-value" data-condition-id="${condition.id}"
                     style="width: 100%;">
             `;
         }

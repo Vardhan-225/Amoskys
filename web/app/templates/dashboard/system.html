@@ -119,10 +119,10 @@
         <div class="card-header">
             <h3 class="card-title">📈 Performance Timeline</h3>
             <div style="display: flex; gap: 1rem;">
-                <button class="neural-button" onclick="systemDashboard.changeTimeRange(30)" id="btn-30m">30m</button>
-                <button class="neural-button" onclick="systemDashboard.changeTimeRange(60)" id="btn-1h" style="background: var(--neural-primary);">1h</button>
-                <button class="neural-button" onclick="systemDashboard.changeTimeRange(240)" id="btn-4h">4h</button>
-                <button class="neural-button" onclick="systemDashboard.changeTimeRange(1440)" id="btn-24h">24h</button>
+                <button class="neural-button" id="btn-30m">30m</button>
+                <button class="neural-button" id="btn-1h" style="background: var(--neural-primary);">1h</button>
+                <button class="neural-button" id="btn-4h">4h</button>
+                <button class="neural-button" id="btn-24h">24h</button>
             </div>
         </div>
         <div id="performance-timeline-container" style="position: relative; width: 100%; height: 300px; overflow: hidden;">
@@ -188,7 +188,7 @@
     <div class="neural-card">
         <div class="card-header">
             <h3 class="card-title">⚠️ System Alerts</h3>
-            <button class="neural-button" onclick="systemDashboard.clearAlerts()">Clear All</button>
+            <button class="neural-button" id="clear-alerts-btn">Clear All</button>
         </div>
         <div id="system-alerts">
             <p style="color: var(--text-muted); text-align: center; padding: 2rem;">
@@ -852,10 +852,10 @@ class SystemDashboard {
                     <div class="alert-description">${alert.description}</div>
                 </div>
                 <div class="alert-time">${alert.timestamp.toLocaleTimeString()}</div>
-                <button class="alert-dismiss" onclick="systemDashboard.dismissAlert('${alert.id}')">Dismiss</button>
+                <button class="alert-dismiss" data-action="dismiss-alert" data-alert-id="${alert.id}">Dismiss</button>
             </div>
         `).join('');
-        
+
         container.innerHTML = alertsHtml;
     }
     
@@ -1005,6 +1005,21 @@ class SystemDashboard {
 let systemDashboard;
 document.addEventListener('DOMContentLoaded', () => {
     systemDashboard = new SystemDashboard();
+
+    // Time range buttons
+    document.getElementById('btn-30m').addEventListener('click', () => systemDashboard.changeTimeRange(30));
+    document.getElementById('btn-1h').addEventListener('click', () => systemDashboard.changeTimeRange(60));
+    document.getElementById('btn-4h').addEventListener('click', () => systemDashboard.changeTimeRange(240));
+    document.getElementById('btn-24h').addEventListener('click', () => systemDashboard.changeTimeRange(1440));
+
+    // Clear alerts button
+    document.getElementById('clear-alerts-btn').addEventListener('click', () => systemDashboard.clearAlerts());
+
+    // Event delegation for dynamically rendered alert dismiss buttons
+    document.getElementById('system-alerts').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="dismiss-alert"]');
+        if (btn) systemDashboard.dismissAlert(btn.dataset.alertId);
+    });
 });
 </script>
 {% endblock %}

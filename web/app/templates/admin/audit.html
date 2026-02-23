@@ -38,8 +38,8 @@
                 <label>User ID</label>
                 <input type="text" id="userIdFilter" class="filter-input" placeholder="Filter by user ID...">
             </div>
-            <button class="neural-button" onclick="auditViewer.loadLogs()">🔍 Filter</button>
-            <button class="neural-button neural-button-secondary" onclick="auditViewer.exportLogs()">📥 Export</button>
+            <button class="neural-button" id="audit-filter-btn">🔍 Filter</button>
+            <button class="neural-button neural-button-secondary" id="audit-export-btn">📥 Export</button>
         </div>
     </div>
 
@@ -350,18 +350,18 @@ class AuditViewer {
         }
 
         let html = '';
-        html += `<button class="page-btn" ${this.currentPage === 1 ? 'disabled' : ''} onclick="auditViewer.goToPage(${this.currentPage - 1})">← Prev</button>`;
-        
+        html += `<button class="page-btn" ${this.currentPage === 1 ? 'disabled' : ''} data-action="audit-page" data-page="${this.currentPage - 1}">← Prev</button>`;
+
         for (let i = 1; i <= Math.min(this.totalPages, 10); i++) {
-            html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" onclick="auditViewer.goToPage(${i})">${i}</button>`;
+            html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" data-action="audit-page" data-page="${i}">${i}</button>`;
         }
-        
+
         if (this.totalPages > 10) {
             html += `<span style="color: var(--text-muted);">... ${this.totalPages}</span>`;
         }
-        
-        html += `<button class="page-btn" ${this.currentPage === this.totalPages ? 'disabled' : ''} onclick="auditViewer.goToPage(${this.currentPage + 1})">Next →</button>`;
-        
+
+        html += `<button class="page-btn" ${this.currentPage === this.totalPages ? 'disabled' : ''} data-action="audit-page" data-page="${this.currentPage + 1}">Next →</button>`;
+
         container.innerHTML = html;
     }
 
@@ -396,6 +396,16 @@ class AuditViewer {
 
 document.addEventListener('DOMContentLoaded', () => {
     window.auditViewer = new AuditViewer();
+
+    // Filter and export buttons
+    document.getElementById('audit-filter-btn').addEventListener('click', () => auditViewer.loadLogs());
+    document.getElementById('audit-export-btn').addEventListener('click', () => auditViewer.exportLogs());
+
+    // Event delegation for dynamically rendered pagination buttons
+    document.getElementById('pagination').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="audit-page"]');
+        if (btn && !btn.disabled) auditViewer.goToPage(parseInt(btn.dataset.page, 10));
+    });
 });
 </script>
 {% endblock %}

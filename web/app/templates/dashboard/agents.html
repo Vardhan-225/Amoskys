@@ -118,7 +118,7 @@
                     <option value="Physical">Physical</option>
                     <option value="Kernel">Kernel</option>
                 </select>
-                <button onclick="loadAgentData()" class="neural-button" style="padding: 0.3rem 0.7rem; font-size: 0.78rem;">Refresh</button>
+                <button id="refresh-agent-data-btn" class="neural-button" style="padding: 0.3rem 0.7rem; font-size: 0.78rem;">Refresh</button>
             </div>
         </div>
         <div id="agents-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1rem; margin-top: 0.75rem;">
@@ -137,15 +137,15 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
                     <span id="modal-live-badge" style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;color:#00ff88;font-weight:600;"><span style="width:6px;height:6px;border-radius:50%;background:#00ff88;animation:pulse-dot 2s infinite;"></span> LIVE</span>
-                    <span onclick="closeAgentModal()" style="font-size: 1.3rem; cursor: pointer; color: var(--text-muted); line-height: 1; padding: 0.25rem;">&times;</span>
+                    <span id="close-agent-modal-btn" style="font-size: 1.3rem; cursor: pointer; color: var(--text-muted); line-height: 1; padding: 0.25rem;">&times;</span>
                 </div>
             </div>
             <!-- Tab Navigation -->
             <div id="modal-tabs" style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 0 1.5rem; background: rgba(0,0,0,0.15);">
-                <button class="modal-tab active" data-tab="overview" onclick="switchModalTab('overview')">Overview</button>
-                <button class="modal-tab" data-tab="events" onclick="switchModalTab('events')">Events</button>
-                <button class="modal-tab" data-tab="probes" onclick="switchModalTab('probes')">Probes</button>
-                <button class="modal-tab" data-tab="logs" onclick="switchModalTab('logs')">Logs</button>
+                <button class="modal-tab active" data-tab="overview">Overview</button>
+                <button class="modal-tab" data-tab="events">Events</button>
+                <button class="modal-tab" data-tab="probes">Probes</button>
+                <button class="modal-tab" data-tab="logs">Logs</button>
             </div>
             <!-- Modal Body -->
             <div id="modal-body" style="padding: 1.25rem 1.5rem; max-height: 75vh; overflow-y: auto;"></div>
@@ -581,7 +581,7 @@ function createAgentCard(a) {
     const lastCheck = procStatus.timestamp ? formatTimestamp(procStatus.timestamp) : '--';
 
     return `
-    <div class="agent-fleet-card" style="border-left: none;" onclick="openAgentModal('${a.id}')">
+    <div class="agent-fleet-card" style="border-left: none;" data-action="open-agent-modal" data-agent-id="${a.id}">
         <div style="position:absolute;top:0;left:0;width:4px;height:100%;background:${a.color};"></div>
         <div class="agent-card-header">
             <div>
@@ -846,7 +846,7 @@ function buildOverviewTab(a, live) {
         }
         html += '</div>';
         if (live.recent_events.length > 5) {
-            html += `<div style="text-align:center;margin-top:0.5rem;"><button onclick="switchModalTab('events')" style="background:none;border:1px solid rgba(0,217,255,0.3);color:var(--neural-primary);padding:0.3rem 1rem;border-radius:6px;font-size:0.78rem;cursor:pointer;">View All ${live.event_count} Events &rarr;</button></div>`;
+            html += `<div style="text-align:center;margin-top:0.5rem;"><button data-action="switch-tab" data-tab="events" style="background:none;border:1px solid rgba(0,217,255,0.3);color:var(--neural-primary);padding:0.3rem 1rem;border-radius:6px;font-size:0.78rem;cursor:pointer;">View All ${live.event_count} Events &rarr;</button></div>`;
         }
     }
 
@@ -1069,6 +1069,29 @@ let refreshTimer = null;
 document.addEventListener('DOMContentLoaded', () => {
     loadAgentData();
     refreshTimer = setInterval(loadAgentData, 30000);
+
+    // Refresh button
+    document.getElementById('refresh-agent-data-btn').addEventListener('click', loadAgentData);
+
+    // Close modal button
+    document.getElementById('close-agent-modal-btn').addEventListener('click', closeAgentModal);
+
+    // Modal tab buttons
+    document.querySelectorAll('.modal-tab[data-tab]').forEach(tab => {
+        tab.addEventListener('click', () => switchModalTab(tab.dataset.tab));
+    });
+
+    // Event delegation on agents grid (dynamic agent cards)
+    document.getElementById('agents-grid').addEventListener('click', (e) => {
+        const card = e.target.closest('[data-action="open-agent-modal"]');
+        if (card) openAgentModal(card.dataset.agentId);
+    });
+
+    // Event delegation on modal body (dynamic "View All Events" button)
+    document.getElementById('modal-body').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="switch-tab"]');
+        if (btn) switchModalTab(btn.dataset.tab);
+    });
 });
 </script>
 {% endblock %}

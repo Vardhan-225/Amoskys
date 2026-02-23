@@ -31,7 +31,7 @@
     <div class="neural-card">
         <div class="card-header">
             <h3 class="card-title">Session Management</h3>
-            <button class="neural-button neural-button-danger" onclick="sessionManager.revokeAllSessions()">⚠️ Revoke All Sessions</button>
+            <button class="neural-button neural-button-danger" id="revoke-all-sessions-btn">⚠️ Revoke All Sessions</button>
         </div>
         <p style="color: var(--text-secondary); margin-bottom: 1rem;">
             Session management is available through the <a href="/admin/users" style="color: var(--neural-primary);">User Management</a> page.
@@ -113,6 +113,9 @@ class SessionManager {
 
 document.addEventListener('DOMContentLoaded', () => {
     window.sessionManager = new SessionManager();
+
+    // Revoke all sessions button
+    document.getElementById('revoke-all-sessions-btn').addEventListener('click', () => sessionManager.revokeAllSessions());
 });
 </script>
 {% endblock %}

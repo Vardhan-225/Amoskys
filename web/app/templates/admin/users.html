@@ -40,7 +40,7 @@
                     <option value="unverified">Unverified</option>
                 </select>
             </div>
-            <button class="neural-button" onclick="userManager.loadUsers()">🔍 Search</button>
+            <button class="neural-button" id="search-btn">🔍 Search</button>
         </div>
     </div>
 
@@ -76,7 +76,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3 id="modalTitle">User Details</h3>
-            <button class="modal-close" onclick="userManager.closeModal()">✕</button>
+            <button class="modal-close" id="user-modal-close-btn">✕</button>
         </div>
         <div class="modal-body" id="modalBody">
             <!-- Content populated by JS -->
@@ -89,7 +89,7 @@
     <div class="modal-content modal-confirm">
         <div class="modal-header modal-header-warning">
             <h3>⏸️ Suspend User Account</h3>
-            <button class="modal-close" onclick="userManager.closeSuspendModal()">✕</button>
+            <button class="modal-close" id="suspend-modal-close-btn">✕</button>
         </div>
         <div class="modal-body">
             <div class="confirm-details">
@@ -102,7 +102,7 @@
                 The user will be immediately logged out and cannot login until reactivated.
             </p>
             <div class="modal-actions">
-                <button class="neural-button neural-button-secondary" onclick="userManager.closeSuspendModal()">Cancel</button>
+                <button class="neural-button neural-button-secondary" id="suspend-modal-cancel-btn">Cancel</button>
                 <button class="neural-button neural-button-warning" id="confirmSuspendBtn">Suspend Account</button>
             </div>
         </div>
@@ -114,7 +114,7 @@
     <div class="modal-content modal-confirm">
         <div class="modal-header modal-header-danger">
             <h3>🗑️ Permanent User Deletion</h3>
-            <button class="modal-close" onclick="userManager.closeDeleteModal()">✕</button>
+            <button class="modal-close" id="delete-modal-close-btn">✕</button>
         </div>
         <div class="modal-body">
             <div class="confirm-details">
@@ -141,7 +141,7 @@
                 <span class="error-text" id="deleteEmailError"></span>
             </div>
             <div class="modal-actions">
-                <button class="neural-button neural-button-secondary" onclick="userManager.closeDeleteModal()">Cancel</button>
+                <button class="neural-button neural-button-secondary" id="delete-modal-cancel-btn">Cancel</button>
                 <button class="neural-button neural-button-danger" id="confirmDeleteBtn" disabled>Delete Permanently</button>
             </div>
         </div>
@@ -153,7 +153,7 @@
     <div class="modal-content modal-confirm">
         <div class="modal-header modal-header-warning">
             <h3>🔑 Revoke All Sessions</h3>
-            <button class="modal-close" onclick="userManager.closeRevokeSessionsModal()">✕</button>
+            <button class="modal-close" id="revoke-modal-close-btn">✕</button>
         </div>
         <div class="modal-body">
             <div class="confirm-details">
@@ -166,7 +166,7 @@
                 ⚠️ This will immediately log out the user from all devices and invalidate all their active sessions.
             </p>
             <div class="modal-actions">
-                <button class="neural-button neural-button-secondary" onclick="userManager.closeRevokeSessionsModal()">Cancel</button>
+                <button class="neural-button neural-button-secondary" id="revoke-modal-cancel-btn">Cancel</button>
                 <button class="neural-button neural-button-warning" id="confirmRevokeBtn">Revoke All Sessions</button>
             </div>
         </div>
@@ -796,7 +796,10 @@ class UserManager {
 
     init() {
         this.loadUsers();
-        
+
+        // Search button
+        document.getElementById('search-btn').addEventListener('click', () => this.loadUsers());
+
         // Search on Enter key
         document.getElementById('searchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.loadUsers();
@@ -805,6 +808,36 @@ class UserManager {
         // Close modal on overlay click
         document.getElementById('userModal').addEventListener('click', (e) => {
             if (e.target.id === 'userModal') this.closeModal();
+        });
+
+        // Static modal close / cancel buttons
+        document.getElementById('user-modal-close-btn').addEventListener('click', () => this.closeModal());
+        document.getElementById('suspend-modal-close-btn').addEventListener('click', () => this.closeSuspendModal());
+        document.getElementById('suspend-modal-cancel-btn').addEventListener('click', () => this.closeSuspendModal());
+        document.getElementById('delete-modal-close-btn').addEventListener('click', () => this.closeDeleteModal());
+        document.getElementById('delete-modal-cancel-btn').addEventListener('click', () => this.closeDeleteModal());
+        document.getElementById('revoke-modal-close-btn').addEventListener('click', () => this.closeRevokeSessionsModal());
+        document.getElementById('revoke-modal-cancel-btn').addEventListener('click', () => this.closeRevokeSessionsModal());
+
+        // Event delegation for dynamically rendered user action buttons
+        document.getElementById('usersTableBody').addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            const action = btn.dataset.action;
+            const userId = btn.dataset.userId;
+            if (action === 'view-user') this.viewUser(userId);
+            else if (action === 'edit-user') this.editUser(userId);
+            else if (action === 'revoke-session') this.revokeSession(userId);
+            else if (action === 'suspend-user') this.suspendUser(userId);
+            else if (action === 'delete-user') this.deleteUser(userId);
+        });
+
+        // Event delegation for dynamically rendered pagination buttons
+        document.getElementById('pagination').addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action="go-to-page"]');
+            if (btn && !btn.disabled) {
+                this.goToPage(parseInt(btn.dataset.page, 10));
+            }
         });
     }
 
@@ -872,11 +905,11 @@ class UserManager {
                 </td>
                 <td>
                     <div class="action-buttons">
-                        <button class="action-btn" onclick="userManager.viewUser('${user.id}')" title="View Details">👁️</button>
-                        <button class="action-btn" onclick="userManager.editUser('${user.id}')" title="Edit User">✏️</button>
-                        <button class="action-btn danger" onclick="userManager.revokeSession('${user.id}')" title="Revoke Sessions">🔒</button>
-                        <button class="action-btn warning" onclick="userManager.suspendUser('${user.id}')" title="Suspend User">⏸️</button>
-                        <button class="action-btn danger" onclick="userManager.deleteUser('${user.id}')" title="Delete User">🗑️</button>
+                        <button class="action-btn" data-action="view-user" data-user-id="${user.id}" title="View Details">👁️</button>
+                        <button class="action-btn" data-action="edit-user" data-user-id="${user.id}" title="Edit User">✏️</button>
+                        <button class="action-btn danger" data-action="revoke-session" data-user-id="${user.id}" title="Revoke Sessions">🔒</button>
+                        <button class="action-btn warning" data-action="suspend-user" data-user-id="${user.id}" title="Suspend User">⏸️</button>
+                        <button class="action-btn danger" data-action="delete-user" data-user-id="${user.id}" title="Delete User">🗑️</button>
                     </div>
                 </td>
             </tr>
@@ -892,17 +925,17 @@ class UserManager {
         }
 
         let html = '';
-        html += `<button class="page-btn" ${this.currentPage === 1 ? 'disabled' : ''} onclick="userManager.goToPage(${this.currentPage - 1})">← Prev</button>`;
-        
+        html += `<button class="page-btn" ${this.currentPage === 1 ? 'disabled' : ''} data-action="go-to-page" data-page="${this.currentPage - 1}">← Prev</button>`;
+
         for (let i = 1; i <= this.totalPages; i++) {
             if (i === 1 || i === this.totalPages || (i >= this.currentPage - 2 && i <= this.currentPage + 2)) {
-                html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" onclick="userManager.goToPage(${i})">${i}</button>`;
+                html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" data-action="go-to-page" data-page="${i}">${i}</button>`;
             } else if (i === this.currentPage - 3 || i === this.currentPage + 3) {
                 html += `<span style="color: var(--text-muted);">...</span>`;
             }
         }
-        
-        html += `<button class="page-btn" ${this.currentPage === this.totalPages ? 'disabled' : ''} onclick="userManager.goToPage(${this.currentPage + 1})">Next →</button>`;
+
+        html += `<button class="page-btn" ${this.currentPage === this.totalPages ? 'disabled' : ''} data-action="go-to-page" data-page="${this.currentPage + 1}">Next →</button>`;
         
         container.innerHTML = html;
     }
@@ -987,7 +1020,7 @@ class UserManager {
     showEditModal(user) {
         document.getElementById('modalTitle').textContent = `Edit: ${user.email}`;
         document.getElementById('modalBody').innerHTML = `
-            <form id="editUserForm" onsubmit="userManager.saveUser(event, '${user.id}')">
+            <form id="editUserForm" data-user-id="${user.id}">
                 <div class="form-group">
                     <label>Full Name</label>
                     <input
@@ -1021,12 +1054,19 @@ class UserManager {
                     </label>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="neural-button neural-button-secondary" onclick="userManager.closeModal()">Cancel</button>
+                    <button type="button" class="neural-button neural-button-secondary" id="edit-modal-cancel-btn">Cancel</button>
                     <button type="submit" class="neural-button" id="saveUserBtn">Save Changes</button>
                 </div>
             </form>
         `;
         document.getElementById('userModal').classList.add('open');
+
+        // Attach form submit handler
+        const editForm = document.getElementById('editUserForm');
+        editForm.addEventListener('submit', (e) => this.saveUser(e, user.id));
+
+        // Attach cancel button handler
+        document.getElementById('edit-modal-cancel-btn').addEventListener('click', () => this.closeModal());
 
         // Add real-time validation
         const fullNameInput = document.querySelector('input[name="full_name"]');
@@ -1342,7 +1382,7 @@ class UserManager {
                 ${icons[type] || icons.info}
                 <div class="toast-message">${message.replace(/^[✅❌⚠️ℹ️]\s*/, '')}</div>
             </div>
-            <button class="toast-close" onclick="this.parentElement.remove()">
+            <button class="toast-close">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="18" y1="6" x2="6" y2="18"/>
                     <line x1="6" y1="6" x2="18" y2="18"/>

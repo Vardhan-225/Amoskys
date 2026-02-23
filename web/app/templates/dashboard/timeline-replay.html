@@ -19,15 +19,15 @@
     <!-- Playback Controls -->
     <div class="tr-card tr-controls">
         <div class="tr-controls-left">
-            <button id="play-pause-btn" class="tr-btn tr-btn-primary" onclick="replay.togglePlayback()">Play</button>
-            <button class="tr-btn" onclick="replay.stepBackward()" title="Step back">Back</button>
-            <button class="tr-btn" onclick="replay.stepForward()" title="Step forward">Next</button>
-            <button class="tr-btn" onclick="replay.reset()" title="Reset">Reset</button>
+            <button id="play-pause-btn" class="tr-btn tr-btn-primary">Play</button>
+            <button id="step-back-btn" class="tr-btn" title="Step back">Back</button>
+            <button id="step-forward-btn" class="tr-btn" title="Step forward">Next</button>
+            <button id="reset-btn" class="tr-btn" title="Reset">Reset</button>
         </div>
         <div class="tr-controls-right">
             <div class="tr-control-group">
                 <label class="tr-ctrl-label">Speed</label>
-                <select id="speed-control" onchange="replay.setSpeed(this.value)" class="tr-select">
+                <select id="speed-control" class="tr-select">
                     <option value="2000">0.5x</option>
                     <option value="1000" selected>1x</option>
                     <option value="500">2x</option>
@@ -367,7 +367,7 @@ class TimelineReplay {
     renderPhases() {
         const container = document.getElementById('attack-phases');
         container.innerHTML = this.phases.map(p =>
-            '<div class="tr-phase" id="phase-' + p.id + '" onclick="replay.jumpToPhase(' + p.id + ')">' +
+            '<div class="tr-phase" id="phase-' + p.id + '" data-action="jump-to-phase" data-phase-id="' + p.id + '">' +
                 '<div class="tr-phase-name">' + this.esc(p.name) + '</div>' +
                 '<div class="tr-phase-count">Events ' + (p.eventRange[0] + 1) + '-' + (p.eventRange[1] + 1) + '</div>' +
                 (p.time ? '<div class="tr-phase-label">' + p.time + '</div>' : '') +
@@ -567,6 +567,25 @@ class TimelineReplay {
 }
 
 let replay;
-document.addEventListener('DOMContentLoaded', () => { replay = new TimelineReplay(); });
+document.addEventListener('DOMContentLoaded', () => {
+    replay = new TimelineReplay();
+
+    // Playback control buttons
+    document.getElementById('play-pause-btn').addEventListener('click', () => replay.togglePlayback());
+    document.getElementById('step-back-btn').addEventListener('click', () => replay.stepBackward());
+    document.getElementById('step-forward-btn').addEventListener('click', () => replay.stepForward());
+    document.getElementById('reset-btn').addEventListener('click', () => replay.reset());
+
+    // Speed control select
+    document.getElementById('speed-control').addEventListener('change', function() {
+        replay.setSpeed(this.value);
+    });
+
+    // Event delegation on attack phases (dynamic phase elements)
+    document.getElementById('attack-phases').addEventListener('click', (e) => {
+        const phase = e.target.closest('[data-action="jump-to-phase"]');
+        if (phase) replay.jumpToPhase(parseInt(phase.dataset.phaseId, 10));
+    });
+});
 </script>
 {% endblock %}

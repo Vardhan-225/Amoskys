@@ -17,7 +17,7 @@
         <div class="status-badge" id="active-count" style="background: linear-gradient(135deg, #00d9ff 0%, #00b8d4 100%);">
             <strong>0</strong> perspectives active
         </div>
-        <button class="neural-button" onclick="perspectiveSelector.applyPerspectives()">
+        <button class="neural-button" id="apply-perspectives-btn">
             ✓ Apply Selection
         </button>
     </div>
@@ -27,22 +27,22 @@
 <div class="neural-card" style="margin-bottom: 1.5rem;">
     <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">Quick Selection Presets</h3>
     <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('all')">
+        <button class="preset-btn" data-preset="all">
             🌐 All Perspectives
         </button>
-        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('network')">
+        <button class="preset-btn" data-preset="network">
             🌐 Network Focus
         </button>
-        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('endpoint')">
+        <button class="preset-btn" data-preset="endpoint">
             💻 Endpoint Focus
         </button>
-        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('behavioral')">
+        <button class="preset-btn" data-preset="behavioral">
             🧠 Behavioral Analysis
         </button>
-        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('threat-hunting')">
+        <button class="preset-btn" data-preset="threat-hunting">
             🎯 Threat Hunting
         </button>
-        <button class="preset-btn" onclick="perspectiveSelector.loadPreset('none')">
+        <button class="preset-btn" data-preset="none">
             🔄 Clear All
         </button>
     </div>
@@ -54,7 +54,7 @@
         <h3 style="margin: 0; color: #00d9ff; font-size: 1.1rem;">Available Perspectives</h3>
         <div style="display: flex; gap: 1rem; align-items: center;">
             <label style="color: var(--text-secondary); font-size: 0.9rem;">Filter by category:</label>
-            <select id="category-filter" class="neural-select" onchange="perspectiveSelector.filterByCategory(this.value)">
+            <select id="category-filter" class="neural-select">
                 <option value="all">All Categories</option>
                 <option value="network">Network</option>
                 <option value="endpoint">Endpoint</option>
@@ -429,7 +429,7 @@ class PerspectiveSelector {
 
         grid.innerHTML = perspectivesToRender.map(perspective => `
             <div class="perspective-card ${this.selectedPerspectives.has(perspective.id) ? 'active' : ''}"
-                 onclick="perspectiveSelector.togglePerspective('${perspective.id}')"
+                 data-action="toggle-perspective" data-perspective-id="${perspective.id}"
                  data-category="${perspective.category}">
                 <div class="perspective-header">
                     <div class="perspective-icon">${perspective.icon}</div>
@@ -600,6 +600,25 @@ class PerspectiveSelector {
 let perspectiveSelector;
 document.addEventListener('DOMContentLoaded', () => {
     perspectiveSelector = new PerspectiveSelector();
+
+    // Apply Selection button
+    document.getElementById('apply-perspectives-btn').addEventListener('click', () => perspectiveSelector.applyPerspectives());
+
+    // Preset buttons (event delegation)
+    document.querySelectorAll('.preset-btn[data-preset]').forEach(btn => {
+        btn.addEventListener('click', () => perspectiveSelector.loadPreset(btn.dataset.preset));
+    });
+
+    // Category filter
+    document.getElementById('category-filter').addEventListener('change', function() {
+        perspectiveSelector.filterByCategory(this.value);
+    });
+
+    // Perspective cards (event delegation on dynamic grid)
+    document.getElementById('perspectives-grid').addEventListener('click', (e) => {
+        const card = e.target.closest('[data-action="toggle-perspective"]');
+        if (card) perspectiveSelector.togglePerspective(card.dataset.perspectiveId);
+    });
 });
 </script>
 {% endblock %}

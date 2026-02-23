@@ -40,7 +40,7 @@ def create_app():
                 "Generate one: python -c 'import secrets; print(secrets.token_hex(32))'"
             )
 
-    # Reject known-weak / placeholder keys in production
+    # Reject known-weak / placeholder keys in ALL environments
     _WEAK_PATTERNS = {
         "dev-secret-key",
         "change-in-production",
@@ -48,21 +48,30 @@ def create_app():
         "amoskys-neural-security-dev-key",
         "changeme",
         "placeholder",
+        "change_me",
     }
-    if not is_dev:
+    if secret_key:  # Only validate if not auto-generated
+        _key_warnings = []
         if len(secret_key) < 32:
-            raise ValueError(
-                f"SECRET_KEY too short ({len(secret_key)} chars). "
-                "Minimum 32 characters required."
+            _key_warnings.append(
+                f"SECRET_KEY too short ({len(secret_key)} chars, minimum 32)."
             )
         lower_key = secret_key.lower()
         for weak in _WEAK_PATTERNS:
             if weak in lower_key:
-                raise ValueError(
-                    f"SECRET_KEY contains weak pattern '{weak}'. "
-                    "Generate a cryptographic key: "
-                    "python -c 'import secrets; print(secrets.token_hex(32))'"
+                _key_warnings.append(
+                    f"SECRET_KEY contains weak pattern '{weak}'."
                 )
+        if _key_warnings:
+            _msg = (
+                " ".join(_key_warnings)
+                + " Generate a strong key: "
+                "python -c 'import secrets; print(secrets.token_hex(32))'"
+            )
+            if is_dev:
+                logging.warning("INSECURE SECRET_KEY: %s", _msg)
+            else:
+                raise ValueError(_msg)
 
     app.config["SECRET_KEY"] = secret_key
 

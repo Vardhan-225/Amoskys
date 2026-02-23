@@ -16,7 +16,7 @@
         </p>
         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
             <a href="/dashboard/cortex" class="neural-button">← Back to Cortex</a>
-            <button class="neural-button" onclick="dbManager.refreshAll()">🔄 Refresh Statistics</button>
+            <button class="neural-button" id="refresh-stats-btn">🔄 Refresh Statistics</button>
         </div>
     </div>
 
@@ -65,23 +65,22 @@
         <div class="card-header">
             <h3 class="card-title">🔍 Raw Data Viewer (Read-Only)</h3>
             <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <select id="table-selector" class="table-select" onchange="dbManager.loadTableData(1)">
+                <select id="table-selector" class="table-select">
                     <option value="">-- Loading tables... --</option>
                 </select>
-                <button class="neural-button-sm" onclick="dbManager.loadTableData(1)">Load Data</button>
-                <button class="neural-button-sm" onclick="dbManager.exportData('csv')" title="Export CSV">CSV</button>
-                <button class="neural-button-sm" onclick="dbManager.exportData('json')" title="Export JSON">JSON</button>
+                <button class="neural-button-sm" id="load-data-btn">Load Data</button>
+                <button class="neural-button-sm" id="export-csv-btn" title="Export CSV">CSV</button>
+                <button class="neural-button-sm" id="export-json-btn" title="Export JSON">JSON</button>
             </div>
         </div>
         <!-- Search bar -->
         <div id="search-bar" style="display: none; padding: 0.75rem 0; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-            <input type="text" id="search-input" class="table-select" placeholder="Search..." style="min-width: 200px;"
-                   onkeydown="if(event.key==='Enter') dbManager.searchTable()">
+            <input type="text" id="search-input" class="table-select" placeholder="Search..." style="min-width: 200px;">
             <select id="search-column-selector" class="table-select" style="min-width: 180px;">
                 <option value="">All columns</option>
             </select>
-            <button class="neural-button-sm" onclick="dbManager.searchTable()">Search</button>
-            <button class="neural-button-sm" onclick="dbManager.clearSearch()">Clear</button>
+            <button class="neural-button-sm" id="search-table-btn">Search</button>
+            <button class="neural-button-sm" id="clear-search-btn">Clear</button>
         </div>
         <div class="data-viewer-container">
             <div id="data-viewer-content">
@@ -93,10 +92,10 @@
         <!-- Pagination -->
         <div id="pagination-controls" style="display: none; padding: 0.75rem 0; gap: 0.5rem; align-items: center; justify-content: space-between;">
             <div style="display: flex; gap: 0.5rem;">
-                <button class="neural-button-sm" id="page-first" onclick="dbManager.loadTableData(1)">First</button>
-                <button class="neural-button-sm" id="page-prev" onclick="dbManager.prevPage()">Prev</button>
-                <button class="neural-button-sm" id="page-next" onclick="dbManager.nextPage()">Next</button>
-                <button class="neural-button-sm" id="page-last" onclick="dbManager.lastPage()">Last</button>
+                <button class="neural-button-sm" id="page-first">First</button>
+                <button class="neural-button-sm" id="page-prev">Prev</button>
+                <button class="neural-button-sm" id="page-next">Next</button>
+                <button class="neural-button-sm" id="page-last">Last</button>
             </div>
             <span id="page-info" style="color: var(--text-secondary); font-size: 0.85rem;">Page 1 of 1</span>
         </div>
@@ -128,7 +127,7 @@
                         <select id="truncate-table-selector" class="table-select">
                             <option value="">-- Loading tables... --</option>
                         </select>
-                        <button class="danger-button" onclick="dbManager.confirmTruncateTable()">
+                        <button class="danger-button" id="truncate-table-btn">
                             🗑️ Truncate Table
                         </button>
                     </div>
@@ -139,7 +138,7 @@
                     <p class="action-description">
                         Delete ALL data from ALL tables. Preserves schema. Requires confirmation.
                     </p>
-                    <button class="danger-button" onclick="dbManager.confirmResetDatabase()" style="margin-top: 1rem;">
+                    <button class="danger-button" id="reset-database-btn" style="margin-top: 1rem;">
                         ⚠️ Reset All Data
                     </button>
                 </div>
@@ -149,7 +148,7 @@
                     <p class="action-description">
                         Clear the Write-Ahead Log queue (already processed events).
                     </p>
-                    <button class="neural-button" onclick="dbManager.clearWAL()" style="margin-top: 1rem;">
+                    <button class="neural-button" id="clear-wal-btn" style="margin-top: 1rem;">
                         🗑️ Clear WAL Queue
                     </button>
                 </div>
@@ -371,6 +370,33 @@ class DatabaseManager {
         this.loadTables();
         this.refreshAll();
         this.loadAuditLog();
+
+        // Header controls
+        document.getElementById('refresh-stats-btn').addEventListener('click', () => this.refreshAll());
+
+        // Data viewer controls
+        document.getElementById('table-selector').addEventListener('change', () => this.loadTableData(1));
+        document.getElementById('load-data-btn').addEventListener('click', () => this.loadTableData(1));
+        document.getElementById('export-csv-btn').addEventListener('click', () => this.exportData('csv'));
+        document.getElementById('export-json-btn').addEventListener('click', () => this.exportData('json'));
+
+        // Search controls
+        document.getElementById('search-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') this.searchTable();
+        });
+        document.getElementById('search-table-btn').addEventListener('click', () => this.searchTable());
+        document.getElementById('clear-search-btn').addEventListener('click', () => this.clearSearch());
+
+        // Pagination controls
+        document.getElementById('page-first').addEventListener('click', () => this.loadTableData(1));
+        document.getElementById('page-prev').addEventListener('click', () => this.prevPage());
+        document.getElementById('page-next').addEventListener('click', () => this.nextPage());
+        document.getElementById('page-last').addEventListener('click', () => this.lastPage());
+
+        // Maintenance controls
+        document.getElementById('truncate-table-btn').addEventListener('click', () => this.confirmTruncateTable());
+        document.getElementById('reset-database-btn').addEventListener('click', () => this.confirmResetDatabase());
+        document.getElementById('clear-wal-btn').addEventListener('click', () => this.clearWAL());
     }
 
     async loadTables() {

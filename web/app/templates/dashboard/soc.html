@@ -60,7 +60,7 @@
                         <option value="medium">Medium</option>
                         <option value="low">Low</option>
                     </select>
-                    <button onclick="socDashboard.exportEvents('csv')" class="neural-button" style="padding:0.25rem 0.6rem;font-size:0.7rem;cursor:pointer;" title="Export CSV">Export CSV</button>
+                    <button id="soc-export-csv-btn" class="neural-button" style="padding:0.25rem 0.6rem;font-size:0.7rem;cursor:pointer;" title="Export CSV">Export CSV</button>
                     <span class="neural-loading" id="events-loading" style="display: none;"></span>
                 </div>
             </div>
@@ -114,9 +114,9 @@
         <div class="card-header">
             <h3 class="card-title">📈 Event Timeline (24 Hours)</h3>
             <div style="display: flex; gap: 1rem;">
-                <button class="neural-button" onclick="socDashboard.changeTimeRange(6)">6H</button>
-                <button class="neural-button" onclick="socDashboard.changeTimeRange(12)">12H</button>
-                <button class="neural-button" onclick="socDashboard.changeTimeRange(24)" style="background: var(--neural-primary);">24H</button>
+                <button class="neural-button" id="soc-btn-6h">6H</button>
+                <button class="neural-button" id="soc-btn-12h">12H</button>
+                <button class="neural-button" id="soc-btn-24h" style="background: var(--neural-primary);">24H</button>
             </div>
         </div>
         <!-- Canvas wrapper with fixed height to prevent infinite expansion -->
@@ -130,7 +130,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>🔍 Event Investigation</h3>
-                <span class="modal-close" onclick="socDashboard.closeInvestigation()">&times;</span>
+                <span class="modal-close" id="soc-modal-close">&times;</span>
             </div>
             <div class="modal-body" id="investigation-content">
                 <!-- Investigation content will be populated here -->
@@ -661,7 +661,7 @@ class SOCDashboard {
             const riskColor = riskPct > 70 ? '#ff3366' : riskPct > 40 ? '#ffaa00' : '#00ff88';
             const classLabel = event.classification ? `<span class="classification-badge">${event.classification}</span>` : '';
             return `
-            <div class="event-item severity-${event.severity}" onclick="socDashboard.openInvestigation('${event.id}')" data-event='${JSON.stringify(event).replace(/'/g, "&#39;")}'>
+            <div class="event-item severity-${event.severity}" data-action="investigate-event" data-event-id="${event.id}" data-event='${JSON.stringify(event).replace(/'/g, "&#39;")}'>
                 <div class="event-main">
                     <div class="event-type">${this.formatEventType(event.type)} ${classLabel}</div>
                     <div class="event-description">${event.description}</div>
@@ -748,15 +748,15 @@ class SOCDashboard {
         return date.toLocaleDateString();
     }
     
-    changeTimeRange(hours) {
+    changeTimeRange(hours, btnEl) {
         this.timeRange = hours;
         this.updateTimeline();
-        
+
         // Update button styles
-        document.querySelectorAll('.neural-button').forEach(btn => {
+        document.querySelectorAll('#soc-btn-6h, #soc-btn-12h, #soc-btn-24h').forEach(btn => {
             btn.style.background = '';
         });
-        event.target.style.background = 'var(--neural-primary)';
+        if (btnEl) btnEl.style.background = 'var(--neural-primary)';
     }
     
     openInvestigation(eventId) {
@@ -889,6 +889,23 @@ class SOCDashboard {
 let socDashboard;
 document.addEventListener('DOMContentLoaded', () => {
     socDashboard = new SOCDashboard();
+
+    // Export CSV button
+    document.getElementById('soc-export-csv-btn').addEventListener('click', () => socDashboard.exportEvents('csv'));
+
+    // Time range buttons
+    document.getElementById('soc-btn-6h').addEventListener('click', function() { socDashboard.changeTimeRange(6, this); });
+    document.getElementById('soc-btn-12h').addEventListener('click', function() { socDashboard.changeTimeRange(12, this); });
+    document.getElementById('soc-btn-24h').addEventListener('click', function() { socDashboard.changeTimeRange(24, this); });
+
+    // Modal close button
+    document.getElementById('soc-modal-close').addEventListener('click', () => socDashboard.closeInvestigation());
+
+    // Event delegation for dynamically rendered event feed items
+    document.getElementById('live-events-container').addEventListener('click', (e) => {
+        const item = e.target.closest('[data-action="investigate-event"]');
+        if (item) socDashboard.openInvestigation(item.dataset.eventId);
+    });
 });
 
 // Close modal on outside click

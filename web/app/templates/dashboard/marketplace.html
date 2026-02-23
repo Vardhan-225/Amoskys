@@ -17,7 +17,7 @@
         <div class="selection-badge" id="selection-badge">
             <span id="selection-count">0</span> selected
         </div>
-        <button class="deploy-button" id="deploy-button" onclick="marketplace.deployAgent()" disabled>
+        <button class="deploy-button" id="deploy-button" disabled>
             <span>🚀</span> Deploy Configuration
         </button>
     </div>
@@ -27,7 +27,7 @@
 <div class="neural-card" style="margin-bottom: 1.5rem;">
     <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">⚡ Quick Start Bundles</h3>
     <div class="bundles-grid">
-        <div class="bundle-card" onclick="marketplace.applyBundle('essential')">
+        <div class="bundle-card" data-action="apply-bundle" data-bundle="essential">
             <div class="bundle-badge recommended">RECOMMENDED</div>
             <div class="bundle-icon">&#127919;</div>
             <h4 class="bundle-name">Essential Security</h4>
@@ -46,7 +46,7 @@
             </div>
         </div>
 
-        <div class="bundle-card" onclick="marketplace.applyBundle('advanced')">
+        <div class="bundle-card" data-action="apply-bundle" data-bundle="advanced">
             <div class="bundle-icon">&#128640;</div>
             <h4 class="bundle-name">Advanced Defense</h4>
             <p class="bundle-desc">Extended coverage with kernel and memory analysis</p>
@@ -63,7 +63,7 @@
             </div>
         </div>
 
-        <div class="bundle-card" onclick="marketplace.applyBundle('cloud')">
+        <div class="bundle-card" data-action="apply-bundle" data-bundle="cloud">
             <div class="bundle-icon">&#9729;&#65039;</div>
             <h4 class="bundle-name">Cloud Native</h4>
             <p class="bundle-desc">Container and cloud infrastructure monitoring</p>
@@ -80,7 +80,7 @@
             </div>
         </div>
 
-        <div class="bundle-card custom" onclick="marketplace.scrollToCatalog()">
+        <div class="bundle-card custom" data-action="scroll-to-catalog">
             <div class="bundle-icon">⚙️</div>
             <h4 class="bundle-name">Custom Selection</h4>
             <p class="bundle-desc">Build your own configuration from catalog</p>
@@ -97,7 +97,7 @@
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div style="display: flex; align-items: center; gap: 1rem;">
             <label style="color: var(--text-secondary); font-weight: 600;">Filter:</label>
-            <select id="category-filter" class="filter-select" onchange="marketplace.filterPerspectives()">
+            <select id="category-filter" class="filter-select">
                 <option value="all">All Categories</option>
                 <option value="endpoint">Endpoint Security</option>
                 <option value="network">Network Monitoring</option>
@@ -106,8 +106,8 @@
             </select>
         </div>
         <div style="display: flex; gap: 0.75rem;">
-            <button class="control-btn" onclick="marketplace.selectAll()">Select All</button>
-            <button class="control-btn" onclick="marketplace.clearAll()">Clear All</button>
+            <button class="control-btn" id="select-all-btn">Select All</button>
+            <button class="control-btn" id="clear-all-btn">Clear All</button>
         </div>
     </div>
 </div>
@@ -119,7 +119,7 @@
         <div class="card-header">
             <div class="card-icon">⚙️</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-process" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-process">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -146,7 +146,7 @@
         <div class="card-header">
             <div class="card-icon">🌐</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-network" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-network">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -173,7 +173,7 @@
         <div class="card-header">
             <div class="card-icon">📁</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-filesystem" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-filesystem">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -200,7 +200,7 @@
         <div class="card-header">
             <div class="card-icon">📋</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-registry" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-registry">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -227,7 +227,7 @@
         <div class="card-header">
             <div class="card-icon">🔧</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-kernel" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-kernel">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -254,7 +254,7 @@
         <div class="card-header">
             <div class="card-icon">💾</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-memory" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-memory">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -281,7 +281,7 @@
         <div class="card-header">
             <div class="card-icon">🔍</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-dns" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-dns">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -308,7 +308,7 @@
         <div class="card-header">
             <div class="card-icon">🔐</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-auth" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-auth">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -335,7 +335,7 @@
         <div class="card-header">
             <div class="card-icon">☁️</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-cloud" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-cloud">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -362,7 +362,7 @@
         <div class="card-header">
             <div class="card-icon">📦</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-container" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-container">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -389,7 +389,7 @@
         <div class="card-header">
             <div class="card-icon">🔌</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-usb" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-usb">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -416,7 +416,7 @@
         <div class="card-header">
             <div class="card-icon">💻</div>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="perspective-powershell" onchange="marketplace.updateSelection()">
+                <input type="checkbox" id="perspective-powershell">
                 <span class="checkmark"></span>
             </label>
         </div>
@@ -444,7 +444,7 @@
     <div class="deploy-modal-content">
         <div class="deploy-modal-header">
             <h3>🚀 Deploy Agent Configuration</h3>
-            <button class="close-btn" onclick="marketplace.closeDeployModal()">✕</button>
+            <button class="close-btn" id="deploy-modal-close-btn">✕</button>
         </div>
         <div class="deploy-modal-body">
             <div class="deploy-summary">
@@ -461,7 +461,7 @@
                 <!-- Selected perspectives will be listed here -->
             </div>
             <div class="deploy-actions">
-                <button class="modal-deploy-btn" onclick="marketplace.confirmDeploy()">
+                <button class="modal-deploy-btn" id="confirm-deploy-btn">
                     <span>⬇️</span> Download Configured Agent
                 </button>
             </div>
@@ -1003,6 +1003,34 @@ class Marketplace {
 
     init() {
         this.updateUI();
+
+        // Deploy button
+        document.getElementById('deploy-button').addEventListener('click', () => this.deployAgent());
+
+        // Bundle cards — event delegation on the bundles grid
+        document.querySelector('.bundles-grid').addEventListener('click', (e) => {
+            const card = e.target.closest('[data-action]');
+            if (!card) return;
+            const action = card.dataset.action;
+            if (action === 'apply-bundle') this.applyBundle(card.dataset.bundle);
+            else if (action === 'scroll-to-catalog') this.scrollToCatalog();
+        });
+
+        // Category filter
+        document.getElementById('category-filter').addEventListener('change', () => this.filterPerspectives());
+
+        // Select All / Clear All
+        document.getElementById('select-all-btn').addEventListener('click', () => this.selectAll());
+        document.getElementById('clear-all-btn').addEventListener('click', () => this.clearAll());
+
+        // Perspective checkbox changes — event delegation on the catalog
+        document.getElementById('perspective-catalog').addEventListener('change', (e) => {
+            if (e.target.matches('input[type="checkbox"]')) this.updateSelection();
+        });
+
+        // Deploy modal buttons
+        document.getElementById('deploy-modal-close-btn').addEventListener('click', () => this.closeDeployModal());
+        document.getElementById('confirm-deploy-btn').addEventListener('click', () => this.confirmDeploy());
     }
 
     scrollToCatalog() {

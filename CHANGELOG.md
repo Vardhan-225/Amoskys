@@ -5,7 +5,7 @@
 First beta release following a 5-week hardening sprint that transformed AMOSKYS
 from prototype into a production-candidate security monitoring platform.
 
-**4,188 tests | 9 canonical agents | 103 micro-probes | 24 correlation rules**
+**4,188 tests | 9 canonical agents | 89 micro-probes | 26 correlation rules**
 
 ---
 

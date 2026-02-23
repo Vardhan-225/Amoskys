@@ -20,6 +20,7 @@ from typing import Any, List
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from amoskys.enrichment import EnrichmentPipeline
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.storage.telemetry_store import TelemetryStore
 
@@ -49,6 +50,16 @@ class WALProcessor:
         self.error_count = 0
         self.quarantine_count = 0
         self.chain_break_count = 0
+
+        # A4.4: Enrichment pipeline (GeoIP → ASN → ThreatIntel)
+        try:
+            self._pipeline = EnrichmentPipeline()
+            logger.info(
+                "Enrichment pipeline initialized: %s", self._pipeline.status()
+            )
+        except Exception as e:
+            logger.warning("Enrichment pipeline unavailable: %s", e)
+            self._pipeline = None
 
     def process_batch(self, batch_size: int = 100) -> int:
         """Process a batch of events from WAL with BLAKE2b integrity verification.
@@ -303,6 +314,14 @@ class WALProcessor:
     ) -> None:
         """Extract structured data from security events into domain-specific tables."""
         attrs = {k: event.attributes[k] for k in event.attributes}
+
+        # A4.4: Enrich attributes with GeoIP, ASN, and threat intelligence
+        if self._pipeline is not None:
+            try:
+                self._pipeline.enrich(attrs)
+            except Exception:
+                logger.debug("Enrichment failed for event — continuing", exc_info=True)
+
         cat = event.security_event.event_category or ""
         se = event.security_event
         mitre = list(se.mitre_techniques) if se.mitre_techniques else []
@@ -1114,6 +1133,8 @@ class WALProcessor:
         stats = self.store.get_statistics()
         logger.info(f"Final statistics: {stats}")
         self.store.close()
+        if self._pipeline is not None:
+            self._pipeline.close()
 
 
 def main():

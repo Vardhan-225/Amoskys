@@ -16,8 +16,8 @@
         </p>
         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
             <a href="/dashboard/cortex" class="neural-button">← Back to Cortex</a>
-            <button class="neural-button" onclick="peripheralDashboard.refreshAll()">🔄 Refresh Data</button>
-            <button class="neural-button" onclick="peripheralDashboard.toggleAutoRefresh()">
+            <button class="neural-button" id="periph-refresh-btn">🔄 Refresh Data</button>
+            <button class="neural-button" id="periph-toggle-auto-refresh-btn">
                 <span id="auto-refresh-btn">⏸️ Pause Auto-Refresh</span>
             </button>
         </div>
@@ -116,10 +116,10 @@
         <div class="card-header">
             <h3 class="card-title">📡 Connection Timeline (Last 24h)</h3>
             <div style="display: flex; gap: 0.5rem;">
-                <button class="neural-button-sm" onclick="peripheralDashboard.updateTimeWindow(24)">24h</button>
-                <button class="neural-button-sm" onclick="peripheralDashboard.updateTimeWindow(12)">12h</button>
-                <button class="neural-button-sm" onclick="peripheralDashboard.updateTimeWindow(6)">6h</button>
-                <button class="neural-button-sm" onclick="peripheralDashboard.updateTimeWindow(1)">1h</button>
+                <button class="neural-button-sm" data-action="periph-time-window" data-hours="24">24h</button>
+                <button class="neural-button-sm" data-action="periph-time-window" data-hours="12">12h</button>
+                <button class="neural-button-sm" data-action="periph-time-window" data-hours="6">6h</button>
+                <button class="neural-button-sm" data-action="periph-time-window" data-hours="1">1h</button>
             </div>
         </div>
         <div class="timeline-container">
@@ -741,6 +741,15 @@ class PeripheralDashboard {
 let peripheralDashboard;
 document.addEventListener('DOMContentLoaded', () => {
     peripheralDashboard = new PeripheralDashboard();
+
+    // Refresh and auto-refresh toggle buttons
+    document.getElementById('periph-refresh-btn').addEventListener('click', () => peripheralDashboard.refreshAll());
+    document.getElementById('periph-toggle-auto-refresh-btn').addEventListener('click', () => peripheralDashboard.toggleAutoRefresh());
+
+    // Time window buttons
+    document.querySelectorAll('[data-action="periph-time-window"]').forEach(btn => {
+        btn.addEventListener('click', () => peripheralDashboard.updateTimeWindow(parseInt(btn.dataset.hours, 10)));
+    });
 });
 </script>
 {% endblock %}
