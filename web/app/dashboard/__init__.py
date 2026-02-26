@@ -208,6 +208,22 @@ def threat_feed():
     return render_template("dashboard/threat-feed.html", user=user)
 
 
+@dashboard_bp.route("/reliability")
+@require_login
+def reliability_dashboard():
+    """Agent Reliability (AMRDR) - Drift detection and trust weights"""
+    user = get_current_user()
+    return render_template("dashboard/reliability.html", user=user)
+
+
+@dashboard_bp.route("/proof-spine")
+@require_login
+def proof_spine_dashboard():
+    """Proof Spine - Cryptographic chain status and verification"""
+    user = get_current_user()
+    return render_template("dashboard/proof-spine.html", user=user)
+
+
 # Real-time Data Endpoints
 @dashboard_bp.route("/api/live/threats")
 @require_rate_limit(max_requests=100, window_seconds=60)

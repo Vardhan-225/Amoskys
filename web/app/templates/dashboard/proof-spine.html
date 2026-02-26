@@ -1,0 +1,437 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Proof Spine - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="proof-spine-dashboard">
+
+    <!-- KPI Row -->
+    <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+        <div class="metric-card">
+            <div style="font-size:1.5rem;">&#128279;</div>
+            <div class="metric-value" id="kpi-segments">--</div>
+            <div class="metric-label">Total Segments</div>
+        </div>
+        <div class="metric-card">
+            <div style="font-size:1.5rem;">&#128274;</div>
+            <div class="metric-value" id="kpi-checkpoints" style="color:var(--neural-success);">--</div>
+            <div class="metric-label">Sealed Checkpoints</div>
+        </div>
+        <div class="metric-card">
+            <div style="font-size:1.5rem;">&#128196;</div>
+            <div class="metric-value" id="kpi-events">--</div>
+            <div class="metric-label">Total Events</div>
+        </div>
+        <div class="metric-card">
+            <div style="font-size:1.5rem;">&#128994;</div>
+            <div class="metric-value" id="kpi-health" style="color:var(--neural-success);">--</div>
+            <div class="metric-label">Chain Health</div>
+        </div>
+    </div>
+
+    <!-- Two-column layout -->
+    <div style="display:grid; grid-template-columns: 2fr 1fr; gap:1.5rem;">
+
+        <!-- Chain Visualization -->
+        <div class="neural-card">
+            <div class="card-header" style="justify-content:space-between;">
+                <h3 class="card-title">Cryptographic Proof Chain</h3>
+                <span style="color:var(--text-muted); font-size:0.8rem;" id="chain-last-update">--</span>
+            </div>
+            <div id="chain-viz" style="min-height:200px; overflow-x:auto; padding:1rem 0;">
+                <p style="color:var(--text-muted); text-align:center;">Loading chain...</p>
+            </div>
+        </div>
+
+        <!-- Chain Properties -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">Chain Properties</h3>
+            </div>
+            <div id="chain-properties">
+                <div class="prop-row">
+                    <span class="prop-label">Hash Algorithm</span>
+                    <span class="prop-value">BLAKE2b-256</span>
+                </div>
+                <div class="prop-row">
+                    <span class="prop-label">Merkle Tree</span>
+                    <span class="prop-value">Binary, BLAKE2b leaves</span>
+                </div>
+                <div class="prop-row">
+                    <span class="prop-label">Signature</span>
+                    <span class="prop-value">Ed25519</span>
+                </div>
+                <div class="prop-row">
+                    <span class="prop-label">Segment Size</span>
+                    <span class="prop-value" id="prop-seg-size">1000 events</span>
+                </div>
+                <div class="prop-row">
+                    <span class="prop-label">Current Segment</span>
+                    <span class="prop-value" id="prop-current-seg">--</span>
+                </div>
+                <div class="prop-row">
+                    <span class="prop-label">Last Checkpoint</span>
+                    <span class="prop-value" id="prop-last-cp">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Segment Verification -->
+    <div class="neural-card">
+        <div class="card-header" style="justify-content:space-between;">
+            <h3 class="card-title">Segment Verification</h3>
+            <div style="display:flex; gap:0.75rem; align-items:center;">
+                <input type="number" id="verify-segment-id" placeholder="Segment ID" min="0" style="width:120px; padding:0.4rem 0.6rem; background:rgba(0,0,0,0.3); border:1px solid rgba(0,217,255,0.3); border-radius:6px; color:var(--text-primary); font-size:0.85rem;">
+                <button class="neural-button" id="btn-verify" style="font-size:0.85rem; padding:0.4rem 1rem;">Verify</button>
+            </div>
+        </div>
+        <div id="verify-result" style="min-height:80px;">
+            <p style="color:var(--text-muted); text-align:center; padding:1.5rem;">Select a segment and click Verify to check cryptographic integrity.</p>
+        </div>
+    </div>
+
+    <!-- Proof Bundle Export -->
+    <div class="neural-card">
+        <div class="card-header" style="justify-content:space-between;">
+            <h3 class="card-title">Proof Bundle Export</h3>
+            <div class="card-badge badge-success">Offline Verification</div>
+        </div>
+        <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:1rem;">
+            Export a self-contained proof bundle that can be verified offline by any third party.
+            Bundles include checkpoints, events, Merkle proofs, and signing keys.
+        </p>
+        <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+            <div>
+                <label style="color:var(--text-secondary); font-size:0.8rem; display:block; margin-bottom:0.4rem;">Segment ID</label>
+                <input type="number" id="export-segment-id" placeholder="e.g. 0" min="0" style="width:120px; padding:0.5rem; background:rgba(0,0,0,0.3); border:1px solid rgba(0,217,255,0.3); border-radius:6px; color:var(--text-primary);">
+            </div>
+            <div style="display:flex; align-items:flex-end;">
+                <button class="neural-button" id="btn-export-segment" style="font-size:0.85rem;">Download Bundle</button>
+            </div>
+        </div>
+        <div id="export-status" style="margin-top:0.75rem; font-size:0.85rem; color:var(--text-muted);"></div>
+    </div>
+
+</div>
+
+<style>
+    .prop-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.6rem 0;
+        border-bottom: 1px solid rgba(0,217,255,0.1);
+    }
+    .prop-row:last-child { border-bottom: none; }
+    .prop-label { color: var(--text-muted); font-size: 0.85rem; }
+    .prop-value { color: var(--text-primary); font-size: 0.85rem; font-weight: 500; }
+
+    /* Chain visualization */
+    .chain-segment {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 100px;
+        position: relative;
+    }
+    .chain-node {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+    .chain-node:hover {
+        transform: scale(1.1);
+        box-shadow: 0 0 15px rgba(0,217,255,0.5);
+    }
+    .chain-node.sealed {
+        background: rgba(0,255,136,0.15);
+        border: 2px solid #00ff88;
+        color: #00ff88;
+    }
+    .chain-node.unsealed {
+        background: rgba(240,173,78,0.15);
+        border: 2px dashed #f0ad4e;
+        color: #f0ad4e;
+    }
+    .chain-node.genesis {
+        background: rgba(0,217,255,0.15);
+        border: 2px solid #00d9ff;
+        color: #00d9ff;
+    }
+    .chain-link {
+        display: inline-flex;
+        align-items: center;
+        color: rgba(0,217,255,0.4);
+        font-size: 1.2rem;
+        margin: 0 4px;
+        vertical-align: middle;
+    }
+    .chain-label {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        margin-top: 4px;
+        text-align: center;
+    }
+    .chain-events {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+    }
+
+    /* Verification result */
+    .verify-pass {
+        background: rgba(0,255,136,0.08);
+        border: 1px solid rgba(0,255,136,0.3);
+        border-radius: 8px;
+        padding: 1rem 1.5rem;
+    }
+    .verify-fail {
+        background: rgba(255,51,102,0.08);
+        border: 1px solid rgba(255,51,102,0.3);
+        border-radius: 8px;
+        padding: 1rem 1.5rem;
+    }
+    .verify-detail {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        margin-top: 0.5rem;
+        font-family: 'Courier New', monospace;
+    }
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+class ProofSpineDashboard {
+    constructor() {
+        this.REFRESH = 15000;
+        this.init();
+    }
+
+    async init() {
+        this.initListeners();
+        await this.refresh();
+        this.timer = setInterval(() => this.refresh(), this.REFRESH);
+    }
+
+    initListeners() {
+        const btnVerify = document.getElementById('btn-verify');
+        if (btnVerify) btnVerify.addEventListener('click', () => this.verifySegment());
+
+        const btnExport = document.getElementById('btn-export-segment');
+        if (btnExport) btnExport.addEventListener('click', () => this.exportBundle());
+    }
+
+    async refresh() {
+        try {
+            const r = await fetch('/api/proofs/chain-status');
+            const d = await r.json();
+            if (d.error) {
+                this.showNoData();
+                return;
+            }
+
+            this.setText('kpi-segments', d.total_segments || 0);
+            this.setText('kpi-checkpoints', d.total_checkpoints || 0);
+            this.setText('kpi-events', this.formatNumber(d.total_events || 0));
+
+            const health = d.chain_health || 'unknown';
+            const healthEl = document.getElementById('kpi-health');
+            if (healthEl) {
+                healthEl.textContent = health.toUpperCase();
+                healthEl.style.color = health === 'healthy' ? 'var(--neural-success)' : 'var(--neural-warning)';
+            }
+
+            this.setText('prop-current-seg', d.current_segment_id !== null ? d.current_segment_id : '--');
+            this.setText('prop-last-cp', d.last_checkpoint_segment !== null ? 'Segment ' + d.last_checkpoint_segment : '--');
+            this.setText('chain-last-update', 'Updated ' + new Date().toLocaleTimeString());
+
+            this.renderChain(d);
+        } catch (e) {
+            console.error('Chain status failed:', e);
+            this.showNoData();
+        }
+    }
+
+    showNoData() {
+        this.setText('kpi-segments', '0');
+        this.setText('kpi-checkpoints', '0');
+        this.setText('kpi-events', '0');
+        this.setText('kpi-health', 'N/A');
+        const viz = document.getElementById('chain-viz');
+        if (viz) viz.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:2rem;">No WAL data found. Start agents to generate telemetry.</p>';
+    }
+
+    renderChain(data) {
+        const viz = document.getElementById('chain-viz');
+        if (!viz) return;
+
+        const totalSeg = data.total_segments || 0;
+        const totalCp = data.total_checkpoints || 0;
+
+        if (totalSeg === 0) {
+            viz.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:2rem;">No segments yet. Chain will appear when events are collected.</p>';
+            return;
+        }
+
+        // Show up to 12 most recent segments
+        const maxShow = Math.min(totalSeg, 12);
+        const startIdx = Math.max(0, totalSeg - maxShow);
+
+        let html = '<div style="display:flex; align-items:center; overflow-x:auto; padding:0.5rem 0; gap:2px;">';
+
+        // Genesis marker
+        if (startIdx === 0) {
+            html += `<div class="chain-segment">
+                <div class="chain-node genesis" title="Genesis (zero hash)">G</div>
+                <div class="chain-label">Genesis</div>
+            </div>
+            <span class="chain-link">&#8594;</span>`;
+        } else {
+            html += `<div class="chain-segment">
+                <div class="chain-node genesis" title="Earlier segments (${startIdx} hidden)">...</div>
+                <div class="chain-label">${startIdx} prior</div>
+            </div>
+            <span class="chain-link">&#8594;</span>`;
+        }
+
+        for (let i = startIdx; i < totalSeg; i++) {
+            const sealed = i < totalCp;
+            html += `<div class="chain-segment">
+                <div class="chain-node ${sealed ? 'sealed' : 'unsealed'}" title="Segment ${i} — ${sealed ? 'Sealed' : 'Unsealed'}" data-seg="${i}">
+                    ${i}
+                </div>
+                <div class="chain-label">${sealed ? 'Sealed' : 'Open'}</div>
+            </div>`;
+            if (i < totalSeg - 1) {
+                html += '<span class="chain-link">&#8594;</span>';
+            }
+        }
+
+        html += '</div>';
+
+        // Legend
+        html += `<div style="display:flex; gap:1.5rem; margin-top:1rem; font-size:0.75rem; color:var(--text-muted);">
+            <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:rgba(0,255,136,0.15);border:2px solid #00ff88;vertical-align:middle;margin-right:4px;"></span> Sealed (Checkpoint signed)</span>
+            <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:rgba(240,173,78,0.15);border:2px dashed #f0ad4e;vertical-align:middle;margin-right:4px;"></span> Unsealed (Filling)</span>
+            <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:rgba(0,217,255,0.15);border:2px solid #00d9ff;vertical-align:middle;margin-right:4px;"></span> Genesis</span>
+        </div>`;
+
+        viz.innerHTML = html;
+
+        // Click to verify
+        viz.querySelectorAll('.chain-node[data-seg]').forEach(node => {
+            node.addEventListener('click', () => {
+                const segId = node.dataset.seg;
+                document.getElementById('verify-segment-id').value = segId;
+                this.verifySegment();
+            });
+        });
+    }
+
+    async verifySegment() {
+        const segIdInput = document.getElementById('verify-segment-id');
+        const resultEl = document.getElementById('verify-result');
+        if (!segIdInput || !resultEl) return;
+
+        const segId = segIdInput.value;
+        if (segId === '' || segId === undefined) {
+            resultEl.innerHTML = '<p style="color:var(--neural-warning); text-align:center;">Enter a segment ID to verify.</p>';
+            return;
+        }
+
+        resultEl.innerHTML = '<p style="text-align:center;"><span class="neural-loading"></span> Verifying segment ' + segId + '...</p>';
+
+        try {
+            const r = await fetch('/api/proofs/verify-segment/' + segId);
+            const d = await r.json();
+
+            if (d.error) {
+                resultEl.innerHTML = `<div class="verify-fail">
+                    <strong style="color:var(--neural-danger);">&#10008; Verification Error</strong>
+                    <div class="verify-detail">${d.error}</div>
+                </div>`;
+                return;
+            }
+
+            const intact = d.chain_intact && d.merkle_valid;
+            const cp = d.checkpoint || {};
+
+            resultEl.innerHTML = `<div class="${intact ? 'verify-pass' : 'verify-fail'}">
+                <strong style="color:${intact ? 'var(--neural-success)' : 'var(--neural-danger)'};">
+                    ${intact ? '&#10004; VERIFIED' : '&#10008; INTEGRITY FAILURE'}
+                </strong>
+                <span style="color:var(--text-muted); font-size:0.85rem; margin-left:1rem;">Segment ${d.segment_id}</span>
+                <div class="verify-detail">
+                    Chain Intact: ${d.chain_intact ? 'PASS' : 'FAIL'}<br>
+                    Merkle Valid: ${d.merkle_valid ? 'PASS' : 'FAIL'}<br>
+                    Event Count: ${cp.event_count || '--'}<br>
+                    Root Hash: ${(cp.root_hash_hex || '').substring(0, 32)}...<br>
+                    ${cp.checkpoint_sig_hex ? 'Checkpoint Signed: YES' : 'Checkpoint Signed: NO (unsigned mode)'}
+                    ${d.missing_events ? '<br>Missing Events: ' + d.missing_events.length : ''}
+                    ${d.tampered_events ? '<br>Tampered Events: ' + d.tampered_events.length : ''}
+                </div>
+            </div>`;
+        } catch (e) {
+            resultEl.innerHTML = `<div class="verify-fail">
+                <strong style="color:var(--neural-danger);">Verification request failed</strong>
+                <div class="verify-detail">${e.message}</div>
+            </div>`;
+        }
+    }
+
+    async exportBundle() {
+        const segIdInput = document.getElementById('export-segment-id');
+        const statusEl = document.getElementById('export-status');
+        if (!segIdInput || !statusEl) return;
+
+        const segId = segIdInput.value;
+        if (segId === '' || segId === undefined) {
+            statusEl.textContent = 'Enter a segment ID to export.';
+            return;
+        }
+
+        statusEl.textContent = 'Generating proof bundle for segment ' + segId + '...';
+
+        try {
+            const r = await fetch('/api/proofs/bundle/segment/' + segId);
+            if (r.ok) {
+                const blob = await r.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'proof_bundle_segment_' + segId + '.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                statusEl.textContent = 'Bundle downloaded successfully.';
+            } else {
+                const d = await r.json();
+                statusEl.textContent = 'Export failed: ' + (d.error || 'Unknown error');
+            }
+        } catch (e) {
+            statusEl.textContent = 'Export failed: ' + e.message;
+        }
+    }
+
+    formatNumber(n) {
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+        if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+        return n.toString();
+    }
+
+    setText(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => { new ProofSpineDashboard(); });
+</script>
+{% endblock %}

@@ -1059,6 +1059,16 @@
                     <span>Marketplace</span>
                 </a>
 
+                <div class="sidebar-section-label">Proof &amp; Trust</div>
+                <a href="/dashboard/reliability" class="sidebar-link">
+                    <span class="sidebar-link-icon">&#9878;</span>
+                    <span>Agent Reliability</span>
+                </a>
+                <a href="/dashboard/proof-spine" class="sidebar-link">
+                    <span class="sidebar-link-icon">&#128274;</span>
+                    <span>Proof Spine</span>
+                </a>
+
                 <div class="sidebar-section-label">Tools</div>
                 <a href="/dashboard/evidence-chain" class="sidebar-link">
                     <span class="sidebar-link-icon">&#128279;</span>
@@ -1165,6 +1175,7 @@
                     '/dashboard/my-agents': 'My Agents', '/dashboard/database': 'Database',
                     '/dashboard/evidence-chain': 'Evidence Chain', '/dashboard/query-builder': 'Query Builder',
                     '/dashboard/threat-feed': 'Live Threat Feed', '/dashboard/timeline-replay': 'Timeline Replay',
+                    '/dashboard/reliability': 'Agent Reliability', '/dashboard/proof-spine': 'Proof Spine',
                 };
                 const path = window.location.pathname.replace(/\/$/, '') || '/dashboard';
                 const pageName = PAGE_NAMES[path] || path.split('/').pop().replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -1526,6 +1537,8 @@
                     { type: 'navigation', icon: '⏱️', title: 'Timeline Replay', description: 'Replay threat timelines', url: '/dashboard/timeline-replay', keywords: ['timeline', 'replay', 'history'] },
                     { type: 'navigation', icon: '🔍', title: 'Query Builder', description: 'Build custom queries', url: '/dashboard/query-builder', keywords: ['query', 'search', 'filter', 'sql'] },
                     { type: 'navigation', icon: '👁️', title: 'Perspective Selector', description: 'Configure agent perspectives', url: '/dashboard/perspective-selector', keywords: ['perspective', 'view', 'agent'] },
+                    { type: 'navigation', icon: '⚖', title: 'Agent Reliability', description: 'AMRDR drift detection and trust weights', url: '/dashboard/reliability', keywords: ['reliability', 'amrdr', 'drift', 'trust', 'weight', 'bayesian'] },
+                    { type: 'navigation', icon: '🔐', title: 'Proof Spine', description: 'Cryptographic chain status and verification', url: '/dashboard/proof-spine', keywords: ['proof', 'spine', 'chain', 'merkle', 'checkpoint', 'verify', 'tamper'] },
                     
                     // Actions
                     { type: 'action', icon: '🔄', title: 'Refresh Dashboard', description: 'Reload current dashboard data', action: () => location.reload(), keywords: ['refresh', 'reload'] },

@@ -1,0 +1,397 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Agent Reliability (AMRDR) - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="reliability-dashboard">
+
+    <!-- KPI Row -->
+    <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+        <div class="metric-card">
+            <div style="font-size:1.5rem;">&#9878;</div>
+            <div class="metric-value" id="kpi-agents">--</div>
+            <div class="metric-label">Tracked Agents</div>
+        </div>
+        <div class="metric-card">
+            <div style="font-size:1.5rem;">&#9989;</div>
+            <div class="metric-value" id="kpi-healthy" style="color:var(--neural-success);">--</div>
+            <div class="metric-label">Healthy</div>
+        </div>
+        <div class="metric-card">
+            <div style="font-size:1.5rem;">&#9888;</div>
+            <div class="metric-value" id="kpi-degraded" style="color:var(--neural-warning);">--</div>
+            <div class="metric-label">Degraded</div>
+        </div>
+        <div class="metric-card">
+            <div style="font-size:1.5rem;">&#128683;</div>
+            <div class="metric-value" id="kpi-quarantined" style="color:var(--neural-danger);">--</div>
+            <div class="metric-label">Quarantined</div>
+        </div>
+        <div class="metric-card">
+            <div style="font-size:1.5rem;">&#128200;</div>
+            <div class="metric-value" id="kpi-avg-weight">--</div>
+            <div class="metric-label">Mean Weight</div>
+        </div>
+    </div>
+
+    <!-- Two-column layout -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem;">
+
+        <!-- Agent Weights Chart -->
+        <div class="neural-card">
+            <div class="card-header" style="justify-content:space-between;">
+                <h3 class="card-title">Agent Reliability Weights</h3>
+                <div class="card-badge badge-success" id="badge-amrdr">AMRDR</div>
+            </div>
+            <canvas id="weights-chart" height="280"></canvas>
+        </div>
+
+        <!-- Drift Alerts -->
+        <div class="neural-card">
+            <div class="card-header" style="justify-content:space-between;">
+                <h3 class="card-title">Drift Alerts</h3>
+                <div id="drift-count-badge" class="card-badge badge-success">0 Active</div>
+            </div>
+            <div id="drift-alerts-container" style="max-height:280px; overflow-y:auto;">
+                <p style="color:var(--text-muted); text-align:center; padding:2rem;">Loading drift data...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agent Detail Table -->
+    <div class="neural-card">
+        <div class="card-header" style="justify-content:space-between;">
+            <h3 class="card-title">Agent Reliability State</h3>
+            <span style="color:var(--text-muted); font-size:0.8rem;" id="last-refresh">--</span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                <thead>
+                    <tr style="border-bottom:1px solid rgba(0,217,255,0.3); text-align:left;">
+                        <th style="padding:0.75rem; color:var(--text-secondary);">Agent</th>
+                        <th style="padding:0.75rem; color:var(--text-secondary);">Weight</th>
+                        <th style="padding:0.75rem; color:var(--text-secondary);">Alpha / Beta</th>
+                        <th style="padding:0.75rem; color:var(--text-secondary);">Drift State</th>
+                        <th style="padding:0.75rem; color:var(--text-secondary);">Status</th>
+                        <th style="padding:0.75rem; color:var(--text-secondary);">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="agent-table-body">
+                    <tr><td colspan="6" style="padding:2rem; text-align:center; color:var(--text-muted);">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Feedback Panel -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">Analyst Feedback (Ground Truth Oracle)</h3>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+            <div>
+                <label style="color:var(--text-secondary); font-size:0.85rem; display:block; margin-bottom:0.5rem;">Agent ID</label>
+                <input type="text" id="feedback-agent" placeholder="e.g. flowagent" style="width:100%; padding:0.6rem; background:rgba(0,0,0,0.3); border:1px solid rgba(0,217,255,0.3); border-radius:6px; color:var(--text-primary); font-size:0.9rem;">
+            </div>
+            <div>
+                <label style="color:var(--text-secondary); font-size:0.85rem; display:block; margin-bottom:0.5rem;">Event ID</label>
+                <input type="text" id="feedback-event" placeholder="e.g. evt-001" style="width:100%; padding:0.6rem; background:rgba(0,0,0,0.3); border:1px solid rgba(0,217,255,0.3); border-radius:6px; color:var(--text-primary); font-size:0.9rem;">
+            </div>
+        </div>
+        <div style="margin-top:1rem; display:flex; gap:1rem;">
+            <button class="neural-button" id="btn-confirm" style="background:linear-gradient(135deg, #00ff88, #00cc66);">Confirm (True Positive)</button>
+            <button class="neural-button" id="btn-dismiss" style="background:linear-gradient(135deg, #ff3366, #cc0044); color:white;">Dismiss (False Positive)</button>
+        </div>
+        <div id="feedback-result" style="margin-top:0.75rem; font-size:0.85rem; color:var(--text-muted);"></div>
+    </div>
+
+</div>
+
+<style>
+    .weight-bar {
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(0,217,255,0.15);
+        overflow: hidden;
+        margin-top: 4px;
+    }
+    .weight-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.5s ease;
+    }
+    .drift-alert-item {
+        padding: 0.75rem 1rem;
+        border-left: 3px solid var(--neural-warning);
+        background: rgba(240,173,78,0.08);
+        border-radius: 0 6px 6px 0;
+        margin-bottom: 0.5rem;
+    }
+    .drift-alert-item.alert-level {
+        border-left-color: var(--neural-danger);
+        background: rgba(255,51,102,0.08);
+    }
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+class ReliabilityDashboard {
+    constructor() {
+        this.REFRESH = 10000;
+        this.weightsChart = null;
+        this.init();
+    }
+
+    async init() {
+        this.initChart();
+        this.initFeedback();
+        await this.refresh();
+        this.timer = setInterval(() => this.refresh(), this.REFRESH);
+    }
+
+    initChart() {
+        const ctx = document.getElementById('weights-chart');
+        if (!ctx) return;
+        this.weightsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Reliability Weight',
+                    data: [],
+                    backgroundColor: [],
+                    borderColor: [],
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        min: 0, max: 1,
+                        grid: { color: 'rgba(0,217,255,0.1)' },
+                        ticks: { color: '#b4bcd0' }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#b4bcd0', font: { size: 12 } }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `Weight: ${ctx.raw.toFixed(4)}`
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    initFeedback() {
+        const btnConfirm = document.getElementById('btn-confirm');
+        const btnDismiss = document.getElementById('btn-dismiss');
+        if (btnConfirm) btnConfirm.addEventListener('click', () => this.sendFeedback('confirm'));
+        if (btnDismiss) btnDismiss.addEventListener('click', () => this.sendFeedback('dismiss'));
+    }
+
+    async refresh() {
+        await Promise.allSettled([
+            this.fetchStatus(),
+            this.fetchDrifts()
+        ]);
+        const el = document.getElementById('last-refresh');
+        if (el) el.textContent = 'Updated ' + new Date().toLocaleTimeString();
+    }
+
+    async fetchStatus() {
+        try {
+            const r = await fetch('/api/reliability/status');
+            const d = await r.json();
+            if (!d.agents) return;
+
+            const agents = d.agents;
+            let healthy = 0, degraded = 0, quarantined = 0, totalWeight = 0;
+
+            agents.forEach(a => {
+                totalWeight += a.weight;
+                if (a.weight <= 0) quarantined++;
+                else if (a.weight < 0.5 || a.drift_state === 'ALERT') degraded++;
+                else healthy++;
+            });
+
+            // KPIs
+            this.setText('kpi-agents', agents.length);
+            this.setText('kpi-healthy', healthy);
+            this.setText('kpi-degraded', degraded);
+            this.setText('kpi-quarantined', quarantined);
+            this.setText('kpi-avg-weight', agents.length ? (totalWeight / agents.length).toFixed(3) : '--');
+
+            // Chart
+            if (this.weightsChart) {
+                const sorted = [...agents].sort((a, b) => b.weight - a.weight);
+                this.weightsChart.data.labels = sorted.map(a => a.agent_id);
+                this.weightsChart.data.datasets[0].data = sorted.map(a => a.weight);
+                this.weightsChart.data.datasets[0].backgroundColor = sorted.map(a => this.weightColor(a.weight, 0.7));
+                this.weightsChart.data.datasets[0].borderColor = sorted.map(a => this.weightColor(a.weight, 1));
+                this.weightsChart.update('none');
+            }
+
+            // Table
+            this.renderTable(agents);
+        } catch (e) {
+            console.error('Reliability fetch failed:', e);
+        }
+    }
+
+    async fetchDrifts() {
+        try {
+            const r = await fetch('/api/reliability/drifts');
+            const d = await r.json();
+            const container = document.getElementById('drift-alerts-container');
+            const badge = document.getElementById('drift-count-badge');
+            if (!container) return;
+
+            const drifts = d.drifts || [];
+            if (badge) {
+                badge.textContent = drifts.length + ' Active';
+                badge.className = 'card-badge ' + (drifts.length > 0 ? 'badge-warning' : 'badge-success');
+            }
+
+            if (drifts.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:2rem;">No drift alerts. All agents stable.</p>';
+                return;
+            }
+
+            container.innerHTML = drifts.map(d => `
+                <div class="drift-alert-item ${d.drift_state === 'ALERT' ? 'alert-level' : ''}">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:var(--text-primary);">${d.agent_id}</strong>
+                        <span class="card-badge ${d.drift_state === 'ALERT' ? 'badge-danger' : 'badge-warning'}" style="font-size:0.7rem;">
+                            ${d.drift_state}
+                        </span>
+                    </div>
+                    <div style="color:var(--text-muted); font-size:0.8rem; margin-top:0.3rem;">
+                        ${d.detector || 'drift'} detected &middot; weight: ${(d.weight || 0).toFixed(3)}
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Drift fetch failed:', e);
+        }
+    }
+
+    renderTable(agents) {
+        const tbody = document.getElementById('agent-table-body');
+        if (!tbody) return;
+
+        if (agents.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="padding:2rem; text-align:center; color:var(--text-muted);">No agents tracked yet. Start agents to see AMRDR data.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = agents.map(a => {
+            const w = a.weight;
+            const barColor = this.weightColor(w, 1);
+            const statusLabel = w <= 0 ? 'Quarantined' : (w < 0.5 ? 'Degraded' : 'Healthy');
+            const statusClass = w <= 0 ? 'badge-danger' : (w < 0.5 ? 'badge-warning' : 'badge-success');
+            const driftLabel = a.drift_state || 'STABLE';
+            const driftClass = driftLabel === 'ALERT' ? 'badge-danger' : (driftLabel === 'WARNING' ? 'badge-warning' : 'badge-success');
+
+            return `<tr style="border-bottom:1px solid rgba(0,217,255,0.1);">
+                <td style="padding:0.75rem;">
+                    <strong style="color:var(--text-primary);">${a.agent_id}</strong>
+                </td>
+                <td style="padding:0.75rem; min-width:120px;">
+                    <span style="color:${barColor}; font-weight:600;">${w.toFixed(4)}</span>
+                    <div class="weight-bar"><div class="weight-bar-fill" style="width:${(w * 100).toFixed(1)}%; background:${barColor};"></div></div>
+                </td>
+                <td style="padding:0.75rem; color:var(--text-secondary);">
+                    ${(a.alpha || 0).toFixed(1)} / ${(a.beta || 0).toFixed(1)}
+                </td>
+                <td style="padding:0.75rem;">
+                    <span class="card-badge ${driftClass}" style="font-size:0.75rem;">${driftLabel}</span>
+                </td>
+                <td style="padding:0.75rem;">
+                    <span class="card-badge ${statusClass}" style="font-size:0.75rem;">${statusLabel}</span>
+                </td>
+                <td style="padding:0.75rem;">
+                    ${w <= 0 ? `<button class="neural-button" style="font-size:0.75rem; padding:0.3rem 0.8rem;" data-restore="${a.agent_id}">Restore</button>` :
+                    (w > 0 ? `<button class="neural-button" style="font-size:0.75rem; padding:0.3rem 0.8rem; background:linear-gradient(135deg,#ff3366,#cc0044); color:white;" data-quarantine="${a.agent_id}">Quarantine</button>` : '')}
+                </td>
+            </tr>`;
+        }).join('');
+
+        // Attach action listeners
+        tbody.querySelectorAll('[data-restore]').forEach(btn => {
+            btn.addEventListener('click', () => this.restoreAgent(btn.dataset.restore));
+        });
+        tbody.querySelectorAll('[data-quarantine]').forEach(btn => {
+            btn.addEventListener('click', () => this.quarantineAgent(btn.dataset.quarantine));
+        });
+    }
+
+    async sendFeedback(action) {
+        const agentId = document.getElementById('feedback-agent').value.trim();
+        const eventId = document.getElementById('feedback-event').value.trim();
+        const resultEl = document.getElementById('feedback-result');
+        if (!agentId || !eventId) {
+            if (resultEl) resultEl.textContent = 'Please fill both Agent ID and Event ID.';
+            return;
+        }
+        try {
+            const r = await fetch('/api/reliability/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ agent_id: agentId, event_id: eventId, action: action })
+            });
+            const d = await r.json();
+            if (resultEl) resultEl.textContent = d.message || (action === 'confirm' ? 'Event confirmed as true positive.' : 'Event dismissed as false positive.');
+            this.refresh();
+        } catch (e) {
+            if (resultEl) resultEl.textContent = 'Feedback failed: ' + e.message;
+        }
+    }
+
+    async restoreAgent(agentId) {
+        try {
+            await fetch('/api/reliability/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ agent_id: agentId, action: 'restore' })
+            });
+            this.refresh();
+        } catch (e) { console.error(e); }
+    }
+
+    async quarantineAgent(agentId) {
+        try {
+            await fetch('/api/reliability/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ agent_id: agentId, action: 'quarantine' })
+            });
+            this.refresh();
+        } catch (e) { console.error(e); }
+    }
+
+    weightColor(w, alpha) {
+        if (w <= 0) return `rgba(255,51,102,${alpha})`;
+        if (w < 0.3) return `rgba(255,80,80,${alpha})`;
+        if (w < 0.5) return `rgba(240,173,78,${alpha})`;
+        if (w < 0.8) return `rgba(0,217,255,${alpha})`;
+        return `rgba(0,255,136,${alpha})`;
+    }
+
+    setText(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => { new ReliabilityDashboard(); });
+</script>
+{% endblock %}
