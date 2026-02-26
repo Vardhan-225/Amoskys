@@ -16,12 +16,20 @@ Enhanced with Advanced Rules:
     - Credential theft chains
     - Lateral movement patterns
     - Data exfiltration detection
+
+AMRDR Integration (Sprint 2):
+    - Optional ReliabilityTracker injection (defaults to NoOp)
+    - Incident confidence weighted by agent reliability scores
+    - Device risk scoring scaled by average agent weight
+    - Drift alerts emitted when AMRDR detects agent degradation
+    - Analyst feedback loop to update agent reliability
 """
 
 import json
 import logging
 import sqlite3
 import time
+import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -31,8 +39,15 @@ from amoskys.intel.advanced_rules import evaluate_advanced_rules
 from amoskys.intel.models import (
     DeviceRiskSnapshot,
     Incident,
+    MitreTactic,
     Severity,
     TelemetryEventView,
+)
+from amoskys.intel.reliability import (
+    DriftType,
+    NoOpReliabilityTracker,
+    RecalibrationTier,
+    ReliabilityTracker,
 )
 from amoskys.intel.rules import evaluate_rules
 
@@ -57,6 +72,7 @@ class FusionEngine:
         db_path: str = "data/intel/fusion.db",
         window_minutes: int = 30,
         eval_interval: int = 60,
+        reliability_tracker: Optional[ReliabilityTracker] = None,
     ):
         """Initialize fusion engine
 
@@ -64,10 +80,16 @@ class FusionEngine:
             db_path: Path to intelligence database
             window_minutes: Correlation window size (default: 30 minutes)
             eval_interval: How often to evaluate rules in seconds
+            reliability_tracker: AMRDR reliability tracker (defaults to NoOp)
         """
         self.db_path = db_path
         self.window_minutes = window_minutes
         self.eval_interval = eval_interval
+
+        # AMRDR: reliability tracker (NoOp if not provided — backward compatible)
+        self.reliability_tracker: ReliabilityTracker = (
+            reliability_tracker or NoOpReliabilityTracker()
+        )
 
         # Per-device state: event buffers + risk scores
         self.device_state: Dict[str, Dict[str, Any]] = defaultdict(
@@ -89,12 +111,17 @@ class FusionEngine:
             "incidents_by_rule": defaultdict(int),
             "devices_tracked": 0,
             "last_eval_duration_ms": 0,
+            "drift_alerts_emitted": 0,
         }
 
         # Initialize database
         self._init_db()
 
-        logger.info(f"FusionEngine initialized: {db_path}, window={window_minutes}m")
+        tracker_type = type(self.reliability_tracker).__name__
+        logger.info(
+            f"FusionEngine initialized: {db_path}, window={window_minutes}m, "
+            f"tracker={tracker_type}"
+        )
 
     def _init_db(self):
         """Initialize SQLite database for incidents and device risk"""
@@ -104,9 +131,8 @@ class FusionEngine:
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
 
-        # Incidents table
-        self.db.execute(
-            """
+        # Incidents table (with AMRDR columns)
+        self.db.execute("""
             CREATE TABLE IF NOT EXISTS incidents (
                 incident_id TEXT PRIMARY KEY,
                 device_id TEXT NOT NULL,
@@ -119,10 +145,15 @@ class FusionEngine:
                 end_ts TEXT,
                 event_ids TEXT NOT NULL,
                 metadata TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                agent_weights TEXT NOT NULL DEFAULT '{}',
+                weighted_confidence REAL NOT NULL DEFAULT 1.0,
+                contributing_agents TEXT NOT NULL DEFAULT '[]'
             )
-        """
-        )
+        """)
+
+        # Migration: add AMRDR columns to existing databases
+        self._migrate_amrdr_columns()
         self.db.execute(
             "CREATE INDEX IF NOT EXISTS idx_incidents_device ON incidents(device_id)"
         )
@@ -131,8 +162,7 @@ class FusionEngine:
         )
 
         # Device risk snapshots table
-        self.db.execute(
-            """
+        self.db.execute("""
             CREATE TABLE IF NOT EXISTS device_risk (
                 device_id TEXT PRIMARY KEY,
                 score INTEGER NOT NULL,
@@ -142,10 +172,31 @@ class FusionEngine:
                 metadata TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
-        """
-        )
+        """)
 
         logger.info("Fusion database schema initialized")
+
+    def _migrate_amrdr_columns(self):
+        """Add AMRDR columns to existing incidents table if missing.
+
+        Safe to call on fresh databases (no-op) and existing ones (additive).
+        """
+        existing_columns = {
+            row[1] for row in self.db.execute("PRAGMA table_info(incidents)").fetchall()
+        }
+
+        migrations = [
+            ("agent_weights", "TEXT NOT NULL DEFAULT '{}'"),
+            ("weighted_confidence", "REAL NOT NULL DEFAULT 1.0"),
+            ("contributing_agents", "TEXT NOT NULL DEFAULT '[]'"),
+        ]
+
+        for col_name, col_def in migrations:
+            if col_name not in existing_columns:
+                self.db.execute(
+                    f"ALTER TABLE incidents ADD COLUMN {col_name} {col_def}"
+                )
+                logger.info(f"Migrated incidents table: added {col_name}")
 
     def ingest_telemetry_from_db(self, telemetry_db_path: str):
         """Ingest telemetry events from agent database
@@ -206,6 +257,13 @@ class FusionEngine:
     ) -> tuple[List[Incident], DeviceRiskSnapshot]:
         """Evaluate correlation rules and update device risk for a single device
 
+        AMRDR integration:
+        - Pulls fusion weights from reliability tracker
+        - Passes weights to rule evaluation for confidence scoring
+        - Annotates incidents with agent_weights, weighted_confidence,
+          and contributing_agents
+        - Checks for drift alerts and emits AMRDR_DRIFT incidents
+
         Args:
             device_id: Device to evaluate
 
@@ -219,22 +277,32 @@ class FusionEngine:
             logger.debug(f"No events for {device_id}, skipping evaluation")
             return [], self._get_current_risk_snapshot(device_id)
 
-        # Run correlation rules
-        incidents = evaluate_rules(events, device_id)
+        # Pull AMRDR fusion weights
+        weights = self.reliability_tracker.get_fusion_weights()
 
-        # Run advanced correlation rules
-        advanced_incidents = evaluate_advanced_rules(events, device_id)
+        # Run correlation rules with AMRDR weights
+        incidents = evaluate_rules(events, device_id, weights=weights)
+
+        # Run advanced correlation rules with AMRDR weights
+        advanced_incidents = evaluate_advanced_rules(events, device_id, weights=weights)
         incidents.extend(advanced_incidents)
 
-        # Update device risk score based on recent events + incidents
-        risk_snapshot = self._calculate_device_risk(device_id, events, incidents)
+        # Emit AMRDR drift alerts if any agent is drifting
+        drift_incidents = self._emit_drift_alerts(device_id)
+        incidents.extend(drift_incidents)
+
+        # Update device risk score (now reliability-weighted)
+        risk_snapshot = self._calculate_device_risk(
+            device_id, events, incidents, weights
+        )
 
         # Update state
         state["last_eval"] = datetime.now()
         state["incident_count"] += len(incidents)
 
         logger.info(
-            f"Evaluated {device_id}: {len(incidents)} incidents, risk={risk_snapshot.score}"
+            f"Evaluated {device_id}: {len(incidents)} incidents, "
+            f"risk={risk_snapshot.score}, active_weights={len(weights)}"
         )
 
         return incidents, risk_snapshot
@@ -244,8 +312,13 @@ class FusionEngine:
         device_id: str,
         events: List[TelemetryEventView],
         new_incidents: List[Incident],
+        weights: Optional[Dict[str, float]] = None,
     ) -> DeviceRiskSnapshot:
         """Calculate device risk score from events and incidents
+
+        AMRDR enhancement: incident contributions are scaled by the average
+        reliability weight of contributing agents. Low-reliability agents
+        contribute less to the device risk score.
 
         Implements the scoring model:
         - Base: 10 points
@@ -254,8 +327,8 @@ class FusionEngine:
         - New SSH key: +30
         - New LaunchAgent in /Users: +25
         - Suspicious sudo: +30
-        - HIGH incident: +20
-        - CRITICAL incident: +40
+        - HIGH incident: +20 * avg_agent_weight
+        - CRITICAL incident: +40 * avg_agent_weight
         - Decay: -10 per 10 minutes without risky events
         - Clamp: [0, 100]
 
@@ -263,6 +336,7 @@ class FusionEngine:
             device_id: Device being evaluated
             events: Recent events in window
             new_incidents: Incidents fired in this evaluation
+            weights: AMRDR fusion weights {agent_id: weight}
 
         Returns:
             DeviceRiskSnapshot
@@ -359,14 +433,32 @@ class FusionEngine:
             score += suspicious_sudo_count * 30
             reason_tags.append(f"suspicious_sudo_{suspicious_sudo_count}")
 
-        # Add incident contributions
+        # Add incident contributions (scaled by AMRDR agent weights)
         for incident in new_incidents:
+            # Compute average weight of contributing agents
+            avg_weight = 1.0
+            if weights and incident.contributing_agents:
+                agent_weights = [
+                    weights.get(a, 1.0) for a in incident.contributing_agents
+                ]
+                avg_weight = sum(agent_weights) / len(agent_weights)
+            elif incident.weighted_confidence < 1.0:
+                avg_weight = incident.weighted_confidence
+
             if incident.severity == Severity.CRITICAL:
-                score += 40
-                reason_tags.append(f"incident_critical_{incident.rule_name}")
+                base_points = 40
+                scaled_points = int(base_points * avg_weight)
+                score += scaled_points
+                reason_tags.append(
+                    f"incident_critical_{incident.rule_name}" f"(w={avg_weight:.2f})"
+                )
             elif incident.severity == Severity.HIGH:
-                score += 20
-                reason_tags.append(f"incident_high_{incident.rule_name}")
+                base_points = 20
+                scaled_points = int(base_points * avg_weight)
+                score += scaled_points
+                reason_tags.append(
+                    f"incident_high_{incident.rule_name}" f"(w={avg_weight:.2f})"
+                )
 
             supporting_events.extend(incident.event_ids)
 
@@ -423,7 +515,7 @@ class FusionEngine:
         )
 
     def persist_incident(self, incident: Incident):
-        """Save incident to database
+        """Save incident to database (includes AMRDR columns)
 
         Args:
             incident: Incident to persist
@@ -433,8 +525,9 @@ class FusionEngine:
                 """
                 INSERT OR REPLACE INTO incidents
                 (incident_id, device_id, severity, tactics, techniques, rule_name,
-                 summary, start_ts, end_ts, event_ids, metadata, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 summary, start_ts, end_ts, event_ids, metadata, created_at,
+                 agent_weights, weighted_confidence, contributing_agents)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     incident.incident_id,
@@ -449,9 +542,15 @@ class FusionEngine:
                     json.dumps(incident.event_ids),
                     json.dumps(incident.metadata),
                     incident.created_at.isoformat(),
+                    json.dumps(incident.agent_weights),
+                    incident.weighted_confidence,
+                    json.dumps(incident.contributing_agents),
                 ),
             )
-            logger.info(f"Persisted incident: {incident.incident_id}")
+            logger.info(
+                f"Persisted incident: {incident.incident_id} "
+                f"(confidence={incident.weighted_confidence:.2f})"
+            )
         except Exception as e:
             logger.error(f"Failed to persist incident {incident.incident_id}: {e}")
 
@@ -485,6 +584,142 @@ class FusionEngine:
             logger.error(
                 f"Failed to persist risk snapshot for {snapshot.device_id}: {e}"
             )
+
+    def _emit_drift_alerts(self, device_id: str) -> List[Incident]:
+        """Emit AMRDR_DRIFT incidents when agents show reliability drift.
+
+        Checks all tracked agents for drift state changes and creates
+        synthetic incidents to alert operators.
+
+        Args:
+            device_id: Device context for the drift alert
+
+        Returns:
+            List of AMRDR_DRIFT incidents (may be empty)
+        """
+        drift_incidents: List[Incident] = []
+
+        # Check each tracked agent for drift
+        for agent_id in self.reliability_tracker.list_agents():
+            state = self.reliability_tracker.get_state(agent_id)
+            if state is None:
+                continue
+
+            # Only emit if actively drifting
+            if state.drift_type == DriftType.NONE:
+                continue
+
+            # Determine severity based on drift type and tier
+            if state.tier == RecalibrationTier.QUARANTINE:
+                severity = Severity.CRITICAL
+                summary = (
+                    f"Agent {agent_id} QUARANTINED: reliability dropped to "
+                    f"{state.fusion_weight:.2f}, ≥3 consecutive hard resets"
+                )
+            elif state.drift_type == DriftType.ABRUPT:
+                severity = Severity.HIGH
+                summary = (
+                    f"Agent {agent_id} abrupt drift detected: reliability "
+                    f"score={state.alpha / (state.alpha + state.beta):.2f}, "
+                    f"weight={state.fusion_weight:.2f}"
+                )
+            elif state.drift_type == DriftType.GRADUAL:
+                severity = Severity.MEDIUM
+                summary = (
+                    f"Agent {agent_id} gradual drift detected: reliability "
+                    f"score={state.alpha / (state.alpha + state.beta):.2f}, "
+                    f"weight={state.fusion_weight:.2f}"
+                )
+            else:
+                continue
+
+            incident = Incident(
+                incident_id=f"AMRDR-DRIFT-{agent_id}-{uuid.uuid4().hex[:8]}",
+                device_id=device_id,
+                severity=severity,
+                tactics=[MitreTactic.DEFENSE_EVASION.value],
+                techniques=["T1562"],  # Impair Defenses
+                rule_name="AMRDR_DRIFT",
+                summary=summary,
+                start_ts=datetime.now(),
+                end_ts=datetime.now(),
+                metadata={
+                    "agent_id": agent_id,
+                    "drift_type": state.drift_type.value,
+                    "recalibration_tier": state.tier.value,
+                    "alpha": str(state.alpha),
+                    "beta": str(state.beta),
+                    "fusion_weight": str(state.fusion_weight),
+                },
+                agent_weights={agent_id: state.fusion_weight},
+                weighted_confidence=state.fusion_weight,
+                contributing_agents=[agent_id],
+            )
+
+            drift_incidents.append(incident)
+            self.metrics["drift_alerts_emitted"] += 1
+
+            logger.warning(
+                f"AMRDR_DRIFT | agent={agent_id} | "
+                f"drift={state.drift_type.value} | "
+                f"tier={state.tier.value} | "
+                f"weight={state.fusion_weight:.2f}"
+            )
+
+        return drift_incidents
+
+    def provide_incident_feedback(
+        self,
+        incident_id: str,
+        is_confirmed: bool,
+        analyst: str = "system",
+    ) -> bool:
+        """Feed analyst confirmation/dismissal back to AMRDR.
+
+        When an analyst confirms or dismisses an incident, the contributing
+        agents' reliability is updated accordingly. Confirmed incidents
+        increase agent reliability; dismissed incidents decrease it.
+
+        Args:
+            incident_id: Incident to provide feedback on
+            is_confirmed: True = real incident, False = false positive
+            analyst: Who provided the feedback
+
+        Returns:
+            True if feedback was recorded, False if incident not found
+        """
+        # Look up incident from DB to find contributing agents
+        row = self.db.execute(
+            "SELECT contributing_agents, rule_name FROM incidents "
+            "WHERE incident_id = ?",
+            (incident_id,),
+        ).fetchone()
+
+        if not row:
+            logger.warning(f"Cannot provide feedback: incident {incident_id} not found")
+            return False
+
+        contributing_agents = json.loads(row[0])
+        rule_name = row[1]
+
+        # Skip AMRDR_DRIFT incidents (self-referential feedback loop)
+        if rule_name == "AMRDR_DRIFT":
+            logger.debug(f"Skipping AMRDR feedback for drift alert {incident_id}")
+            return True
+
+        # Update each contributing agent's reliability
+        for agent_id in contributing_agents:
+            self.reliability_tracker.update(
+                agent_id=agent_id,
+                ground_truth_match=is_confirmed,
+            )
+            logger.info(
+                f"AMRDR_FEEDBACK | incident={incident_id} | "
+                f"agent={agent_id} | confirmed={is_confirmed} | "
+                f"analyst={analyst}"
+            )
+
+        return True
 
     def evaluate_all_devices(self):
         """Evaluate all devices with pending events
@@ -572,22 +807,30 @@ class FusionEngine:
 
         incidents = []
         for row in rows:
-            incidents.append(
-                {
-                    "incident_id": row[0],
-                    "device_id": row[1],
-                    "severity": row[2],
-                    "tactics": json.loads(row[3]),
-                    "techniques": json.loads(row[4]),
-                    "rule_name": row[5],
-                    "summary": row[6],
-                    "start_ts": row[7],
-                    "end_ts": row[8],
-                    "event_ids": json.loads(row[9]),
-                    "metadata": json.loads(row[10]),
-                    "created_at": row[11],
-                }
-            )
+            inc = {
+                "incident_id": row[0],
+                "device_id": row[1],
+                "severity": row[2],
+                "tactics": json.loads(row[3]),
+                "techniques": json.loads(row[4]),
+                "rule_name": row[5],
+                "summary": row[6],
+                "start_ts": row[7],
+                "end_ts": row[8],
+                "event_ids": json.loads(row[9]),
+                "metadata": json.loads(row[10]),
+                "created_at": row[11],
+            }
+            # AMRDR columns (may not exist in older databases)
+            if len(row) > 12:
+                inc["agent_weights"] = json.loads(row[12]) if row[12] else {}
+                inc["weighted_confidence"] = row[13] if row[13] else 1.0
+                inc["contributing_agents"] = json.loads(row[14]) if row[14] else []
+            else:
+                inc["agent_weights"] = {}
+                inc["weighted_confidence"] = 1.0
+                inc["contributing_agents"] = []
+            incidents.append(inc)
 
         return incidents
 

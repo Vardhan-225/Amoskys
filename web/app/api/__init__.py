@@ -32,6 +32,8 @@ from .integration import integration_bp
 from .onboarding import onboarding_bp  # User onboarding
 from .peripheral_telemetry import peripheral_bp  # Peripheral telemetry API
 from .process_telemetry import process_bp  # Process telemetry API
+from .proofs import proofs_bp  # Proof Spine API (D5)
+from .reliability import reliability_bp  # AMRDR Reliability API (Sprint 2)
 from .snmp_simple import snmp_simple_bp  # Simple SNMP telemetry API
 from .system import system_bp
 from .telemetry import telemetry_bp  # Real-time telemetry from EventBus WAL
@@ -51,6 +53,8 @@ api_bp.register_blueprint(database_manager_bp)  # Register database manager API
 api_bp.register_blueprint(health_bp)  # Register health API v1
 api_bp.register_blueprint(telemetry_bp)  # Register telemetry API
 api_bp.register_blueprint(onboarding_bp)  # Register onboarding API
+api_bp.register_blueprint(proofs_bp)  # Register proof spine API
+api_bp.register_blueprint(reliability_bp)  # Register AMRDR reliability API
 
 
 # Add API documentation endpoint

@@ -164,6 +164,11 @@ class Incident:
     metadata: Dict[str, str] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
 
+    # AMRDR reliability-awareness fields
+    agent_weights: Dict[str, float] = field(default_factory=dict)
+    weighted_confidence: float = 1.0
+    contributing_agents: List[str] = field(default_factory=list)
+
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization"""
         return {
@@ -179,6 +184,9 @@ class Incident:
             "event_ids": self.event_ids,
             "metadata": self.metadata,
             "created_at": self.created_at.isoformat(),
+            "agent_weights": self.agent_weights,
+            "weighted_confidence": self.weighted_confidence,
+            "contributing_agents": self.contributing_agents,
         }
 
     def add_event(self, event_id: str, event_ts: datetime) -> None:

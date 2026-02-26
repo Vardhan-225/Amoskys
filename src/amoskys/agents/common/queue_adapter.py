@@ -148,14 +148,27 @@ class LocalQueueAdapter:
         payload_bytes = telemetry.SerializeToString()
         content_hash = hashlib.sha256(payload_bytes).digest()
 
-        # Sign if key available
+        # Build UniversalEnvelope for full-envelope signing (D4)
         sig: Optional[bytes] = None
         prev_sig = self._prev_sig or None
 
         if self._signing_key is not None:
+            from amoskys.common.crypto.canonical import universal_canonical_bytes
             from amoskys.common.crypto.signing import sign
 
-            sig = sign(self._signing_key, content_hash)
+            # Construct a temporary envelope to compute canonical bytes
+            temp_env = pb.UniversalEnvelope()
+            temp_env.version = "1.0"
+            temp_env.ts_ns = ts_ns
+            temp_env.idempotency_key = idem_key
+            temp_env.device_telemetry.CopyFrom(telemetry)
+            temp_env.schema_version = 1
+            temp_env.signing_algorithm = "Ed25519"
+            if prev_sig:
+                temp_env.prev_sig = prev_sig
+            # sig is left empty — canonical form zeroes it
+            canonical = universal_canonical_bytes(temp_env)
+            sig = sign(self._signing_key, canonical)
 
         result = self.queue.enqueue(
             telemetry,
@@ -163,6 +176,7 @@ class LocalQueueAdapter:
             content_hash=content_hash,
             sig=sig,
             prev_sig=prev_sig,
+            ts_ns=ts_ns,
         )
 
         # Advance hash chain on successful enqueue

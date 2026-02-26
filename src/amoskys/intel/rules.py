@@ -698,12 +698,19 @@ ALL_RULES = [
 ]
 
 
-def evaluate_rules(events: List[TelemetryEventView], device_id: str) -> List[Incident]:
+def evaluate_rules(
+    events: List[TelemetryEventView],
+    device_id: str,
+    weights: Optional[dict] = None,
+) -> List[Incident]:
     """Evaluate all correlation rules against event window
 
     Args:
         events: List of TelemetryEventView objects to correlate
         device_id: Device being evaluated
+        weights: Optional AMRDR fusion weights {agent_id: weight}.
+            When provided, incidents are annotated with agent_weights,
+            weighted_confidence, and contributing_agents.
 
     Returns:
         List of Incident objects (may be empty if no rules fire)
@@ -714,6 +721,9 @@ def evaluate_rules(events: List[TelemetryEventView], device_id: str) -> List[Inc
         try:
             incident = rule_fn(events, device_id)
             if incident:
+                # Annotate with AMRDR weights if available
+                if weights:
+                    _annotate_incident_weights(incident, events, weights)
                 incidents.append(incident)
                 logger.info(
                     f"Rule fired: {incident.rule_name} → {incident.incident_id}"
@@ -722,3 +732,44 @@ def evaluate_rules(events: List[TelemetryEventView], device_id: str) -> List[Inc
             logger.error(f"Rule {rule_fn.__name__} failed: {e}", exc_info=True)
 
     return incidents
+
+
+def _annotate_incident_weights(
+    incident: Incident,
+    events: List[TelemetryEventView],
+    weights: dict,
+) -> None:
+    """Annotate an incident with AMRDR reliability weights.
+
+    Determines which agents contributed to the incident's events and
+    computes a weighted confidence score based on their fusion weights.
+
+    Args:
+        incident: Incident to annotate (modified in place)
+        events: Event window (used to determine agent sources)
+        weights: AMRDR fusion weights {agent_id: weight}
+    """
+    # Determine contributing agents from incident event IDs
+    incident_event_ids = set(incident.event_ids)
+    contributing = set()
+
+    for event in events:
+        if event.event_id in incident_event_ids:
+            # Derive agent from event attributes or event_type
+            agent_id = event.attributes.get("agent_id", event.event_type)
+            contributing.add(agent_id)
+
+    incident.contributing_agents = sorted(contributing)
+
+    # Collect weights for contributing agents
+    agent_w = {}
+    for agent_id in incident.contributing_agents:
+        agent_w[agent_id] = weights.get(agent_id, 1.0)
+
+    incident.agent_weights = agent_w
+
+    # Compute weighted confidence as average of contributing agent weights
+    if agent_w:
+        incident.weighted_confidence = sum(agent_w.values()) / len(agent_w)
+    else:
+        incident.weighted_confidence = 1.0

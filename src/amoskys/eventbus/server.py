@@ -214,11 +214,23 @@ DEDUPE_MAX = int(os.getenv("BUS_DEDUPE_MAX", "50000"))
 _dedupe: "OrderedDict[str, float]" = OrderedDict()
 
 MAX_ENV_BYTES = int(os.getenv("BUS_MAX_ENV_BYTES", "131072"))
-REQUIRE_SIGNATURES = os.getenv("BUS_REQUIRE_SIGNATURES", "false").lower() in (
+# D4: REQUIRE_SIGNATURES defaults to true. Set EVENTBUS_ALLOW_UNSIGNED=true
+# for CI/test environments to accept unsigned envelopes (with WARNING).
+REQUIRE_SIGNATURES = os.getenv("EVENTBUS_ALLOW_UNSIGNED", "false").lower() not in (
     "true",
     "1",
     "yes",
 )
+
+# D4: Agent key registry — maps agent_id → Ed25519 public key
+_AGENT_KEY_REGISTRY: dict = {}
+
+try:
+    BUS_UNSIGNED_REJECTED = Counter(
+        "bus_unsigned_rejected_total", "Unsigned envelopes rejected"
+    )
+except ValueError:
+    BUS_UNSIGNED_REJECTED = Counter("_bus_dummy8", "dummy")
 
 
 def _sizeof_env(env):
@@ -433,48 +445,75 @@ def _peer_cn_from_context(context):
     return None
 
 
+def _load_agent_key_registry():
+    """Load agent key registry from JSON file.
+
+    The registry maps agent_id → Ed25519 public key for per-agent
+    signature verification (D4: Agent Key Registry).
+    """
+    global _AGENT_KEY_REGISTRY
+    registry_path = os.getenv("AGENT_KEY_REGISTRY_PATH", "agent_key_registry.json")
+    try:
+        import json as _json
+
+        with open(registry_path, "r") as f:
+            data = _json.load(f)
+        for entry in data.get("agents", []):
+            if entry.get("status") != "active":
+                continue
+            agent_id = entry["agent_id"]
+            pubkey_b64 = entry["public_key"]
+            import base64
+
+            pubkey_bytes = base64.b64decode(pubkey_b64)
+            from cryptography.hazmat.primitives.asymmetric import ed25519 as _ed
+
+            pk = _ed.Ed25519PublicKey.from_public_bytes(pubkey_bytes)
+            _AGENT_KEY_REGISTRY[agent_id] = pk
+        logger.info(
+            "Loaded agent key registry: %d active agents", len(_AGENT_KEY_REGISTRY)
+        )
+    except FileNotFoundError:
+        logger.warning(
+            "AGENT_KEY_REGISTRY_MISSING: %s not found; "
+            "per-agent verification will fall back to global AGENT_PUBKEY",
+            registry_path,
+        )
+    except Exception as e:
+        logger.warning("AGENT_KEY_REGISTRY_LOAD_FAILURE: %s", e)
+
+
 def _verify_envelope_signature(envelope):
     """Verify Ed25519 signature on a UniversalEnvelope.
 
-    This function extracts the signature and signing algorithm from the envelope,
-    reconstructs the payload for verification, and validates the signature using
-    the stored public key.
+    D4 canonical form: sig (field 8) is zeroed, prev_sig (field 9) is KEPT.
+    This binds the chain link into the signature.
 
-    Args:
-        envelope: UniversalEnvelope protobuf message with optional sig and
-                 signing_algorithm fields.
-
-    Returns:
-        tuple: (is_valid, error_message)
-            - (True, None) if signature is valid or absent (backward compat)
-            - (False, reason) if signature verification fails
-            - (False, reason) if REQUIRE_SIGNATURES=true and no signature present
-
-    Implementation:
+    Verification order:
         1. Check if sig and signing_algorithm are present
-        2. If neither present and REQUIRE_SIGNATURES=false, return (True, None)
-        3. If neither present and REQUIRE_SIGNATURES=true, reject
-        4. Reconstruct payload by serializing the envelope without sig fields
-        5. Verify signature using stored public key (AGENT_PUBKEY from config)
-        6. Return result
-
-    Security:
-        - Uses Ed25519 verification from cryptography library
-        - Rejects envelopes with invalid signatures
-        - Logs all verification failures for audit
-        - Supports gradual migration with REQUIRE_SIGNATURES flag
+        2. If absent and REQUIRE_SIGNATURES: reject (ERROR log + metric)
+        3. If absent and EVENTBUS_ALLOW_UNSIGNED: accept with WARNING
+        4. Look up agent public key from registry, fall back to AGENT_PUBKEY
+        5. Reconstruct canonical bytes (sig zeroed, prev_sig KEPT)
+        6. Ed25519 verify
     """
-    # Check if signature fields are present
     has_sig = bool(envelope.sig)
     has_algorithm = bool(envelope.signing_algorithm)
 
     # No signature present
     if not has_sig and not has_algorithm:
         if REQUIRE_SIGNATURES:
+            logger.error(
+                "[PublishTelemetry] UNSIGNED_REJECTED: idem=%s",
+                envelope.idempotency_key,
+            )
+            BUS_UNSIGNED_REJECTED.inc()
             return (False, "Signature required but not present")
         else:
-            logger.info(
-                "[PublishTelemetry] No signature present (backward compat mode)"
+            logger.warning(
+                "[PublishTelemetry] UNSIGNED_ACCEPTED: idem=%s "
+                "(EVENTBUS_ALLOW_UNSIGNED=true)",
+                envelope.idempotency_key,
             )
             return (True, None)
 
@@ -486,21 +525,25 @@ def _verify_envelope_signature(envelope):
     if envelope.signing_algorithm != "Ed25519":
         return (False, f"Unsupported signing algorithm: {envelope.signing_algorithm}")
 
-    # Get the public key (currently use single AGENT_PUBKEY, could extend to TRUST)
-    if AGENT_PUBKEY is None:
+    # D4: Look up agent-specific public key from registry
+    pubkey = None
+    agent_id = None
+    if envelope.HasField("device_telemetry"):
+        agent_id = envelope.device_telemetry.collection_agent
+    if agent_id and agent_id in _AGENT_KEY_REGISTRY:
+        pubkey = _AGENT_KEY_REGISTRY[agent_id]
+    elif AGENT_PUBKEY is not None:
+        pubkey = AGENT_PUBKEY
+    else:
         return (False, "No public key configured for signature verification")
 
-    # Reconstruct payload: serialize envelope with sig/prev_sig cleared
-    # This matches how the client signs it (signs the canonical protobuf of the payload)
-    payload_copy = telemetry_pb2.UniversalEnvelope()
-    payload_copy.CopyFrom(envelope)
-    payload_copy.sig = b""
-    payload_copy.prev_sig = b""
+    # D4: Canonical form — sig zeroed, prev_sig KEPT
+    from amoskys.common.crypto.canonical import universal_canonical_bytes
 
-    payload_bytes = payload_copy.SerializeToString()
+    canonical = universal_canonical_bytes(envelope)
 
     # Verify the signature
-    signature_valid = verify(AGENT_PUBKEY, payload_bytes, envelope.sig)
+    signature_valid = verify(pubkey, canonical, envelope.sig)
 
     if not signature_valid:
         return (False, "Signature verification failed (invalid signature or wrong key)")
@@ -1662,6 +1705,9 @@ def serve():
                 "per-agent CN authorization disabled",
                 e,
             )
+
+        # D4: Load agent key registry for per-agent signature verification
+        _load_agent_key_registry()
 
         # Start health check HTTP server (P1-EB-4)
         _start_health_server()

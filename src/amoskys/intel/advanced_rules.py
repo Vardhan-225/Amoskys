@@ -1514,13 +1514,17 @@ ADVANCED_RULES = [
 
 
 def evaluate_advanced_rules(
-    events: List[TelemetryEventView], device_id: str
+    events: List[TelemetryEventView],
+    device_id: str,
+    weights: Optional[Dict[str, float]] = None,
 ) -> List[Incident]:
     """Evaluate all advanced correlation rules
 
     Args:
         events: List of TelemetryEventView objects
         device_id: Device being evaluated
+        weights: Optional AMRDR fusion weights {agent_id: weight}.
+            When provided, incidents are annotated with reliability metadata.
 
     Returns:
         List of detected Incidents
@@ -1531,6 +1535,9 @@ def evaluate_advanced_rules(
         try:
             incident = rule_fn(events, device_id)
             if incident:
+                # Annotate with AMRDR weights if available
+                if weights:
+                    _annotate_advanced_incident(incident, events, weights)
                 incidents.append(incident)
                 logger.info(
                     f"Advanced rule fired: {incident.rule_name} → {incident.incident_id}"
@@ -1539,3 +1546,36 @@ def evaluate_advanced_rules(
             logger.error(f"Advanced rule {rule_fn.__name__} failed: {e}", exc_info=True)
 
     return incidents
+
+
+def _annotate_advanced_incident(
+    incident: Incident,
+    events: List[TelemetryEventView],
+    weights: Dict[str, float],
+) -> None:
+    """Annotate an advanced rule incident with AMRDR reliability weights.
+
+    Args:
+        incident: Incident to annotate (modified in place)
+        events: Event window
+        weights: AMRDR fusion weights {agent_id: weight}
+    """
+    incident_event_ids = set(incident.event_ids)
+    contributing = set()
+
+    for event in events:
+        if event.event_id in incident_event_ids:
+            agent_id = event.attributes.get("agent_id", event.event_type)
+            contributing.add(agent_id)
+
+    incident.contributing_agents = sorted(contributing)
+    incident.agent_weights = {
+        a: weights.get(a, 1.0) for a in incident.contributing_agents
+    }
+
+    if incident.agent_weights:
+        incident.weighted_confidence = sum(incident.agent_weights.values()) / len(
+            incident.agent_weights
+        )
+    else:
+        incident.weighted_confidence = 1.0

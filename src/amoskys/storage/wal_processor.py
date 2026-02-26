@@ -54,9 +54,7 @@ class WALProcessor:
         # A4.4: Enrichment pipeline (GeoIP → ASN → ThreatIntel)
         try:
             self._pipeline = EnrichmentPipeline()
-            logger.info(
-                "Enrichment pipeline initialized: %s", self._pipeline.status()
-            )
+            logger.info("Enrichment pipeline initialized: %s", self._pipeline.status())
         except Exception as e:
             logger.warning("Enrichment pipeline unavailable: %s", e)
             self._pipeline = None

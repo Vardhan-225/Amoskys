@@ -59,13 +59,10 @@ def create_app():
         lower_key = secret_key.lower()
         for weak in _WEAK_PATTERNS:
             if weak in lower_key:
-                _key_warnings.append(
-                    f"SECRET_KEY contains weak pattern '{weak}'."
-                )
+                _key_warnings.append(f"SECRET_KEY contains weak pattern '{weak}'.")
         if _key_warnings:
             _msg = (
-                " ".join(_key_warnings)
-                + " Generate a strong key: "
+                " ".join(_key_warnings) + " Generate a strong key: "
                 "python -c 'import secrets; print(secrets.token_hex(32))'"
             )
             if is_dev:

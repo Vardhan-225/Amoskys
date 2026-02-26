@@ -115,6 +115,7 @@ class LocalQueue:
         content_hash: Optional[bytes] = None,
         sig: Optional[bytes] = None,
         prev_sig: Optional[bytes] = None,
+        ts_ns: Optional[int] = None,
     ) -> bool:
         """Add telemetry to queue with deduplication and optional signing.
 
@@ -127,6 +128,9 @@ class LocalQueue:
             content_hash: SHA-256 digest of serialized payload (optional)
             sig: Ed25519 signature over content_hash (optional)
             prev_sig: Previous row's signature for hash chain (optional)
+            ts_ns: Timestamp in nanoseconds (optional, defaults to now).
+                When provided, ensures the stored ts_ns matches the one
+                used for full-envelope signing (D4).
 
         Returns:
             bool: True if enqueued, False if duplicate
@@ -135,7 +139,8 @@ class LocalQueue:
             sqlite3.DatabaseError: On database corruption or disk full
         """
         data = telemetry.SerializeToString()
-        ts_ns = int(time.time() * 1e9)
+        if ts_ns is None:
+            ts_ns = int(time.time() * 1e9)
 
         with self._lock:
             try:

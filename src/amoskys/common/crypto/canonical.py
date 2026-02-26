@@ -5,65 +5,47 @@ messages for signature generation and verification. Canonical form ensures
 that semantically equivalent messages produce identical byte representations,
 which is critical for signature verification.
 
-Why Canonical Form Matters:
-    - Protobuf serialization is NOT deterministic by default
-    - Unknown fields, field order, and optional fields can vary
-    - Signatures must be over a consistent byte representation
-    - Canon form excludes signature fields to prevent circular dependency
+Two canonical forms are provided:
 
-Fields Excluded from Canonical Form:
-    - sig: The signature itself (would create circular dependency)
-    - prev_sig: Previous signature (not part of current message semantics)
+1. ``canonical_bytes(env)`` — Legacy Envelope (messaging_schema.proto).
+   Excludes sig and prev_sig.
 
-Fields Included in Canonical Form:
-    - version: Protocol version
-    - ts_ns: Timestamp (nanoseconds since epoch)
-    - idempotency_key: Deduplication key
-    - flow: FlowEvent payload (if present)
-
-Security Note:
-    Changing canonical form breaks signature compatibility. Any modification
-    to field selection or serialization order requires re-signing all data.
+2. ``universal_canonical_bytes(env)`` — UniversalEnvelope.
+   Clears **only** ``sig`` (field 8).
+   ``prev_sig`` is **included** — binding the chain link into the signature.
+   See docs/proof/canonical_bytes_spec.md for the full field table.
 """
 
 from typing import cast
 
 from amoskys.proto import messaging_schema_pb2 as pb
+from amoskys.proto import universal_telemetry_pb2 as upb
 
 
 def canonical_bytes(env: pb.Envelope) -> bytes:
-    """Convert Envelope to canonical byte representation for signing.
-
-    Creates a deterministic serialization of the envelope by copying only
-    semantic fields (excluding signature fields) to a clean protobuf instance.
-    This ensures consistent byte representation for Ed25519 signing.
-
-    Args:
-        env: Source envelope (may contain signature fields)
-
-    Returns:
-        bytes: Canonical protobuf serialization suitable for signing
-
-    Canonical Form includes:
-        - version, ts_ns, idempotency_key (always)
-        - flow payload (if present and non-empty)
-
-    Canonical Form excludes:
-        - sig, prev_sig (to prevent circular dependencies)
-        - Unknown/extension fields
-        - Optional fields with default values
-
-    Example:
-        >>> env = make_envelope(flow_event)  # sig field is empty
-        >>> canonical = canonical_bytes(env)
-        >>> signature = sign(private_key, canonical)
-        >>> env.sig = signature  # Now add signature
-    """
+    """Legacy Envelope canonical form (excludes sig and prev_sig)."""
     clone = pb.Envelope()
     clone.version = env.version
     clone.ts_ns = env.ts_ns
     clone.idempotency_key = env.idempotency_key
-    # Only handle flow field as per current protobuf schema
     if hasattr(env, "flow") and env.flow.ByteSize() > 0:
         clone.flow.CopyFrom(env.flow)
     return cast(bytes, clone.SerializeToString())
+
+
+def universal_canonical_bytes(env: upb.UniversalEnvelope) -> bytes:
+    """UniversalEnvelope canonical form — full envelope with sig zeroed.
+
+    Per the Canonical Bytes Spec (docs/proof/canonical_bytes_spec.md):
+      - sig (field 8) is cleared to b"" (circular dependency)
+      - prev_sig (field 9) is KEPT (binds chain link into signature)
+      - All other fields are included as-is
+
+    This means swapping prev_sig between two envelopes invalidates both
+    signatures, making chain reordering detectable.
+    """
+    clone = upb.UniversalEnvelope()
+    clone.CopyFrom(env)
+    clone.sig = b""  # Only field excluded
+    # prev_sig is NOT cleared — it is part of the signed payload
+    return clone.SerializeToString()

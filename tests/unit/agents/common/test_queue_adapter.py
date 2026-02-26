@@ -792,13 +792,10 @@ class TestEnvelopeSigning:
         assert bytes(rows[2][1]) == bytes(rows[1][0])
 
     def test_signature_verifies(self, signed_adapter, ed25519_key_path):
-        """Stored signature should verify against stored content_hash."""
-        from cryptography.hazmat.primitives import serialization
-
-        # We need the public key — derive from private key
+        """Stored signature should verify against full-envelope canonical bytes (D4)."""
         from cryptography.hazmat.primitives.asymmetric import ed25519 as ed_mod
 
-        from amoskys.common.crypto.signing import load_public_key, verify
+        from amoskys.common.crypto.signing import verify
 
         with open(ed25519_key_path, "rb") as f:
             sk = ed_mod.Ed25519PrivateKey.from_private_bytes(f.read())
@@ -806,13 +803,21 @@ class TestEnvelopeSigning:
 
         signed_adapter.enqueue({"event_type": "METRIC", "severity": "INFO"})
 
-        row = signed_adapter.queue.db.execute(
-            "SELECT content_hash, sig FROM queue LIMIT 1"
-        ).fetchone()
-        content_hash = bytes(row[0])
-        sig = bytes(row[1])
+        # Drain to get the full UniversalEnvelope with sig
+        captured = []
 
-        assert verify(pk, content_hash, sig) is True
+        def capture_fn(events):
+            captured.extend(events)
+
+        signed_adapter.drain(capture_fn, limit=1)
+        assert len(captured) == 1
+        envelope = captured[0]
+
+        # Verify using canonical bytes (sig zeroed, prev_sig KEPT)
+        from amoskys.common.crypto.canonical import universal_canonical_bytes
+
+        canonical = universal_canonical_bytes(envelope)
+        assert verify(pk, canonical, envelope.sig) is True
 
     def test_drain_produces_signed_envelope(self, signed_adapter):
         """drain() should produce UniversalEnvelope with sig fields."""
