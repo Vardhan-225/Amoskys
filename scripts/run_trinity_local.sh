@@ -58,7 +58,7 @@ echo ""
 
 # Run as modules (-m) to avoid types.py shadowing stdlib types module.
 # When run as a script, Python adds the script's directory to sys.path,
-# and kernel_audit/types.py or protocol_collectors/types.py shadows
+# and kernel_audit/types.py or protocol_collectors/agent_types.py shadows
 # the stdlib 'types' module, crashing the import chain.
 
 # Kernel audit — on macOS, audit log doesn't exist but collector handles gracefully

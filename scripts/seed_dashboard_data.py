@@ -27,7 +27,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "port_scan_detected",
         "probe": "port_scan_sweep",
-        "agent": "flow_agent_v2",
+        "agent": "flow",
         "risk_range": (0.6, 0.9),
         "mitre": ["T1046"],
         "desc": "Port scan sweep detected: {ports} ports probed from {src}",
@@ -35,7 +35,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "lateral_movement_detected",
         "probe": "lateral_movement",
-        "agent": "flow_agent_v2",
+        "agent": "flow",
         "risk_range": (0.7, 0.95),
         "mitre": ["T1021", "T1021.002"],
         "desc": "Lateral movement via SMB/RDP from {src} to {dst}",
@@ -43,7 +43,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "c2_beaconing_detected",
         "probe": "c2_beacon_detector",
-        "agent": "flow_agent_v2",
+        "agent": "flow",
         "risk_range": (0.8, 0.95),
         "mitre": ["T1071.001", "T1573"],
         "desc": "C2 beaconing pattern: {interval}s interval to {dst}",
@@ -51,7 +51,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "data_exfiltration_detected",
         "probe": "data_exfil_detector",
-        "agent": "flow_agent_v2",
+        "agent": "flow",
         "risk_range": (0.85, 0.98),
         "mitre": ["T1048", "T1041"],
         "desc": "Potential data exfiltration: {bytes}MB to {dst}",
@@ -60,7 +60,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "dns_c2_beaconing",
         "probe": "dns_beaconing",
-        "agent": "dns_agent_v2",
+        "agent": "dns",
         "risk_range": (0.7, 0.9),
         "mitre": ["T1071.004", "T1568.002"],
         "desc": "DNS C2 beaconing: {domain} queried {count} times",
@@ -68,7 +68,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "dns_tunneling_detected",
         "probe": "dns_tunneling",
-        "agent": "dns_agent_v2",
+        "agent": "dns",
         "risk_range": (0.8, 0.95),
         "mitre": ["T1071.004", "T1048.003"],
         "desc": "DNS tunneling: high-entropy queries to {domain}",
@@ -76,7 +76,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "dga_domain_detected",
         "probe": "dga_detector",
-        "agent": "dns_agent_v2",
+        "agent": "dns",
         "risk_range": (0.6, 0.85),
         "mitre": ["T1568.002"],
         "desc": "DGA domain detected: {domain} (entropy={entropy:.2f})",
@@ -85,7 +85,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "ssh_brute_force",
         "probe": "ssh_brute_force",
-        "agent": "auth_guard_agent_v2",
+        "agent": "auth",
         "risk_range": (0.7, 0.95),
         "mitre": ["T1110", "T1021.004"],
         "desc": "SSH brute force: {count} failed attempts from {src}",
@@ -93,7 +93,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "sudo_escalation_suspicious",
         "probe": "sudo_escalation",
-        "agent": "auth_guard_agent_v2",
+        "agent": "auth",
         "risk_range": (0.6, 0.85),
         "mitre": ["T1548.003"],
         "desc": "Suspicious sudo escalation by {user}: {cmd}",
@@ -101,7 +101,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "impossible_travel_detected",
         "probe": "geo_impossible_travel",
-        "agent": "auth_guard_agent_v2",
+        "agent": "auth",
         "risk_range": (0.8, 0.95),
         "mitre": ["T1078"],
         "desc": "Impossible travel: login from {loc1} and {loc2} within {minutes}m",
@@ -110,7 +110,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "critical_file_modified",
         "probe": "critical_system_files",
-        "agent": "fim_agent_v2",
+        "agent": "fim",
         "risk_range": (0.7, 0.95),
         "mitre": ["T1565.001"],
         "desc": "Critical system file modified: {path}",
@@ -118,7 +118,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "suid_change_detected",
         "probe": "suid_sgid_changes",
-        "agent": "fim_agent_v2",
+        "agent": "fim",
         "risk_range": (0.75, 0.9),
         "mitre": ["T1548.001"],
         "desc": "SUID/SGID bit changed on {path}",
@@ -127,7 +127,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "persistence_launch_agent",
         "probe": "launch_agent_detector",
-        "agent": "persistence_agent_v2",
+        "agent": "persistence",
         "risk_range": (0.6, 0.85),
         "mitre": ["T1543.001"],
         "desc": "New LaunchAgent created: {path}",
@@ -135,7 +135,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "persistence_cron_reboot",
         "probe": "cron_reboot_detector",
-        "agent": "persistence_agent_v2",
+        "agent": "persistence",
         "risk_range": (0.5, 0.75),
         "mitre": ["T1053.003"],
         "desc": "Cron @reboot persistence: {cmd}",
@@ -144,7 +144,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "unauthorized_usb_storage",
         "probe": "usb_storage_detector",
-        "agent": "peripheral_agent_v2",
+        "agent": "peripheral",
         "risk_range": (0.5, 0.8),
         "mitre": ["T1091", "T1052.001"],
         "desc": "Unauthorized USB storage device: {vendor}:{product}",
@@ -153,7 +153,7 @@ EVENT_TEMPLATES = [
     {
         "event_category": "kernel_module_load",
         "probe": "kernel_module_load",
-        "agent": "kernel_audit_agent_v2",
+        "agent": "kernel_audit",
         "risk_range": (0.7, 0.9),
         "mitre": ["T1547.006"],
         "desc": "Kernel module loaded: {module}",
