@@ -508,22 +508,22 @@ async function showIncident(id) {
 
         document.getElementById('detail-content').innerHTML =
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">'
-            + '<div><div class="form-label">Severity</div><div style="font-weight:700;text-transform:uppercase;">' + inc.severity + '</div></div>'
-            + '<div><div class="form-label">Created</div><div>' + inc.created_at + '</div></div>'
-            + '<div><div class="form-label">Assignee</div><div>' + (inc.assignee || 'Unassigned') + '</div></div>'
-            + '<div><div class="form-label">Updated</div><div>' + inc.updated_at + '</div></div>'
+            + '<div><div class="form-label">Severity</div><div style="font-weight:700;text-transform:uppercase;">' + escapeHtml(inc.severity) + '</div></div>'
+            + '<div><div class="form-label">Created</div><div>' + escapeHtml(inc.created_at) + '</div></div>'
+            + '<div><div class="form-label">Assignee</div><div>' + escapeHtml(inc.assignee || 'Unassigned') + '</div></div>'
+            + '<div><div class="form-label">Updated</div><div>' + escapeHtml(inc.updated_at) + '</div></div>'
             + '</div>'
             + slaText
             + '<div style="margin:1.5rem 0;">'
             + '<div class="form-label">Description</div>'
-            + '<div style="padding:0.75rem;background:rgba(255,255,255,0.05);border-radius:6px;line-height:1.5;color:var(--text-secondary);">' + (inc.description || 'No description') + '</div>'
+            + '<div style="padding:0.75rem;background:rgba(255,255,255,0.05);border-radius:6px;line-height:1.5;color:var(--text-secondary);">' + escapeHtml(inc.description || 'No description') + '</div>'
             + '</div>'
             + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">'
             + '<div><label class="form-label" for="update-status">Update Status</label><select id="update-status" class="form-input">' + statusSelect + '</select></div>'
-            + '<div><label class="form-label" for="update-notes">Resolution Notes</label><input type="text" id="update-notes" class="form-input" placeholder="Add notes..." value="' + (inc.resolution_notes || '') + '"></div>'
+            + '<div><label class="form-label" for="update-notes">Resolution Notes</label><input type="text" id="update-notes" class="form-input" placeholder="Add notes..." value="' + escapeHtml(inc.resolution_notes || '') + '"></div>'
             + '</div>'
             + '<button data-update-incident="' + inc.id + '" class="neural-button" style="padding:0.5rem 1.5rem;cursor:pointer;">Update Incident</button>'
-            + (inc.resolved_at ? '<div style="margin-top:1rem;font-size:0.85rem;color:#00ff88;">Resolved at: ' + inc.resolved_at + '</div>' : '');
+            + (inc.resolved_at ? '<div style="margin-top:1rem;font-size:0.85rem;color:#00ff88;">Resolved at: ' + escapeHtml(inc.resolved_at) + '</div>' : '');
         document.getElementById('detail-modal').style.display = 'flex';
     } catch (err) {
         console.error('Failed to load incident:', err);

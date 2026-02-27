@@ -146,6 +146,15 @@ class ReliabilityDashboard {
         this.initFeedback();
         await this.refresh();
         this.timer = setInterval(() => this.refresh(), this.REFRESH);
+        // SocketIO: refresh reliability when agent data changes
+        window.addEventListener('ws:agents', () => {
+            this.refresh();
+            if (this.REFRESH < 30000) {
+                this.REFRESH = 30000;
+                clearInterval(this.timer);
+                this.timer = setInterval(() => this.refresh(), this.REFRESH);
+            }
+        });
     }
 
     initChart() {

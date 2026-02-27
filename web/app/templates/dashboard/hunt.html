@@ -338,10 +338,20 @@ async function huntSearch(offset) {
             (highRisk > 0 ? '<span>&#128308; <span class="hunt-stats-val" style="color:#ff3366;">' + highRisk + '</span> high-risk</span>' : '') +
             '</span>';
 
+        // Auto-escalate: if 0 results within narrow window, retry with All Time
+        if (data.total_count === 0 && parseInt(hours, 10) <= 168 && offset === 0 && !huntSearch._escalated) {
+            huntSearch._escalated = true;
+            document.getElementById('hunt-hours').value = '8760';
+            document.getElementById('hunt-summary').innerHTML = '<span style="color:var(--text-muted);">No results in ' + hours + 'h window — expanding to All Time...</span>';
+            return huntSearch(0);
+        }
+        huntSearch._escalated = false;
+
         renderResults(data.results, table);
         renderTimeline(data.results, table);
         renderPagination(data.total_count, offset);
     } catch (err) {
+        huntSearch._escalated = false;
         document.getElementById('hunt-summary').textContent = 'Search failed: ' + err.message;
     }
 }
@@ -378,6 +388,7 @@ function renderResults(rows, table) {
         var arrow = sortCol === c ? (sortDir === 'asc' ? ' &uarr;' : ' &darr;') : '';
         html += '<th data-sort-col="' + c + '">' + c.replace(/_/g, ' ') + arrow + '</th>';
     }
+    html += '<th style="min-width:100px;">Actions</th>';
     html += '</tr></thead><tbody>';
 
     for (var ri = 0; ri < rows.length; ri++) {
@@ -405,6 +416,11 @@ function renderResults(rows, table) {
             }
             html += '<td>' + val + '</td>';
         }
+        var eid = row.id || '';
+        html += '<td style="white-space:nowrap;">'
+            + '<a href="/dashboard/timeline-replay?event_id=' + eid + '" style="color:var(--neural-primary);font-size:0.72rem;margin-right:0.5rem;text-decoration:none;" title="View in Timeline">Timeline</a>'
+            + '<a href="/dashboard/evidence-chain?event_id=' + eid + '" style="color:#00ff88;font-size:0.72rem;text-decoration:none;" title="Evidence Chain">Evidence</a>'
+            + '</td>';
         html += '</tr>';
     }
     html += '</tbody></table>';

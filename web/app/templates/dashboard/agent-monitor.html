@@ -1,0 +1,752 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Agent Monitor - AMOSKYS{% endblock %}
+
+{% block content %}
+<div style="padding: 1.5rem 2rem;">
+    <!-- Agent Selector Bar -->
+    <div class="neural-card" style="margin-bottom: 1rem; padding: 0.75rem 1rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+                <span id="am-agent-dot" style="width:10px;height:10px;border-radius:50%;background:#555;"></span>
+                <h2 style="margin:0;font-size:1.1rem;" id="am-agent-name">Agent Monitor</h2>
+                <span id="am-status-badge" style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:10px;font-weight:700;background:rgba(255,51,102,0.15);color:#ff3366;">OFFLINE</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+                <a href="/dashboard/agents" style="font-size:0.72rem;color:var(--neural-primary);text-decoration:none;">View Agent Network</a>
+                <button id="am-toggle-btn" class="neural-button" style="padding:0.25rem 0.6rem;font-size:0.72rem;">Start</button>
+            </div>
+        </div>
+        <div id="am-agent-tabs" style="display:flex;gap:0;margin-top:0.6rem;overflow-x:auto;"></div>
+    </div>
+
+    <!-- Two-Column Layout -->
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:1rem;align-items:start;">
+        <!-- Left Panel -->
+        <div style="position:sticky;top:80px;">
+            <!-- Process Health -->
+            <div class="neural-card" style="margin-bottom:0.75rem;">
+                <div style="font-size:0.78rem;font-weight:700;color:var(--text-primary);margin-bottom:0.6rem;">Process Health</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-bottom:0.6rem;">
+                    <div style="text-align:center;padding:0.5rem;background:rgba(78,205,196,0.06);border-radius:6px;border:1px solid rgba(78,205,196,0.15);">
+                        <div id="am-cpu" style="font-size:1.2rem;font-weight:700;color:#4ECDC4;">--</div>
+                        <div style="font-size:0.6rem;color:var(--text-muted);">CPU</div>
+                    </div>
+                    <div style="text-align:center;padding:0.5rem;background:rgba(170,150,218,0.06);border-radius:6px;border:1px solid rgba(170,150,218,0.15);">
+                        <div id="am-mem" style="font-size:1.2rem;font-weight:700;color:#AA96DA;">--</div>
+                        <div style="font-size:0.6rem;color:var(--text-muted);">Memory</div>
+                    </div>
+                </div>
+                <!-- CPU Sparkline -->
+                <div style="font-size:0.62rem;color:var(--text-muted);margin-bottom:0.2rem;">CPU History</div>
+                <div id="am-cpu-spark" style="display:flex;align-items:flex-end;gap:2px;height:30px;margin-bottom:0.5rem;"></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.3rem;font-size:0.72rem;">
+                    <div style="color:var(--text-secondary);">PID: <span id="am-pid" style="color:var(--text-primary);font-family:monospace;">--</span></div>
+                    <div style="color:var(--text-secondary);">Uptime: <span id="am-uptime" style="color:var(--text-primary);">--</span></div>
+                </div>
+            </div>
+
+            <!-- Probe Health -->
+            <div class="neural-card" style="margin-bottom:0.75rem;">
+                <div style="font-size:0.78rem;font-weight:700;color:var(--text-primary);margin-bottom:0.5rem;">Probe Health</div>
+                <div id="am-probe-bar" style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,0.05);margin-bottom:0.4rem;"></div>
+                <div id="am-probe-legend" style="display:flex;gap:0.6rem;font-size:0.65rem;color:var(--text-secondary);margin-bottom:0.5rem;"></div>
+                <div id="am-probe-list" style="max-height:200px;overflow-y:auto;"></div>
+            </div>
+
+            <!-- Stats -->
+            <div class="neural-card">
+                <div style="font-size:0.78rem;font-weight:700;color:var(--text-primary);margin-bottom:0.5rem;">Event Stats</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.3rem;margin-bottom:0.5rem;">
+                    <div style="text-align:center;padding:0.4rem;background:rgba(255,170,0,0.06);border-radius:6px;">
+                        <div id="am-evts-min" style="font-size:1rem;font-weight:700;color:#ffaa00;">0</div>
+                        <div style="font-size:0.55rem;color:var(--text-muted);">Evts/min</div>
+                    </div>
+                    <div style="text-align:center;padding:0.4rem;background:rgba(0,170,255,0.06);border-radius:6px;">
+                        <div id="am-evts-hour" style="font-size:1rem;font-weight:700;color:#00aaff;">0</div>
+                        <div style="font-size:0.55rem;color:var(--text-muted);">Evts/hour</div>
+                    </div>
+                    <div style="text-align:center;padding:0.4rem;background:rgba(0,255,136,0.06);border-radius:6px;">
+                        <div id="am-evts-total" style="font-size:1rem;font-weight:700;color:#00ff88;">0</div>
+                        <div style="font-size:0.55rem;color:var(--text-muted);">Total</div>
+                    </div>
+                </div>
+                <!-- 24h Histogram -->
+                <div style="font-size:0.62rem;color:var(--text-muted);margin-bottom:0.2rem;">24h Distribution</div>
+                <div id="am-hourly-chart" style="display:flex;align-items:flex-end;gap:1px;height:40px;"></div>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div>
+            <!-- Tab Bar -->
+            <div class="neural-card" style="padding:0;margin-bottom:0;">
+                <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <button class="am-tab active" data-tab="events">Events Stream</button>
+                    <button class="am-tab" data-tab="domain">Domain Data</button>
+                    <button class="am-tab" data-tab="probes">Probes</button>
+                    <button class="am-tab" data-tab="logs">Logs</button>
+                </div>
+
+                <!-- Events Tab -->
+                <div id="am-panel-events" class="am-panel">
+                    <div style="display:flex;gap:0.5rem;padding:0.6rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.04);align-items:center;">
+                        <input type="text" id="am-event-filter" placeholder="Filter events..." style="flex:1;padding:0.3rem 0.6rem;background:var(--bg-tertiary);color:var(--text-primary);border:1px solid rgba(0,217,255,0.2);border-radius:5px;font-size:0.75rem;outline:none;">
+                        <select id="am-risk-filter" style="padding:0.3rem 0.5rem;background:var(--bg-tertiary);color:var(--text-primary);border:1px solid rgba(0,217,255,0.2);border-radius:5px;font-size:0.72rem;cursor:pointer;">
+                            <option value="">All Risk</option>
+                            <option value="high">High (>70%)</option>
+                            <option value="medium">Med (>40%)</option>
+                            <option value="low">Low</option>
+                        </select>
+                        <button id="am-stream-toggle" style="padding:0.25rem 0.5rem;background:rgba(0,255,136,0.15);color:#00ff88;border:1px solid rgba(0,255,136,0.3);border-radius:5px;font-size:0.65rem;font-weight:700;cursor:pointer;">Pause</button>
+                    </div>
+                    <div id="am-event-stream" class="am-stream-container">
+                        <div style="text-align:center;padding:2rem;color:var(--text-muted);font-size:0.82rem;">Loading events...</div>
+                    </div>
+                </div>
+
+                <!-- Domain Data Tab -->
+                <div id="am-panel-domain" class="am-panel" style="display:none;">
+                    <div id="am-domain-content" style="padding:0.8rem;">
+                        <div style="text-align:center;padding:2rem;color:var(--text-muted);font-size:0.82rem;">Loading domain data...</div>
+                    </div>
+                </div>
+
+                <!-- Probes Tab -->
+                <div id="am-panel-probes" class="am-panel" style="display:none;">
+                    <div id="am-probes-content" style="padding:0.8rem;">
+                        <div style="text-align:center;padding:2rem;color:var(--text-muted);font-size:0.82rem;">Loading probe data...</div>
+                    </div>
+                </div>
+
+                <!-- Logs Tab -->
+                <div id="am-panel-logs" class="am-panel" style="display:none;">
+                    <div id="am-logs-content" class="am-stream-container" style="font-family:monospace;font-size:0.72rem;">
+                        <div style="text-align:center;padding:2rem;color:var(--text-muted);">Loading logs...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Agent selector tabs */
+.am-agent-tab {
+    padding: 0.3rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.am-agent-tab:hover { background: rgba(255,255,255,0.05); color: var(--text-secondary); }
+.am-agent-tab.active { border-color: var(--neural-primary); color: var(--text-primary); background: rgba(0,217,255,0.08); }
+/* Content tabs */
+.am-tab {
+    padding: 0.6rem 1rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+.am-tab:hover { color: var(--text-secondary); }
+.am-tab.active { color: var(--neural-primary); border-bottom-color: var(--neural-primary); }
+/* Stream container */
+.am-stream-container {
+    height: calc(100vh - 320px);
+    min-height: 300px;
+    overflow-y: auto;
+    padding: 0;
+}
+/* Event rows */
+.am-event-row {
+    display: grid;
+    grid-template-columns: 120px auto 1fr 100px 50px;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 0.72rem;
+    align-items: center;
+    transition: background 0.15s;
+}
+.am-event-row:hover { background: rgba(0,217,255,0.04); }
+.am-event-row.risk-high { border-left: 3px solid #ff3366; }
+.am-event-row.risk-medium { border-left: 3px solid #ffaa00; }
+.am-event-row.risk-low { border-left: 3px solid #00ff88; }
+.am-event-ts { color: #00aaff; font-family: monospace; font-size: 0.68rem; }
+.am-event-cat { font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.am-event-desc { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.am-event-mitre { display: flex; gap: 2px; flex-wrap: nowrap; overflow: hidden; }
+.am-event-risk { font-weight: 700; text-align: right; }
+/* Domain data table */
+.am-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+}
+.am-table th {
+    text-align: left;
+    padding: 0.5rem 0.6rem;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-weight: 600;
+}
+.am-table td {
+    padding: 0.4rem 0.6rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-family: monospace;
+    font-size: 0.72rem;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.am-table tr:hover td { background: rgba(0,217,255,0.03); }
+/* Log lines */
+.am-log-line {
+    padding: 0.15rem 0.8rem;
+    border-bottom: 1px solid rgba(255,255,255,0.02);
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.5;
+}
+/* Probe item */
+.am-probe-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0;
+    font-size: 0.7rem;
+}
+.am-probe-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce() }}">
+(function() {
+    var AGENTS = [
+        { id: 'proc',    name: 'Process Monitor',   color: '#4ECDC4' },
+        { id: 'dns',     name: 'DNS Detector',      color: '#AA96DA' },
+        { id: 'auth',    name: 'Auth Guard',         color: '#FF6B35' },
+        { id: 'fim',     name: 'File Integrity',     color: '#00ff88' },
+        { id: 'flow',    name: 'Flow Analyzer',      color: '#F38181' },
+        { id: 'persistence', name: 'Persistence Guard', color: '#FCBAD3' },
+        { id: 'peripheral',  name: 'Peripheral Watch',  color: '#FF6B9D' },
+        { id: 'kernel_audit', name: 'Kernel Audit',     color: '#FFD93D' },
+        { id: 'device_discovery', name: 'Device Discovery', color: '#6BCB77' },
+        { id: 'protocol_collectors', name: 'Protocol Collectors', color: '#00B4D8' },
+    ];
+
+    var ID_MAP = {
+        'proc':'proc_agent','dns':'dns_agent','auth':'auth_agent',
+        'fim':'fim_agent','flow':'flow_agent','persistence':'persistence_agent',
+        'peripheral':'peripheral_agent','kernel_audit':'kernel_audit_agent',
+        'device_discovery':'device_discovery_agent','protocol_collectors':'protocol_collectors_agent',
+    };
+
+    // Domain data columns per agent
+    var DOMAIN_COLS = {
+        proc: ['timestamp_dt','pid','exe','username','cpu_percent','memory_percent','is_suspicious'],
+        dns: ['timestamp_dt','domain','query_type','response_code','risk_score','dga_score','is_beaconing'],
+        fim: ['timestamp_dt','path','event_type','change_type','old_hash','new_hash','risk_score'],
+        flow: ['timestamp_dt','src_ip','dst_ip','dst_port','protocol','bytes_tx','bytes_rx','threat_score','is_suspicious'],
+        kernel_audit: ['timestamp_dt','syscall','event_type','pid','uid','exe','target_path','risk_score'],
+        peripheral: ['timestamp_dt','event_type','device_type','vendor_id','product_id','serial_number','is_authorized','risk_score'],
+        persistence: ['timestamp_dt','event_type','mechanism','path','command','change_type','risk_score'],
+    };
+
+    var agentId = new URLSearchParams(location.search).get('agent') || 'proc';
+    var catalogId = ID_MAP[agentId] || agentId;
+    var agentMeta = AGENTS.find(function(a) { return a.id === agentId; }) || AGENTS[0];
+    var streamBuffer = [];
+    var cpuHistory = [];
+    var streamPaused = false;
+    var currentTab = 'events';
+    var pollingTimer = null;
+    var overviewData = null;
+    var lastPollTime = 0;
+
+    function init() {
+        renderAgentTabs();
+        setupTabHandlers();
+        setupFilterHandlers();
+        setupToggleBtn();
+        updateHeader();
+        loadAll();
+        pollingTimer = setInterval(pollLiveData, 8000);
+        // SocketIO
+        window.addEventListener('ws:agents', function() {
+            var now = Date.now();
+            if (now - lastPollTime > 3000) pollLiveData();
+        });
+    }
+
+    function renderAgentTabs() {
+        var tabs = document.getElementById('am-agent-tabs');
+        tabs.innerHTML = AGENTS.map(function(a) {
+            var cls = a.id === agentId ? 'am-agent-tab active' : 'am-agent-tab';
+            return '<button class="' + cls + '" data-agent="' + a.id + '" style="border-color:' + (a.id === agentId ? a.color : 'transparent') + ';' + (a.id === agentId ? 'color:' + a.color : '') + ';">' + a.name + '</button>';
+        }).join('');
+
+        tabs.addEventListener('click', function(e) {
+            var btn = e.target.closest('.am-agent-tab');
+            if (!btn || btn.dataset.agent === agentId) return;
+            switchAgent(btn.dataset.agent);
+        });
+    }
+
+    function switchAgent(newId) {
+        agentId = newId;
+        catalogId = ID_MAP[agentId] || agentId;
+        agentMeta = AGENTS.find(function(a) { return a.id === agentId; }) || AGENTS[0];
+        streamBuffer = [];
+        cpuHistory = [];
+        history.pushState(null, '', '/dashboard/agent-monitor?agent=' + agentId);
+
+        // Update tab highlight
+        document.querySelectorAll('.am-agent-tab').forEach(function(t) {
+            var isActive = t.dataset.agent === agentId;
+            t.className = isActive ? 'am-agent-tab active' : 'am-agent-tab';
+            t.style.borderColor = isActive ? agentMeta.color : 'transparent';
+            t.style.color = isActive ? agentMeta.color : '';
+        });
+
+        updateHeader();
+        loadAll();
+    }
+
+    function updateHeader() {
+        document.getElementById('am-agent-dot').style.background = agentMeta.color;
+        document.getElementById('am-agent-name').textContent = agentMeta.name;
+    }
+
+    function setupTabHandlers() {
+        document.querySelectorAll('.am-tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                currentTab = this.dataset.tab;
+                document.querySelectorAll('.am-tab').forEach(function(t) { t.classList.remove('active'); });
+                this.classList.add('active');
+                document.querySelectorAll('.am-panel').forEach(function(p) { p.style.display = 'none'; });
+                document.getElementById('am-panel-' + currentTab).style.display = '';
+                if (currentTab === 'domain') loadDomainData();
+                if (currentTab === 'logs') renderLogs();
+            });
+        });
+    }
+
+    function setupFilterHandlers() {
+        document.getElementById('am-event-filter').addEventListener('input', renderEventStream);
+        document.getElementById('am-risk-filter').addEventListener('change', renderEventStream);
+        document.getElementById('am-stream-toggle').addEventListener('click', function() {
+            streamPaused = !streamPaused;
+            this.textContent = streamPaused ? 'Resume' : 'Pause';
+            this.style.background = streamPaused ? 'rgba(255,170,0,0.15)' : 'rgba(0,255,136,0.15)';
+            this.style.color = streamPaused ? '#ffaa00' : '#00ff88';
+            this.style.borderColor = streamPaused ? 'rgba(255,170,0,0.3)' : 'rgba(0,255,136,0.3)';
+        });
+    }
+
+    function setupToggleBtn() {
+        document.getElementById('am-toggle-btn').addEventListener('click', function() {
+            var btn = this;
+            if (btn.textContent === 'Stop') {
+                btn.textContent = 'Stopping...';
+                btn.disabled = true;
+                fetch('/dashboard/api/agents/' + catalogId + '/stop', { method: 'POST' })
+                    .then(function() { setTimeout(pollLiveData, 1500); })
+                    .finally(function() { btn.disabled = false; });
+            } else {
+                btn.textContent = 'Starting...';
+                btn.disabled = true;
+                fetch('/dashboard/api/agents/' + catalogId + '/start', { method: 'POST' })
+                    .then(function() { setTimeout(pollLiveData, 2000); })
+                    .finally(function() { btn.disabled = false; });
+            }
+        });
+    }
+
+    function loadAll() {
+        Promise.all([
+            fetch('/dashboard/api/agents/' + agentId + '/live-data?limit=100').then(function(r) { return r.json(); }),
+            fetch('/dashboard/api/agents/status').then(function(r) { return r.json(); }),
+            fetch('/dashboard/api/agents/deep-overview').then(function(r) { return r.json(); }),
+            fetch('/dashboard/api/agents/activity').then(function(r) { return r.json(); }),
+        ]).then(function(results) {
+            var liveData = results[0];
+            var statusData = results[1];
+            var deepData = results[2];
+            var actData = results[3];
+
+            lastPollTime = Date.now();
+
+            // Process status
+            var agentStatus = null;
+            if (statusData.status === 'success' && statusData.data && statusData.data.agents) {
+                agentStatus = statusData.data.agents.find(function(a) { return a.agent_id === catalogId; });
+            }
+            updateProcessPanel(liveData, agentStatus);
+
+            // Deep overview (probes)
+            if (deepData.status === 'success' && deepData.agents) {
+                overviewData = deepData.agents.find(function(a) { return a.id === agentId; });
+                updateProbePanel();
+            }
+
+            // Activity stats
+            if (actData.status === 'success' && actData.activity) {
+                var act = actData.activity[agentId] || {};
+                document.getElementById('am-evts-min').textContent = act.last_min || 0;
+                document.getElementById('am-evts-hour').textContent = act.last_hour || 0;
+            }
+
+            // Events
+            if (liveData.status === 'success') {
+                document.getElementById('am-evts-total').textContent = formatNum(liveData.event_count || 0);
+                mergeEvents(liveData.recent_events || []);
+                renderEventStream();
+                renderHourlyChart(liveData.hourly_stats || []);
+                renderLogs(liveData.log_tail || []);
+            }
+        }).catch(function(err) {
+            console.error('Agent monitor load failed:', err);
+        });
+    }
+
+    function pollLiveData() {
+        if (streamPaused) return;
+        lastPollTime = Date.now();
+
+        Promise.all([
+            fetch('/dashboard/api/agents/' + agentId + '/live-data?limit=25').then(function(r) { return r.json(); }),
+            fetch('/dashboard/api/agents/status').then(function(r) { return r.json(); }),
+            fetch('/dashboard/api/agents/activity').then(function(r) { return r.json(); }),
+        ]).then(function(results) {
+            var liveData = results[0];
+            var statusData = results[1];
+            var actData = results[2];
+
+            var agentStatus = null;
+            if (statusData.status === 'success' && statusData.data && statusData.data.agents) {
+                agentStatus = statusData.data.agents.find(function(a) { return a.agent_id === catalogId; });
+            }
+            updateProcessPanel(liveData, agentStatus);
+
+            if (actData.status === 'success' && actData.activity) {
+                var act = actData.activity[agentId] || {};
+                document.getElementById('am-evts-min').textContent = act.last_min || 0;
+                document.getElementById('am-evts-hour').textContent = act.last_hour || 0;
+            }
+
+            if (liveData.status === 'success') {
+                document.getElementById('am-evts-total').textContent = formatNum(liveData.event_count || 0);
+                var newEvts = deduplicateEvents(liveData.recent_events || []);
+                if (newEvts.length > 0) {
+                    mergeEvents(newEvts);
+                    if (currentTab === 'events') renderEventStream();
+                }
+                renderHourlyChart(liveData.hourly_stats || []);
+            }
+        }).catch(function(err) {
+            console.warn('Poll failed:', err);
+        });
+    }
+
+    function updateProcessPanel(liveData, agentStatus) {
+        var proc = (liveData && liveData.process) || {};
+        var isRunning = (agentStatus && agentStatus.status === 'running') || proc.status === 'running';
+
+        // Status badge
+        var badge = document.getElementById('am-status-badge');
+        if (isRunning) {
+            badge.textContent = 'ONLINE';
+            badge.style.background = 'rgba(0,255,136,0.15)';
+            badge.style.color = '#00ff88';
+        } else {
+            badge.textContent = 'OFFLINE';
+            badge.style.background = 'rgba(255,51,102,0.15)';
+            badge.style.color = '#ff3366';
+        }
+
+        // Toggle button
+        var toggleBtn = document.getElementById('am-toggle-btn');
+        toggleBtn.textContent = isRunning ? 'Stop' : 'Start';
+
+        // CPU/Memory
+        var cpuVal = proc.cpu_percent != null ? proc.cpu_percent.toFixed(1) + '%' : '--';
+        var memVal = proc.memory_mb != null ? proc.memory_mb.toFixed(1) + ' MB' : '--';
+        document.getElementById('am-cpu').textContent = cpuVal;
+        document.getElementById('am-mem').textContent = memVal;
+
+        // PID/Uptime
+        document.getElementById('am-pid').textContent = proc.pid || (agentStatus && agentStatus.pid) || '--';
+        var upSec = proc.uptime_seconds || (agentStatus && agentStatus.uptime_seconds) || 0;
+        var uptime;
+        if (upSec > 3600) { uptime = (upSec / 3600).toFixed(1) + 'h'; }
+        else if (upSec > 60) { uptime = Math.floor(upSec / 60) + 'm'; }
+        else if (upSec > 0) { uptime = upSec + 's'; }
+        else { uptime = '--'; }
+        document.getElementById('am-uptime').textContent = uptime;
+
+        // CPU sparkline
+        var cpuNum = proc.cpu_percent || 0;
+        cpuHistory.push(cpuNum);
+        if (cpuHistory.length > 12) cpuHistory.shift();
+        var spark = document.getElementById('am-cpu-spark');
+        var maxCpu = Math.max.apply(null, cpuHistory.concat([1]));
+        spark.innerHTML = cpuHistory.map(function(v) {
+            var h = Math.max(2, (v / maxCpu) * 28);
+            var clr = v > 80 ? '#ff3366' : v > 50 ? '#ffaa00' : '#4ECDC4';
+            return '<div style="flex:1;height:' + h + 'px;background:' + clr + ';border-radius:2px;opacity:0.8;"></div>';
+        }).join('');
+    }
+
+    function updateProbePanel() {
+        if (!overviewData) return;
+        var ps = overviewData.probe_summary;
+        var total = ps.total || 1;
+
+        // Bar
+        var bar = document.getElementById('am-probe-bar');
+        bar.innerHTML = [
+            { c: ps.real, clr: '#00ff88' },
+            { c: ps.degraded, clr: '#ffaa00' },
+            { c: ps.broken, clr: '#ff3366' },
+            { c: ps.disabled, clr: '#555' },
+        ].map(function(s) {
+            return s.c > 0 ? '<div style="width:' + ((s.c/total)*100) + '%;background:' + s.clr + ';"></div>' : '';
+        }).join('');
+
+        // Legend
+        document.getElementById('am-probe-legend').innerHTML =
+            '<span style="color:#00ff88;">' + ps.real + ' Real</span>' +
+            '<span style="color:#ffaa00;">' + ps.degraded + ' Deg</span>' +
+            '<span style="color:#ff3366;">' + ps.broken + ' Brk</span>';
+
+        // Probe list
+        var list = document.getElementById('am-probe-list');
+        if (overviewData.probes && overviewData.probes.length > 0) {
+            list.innerHTML = overviewData.probes.map(function(p) {
+                var dotColor = p.verdict === 'REAL' ? '#00ff88' : p.verdict === 'DEGRADED' ? '#ffaa00' : p.verdict === 'BROKEN' ? '#ff3366' : '#555';
+                var mitre = (p.mitre_techniques || []).slice(0, 2).map(function(t) {
+                    return '<span style="font-size:0.6rem;padding:0.1rem 0.3rem;background:rgba(255,107,157,0.12);color:#ff6b9d;border-radius:3px;">' + escapeHtml(t) + '</span>';
+                }).join(' ');
+                return '<div class="am-probe-item">' +
+                    '<span class="am-probe-dot" style="background:' + dotColor + ';"></span>' +
+                    '<span style="color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(p.name || p.probe_id) + '</span>' +
+                    mitre +
+                    '</div>';
+            }).join('');
+        } else {
+            list.innerHTML = '<div style="font-size:0.7rem;color:var(--text-muted);padding:0.5rem 0;">No probe data available</div>';
+        }
+    }
+
+    // ── Events Stream ──
+    function mergeEvents(events) {
+        var existingIds = {};
+        for (var i = 0; i < streamBuffer.length; i++) {
+            if (streamBuffer[i].id) existingIds[streamBuffer[i].id] = true;
+        }
+        var newOnes = [];
+        for (var j = 0; j < events.length; j++) {
+            if (!events[j].id || !existingIds[events[j].id]) {
+                newOnes.push(events[j]);
+            }
+        }
+        streamBuffer = newOnes.concat(streamBuffer).slice(0, 200);
+    }
+
+    function deduplicateEvents(events) {
+        var existingIds = {};
+        for (var i = 0; i < streamBuffer.length; i++) {
+            if (streamBuffer[i].id) existingIds[streamBuffer[i].id] = true;
+        }
+        return events.filter(function(e) { return !e.id || !existingIds[e.id]; });
+    }
+
+    function renderEventStream() {
+        var container = document.getElementById('am-event-stream');
+        var filterText = (document.getElementById('am-event-filter').value || '').toLowerCase();
+        var riskFilter = document.getElementById('am-risk-filter').value;
+
+        var filtered = streamBuffer.filter(function(e) {
+            if (filterText) {
+                var cat = (e.event_category || '').toLowerCase();
+                var desc = (e.description || '').toLowerCase();
+                if (cat.indexOf(filterText) === -1 && desc.indexOf(filterText) === -1) return false;
+            }
+            if (riskFilter) {
+                var rs = e.risk_score || 0;
+                if (riskFilter === 'high' && rs <= 0.7) return false;
+                if (riskFilter === 'medium' && (rs <= 0.4 || rs > 0.7)) return false;
+                if (riskFilter === 'low' && rs > 0.4) return false;
+            }
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);font-size:0.82rem;">No events' + (filterText || riskFilter ? ' matching filter' : ' collected yet') + '</div>';
+            return;
+        }
+
+        container.innerHTML = filtered.map(function(e) {
+            var rs = e.risk_score || 0;
+            var riskClass = rs > 0.7 ? 'risk-high' : rs > 0.4 ? 'risk-medium' : 'risk-low';
+            var riskColor = rs > 0.7 ? '#ff3366' : rs > 0.4 ? '#ffaa00' : '#00ff88';
+            var ts = e.timestamp_dt ? e.timestamp_dt.substring(11, 19) : '--';
+            var mitre = '';
+            if (Array.isArray(e.mitre_techniques) && e.mitre_techniques.length > 0) {
+                mitre = e.mitre_techniques.slice(0, 2).map(function(t) {
+                    return '<span style="font-size:0.6rem;padding:0.1rem 0.25rem;background:rgba(255,107,157,0.12);color:#ff6b9d;border-radius:3px;">' + escapeHtml(t) + '</span>';
+                }).join(' ');
+            }
+            return '<div class="am-event-row ' + riskClass + '">' +
+                '<span class="am-event-ts">' + ts + '</span>' +
+                '<span class="am-event-cat">' + escapeHtml(e.event_category || 'unknown') + '</span>' +
+                '<span class="am-event-desc">' + escapeHtml((e.description || '').substring(0, 120)) + '</span>' +
+                '<span class="am-event-mitre">' + mitre + '</span>' +
+                '<span class="am-event-risk" style="color:' + riskColor + ';">' + Math.round(rs * 100) + '%</span>' +
+                '</div>';
+        }).join('');
+    }
+
+    // ── Domain Data ──
+    function loadDomainData() {
+        var content = document.getElementById('am-domain-content');
+        content.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">Loading...</div>';
+
+        fetch('/dashboard/api/agents/' + agentId + '/domain-data?limit=100')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status !== 'success' || !data.data || data.data.length === 0) {
+                    content.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);font-size:0.82rem;">No ' + data.schema + ' data collected yet. Start the agent and wait for collection.</div>';
+                    return;
+                }
+
+                var cols = DOMAIN_COLS[agentId] || Object.keys(data.data[0]);
+                var headerRow = cols.map(function(c) {
+                    return '<th>' + escapeHtml(c.replace(/_/g, ' ')) + '</th>';
+                }).join('');
+                var bodyRows = data.data.map(function(row) {
+                    return '<tr>' + cols.map(function(c) {
+                        var val = row[c];
+                        if (val === null || val === undefined) val = '--';
+                        if (typeof val === 'number' && (c.indexOf('score') !== -1 || c === 'threat_score')) {
+                            val = (val * 100).toFixed(0) + '%';
+                        }
+                        if (typeof val === 'boolean') val = val ? 'Yes' : 'No';
+                        if (c === 'timestamp_dt' && typeof val === 'string') val = val.substring(0, 19);
+                        return '<td title="' + escapeHtml(String(val)) + '">' + escapeHtml(String(val)) + '</td>';
+                    }).join('') + '</tr>';
+                }).join('');
+
+                content.innerHTML = '<div style="overflow-x:auto;max-height:calc(100vh - 340px);overflow-y:auto;">' +
+                    '<table class="am-table"><thead><tr>' + headerRow + '</tr></thead>' +
+                    '<tbody>' + bodyRows + '</tbody></table></div>' +
+                    '<div style="font-size:0.65rem;color:var(--text-muted);padding:0.5rem 0;">Showing ' + data.count + ' rows from ' + escapeHtml(data.schema) + '</div>';
+            })
+            .catch(function(err) {
+                content.innerHTML = '<div style="text-align:center;padding:2rem;color:#ff3366;font-size:0.82rem;">Failed to load: ' + escapeHtml(err.message) + '</div>';
+            });
+    }
+
+    // ── Probes Tab ──
+    function renderProbesTab() {
+        var content = document.getElementById('am-probes-content');
+        if (!overviewData || !overviewData.probes) {
+            content.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No probe data. Run deep overview first.</div>';
+            return;
+        }
+        content.innerHTML = overviewData.probes.map(function(p) {
+            var dotColor = p.verdict === 'REAL' ? '#00ff88' : p.verdict === 'DEGRADED' ? '#ffaa00' : p.verdict === 'BROKEN' ? '#ff3366' : '#555';
+            var mitre = (p.mitre_techniques || []).map(function(t) {
+                return '<span style="font-size:0.62rem;padding:0.1rem 0.3rem;background:rgba(255,107,157,0.12);color:#ff6b9d;border-radius:3px;margin-right:2px;">' + escapeHtml(t) + '</span>';
+            }).join('');
+            return '<div style="padding:0.5rem 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;gap:0.5rem;">' +
+                '<span class="am-probe-dot" style="background:' + dotColor + ';"></span>' +
+                '<span style="font-weight:600;color:var(--text-primary);font-size:0.78rem;min-width:180px;">' + escapeHtml(p.name || p.probe_id) + '</span>' +
+                '<span style="font-size:0.68rem;padding:0.15rem 0.4rem;border-radius:4px;background:rgba(255,255,255,0.05);color:' + dotColor + ';font-weight:600;">' + (p.verdict || 'UNKNOWN') + '</span>' +
+                '<span style="flex:1;font-size:0.7rem;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(p.description || '') + '</span>' +
+                '<span>' + mitre + '</span>' +
+                '</div>';
+        }).join('');
+    }
+
+    // ── Logs ──
+    var lastLogTail = [];
+    function renderLogs(logTail) {
+        if (logTail) lastLogTail = logTail;
+        var container = document.getElementById('am-logs-content');
+        if (!lastLogTail || lastLogTail.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);font-size:0.82rem;">No log output available. Agent may not be running.</div>';
+            return;
+        }
+        container.innerHTML = lastLogTail.map(function(line) {
+            var color = 'var(--text-secondary)';
+            if (line.indexOf('ERROR') !== -1) color = '#ff3366';
+            else if (line.indexOf('WARNING') !== -1) color = '#ffaa00';
+            else if (line.indexOf('INFO') !== -1) color = '#00ff88';
+            return '<div class="am-log-line" style="color:' + color + ';">' + escapeHtml(line) + '</div>';
+        }).join('');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // ── Hourly Chart ──
+    function renderHourlyChart(stats) {
+        var chart = document.getElementById('am-hourly-chart');
+        if (!stats || stats.length === 0) {
+            chart.innerHTML = '<div style="font-size:0.65rem;color:var(--text-muted);width:100%;text-align:center;">No hourly data</div>';
+            return;
+        }
+        var maxCount = Math.max.apply(null, stats.map(function(s) { return s.count; }).concat([1]));
+        chart.innerHTML = stats.reverse().map(function(s) {
+            var h = Math.max(2, (s.count / maxCount) * 36);
+            var hr = s.hour ? s.hour.substring(11, 13) + ':00' : '';
+            return '<div style="flex:1;height:' + h + 'px;background:rgba(0,170,255,0.4);border-radius:2px 2px 0 0;" title="' + hr + ': ' + s.count + ' events"></div>';
+        }).join('');
+    }
+
+    // ── Utilities ──
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function formatNum(n) {
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+        if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+        return String(n);
+    }
+
+    // Render probes tab when switched to
+    var origTabHandler = null;
+    document.querySelectorAll('.am-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            if (this.dataset.tab === 'probes') renderProbesTab();
+        });
+    });
+
+    document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+{% endblock %}

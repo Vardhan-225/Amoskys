@@ -60,8 +60,8 @@
         <div class="pipeline-flow">
             <div class="pipeline-node">
                 <div class="pipeline-icon">&#x1F916;</div>
-                <div class="pipeline-label" style="color:#00aaff;">10 Agents</div>
-                <div class="pipeline-sub">85 Probes</div>
+                <div class="pipeline-label" style="color:#00aaff;" id="pipe-agents">-- Agents</div>
+                <div class="pipeline-sub" id="pipe-probes">-- Probes</div>
             </div>
             <div class="pipeline-arrow"><span class="pipeline-arrow-dot"></span></div>
             <div class="pipeline-node">
@@ -70,10 +70,10 @@
                 <div class="pipeline-sub">Signing</div>
             </div>
             <div class="pipeline-arrow"><span class="pipeline-arrow-dot"></span></div>
-            <div class="pipeline-node">
+            <div class="pipeline-node" id="pipe-eventbus-node" style="cursor:pointer;" title="EventBus — click for details">
                 <div class="pipeline-icon">&#x1F4E1;</div>
                 <div class="pipeline-label" style="color:#FF6B35;">EventBus</div>
-                <div class="pipeline-sub">gRPC/mTLS</div>
+                <div class="pipeline-sub" id="pipe-eb-status" style="font-weight:600;">Checking...</div>
             </div>
             <div class="pipeline-arrow"><span class="pipeline-arrow-dot"></span></div>
             <div class="pipeline-node">
@@ -100,10 +100,27 @@
                 <div class="pipeline-sub">Real-time UI</div>
             </div>
         </div>
-    </div>
 
-    <!-- Agent Lifecycle Control Panel -->
-    {% include 'dashboard/agent-control-panel.html' %}
+        <!-- EventBus Infrastructure Status (inline, collapsible) -->
+        <div id="eb-detail-panel" style="display:none;margin-top:0.5rem;padding:0.6rem 0.8rem;background:rgba(255,107,53,0.04);border:1px solid rgba(255,107,53,0.15);border-radius:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.4rem;">
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <span id="eb-dot" style="width:8px;height:8px;border-radius:50%;background:#555;"></span>
+                    <span style="font-weight:700;font-size:0.8rem;color:#FF6B35;">EventBus Server</span>
+                    <span id="eb-status-label" style="font-size:0.68rem;padding:0.1rem 0.4rem;border-radius:8px;font-weight:600;background:rgba(85,85,85,0.2);color:#555;">--</span>
+                </div>
+                <div style="display:flex;gap:0.4rem;align-items:center;">
+                    <span style="font-size:0.65rem;color:var(--text-muted);">Port 50051</span>
+                    <span style="font-size:0.65rem;color:var(--text-muted);" id="eb-pid-label"></span>
+                    <span style="font-size:0.65rem;color:var(--text-muted);" id="eb-uptime-label"></span>
+                    <button id="eb-toggle-btn" style="padding:0.2rem 0.5rem;font-size:0.65rem;font-weight:700;border-radius:4px;cursor:pointer;border:1px solid rgba(255,107,53,0.3);background:rgba(255,107,53,0.12);color:#FF6B35;">Start</button>
+                </div>
+            </div>
+            <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.3rem;">
+                Central gRPC message broker for all agent telemetry. Agents cannot publish events without EventBus running.
+            </div>
+        </div>
+    </div>
 
     <!-- Agent Cards Grid (Deep Overview) -->
     <div class="neural-card" style="margin-top: 1rem;">
@@ -125,6 +142,14 @@
             <div style="grid-column: 1/-1; color: var(--text-muted); text-align: center; padding: 2rem;">Loading agent fleet...</div>
         </div>
     </div>
+
+    <!-- Agent Lifecycle Control Panel (collapsible) -->
+    <details style="margin-top: 1rem;">
+        <summary style="cursor:pointer;padding:0.6rem 1rem;background:var(--bg-secondary);border:1px solid rgba(0,217,255,0.15);border-radius:8px;color:var(--text-secondary);font-size:0.82rem;font-weight:600;list-style:none;display:flex;align-items:center;gap:0.5rem;">
+            <span style="transition:transform 0.2s;">&#9654;</span> Advanced: Agent Lifecycle Controls
+        </summary>
+        {% include 'dashboard/agent-control-panel.html' %}
+    </details>
 
     <!-- Agent Live Data Modal -->
     <div id="agent-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; justify-content: center; align-items: flex-start; overflow-y: auto; padding: 1.5rem 0;">
@@ -439,6 +464,31 @@
 }
 .stat-pill .stat-val { font-size: 1.1rem; font-weight: 700; }
 .stat-pill .stat-lbl { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
+/* Quick-action buttons on agent cards */
+.agent-quick-btn {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 5px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.agent-quick-btn.monitor-btn {
+    background: rgba(0,255,136,0.15);
+    color: #00ff88;
+    border: 1px solid rgba(0,255,136,0.3);
+}
+.agent-quick-btn.monitor-btn:hover { background: rgba(0,255,136,0.25); }
+.agent-quick-btn.start-btn {
+    background: rgba(0,217,255,0.15);
+    color: var(--neural-primary);
+    border: 1px solid rgba(0,217,255,0.3);
+}
+.agent-quick-btn.start-btn:hover { background: rgba(0,217,255,0.25); }
 </style>
 
 {% endblock %}
@@ -447,6 +497,7 @@
 <script nonce="{{ csp_nonce() }}">
 let agentData = null;
 let agentStatusData = {};
+let agentActivityData = {};
 let currentFilter = '';
 
 document.getElementById('agent-filter').addEventListener('change', function() {
@@ -456,10 +507,11 @@ document.getElementById('agent-filter').addEventListener('change', function() {
 
 async function loadAgentData() {
     try {
-        // Fetch deep overview and agent status in parallel
-        const [overviewResp, statusResp] = await Promise.all([
+        // Fetch deep overview, agent status, and activity in parallel
+        const [overviewResp, statusResp, activityResp] = await Promise.all([
             fetch('/dashboard/api/agents/deep-overview'),
             fetch('/dashboard/api/agents/status'),
+            fetch('/dashboard/api/agents/activity'),
         ]);
         const data = await overviewResp.json();
         if (data.status !== 'success') return;
@@ -473,10 +525,19 @@ async function loadAgentData() {
                     agentStatusData[agent.agent_id] = agent;
                 }
             }
-        } catch (e) { /* ignore status fetch failure */ }
+        } catch (e) { console.warn('Agent status fetch failed:', e); }
 
-        // Count actually running agents
-        const runningCount = Object.values(agentStatusData).filter(a => a.status === 'running' || a.status === 'online').length;
+        // Parse activity data
+        try {
+            const actData = await activityResp.json();
+            if (actData.status === 'success') {
+                agentActivityData = actData.activity || {};
+            }
+        } catch (e) { console.warn('Agent activity fetch failed:', e); }
+
+        // Count running security agents (exclude EventBus)
+        const securityAgentStatuses = Object.entries(agentStatusData).filter(function(e) { return e[0] !== 'eventbus'; });
+        const runningCount = securityAgentStatuses.filter(function(e) { return e[1].status === 'running' || e[1].status === 'online'; }).length;
 
         // Summary metrics
         document.getElementById('s-agents').textContent = data.summary.total_agents;
@@ -486,6 +547,13 @@ async function loadAgentData() {
         document.getElementById('net-badge').textContent = runningCount + '/' + data.summary.total_agents + ' Running';
         document.getElementById('net-badge').className = runningCount >= data.summary.total_agents ? 'card-badge badge-success' : 'card-badge badge-warning';
 
+        // Pipeline stats (dynamic)
+        document.getElementById('pipe-agents').textContent = data.summary.total_agents + ' Agents';
+        document.getElementById('pipe-probes').textContent = data.summary.total_probes + ' Probes';
+
+        // Update EventBus status in pipeline
+        updateEventBusStatus();
+
         // Probe health bar
         renderProbeBar(data.agents);
 
@@ -494,6 +562,47 @@ async function loadAgentData() {
     } catch (err) {
         console.error('Agent data load failed:', err);
         document.getElementById('net-badge').textContent = 'Error';
+    }
+}
+
+function updateEventBusStatus() {
+    var eb = agentStatusData['eventbus'];
+    var isRunning = eb && eb.status === 'running';
+    var statusSub = document.getElementById('pipe-eb-status');
+    var node = document.getElementById('pipe-eventbus-node');
+    if (statusSub) {
+        statusSub.textContent = isRunning ? 'Online' : 'Offline';
+        statusSub.style.color = isRunning ? '#00ff88' : '#ff3366';
+    }
+    if (node) {
+        node.style.background = isRunning ? 'rgba(0,255,136,0.06)' : 'rgba(255,51,102,0.06)';
+        node.style.borderRadius = '8px';
+    }
+    // Detail panel
+    var dot = document.getElementById('eb-dot');
+    var label = document.getElementById('eb-status-label');
+    var pidLabel = document.getElementById('eb-pid-label');
+    var uptimeLabel = document.getElementById('eb-uptime-label');
+    var toggleBtn = document.getElementById('eb-toggle-btn');
+    if (dot) {
+        dot.style.background = isRunning ? '#00ff88' : '#ff3366';
+        dot.style.boxShadow = '0 0 6px ' + (isRunning ? '#00ff88' : '#ff3366');
+    }
+    if (label) {
+        label.textContent = isRunning ? 'ONLINE' : 'OFFLINE';
+        label.style.background = isRunning ? 'rgba(0,255,136,0.15)' : 'rgba(255,51,102,0.15)';
+        label.style.color = isRunning ? '#00ff88' : '#ff3366';
+    }
+    if (pidLabel && eb) {
+        pidLabel.textContent = eb.pid ? 'PID ' + eb.pid : '';
+    }
+    if (uptimeLabel && eb && eb.uptime_seconds > 0) {
+        var us = eb.uptime_seconds;
+        var ut = us > 3600 ? (us / 3600).toFixed(1) + 'h' : us > 60 ? Math.floor(us / 60) + 'm' : us + 's';
+        uptimeLabel.textContent = 'Up ' + ut;
+    }
+    if (toggleBtn) {
+        toggleBtn.textContent = isRunning ? 'Stop' : 'Start';
     }
 }
 
@@ -577,11 +686,21 @@ function createAgentCard(a) {
     const statusText = isRunning ? 'ONLINE' : 'OFFLINE';
     const pid = procStatus.pid || '--';
     const upSec = procStatus.uptime_seconds || 0;
-    const uptime = upSec > 3600 ? (upSec / 3600).toFixed(1) + 'h' : upSec > 60 ? Math.floor(upSec / 60) + 'm' : upSec > 0 ? upSec + 's' : '--';
-    const lastCheck = procStatus.timestamp ? formatTimestamp(procStatus.timestamp) : '--';
+    var uptime;
+    if (upSec > 3600) { uptime = (upSec / 3600).toFixed(1) + 'h'; }
+    else if (upSec > 60) { uptime = Math.floor(upSec / 60) + 'm'; }
+    else if (upSec > 0) { uptime = upSec + 's'; }
+    else { uptime = '--'; }
+
+    // Activity data
+    const activity = agentActivityData[a.id] || {};
+    const evtsMin = activity.last_min || 0;
+
+    // Visual style for stopped agents
+    const cardStyle = isRunning ? '' : 'opacity:0.55;filter:grayscale(30%);';
 
     return `
-    <div class="agent-fleet-card" style="border-left: none;" data-action="open-agent-modal" data-agent-id="${a.id}">
+    <div class="agent-fleet-card" style="border-left: none;${cardStyle}" data-action="open-agent-modal" data-agent-id="${a.id}">
         <div style="position:absolute;top:0;left:0;width:4px;height:100%;background:${a.color};"></div>
         <div class="agent-card-header">
             <div>
@@ -607,8 +726,8 @@ function createAgentCard(a) {
                 <div class="agent-stat-lbl">Probes</div>
             </div>
             <div class="agent-stat">
-                <div class="agent-stat-val" style="color:#ffaa00;">${formatNumber(a.event_count)}</div>
-                <div class="agent-stat-lbl">Events</div>
+                <div class="agent-stat-val" style="color:#ffaa00;">${evtsMin}</div>
+                <div class="agent-stat-lbl">Evts/min</div>
             </div>
             <div class="agent-stat">
                 <div class="agent-stat-val" style="color:#ff6b9d;">${a.mitre_count}</div>
@@ -632,7 +751,10 @@ function createAgentCard(a) {
                 ${topMitre.map(t => `<span class="mitre-chip">${t}</span>`).join('')}
                 ${a.mitre_techniques.length > 4 ? `<span class="mitre-chip" style="background:rgba(255,255,255,0.08);color:var(--text-muted);">+${a.mitre_techniques.length - 4}</span>` : ''}
             </div>
-            <span style="font-size:0.62rem;color:var(--text-muted);white-space:nowrap;">Click for live data</span>
+            ${isRunning
+                ? '<a href="/dashboard/agent-monitor?agent=' + a.id + '" class="agent-quick-btn monitor-btn" onclick="event.stopPropagation();">Monitor</a>'
+                : '<button class="agent-quick-btn start-btn" data-catalog-id="' + catalogId + '" onclick="event.stopPropagation();">Start</button>'
+            }
         </div>
     </div>`;
 }
@@ -1083,6 +1205,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Event delegation on agents grid (dynamic agent cards)
     document.getElementById('agents-grid').addEventListener('click', (e) => {
+        // Quick-start button
+        const startBtn = e.target.closest('.start-btn');
+        if (startBtn) {
+            const cid = startBtn.dataset.catalogId;
+            startBtn.textContent = 'Starting...';
+            startBtn.disabled = true;
+            fetch('/dashboard/api/agents/' + cid + '/start', { method: 'POST' })
+                .then(function() { setTimeout(loadAgentData, 1500); })
+                .catch(function() { startBtn.textContent = 'Failed'; });
+            return;
+        }
         const card = e.target.closest('[data-action="open-agent-modal"]');
         if (card) openAgentModal(card.dataset.agentId);
     });
@@ -1091,6 +1224,38 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('modal-body').addEventListener('click', (e) => {
         const btn = e.target.closest('[data-action="switch-tab"]');
         if (btn) switchModalTab(btn.dataset.tab);
+    });
+
+    // EventBus pipeline node — toggle detail panel
+    var ebNode = document.getElementById('pipe-eventbus-node');
+    var ebPanel = document.getElementById('eb-detail-panel');
+    if (ebNode && ebPanel) {
+        ebNode.addEventListener('click', function() {
+            ebPanel.style.display = ebPanel.style.display === 'none' ? 'block' : 'none';
+        });
+    }
+
+    // EventBus start/stop toggle
+    var ebToggle = document.getElementById('eb-toggle-btn');
+    if (ebToggle) {
+        ebToggle.addEventListener('click', function() {
+            var action = this.textContent === 'Stop' ? 'stop' : 'start';
+            this.textContent = action === 'start' ? 'Starting...' : 'Stopping...';
+            this.disabled = true;
+            fetch('/dashboard/api/agents/eventbus/' + action, { method: 'POST' })
+                .then(function() { setTimeout(loadAgentData, 2000); })
+                .catch(function() { })
+                .finally(function() { ebToggle.disabled = false; });
+        });
+    }
+
+    // SocketIO: refresh on push and slow polling
+    window.addEventListener('ws:agents', () => {
+        loadAgentData();
+        if (refreshTimer) {
+            clearInterval(refreshTimer);
+            refreshTimer = setInterval(loadAgentData, 60000);
+        }
     });
 });
 </script>

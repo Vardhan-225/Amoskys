@@ -389,9 +389,30 @@ class SOCDashboard {
         this.initCharts();
         this.initEventFilters();
         this.startRealTimeUpdates();
-        
+        this.initSocketIO();
+
         // FIXED: Add cleanup on page unload
         window.addEventListener('beforeunload', () => this.cleanup());
+    }
+
+    initSocketIO() {
+        // SocketIO push: use threat_score and metrics for instant SOC header updates
+        window.addEventListener('ws:threat_score', (e) => {
+            const ts = e.detail;
+            if (typeof ts.score === 'number') {
+                var el = document.getElementById('threat-score');
+                if (el) el.textContent = (ts.score * 100).toFixed(0);
+                var lvl = document.getElementById('threat-level');
+                if (lvl) lvl.textContent = (ts.level || 'LOW').toUpperCase();
+            }
+            // Slow polling from 3s to 10s when SocketIO is active
+            if (this.updateInterval < 10000) this.updateInterval = 10000;
+        });
+        window.addEventListener('ws:threats', () => {
+            // Trigger a full data refresh from the server
+            this.updateEventFeed();
+            this.updateEventAnalytics();
+        });
     }
     
     // FIXED: Add cleanup method to prevent memory leaks
@@ -464,7 +485,7 @@ class SOCDashboard {
                         ticks: { color: '#cccccc' },
                         grid: { color: 'rgba(255, 255, 255, 0.1)' },
                         beginAtZero: true,
-                        max: 100  // Prevent y-axis from expanding infinitely
+                        suggestedMax: 20  // Sensible default, auto-expands with data
                     }
                 },
                 plugins: {
@@ -489,72 +510,83 @@ class SOCDashboard {
     
     async startRealTimeUpdates() {
         try {
+            // Fetch threats ONCE per cycle and share across consumers
+            var threatsData = null;
+            try {
+                var tr = await fetch('/dashboard/api/live/threats');
+                var td = await tr.json();
+                if (td.status === 'success') threatsData = td;
+            } catch (e) { console.warn('SOC threats fetch failed:', e); }
+
             await Promise.all([
-                this.updateThreatMetrics(),
-                this.updateEventFeed(),
+                this.updateThreatMetrics(threatsData),
+                this.updateEventFeed(threatsData),
                 this.updateEventAnalytics(),
-                this.updateTimeline()
+                this.updateTimeline(threatsData)
             ]);
         } catch (error) {
             console.error('SOC dashboard update error:', error);
         }
-        
+
         // FIXED: Track timer so it can be cleared on cleanup
         this.updateTimer = setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
     }
     
-    async updateThreatMetrics() {
+    async updateThreatMetrics(threatsData) {
         try {
-            const [threatResponse, eventsResponse] = await Promise.all([
-                fetch('/dashboard/api/live/threat-score'),
-                fetch('/dashboard/api/live/threats')
-            ]);
-            
-            const threatData = await threatResponse.json();
-            const eventsData = await eventsResponse.json();
-            
+            // Threat score is a separate lightweight endpoint
+            var threatResponse = await fetch('/dashboard/api/live/threat-score');
+            var threatData = await threatResponse.json();
+
             if (threatData.status === 'success') {
                 document.getElementById('current-threat-level').textContent = threatData.threat_level;
-                document.getElementById('threat-score-display').textContent = `Score: ${threatData.threat_score}`;
-                
-                const card = document.getElementById('threat-level-card');
-                card.style.background = `linear-gradient(135deg, ${threatData.threat_color}22, ${threatData.threat_color}11)`;
+                document.getElementById('threat-score-display').textContent = 'Score: ' + threatData.threat_score;
+
+                var card = document.getElementById('threat-level-card');
+                card.style.background = 'linear-gradient(135deg, ' + threatData.threat_color + '22, ' + threatData.threat_color + '11)';
             }
-            
-            if (eventsData.status === 'success') {
-                const events = eventsData.threats;
-                const lastHour = new Date(Date.now() - 60 * 60 * 1000);
-                const recentEvents = events.filter(e => new Date(e.timestamp) > lastHour);
-                const criticalAlerts = events.filter(e => e.severity === 'critical').length;
-                
+
+            if (threatsData) {
+                var events = threatsData.threats;
+                var lastHour = new Date(Date.now() - 60 * 60 * 1000);
+                var recentEvents = events.filter(function(e) { return new Date(e.timestamp) > lastHour; });
+                var criticalAlerts = events.filter(function(e) { return e.severity === 'critical'; }).length;
+
                 document.getElementById('events-last-hour').textContent = recentEvents.length;
                 document.getElementById('critical-alerts').textContent = criticalAlerts;
-                document.getElementById('investigating-count').textContent = eventsData.investigating_count || 0;
-                
-                const trend = recentEvents.length > 10 ? 'High' : recentEvents.length > 5 ? 'Moderate' : 'Low';
-                document.getElementById('hourly-trend').textContent = `Trend: ${trend}`;
+                document.getElementById('investigating-count').textContent = threatsData.investigating_count || 0;
+
+                var trend;
+                if (recentEvents.length > 10) trend = 'High';
+                else if (recentEvents.length > 5) trend = 'Moderate';
+                else trend = 'Low';
+                document.getElementById('hourly-trend').textContent = 'Trend: ' + trend;
             }
         } catch (error) {
             console.error('Threat metrics update failed:', error);
         }
     }
     
-    async updateEventFeed() {
+    async updateEventFeed(threatsData) {
         try {
             document.getElementById('events-loading').style.display = 'inline-block';
-            
-            const response = await fetch('/dashboard/api/live/threats');
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                const severityFilter = document.getElementById('severity-filter').value;
-                let filteredEvents = data.threats;
-                
+
+            // If no shared data provided (e.g. filter change), fetch on demand
+            if (!threatsData) {
+                var r = await fetch('/dashboard/api/live/threats');
+                var d = await r.json();
+                if (d.status === 'success') threatsData = d;
+            }
+
+            if (threatsData) {
+                var severityFilter = document.getElementById('severity-filter').value;
+                var filteredEvents = threatsData.threats;
+
                 if (severityFilter) {
-                    filteredEvents = filteredEvents.filter(e => e.severity === severityFilter);
+                    filteredEvents = filteredEvents.filter(function(e) { return e.severity === severityFilter; });
                 }
-                
-                this.renderEventFeed(filteredEvents.slice(0, 20)); // Show top 20
+
+                this.renderEventFeed(filteredEvents.slice(0, 20));
             }
         } catch (error) {
             console.error('Event feed update failed:', error);
@@ -607,16 +639,13 @@ class SOCDashboard {
         const total = sorted.reduce((sum, [, c]) => sum + c, 0);
         container.innerHTML = sorted.map(([agent, count]) => {
             const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-            const now = new Date();
-            const lastSeen = new Date(now - Math.random() * 3600000); // approximation from live data
-            const lastTs = lastSeen.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
             return `
             <div class="agent-event-item">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem;">
                     <span style="color:#00aaff;font-weight:600;font-size:0.85rem;">${agent}</span>
                     <div style="text-align:right;">
                         <span style="color:var(--text-secondary);font-size:0.8rem;">${count} events</span>
-                        <div style="font-size:0.65rem;color:var(--text-muted);">Last: ${lastTs}</div>
+                        <div style="font-size:0.65rem;color:var(--text-muted);">${pct}% of total</div>
                     </div>
                 </div>
                 <div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;">
@@ -626,15 +655,11 @@ class SOCDashboard {
         }).join('');
     }
     
-    async updateTimeline() {
+    async updateTimeline(threatsData) {
         try {
-            const response = await fetch('/dashboard/api/live/threats');
-            const data = await response.json();
-            
-            if (data.status === 'success') {
-                const events = data.threats;
-                const hourlyData = this.aggregateEventsByHour(events, this.timeRange);
-                
+            if (threatsData) {
+                var hourlyData = this.aggregateEventsByHour(threatsData.threats, this.timeRange);
+
                 this.charts.timeline.data.labels = hourlyData.labels;
                 this.charts.timeline.data.datasets[0].data = hourlyData.counts;
                 this.charts.timeline.update();
@@ -844,14 +869,61 @@ class SOCDashboard {
                 </table>
             </div>
             ` : ''}
+
+            <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid rgba(0,217,255,0.2);display:flex;gap:0.75rem;flex-wrap:wrap;">
+                <button class="neural-button" style="padding:0.5rem 1rem;cursor:pointer;" data-soc-action="create-incident" data-event-id="${event.id}">
+                    Create Incident
+                </button>
+                <a href="/dashboard/timeline-replay?event_id=${event.id}" class="neural-button" style="padding:0.5rem 1rem;text-decoration:none;">
+                    View Timeline
+                </a>
+                <a href="/dashboard/evidence-chain?event_id=${event.id}" class="neural-button" style="padding:0.5rem 1rem;text-decoration:none;background:rgba(0,217,255,0.15);color:var(--neural-primary);border:1px solid var(--neural-primary);">
+                    Evidence Chain
+                </a>
+                <button class="neural-button" style="padding:0.5rem 1rem;cursor:pointer;background:linear-gradient(135deg,#ff3366,#cc0044);color:white;" data-soc-action="dismiss" data-event-id="${event.id}">
+                    Dismiss
+                </button>
+            </div>
             </div>
         `;
-        
+
         modal.style.display = 'flex';
+
+        // Wire triage action buttons
+        const modalEl = document.getElementById('investigation-content');
+        modalEl.querySelectorAll('[data-soc-action]').forEach(btn => {
+            btn.addEventListener('click', (e) => this.handleTriageAction(e.target.dataset.socAction, event));
+        });
     }
     
     closeInvestigation() {
         document.getElementById('investigation-modal').style.display = 'none';
+    }
+
+    async handleTriageAction(action, event) {
+        if (action === 'create-incident') {
+            try {
+                const r = await fetch('/dashboard/api/incidents', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: `${this.formatEventType(event.type)} from ${event.agent_id || 'unknown'}`,
+                        severity: event.severity || 'medium',
+                        description: event.description || '',
+                        source_event_ids: [event.id],
+                    })
+                });
+                const data = await r.json();
+                if (data.id) {
+                    this.closeInvestigation();
+                    window.location.href = '/dashboard/incidents';
+                }
+            } catch (e) {
+                console.error('Failed to create incident:', e);
+            }
+        } else if (action === 'dismiss') {
+            this.closeInvestigation();
+        }
     }
 
     async exportEvents(format) {

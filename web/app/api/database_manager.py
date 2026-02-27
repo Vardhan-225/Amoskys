@@ -25,9 +25,12 @@ database_manager_bp = Blueprint(
     "database_manager", __name__, url_prefix="/database-manager"
 )
 
-# Database paths (relative to web/ directory)
-DB_PATH = "../data/telemetry.db"
-WAL_PATH = "../data/wal/flowagent.db"
+# Resolve paths relative to the project root (3 levels up from this file)
+_PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+DB_PATH = os.path.join(_PROJECT_ROOT, "data", "telemetry.db")
+WAL_PATH = os.path.join(_PROJECT_ROOT, "data", "wal", "flowagent.db")
 
 # Known core tables (used for quick stats fallback)
 CORE_TABLES = [

@@ -386,8 +386,10 @@ class AgentControlPanel {
     updateSummary(data) {
         var badge = document.getElementById('acp-summary');
         if (!badge) return;
-        var running = data.running || 0;
-        var total = data.total || 0;
+        // Exclude EventBus from counts — it's infrastructure, not a security agent
+        var secAgents = this.agents.filter(function(a) { return a.agent_id !== 'eventbus'; });
+        var running = secAgents.filter(function(a) { return a.status === 'running'; }).length;
+        var total = secAgents.length;
         var stopped = total - running;
         if (running === total && total > 0) {
             badge.textContent = running + '/' + total + ' Online';
@@ -438,12 +440,16 @@ class AgentControlPanel {
     render() {
         var grid = document.getElementById('agent-controls-grid');
         if (!grid) return;
-        if (this.agents.length === 0) {
+        // Separate EventBus from security agents
+        var securityAgents = this.agents.filter(function(a) { return a.agent_id !== 'eventbus'; });
+        this.eventbusAgent = this.agents.find(function(a) { return a.agent_id === 'eventbus'; });
+
+        if (securityAgents.length === 0) {
             grid.innerHTML = '<div class="acp-loading"><div>No agents discovered on this platform.</div></div>';
             return;
         }
         var self = this;
-        grid.innerHTML = this.agents.map(function(agent) { return self.createCard(agent); }).join('');
+        grid.innerHTML = securityAgents.map(function(agent) { return self.createCard(agent); }).join('');
         this.attachCardListeners();
         this.startMetricsUpdate();
     }
@@ -615,7 +621,7 @@ class AgentControlPanel {
     async batchStart() {
         var btn = document.getElementById('acp-start-all');
         if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; }
-        var stopped = this.agents.filter(function(a) { return a.status !== 'running'; });
+        var stopped = this.agents.filter(function(a) { return a.status !== 'running' && a.agent_id !== 'eventbus'; });
         for (var i = 0; i < stopped.length; i++) {
             await this.startAgent(stopped[i].agent_id);
         }
@@ -626,7 +632,7 @@ class AgentControlPanel {
     async batchStop() {
         var btn = document.getElementById('acp-stop-all');
         if (btn) { btn.disabled = true; btn.textContent = 'Stopping...'; }
-        var running = this.agents.filter(function(a) { return a.status === 'running'; });
+        var running = this.agents.filter(function(a) { return a.status === 'running' && a.agent_id !== 'eventbus'; });
         for (var i = 0; i < running.length; i++) {
             await this.stopAgent(running[i].agent_id);
         }

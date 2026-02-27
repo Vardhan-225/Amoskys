@@ -209,6 +209,7 @@
             transition: opacity 0.3s ease;
         }
 
+        .sidebar-overlay.active,
         .sidebar-overlay.show {
             display: block;
             opacity: 1;
@@ -401,7 +402,7 @@
 
         .card-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 1rem;
             padding-bottom: 0.5rem;
@@ -1028,6 +1029,10 @@
                 </a>
 
                 <div class="sidebar-section-label">Monitoring</div>
+                <a href="/dashboard/agent-monitor" class="sidebar-link">
+                    <span class="sidebar-link-icon">&#128225;</span>
+                    <span>Agent Monitor</span>
+                </a>
                 <a href="/dashboard/probe-explorer" class="sidebar-link">
                     <span class="sidebar-link-icon">🔬</span>
                     <span>Probe Explorer</span>
@@ -1176,6 +1181,7 @@
                     '/dashboard/evidence-chain': 'Evidence Chain', '/dashboard/query-builder': 'Query Builder',
                     '/dashboard/threat-feed': 'Live Threat Feed', '/dashboard/timeline-replay': 'Timeline Replay',
                     '/dashboard/reliability': 'Agent Reliability', '/dashboard/proof-spine': 'Proof Spine',
+                    '/dashboard/agent-monitor': 'Agent Monitor',
                 };
                 const path = window.location.pathname.replace(/\/$/, '') || '/dashboard';
                 const pageName = PAGE_NAMES[path] || path.split('/').pop().replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -1184,8 +1190,8 @@
             
             updateActiveNav() {
                 const currentPath = window.location.pathname;
-                const navLinks = document.querySelectorAll('.nav-link');
-                
+                const navLinks = document.querySelectorAll('.sidebar-link');
+
                 navLinks.forEach(link => {
                     if (link.getAttribute('href') === currentPath) {
                         link.classList.add('active');
@@ -1339,24 +1345,31 @@
                 const path = window.location.pathname;
                 if (path.includes('/cortex')) return 'cortex';
                 if (path.includes('/soc')) return 'soc';
-                if (path.includes('/agents')) return 'agents';
+                if (path.includes('/agents') || path.includes('/agent-monitor')) return 'agents';
                 if (path.includes('/system')) return 'system';
                 if (path.includes('/neural')) return 'cortex';
                 return 'cortex';
             }
             
             handleDataUpdate(data) {
-                // Dispatch custom events that individual dashboards can listen to
+                // Dispatch combined event for backward compatibility
                 window.dispatchEvent(new CustomEvent('dashboardUpdate', {
                     detail: data
                 }));
-                
+                // Dispatch granular events per data category so pages can subscribe
+                var categories = ['threats', 'agents', 'metrics', 'threat_score', 'events', 'neural'];
+                for (var i = 0; i < categories.length; i++) {
+                    var key = categories[i];
+                    if (data[key]) {
+                        window.dispatchEvent(new CustomEvent('ws:' + key, { detail: data[key] }));
+                    }
+                }
                 // Update last update time
                 if (data.timestamp) {
-                    const updateTime = new Date(data.timestamp * 1000);
-                    const elements = document.querySelectorAll('.last-update');
-                    elements.forEach(el => {
-                        el.textContent = `Last updated: ${updateTime.toLocaleTimeString()}`;
+                    var updateTime = new Date(data.timestamp * 1000);
+                    var elements = document.querySelectorAll('.last-update');
+                    elements.forEach(function(el) {
+                        el.textContent = 'Last updated: ' + updateTime.toLocaleTimeString();
                     });
                 }
             }
@@ -1539,7 +1552,8 @@
                     { type: 'navigation', icon: '👁️', title: 'Perspective Selector', description: 'Configure agent perspectives', url: '/dashboard/perspective-selector', keywords: ['perspective', 'view', 'agent'] },
                     { type: 'navigation', icon: '⚖', title: 'Agent Reliability', description: 'AMRDR drift detection and trust weights', url: '/dashboard/reliability', keywords: ['reliability', 'amrdr', 'drift', 'trust', 'weight', 'bayesian'] },
                     { type: 'navigation', icon: '🔐', title: 'Proof Spine', description: 'Cryptographic chain status and verification', url: '/dashboard/proof-spine', keywords: ['proof', 'spine', 'chain', 'merkle', 'checkpoint', 'verify', 'tamper'] },
-                    
+                    { type: 'navigation', icon: '📡', title: 'Agent Monitor', description: 'Deep single-agent telemetry viewer', url: '/dashboard/agent-monitor', keywords: ['agent', 'monitor', 'telemetry', 'stream', 'live', 'events'] },
+
                     // Actions
                     { type: 'action', icon: '🔄', title: 'Refresh Dashboard', description: 'Reload current dashboard data', action: () => location.reload(), keywords: ['refresh', 'reload'] },
                     { type: 'action', icon: '🚪', title: 'Logout', description: 'Sign out of AMOSKYS', action: () => logout(), keywords: ['logout', 'signout', 'exit'] },

@@ -236,8 +236,24 @@ class EvidenceChainViewer {
         if (eventId) {
             await this.loadFromAPI(eventId);
         } else {
-            this.loadDemo();
+            // Try to load the highest-risk real event instead of demo
+            await this.loadRecentOrDemo();
         }
+    }
+
+    async loadRecentOrDemo() {
+        try {
+            var r = await fetch('/dashboard/api/live/threats?hours=8760');
+            var d = await r.json();
+            if (d.status === 'success' && d.threats && d.threats.length > 0) {
+                var best = d.threats.reduce(function(a, b) { return (b.risk_score || 0) > (a.risk_score || 0) ? b : a; });
+                if (best.id) {
+                    await this.loadFromAPI(best.id);
+                    return;
+                }
+            }
+        } catch (e) { /* fall through to demo */ }
+        this.loadDemo();
     }
 
     async loadFromAPI(eventId) {

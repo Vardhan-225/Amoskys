@@ -19,10 +19,21 @@ from flask import Blueprint, jsonify, request, send_file
 
 proofs_bp = Blueprint("proofs", __name__, url_prefix="/proofs")
 
+# Resolve paths relative to the project root (3 levels up from this file)
+_PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+
 # Configuration — paths can be overridden via environment
-WAL_PATH = os.getenv("IS_WAL_PATH", "data/wal/flowagent.db")
-MANIFEST_PATH = os.getenv("CHECKPOINT_MANIFEST_PATH", "data/checkpoints.jsonl")
-AGENT_KEYS_PATH = os.getenv("AGENT_KEY_REGISTRY_PATH", "agent_key_registry.json")
+WAL_PATH = os.getenv(
+    "IS_WAL_PATH", os.path.join(_PROJECT_ROOT, "data", "wal", "flowagent.db")
+)
+MANIFEST_PATH = os.getenv(
+    "CHECKPOINT_MANIFEST_PATH", os.path.join(_PROJECT_ROOT, "data", "checkpoints.jsonl")
+)
+AGENT_KEYS_PATH = os.getenv(
+    "AGENT_KEY_REGISTRY_PATH", os.path.join(_PROJECT_ROOT, "agent_key_registry.json")
+)
 CHECKPOINT_PUBKEY_PATH = os.getenv("CHECKPOINT_PUBKEY_PATH", None)
 SEGMENT_SIZE = int(os.getenv("PROOF_SEGMENT_SIZE", "1000"))
 

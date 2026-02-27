@@ -50,9 +50,16 @@
         </div>
 
         <div class="hero-stats">
-            <div class="hero-stat">
+            <div class="hero-stat" style="position:relative;">
                 <span class="hero-stat-val" id="cb-events">0</span>
-                <span class="hero-stat-lbl">Events (24h)</span>
+                <span class="hero-stat-lbl">Events
+                    <select id="time-range-select" class="cc-time-select" title="Time range">
+                        <option value="1">(1h)</option>
+                        <option value="6">(6h)</option>
+                        <option value="24" selected>(24h)</option>
+                        <option value="168">(7d)</option>
+                    </select>
+                </span>
             </div>
             <div class="hero-stat-sep"></div>
             <div class="hero-stat">
@@ -542,6 +549,17 @@
     border: 1px solid rgba(255,255,255,0.1); margin-right: 2px;
 }
 
+/* ── Time range select ── */
+.cc-time-select {
+    background: transparent; color: var(--text-muted); border: none; outline: none;
+    font-size: inherit; font-family: inherit; font-weight: inherit; letter-spacing: inherit;
+    cursor: pointer; padding: 0; appearance: none; -webkit-appearance: none;
+    text-transform: uppercase;
+}
+.cc-time-select option {
+    background: var(--bg-secondary); color: var(--text-primary);
+}
+
 /* ── Empty state ── */
 .cc-empty { text-align: center; padding: 2rem; color: var(--text-muted); }
 .cc-empty-icon { font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5; }
@@ -579,6 +597,7 @@ class CortexCommandCenter {
         this.agentCache = [];
         this.seenCritical = new Set();
         this.clusterCache = null;
+        this.hoursRange = 24;
         this.init();
     }
 
@@ -587,6 +606,44 @@ class CortexCommandCenter {
         this.timer = setInterval(() => this.refreshAll(), this.REFRESH);
         window.addEventListener('beforeunload', () => { if (this.timer) clearInterval(this.timer); });
         this.initKeyboard();
+        this.initSocketIO();
+    }
+
+    initSocketIO() {
+        // Listen for granular SocketIO push events from base.html RealTimeConnection
+        window.addEventListener('ws:metrics', (e) => {
+            const m = e.detail;
+            this.setGauge('cpu', Math.round(m.cpu_usage || 0), '#00ff88');
+            this.setGauge('mem', Math.round(m.memory_usage || 0), '#0088ff');
+            this.setGauge('disk', Math.round(m.disk_usage || 0), '#ffaa00');
+            document.getElementById('cpu-val').textContent = Math.round(m.cpu_usage || 0) + '%';
+            document.getElementById('mem-val').textContent = Math.round(m.memory_usage || 0) + '%';
+            document.getElementById('disk-val').textContent = Math.round(m.disk_usage || 0) + '%';
+            document.getElementById('vitals-ts').textContent = new Date().toLocaleTimeString();
+            this.slowPolling();
+        });
+        window.addEventListener('ws:threat_score', (e) => {
+            const ts = e.detail;
+            if (typeof ts.score === 'number') {
+                this.setPosture(Math.round((1 - ts.score) * 100));
+                const level = (ts.level || 'BENIGN').toUpperCase();
+                const badge = document.getElementById('threat-badge');
+                badge.textContent = level === 'BENIGN' ? 'CLEAR' : level;
+                badge.className = 'threat-badge' + this.threatClass(level);
+            }
+        });
+        window.addEventListener('ws:agents', (e) => {
+            const a = e.detail;
+            document.getElementById('cb-agents').innerHTML = (a.online_agents || 0) + '/' + (a.agent_count || 0) + this.trendArrow('agents', a.online_agents || 0);
+        });
+    }
+
+    slowPolling() {
+        if (this.REFRESH < 15000) {
+            this.REFRESH = 15000;
+            clearInterval(this.timer);
+            this.timer = setInterval(() => this.refreshAll(), this.REFRESH);
+        }
     }
 
     initKeyboard() {
@@ -683,28 +740,39 @@ class CortexCommandCenter {
     /* ── 2. Compact Threat Feed (5 items + triage) ── */
     async fetchThreats() {
         try {
-            const r = await fetch('/dashboard/api/live/threats');
+            const r = await fetch('/dashboard/api/live/threats?hours=' + this.hoursRange);
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const d = await r.json();
             if (d.status !== 'success') throw new Error('API error');
 
             const threatCount = d.count || 0;
             document.getElementById('cb-threats').innerHTML = threatCount + this.trendArrow('threats', threatCount);
+            // Update event count from the time-range-filtered response
+            document.getElementById('cb-events').innerHTML = this.fmtNum(threatCount) + this.trendArrow('events', threatCount);
             this.updateFreshness(d.data_stale, d.last_event_time);
             const container = document.getElementById('threat-feed');
             this.threatCache = d.threats || [];
 
-            // Compute MTTD from timestamps
-            if (this.threatCache.length > 0) {
-                const now = Date.now();
-                let totalMs = 0; let cnt = 0;
-                for (const t of this.threatCache.slice(0, 20)) {
-                    if (t.timestamp) { totalMs += now - new Date(t.timestamp).getTime(); cnt++; }
+            // Compute MTTD as median inter-arrival time between detections
+            if (this.threatCache.length >= 2) {
+                const times = this.threatCache
+                    .map(t => t.timestamp ? new Date(t.timestamp).getTime() : 0)
+                    .filter(t => t > 0)
+                    .sort((a, b) => b - a);
+                if (times.length >= 2) {
+                    const gaps = [];
+                    for (let i = 0; i < times.length - 1; i++) gaps.push(times[i] - times[i + 1]);
+                    gaps.sort((a, b) => a - b);
+                    const median = gaps[Math.floor(gaps.length / 2)];
+                    const medH = median / 3600000;
+                    let mttdLabel;
+                    if (medH < 1/60) mttdLabel = '<1m';
+                    else if (medH < 1) mttdLabel = Math.round(medH * 60) + 'm';
+                    else mttdLabel = medH.toFixed(1) + 'h';
+                    document.getElementById('cb-mttd').textContent = mttdLabel;
                 }
-                if (cnt > 0) {
-                    const avgH = totalMs / cnt / 3600000;
-                    document.getElementById('cb-mttd').textContent = avgH < 1 ? Math.round(avgH * 60) + 'm' : avgH.toFixed(1) + 'h';
-                }
+            } else if (this.threatCache.length === 1) {
+                document.getElementById('cb-mttd').textContent = 'N/A';
             }
 
             if (this.threatCache.length === 0) {
@@ -757,6 +825,17 @@ class CortexCommandCenter {
         if (!t) return;
 
         if (action === 'legit') {
+            try {
+                await fetch('/api/v1/reliability/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        agent_id: t.agent_id || 'unknown',
+                        event_id: t.id,
+                        action: 'confirm_benign'
+                    })
+                });
+            } catch (e) { console.warn('Reliability feedback failed:', e); }
             this.toast('Marked as legitimate', 'success');
             return;
         }
@@ -798,9 +877,15 @@ class CortexCommandCenter {
         const text = document.getElementById('freshness-text');
         if (!el) return;
         el.style.display = 'flex';
+        el.style.borderColor = ''; el.style.background = '';
         if (!lastEventTime) { dot.className = 'freshness-dot old'; text.textContent = 'No data'; return; }
         const ago = (Date.now() - new Date(lastEventTime).getTime()) / 1000;
-        if (ago < 3600) { dot.className = 'freshness-dot fresh'; text.textContent = 'Live \u00b7 ' + Math.floor(ago / 60) + 'm ago'; }
+        if (dataStale) {
+            // Data came from fallback (outside requested time range)
+            dot.className = 'freshness-dot stale';
+            text.textContent = 'Historical \u00b7 ' + this.relTime(lastEventTime);
+            el.style.borderColor = 'rgba(255,170,0,0.3)'; el.style.background = 'rgba(255,170,0,0.05)';
+        } else if (ago < 3600) { dot.className = 'freshness-dot fresh'; text.textContent = 'Live \u00b7 ' + Math.floor(ago / 60) + 'm ago'; }
         else if (ago < 86400) { dot.className = 'freshness-dot stale'; text.textContent = Math.floor(ago / 3600) + 'h ago'; }
         else { dot.className = 'freshness-dot old'; text.textContent = Math.floor(ago / 86400) + 'd ago'; }
         if (dataStale) { el.style.borderColor = 'rgba(255,170,0,0.3)'; el.style.background = 'rgba(255,170,0,0.05)'; }
@@ -872,7 +957,7 @@ class CortexCommandCenter {
     /* ── 4. Event Clustering (Activity + Severity + Heatmap + Top IPs) ── */
     async fetchClustering() {
         try {
-            const r = await fetch('/dashboard/api/live/event-clustering');
+            const r = await fetch('/dashboard/api/live/event-clustering?hours=' + this.hoursRange);
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const d = await r.json();
             if (d.status !== 'success') throw new Error('API error');
@@ -1098,7 +1183,12 @@ class CortexCommandCenter {
                 html += '</div>';
             }
             container.innerHTML = html;
-        } catch (e) { /* silent */ }
+        } catch (e) {
+            var container = document.getElementById('probe-section');
+            if (container && container.querySelector('.cc-loading')) {
+                container.innerHTML = '<div class="cc-empty" style="padding:0.75rem;"><div class="cc-empty-msg" style="font-size:0.78rem;">Probe audit unavailable</div></div>';
+            }
+        }
     }
 
     /* ── Exports ── */
@@ -1145,6 +1235,12 @@ class CortexCommandCenter {
 
 document.addEventListener('DOMContentLoaded', () => {
     window.cortex = new CortexCommandCenter();
+
+    // Time range selector
+    document.getElementById('time-range-select').addEventListener('change', function() {
+        cortex.hoursRange = parseInt(this.value, 10);
+        cortex.refreshAll();
+    });
 
     // Export agents button
     document.getElementById('cortex-export-agents-btn').addEventListener('click', () => cortex.exportAgents());

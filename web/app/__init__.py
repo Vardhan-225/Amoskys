@@ -9,7 +9,7 @@ import logging
 import os
 import sys
 
-from flask import Flask, render_template, request
+from flask import Flask, jsonify, render_template, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 
@@ -29,11 +29,36 @@ def create_app():
         if is_dev:
             import secrets as _secrets
 
-            secret_key = _secrets.token_hex(32)
-            logging.warning(
-                "SECRET_KEY not set — generated ephemeral key for dev/test. "
-                "Sessions will not persist across restarts."
+            # Persist dev key so sessions survive restarts
+            _dev_key_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "data",
+                ".dev_secret_key",
             )
+            try:
+                os.makedirs(os.path.dirname(_dev_key_path), exist_ok=True)
+                if os.path.exists(_dev_key_path):
+                    with open(_dev_key_path) as f:
+                        secret_key = f.read().strip()
+                    if len(secret_key) >= 32:
+                        logging.info(
+                            "Loaded persistent dev SECRET_KEY from %s", _dev_key_path
+                        )
+                    else:
+                        secret_key = None  # regenerate if corrupt
+                if not secret_key:
+                    secret_key = _secrets.token_hex(32)
+                    with open(_dev_key_path, "w") as f:
+                        f.write(secret_key)
+                    logging.info(
+                        "Generated persistent dev SECRET_KEY → %s", _dev_key_path
+                    )
+            except OSError:
+                secret_key = _secrets.token_hex(32)
+                logging.warning(
+                    "Could not persist dev SECRET_KEY — sessions will not "
+                    "survive restarts."
+                )
         else:
             raise ValueError(
                 "SECRET_KEY environment variable is required. "
@@ -134,10 +159,8 @@ def create_app():
 
     app.register_blueprint(admin_bp)
 
-    # Register User Auth API blueprint (Phase 3 - Web Auth)
-    from .api.user_auth import user_auth_bp
-
-    app.register_blueprint(user_auth_bp, url_prefix="/api")
+    # NOTE: user_auth_bp is already registered as a sub-blueprint of api_bp
+    # (see web/app/api/__init__.py) — no duplicate registration needed here.
 
     # Register Auth API blueprint (Phase 3)
     from amoskys.api.auth import auth_bp
@@ -189,19 +212,23 @@ def create_app():
     # Keep HTML error handlers for non-API requests
     @app.errorhandler(404)
     def not_found_error(error):
-        # Return JSON for API requests, HTML otherwise
         if request.path.startswith("/api/"):
-            return  # Let unified handler deal with it
+            return jsonify({"error": "Not found", "path": request.path}), 404
         return render_template("404.html"), 404
 
     @app.errorhandler(500)
     def internal_error(error):
         if request.path.startswith("/api/"):
-            return  # Let unified handler deal with it
-        # Generate error ID for tracking
+            return jsonify({"error": "Internal server error"}), 500
         import uuid
 
         error_id = str(uuid.uuid4())[:8].upper()
         return render_template("500.html", error_id=error_id), 500
+
+    # Top-level health alias for external monitoring (no /api prefix required)
+    @app.route("/v1/health/ping", methods=["GET"])
+    @app.route("/health", methods=["GET"])
+    def health_ping_alias():
+        return jsonify({"status": "ok"})
 
     return app, socketio

@@ -330,6 +330,7 @@ class ThreatFeedController {
         this.timer = setInterval(() => this.refresh(), this.REFRESH);
         window.addEventListener('beforeunload', () => { if (this.timer) clearInterval(this.timer); });
         this.initKeyboard();
+        this.initSocketIO();
     }
 
     initKeyboard() {
@@ -339,6 +340,19 @@ class ThreatFeedController {
             switch (e.key.toLowerCase()) {
                 case 'r': e.preventDefault(); this.refresh(); this.toast('Refreshing...', 'info'); break;
                 case 'escape': document.getElementById('filter-search').value = ''; this.applyFilters(); break;
+            }
+        });
+    }
+
+    initSocketIO() {
+        // When SocketIO pushes new threat data, trigger a full refresh
+        // (which runs through filters/pagination properly) and slow polling
+        window.addEventListener('ws:threats', () => {
+            this.refresh();
+            if (this.REFRESH < 15000) {
+                this.REFRESH = 15000;
+                clearInterval(this.timer);
+                this.timer = setInterval(() => this.refresh(), this.REFRESH);
             }
         });
     }

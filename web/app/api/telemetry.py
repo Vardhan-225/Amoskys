@@ -20,11 +20,11 @@ from amoskys.proto import universal_telemetry_pb2
 
 telemetry_bp = Blueprint("telemetry", __name__, url_prefix="/telemetry")
 
-# WAL database path - from /web/app/api/ to /data/wal/flowagent.db
-# Go up from api/ to app/, then app/ to web/, then web/ to project root, then into data/wal/
-WAL_DB_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "..", "data", "wal", "flowagent.db"
+# Resolve WAL path relative to project root (3 levels up from this file)
+_PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
+WAL_DB_PATH = os.path.join(_PROJECT_ROOT, "data", "wal", "flowagent.db")
 
 
 def get_wal_connection():

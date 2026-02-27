@@ -249,8 +249,25 @@ class TimelineReplay {
         if (eventId) {
             await this.loadFromAPI(eventId);
         } else {
-            this.loadDemoScenario();
+            // Try to load the highest-risk recent event instead of demo
+            await this.loadRecentOrDemo();
         }
+    }
+
+    async loadRecentOrDemo() {
+        try {
+            const r = await fetch('/dashboard/api/live/threats?hours=8760');
+            const d = await r.json();
+            if (d.status === 'success' && d.threats && d.threats.length > 0) {
+                // Pick the highest-risk event
+                var best = d.threats.reduce(function(a, b) { return (b.risk_score || 0) > (a.risk_score || 0) ? b : a; });
+                if (best.id) {
+                    await this.loadFromAPI(best.id);
+                    return;
+                }
+            }
+        } catch (e) { /* fall through to demo */ }
+        this.loadDemoScenario();
     }
 
     async loadFromAPI(eventId) {
@@ -504,6 +521,11 @@ class TimelineReplay {
                 '</div>' +
                 indicatorHtml +
                 mitreHtml +
+                '<div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid rgba(0,217,255,0.15);display:flex;gap:0.5rem;flex-wrap:wrap;">' +
+                    (event.id ? '<a href="/dashboard/evidence-chain?event_id=' + event.id + '" style="color:#00ff88;font-size:0.78rem;text-decoration:none;padding:0.3rem 0.6rem;border:1px solid rgba(0,255,136,0.3);border-radius:6px;">Evidence Chain</a>' : '') +
+                    (event.id ? '<a href="/dashboard/hunt?event_id=' + event.id + '" style="color:var(--neural-primary);font-size:0.78rem;text-decoration:none;padding:0.3rem 0.6rem;border:1px solid rgba(0,217,255,0.3);border-radius:6px;">Hunt Related</a>' : '') +
+                    '<button class="neural-button" style="font-size:0.72rem;padding:0.3rem 0.6rem;cursor:pointer;" data-action="create-incident-from-timeline" data-event-idx="' + index + '">Create Incident</button>' +
+                '</div>' +
             '</div>';
 
         this.addEventToHistory(event, index);
@@ -585,6 +607,41 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('attack-phases').addEventListener('click', (e) => {
         const phase = e.target.closest('[data-action="jump-to-phase"]');
         if (phase) replay.jumpToPhase(parseInt(phase.dataset.phaseId, 10));
+    });
+
+    // Create Incident from timeline event
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-action="create-incident-from-timeline"]');
+        if (!btn) return;
+        const idx = parseInt(btn.dataset.eventIdx, 10);
+        const ev = replay.events[idx];
+        if (!ev) return;
+        btn.disabled = true;
+        btn.textContent = 'Creating…';
+        try {
+            const r = await fetch('/dashboard/api/incidents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: replay.fmtType(ev.event_type || ev.type) + ' from ' + (ev.agent_id || 'unknown'),
+                    severity: ev.severity || 'medium',
+                    description: ev.description || JSON.stringify(ev).substring(0, 500),
+                    source_event_ids: [ev.id || ev.event_id],
+                })
+            });
+            const data = await r.json();
+            if (data.id) {
+                btn.textContent = 'Created ✓';
+                setTimeout(() => { window.location.href = '/dashboard/incidents'; }, 600);
+            } else {
+                btn.textContent = 'Failed';
+                btn.disabled = false;
+            }
+        } catch (err) {
+            console.error('Failed to create incident from timeline:', err);
+            btn.textContent = 'Error';
+            btn.disabled = false;
+        }
     });
 });
 </script>

@@ -566,7 +566,7 @@ class DatabaseManager {
                     <tbody>
                         ${records.map(record => `
                             <tr>
-                                ${columns.map(col => `<td title="${record[col]}">${this.formatValue(record[col])}</td>`).join('')}
+                                ${columns.map(col => `<td title="${this.escapeHtml(record[col])}">${this.formatValue(record[col])}</td>`).join('')}
                             </tr>
                         `).join('')}
                     </tbody>
@@ -763,14 +763,22 @@ class DatabaseManager {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
+    escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        var div = document.createElement('div');
+        div.textContent = String(str);
+        return div.innerHTML;
+    }
+
     formatValue(value) {
         if (value === null || value === undefined) {
             return '<span style="color: #666; font-style: italic;">—</span>';
         }
+        var escaped = this.escapeHtml(value);
         if (typeof value === 'string' && value.length > 100) {
-            return value.substring(0, 100) + '...';
+            return escaped.substring(0, 100) + '...';
         }
-        return value;
+        return escaped;
     }
 }
 

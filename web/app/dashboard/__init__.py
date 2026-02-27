@@ -105,6 +105,14 @@ def agent_management():
     return render_template("dashboard/agents.html", user=user)
 
 
+@dashboard_bp.route("/agent-monitor")
+@require_login
+def agent_monitor():
+    """Agent Monitor - Deep single-agent telemetry viewer"""
+    user = get_current_user()
+    return render_template("dashboard/agent-monitor.html", user=user)
+
+
 @dashboard_bp.route("/probe-explorer")
 @require_login
 def probe_explorer():
@@ -244,7 +252,8 @@ def live_threats():
             }
         )
 
-    rows = store.get_recent_security_events(limit=50, hours=24)
+    hours = min(int(request.args.get("hours", 24)), 8760)
+    rows = store.get_recent_security_events(limit=50, hours=hours)
     data_stale = False
     if not rows:
         # Fallback: show most recent events regardless of age
@@ -580,13 +589,14 @@ def event_clustering():
             }
         )
 
-    data = store.get_security_event_clustering(hours=24)
+    hours = min(int(request.args.get("hours", 24)), 8760)
+    data = store.get_security_event_clustering(hours=hours)
 
     # Extract source_ip counts from security_events indicators
     # Use targeted SQL query instead of scanning all events
     by_source_ip = {}
     try:
-        cutoff_ns = int((time.time() - 24 * 3600) * 1e9)
+        cutoff_ns = int((time.time() - hours * 3600) * 1e9)
         cursor = store.db.execute(
             """SELECT indicators FROM security_events
                WHERE timestamp_ns > ? AND indicators LIKE '%_ip%'""",
@@ -1905,6 +1915,162 @@ def _get_local_ip():
         return ip
     except Exception:
         return "127.0.0.1"
+
+
+# ── Agent Activity & Domain Data APIs ────────────────────────────
+
+
+@dashboard_bp.route("/api/agents/activity")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def agents_activity():
+    """Per-agent event rates for last 1 min and last 60 min."""
+    from .telemetry_bridge import get_telemetry_store
+
+    store = get_telemetry_store()
+    result = {}
+
+    if store:
+        try:
+            now_ns = int(time.time() * 1e9)
+            one_min_ns = now_ns - 60 * int(1e9)
+            sixty_min_ns = now_ns - 3600 * int(1e9)
+
+            cursor = store.db.execute(
+                """SELECT event_category,
+                   SUM(CASE WHEN timestamp_ns > ? THEN 1 ELSE 0 END) as last_min,
+                   COUNT(*) as last_hour
+                   FROM security_events
+                   WHERE timestamp_ns > ?
+                   GROUP BY event_category""",
+                (one_min_ns, sixty_min_ns),
+            )
+            for row in cursor.fetchall():
+                cat, last_min, last_hour = row[0], row[1], row[2]
+                for agent_id, prefixes in _AGENT_EVENT_CATEGORIES.items():
+                    for prefix in prefixes:
+                        if cat and (cat.startswith(prefix) or cat == prefix):
+                            if agent_id not in result:
+                                result[agent_id] = {"last_min": 0, "last_hour": 0}
+                            result[agent_id]["last_min"] += last_min
+                            result[agent_id]["last_hour"] += last_hour
+                            break
+        except Exception:
+            pass
+
+    return jsonify(
+        {
+            "status": "success",
+            "activity": result,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+
+@dashboard_bp.route("/api/agents/<agent_id>/domain-data")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def agent_domain_data(agent_id):
+    """Domain-specific structured data for Agent Monitor page."""
+    from .telemetry_bridge import get_telemetry_store
+
+    store = get_telemetry_store()
+    limit = min(request.args.get("limit", 50, type=int), 200)
+    rows = []
+    schema = "generic"
+
+    if store:
+        try:
+            if agent_id == "dns":
+                schema = "dns_events"
+                cursor = store.db.execute(
+                    "SELECT timestamp_dt, domain, query_type, response_code, "
+                    "risk_score, dga_score, is_beaconing FROM dns_events "
+                    "ORDER BY id DESC LIMIT ?",
+                    (limit,),
+                )
+                cols = [d[0] for d in cursor.description]
+                rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+
+            elif agent_id == "fim":
+                schema = "fim_events"
+                cursor = store.db.execute(
+                    "SELECT timestamp_dt, path, event_type, change_type, "
+                    "old_hash, new_hash, risk_score FROM fim_events "
+                    "ORDER BY id DESC LIMIT ?",
+                    (limit,),
+                )
+                cols = [d[0] for d in cursor.description]
+                rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+
+            elif agent_id == "flow":
+                schema = "flow_events"
+                cursor = store.db.execute(
+                    "SELECT timestamp_dt, src_ip, dst_ip, dst_port, protocol, "
+                    "bytes_tx, bytes_rx, threat_score, is_suspicious FROM flow_events "
+                    "ORDER BY id DESC LIMIT ?",
+                    (limit,),
+                )
+                cols = [d[0] for d in cursor.description]
+                rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+
+            elif agent_id == "proc":
+                schema = "process_events"
+                cursor = store.db.execute(
+                    "SELECT timestamp_dt, pid, exe, username, "
+                    "cpu_percent, memory_percent, is_suspicious FROM process_events "
+                    "ORDER BY id DESC LIMIT ?",
+                    (limit,),
+                )
+                cols = [d[0] for d in cursor.description]
+                rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+
+            elif agent_id == "kernel_audit":
+                schema = "audit_events"
+                cursor = store.db.execute(
+                    "SELECT timestamp_dt, syscall, event_type, pid, uid, "
+                    "exe, target_path, risk_score FROM audit_events "
+                    "ORDER BY id DESC LIMIT ?",
+                    (limit,),
+                )
+                cols = [d[0] for d in cursor.description]
+                rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+
+            elif agent_id == "peripheral":
+                schema = "peripheral_events"
+                cursor = store.db.execute(
+                    "SELECT timestamp_dt, event_type, device_type, vendor_id, "
+                    "product_id, serial_number, is_authorized, risk_score "
+                    "FROM peripheral_events ORDER BY id DESC LIMIT ?",
+                    (limit,),
+                )
+                cols = [d[0] for d in cursor.description]
+                rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+
+            elif agent_id == "persistence":
+                schema = "persistence_events"
+                cursor = store.db.execute(
+                    "SELECT timestamp_dt, event_type, mechanism, path, "
+                    "command, change_type, risk_score FROM persistence_events "
+                    "ORDER BY id DESC LIMIT ?",
+                    (limit,),
+                )
+                cols = [d[0] for d in cursor.description]
+                rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+
+        except Exception:
+            pass
+
+    return jsonify(
+        {
+            "status": "success",
+            "agent_id": agent_id,
+            "schema": schema,
+            "data": rows,
+            "count": len(rows),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
 
 
 # ── Agent Deployment API ─────────────────────────────────────────

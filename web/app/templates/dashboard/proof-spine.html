@@ -217,6 +217,15 @@ class ProofSpineDashboard {
         this.initListeners();
         await this.refresh();
         this.timer = setInterval(() => this.refresh(), this.REFRESH);
+        // SocketIO: new events may create WAL segments — refresh chain status
+        window.addEventListener('ws:threats', () => {
+            this.refresh();
+            if (this.REFRESH < 30000) {
+                this.REFRESH = 30000;
+                clearInterval(this.timer);
+                this.timer = setInterval(() => this.refresh(), this.REFRESH);
+            }
+        });
     }
 
     initListeners() {
