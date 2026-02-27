@@ -1,0 +1,323 @@
+================================================================================
+AMOSKYS EVENTBUS/WAL/STORAGE AUDIT - EXECUTIVE SUMMARY
+================================================================================
+
+DOCUMENT: Full audit report in TECHNICAL_AUDIT_REPORT.md (3000+ lines)
+
+================================================================================
+KEY FINDINGS
+================================================================================
+
+1. EVENTBUS ARCHITECTURE (src/amoskys/eventbus/server.py)
+   ✓ IMPLEMENTED:
+     - gRPC server with mTLS (client certs required)
+     - Size validation (max 131KB by default)
+     - Idempotency deduplication (300 second TTL, 50K entry cache)
+     - Backpressure via inflight request tracking
+     - Ed25519 signature verification (optional, REQUIRE_SIGNATURES=false default)
+     - Prometheus metrics (7 metrics: publish_total, invalid_total, latency_ms, inflight, retry_total, dedup_hits, wal_failures)
+     - Graceful shutdown (SIGHUP/SIGTERM with 10s grace period)
+     - Health check endpoint (GET /healthz on port 8080)
+
+   ✗ NOT IMPLEMENTED:
+     - Authorization via CN checking (trust map loaded but never enforced)
+     - Streaming Subscribe RPC (returns UNIMPLEMENTED)
+     - Full readiness checks on health endpoint
+
+   ⚠ ISSUES:
+     - Signatures required by default: FALSE (backward compat risk)
+     - Trust map never consulted (any valid client cert accepted)
+
+2. WAL LAYER ARCHITECTURE (src/amoskys/agents/flowagent/wal_sqlite.py)
+   ✓ FULLY IMPLEMENTED:
+     - SQLite WAL mode (synchronous=FULL for crash safety)
+     - BLAKE2b checksums (32-byte digest, detects corruption)
+     - Hash chain (BLAKE2b(env || prev_sig) for tamper detection)
+     - Genesis state (32 zero bytes for chain start)
+     - Idempotency (UNIQUE constraint on idem key)
+     - Backpressure (tail-drop, auto-deletes oldest when >200MB)
+     - Vacuum triggers (reclaims space when >30% deletions)
+     - Thread-safe operations (RWLock on critical sections)
+
+   SEMANTICS:
+     - Write: checksum + chain sig computed and verified before INSERT
+     - Read: Batch processing with checksum & chain verification
+     - Quarantine: Failed events sent to wal_dead_letter table
+     - Thread safety: Lock held during prev_sig read, chain compute, insert
+
+3. STORAGE LAYER (src/amoskys/storage/telemetry_store.py)
+   ✓ SCHEMA:
+     - 14 tables: process_events, device_telemetry, flow_events, security_events,
+       peripheral_events, dns_events, audit_events, persistence_events, fim_events,
+       incidents, alert_rules, metrics_timeseries, wal_archive, wal_dead_letter
+     - Indexes on: timestamp_ns DESC, device_id, risk_score DESC, type/category
+     - Foreign key refs: None (denormalized for perf)
+
+   ✓ MIGRATIONS:
+     - 001: Add schema_version column to all tables
+     - 002: Add GeoIP/ASN columns (geo_*, asn_*)
+     - 003: Add ThreatIntel columns (threat_intel_match, threat_source, threat_severity)
+     - Auto-applied on TelemetryStore init (lines 492-503)
+
+   ROUTING:
+     - process_events: From ProcessEvent or proc-agent security events
+     - flow_events: From FlowEvent or flow-agent security events
+     - security_events: From SecurityEvent sub-messages
+     - dns_events: From dns-agent security events
+     - audit_events: From kernel_audit security events
+     - persistence_events: From persistence-agent security events
+     - fim_events: From fim-agent security events
+     - peripheral_events: From peripheral_agent STATUS events
+
+4. ENRICHMENT PIPELINE (src/amoskys/enrichment/)
+   ✓ THREE STAGES (ordered):
+     1. GeoIP: MaxMind GeoLite2-City → geo_src_*, geo_dst_* fields
+        - Caches 10K IPs (LRU)
+        - Skips private IPs (127.*, 10.*, 192.168.*, 172.16.*, etc.)
+        - Returns: country, city, latitude, longitude, continent, timezone
+
+     2. ASN: MaxMind GeoLite2-ASN → asn_src_*, asn_dst_* fields
+        - Caches 10K IPs (LRU)
+        - Classifies networks: hosting, tor, vpn, education, government, residential, corporate
+        - Returns: asn_number, asn_org, network_type, is_hosting/is_tor/is_vpn flags
+
+     3. ThreatIntel: Local SQLite → threat_intel_match, threat_source, threat_severity
+        - Caches 10K checks (LRU with 3600s TTL)
+        - Checks: src_ip, dst_ip, source_ip, domain, hostname, file_hash, sha256, new_hash
+        - Returns: matched (bool), severity (critical/high/medium/low), source
+
+   DETERMINISM:
+     - Same input → same output (unless DB contents change)
+     - Failures graceful: if stage unavailable, continues with others
+     - Status: "raw" (no stages), "partial" (some failed), "enriched" (all succeeded)
+
+5. END-TO-END FLOW
+   T0: Event created by agent
+   T1: Publish(Envelope) RPC to EventBus
+       - Validate size, sig, dedup, inflight
+       - Extract FlowEvent
+       - Write to WAL with checksums & chain sig
+       - Return OK("accepted") to client
+   T2: Event in WAL (durable, encrypted by SQLite)
+   T3: WAL Processor running (separate process)
+       - Read batch from WAL
+       - Verify BLAKE2b checksums
+       - Verify hash chain integrity
+       - Parse protobuf
+       - Enrich via pipeline
+       - Insert into appropriate domain table
+       - DELETE from WAL (commit)
+   T4: Event in TelemetryStore
+       - Queryable from dashboard
+       - Retained per retention policy
+
+================================================================================
+CRITICAL ISSUES & GAPS
+================================================================================
+
+SECURITY:
+1. Signatures optional by default (REQUIRE_SIGNATURES=false)
+   → Fix: Set to true in production config
+
+2. Trust map loaded but never checked
+   → Impact: Any client with valid cert accepted regardless of CN
+   → Fix: Call _peer_cn_from_context() and validate against TRUST dict
+
+3. Overload mode can be toggled externally
+   → Severity: Medium (availability attack)
+   → Mitigation: Already logged with source tracking
+
+RELIABILITY:
+4. WAL Processor is separate process (not integrated)
+   → Impact: Events accumulate in WAL if processor crashes
+   → Fix: Monitor WAL row count and processor health
+
+5. Dedup cache expires after 300 seconds
+   → Issue: Clients retrying after TTL create duplicates
+   → Fix: Use persistent dedup table, not memory cache
+
+6. Events ACK'd before storage persistence
+   → Semantics: "ACK after WAL" but not "ACK after store"
+   → Impact: Dashboard may not show event immediately
+
+7. Quarantine without replay
+   → Dead letter queue is permanent
+   → Impact: Corrupted events never recovered
+   → Fix: Add replay mechanism
+
+PERFORMANCE:
+8. Signature verification on every request
+   → With 10k RPS, adds ~100-200ms latency
+   → Fix: Batch or cache verification
+
+9. No request batching in WAL write
+   → Each event: individual SQLite INSERT + COMMIT
+   → Fix: Batch 100 events per transaction
+
+OBSERVABILITY:
+10. No metrics for hash chain breaks
+    → Add: wal_chain_breaks_total counter
+
+11. No tracing for single-event lifecycle
+    → Add: Idempotency key in all logs
+
+================================================================================
+CONFIGURATION CHECKLIST
+================================================================================
+
+MUST CONFIGURE:
+✓ BUS_SERVER_PORT: Set gRPC listen port
+✓ BUS_MAX_ENV_BYTES: Set size limit (default 131KB reasonable)
+✓ EVENTBUS_REQUIRE_CLIENT_AUTH: true (default, keep enabled)
+
+SHOULD CONFIGURE:
+⚠ BUS_REQUIRE_SIGNATURES: true (default false, change in production)
+⚠ BUS_DEDUPE_TTL_SEC: 300-600s (default 300, increase if high retry rates)
+⚠ BUS_DEDUPE_MAX: 50K entries (increase if >10k RPS)
+
+WAL CONFIGURATION:
+✓ config.agent.wal_path: Set to persistent volume
+✓ config.storage.max_wal_bytes: 200MB (increase if high volume)
+✓ vacuum_threshold: 0.3 (reasonable default)
+
+STORAGE CONFIGURATION:
+✓ data/telemetry.db: Set to persistent volume
+✓ Retention policies: Configure per table
+
+ENRICHMENT CONFIGURATION:
+✓ /usr/share/GeoIP/GeoLite2-City.mmdb: Download and deploy
+✓ /usr/share/GeoIP/GeoLite2-ASN.mmdb: Download and deploy
+✓ data/threat_intel.db: Load indicators via CSV
+
+================================================================================
+TESTING RECOMMENDATIONS
+================================================================================
+
+FUNCTIONAL:
+[ ] Publish with valid envelope → stored in WAL → processed → in TelemetryStore
+[ ] Publish duplicate (same idempotency_key) → OK("duplicate") returned
+[ ] Publish oversized envelope → INVALID response
+[ ] Publish without signature (REQUIRE_SIGNATURES=false) → OK
+[ ] Publish with invalid signature (REQUIRE_SIGNATURES=true) → INVALID
+[ ] Overload mode enabled → all requests return RETRY
+
+RELIABILITY:
+[ ] WAL Processor crash → events queue in WAL, resume when processor restarts
+[ ] EventBus crash → events durable in WAL, resume processing when server restarts
+[ ] Database corruption → BLAKE2b detects, sends to dead_letter table
+[ ] Chain tampering → Hash chain verification catches modification
+
+PERFORMANCE:
+[ ] 1k RPS sustained → measure latency, inflight requests
+[ ] 10k RPS burst → measure backpressure, RETRY rate
+[ ] 200MB WAL → verify vacuum triggers and disk reclamation
+
+SECURITY:
+[ ] Client cert validation → reject invalid certs
+[ ] mTLS enforcement → verify EVENTBUS_REQUIRE_CLIENT_AUTH=true
+[ ] CN authorization → (once implemented) verify only trusted agents accepted
+
+================================================================================
+METRICS TO MONITOR
+================================================================================
+
+In production, alert on:
+
+1. bus_publish_total: Should increase linearly
+2. bus_invalid_total: Spike = bad events or attacks
+3. bus_retry_total: Spike = overload or inflight limit exceeded
+4. bus_inflight_requests: Should stay <max_inflight
+5. bus_wal_write_failures_total: Any value > 0 = WAL problems
+6. bus_dedup_hits_total: Measure retry rate
+
+WAL PROCESSOR:
+7. wal_rows_count: Accumulation indicates processor lag
+8. wal_chain_breaks_total: Any > 0 = corruption detected
+9. wal_quarantine_total: Measure processing errors
+
+STORAGE:
+10. security_events_count: Verify events flowing through
+11. flow_events_count: Network event tracking
+12. storage_db_size_bytes: Monitor disk usage
+
+ENRICHMENT:
+13. geoip_cache_hits/misses: Measure cache efficiency
+14. asn_cache_hits/misses: Measure cache efficiency
+15. threat_intel_matches_total: Measure detection rate
+
+================================================================================
+RECOMMENDATIONS FOR NEXT SPRINT
+================================================================================
+
+P0 (CRITICAL):
+1. Enable signature verification by default (BUS_REQUIRE_SIGNATURES=true)
+2. Implement CN authorization (enforce trust map)
+3. Add persistent dedup table (not memory cache)
+
+P1 (HIGH):
+4. Integrate WAL Processor into EventBus server (avoid separate process)
+5. Add metrics for hash chain breaks and quarantine rate
+6. Implement event tracing via idempotency_key in logs
+7. Add health check that verifies WAL and Storage connectivity
+
+P2 (MEDIUM):
+8. Implement Subscribe RPC for streaming events
+9. Batch WAL writes (100 events per transaction)
+10. Add replay mechanism for dead-letter queue
+11. Cache signature verification per agent CN
+
+P3 (NICE-TO-HAVE):
+12. Implement readiness check on /healthz endpoint
+13. Add rate limiting per agent CN
+14. Implement circuit breaker for enrichment failures
+15. Add audit logging for configuration changes
+
+================================================================================
+FILE REFERENCES
+================================================================================
+
+EventBus:
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/src/amoskys/eventbus/server.py (1716 lines)
+
+WAL:
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/src/amoskys/agents/flowagent/wal_sqlite.py (390 lines)
+
+WAL Processor:
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/src/amoskys/storage/wal_processor.py (1148 lines)
+
+Storage:
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/src/amoskys/storage/telemetry_store.py (1000+ lines)
+
+Enrichment:
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/src/amoskys/enrichment/__init__.py (132 lines)
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/src/amoskys/enrichment/geoip.py (181 lines)
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/src/amoskys/enrichment/asn.py (207 lines)
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/src/amoskys/enrichment/threat_intel.py (250+ lines)
+
+Proto:
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/proto/universal_telemetry.proto (537 lines)
+
+Migrations:
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/src/amoskys/storage/migrations/sql/001_add_schema_version.sql
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/src/amoskys/storage/migrations/sql/002_add_geo_columns.sql
+  /sessions/ecstatic-loving-gauss/mnt/Amoskys/src/amoskys/storage/migrations/sql/003_add_threat_intel_columns.sql
+
+================================================================================
+AUDIT DOCUMENT
+================================================================================
+
+Full technical audit: TECHNICAL_AUDIT_REPORT.md
+
+This document contains:
+- Complete EventBus initialization flow (lines 1455-1689)
+- Publish RPC handler step-by-step execution (lines 946-1133)
+- WAL write sequence with code line refs (lines 131-157)
+- WAL verify sequence with code line refs (lines 64-210)
+- Complete schema listing (all 14 tables)
+- Enrichment pipeline execution (3 stages)
+- End-to-end event trace (T0-T4)
+- All gaps and known issues
+- Configuration reference
+- Response examples
+
+================================================================================

@@ -1,0 +1,84 @@
+{
+  "agents": [
+    {
+      "agent_id": "proc_agent",
+      "key_id": "k-proc-2026-02",
+      "public_key": "",
+      "valid_from": "2026-02-01T00:00:00Z",
+      "valid_until": null,
+      "status": "placeholder"
+    },
+    {
+      "agent_id": "flow_agent",
+      "key_id": "k-flow-2026-02",
+      "public_key": "",
+      "valid_from": "2026-02-01T00:00:00Z",
+      "valid_until": null,
+      "status": "placeholder"
+    },
+    {
+      "agent_id": "dns_agent",
+      "key_id": "k-dns-2026-02",
+      "public_key": "",
+      "valid_from": "2026-02-01T00:00:00Z",
+      "valid_until": null,
+      "status": "placeholder"
+    },
+    {
+      "agent_id": "fim_agent",
+      "key_id": "k-fim-2026-02",
+      "public_key": "",
+      "valid_from": "2026-02-01T00:00:00Z",
+      "valid_until": null,
+      "status": "placeholder"
+    },
+    {
+      "agent_id": "auth_guard_agent",
+      "key_id": "k-auth-2026-02",
+      "public_key": "",
+      "valid_from": "2026-02-01T00:00:00Z",
+      "valid_until": null,
+      "status": "placeholder"
+    },
+    {
+      "agent_id": "persistence_guard",
+      "key_id": "k-persist-2026-02",
+      "public_key": "",
+      "valid_from": "2026-02-01T00:00:00Z",
+      "valid_until": null,
+      "status": "placeholder"
+    },
+    {
+      "agent_id": "peripheral_agent",
+      "key_id": "k-peripheral-2026-02",
+      "public_key": "",
+      "valid_from": "2026-02-01T00:00:00Z",
+      "valid_until": null,
+      "status": "placeholder"
+    },
+    {
+      "agent_id": "kernel_audit_agent",
+      "key_id": "k-kernel-2026-02",
+      "public_key": "",
+      "valid_from": "2026-02-01T00:00:00Z",
+      "valid_until": null,
+      "status": "placeholder"
+    },
+    {
+      "agent_id": "device_discovery",
+      "key_id": "k-discovery-2026-02",
+      "public_key": "",
+      "valid_from": "2026-02-01T00:00:00Z",
+      "valid_until": null,
+      "status": "placeholder"
+    },
+    {
+      "agent_id": "protocol_collectors",
+      "key_id": "k-protocol-2026-02",
+      "public_key": "",
+      "valid_from": "2026-02-01T00:00:00Z",
+      "valid_until": null,
+      "status": "placeholder"
+    }
+  ]
+}
