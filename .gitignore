@@ -94,7 +94,6 @@ cython_debug/
 
 # ---- AMOSKYS Runtime Data ----
 data/
-!data/.gitkeep
 logs/
 !logs/.gitkeep
 
@@ -123,6 +122,7 @@ certs/ca.srl
 .envrc
 !.env.example
 !.env.template
+.dev_secret_key
 
 # ---- Logs ----
 *.log
