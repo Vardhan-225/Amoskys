@@ -328,6 +328,7 @@ class WALProcessor:
         if attrs.get("pid") and collection_agent in (
             "proc-agent-v3",
             "proc_agent_v3",
+            "proc",
         ):
             self._extract_process_from_security(
                 attrs,
@@ -374,7 +375,7 @@ class WALProcessor:
             )
 
         # Kernel audit events from kernel_audit-agent probes
-        if "kernel" in collection_agent and attrs.get("syscall"):
+        if "kernel" in collection_agent or cat.startswith("kernel_"):
             self._extract_audit_from_security(
                 attrs,
                 se,
@@ -1035,9 +1036,7 @@ class WALProcessor:
         """
         import glob
 
-        queue_files = glob.glob(f"{queue_dir}/*_v2.db") + glob.glob(
-            f"{queue_dir}/*_v3.db"
-        )
+        queue_files = glob.glob(f"{queue_dir}/*.db")
         total_processed = 0
 
         for qf in sorted(queue_files):
@@ -1109,11 +1108,17 @@ class WALProcessor:
         while True:
             cycle += 1
             try:
+                # Process EventBus WAL
                 processed = self.process_batch(batch_size=100)
+
+                # Also drain agent local queues (data/queue/*.db)
+                queue_processed = self.process_local_queues("data/queue")
+                processed += queue_processed
 
                 if processed > 0:
                     logger.info(
-                        f"Cycle #{cycle}: Processed {processed} events (total: {self.processed_count}, errors: {self.error_count})"
+                        f"Cycle #{cycle}: Processed {processed} events "
+                        f"(total: {self.processed_count}, errors: {self.error_count})"
                     )
                 elif cycle % 12 == 0:  # Log every minute when idle
                     logger.debug(f"Cycle #{cycle}: No events to process")
