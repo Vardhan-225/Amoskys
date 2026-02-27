@@ -1147,7 +1147,7 @@ class TestExtractProcessFromSecurity:
             "dev-1",
             1000,
             "2024-01-01T00:00:00",
-            "proc_agent_v3",
+            "proc",
             "3.0",
             "test",
         )

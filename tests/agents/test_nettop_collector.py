@@ -375,7 +375,7 @@ class TestProbesWithBytes:
         ]
 
         context = ProbeContext(
-            agent_name="flow_agent_v2",
+            agent_name="flow",
             device_id="test-host",
             now_ns=now_ns,
             shared_data={"flows": flows},
@@ -408,7 +408,7 @@ class TestProbesWithBytes:
         ]
 
         context = ProbeContext(
-            agent_name="flow_agent_v2",
+            agent_name="flow",
             device_id="test-host",
             now_ns=now_ns,
             shared_data={"flows": flows},
@@ -443,7 +443,7 @@ class TestProbesWithBytes:
         ]
 
         context = ProbeContext(
-            agent_name="flow_agent_v2",
+            agent_name="flow",
             device_id="test-host",
             now_ns=now_ns,
             shared_data={"flows": flows},
@@ -478,7 +478,7 @@ class TestProbesWithBytes:
         ]
 
         context = ProbeContext(
-            agent_name="flow_agent_v2",
+            agent_name="flow",
             device_id="test-host",
             now_ns=now_ns,
             shared_data={"flows": flows},

@@ -316,7 +316,7 @@ class TestProcessGuid:
             "create_time": 1700000000.0,
         }
 
-        context = ProbeContext(device_id="test-host", agent_name="proc_agent_v3")
+        context = ProbeContext(device_id="test-host", agent_name="proc")
 
         with (
             patch("amoskys.agents.proc.probes.psutil") as mock_psutil,

@@ -134,7 +134,7 @@ class TestProcAgentV3Init:
 
     def test_agent_init_defaults(self, proc_agent):
         """Verify default initialization parameters."""
-        assert proc_agent.agent_name == "proc_agent_v3"
+        assert proc_agent.agent_name == "proc"
         assert proc_agent.device_id is not None  # socket.gethostname()
         assert proc_agent.collection_interval == 5.0
         assert len(proc_agent._probes) == 0  # No probes registered yet
@@ -160,7 +160,7 @@ class TestProcAgentV3Init:
 
     def test_agent_name_and_device_id(self, proc_agent):
         """Verify agent metadata is set correctly."""
-        assert proc_agent.agent_name == "proc_agent_v3"
+        assert proc_agent.agent_name == "proc"
         assert isinstance(proc_agent.device_id, str)
         assert len(proc_agent.device_id) > 0
 
@@ -275,7 +275,7 @@ class TestProcAgentHealth:
         health = proc_agent.get_health()
 
         assert "agent_name" in health
-        assert health["agent_name"] == "proc_agent_v3"
+        assert health["agent_name"] == "proc"
         assert "device_id" in health
         assert "is_running" in health
         assert "collection_count" in health
@@ -579,7 +579,7 @@ __all__ = [
 # =============================================================================
 
 
-def _make_context(device_id="test-host", agent_name="proc_agent_v3"):
+def _make_context(device_id="test-host", agent_name="proc"):
     """Create a standard ProbeContext for probe tests."""
     return ProbeContext(
         device_id=device_id,

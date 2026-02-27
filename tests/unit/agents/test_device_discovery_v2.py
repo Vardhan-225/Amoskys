@@ -74,7 +74,7 @@ class TestDeviceDiscoveryV2Init:
 
     def test_agent_init(self, device_discovery_agent):
         """Test basic initialization."""
-        assert device_discovery_agent.agent_name == "device_discovery_v2"
+        assert device_discovery_agent.agent_name == "device_discovery"
         assert device_discovery_agent.device_id == "test-host-001"
         assert isinstance(device_discovery_agent, HardenedAgentBase)
         assert isinstance(device_discovery_agent, MicroProbeAgentMixin)
@@ -319,7 +319,7 @@ class TestDeviceDiscoveryV2Health:
         assert "agent_name" in health
         assert "device_id" in health
         assert "circuit_breaker_state" in health
-        assert health["agent_name"] == "device_discovery_v2"
+        assert health["agent_name"] == "device_discovery"
 
     def test_probe_error_handling(self, device_discovery_agent_with_mocks):
         """Test probe error recovery."""

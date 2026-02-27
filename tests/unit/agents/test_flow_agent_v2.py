@@ -300,7 +300,7 @@ class TestFlowAgentV2Init:
 
     def test_agent_init(self, flow_agent):
         """Test basic initialization."""
-        assert flow_agent.agent_name == "flow_agent_v2"
+        assert flow_agent.agent_name == "flow"
         assert flow_agent.device_id is not None
         assert isinstance(flow_agent, HardenedAgentBase)
         assert isinstance(flow_agent, MicroProbeAgentMixin)
@@ -454,7 +454,7 @@ class TestFlowAgentV2Health:
         assert "agent_name" in health
         assert "device_id" in health
         assert "circuit_breaker_state" in health
-        assert health["agent_name"] == "flow_agent_v2"
+        assert health["agent_name"] == "flow"
 
     def test_probe_error_handling(self, flow_agent_with_mocks):
         """Test probe error recovery."""
@@ -1136,7 +1136,7 @@ class TestFlowAgentV2GetHealth:
         flow_agent_with_mocks.setup()
         health = flow_agent_with_mocks.get_health()
         assert isinstance(health, dict)
-        assert health["agent_name"] == "flow_agent_v2"
+        assert health["agent_name"] == "flow"
         assert "device_id" in health
         assert "is_running" in health
         assert "collection_count" in health

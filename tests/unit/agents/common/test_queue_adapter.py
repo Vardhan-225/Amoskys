@@ -39,7 +39,7 @@ def adapter(tmp_queue_dir):
     """Create a fresh LocalQueueAdapter."""
     return LocalQueueAdapter(
         queue_path=tmp_queue_dir,
-        agent_name="protocol_collectors_v2",
+        agent_name="protocol_collectors",
         device_id="host-lab-001",
     )
 
@@ -56,7 +56,7 @@ class TestCollectionAgentField:
         """collection_agent should default to self.agent_name."""
         event = {"event_type": "METRIC", "severity": "INFO"}
         telemetry = adapter._dict_to_telemetry(event)
-        assert telemetry.collection_agent == "protocol_collectors_v2"
+        assert telemetry.collection_agent == "protocol_collectors"
 
     def test_collection_agent_from_event_dict(self, adapter):
         """If event dict has collection_agent, use it."""
@@ -76,7 +76,7 @@ class TestCollectionAgentField:
             "data": {"category": "SSH_BRUTE_FORCE"},
         }
         telemetry = adapter._dict_to_telemetry(event)
-        assert telemetry.collection_agent == "protocol_collectors_v2"
+        assert telemetry.collection_agent == "protocol_collectors"
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +395,7 @@ class TestCommonFieldMappings:
         """source_component falls back to adapter.agent_name."""
         event = {"event_type": "METRIC"}
         telemetry = adapter._dict_to_telemetry(event)
-        assert telemetry.events[0].source_component == "protocol_collectors_v2"
+        assert telemetry.events[0].source_component == "protocol_collectors"
 
     def test_confidence_score_mapped(self, adapter):
         """confidence → confidence_score on TelemetryEvent."""
@@ -576,7 +576,7 @@ class TestRoundTripFidelity:
 
         # Verify top-level fields
         assert telemetry.device_id == "host-lab-001"
-        assert telemetry.collection_agent == "protocol_collectors_v2"
+        assert telemetry.collection_agent == "protocol_collectors"
 
         # Verify TelemetryEvent
         tel_event = telemetry.events[0]
@@ -616,7 +616,7 @@ class TestEdgeCases:
         """Empty dict should produce valid proto with defaults."""
         telemetry = adapter._dict_to_telemetry({})
         assert telemetry.device_id == "host-lab-001"
-        assert telemetry.collection_agent == "protocol_collectors_v2"
+        assert telemetry.collection_agent == "protocol_collectors"
         assert len(telemetry.events) == 1
         assert telemetry.events[0].event_type == "METRIC"
 

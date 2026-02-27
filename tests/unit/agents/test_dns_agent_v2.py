@@ -82,7 +82,7 @@ class TestDNSAgentV2Init:
 
     def test_agent_init_defaults(self, dns_agent):
         """Verify default initialization."""
-        assert dns_agent.agent_name == "dns_agent_v2"
+        assert dns_agent.agent_name == "dns"
         assert dns_agent.device_id is not None
         assert dns_agent.collection_interval == 10.0
         assert len(dns_agent._probes) == 0
@@ -244,7 +244,7 @@ class TestDNSHealthMetrics:
         health = dns_agent.get_health()
 
         assert "agent_name" in health
-        assert health["agent_name"] == "dns_agent_v2"
+        assert health["agent_name"] == "dns"
         assert "device_id" in health
         assert "probes" in health
 

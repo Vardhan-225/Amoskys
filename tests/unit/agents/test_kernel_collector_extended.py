@@ -34,7 +34,7 @@ from amoskys.agents.kernel_audit.collector import (
     StubKernelAuditCollector,
     create_kernel_audit_collector,
 )
-from amoskys.agents.kernel_audit.types import KernelAuditEvent
+from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 
 # =============================================================================
 # BaseKernelAuditCollector

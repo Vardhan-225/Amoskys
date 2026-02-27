@@ -363,7 +363,7 @@ class TestFIMAgentV2Init:
 
     def test_agent_init(self, fim_agent):
         """Test basic initialization."""
-        assert fim_agent.agent_name == "fim_agent_v2"
+        assert fim_agent.agent_name == "fim"
         assert fim_agent.device_id is not None
         assert isinstance(fim_agent, HardenedAgentBase)
         assert isinstance(fim_agent, MicroProbeAgentMixin)
@@ -521,7 +521,7 @@ class TestFIMAgentV2Health:
         assert "agent_name" in health
         assert "device_id" in health
         assert "circuit_breaker_state" in health
-        assert health["agent_name"] == "fim_agent_v2"
+        assert health["agent_name"] == "fim"
 
     def test_probe_error_handling(self, fim_agent_with_mocks):
         """Test probe error recovery."""
@@ -1185,7 +1185,7 @@ class TestFIMAgentV2GetHealth:
         fim_agent_with_mocks.setup()
         health = fim_agent_with_mocks.get_health()
         assert isinstance(health, dict)
-        assert health["agent_name"] == "fim_agent_v2"
+        assert health["agent_name"] == "fim"
         assert "baseline_files" in health
         assert "probes" in health
         assert "circuit_breaker_state" in health

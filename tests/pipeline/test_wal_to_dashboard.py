@@ -71,7 +71,7 @@ def _build_security_envelope(
     severity: str = "HIGH",
     mitre_techniques: list | None = None,
     confidence: float = 0.85,
-    agent_name: str = "flow_agent_v2",
+    agent_name: str = "flow",
 ) -> pb.UniversalEnvelope:
     """Build a complete UniversalEnvelope with a SecurityEvent inside.
 
@@ -173,29 +173,29 @@ class TestWALToSecurityEvents:
         """Events from flow, dns, auth agents all land in security_events."""
         agents = [
             (
-                "flow_agent_v2",
+                "flow",
                 "lateral_movement_detected",
                 0.9,
                 "lateral_movement",
                 ["T1021"],
             ),
-            ("dns_agent_v2", "dns_c2_beaconing", 0.75, "dns_beaconing", ["T1071.004"]),
+            ("dns", "dns_c2_beaconing", 0.75, "dns_beaconing", ["T1071.004"]),
             (
-                "auth_guard_agent_v2",
+                "auth",
                 "ssh_brute_force",
                 0.85,
                 "ssh_brute_force",
                 ["T1110"],
             ),
             (
-                "fim_agent_v2",
+                "fim",
                 "critical_file_modified",
                 0.6,
                 "critical_system_files",
                 ["T1565"],
             ),
             (
-                "persistence_agent_v2",
+                "persistence",
                 "persistence_launch_agent",
                 0.7,
                 "launch_agent_detector",

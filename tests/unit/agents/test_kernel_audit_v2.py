@@ -29,7 +29,7 @@ from amoskys.agents.common.probes import (
 from amoskys.agents.kernel_audit.kernel_audit_agent import (
     KernelAuditAgent as KernelAuditAgentV2,
 )
-from amoskys.agents.kernel_audit.types import KernelAuditEvent
+from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 
 # =============================================================================
 # Fixtures
@@ -64,7 +64,7 @@ def kernel_audit_agent(stub_kernel_collector):
     """Create KernelAuditAgentV2 with stub collector."""
     agent = KernelAuditAgentV2(
         device_id="test-host",
-        agent_name="kernel_audit_v2",
+        agent_name="kernel_audit",
         collection_interval=5.0,
         collector=stub_kernel_collector,
     )
@@ -103,7 +103,7 @@ class TestKernelAuditAgentV2Init:
 
     def test_agent_init(self, kernel_audit_agent):
         """Verify default initialization."""
-        assert kernel_audit_agent.agent_name == "kernel_audit_v2"
+        assert kernel_audit_agent.agent_name == "kernel_audit"
         assert kernel_audit_agent.device_id == "test-host"
         assert kernel_audit_agent.collection_interval == 5.0
         assert kernel_audit_agent.audit_log_path == "/var/log/audit/audit.log"

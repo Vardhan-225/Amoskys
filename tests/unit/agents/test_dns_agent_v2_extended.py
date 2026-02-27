@@ -568,7 +568,7 @@ class TestDNSGetHealth:
 
     def test_health_fields(self, dns_agent):
         health = dns_agent.get_health()
-        assert health["agent_name"] == "dns_agent_v2"
+        assert health["agent_name"] == "dns"
         assert "device_id" in health
         assert "is_running" in health
         assert "collection_count" in health

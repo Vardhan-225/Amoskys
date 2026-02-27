@@ -63,7 +63,7 @@ class TestPeripheralAgentV2Init:
 
     def test_agent_init(self, peripheral_agent):
         """Test basic initialization."""
-        assert peripheral_agent.agent_name == "peripheral_agent_v2"
+        assert peripheral_agent.agent_name == "peripheral"
         assert peripheral_agent.device_id is not None
         assert isinstance(peripheral_agent, HardenedAgentBase)
         assert isinstance(peripheral_agent, MicroProbeAgentMixin)
@@ -254,7 +254,7 @@ class TestPeripheralAgentV2Health:
         assert "agent_name" in health
         assert "device_id" in health
         assert "circuit_breaker_state" in health
-        assert health["agent_name"] == "peripheral_agent_v2"
+        assert health["agent_name"] == "peripheral"
 
     def test_probe_error_handling(self, peripheral_agent_with_mocks):
         """Test probe error recovery."""
@@ -540,7 +540,7 @@ class TestPeripheralAgentV2CollectExtended:
         assert dt.device_id == peripheral_agent_with_mocks.device_id
         assert dt.device_type == "HOST"
         assert dt.protocol == "USB"
-        assert dt.collection_agent == "peripheral_agent_v2"
+        assert dt.collection_agent == "peripheral"
         assert dt.agent_version == "2.0.0"
         # Should always have at least the heartbeat metric
         assert len(dt.events) >= 1
@@ -798,7 +798,7 @@ class TestPeripheralAgentV2GetHealth:
         peripheral_agent_with_mocks.setup()
         health = peripheral_agent_with_mocks.get_health()
         assert isinstance(health, dict)
-        assert health["agent_name"] == "peripheral_agent_v2"
+        assert health["agent_name"] == "peripheral"
         assert "device_id" in health
         assert "is_running" in health
         assert "collection_count" in health

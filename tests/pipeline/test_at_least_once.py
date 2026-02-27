@@ -308,7 +308,7 @@ class TestProtobufRoundTrip:
             device_id="test-host-42",
             device_type="ENDPOINT",
             protocol="AGENT_TELEMETRY",
-            collection_agent="kernel_audit_v2",
+            collection_agent="kernel_audit",
             agent_version="v2.1.0",
             timestamp_ns=1700000000000000000,
         )
@@ -349,7 +349,7 @@ class TestProtobufRoundTrip:
         r = recovered[0]
         assert r.device_id == "test-host-42"
         assert r.device_type == "ENDPOINT"
-        assert r.collection_agent == "kernel_audit_v2"
+        assert r.collection_agent == "kernel_audit"
         assert r.agent_version == "v2.1.0"
         assert r.timestamp_ns == 1700000000000000000
 

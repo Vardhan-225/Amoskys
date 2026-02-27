@@ -24,7 +24,7 @@ from amoskys.agents.kernel_audit.collector import (
     StubKernelAuditCollector,
     create_kernel_audit_collector,
 )
-from amoskys.agents.kernel_audit.types import KernelAuditEvent
+from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 
 # =============================================================================
 # Sample praudit -x XML output
@@ -528,7 +528,7 @@ class TestProbeIntegration:
 
         ctx = ProbeContext(
             device_id="test-mac",
-            agent_name="kernel_audit_v2",
+            agent_name="kernel_audit",
             now_ns=int(time.time() * 1e9),
             shared_data={"kernel_events": events},
         )
@@ -549,7 +549,7 @@ class TestProbeIntegration:
 
         ctx = ProbeContext(
             device_id="test-mac",
-            agent_name="kernel_audit_v2",
+            agent_name="kernel_audit",
             now_ns=int(time.time() * 1e9),
             shared_data={"kernel_events": setuid_events},
         )

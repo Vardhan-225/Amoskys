@@ -57,7 +57,7 @@ def adapter(tmp_path):
     """Fresh LocalQueueAdapter."""
     return LocalQueueAdapter(
         queue_path=str(tmp_path / "e2e_queue.db"),
-        agent_name="protocol_collectors_v2",
+        agent_name="protocol_collectors",
         device_id="host-e2e-001",
     )
 
@@ -550,7 +550,7 @@ class TestQueueToFusionIntegration:
 
         # Step 1: Convert to protobuf via adapter
         telemetry = adapter._dict_to_telemetry(event_dict)
-        assert telemetry.collection_agent == "protocol_collectors_v2"
+        assert telemetry.collection_agent == "protocol_collectors"
 
         # Step 2: Verify security_event is populated
         pb_event = telemetry.events[0]
@@ -600,7 +600,7 @@ class TestQueueToFusionIntegration:
         sec = ev.security_event
 
         # Full round-trip verification
-        assert t.collection_agent == "protocol_collectors_v2"
+        assert t.collection_agent == "protocol_collectors"
         assert ev.event_type == "protocol_threat"
         assert ev.severity == "CRITICAL"
         assert sec.event_category == "DNS_TUNNELING"

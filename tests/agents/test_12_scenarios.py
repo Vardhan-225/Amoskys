@@ -65,7 +65,7 @@ class TestScenario01_BinaryFromTemp:
         from amoskys.agents.proc.probes import BinaryFromTempProbe
 
         probe = BinaryFromTempProbe()
-        context = _ctx(agent_name="proc_agent_v3")
+        context = _ctx(agent_name="proc")
 
         mock_proc = MagicMock()
         mock_proc.info = {
@@ -107,7 +107,7 @@ class TestScenario02_CurlPipeShell:
         from amoskys.agents.proc.probes import LOLBinExecutionProbe
 
         probe = LOLBinExecutionProbe()
-        context = _ctx(agent_name="proc_agent_v3")
+        context = _ctx(agent_name="proc")
 
         mock_proc = MagicMock()
         mock_proc.info = {
@@ -150,7 +150,7 @@ class TestScenario03_PythonReverseShell:
         from amoskys.agents.proc.probes import ScriptInterpreterProbe
 
         probe = ScriptInterpreterProbe()
-        context = _ctx(agent_name="proc_agent_v3")
+        context = _ctx(agent_name="proc")
 
         mock_proc = MagicMock()
         mock_proc.info = {
@@ -225,7 +225,7 @@ class TestScenario04_LaunchAgentPersistence:
         )
 
         context = _ctx(
-            agent_name="persistence_agent_v2",
+            agent_name="persistence",
             persistence_changes=[change],
         )
         events = probe.scan(context)
@@ -294,7 +294,7 @@ class TestScenario05_ShellProfileHijack:
         )
 
         context = _ctx(
-            agent_name="persistence_agent_v2",
+            agent_name="persistence",
             persistence_changes=[change],
         )
         events = probe.scan(context)
@@ -348,7 +348,7 @@ class TestScenario06_CronPersistence:
         )
 
         context = _ctx(
-            agent_name="persistence_agent_v2",
+            agent_name="persistence",
             persistence_changes=[change],
         )
         events = probe.scan(context)
@@ -402,7 +402,7 @@ class TestScenario07_WebshellDrop:
             timestamp_ns=_now_ns(),
         )
 
-        context = _ctx(agent_name="fim_agent_v2", file_changes=[change])
+        context = _ctx(agent_name="fim", file_changes=[change])
 
         # Patch _check_webshell_patterns to use our temp file path
         with patch.object(probe, "_check_webshell_patterns") as mock_check:
@@ -466,7 +466,7 @@ class TestScenario08_WorldWritable:
             timestamp_ns=_now_ns(),
         )
 
-        context = _ctx(agent_name="fim_agent_v2", file_changes=[change])
+        context = _ctx(agent_name="fim", file_changes=[change])
         events = probe.scan(context)
 
         assert len(events) >= 1
@@ -503,7 +503,7 @@ class TestScenario09_NXDomainBurst:
             for i in range(50)
         ]
 
-        context = _ctx(agent_name="dns_agent_v2", dns_queries=queries)
+        context = _ctx(agent_name="dns", dns_queries=queries)
         events = probe.scan(context)
 
         assert len(events) >= 1
@@ -545,7 +545,7 @@ class TestScenario10_DGADomains:
             for domain in dga_domains
         ]
 
-        context = _ctx(agent_name="dns_agent_v2", dns_queries=queries)
+        context = _ctx(agent_name="dns", dns_queries=queries)
         events = probe.scan(context)
 
         # At least one DGA domain should be flagged
@@ -582,7 +582,7 @@ class TestScenario11_USBStorage:
         )
 
         context = _ctx(
-            agent_name="peripheral_agent_v2",
+            agent_name="peripheral",
             usb_devices=[flash_drive],
         )
         events = probe.scan(context)
@@ -683,7 +683,7 @@ class TestScenario13_SUIDbitChange:
             timestamp_ns=_now_ns(),
         )
 
-        context = _ctx(agent_name="fim_agent_v2", file_changes=[change])
+        context = _ctx(agent_name="fim", file_changes=[change])
         events = probe.scan(context)
 
         assert len(events) >= 1
@@ -736,7 +736,7 @@ class TestScenario14_ConfigBackdoor:
             timestamp_ns=_now_ns(),
         )
 
-        context = _ctx(agent_name="fim_agent_v2", file_changes=[change])
+        context = _ctx(agent_name="fim", file_changes=[change])
         events = probe.scan(context)
 
         assert len(events) >= 1
@@ -787,7 +787,7 @@ class TestScenario15_SSHKeyBackdoor:
         )
 
         context = _ctx(
-            agent_name="persistence_agent_v2",
+            agent_name="persistence",
             persistence_changes=[change],
         )
         events = probe.scan(context)
@@ -841,7 +841,7 @@ class TestScenario16_HiddenFile:
         )
 
         context = _ctx(
-            agent_name="persistence_agent_v2",
+            agent_name="persistence",
             persistence_changes=[change],
         )
         events = probe.scan(context)
@@ -883,7 +883,7 @@ class TestScenario17_PortScan:
             for i in range(1, 26)  # 25 ports
         ]
 
-        context = _ctx(agent_name="flow_agent_v2", flows=flows)
+        context = _ctx(agent_name="flow", flows=flows)
         events = probe.scan(context)
 
         assert len(events) >= 1
@@ -925,7 +925,7 @@ class TestScenario18_DataExfil:
             )
         ]
 
-        context = _ctx(agent_name="flow_agent_v2", flows=flows)
+        context = _ctx(agent_name="flow", flows=flows)
         events = probe.scan(context)
 
         assert len(events) >= 1
@@ -969,7 +969,7 @@ class TestScenario19_C2Beacon:
             for i in range(6)
         ]
 
-        context = _ctx(agent_name="flow_agent_v2", flows=flows)
+        context = _ctx(agent_name="flow", flows=flows)
         events = probe.scan(context)
 
         assert len(events) >= 1
@@ -1011,7 +1011,7 @@ class TestScenario20_SuspiciousTunnel:
             )
         ]
 
-        context = _ctx(agent_name="flow_agent_v2", flows=flows)
+        context = _ctx(agent_name="flow", flows=flows)
         events = probe.scan(context)
 
         assert len(events) >= 1
@@ -1047,7 +1047,7 @@ class TestScenario21_SuspiciousTLD:
             for i in range(3)
         ]
 
-        context = _ctx(agent_name="dns_agent_v2", dns_queries=queries)
+        context = _ctx(agent_name="dns", dns_queries=queries)
         events = probe.scan(context)
 
         assert len(events) >= 1
@@ -1084,7 +1084,7 @@ class TestScenario22_DNSTunneling:
             for i in range(6)
         ]
 
-        context = _ctx(agent_name="dns_agent_v2", dns_queries=queries)
+        context = _ctx(agent_name="dns", dns_queries=queries)
         events = probe.scan(context)
 
         assert len(events) >= 1
@@ -1141,7 +1141,7 @@ class TestScenario24_ExecveFromTmp:
 
     def test_execve_high_risk_fires(self):
         from amoskys.agents.kernel_audit.probes import ExecveHighRiskProbe
-        from amoskys.agents.kernel_audit.types import KernelAuditEvent
+        from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 
         probe = ExecveHighRiskProbe()
         now = _now_ns()
@@ -1166,7 +1166,7 @@ class TestScenario24_ExecveFromTmp:
         ]
 
         context = _ctx(
-            agent_name="kernel_audit_agent_v2",
+            agent_name="kernel_audit",
             kernel_events=kernel_events,
         )
         events = probe.scan(context)
@@ -1188,7 +1188,7 @@ class TestScenario25_SyscallFlood:
 
     def test_syscall_flood_fires(self):
         from amoskys.agents.kernel_audit.probes import SyscallFloodProbe
-        from amoskys.agents.kernel_audit.types import KernelAuditEvent
+        from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 
         probe = SyscallFloodProbe()
         now = _now_ns()
@@ -1214,7 +1214,7 @@ class TestScenario25_SyscallFlood:
         ]
 
         context = _ctx(
-            agent_name="kernel_audit_agent_v2",
+            agent_name="kernel_audit",
             kernel_events=kernel_events,
         )
         events = probe.scan(context)

@@ -97,7 +97,7 @@ class TestAuthGuardAgentV2Init:
 
     def test_agent_init(self, auth_agent):
         """Verify default initialization."""
-        assert auth_agent.agent_name == "auth_guard_agent_v2"
+        assert auth_agent.agent_name == "auth"
         assert auth_agent.device_id is not None
         assert auth_agent.collection_interval == 5.0
 

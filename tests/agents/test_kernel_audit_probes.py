@@ -27,14 +27,14 @@ from amoskys.agents.kernel_audit.probes import (
     SyscallFloodProbe,
     create_kernel_audit_probes,
 )
-from amoskys.agents.kernel_audit.types import KernelAuditEvent
+from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 
 
 def make_context(events: List[KernelAuditEvent]) -> ProbeContext:
     """Create a probe context with kernel events."""
     return ProbeContext(
         device_id="test-host-001",
-        agent_name="kernel_audit_v2",
+        agent_name="kernel_audit",
         now_ns=int(time.time() * 1e9),
         shared_data={"kernel_events": events},
     )
@@ -649,7 +649,7 @@ class TestKernelAuditAgentV2Integration:
 
         health = agent.get_health()
 
-        assert health["agent_name"] == "kernel_audit_v2"
+        assert health["agent_name"] == "kernel_audit"
         assert health["device_id"] == "test-001"
         assert "probes" in health
         assert len(health["probes"]) == 7

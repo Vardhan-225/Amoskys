@@ -82,7 +82,7 @@ class TestPersistenceGuardV2Init:
 
     def test_agent_init(self, persistence_agent):
         """Verify default initialization."""
-        assert persistence_agent.agent_name == "persistence_guard_v2"
+        assert persistence_agent.agent_name == "persistence"
         assert persistence_agent.device_id is not None
         assert persistence_agent.collection_interval == 30.0
 

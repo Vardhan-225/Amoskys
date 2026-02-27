@@ -53,9 +53,9 @@ from amoskys.agents.protocol_collectors.probes import (
 )
 from amoskys.agents.protocol_collectors.protocol_collectors_v2 import (
     ProtocolCollectorsV2,
-    create_protocol_collectors_v2,
+    create_protocol_collectors,
 )
-from amoskys.agents.protocol_collectors.types import (
+from amoskys.agents.protocol_collectors.agent_types import (
     ProtocolEvent,
     ProtocolThreat,
     ProtocolType,
@@ -88,7 +88,7 @@ def _make_context(protocol_events: List[ProtocolEvent] = None) -> ProbeContext:
     """Helper: create ProbeContext with protocol events in shared_data."""
     return ProbeContext(
         device_id="host-001",
-        agent_name="protocol_collectors_v2",
+        agent_name="protocol_collectors",
         shared_data={"protocol_events": protocol_events or []},
     )
 
@@ -1951,7 +1951,7 @@ class TestProtocolCollectorsV2Init:
         """Test agent with default parameters."""
         agent = ProtocolCollectorsV2(device_id="host-001")
         assert agent.device_id == "host-001"
-        assert agent.agent_name == "protocol_collectors_v2"
+        assert agent.agent_name == "protocol_collectors"
         assert agent.collection_interval == 5.0
         assert agent.log_path == "/var/log/syslog"
         assert agent.use_stub is False
@@ -2106,7 +2106,7 @@ class TestProtocolCollectorsV2Collection:
         agent.setup()
         results = agent.collect_data()
         for r in results:
-            assert r["agent"] == "protocol_collectors_v2"
+            assert r["agent"] == "protocol_collectors"
 
     def test_collect_data_empty_collector(self):
         """collect_data() returns empty list when collector produces no events."""
@@ -2207,7 +2207,7 @@ class TestProtocolCollectorsV2Health:
         agent = ProtocolCollectorsV2(device_id="host-001", use_stub=True)
         agent.setup()
         health = agent.health_summary()
-        assert health["agent_name"] == "protocol_collectors_v2"
+        assert health["agent_name"] == "protocol_collectors"
         assert health["device_id"] == "host-001"
         assert "uptime_seconds" in health
         assert "collection_count" in health
@@ -2307,7 +2307,7 @@ class TestProtocolCollectorsV2ProbeIsolation:
 
 
 # =============================================================================
-# Test: create_protocol_collectors_v2 Factory
+# Test: create_protocol_collectors Factory
 # =============================================================================
 
 
@@ -2316,13 +2316,13 @@ class TestCreateProtocolCollectorsV2:
 
     def test_creates_agent(self):
         """Factory creates ProtocolCollectorsV2 instance."""
-        agent = create_protocol_collectors_v2(device_id="host-001")
+        agent = create_protocol_collectors(device_id="host-001")
         assert isinstance(agent, ProtocolCollectorsV2)
         assert agent.device_id == "host-001"
 
     def test_passes_kwargs(self):
         """Factory passes kwargs through."""
-        agent = create_protocol_collectors_v2(
+        agent = create_protocol_collectors(
             device_id="host-001",
             use_stub=True,
             collection_interval=60.0,
@@ -2362,7 +2362,7 @@ class TestFullCycleIntegration:
 
         # Health should reflect collection
         health = agent.health_summary()
-        assert health["agent_name"] == "protocol_collectors_v2"
+        assert health["agent_name"] == "protocol_collectors"
 
         # Second collection should also work
         results2 = agent.collect_data()
