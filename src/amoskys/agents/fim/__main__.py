@@ -12,7 +12,7 @@ def main() -> None:
     """Entry point for FIM agent module."""
     agent_main(
         agent_class=FIMAgent,
-        agent_name="fim_agent",
+        agent_name="fim",
         description="File integrity monitoring agent - detects SUID escalation, "
         "webshell drops, config backdoors, library hijacking, and bootloader tampering",
     )

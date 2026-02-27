@@ -58,7 +58,7 @@ logger = logging.getLogger("ProcAgentV3")
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
-QUEUE_PATH = getattr(config.agent, "proc_queue_path", "data/queue/proc_agent_v3.db")
+QUEUE_PATH = getattr(config.agent, "proc_queue_path", "data/queue/proc.db")
 
 
 # =============================================================================
@@ -187,7 +187,7 @@ class ProcAgent(MicroProbeAgentMixin, HardenedAgentBase):
         Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
         queue_adapter = LocalQueueAdapter(
             queue_path=QUEUE_PATH,
-            agent_name="proc_agent_v3",
+            agent_name="proc",
             device_id=device_id,
             max_bytes=50 * 1024 * 1024,
             max_retries=10,
@@ -196,7 +196,7 @@ class ProcAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
         # Initialize base classes
         super().__init__(
-            agent_name="proc_agent_v3",
+            agent_name="proc",
             device_id=device_id,
             collection_interval=collection_interval,
             eventbus_publisher=publisher,

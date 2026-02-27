@@ -37,7 +37,7 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
-from amoskys.agents.kernel_audit.types import (
+from amoskys.agents.kernel_audit.agent_types import (
     MODULE_SYSCALLS,
     PERMISSION_SYSCALLS,
     PRIVESC_SYSCALLS,

@@ -26,6 +26,8 @@ Usage:
 from __future__ import annotations
 
 import logging
+import socket
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set
 
 from amoskys.agents.common.base import HardenedAgentBase
@@ -35,10 +37,18 @@ from amoskys.agents.common.probes import (
     ProbeContext,
     TelemetryEvent,
 )
+from amoskys.agents.common.queue_adapter import LocalQueueAdapter
+from amoskys.config import get_config
 
 from .probes import DEVICE_DISCOVERY_PROBES
 
 logger = logging.getLogger(__name__)
+
+config = get_config()
+CERT_DIR = config.agent.cert_dir
+QUEUE_PATH = getattr(
+    config.agent, "device_discovery_queue_path", "data/queue/device_discovery.db"
+)
 
 
 class DeviceDiscovery(MicroProbeAgentMixin, HardenedAgentBase):
@@ -56,9 +66,10 @@ class DeviceDiscovery(MicroProbeAgentMixin, HardenedAgentBase):
 
     def __init__(
         self,
-        device_id: str,
-        agent_name: str = "device_discovery_v2",
         collection_interval: float = 30.0,
+        *,
+        device_id: Optional[str] = None,
+        agent_name: str = "device_discovery",
         known_ips: Optional[Set[str]] = None,
         authorized_dhcp: Optional[Set[str]] = None,
         authorized_dns: Optional[Set[str]] = None,
@@ -69,9 +80,9 @@ class DeviceDiscovery(MicroProbeAgentMixin, HardenedAgentBase):
         """Initialize DeviceDiscoveryV2.
 
         Args:
-            device_id: Unique device identifier
-            agent_name: Agent name for logging/metrics
             collection_interval: Seconds between discovery cycles (default 30s)
+            device_id: Unique device identifier (defaults to hostname)
+            agent_name: Agent name for logging/metrics
             known_ips: Set of known/baseline IP addresses
             authorized_dhcp: Set of authorized DHCP server IPs
             authorized_dns: Set of authorized DNS server IPs
@@ -79,6 +90,10 @@ class DeviceDiscovery(MicroProbeAgentMixin, HardenedAgentBase):
             metrics_interval: Seconds between metrics emissions
             probes: Custom probes (overrides defaults)
         """
+        # Auto-create infra when called via cli.run_agent() (zero-args path)
+        _auto_infra = device_id is None
+        device_id = device_id or socket.gethostname()
+
         # Store configuration
         self.known_ips = known_ips or set()
         self.authorized_dhcp = authorized_dhcp or set()
@@ -87,6 +102,17 @@ class DeviceDiscovery(MicroProbeAgentMixin, HardenedAgentBase):
         # Use custom probes if provided, otherwise default
         if probes is None:
             probes = self._create_default_probes()
+
+        if _auto_infra and queue_adapter is None:
+            Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
+            queue_adapter = LocalQueueAdapter(
+                queue_path=QUEUE_PATH,
+                agent_name=agent_name,
+                device_id=device_id,
+                max_bytes=50 * 1024 * 1024,
+                max_retries=10,
+                signing_key_path=f"{CERT_DIR}/agent.ed25519",
+            )
 
         # Initialize using super() for proper MRO handling
         super().__init__(

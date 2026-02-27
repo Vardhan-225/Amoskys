@@ -546,13 +546,13 @@ class PersistenceGuard(MicroProbeAgentMixin, HardenedAgentBase):
         8. HiddenFilePersistenceProbe - hidden executable loaders
     """
 
-    AGENT_NAME = "persistence_guard_v2"
+    AGENT_NAME = "persistence"
     COLLECTION_INTERVAL_SECONDS = 300.0  # 5 minutes default
 
     def __init__(
         self,
         device_id: Optional[str] = None,
-        queue_path: str = "data/queue/persistence_guard_v2.db",
+        queue_path: str = "data/queue/persistence.db",
         baseline_mode: str = "monitor",  # "create" or "monitor"
         baseline_path: str = "data/persistence_baseline.json",
         collection_interval: float = COLLECTION_INTERVAL_SECONDS,
@@ -777,7 +777,7 @@ def main():
     parser.add_argument(
         "--queue-path",
         type=str,
-        default="data/queue/persistence_guard_v2.db",
+        default="data/queue/persistence.db",
         help="Local queue database path",
     )
     parser.add_argument(

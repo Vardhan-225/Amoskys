@@ -12,7 +12,7 @@ def main() -> None:
     """Entry point for peripheral agent module."""
     agent_main(
         agent_class=PeripheralAgent,
-        agent_name="peripheral_agent",
+        agent_name="peripheral",
         description="Peripheral device monitoring - tracks USB devices, "
         "Bluetooth connections, and detects unauthorized hardware",
     )

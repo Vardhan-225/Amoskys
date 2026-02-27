@@ -12,7 +12,7 @@ def main() -> None:
     """Entry point for kernel audit agent module."""
     agent_main(
         agent_class=KernelAuditAgent,
-        agent_name="kernel_audit_agent",
+        agent_name="kernel_audit",
         description="Kernel-level monitoring agent - detects privilege escalation, "
         "container escapes, and kernel-level attacks",
     )

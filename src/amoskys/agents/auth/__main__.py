@@ -12,7 +12,7 @@ def main() -> None:
     """Entry point for auth agent module."""
     agent_main(
         agent_class=AuthGuardAgent,
-        agent_name="auth_agent",
+        agent_name="auth",
         description="Authentication monitoring agent - tracks login attempts, "
         "SSH sessions, sudo usage, and authentication anomalies",
     )

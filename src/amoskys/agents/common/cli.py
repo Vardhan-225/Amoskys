@@ -280,7 +280,10 @@ def run_agent(
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
 
-    # Get collection method — check all known method names
+    # Prefer _run_one_cycle() for HardenedAgentBase agents — it does the full
+    # collect → validate → enrich → publish pipeline.  Fall back to bare
+    # collect_data / collect / run_once for simpler agents.
+    full_cycle_method = getattr(agent, "_run_one_cycle", None)
     collect_method = (
         getattr(agent, "collect", None)
         or getattr(agent, "run_once", None)
@@ -288,11 +291,26 @@ def run_agent(
         or getattr(agent, "scan_all_probes", None)
         or getattr(agent, "run_probes", None)
     )
-    if not collect_method:
+
+    if full_cycle_method:
+        # Run setup() once before entering loop (mirrors run_forever)
+        setup_fn = getattr(agent, "setup", None)
+        if setup_fn and not setup_fn():
+            logger.critical("Agent setup failed; exiting")
+            sys.exit(1)
+        cycle_fn = full_cycle_method
+        logger.info("Using full publish pipeline (_run_one_cycle)")
+    elif collect_method:
+        cycle_fn = collect_method
+        logger.info("Using bare collection (no publish pipeline)")
+    else:
         logger.error(
-            "Agent has no collect/run_once/collect_data/scan_all_probes method"
+            "Agent has no _run_one_cycle/collect/run_once/collect_data method"
         )
         sys.exit(1)
+
+    # Drain helper — flush local queue to EventBus between cycles
+    drain_fn = getattr(agent, "_drain_local_queue", None)
 
     # Run loop
     cycle = 0
@@ -308,7 +326,16 @@ def run_agent(
             hb_status = "healthy"
             hb_error = None
             try:
-                collect_method()
+                # Drain local queue before each cycle (recover buffered events)
+                if drain_fn:
+                    try:
+                        drained = drain_fn(limit=200)
+                        if drained:
+                            logger.info("Drained %d events from local queue", drained)
+                    except Exception:
+                        pass  # Non-fatal
+
+                cycle_fn()
                 duration_ms = (time.time() - start_time) * 1000
                 logger.info("Cycle complete in %.1fms", duration_ms)
             except Exception as e:

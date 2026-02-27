@@ -59,7 +59,7 @@ logger = logging.getLogger("AuthGuardAgentV2")
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
-QUEUE_PATH = getattr(config.agent, "auth_queue_path", "data/queue/auth_agent_v2.db")
+QUEUE_PATH = getattr(config.agent, "auth_queue_path", "data/queue/auth.db")
 
 # Tunables
 AUTH_WINDOW_SECONDS = 900  # 15 minutes
@@ -905,7 +905,7 @@ class AuthGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
         Path(queue_path).parent.mkdir(parents=True, exist_ok=True)
         queue_adapter = LocalQueueAdapter(
             queue_path=queue_path,
-            agent_name="auth_guard_agent_v2",
+            agent_name="auth",
             device_id=device_id,
             max_bytes=50 * 1024 * 1024,
             max_retries=10,
@@ -914,7 +914,7 @@ class AuthGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
         # Initialize base classes
         super().__init__(
-            agent_name="auth_guard_agent_v2",
+            agent_name="auth",
             device_id=device_id,
             collection_interval=collection_interval,
             eventbus_publisher=publisher,
@@ -1017,7 +1017,7 @@ class AuthGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
             protocol="AUTH",
             events=proto_events,
             timestamp_ns=timestamp_ns,
-            collection_agent="auth_guard_agent_v2",
+            collection_agent="auth",
             agent_version="2.1.0",
         )
 

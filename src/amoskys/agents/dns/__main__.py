@@ -12,7 +12,7 @@ def main() -> None:
     """Entry point for DNS agent module."""
     agent_main(
         agent_class=DNSAgent,
-        agent_name="dns_agent",
+        agent_name="dns",
         description="DNS monitoring agent - detects C2 communication, "
         "DGA domains, DNS tunneling, and suspicious DNS patterns",
     )

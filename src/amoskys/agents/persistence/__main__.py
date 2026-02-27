@@ -12,7 +12,7 @@ def main() -> None:
     """Entry point for persistence agent module."""
     agent_main(
         agent_class=PersistenceGuard,
-        agent_name="persistence_agent",
+        agent_name="persistence",
         description="Persistence mechanism monitoring - detects launchd, cron, "
         "systemd, and other persistence techniques used by attackers",
     )

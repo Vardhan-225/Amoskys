@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from amoskys.agents.kernel_audit.types import KernelAuditEvent
+from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 
 logger = logging.getLogger(__name__)
 

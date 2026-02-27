@@ -12,7 +12,7 @@ def main() -> None:
     """Entry point for proc agent module."""
     agent_main(
         agent_class=ProcAgent,
-        agent_name="proc_agent",
+        agent_name="proc",
         description="Process monitoring agent - tracks running processes, "
         "detects suspicious behavior, and monitors resource usage",
     )

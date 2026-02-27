@@ -17,8 +17,8 @@ Architecture:
     - HardenedAgentBase: Circuit breaker + offline resilience
 
 CLI Usage:
-    python flow_agent_v2.py --interval 15 --log-level DEBUG
-    python flow_agent_v2.py --interface en0
+    python flow_agent.py --interval 15 --log-level DEBUG
+    python flow_agent.py --interface en0
 
 MITRE ATT&CK Coverage:
     - T1046: Network Service Discovery
@@ -64,7 +64,7 @@ logger = logging.getLogger("FlowAgentV2")
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
-QUEUE_PATH = getattr(config.agent, "flow_queue_path", "data/queue/flow_agent_v2.db")
+QUEUE_PATH = getattr(config.agent, "flow_queue_path", "data/queue/flow.db")
 
 
 # =============================================================================
@@ -447,7 +447,7 @@ class FlowAgent(MicroProbeAgentMixin, HardenedAgentBase):
         8. NewExternalServiceProbe — New external connections
     """
 
-    AGENT_NAME = "flow_agent_v2"
+    AGENT_NAME = "flow"
 
     def __init__(
         self,
@@ -467,7 +467,7 @@ class FlowAgent(MicroProbeAgentMixin, HardenedAgentBase):
         Path(queue_path).parent.mkdir(parents=True, exist_ok=True)
         queue_adapter = LocalQueueAdapter(
             queue_path=queue_path,
-            agent_name="flow_agent_v2",
+            agent_name="flow",
             device_id=device_id,
             max_bytes=50 * 1024 * 1024,
             max_retries=10,
@@ -668,7 +668,7 @@ class FlowAgent(MicroProbeAgentMixin, HardenedAgentBase):
             protocol="FLOW",
             events=proto_events,
             timestamp_ns=timestamp_ns,
-            collection_agent="flow_agent_v2",
+            collection_agent="flow",
             agent_version="2.0.0",
         )
 
@@ -734,7 +734,7 @@ def main():
     parser.add_argument(
         "--queue-path",
         type=str,
-        default="data/queue/flow_agent_v2.db",
+        default="data/queue/flow.db",
         help="Local queue database path",
     )
     parser.add_argument(

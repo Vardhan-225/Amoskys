@@ -27,7 +27,7 @@ from amoskys.agents.common.probes import (
 )
 
 # Use relative import to avoid triggering amoskys.agents.__init__
-from .types import ProtocolEvent, ProtocolType, ThreatCategory
+from .agent_types import ProtocolEvent, ProtocolType, ThreatCategory
 
 logger = logging.getLogger(__name__)
 

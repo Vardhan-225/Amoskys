@@ -61,7 +61,7 @@ logger = logging.getLogger("DNSAgentV2")
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
-QUEUE_PATH = getattr(config.agent, "dns_queue_path", "data/queue/dns_agent_v2.db")
+QUEUE_PATH = getattr(config.agent, "dns_queue_path", "data/queue/dns.db")
 
 
 # =============================================================================
@@ -345,7 +345,7 @@ class DNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
         Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
         queue_adapter = LocalQueueAdapter(
             queue_path=QUEUE_PATH,
-            agent_name="dns_agent_v2",
+            agent_name="dns",
             device_id=device_id,
             max_bytes=50 * 1024 * 1024,
             max_retries=10,
@@ -354,7 +354,7 @@ class DNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
         # Initialize base classes
         super().__init__(
-            agent_name="dns_agent_v2",
+            agent_name="dns",
             device_id=device_id,
             collection_interval=collection_interval,
             eventbus_publisher=publisher,
@@ -534,7 +534,7 @@ class DNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
             protocol="DNS",
             events=proto_events,
             timestamp_ns=timestamp_ns,
-            collection_agent="dns_agent_v2",
+            collection_agent="dns",
             agent_version="2.0.0",
         )
 

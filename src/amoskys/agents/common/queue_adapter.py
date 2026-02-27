@@ -139,6 +139,9 @@ class LocalQueueAdapter:
         # Convert event to DeviceTelemetry if needed
         if isinstance(event, pb.DeviceTelemetry):
             telemetry = event
+        elif isinstance(event, pb.UniversalEnvelope):
+            # Extract DeviceTelemetry from an already-wrapped envelope
+            telemetry = event.device_telemetry
         elif isinstance(event, dict):
             telemetry = self._dict_to_telemetry(event)
         else:

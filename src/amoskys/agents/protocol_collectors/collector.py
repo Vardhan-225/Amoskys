@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional
 
 # Use relative import to avoid triggering amoskys.agents.__init__
-from .types import ProtocolEvent, ProtocolType
+from .agent_types import ProtocolEvent, ProtocolType
 
 logger = logging.getLogger(__name__)
 

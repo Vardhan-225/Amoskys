@@ -72,7 +72,7 @@ logger = logging.getLogger("FIMAgentV2")
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
-QUEUE_PATH = getattr(config.agent, "fim_queue_path", "data/queue/fim_agent_v2.db")
+QUEUE_PATH = getattr(config.agent, "fim_queue_path", "data/queue/fim.db")
 BASELINE_PATH = getattr(config.agent, "fim_baseline_path", "data/fim_baseline.json")
 
 
@@ -389,7 +389,7 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
         Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
         queue_adapter = LocalQueueAdapter(
             queue_path=QUEUE_PATH,
-            agent_name="fim_agent_v2",
+            agent_name="fim",
             device_id=device_id,
             max_bytes=50 * 1024 * 1024,
             max_retries=10,
@@ -398,7 +398,7 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
         # Initialize base classes
         super().__init__(
-            agent_name="fim_agent_v2",
+            agent_name="fim",
             device_id=device_id,
             collection_interval=collection_interval,
             eventbus_publisher=publisher,
@@ -538,7 +538,7 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
                 protocol="FIM",
                 events=[baseline_event],
                 timestamp_ns=timestamp_ns,
-                collection_agent="fim_agent_v2",
+                collection_agent="fim",
                 agent_version="2.0.0",
             )
             return [telemetry]
@@ -587,7 +587,7 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
                 protocol="FIM",
                 events=[heartbeat],
                 timestamp_ns=timestamp_ns,
-                collection_agent="fim_agent_v2",
+                collection_agent="fim",
                 agent_version="2.0.0",
             )
             return [telemetry]
@@ -748,7 +748,7 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
             protocol="FIM",
             events=telemetry_events,
             timestamp_ns=timestamp_ns,
-            collection_agent="fim_agent_v2",
+            collection_agent="fim",
             agent_version="2.0.0",
         )
 
@@ -851,7 +851,7 @@ def main():
         "--queue-path",
         type=str,
         default=None,
-        help="Local queue database path (default: data/queue/fim_agent_v2.db)",
+        help="Local queue database path (default: data/queue/fim.db)",
     )
     parser.add_argument(
         "--baseline-path",

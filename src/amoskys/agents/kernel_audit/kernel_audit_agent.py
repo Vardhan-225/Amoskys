@@ -35,7 +35,9 @@ MITRE ATT&CK Coverage:
 from __future__ import annotations
 
 import logging
+import socket
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from amoskys.agents.common.base import HardenedAgentBase
@@ -45,14 +47,22 @@ from amoskys.agents.common.probes import (
     ProbeContext,
     TelemetryEvent,
 )
+from amoskys.agents.common.queue_adapter import LocalQueueAdapter
 from amoskys.agents.kernel_audit.collector import (
     BaseKernelAuditCollector,
     create_kernel_audit_collector,
 )
 from amoskys.agents.kernel_audit.probes import create_kernel_audit_probes
-from amoskys.agents.kernel_audit.types import KernelAuditEvent
+from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.config import get_config
 
 logger = logging.getLogger(__name__)
+
+config = get_config()
+CERT_DIR = config.agent.cert_dir
+QUEUE_PATH = getattr(
+    config.agent, "kernel_audit_queue_path", "data/queue/kernel_audit.db"
+)
 
 
 class KernelAuditAgent(MicroProbeAgentMixin, HardenedAgentBase):
@@ -68,11 +78,11 @@ class KernelAuditAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
     def __init__(
         self,
-        device_id: str,
-        agent_name: str = "kernel_audit_v2",
         collection_interval: float = 5.0,
-        audit_log_path: str = "/var/log/audit/audit.log",
         *,
+        device_id: Optional[str] = None,
+        agent_name: str = "kernel_audit",
+        audit_log_path: str = "/var/log/audit/audit.log",
         collector: Optional[BaseKernelAuditCollector] = None,
         probes: Optional[List[MicroProbe]] = None,
         eventbus_publisher: Optional[Any] = None,
@@ -83,9 +93,9 @@ class KernelAuditAgent(MicroProbeAgentMixin, HardenedAgentBase):
         """Initialize KernelAudit Agent v2.
 
         Args:
-            device_id: Unique device identifier
-            agent_name: Agent name for logging/metrics
             collection_interval: Seconds between collection cycles
+            device_id: Unique device identifier (defaults to hostname)
+            agent_name: Agent name for logging/metrics
             audit_log_path: Path to audit log file
             collector: Optional custom collector (uses AuditdLogCollector if None)
             probes: Optional custom probes (uses default probes if None)
@@ -94,6 +104,21 @@ class KernelAuditAgent(MicroProbeAgentMixin, HardenedAgentBase):
             queue_adapter: LocalQueueAdapter for simplified queue interface
             metrics_interval: Seconds between metrics emissions
         """
+        # Auto-create infra when called via cli.run_agent() (zero-args path)
+        _auto_infra = device_id is None
+        device_id = device_id or socket.gethostname()
+
+        if _auto_infra and queue_adapter is None:
+            Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
+            queue_adapter = LocalQueueAdapter(
+                queue_path=QUEUE_PATH,
+                agent_name=agent_name,
+                device_id=device_id,
+                max_bytes=50 * 1024 * 1024,
+                max_retries=10,
+                signing_key_path=f"{CERT_DIR}/agent.ed25519",
+            )
+
         # Initialize MicroProbeAgentMixin first (handles probes)
         super().__init__(
             agent_name=agent_name,

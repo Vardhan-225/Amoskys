@@ -30,6 +30,8 @@ Usage:
 from __future__ import annotations
 
 import logging
+import socket
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from amoskys.agents.common.base import HardenedAgentBase
@@ -39,13 +41,23 @@ from amoskys.agents.common.probes import (
     ProbeContext,
     TelemetryEvent,
 )
+from amoskys.agents.common.queue_adapter import LocalQueueAdapter
+from amoskys.config import get_config
 
 # Use relative imports to avoid triggering amoskys.agents.__init__
 from .collector import BaseProtocolCollector, create_protocol_collector
 from .probes import PROTOCOL_PROBES
-from .types import ProtocolEvent
+from .agent_types import ProtocolEvent
 
 logger = logging.getLogger(__name__)
+
+config = get_config()
+CERT_DIR = config.agent.cert_dir
+QUEUE_PATH = getattr(
+    config.agent,
+    "protocol_collectors_queue_path",
+    "data/queue/protocol_collectors.db",
+)
 
 
 class ProtocolCollectors(MicroProbeAgentMixin, HardenedAgentBase):
@@ -62,9 +74,10 @@ class ProtocolCollectors(MicroProbeAgentMixin, HardenedAgentBase):
 
     def __init__(
         self,
-        device_id: str,
-        agent_name: str = "protocol_collectors_v2",
         collection_interval: float = 5.0,
+        *,
+        device_id: Optional[str] = None,
+        agent_name: str = "protocol_collectors",
         log_path: str = "/var/log/syslog",
         collector: Optional[BaseProtocolCollector] = None,
         use_stub: bool = False,
@@ -75,9 +88,9 @@ class ProtocolCollectors(MicroProbeAgentMixin, HardenedAgentBase):
         """Initialize ProtocolCollectorsV2.
 
         Args:
-            device_id: Unique device identifier
-            agent_name: Agent name for logging/metrics
             collection_interval: Seconds between collection cycles
+            device_id: Unique device identifier (defaults to hostname)
+            agent_name: Agent name for logging/metrics
             log_path: Path to network log file
             collector: Custom collector (overrides log_path)
             use_stub: Use stub collector for testing
@@ -85,6 +98,21 @@ class ProtocolCollectors(MicroProbeAgentMixin, HardenedAgentBase):
             metrics_interval: Seconds between metrics emissions
             probes: Custom probes (overrides defaults)
         """
+        # Auto-create infra when called via cli.run_agent() (zero-args path)
+        _auto_infra = device_id is None
+        device_id = device_id or socket.gethostname()
+
+        if _auto_infra and queue_adapter is None:
+            Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
+            queue_adapter = LocalQueueAdapter(
+                queue_path=QUEUE_PATH,
+                agent_name=agent_name,
+                device_id=device_id,
+                max_bytes=50 * 1024 * 1024,
+                max_retries=10,
+                signing_key_path=f"{CERT_DIR}/agent.ed25519",
+            )
+
         # Initialize using super() for proper MRO handling
         super().__init__(
             agent_name=agent_name,
@@ -180,7 +208,7 @@ class ProtocolCollectors(MicroProbeAgentMixin, HardenedAgentBase):
 
 
 # Convenience factory function
-def create_protocol_collectors_v2(
+def create_protocol_collectors(
     device_id: str,
     **kwargs,
 ) -> ProtocolCollectorsV2:

@@ -55,7 +55,7 @@ config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
 QUEUE_PATH = getattr(
-    config.agent, "peripheral_queue_path", "data/queue/peripheral_agent_v2.db"
+    config.agent, "peripheral_queue_path", "data/queue/peripheral.db"
 )
 
 
@@ -162,7 +162,7 @@ class PeripheralAgent(MicroProbeAgentMixin, HardenedAgentBase):
         Path(QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
         queue_adapter = LocalQueueAdapter(
             queue_path=QUEUE_PATH,
-            agent_name="peripheral_agent_v2",
+            agent_name="peripheral",
             device_id=device_id,
             max_bytes=50 * 1024 * 1024,
             max_retries=10,
@@ -171,7 +171,7 @@ class PeripheralAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
         # Initialize base classes
         super().__init__(
-            agent_name="peripheral_agent_v2",
+            agent_name="peripheral",
             device_id=device_id,
             collection_interval=collection_interval,
             eventbus_publisher=publisher,
@@ -318,7 +318,7 @@ class PeripheralAgent(MicroProbeAgentMixin, HardenedAgentBase):
             protocol="USB",
             events=proto_events,
             timestamp_ns=timestamp_ns,
-            collection_agent="peripheral_agent_v2",
+            collection_agent="peripheral",
             agent_version="2.0.0",
         )
 

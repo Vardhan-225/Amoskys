@@ -12,7 +12,7 @@ def main() -> None:
     """Entry point for flow agent module."""
     agent_main(
         agent_class=FlowAgent,
-        agent_name="flow_agent",
+        agent_name="flow",
         description="Network flow analysis agent - detects C2 beaconing, "
         "lateral movement, data exfiltration, and tunnel detection",
     )

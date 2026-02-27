@@ -1,7 +1,15 @@
-"""Backward-compatibility shim — use run_agent.py instead."""
+#!/usr/bin/env python3
+"""Deprecated: use ``python -m amoskys.agents.protocol_collectors`` instead."""
 
-from amoskys.agents.protocol_collectors.run_agent import *  # noqa: F401,F403
-from amoskys.agents.protocol_collectors.run_agent import main
+import warnings
+
+warnings.warn(
+    "run_agent_v2.py is deprecated. Use: python -m amoskys.agents.protocol_collectors",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+from amoskys.agents.protocol_collectors.__main__ import main  # noqa: E402
 
 if __name__ == "__main__":
     main()
