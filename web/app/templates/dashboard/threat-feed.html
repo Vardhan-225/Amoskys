@@ -288,7 +288,8 @@
 /* ── Explanation panel ── */
 .tf-triage-btn.tf-triage-why { background: rgba(0,170,255,0.12); color: #00aaff; border: 1px solid rgba(0,170,255,0.25); font-size: 0.72rem; }
 .tf-triage-btn.tf-triage-why:hover { background: rgba(0,170,255,0.25); }
-.tf-explain-panel { display: none; margin-top: 0.75rem; padding: 0.75rem; background: rgba(0,170,255,0.04); border: 1px solid rgba(0,170,255,0.12); border-radius: 6px; }
+.tf-explain-panel { display: none; margin-top: 0.75rem; padding: 0.75rem; background: rgba(0,170,255,0.04); border: 1px solid rgba(0,170,255,0.12); border-radius: 6px; animation: explain-fadein 0.25s ease; }
+@keyframes explain-fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 .tf-explain-panel.open { display: block; }
 .tf-explain-verdict { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.5rem; }
 .tf-explain-verdict.legitimate { background: rgba(0,255,136,0.15); color: #00ff88; }
@@ -305,6 +306,47 @@
 .tf-explain-rec.monitor { background: rgba(0,170,255,0.12); color: #00aaff; }
 .tf-explain-rec.dismiss { background: rgba(255,255,255,0.05); color: var(--text-muted); }
 
+/* ── MITRE Technique Cards in Explanation ── */
+.tf-mitre-cards { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+.tf-mitre-card {
+    display: flex; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 8px;
+    background: rgba(0,217,255,0.04); border: 1px solid rgba(0,217,255,0.1);
+    transition: all 0.2s; cursor: pointer;
+}
+.tf-mitre-card:hover { background: rgba(0,217,255,0.08); border-color: rgba(0,217,255,0.2); }
+.tf-mitre-card-id {
+    font-size: 0.75rem; font-weight: 800; color: var(--neural-primary);
+    font-family: monospace; white-space: nowrap; min-width: 65px;
+}
+.tf-mitre-card-body { flex: 1; min-width: 0; }
+.tf-mitre-card-tactic {
+    font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #a78bfa; margin-bottom: 2px;
+}
+.tf-mitre-card-desc { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4; }
+.tf-mitre-card-arrow { color: var(--text-muted); font-size: 0.8rem; align-self: center; flex-shrink: 0; }
+
+/* ── MITRE Tag Hover Tooltip ── */
+.tf-tag-mitre {
+    position: relative; cursor: help;
+}
+.tf-tag-mitre .mitre-tip {
+    display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    width: 240px; padding: 0.5rem 0.65rem; border-radius: 8px; z-index: 100;
+    background: rgba(10,14,39,0.97); border: 1px solid rgba(0,217,255,0.2);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5); pointer-events: none;
+    animation: tip-fadein 0.15s ease;
+}
+@keyframes tip-fadein { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+.tf-tag-mitre:hover .mitre-tip { display: block; }
+.mitre-tip-id { font-size: 0.72rem; font-weight: 800; color: var(--neural-primary); font-family: monospace; }
+.mitre-tip-tactic { font-size: 0.6rem; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; margin-top: 2px; }
+.mitre-tip-desc { font-size: 0.7rem; color: var(--text-secondary); line-height: 1.4; margin-top: 3px; }
+.mitre-tip::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: rgba(0,217,255,0.2);
+}
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
     .tf-filters { flex-direction: column; }
@@ -317,6 +359,34 @@
 </style>
 
 <script nonce="{{ csp_nonce() }}">
+/* MITRE ATT&CK technique reference for hover tooltips */
+var MITRE_DB = {
+    'T1078':     { tactic: 'Initial Access',        desc: 'Use of valid credentials from an external source' },
+    'T1110':     { tactic: 'Credential Access',      desc: 'Brute force authentication attempts' },
+    'T1110.001': { tactic: 'Credential Access',      desc: 'Password guessing attacks' },
+    'T1552':     { tactic: 'Credential Access',      desc: 'Access to unsecured credential files' },
+    'T1543.001': { tactic: 'Persistence',            desc: 'Installation of a macOS Launch Agent' },
+    'T1543.004': { tactic: 'Persistence',            desc: 'Installation of a macOS Launch Daemon' },
+    'T1053.003': { tactic: 'Persistence',            desc: 'Creation or modification of cron jobs' },
+    'T1547.015': { tactic: 'Persistence',            desc: 'Modification of login items' },
+    'T1548.003': { tactic: 'Privilege Escalation',   desc: 'Abuse of sudo privileges' },
+    'T1548.001': { tactic: 'Privilege Escalation',   desc: 'Setuid/setgid bit manipulation' },
+    'T1070.002': { tactic: 'Defense Evasion',        desc: 'Clearing of system logs' },
+    'T1222':     { tactic: 'Defense Evasion',        desc: 'File or directory permission modifications' },
+    'T1562.001': { tactic: 'Defense Evasion',        desc: 'Disabling or modifying security tools' },
+    'T1071.004': { tactic: 'Command & Control',      desc: 'DNS-based command and control' },
+    'T1071.001': { tactic: 'Command & Control',      desc: 'HTTP/S-based beaconing behavior' },
+    'T1568.002': { tactic: 'Command & Control',      desc: 'Domain generation algorithm activity' },
+    'T1046':     { tactic: 'Discovery',              desc: 'Network service scanning / enumeration' },
+    'T1057':     { tactic: 'Discovery',              desc: 'Process enumeration' },
+    'T1059':     { tactic: 'Execution',              desc: 'Use of command/scripting interpreters' },
+    'T1059.004': { tactic: 'Execution',              desc: 'Reverse shell via Unix shell' },
+    'T1005':     { tactic: 'Collection',             desc: 'Access to sensitive local files' },
+    'T1021.004': { tactic: 'Lateral Movement',       desc: 'SSH-based lateral movement' },
+    'T1048.003': { tactic: 'Exfiltration',           desc: 'Data exfiltration over DNS' },
+    'T1200':     { tactic: 'Initial Access',         desc: 'Hardware device insertion (USB/Thunderbolt)' },
+};
+
 class ThreatFeedController {
     constructor() {
         this.threats = [];
@@ -525,7 +595,13 @@ class ThreatFeedController {
             // Tags — agent name + hostname side by side, then IP, classification, risk, confidence
             let tags = '';
             if (t.mitre_techniques && t.mitre_techniques.length > 0) {
-                tags += t.mitre_techniques.map(m => '<span class="tf-tag tf-tag-mitre">' + m + '</span>').join('');
+                tags += t.mitre_techniques.map(m => {
+                    var info = MITRE_DB[m];
+                    var tip = info
+                        ? '<span class="mitre-tip"><span class="mitre-tip-id">' + m + '</span><span class="mitre-tip-tactic">' + this.esc(info.tactic) + '</span><span class="mitre-tip-desc">' + this.esc(info.desc) + '</span></span>'
+                        : '';
+                    return '<span class="tf-tag tf-tag-mitre">' + m + tip + '</span>';
+                }).join('');
             }
             if (t.agent_name) tags += '<span class="tf-tag tf-tag-agent">' + this.esc(t.agent_name) + '</span>';
             if (t.device_id) tags += '<span class="tf-tag tf-tag-host">' + this.esc(t.device_id) + '</span>';
@@ -655,11 +731,31 @@ class ThreatFeedController {
                     '<span class="tf-explain-factor-detail">' + this.esc(f.detail || '') + '</span>' +
                 '</div>'
             ).join('');
+
+            /* Build MITRE technique cards from structured detail */
+            var mitreCards = '';
+            var techniques = ex.mitre_techniques_detail || [];
+            if (techniques.length > 0) {
+                mitreCards = '<div style="margin-top:0.6rem;margin-bottom:0.4rem;font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">MITRE ATT&CK Mapping</div>' +
+                    '<div class="tf-mitre-cards">' + techniques.map(m =>
+                        '<div class="tf-mitre-card" onclick="window.open(\'https://attack.mitre.org/techniques/' + this.esc(m.id).replace('.', '/') + '/\', \'_blank\')">' +
+                            '<div class="tf-mitre-card-id">' + this.esc(m.id) + '</div>' +
+                            '<div class="tf-mitre-card-body">' +
+                                '<div class="tf-mitre-card-tactic">' + this.esc(m.tactic || '') + '</div>' +
+                                '<div class="tf-mitre-card-desc">' + this.esc(m.description || '') + '</div>' +
+                            '</div>' +
+                            '<div class="tf-mitre-card-arrow">&rarr;</div>' +
+                        '</div>'
+                    ).join('') + '</div>';
+            } else if (ex.mitre_context) {
+                mitreCards = '<div class="tf-explain-mitre">MITRE: ' + this.esc(ex.mitre_context) + '</div>';
+            }
+
             panel.innerHTML =
                 '<span class="tf-explain-verdict ' + (ex.verdict || 'legitimate') + '">' + (ex.verdict || 'legitimate').toUpperCase() + '</span>' +
                 ' <span style="color:var(--text-muted);font-size:0.75rem;">Confidence: ' + ((ex.confidence || 0) * 100).toFixed(0) + '%</span>' +
                 (factors || '') +
-                (ex.mitre_context ? '<div class="tf-explain-mitre">MITRE: ' + this.esc(ex.mitre_context) + '</div>' : '') +
+                mitreCards +
                 (ex.recommendation ? '<span class="tf-explain-rec ' + ex.recommendation + '">Rec: ' + ex.recommendation + '</span>' : '');
         } catch (e) {
             panel.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Failed to load explanation</div>';

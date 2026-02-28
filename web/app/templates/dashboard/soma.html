@@ -1,709 +1,915 @@
 {% extends "dashboard/base.html" %}
 
-{% block title %}SOMA Intelligence - AMOSKYS Cortex{% endblock %}
+{% block title %}SOMA Intelligence - AMOSKYS{% endblock %}
 
 {% block content %}
-<div class="neural-dashboard">
-    <!-- Header -->
-    <div class="neural-card">
-        <div class="card-header">
-            <h2 class="card-title">SOMA Intelligence</h2>
-            <div class="card-badge" id="brain-status-badge">Loading...</div>
+<div class="soma-page">
+
+    <!-- ========================================================= -->
+    <!-- BRAIN HERO                                                 -->
+    <!-- ========================================================= -->
+    <div class="soma-hero">
+        <div class="soma-hero-top">
+            <div class="brain-viz">
+                <svg class="brain-svg" viewBox="0 0 200 200" width="180" height="180">
+                    <defs>
+                        <filter id="brain-glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                        <radialGradient id="bg-grad" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00d9ff" stop-opacity="0.15"/><stop offset="100%" stop-color="#00d9ff" stop-opacity="0"/></radialGradient>
+                    </defs>
+                    <circle cx="100" cy="100" r="90" fill="url(#bg-grad)"/>
+                    <!-- Neural connections -->
+                    <g stroke="rgba(0,217,255,0.2)" stroke-width="1.2" fill="none" stroke-dasharray="4 4">
+                        <line x1="100" y1="100" x2="38" y2="55"/><line x1="100" y1="100" x2="162" y2="55"/>
+                        <line x1="100" y1="100" x2="38" y2="145"/><line x1="100" y1="100" x2="162" y2="145"/>
+                        <line x1="100" y1="100" x2="100" y2="28"/><line x1="100" y1="100" x2="100" y2="172"/>
+                        <line x1="38" y1="55" x2="100" y2="28"/><line x1="162" y1="55" x2="100" y2="28"/>
+                        <line x1="38" y1="145" x2="100" y2="172"/><line x1="162" y1="145" x2="100" y2="172"/>
+                    </g>
+                    <!-- Data particles along connections -->
+                    <circle r="2.5" fill="#00d9ff" opacity="0.8"><animateMotion dur="2.5s" repeatCount="indefinite" path="M100,100 L38,55 L100,28 L162,55 L100,100"/></circle>
+                    <circle r="2" fill="#00ff88" opacity="0.7"><animateMotion dur="3s" repeatCount="indefinite" path="M100,100 L38,145 L100,172 L162,145 L100,100"/></circle>
+                    <circle r="2" fill="#ff3366" opacity="0.6"><animateMotion dur="4s" repeatCount="indefinite" path="M100,28 L38,55 L38,145 L100,172 L162,145 L162,55 L100,28"/></circle>
+                    <!-- Outer nodes -->
+                    <g>
+                        <circle cx="38" cy="55" r="7" fill="rgba(0,217,255,0.08)" stroke="rgba(0,217,255,0.4)" stroke-width="1.5"/>
+                        <circle cx="162" cy="55" r="7" fill="rgba(0,217,255,0.08)" stroke="rgba(0,217,255,0.4)" stroke-width="1.5"/>
+                        <circle cx="38" cy="145" r="7" fill="rgba(0,217,255,0.08)" stroke="rgba(0,217,255,0.4)" stroke-width="1.5"/>
+                        <circle cx="162" cy="145" r="7" fill="rgba(0,217,255,0.08)" stroke="rgba(0,217,255,0.4)" stroke-width="1.5"/>
+                        <circle cx="100" cy="28" r="7" fill="rgba(0,217,255,0.08)" stroke="rgba(0,217,255,0.4)" stroke-width="1.5"/>
+                        <circle cx="100" cy="172" r="7" fill="rgba(0,217,255,0.08)" stroke="rgba(0,217,255,0.4)" stroke-width="1.5"/>
+                    </g>
+                    <!-- Central brain -->
+                    <circle cx="100" cy="100" r="22" fill="rgba(0,217,255,0.08)" stroke="#00d9ff" stroke-width="2.5" filter="url(#brain-glow)">
+                        <animate attributeName="r" values="20;24;20" dur="3s" repeatCount="indefinite"/>
+                    </circle>
+                    <!-- Pulse rings -->
+                    <circle cx="100" cy="100" fill="none" stroke="#00d9ff" stroke-width="1">
+                        <animate attributeName="r" values="24;70" dur="3s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="0.4;0" dur="3s" repeatCount="indefinite"/>
+                    </circle>
+                    <circle cx="100" cy="100" fill="none" stroke="#00ff88" stroke-width="0.8">
+                        <animate attributeName="r" values="24;70" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="0.3;0" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+                    </circle>
+                    <!-- Brain label -->
+                    <text x="100" y="97" text-anchor="middle" fill="#00d9ff" font-size="11" font-weight="800" letter-spacing="1">SOMA</text>
+                    <text x="100" y="109" text-anchor="middle" fill="rgba(0,217,255,0.6)" font-size="7" font-weight="600" letter-spacing="0.5">BRAIN</text>
+                </svg>
+            </div>
+
+            <div class="soma-hero-info">
+                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
+                    <h2 class="soma-title">SOMA Intelligence</h2>
+                    <div class="soma-status-badge" id="brain-status-badge">Loading...</div>
+                </div>
+                <p class="soma-subtitle">Autonomous ML-driven anomaly detection, classification scoring, and agent reliability tracking. Five guardrails ensure safe, provable operation.</p>
+                <div class="soma-guardrails">
+                    <span class="soma-g-pill" title="G1: available() gate — model must pass readiness check">G1</span>
+                    <span class="soma-g-pill" title="G2: No heuristic-labelled training data">G2</span>
+                    <span class="soma-g-pill" title="G3: Event-native features only">G3</span>
+                    <span class="soma-g-pill" title="G4: Persisted IF calibration p5/p95">G4</span>
+                    <span class="soma-g-pill" title="G5: Rate-limited AutoCalibrator (max 10/cycle, min 200 evidence)">G5</span>
+                </div>
+            </div>
         </div>
-        <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">
-            Unified analysis pipeline, ML-driven scoring, autonomous training, and agent reliability tracking.
-        </p>
-        <!-- Section jump nav -->
-        <div id="section-nav" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <a href="#pipeline" class="soma-nav-pill">Pipeline</a>
-            <a href="#classification" class="soma-nav-pill">Classification</a>
-            <a href="#ml-models" class="soma-nav-pill">ML Models</a>
-            <a href="#features" class="soma-nav-pill">Features</a>
-            <a href="#training" class="soma-nav-pill">Training</a>
-            <a href="#calibrator" class="soma-nav-pill">Calibrator</a>
-            <a href="#agents" class="soma-nav-pill">Agents</a>
+
+        <!-- Metrics strip -->
+        <div class="soma-hero-stats">
+            <div class="soma-stat">
+                <span class="soma-stat-val" id="stat-cycles">--</span>
+                <span class="soma-stat-lbl">Training Cycles</span>
+            </div>
+            <div class="soma-stat-sep"></div>
+            <div class="soma-stat">
+                <span class="soma-stat-val" id="stat-events">--</span>
+                <span class="soma-stat-lbl">Events Scored</span>
+            </div>
+            <div class="soma-stat-sep"></div>
+            <div class="soma-stat">
+                <span class="soma-stat-val" id="stat-models">--</span>
+                <span class="soma-stat-lbl">Models Loaded</span>
+            </div>
+            <div class="soma-stat-sep"></div>
+            <div class="soma-stat">
+                <span class="soma-stat-val" id="stat-features">--</span>
+                <span class="soma-stat-lbl">Features</span>
+            </div>
+            <div class="soma-stat-sep"></div>
+            <div class="soma-stat">
+                <span class="soma-stat-val" id="stat-calibrations">--</span>
+                <span class="soma-stat-lbl">Auto-Calibrations</span>
+            </div>
+        </div>
+
+        <!-- Section nav -->
+        <div class="soma-hero-nav" id="section-nav">
+            <a href="#pipeline" class="soma-nav-pill active" data-section="pipeline">Pipeline</a>
+            <a href="#classification" class="soma-nav-pill" data-section="classification">Classification</a>
+            <a href="#ml-models" class="soma-nav-pill" data-section="ml-models">ML Models</a>
+            <a href="#features" class="soma-nav-pill" data-section="features">Features</a>
+            <a href="#training" class="soma-nav-pill" data-section="training">Training</a>
+            <a href="#calibrator" class="soma-nav-pill" data-section="calibrator">Calibrator</a>
+            <a href="#agents" class="soma-nav-pill" data-section="agents">Agents</a>
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- Section 1: Pipeline Architecture                   -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <div class="neural-card" id="pipeline">
-        <div class="card-header">
-            <h3 class="card-title">Pipeline Architecture</h3>
-            <span class="neural-loading" id="pipeline-loading" style="display: none;"></span>
+    <!-- ========================================================= -->
+    <!-- PIPELINE ARCHITECTURE                                      -->
+    <!-- ========================================================= -->
+    <div class="soma-card" id="pipeline">
+        <div class="soma-card-hdr">
+            <h3>Pipeline Architecture</h3>
+            <span class="soma-card-ts" id="pipeline-ts">--</span>
         </div>
-        <div id="pipeline-flow" style="display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 1rem 0;">
-            <!-- Pipeline stages rendered by JS -->
+        <div class="pipeline-flow" id="pipeline-flow">
+            <div class="soma-skeleton" style="height:80px;"></div>
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- Section 2: Signal vs Noise + Learning Metrics      -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <div id="classification" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">Signal vs Noise</h3>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
-                <div class="metric-card" style="border-left: 3px solid #00ff88;">
-                    <div class="metric-value" id="class-legitimate" style="color: #00ff88;">--</div>
-                    <div class="metric-label">Legitimate</div>
-                    <div class="metric-sub" id="class-legitimate-pct" style="color: var(--text-secondary);">--%</div>
+    <!-- ========================================================= -->
+    <!-- SIGNAL VS NOISE + LEARNING                                 -->
+    <!-- ========================================================= -->
+    <div class="soma-row" id="classification">
+        <div class="soma-card">
+            <div class="soma-card-hdr"><h3>Signal vs Noise</h3></div>
+            <div class="class-metrics">
+                <div class="class-metric" style="--accent: #00ff88;">
+                    <div class="class-metric-val" id="class-legit">--</div>
+                    <div class="class-metric-lbl">Legitimate</div>
+                    <div class="class-metric-pct" id="class-legit-pct">--%</div>
                 </div>
-                <div class="metric-card" style="border-left: 3px solid #ffaa00;">
-                    <div class="metric-value" id="class-suspicious" style="color: #ffaa00;">--</div>
-                    <div class="metric-label">Suspicious</div>
-                    <div class="metric-sub" id="class-suspicious-pct" style="color: var(--text-secondary);">--%</div>
+                <div class="class-metric" style="--accent: #ffaa00;">
+                    <div class="class-metric-val" id="class-susp">--</div>
+                    <div class="class-metric-lbl">Suspicious</div>
+                    <div class="class-metric-pct" id="class-susp-pct">--%</div>
                 </div>
-                <div class="metric-card" style="border-left: 3px solid #ff3366;">
-                    <div class="metric-value" id="class-malicious" style="color: #ff3366;">--</div>
-                    <div class="metric-label">Malicious</div>
-                    <div class="metric-sub" id="class-malicious-pct" style="color: var(--text-secondary);">--%</div>
+                <div class="class-metric" style="--accent: #ff3366;">
+                    <div class="class-metric-val" id="class-mal">--</div>
+                    <div class="class-metric-lbl">Malicious</div>
+                    <div class="class-metric-pct" id="class-mal-pct">--%</div>
                 </div>
             </div>
-            <div style="position: relative; width: 100%; height: 200px;">
+            <div style="position:relative;width:100%;height:200px;">
                 <canvas id="classification-donut"></canvas>
             </div>
         </div>
 
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">Learning Metrics</h3>
+        <div class="soma-card">
+            <div class="soma-card-hdr"><h3>Learning Metrics</h3></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+                <div class="sm-metric"><span class="sm-val" id="events-processed">--</span><span class="sm-lbl">Events Scored</span></div>
+                <div class="sm-metric"><span class="sm-val" id="fp-rate">--</span><span class="sm-lbl">FP Rate</span></div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
-                <div class="metric-card">
-                    <div class="metric-value" id="events-processed">--</div>
-                    <div class="metric-label">Events Scored</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-value" id="fp-rate">--</div>
-                    <div class="metric-label">FP Rate</div>
-                </div>
-            </div>
-            <div id="learning-log" style="max-height: 180px; overflow-y: auto;">
-                <div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">
-                    Feedback loop active. Triage decisions feed into AMRDR agent reliability tracking.
-                    Submit verdicts on incidents to improve classification accuracy.
+            <div class="soma-info-box">
+                <div class="soma-info-icon">&#9432;</div>
+                <div>
+                    <strong>Feedback Loop Active</strong><br>
+                    Triage verdicts (Legit / Investigate / Incident) flow into AMRDR agent reliability tracking, improving classification with every decision.
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- Section 3: ML Models — Brain Status + IF + GBC     -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <div id="ml-models" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-        <!-- Brain Status -->
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">Brain Status</h3>
+    <!-- ========================================================= -->
+    <!-- ML MODELS                                                  -->
+    <!-- ========================================================= -->
+    <div class="soma-card" id="ml-models">
+        <div class="soma-card-hdr"><h3>ML Models</h3></div>
+        <div class="model-grid">
+            <!-- IsolationForest -->
+            <div class="model-card">
+                <div class="model-ring-wrap">
+                    <svg class="model-ring" viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+                        <circle class="model-ring-arc" id="if-ring" cx="40" cy="40" r="34" fill="none"
+                                stroke="#ff3366" stroke-width="6" stroke-linecap="round"
+                                stroke-dasharray="213.6" stroke-dashoffset="213.6"
+                                transform="rotate(-90 40 40)"/>
+                    </svg>
+                    <div class="model-ring-val" id="if-ring-val">--</div>
+                </div>
+                <div class="model-info">
+                    <div class="model-name">IsolationForest<span class="model-badge" id="if-badge">--</span></div>
+                    <div class="model-desc">Unsupervised anomaly detection. Identifies outliers in event feature space without labelled data.</div>
+                    <div class="model-stats">
+                        <div><span class="model-stat-lbl">Anomaly Rate</span><span class="model-stat-val" id="if-anomaly">--</span></div>
+                        <div><span class="model-stat-lbl">Samples</span><span class="model-stat-val" id="if-samples">--</span></div>
+                        <div><span class="model-stat-lbl">Calibration p5</span><span class="model-stat-val" id="if-p5">--</span></div>
+                        <div><span class="model-stat-lbl">Calibration p95</span><span class="model-stat-val" id="if-p95">--</span></div>
+                    </div>
+                </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div class="metric-card" style="border-left: 3px solid var(--neural-primary);">
-                    <div class="metric-value" id="training-cycles" style="color: var(--neural-primary);">--</div>
-                    <div class="metric-label">Training Cycles</div>
-                </div>
-                <div class="metric-card" style="border-left: 3px solid var(--neural-success);">
-                    <div class="metric-value" id="events-trained" style="color: var(--neural-success);">--</div>
-                    <div class="metric-label">Events Trained On</div>
-                </div>
-                <div class="metric-card" style="border-left: 3px solid var(--neural-warning);">
-                    <div class="metric-value" id="feature-count" style="color: var(--neural-warning);">--</div>
-                    <div class="metric-label">Features</div>
-                </div>
-                <div class="metric-card" style="border-left: 3px solid #b388ff;">
-                    <div class="metric-value" id="calibrator-adj-count" style="color: #b388ff;">--</div>
-                    <div class="metric-label">Auto-Calibrations</div>
-                </div>
-            </div>
-        </div>
 
-        <!-- IsolationForest -->
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">IsolationForest</h3>
-                <div class="card-badge" id="if-status-badge">--</div>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div class="metric-card" style="border-left: 3px solid var(--neural-danger);">
-                    <div class="metric-value" id="if-anomaly-rate" style="color: var(--neural-danger);">--</div>
-                    <div class="metric-label">Anomaly Rate</div>
+            <!-- GradientBoosting -->
+            <div class="model-card">
+                <div class="model-ring-wrap">
+                    <svg class="model-ring" viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+                        <circle class="model-ring-arc" id="gbc-ring" cx="40" cy="40" r="34" fill="none"
+                                stroke="#00ff88" stroke-width="6" stroke-linecap="round"
+                                stroke-dasharray="213.6" stroke-dashoffset="213.6"
+                                transform="rotate(-90 40 40)"/>
+                    </svg>
+                    <div class="model-ring-val" id="gbc-ring-val">--</div>
                 </div>
-                <div class="metric-card" style="border-left: 3px solid var(--neural-secondary);">
-                    <div class="metric-value" id="if-samples" style="color: var(--neural-secondary);">--</div>
-                    <div class="metric-label">Samples</div>
+                <div class="model-info">
+                    <div class="model-name">GradientBoosting<span class="model-badge" id="gbc-badge">--</span></div>
+                    <div class="model-desc">Supervised classification. Learns from high-trust incident/IOC-confirmed labels (requires 50+ samples).</div>
+                    <div class="model-stats">
+                        <div><span class="model-stat-lbl">Accuracy</span><span class="model-stat-val" id="gbc-accuracy">--</span></div>
+                        <div><span class="model-stat-lbl">F1 (Macro)</span><span class="model-stat-val" id="gbc-f1">--</span></div>
+                        <div><span class="model-stat-lbl">High-Trust Labels</span><span class="model-stat-val" id="gbc-labels">--</span></div>
+                    </div>
                 </div>
             </div>
-            <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
-                <div>Calibration p5: <span id="if-cal-p5" style="color: var(--text-secondary);">--</span></div>
-                <div>Calibration p95: <span id="if-cal-p95" style="color: var(--text-secondary);">--</span></div>
-            </div>
-        </div>
 
-        <!-- GradientBoosting -->
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">GradientBoosting</h3>
-                <div class="card-badge" id="gbc-status-badge">--</div>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div class="metric-card" style="border-left: 3px solid var(--neural-success);">
-                    <div class="metric-value" id="gbc-accuracy" style="color: var(--neural-success);">--</div>
-                    <div class="metric-label">Accuracy</div>
+            <!-- EventEmbedder -->
+            <div class="model-card">
+                <div class="model-ring-wrap">
+                    <svg class="model-ring" viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+                        <circle class="model-ring-arc" id="emb-ring" cx="40" cy="40" r="34" fill="none"
+                                stroke="#00d9ff" stroke-width="6" stroke-linecap="round"
+                                stroke-dasharray="213.6" stroke-dashoffset="213.6"
+                                transform="rotate(-90 40 40)"/>
+                    </svg>
+                    <div class="model-ring-val" id="emb-ring-val">--</div>
                 </div>
-                <div class="metric-card" style="border-left: 3px solid var(--neural-primary);">
-                    <div class="metric-value" id="gbc-f1" style="color: var(--neural-primary);">--</div>
-                    <div class="metric-label">F1 (Macro)</div>
+                <div class="model-info">
+                    <div class="model-name">EventEmbedder<span class="model-badge" id="emb-badge">--</span></div>
+                    <div class="model-desc">Co-occurrence matrix + TruncatedSVD (32 dims). Creates semantic embeddings for event similarity.</div>
+                    <div class="model-stats">
+                        <div><span class="model-stat-lbl">Dimensions</span><span class="model-stat-val">32</span></div>
+                        <div><span class="model-stat-lbl">Method</span><span class="model-stat-val">SVD</span></div>
+                    </div>
                 </div>
-            </div>
-            <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
-                <div>High-trust labels: <span id="gbc-labels" style="color: var(--text-secondary);">--</span></div>
-                <div>Requires: 50+ incident/IOC-confirmed labels</div>
             </div>
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- Section 4: Feature Importances                     -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <div class="neural-card" id="features">
-        <div class="card-header">
-            <h3 class="card-title">Top Feature Importances</h3>
-            <span style="color: var(--text-muted); font-size: 0.85rem;">From GradientBoosting model (when trained)</span>
+    <!-- ========================================================= -->
+    <!-- FEATURE IMPORTANCES                                        -->
+    <!-- ========================================================= -->
+    <div class="soma-card" id="features">
+        <div class="soma-card-hdr">
+            <h3>Top Feature Importances</h3>
+            <span class="soma-card-sub">From GradientBoosting model (when trained)</span>
         </div>
-        <div id="feature-bars" style="padding: 1rem 0;">
-            <div style="color: var(--text-muted); text-align: center;">No features available yet. Train a model to see importances.</div>
-        </div>
-    </div>
-
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- Section 5: Training History                        -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <div class="neural-card" id="training">
-        <div class="card-header">
-            <h3 class="card-title">Training History</h3>
-            <button class="btn-neural" id="force-train-btn" style="padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer; background: rgba(0,217,255,0.15); border: 1px solid rgba(0,217,255,0.3); color: var(--neural-primary); border-radius: 6px;">
-                Force Train Now
-            </button>
-        </div>
-        <div id="training-history" style="max-height: 400px; overflow-y: auto;">
-            <div style="color: var(--text-muted); text-align: center; padding: 2rem;">No training history yet.</div>
+        <div id="feature-bars" class="feature-bars">
+            <div class="soma-skeleton" style="height:200px;"></div>
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- Section 6: AutoCalibrator                          -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <div class="neural-card" id="calibrator">
-        <div class="card-header">
-            <h3 class="card-title">AutoCalibrator Adjustments</h3>
-            <span style="color: var(--text-muted); font-size: 0.85rem;">Max 10/cycle, min 200 evidence (G5 guardrails)</span>
+    <!-- ========================================================= -->
+    <!-- TRAINING HISTORY                                           -->
+    <!-- ========================================================= -->
+    <div class="soma-card" id="training">
+        <div class="soma-card-hdr">
+            <h3>Training History</h3>
+            <div style="display:flex;gap:0.75rem;align-items:center;">
+                <span class="soma-card-sub" id="training-count">--</span>
+                <button class="soma-btn-action" id="force-train-btn">Force Train Now</button>
+            </div>
         </div>
-        <div id="calibrator-log" style="max-height: 300px; overflow-y: auto;">
-            <div style="color: var(--text-muted); text-align: center; padding: 2rem;">No adjustments yet.</div>
+        <div id="training-sparkline" style="margin-bottom:1rem;"></div>
+        <div id="training-history" class="training-table">
+            <div class="soma-skeleton" style="height:200px;"></div>
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!-- Section 7: Agent Reliability Grid                  -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <div class="neural-card" id="agents">
-        <div class="card-header">
-            <h3 class="card-title">Agent Reliability (AMRDR)</h3>
-            <span class="neural-loading" id="agents-loading" style="display: none;"></span>
+    <!-- ========================================================= -->
+    <!-- AUTOCALIBRATOR                                             -->
+    <!-- ========================================================= -->
+    <div class="soma-card" id="calibrator">
+        <div class="soma-card-hdr">
+            <h3>AutoCalibrator Adjustments</h3>
+            <div class="soma-guardrails" style="gap:0.3rem;">
+                <span class="soma-g-pill" title="Max 10 adjustments per cycle">G5: max 10/cycle</span>
+                <span class="soma-g-pill" title="Minimum 200 evidence events">min 200 evidence</span>
+            </div>
         </div>
-        <div id="agent-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
-            <div style="color: var(--text-secondary); padding: 1rem;">Loading agent states...</div>
+        <div id="calibrator-log" class="calibrator-log">
+            <div class="soma-empty">No adjustments yet. AutoCalibrator activates when sufficient evidence accumulates.</div>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- AGENT RELIABILITY                                          -->
+    <!-- ========================================================= -->
+    <div class="soma-card" id="agents">
+        <div class="soma-card-hdr">
+            <h3>Agent Reliability (AMRDR)</h3>
+            <a href="/dashboard/reliability" class="soma-link">Full Dashboard &rarr;</a>
+        </div>
+        <div id="agent-grid" class="agent-grid">
+            <div class="soma-skeleton" style="height:150px;"></div>
         </div>
     </div>
 </div>
 
 <style>
-    /* Section jump nav pills */
-    .soma-nav-pill {
-        display: inline-block;
-        padding: 0.3rem 0.75rem;
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 12px;
-        text-decoration: none;
-        transition: all 0.2s;
-    }
-    .soma-nav-pill:hover {
-        color: var(--neural-primary);
-        border-color: rgba(0,217,255,0.3);
-        background: rgba(0,217,255,0.08);
-    }
+/* ═══════════════════════════════════════════════════════════════ */
+/* SOMA Intelligence Showcase                                      */
+/* ═══════════════════════════════════════════════════════════════ */
+.soma-page { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
 
-    /* Pipeline flow */
-    .pipeline-stage {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 0.75rem 1rem;
-        border-radius: 8px;
-        background: rgba(0, 255, 136, 0.05);
-        border: 1px solid rgba(0, 255, 136, 0.15);
-        min-width: 120px;
-        text-align: center;
-        transition: all 0.3s;
-    }
-    .pipeline-stage.inactive {
-        background: rgba(255, 170, 0, 0.05);
-        border-color: rgba(255, 170, 0, 0.2);
-    }
-    .pipeline-stage-name {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--text-primary);
-        margin-bottom: 0.25rem;
-    }
-    .pipeline-stage-status {
-        font-size: 0.7rem;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-weight: 500;
-    }
-    .pipeline-stage-status.active {
-        background: rgba(0, 255, 136, 0.15);
-        color: #00ff88;
-    }
-    .pipeline-stage-status.inactive {
-        background: rgba(255, 170, 0, 0.15);
-        color: #ffaa00;
-    }
-    .pipeline-arrow {
-        color: rgba(0, 255, 136, 0.4);
-        font-size: 1.5rem;
-        padding: 0 0.25rem;
-        flex-shrink: 0;
-    }
+/* ── Hero ── */
+.soma-hero {
+    background: linear-gradient(135deg, rgba(0,217,255,0.07), rgba(0,255,136,0.03), rgba(0,217,255,0.05));
+    border: 1px solid rgba(0,217,255,0.15);
+    border-radius: 16px; overflow: hidden; position: relative;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.soma-hero::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,217,255,0.5), rgba(0,255,136,0.3), rgba(0,217,255,0.5), transparent);
+}
+.soma-hero-top {
+    display: grid; grid-template-columns: 200px 1fr; align-items: center; gap: 2rem; padding: 2rem 2.5rem 1.5rem;
+}
+.brain-viz { display: flex; justify-content: center; align-items: center; }
+.brain-svg { filter: drop-shadow(0 0 20px rgba(0,217,255,0.15)); }
+.soma-title { font-size: 1.6rem; font-weight: 800; color: var(--text-primary); }
+.soma-subtitle { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem; }
+.soma-status-badge {
+    padding: 0.2rem 0.8rem; border-radius: 16px; font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+}
+.soma-status-badge.badge-success { background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); }
+.soma-status-badge.badge-warning { background: rgba(255,170,0,0.15); color: #ffaa00; border: 1px solid rgba(255,170,0,0.3); }
+.soma-status-badge.badge-critical { background: rgba(255,51,102,0.15); color: #ff3366; border: 1px solid rgba(255,51,102,0.3); }
 
-    /* Metric cards */
-    .metric-card {
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 8px;
-        padding: 0.75rem 1rem;
-    }
-    .metric-value {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: var(--text-primary);
-        line-height: 1.2;
-    }
-    .metric-label {
-        font-size: 0.75rem;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .metric-sub {
-        font-size: 0.7rem;
-        margin-top: 2px;
-    }
+.soma-guardrails { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.soma-g-pill {
+    padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.65rem; font-weight: 700;
+    background: rgba(0,217,255,0.08); color: var(--neural-primary);
+    border: 1px solid rgba(0,217,255,0.15); cursor: help; transition: all 0.2s;
+    letter-spacing: 0.3px;
+}
+.soma-g-pill:hover { background: rgba(0,217,255,0.15); border-color: rgba(0,217,255,0.3); }
 
-    /* Agent cards */
-    .agent-card {
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 8px;
-        padding: 1rem;
-        border: 1px solid rgba(255, 255, 255, 0.06);
-    }
-    .agent-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.75rem;
-    }
-    .agent-name {
-        font-weight: 600;
-        font-size: 0.85rem;
-        color: var(--text-primary);
-    }
-    .agent-tier {
-        font-size: 0.65rem;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-    .tier-nominal { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
-    .tier-soft { background: rgba(255, 170, 0, 0.15); color: #ffaa00; }
-    .tier-hard { background: rgba(255, 51, 102, 0.15); color: #ff3366; }
-    .tier-quarantine { background: rgba(255, 0, 0, 0.2); color: #ff0000; }
+/* ── Hero Stats Strip ── */
+.soma-hero-stats {
+    display: flex; align-items: center; justify-content: center; gap: 0;
+    padding: 0.75rem 2rem; border-top: 1px solid rgba(255,255,255,0.06);
+    background: rgba(0,0,0,0.15);
+}
+.soma-stat { display: flex; flex-direction: column; align-items: center; padding: 0 2rem; min-width: 90px; }
+.soma-stat-val {
+    font-size: 1.4rem; font-weight: 700; color: var(--text-primary); line-height: 1.2;
+    font-variant-numeric: tabular-nums; transition: color 0.3s;
+}
+.soma-stat-lbl { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; font-weight: 600; }
+.soma-stat-sep { width: 1px; height: 28px; background: rgba(255,255,255,0.08); flex-shrink: 0; }
 
-    .agent-metric {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 0.8rem;
-        margin-bottom: 0.4rem;
-    }
-    .agent-metric-label { color: var(--text-secondary); }
-    .agent-metric-value { color: var(--text-primary); font-weight: 500; }
+/* ── Hero Nav ── */
+.soma-hero-nav {
+    display: flex; gap: 0.4rem; padding: 0.6rem 2rem; border-top: 1px solid rgba(255,255,255,0.04);
+    background: rgba(0,0,0,0.08); flex-wrap: wrap;
+}
+.soma-nav-pill {
+    padding: 0.3rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+    color: var(--text-muted); text-decoration: none; border: 1px solid transparent;
+    transition: all 0.2s; cursor: pointer;
+}
+.soma-nav-pill:hover { color: var(--neural-primary); background: rgba(0,217,255,0.06); }
+.soma-nav-pill.active {
+    color: var(--neural-primary); background: rgba(0,217,255,0.1);
+    border-color: rgba(0,217,255,0.2);
+}
 
-    .reliability-bar {
-        width: 100%;
-        height: 6px;
-        background: rgba(255, 255, 255, 0.08);
-        border-radius: 3px;
-        margin-top: 0.5rem;
-        overflow: hidden;
-    }
-    .reliability-fill {
-        height: 100%;
-        border-radius: 3px;
-        transition: width 0.5s ease;
-    }
+/* ── Shared Card ── */
+.soma-card {
+    background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 1.25rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    animation: soma-fadein 0.4s ease;
+}
+@keyframes soma-fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.soma-card-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.soma-card-hdr h3 { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); }
+.soma-card-ts { font-size: 0.7rem; color: var(--text-muted); }
+.soma-card-sub { font-size: 0.75rem; color: var(--text-muted); }
+.soma-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+.soma-link { font-size: 0.75rem; color: var(--neural-primary); text-decoration: none; }
+.soma-link:hover { text-decoration: underline; }
+.soma-empty { color: var(--text-muted); text-align: center; padding: 2rem; font-size: 0.85rem; }
 
-    .drift-badge {
-        font-size: 0.65rem;
-        padding: 1px 6px;
-        border-radius: 8px;
-        margin-left: 0.5rem;
-    }
-    .drift-none { background: rgba(0, 255, 136, 0.1); color: #00ff88; }
-    .drift-gradual { background: rgba(255, 170, 0, 0.15); color: #ffaa00; }
-    .drift-abrupt { background: rgba(255, 51, 102, 0.15); color: #ff3366; }
+/* ── Loading Skeleton ── */
+.soma-skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+    border-radius: 8px;
+}
+@keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ── Info Box ── */
+.soma-info-box {
+    display: flex; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: 8px;
+    background: rgba(0,217,255,0.04); border: 1px solid rgba(0,217,255,0.1);
+    font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;
+}
+.soma-info-icon { font-size: 1.2rem; color: var(--neural-primary); flex-shrink: 0; }
+.soma-info-box strong { color: var(--text-primary); }
+
+/* ── Pipeline ── */
+.pipeline-flow { display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 1rem 0; }
+.pipe-stage {
+    display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+    padding: 0.8rem 1.2rem; border-radius: 10px; min-width: 110px; text-align: center;
+    position: relative; cursor: default; transition: all 0.3s;
+}
+.pipe-stage.active {
+    background: rgba(0,255,136,0.06); border: 1px solid rgba(0,255,136,0.2);
+    box-shadow: 0 0 15px rgba(0,255,136,0.05);
+}
+.pipe-stage.inactive {
+    background: rgba(255,170,0,0.04); border: 1px solid rgba(255,170,0,0.15);
+}
+.pipe-stage:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+.pipe-stage-name { font-size: 0.78rem; font-weight: 700; color: var(--text-primary); }
+.pipe-stage-status {
+    font-size: 0.6rem; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.3px;
+}
+.pipe-stage-status.active { background: rgba(0,255,136,0.15); color: #00ff88; }
+.pipe-stage-status.inactive { background: rgba(255,170,0,0.15); color: #ffaa00; }
+.pipe-arrow {
+    flex-shrink: 0; display: flex; align-items: center; padding: 0 0.15rem;
+}
+.pipe-arrow svg { display: block; }
+
+/* ── Classification Metrics ── */
+.class-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+.class-metric {
+    background: rgba(255,255,255,0.03); border-radius: 8px; padding: 0.75rem 1rem;
+    border-left: 3px solid var(--accent);
+}
+.class-metric-val { font-size: 1.5rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
+.class-metric-lbl { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+.class-metric-pct { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+
+/* ── Small Metric ── */
+.sm-metric { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 0.75rem 1rem; }
+.sm-val { display: block; font-size: 1.5rem; font-weight: 700; color: var(--text-primary); line-height: 1.2; }
+.sm-lbl { display: block; font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ── Model Grid ── */
+.model-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem; }
+.model-card {
+    display: flex; gap: 1.25rem; padding: 1.25rem; border-radius: 10px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+    transition: all 0.2s;
+}
+.model-card:hover { background: rgba(255,255,255,0.04); border-color: rgba(0,217,255,0.15); transform: translateY(-1px); }
+.model-ring-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+.model-ring { width: 80px; height: 80px; }
+.model-ring-arc { transition: stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1), stroke 0.4s; }
+.model-ring-val {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; font-weight: 700; color: var(--text-primary);
+}
+.model-info { flex: 1; min-width: 0; }
+.model-name { font-size: 0.88rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem; }
+.model-badge {
+    font-size: 0.6rem; padding: 0.1rem 0.5rem; border-radius: 8px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.3px;
+}
+.model-badge.loaded { background: rgba(0,255,136,0.15); color: #00ff88; }
+.model-badge.skipped { background: rgba(255,170,0,0.15); color: #ffaa00; }
+.model-badge.pending { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+.model-desc { font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 0.5rem; }
+.model-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 1rem; }
+.model-stat-lbl { font-size: 0.7rem; color: var(--text-muted); }
+.model-stat-val { font-size: 0.75rem; color: var(--text-primary); font-weight: 600; margin-left: auto; }
+.model-stats > div { display: flex; justify-content: space-between; }
+
+/* ── Feature Bars ── */
+.feature-bars { display: flex; flex-direction: column; gap: 0.5rem; }
+.feat-row {
+    display: flex; align-items: center; gap: 0.75rem;
+    animation: feat-slidein 0.4s ease both;
+}
+@keyframes feat-slidein { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+.feat-name { width: 180px; font-size: 0.8rem; color: var(--text-secondary); text-align: right; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feat-bar-bg { flex: 1; height: 24px; background: rgba(255,255,255,0.04); border-radius: 4px; overflow: hidden; }
+.feat-bar {
+    height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+    background: linear-gradient(90deg, rgba(0,217,255,0.3), rgba(0,217,255,0.7));
+}
+.feat-val { width: 55px; font-size: 0.8rem; color: var(--neural-primary); text-align: right; font-weight: 600; flex-shrink: 0; }
+
+/* ── Training Table ── */
+.training-table { max-height: 400px; overflow-y: auto; }
+.training-table::-webkit-scrollbar { width: 4px; }
+.training-table::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.training-table table { width: 100%; border-collapse: collapse; }
+.training-table th {
+    text-align: left; padding: 0.5rem 0.75rem; font-size: 0.7rem; font-weight: 700;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid rgba(255,255,255,0.08); position: sticky; top: 0;
+    background: var(--bg-secondary);
+}
+.training-table td {
+    padding: 0.5rem 0.75rem; font-size: 0.82rem; border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.training-table tr:hover td { background: rgba(0,217,255,0.03); }
+
+/* ── Action Button ── */
+.soma-btn-action {
+    padding: 0.4rem 1rem; border-radius: 8px; font-size: 0.78rem; font-weight: 700;
+    cursor: pointer; border: 1px solid rgba(0,217,255,0.3);
+    background: rgba(0,217,255,0.1); color: var(--neural-primary);
+    transition: all 0.2s; position: relative; overflow: hidden;
+}
+.soma-btn-action:hover { background: rgba(0,217,255,0.18); border-color: rgba(0,217,255,0.5); }
+.soma-btn-action:active { transform: scale(0.97); }
+.soma-btn-action.training { color: #ffaa00; border-color: rgba(255,170,0,0.3); background: rgba(255,170,0,0.1); }
+.soma-btn-action.done { color: #00ff88; border-color: rgba(0,255,136,0.3); background: rgba(0,255,136,0.1); }
+.soma-btn-action.error { color: #ff3366; border-color: rgba(255,51,102,0.3); background: rgba(255,51,102,0.1); }
+
+/* ── Calibrator Log ── */
+.calibrator-log { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; }
+.cal-entry {
+    padding: 0.75rem 1rem; border-radius: 8px; border-left: 3px solid var(--neural-primary);
+    background: rgba(255,255,255,0.02); font-size: 0.82rem;
+    animation: soma-fadein 0.3s ease;
+}
+.cal-entry-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; }
+.cal-entry-type { font-weight: 700; color: var(--text-primary); }
+.cal-entry-time { font-size: 0.7rem; color: var(--text-muted); }
+.cal-entry-detail { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; }
+.cal-g5-badge {
+    display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px;
+    font-size: 0.6rem; font-weight: 700; background: rgba(0,217,255,0.1);
+    color: var(--neural-primary); border: 1px solid rgba(0,217,255,0.15);
+    margin-left: 0.4rem;
+}
+
+/* ── Agent Grid ── */
+.agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+.ag-card {
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px; padding: 1rem; transition: all 0.2s; cursor: pointer;
+}
+.ag-card:hover { background: rgba(255,255,255,0.04); border-color: rgba(0,217,255,0.15); transform: translateY(-1px); }
+.ag-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; }
+.ag-name { font-weight: 700; font-size: 0.85rem; color: var(--neural-primary); }
+.ag-tier {
+    font-size: 0.6rem; padding: 0.1rem 0.5rem; border-radius: 10px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+}
+.ag-tier.nominal { background: rgba(0,255,136,0.15); color: #00ff88; }
+.ag-tier.soft { background: rgba(255,170,0,0.15); color: #ffaa00; }
+.ag-tier.hard { background: rgba(255,51,102,0.15); color: #ff3366; }
+.ag-tier.quarantine { background: rgba(255,0,0,0.2); color: #ff0000; }
+.ag-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 1rem; margin-bottom: 0.5rem; }
+.ag-metric { display: flex; justify-content: space-between; font-size: 0.78rem; }
+.ag-metric-lbl { color: var(--text-muted); }
+.ag-metric-val { color: var(--text-primary); font-weight: 600; }
+.ag-rel-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+.ag-rel-fill { height: 100%; border-radius: 3px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+.ag-drift {
+    display: inline-block; font-size: 0.6rem; padding: 0.1rem 0.4rem; border-radius: 4px;
+    margin-top: 0.4rem; font-weight: 600;
+}
+.ag-drift.none { background: rgba(0,255,136,0.08); color: #00ff88; }
+.ag-drift.gradual { background: rgba(255,170,0,0.1); color: #ffaa00; }
+.ag-drift.abrupt { background: rgba(255,51,102,0.1); color: #ff3366; }
+
+/* ── Sparkline for Training ── */
+.train-sparkline svg { display: block; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+    .soma-hero-top { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+    .soma-hero-stats { flex-wrap: wrap; }
+    .soma-stat-sep { display: none; }
+    .soma-row { grid-template-columns: 1fr; }
+    .model-grid { grid-template-columns: 1fr; }
+    .feat-name { width: 120px; }
+}
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function() {
     'use strict';
+    var CIRC = 2 * Math.PI * 34; // 213.6
+    var donutChart = null;
 
-    let donutChart = null;
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function fmtNum(n) { return Number(n).toLocaleString(); }
 
-    // ─── Pipeline ───────────────────────────────────────
-    function renderPipeline(stages) {
-        const container = document.getElementById('pipeline-flow');
-        if (!container) return;
-        container.innerHTML = '';
-        stages.forEach((stage, i) => {
-            if (i > 0) {
-                const arrow = document.createElement('div');
-                arrow.className = 'pipeline-arrow';
-                arrow.textContent = '\u2192';
-                container.appendChild(arrow);
-            }
-            const el = document.createElement('div');
-            el.className = 'pipeline-stage' + (stage.status !== 'active' ? ' inactive' : '');
-            el.innerHTML = '<div class="pipeline-stage-name">' + esc(stage.name) + '</div>' +
-                '<div class="pipeline-stage-status ' + stage.status + '">' + stage.status + '</div>';
-            container.appendChild(el);
+    // ─── Section scroll tracking ─────────────────────────
+    var navPills = document.querySelectorAll('.soma-nav-pill[data-section]');
+    var sections = {};
+    navPills.forEach(function(p) { sections[p.dataset.section] = document.getElementById(p.dataset.section); });
+    function updateActiveNav() {
+        var scrollY = window.scrollY + 200;
+        var active = null;
+        for (var key in sections) {
+            if (sections[key] && sections[key].offsetTop <= scrollY) active = key;
+        }
+        navPills.forEach(function(p) { p.classList.toggle('active', p.dataset.section === active); });
+    }
+    window.addEventListener('scroll', updateActiveNav, { passive: true });
+    navPills.forEach(function(p) {
+        p.addEventListener('click', function(e) {
+            e.preventDefault();
+            var target = document.getElementById(this.dataset.section);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
+    });
+
+    // ─── Set model ring gauge ────────────────────────────
+    function setRing(id, pct, color) {
+        var arc = document.getElementById(id);
+        if (!arc) return;
+        var offset = CIRC * (1 - Math.min(1, pct / 100));
+        arc.style.strokeDashoffset = offset;
+        if (color) arc.style.stroke = color;
     }
 
-    // ─── Classification donut ───────────────────────────
-    function renderClassification(data, total) {
-        const pct = (v) => total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
-        document.getElementById('class-legitimate').textContent = (data.legitimate || 0).toLocaleString();
-        document.getElementById('class-suspicious').textContent = (data.suspicious || 0).toLocaleString();
-        document.getElementById('class-malicious').textContent = (data.malicious || 0).toLocaleString();
-        document.getElementById('class-legitimate-pct').textContent = pct(data.legitimate) + '%';
-        document.getElementById('class-suspicious-pct').textContent = pct(data.suspicious) + '%';
-        document.getElementById('class-malicious-pct').textContent = pct(data.malicious) + '%';
+    // ─── Pipeline ────────────────────────────────────────
+    function renderPipeline(stages) {
+        var c = document.getElementById('pipeline-flow');
+        if (!c || !stages.length) return;
+        var arrowSvg = '<svg width="28" height="16" viewBox="0 0 28 16"><path d="M2 8h20M18 3l6 5-6 5" fill="none" stroke="rgba(0,255,136,0.3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-opacity" values="0.2;0.6;0.2" dur="2s" repeatCount="indefinite"/></path></svg>';
+        c.innerHTML = stages.map(function(s, i) {
+            var isActive = s.status === 'active';
+            return (i > 0 ? '<div class="pipe-arrow">' + arrowSvg + '</div>' : '') +
+                '<div class="pipe-stage ' + (isActive ? 'active' : 'inactive') + '">' +
+                    '<div class="pipe-stage-name">' + esc(s.name) + '</div>' +
+                    '<div class="pipe-stage-status ' + s.status + '">' + s.status + '</div>' +
+                '</div>';
+        }).join('');
+        document.getElementById('pipeline-ts').textContent = new Date().toLocaleTimeString();
+    }
 
-        const ctx = document.getElementById('classification-donut');
+    // ─── Classification Donut ────────────────────────────
+    function renderClassification(data, total) {
+        var pct = function(v) { return total > 0 ? ((v / total) * 100).toFixed(1) : '0.0'; };
+        document.getElementById('class-legit').textContent = fmtNum(data.legitimate || 0);
+        document.getElementById('class-susp').textContent = fmtNum(data.suspicious || 0);
+        document.getElementById('class-mal').textContent = fmtNum(data.malicious || 0);
+        document.getElementById('class-legit-pct').textContent = pct(data.legitimate || 0) + '%';
+        document.getElementById('class-susp-pct').textContent = pct(data.suspicious || 0) + '%';
+        document.getElementById('class-mal-pct').textContent = pct(data.malicious || 0) + '%';
+
+        var ctx = document.getElementById('classification-donut');
         if (!ctx) return;
-        const values = [data.legitimate || 0, data.suspicious || 0, data.malicious || 0];
+        var vals = [data.legitimate || 0, data.suspicious || 0, data.malicious || 0];
         if (donutChart) {
-            donutChart.data.datasets[0].data = values;
+            donutChart.data.datasets[0].data = vals;
             donutChart.update();
         } else {
             donutChart = new Chart(ctx.getContext('2d'), {
                 type: 'doughnut',
                 data: {
                     labels: ['Legitimate', 'Suspicious', 'Malicious'],
-                    datasets: [{
-                        data: values,
+                    datasets: [{ data: vals,
                         backgroundColor: ['rgba(0,255,136,0.7)', 'rgba(255,170,0,0.7)', 'rgba(255,51,102,0.7)'],
-                        borderColor: ['#00ff88', '#ffaa00', '#ff3366'],
-                        borderWidth: 1
-                    }]
+                        borderColor: ['#00ff88', '#ffaa00', '#ff3366'], borderWidth: 1 }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '65%',
-                    plugins: {
-                        legend: { display: true, position: 'bottom', labels: { color: '#8899aa', font: { size: 11 } } }
-                    }
+                    responsive: true, maintainAspectRatio: false, cutout: '65%',
+                    animation: { duration: 800, easing: 'easeOutCubic' },
+                    plugins: { legend: { display: true, position: 'bottom', labels: { color: '#8899aa', font: { size: 11 } } } }
                 }
             });
         }
     }
 
-    // ─── Agent Reliability Grid ─────────────────────────
+    // ─── Agent Reliability Grid ──────────────────────────
     function renderAgents(agents) {
-        const grid = document.getElementById('agent-grid');
+        var grid = document.getElementById('agent-grid');
         if (!grid) return;
-        if (!agents || agents.length === 0) {
-            grid.innerHTML = '<div style="color: var(--text-secondary); padding: 1rem;">No agents tracked yet. Agent reliability data populates as events flow through the pipeline.</div>';
+        if (!agents || !agents.length) {
+            grid.innerHTML = '<div class="soma-empty">No agents tracked yet. Agent reliability data populates as events flow through the pipeline.</div>';
             return;
         }
         grid.innerHTML = agents.map(function(a) {
-            var tierClass = 'tier-' + (a.tier || 'nominal').toLowerCase();
-            var hasDrift = (a.drift_status || '');
-            var driftClass = hasDrift.includes('No drift') ? 'drift-none' :
-                             hasDrift.includes('Gradual') ? 'drift-gradual' : 'drift-abrupt';
-            var driftLabel = hasDrift.includes('No drift') ? '' :
-                             hasDrift.includes('Gradual') ? 'Gradual Drift' : 'Abrupt Drift';
-            var rel = (a.reliability || 0);
+            var tier = (a.tier || 'nominal').toLowerCase();
+            var rel = a.reliability || 0;
             var barColor = rel >= 0.8 ? '#00ff88' : rel >= 0.5 ? '#ffaa00' : '#ff3366';
+            var drift = a.drift_status || '';
+            var driftType = drift.includes('No drift') ? 'none' : drift.includes('Gradual') ? 'gradual' : drift.includes('Abrupt') ? 'abrupt' : 'none';
+            var driftLabel = driftType === 'none' ? '' : driftType === 'gradual' ? 'Gradual Drift' : 'Abrupt Drift';
             var obs = a.observations || {};
-            return '<div class="agent-card">' +
-                '<div class="agent-header">' +
-                    '<span class="agent-name">' + esc(a.agent_id || 'Unknown') + '</span>' +
-                    '<span class="agent-tier ' + tierClass + '">' + esc(a.tier || 'NOMINAL') + '</span>' +
+            return '<div class="ag-card" onclick="window.location=\'/dashboard/reliability\'">' +
+                '<div class="ag-header">' +
+                    '<span class="ag-name">' + esc(a.agent_id || 'Unknown') + '</span>' +
+                    '<span class="ag-tier ' + tier + '">' + esc(a.tier || 'NOMINAL') + '</span>' +
                 '</div>' +
-                '<div class="agent-metric"><span class="agent-metric-label">Reliability</span><span class="agent-metric-value">' + (rel * 100).toFixed(1) + '%</span></div>' +
-                '<div class="agent-metric"><span class="agent-metric-label">Fusion Weight</span><span class="agent-metric-value">' + (a.fusion_weight || 0).toFixed(3) + '</span></div>' +
-                '<div class="agent-metric"><span class="agent-metric-label">Observations</span><span class="agent-metric-value">' + (obs.total || 0) + ' (' + (obs.confirmed || 0) + '/' + (obs.dismissed || 0) + ')</span></div>' +
-                '<div class="agent-metric"><span class="agent-metric-label">Trend</span><span class="agent-metric-value">' + esc(a.trend || 'stable') + (driftLabel ? '<span class="drift-badge ' + driftClass + '">' + driftLabel + '</span>' : '') + '</span></div>' +
-                '<div class="reliability-bar"><div class="reliability-fill" style="width: ' + (rel * 100) + '%; background: ' + barColor + ';"></div></div>' +
+                '<div class="ag-metrics">' +
+                    '<div class="ag-metric"><span class="ag-metric-lbl">Reliability</span><span class="ag-metric-val" style="color:' + barColor + ';">' + (rel * 100).toFixed(1) + '%</span></div>' +
+                    '<div class="ag-metric"><span class="ag-metric-lbl">Fusion Weight</span><span class="ag-metric-val">' + (a.fusion_weight || 0).toFixed(3) + '</span></div>' +
+                    '<div class="ag-metric"><span class="ag-metric-lbl">Observations</span><span class="ag-metric-val">' + (obs.total || 0) + '</span></div>' +
+                    '<div class="ag-metric"><span class="ag-metric-lbl">Trend</span><span class="ag-metric-val">' + esc(a.trend || 'stable') + '</span></div>' +
+                '</div>' +
+                '<div class="ag-rel-bar"><div class="ag-rel-fill" style="width:' + (rel * 100) + '%;background:' + barColor + ';"></div></div>' +
+                (driftLabel ? '<span class="ag-drift ' + driftType + '">' + driftLabel + '</span>' : '') +
             '</div>';
         }).join('');
     }
 
-    // ─── Brain Status ───────────────────────────────────
-    async function loadBrainStatus() {
+    // ─── Brain Status + Models ───────────────────────────
+    async function loadBrain() {
         try {
-            var resp = await fetch('/api/soma/brain');
-            var data = await resp.json();
-            if (data.status !== 'success') return;
-
-            var brain = data.brain;
-            var metrics = brain.latest_metrics || {};
-            var cal = brain.if_calibration || {};
+            var r = await fetch('/api/soma/brain');
+            var d = await r.json();
+            if (d.status !== 'success') return;
+            var brain = d.brain, metrics = brain.latest_metrics || {}, cal = brain.if_calibration || {};
 
             // Status badge
-            var statusBadge = document.getElementById('brain-status-badge');
+            var badge = document.getElementById('brain-status-badge');
             var status = metrics.status || 'cold_start';
-            statusBadge.textContent = status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
-            statusBadge.className = 'card-badge ' + (
-                status === 'completed' ? 'badge-success' :
-                status === 'training' ? 'badge-warning' :
-                status === 'error' ? 'badge-critical' : 'badge-warning'
+            badge.textContent = status === 'completed' ? 'Active' : status.replace(/_/g, ' ');
+            badge.className = 'soma-status-badge ' + (
+                status === 'completed' ? 'badge-success' : status === 'error' ? 'badge-critical' : 'badge-warning'
             );
 
-            // Brain metrics
-            document.getElementById('training-cycles').textContent = metrics.cycle || 0;
-            document.getElementById('events-trained').textContent = (metrics.event_count || 0).toLocaleString();
-            document.getElementById('feature-count').textContent = metrics.feature_count || 0;
-            document.getElementById('calibrator-adj-count').textContent = brain.calibrator_adjustments || 0;
+            // Hero stats
+            document.getElementById('stat-cycles').textContent = metrics.cycle || 0;
+            document.getElementById('stat-events').textContent = fmtNum(metrics.event_count || 0);
+            var modelsLoaded = [brain.models_available.isolation_forest, brain.models_available.gradient_boost, brain.models_available.event_embedder].filter(Boolean).length;
+            document.getElementById('stat-models').textContent = modelsLoaded + '/3';
+            document.getElementById('stat-features').textContent = metrics.feature_count || 0;
+            document.getElementById('stat-calibrations').textContent = brain.calibrator_adjustments || 0;
 
-            // IF metrics
+            // IsolationForest model card
             var ifData = metrics.isolation_forest || {};
-            var ifBadge = document.getElementById('if-status-badge');
+            var ifBadge = document.getElementById('if-badge');
             if (brain.models_available.isolation_forest) {
-                ifBadge.textContent = 'Loaded';
-                ifBadge.className = 'card-badge badge-success';
+                ifBadge.textContent = 'Loaded'; ifBadge.className = 'model-badge loaded';
+                var anomalyPct = ifData.anomaly_rate != null ? ifData.anomaly_rate * 100 : 0;
+                setRing('if-ring', 100 - anomalyPct, anomalyPct > 20 ? '#ff3366' : anomalyPct > 10 ? '#ffaa00' : '#00ff88');
+                document.getElementById('if-ring-val').textContent = anomalyPct.toFixed(0) + '%';
             } else {
-                ifBadge.textContent = 'Not Trained';
-                ifBadge.className = 'card-badge badge-warning';
+                ifBadge.textContent = 'Not Trained'; ifBadge.className = 'model-badge pending';
             }
-            document.getElementById('if-anomaly-rate').textContent =
-                ifData.anomaly_rate != null ? (ifData.anomaly_rate * 100).toFixed(1) + '%' : '--';
-            document.getElementById('if-samples').textContent =
-                ifData.samples ? ifData.samples.toLocaleString() : '--';
-            document.getElementById('if-cal-p5').textContent =
-                cal.p5 != null ? cal.p5.toFixed(4) : '--';
-            document.getElementById('if-cal-p95').textContent =
-                cal.p95 != null ? cal.p95.toFixed(4) : '--';
+            document.getElementById('if-anomaly').textContent = ifData.anomaly_rate != null ? (ifData.anomaly_rate * 100).toFixed(1) + '%' : '--';
+            document.getElementById('if-samples').textContent = ifData.samples ? fmtNum(ifData.samples) : '--';
+            document.getElementById('if-p5').textContent = cal.p5 != null ? cal.p5.toFixed(4) : '--';
+            document.getElementById('if-p95').textContent = cal.p95 != null ? cal.p95.toFixed(4) : '--';
 
-            // GBC metrics
+            // GradientBoosting model card
             var gbcData = metrics.gradient_boost || {};
-            var gbcBadge = document.getElementById('gbc-status-badge');
+            var gbcBadge = document.getElementById('gbc-badge');
             if (brain.models_available.gradient_boost) {
-                gbcBadge.textContent = 'Loaded';
-                gbcBadge.className = 'card-badge badge-success';
+                gbcBadge.textContent = 'Loaded'; gbcBadge.className = 'model-badge loaded';
+                var accPct = gbcData.accuracy != null && gbcData.accuracy !== 'n/a' ? gbcData.accuracy * 100 : 0;
+                setRing('gbc-ring', accPct, accPct >= 80 ? '#00ff88' : accPct >= 60 ? '#ffaa00' : '#ff3366');
+                document.getElementById('gbc-ring-val').textContent = accPct.toFixed(0) + '%';
             } else if (gbcData.status === 'skipped') {
-                gbcBadge.textContent = 'Skipped';
-                gbcBadge.className = 'card-badge badge-warning';
+                gbcBadge.textContent = 'Skipped'; gbcBadge.className = 'model-badge skipped';
             } else {
-                gbcBadge.textContent = 'Not Trained';
-                gbcBadge.className = 'card-badge badge-warning';
+                gbcBadge.textContent = 'Not Trained'; gbcBadge.className = 'model-badge pending';
             }
-            document.getElementById('gbc-accuracy').textContent =
-                gbcData.accuracy != null && gbcData.accuracy !== 'n/a'
-                    ? (gbcData.accuracy * 100).toFixed(1) + '%' : '--';
-            document.getElementById('gbc-f1').textContent =
-                gbcData.f1_macro != null && gbcData.f1_macro !== 'n/a'
-                    ? gbcData.f1_macro.toFixed(3) : '--';
-            document.getElementById('gbc-labels').textContent =
-                metrics.high_trust_label_count != null
-                    ? metrics.high_trust_label_count : '--';
+            document.getElementById('gbc-accuracy').textContent = gbcData.accuracy != null && gbcData.accuracy !== 'n/a' ? (gbcData.accuracy * 100).toFixed(1) + '%' : '--';
+            document.getElementById('gbc-f1').textContent = gbcData.f1_macro != null && gbcData.f1_macro !== 'n/a' ? gbcData.f1_macro.toFixed(3) : '--';
+            document.getElementById('gbc-labels').textContent = metrics.high_trust_label_count != null ? metrics.high_trust_label_count : '--';
 
-        } catch (e) {
-            console.error('Brain status error:', e);
-        }
+            // EventEmbedder model card
+            var embBadge = document.getElementById('emb-badge');
+            if (brain.models_available.event_embedder) {
+                embBadge.textContent = 'Loaded'; embBadge.className = 'model-badge loaded';
+                setRing('emb-ring', 100, '#00d9ff');
+                document.getElementById('emb-ring-val').textContent = '32d';
+            } else {
+                embBadge.textContent = 'Not Trained'; embBadge.className = 'model-badge pending';
+            }
+        } catch (e) { console.error('Brain load error:', e); }
     }
 
-    // ─── Feature Importances ────────────────────────────
+    // ─── Feature Importances ─────────────────────────────
     async function loadFeatures() {
         try {
-            var resp = await fetch('/api/soma/brain/features');
-            var data = await resp.json();
-            if (data.status !== 'success' || !data.features.length) return;
-
-            var container = document.getElementById('feature-bars');
-            var maxImportance = Math.max.apply(null, data.features.map(function(f) { return f.importance; }));
-
-            container.innerHTML = data.features.map(function(f) {
-                var pct = maxImportance > 0 ? (f.importance / maxImportance * 100) : 0;
-                return '<div style="display: flex; align-items: center; margin-bottom: 0.5rem;">' +
-                    '<span style="width: 200px; font-size: 0.85rem; color: var(--text-secondary); text-align: right; padding-right: 1rem;">' + esc(f.feature) + '</span>' +
-                    '<div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 4px; height: 24px; overflow: hidden;">' +
-                        '<div style="width: ' + pct + '%; height: 100%; background: linear-gradient(90deg, rgba(0,217,255,0.3), rgba(0,217,255,0.7)); border-radius: 4px; transition: width 0.5s;"></div>' +
-                    '</div>' +
-                    '<span style="width: 60px; font-size: 0.85rem; color: var(--neural-primary); text-align: right; padding-left: 0.5rem;">' + (f.importance * 100).toFixed(1) + '%</span>' +
+            var r = await fetch('/api/soma/brain/features');
+            var d = await r.json();
+            if (d.status !== 'success' || !d.features.length) return;
+            var c = document.getElementById('feature-bars');
+            var maxImp = Math.max.apply(null, d.features.map(function(f) { return f.importance; }));
+            c.innerHTML = d.features.map(function(f, i) {
+                var pct = maxImp > 0 ? (f.importance / maxImp * 100) : 0;
+                return '<div class="feat-row" style="animation-delay:' + (i * 0.05) + 's;">' +
+                    '<span class="feat-name" title="' + esc(f.feature) + '">' + esc(f.feature) + '</span>' +
+                    '<div class="feat-bar-bg"><div class="feat-bar" style="width:' + pct + '%;"></div></div>' +
+                    '<span class="feat-val">' + (f.importance * 100).toFixed(1) + '%</span>' +
                 '</div>';
             }).join('');
-        } catch (e) {
-            console.error('Features error:', e);
-        }
+        } catch (e) { console.error('Features error:', e); }
     }
 
-    // ─── Training History ───────────────────────────────
+    // ─── Training History ────────────────────────────────
     async function loadHistory() {
         try {
-            var resp = await fetch('/api/soma/brain/history?limit=20');
-            var data = await resp.json();
-            if (data.status !== 'success' || !data.history.length) return;
+            var r = await fetch('/api/soma/brain/history?limit=20');
+            var d = await r.json();
+            if (d.status !== 'success' || !d.history.length) return;
 
-            var container = document.getElementById('training-history');
-            container.innerHTML = '<table style="width: 100%; border-collapse: collapse;">' +
-                '<thead><tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">' +
-                '<th style="text-align: left; padding: 0.5rem; color: var(--text-muted);">Cycle</th>' +
-                '<th style="text-align: left; padding: 0.5rem; color: var(--text-muted);">Time</th>' +
-                '<th style="text-align: right; padding: 0.5rem; color: var(--text-muted);">Events</th>' +
-                '<th style="text-align: right; padding: 0.5rem; color: var(--text-muted);">IF Anomaly%</th>' +
-                '<th style="text-align: right; padding: 0.5rem; color: var(--text-muted);">GBC Status</th>' +
-                '<th style="text-align: right; padding: 0.5rem; color: var(--text-muted);">Duration</th>' +
-                '</tr></thead><tbody>' +
-                data.history.reverse().map(function(h) {
-                    var ifRate = h.isolation_forest && h.isolation_forest.anomaly_rate != null
-                        ? (h.isolation_forest.anomaly_rate * 100).toFixed(1) + '%' : '--';
-                    var gbcStatus = h.gradient_boost ? h.gradient_boost.status : '--';
-                    var timeStr = h.started_at ? new Date(h.started_at).toLocaleString() : '--';
-                    return '<tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">' +
-                        '<td style="padding: 0.5rem; color: var(--neural-primary);">#' + (h.cycle || '?') + '</td>' +
-                        '<td style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">' + timeStr + '</td>' +
-                        '<td style="padding: 0.5rem; text-align: right; color: var(--text-secondary);">' + (h.event_count || 0).toLocaleString() + '</td>' +
-                        '<td style="padding: 0.5rem; text-align: right; color: var(--neural-danger);">' + ifRate + '</td>' +
-                        '<td style="padding: 0.5rem; text-align: right; color: ' + (gbcStatus === 'trained' ? 'var(--neural-success)' : 'var(--text-muted)') + ';">' + gbcStatus + '</td>' +
-                        '<td style="padding: 0.5rem; text-align: right; color: var(--text-muted);">' + (h.elapsed_seconds ? h.elapsed_seconds.toFixed(1) + 's' : '--') + '</td>' +
+            document.getElementById('training-count').textContent = d.total_cycles + ' total cycles';
+
+            // Sparkline of anomaly rates
+            var rates = d.history.map(function(h) {
+                return h.isolation_forest && h.isolation_forest.anomaly_rate != null ? h.isolation_forest.anomaly_rate : null;
+            }).filter(function(v) { return v !== null; });
+            if (rates.length >= 2) {
+                var sw = 300, sh = 40;
+                var maxR = Math.max.apply(null, rates) || 1;
+                var step = sw / Math.max(1, rates.length - 1);
+                var pts = rates.map(function(v, i) { return (i * step).toFixed(1) + ',' + (sh - (v / maxR) * (sh - 4)).toFixed(1); }).join(' ');
+                var fillPts = '0,' + sh + ' ' + pts + ' ' + ((rates.length - 1) * step).toFixed(1) + ',' + sh;
+                document.getElementById('training-sparkline').innerHTML =
+                    '<div class="train-sparkline"><svg viewBox="0 0 ' + sw + ' ' + sh + '" width="100%" height="' + sh + '" preserveAspectRatio="none">' +
+                    '<polygon points="' + fillPts + '" fill="rgba(255,51,102,0.1)"/>' +
+                    '<polyline points="' + pts + '" fill="none" stroke="#ff3366" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '</svg><div style="display:flex;justify-content:space-between;font-size:0.6rem;color:var(--text-muted);margin-top:2px;"><span>Anomaly Rate Trend</span><span>' + (rates[rates.length - 1] * 100).toFixed(1) + '%</span></div></div>';
+            }
+
+            // Table
+            var rows = d.history.slice().reverse();
+            document.getElementById('training-history').innerHTML =
+                '<table><thead><tr>' +
+                '<th>Cycle</th><th>Time</th><th style="text-align:right;">Events</th>' +
+                '<th style="text-align:right;">IF Anomaly</th><th style="text-align:right;">GBC</th>' +
+                '<th style="text-align:right;">Duration</th></tr></thead><tbody>' +
+                rows.map(function(h) {
+                    var ifRate = h.isolation_forest && h.isolation_forest.anomaly_rate != null ? (h.isolation_forest.anomaly_rate * 100).toFixed(1) + '%' : '--';
+                    var gbcSt = h.gradient_boost ? h.gradient_boost.status : '--';
+                    var ts = h.started_at ? new Date(h.started_at).toLocaleString() : '--';
+                    var gbcColor = gbcSt === 'trained' ? 'var(--neural-success)' : 'var(--text-muted)';
+                    return '<tr>' +
+                        '<td style="color:var(--neural-primary);font-weight:600;">#' + (h.cycle || '?') + '</td>' +
+                        '<td style="color:var(--text-secondary);font-size:0.8rem;">' + ts + '</td>' +
+                        '<td style="text-align:right;color:var(--text-secondary);">' + fmtNum(h.event_count || 0) + '</td>' +
+                        '<td style="text-align:right;color:var(--neural-danger);">' + ifRate + '</td>' +
+                        '<td style="text-align:right;color:' + gbcColor + ';">' + gbcSt + '</td>' +
+                        '<td style="text-align:right;color:var(--text-muted);">' + (h.elapsed_seconds ? h.elapsed_seconds.toFixed(1) + 's' : '--') + '</td>' +
                     '</tr>';
                 }).join('') +
                 '</tbody></table>';
-        } catch (e) {
-            console.error('History error:', e);
-        }
+        } catch (e) { console.error('History error:', e); }
     }
 
-    // ─── SOMA Overview (pipeline, classification, agents)
-    function loadOverview() {
-        document.getElementById('pipeline-loading').style.display = 'inline-block';
-        document.getElementById('agents-loading').style.display = 'inline-block';
+    // ─── SOMA Overview (pipeline + classification + agents)
+    async function loadOverview() {
+        try {
+            var r = await fetch('/dashboard/api/soma/overview');
+            var d = await r.json();
+            if (d.status !== 'success') return;
 
-        fetch('/dashboard/api/soma/overview')
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.status !== 'success') return;
+            renderPipeline(d.pipeline.stages || []);
+            document.getElementById('events-processed').textContent = fmtNum(d.pipeline.events_processed || 0);
 
-                // Pipeline
-                renderPipeline(data.pipeline.stages || []);
-                document.getElementById('events-processed').textContent =
-                    (data.pipeline.events_processed || 0).toLocaleString();
+            var total = (d.classification.legitimate || 0) + (d.classification.suspicious || 0) + (d.classification.malicious || 0);
+            renderClassification(d.classification, total);
 
-                // Classification
-                var total = (data.classification.legitimate || 0) +
-                            (data.classification.suspicious || 0) +
-                            (data.classification.malicious || 0);
-                renderClassification(data.classification, total);
-
-                // FP Rate
-                document.getElementById('fp-rate').textContent =
-                    ((data.learning.fp_rate || 0) * 100).toFixed(1) + '%';
-
-                // Agents
-                renderAgents(data.agents || []);
-            })
-            .catch(function(err) { console.error('SOMA overview fetch failed:', err); })
-            .finally(function() {
-                document.getElementById('pipeline-loading').style.display = 'none';
-                document.getElementById('agents-loading').style.display = 'none';
-            });
+            document.getElementById('fp-rate').textContent = ((d.learning.fp_rate || 0) * 100).toFixed(1) + '%';
+            renderAgents(d.agents || []);
+        } catch (e) { console.error('Overview error:', e); }
     }
 
-    // ─── Force Train Button ─────────────────────────────
+    // ─── Force Train Button ──────────────────────────────
     document.getElementById('force-train-btn').addEventListener('click', async function() {
         var btn = this;
         btn.textContent = 'Training...';
+        btn.className = 'soma-btn-action training';
         btn.disabled = true;
-        btn.style.opacity = '0.6';
         try {
-            var resp = await fetch('/api/soma/brain/train', { method: 'POST',
-                headers: { 'Content-Type': 'application/json' } });
-            var data = await resp.json();
-            if (data.status === 'success') {
+            var r = await fetch('/api/soma/brain/train', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+            var d = await r.json();
+            if (d.status === 'success') {
                 btn.textContent = 'Done!';
-                btn.style.borderColor = 'var(--neural-success)';
-                btn.style.color = 'var(--neural-success)';
-                setTimeout(function() {
-                    loadBrainStatus();
-                    loadFeatures();
-                    loadHistory();
-                    btn.textContent = 'Force Train Now';
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    btn.style.borderColor = 'rgba(0,217,255,0.3)';
-                    btn.style.color = 'var(--neural-primary)';
-                }, 1500);
+                btn.className = 'soma-btn-action done';
+                setTimeout(function() { loadBrain(); loadFeatures(); loadHistory(); reset(); }, 1500);
             } else {
-                btn.textContent = 'Error: ' + (data.message || 'Unknown');
-                btn.style.borderColor = 'var(--neural-danger)';
-                setTimeout(function() {
-                    btn.textContent = 'Force Train Now';
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    btn.style.borderColor = 'rgba(0,217,255,0.3)';
-                    btn.style.color = 'var(--neural-primary)';
-                }, 3000);
+                btn.textContent = 'Error';
+                btn.className = 'soma-btn-action error';
+                setTimeout(reset, 3000);
             }
         } catch (e) {
             btn.textContent = 'Network Error';
-            setTimeout(function() {
-                btn.textContent = 'Force Train Now';
-                btn.disabled = false;
-                btn.style.opacity = '1';
-            }, 3000);
+            btn.className = 'soma-btn-action error';
+            setTimeout(reset, 3000);
         }
+        function reset() { btn.textContent = 'Force Train Now'; btn.className = 'soma-btn-action'; btn.disabled = false; }
     });
 
-    // ─── Utility ────────────────────────────────────────
-    function esc(s) {
-        var d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
-    }
-
-    // ─── Initial Load ───────────────────────────────────
+    // ─── Initial Load ────────────────────────────────────
     loadOverview();
-    loadBrainStatus();
+    loadBrain();
     loadFeatures();
     loadHistory();
 
-    // ─── Auto-refresh ───────────────────────────────────
+    // ─── Auto-refresh ────────────────────────────────────
     setInterval(loadOverview, 15000);
-    setInterval(function() { loadBrainStatus(); loadFeatures(); }, 30000);
+    setInterval(function() { loadBrain(); loadFeatures(); }, 30000);
     setInterval(loadHistory, 120000);
 
-    // ─── Scroll to hash on load ─────────────────────────
+    // ─── Scroll to hash ──────────────────────────────────
     if (window.location.hash) {
         var target = document.querySelector(window.location.hash);
         if (target) setTimeout(function() { target.scrollIntoView({ behavior: 'smooth' }); }, 300);

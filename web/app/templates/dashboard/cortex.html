@@ -240,6 +240,9 @@
         </div>
     </div>
 
+    <!-- ===== HOVER PREVIEW TOOLTIP ===== -->
+    <div class="cortex-preview" id="cortex-preview"></div>
+
     <!-- ===== TOAST NOTIFICATIONS ===== -->
     <div id="cc-toast-container"></div>
 
@@ -381,9 +384,9 @@
 .tf-item {
     display: flex; gap: 0.6rem; padding: 0.55rem 0.7rem; border-radius: 8px;
     background: rgba(255,255,255,0.02); border-left: 3px solid #00ff88;
-    font-size: 0.8rem; transition: background 0.15s; cursor: pointer;
+    font-size: 0.8rem; transition: background 0.15s, transform 0.15s; cursor: pointer;
 }
-.tf-item:hover { background: rgba(255,255,255,0.04); }
+.tf-item:hover { background: rgba(255,255,255,0.04); transform: translateX(3px); }
 .tf-item.sev-critical { border-left-color: #ff3366; }
 .tf-item.sev-high { border-left-color: #ff6600; }
 .tf-item.sev-medium { border-left-color: #ffaa00; }
@@ -462,8 +465,8 @@
 .af-sparkline svg { display: block; }
 
 /* ── Top IPs ── */
-.ip-bar-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem; font-size: 0.78rem; border-radius: 4px; padding: 2px 4px; transition: background 0.2s; }
-.ip-bar-row:hover { background: rgba(0,217,255,0.08); }
+.ip-bar-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem; font-size: 0.78rem; border-radius: 4px; padding: 2px 4px; cursor: pointer; transition: background 0.2s, transform 0.15s; }
+.ip-bar-row:hover { background: rgba(0,217,255,0.08); transform: translateX(2px); }
 .ip-label { width: 120px; font-family: monospace; color: var(--text-secondary); font-size: 0.75rem; flex-shrink: 0; text-align: right; }
 .ip-bar-bg { flex: 1; height: 16px; background: rgba(255,255,255,0.04); border-radius: 3px; overflow: hidden; }
 .ip-bar { height: 100%; border-radius: 3px; background: var(--neural-primary); opacity: 0.7; transition: width 0.4s; }
@@ -471,8 +474,8 @@
 
 /* ── MITRE Mini-Map ── */
 .mitre-mini { display: flex; flex-direction: column; gap: 0.35rem; }
-.mm-row { display: flex; align-items: center; gap: 0.5rem; border-radius: 4px; padding: 2px 4px; transition: background 0.2s; }
-.mm-row:hover { background: rgba(0,217,255,0.08); }
+.mm-row { display: flex; align-items: center; gap: 0.5rem; border-radius: 4px; padding: 2px 4px; cursor: pointer; transition: background 0.2s, transform 0.15s; }
+.mm-row:hover { background: rgba(0,217,255,0.08); transform: translateX(2px); }
 .mm-label { width: 120px; font-size: 0.7rem; color: var(--text-secondary); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
 .mm-bar-bg { flex: 1; height: 14px; background: rgba(255,255,255,0.04); border-radius: 3px; overflow: hidden; }
 .mm-bar { height: 100%; border-radius: 3px; transition: width 0.4s ease; min-width: 0; }
@@ -568,6 +571,34 @@
 .cc-empty-msg { font-size: 0.85rem; }
 .cc-empty a { color: var(--neural-primary); text-decoration: none; }
 
+/* ── Hover Preview Tooltip ── */
+.cortex-preview {
+    display: none; position: absolute; z-index: 200; width: 280px;
+    padding: 0.75rem 1rem; border-radius: 10px;
+    background: rgba(10,14,39,0.97); border: 1px solid rgba(0,217,255,0.2);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); pointer-events: none;
+    animation: preview-in 0.15s ease;
+}
+@keyframes preview-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.cortex-preview.visible { display: block; }
+.cortex-preview-title { font-size: 0.8rem; font-weight: 700; color: var(--neural-primary); margin-bottom: 0.4rem; }
+.cortex-preview-row { display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.2rem; }
+.cortex-preview-lbl { color: var(--text-muted); }
+.cortex-preview-val { color: var(--text-primary); font-weight: 600; }
+.cortex-preview-bar { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; margin-top: 0.4rem; overflow: hidden; }
+.cortex-preview-fill { height: 100%; border-radius: 2px; }
+
+/* ── Click ripple ── */
+.cc-ripple {
+    position: absolute; border-radius: 50%; background: rgba(0,217,255,0.15);
+    transform: scale(0); animation: ripple-out 0.5s ease-out;
+    pointer-events: none;
+}
+@keyframes ripple-out { to { transform: scale(3); opacity: 0; } }
+
+/* ── Enhanced click state ── */
+.af-card:active { transform: scale(0.98); }
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
     .hero-top { grid-template-columns: 1fr; text-align: center; justify-items: center; }
@@ -577,6 +608,7 @@
     .cc-row-2col, .cc-row-2col-wide { grid-template-columns: 1fr; }
     .vitals-grid { grid-template-columns: repeat(2, 1fr); }
     .mm-label { width: 80px; }
+    .cortex-preview { display: none !important; }
 }
 </style>
 
@@ -1289,6 +1321,80 @@ document.addEventListener('DOMContentLoaded', () => {
             cortex.triage(parseInt(btn.dataset.triageIdx, 10), btn.dataset.triageAction);
         }
     });
+
+    /* ── Hover Preview System ── */
+    const preview = document.getElementById('cortex-preview');
+    let previewTimer = null;
+
+    function showPreview(target, html) {
+        preview.innerHTML = html;
+        const rect = target.getBoundingClientRect();
+        const scrollY = window.scrollY || document.documentElement.scrollTop;
+        const scrollX = window.scrollX || document.documentElement.scrollLeft;
+        preview.style.left = Math.min(rect.left + scrollX, window.innerWidth - 300) + 'px';
+        preview.style.top = (rect.bottom + scrollY + 8) + 'px';
+        preview.classList.add('visible');
+    }
+    function hidePreview() { preview.classList.remove('visible'); }
+
+    // Agent fleet hover preview
+    document.getElementById('agent-fleet').addEventListener('mouseover', (e) => {
+        const card = e.target.closest('.af-card');
+        if (!card) return;
+        clearTimeout(previewTimer);
+        const name = (card.dataset.agentName || '').toLowerCase();
+        const agent = cortex.agentCache.find(a => (a.name || a.id || '').toLowerCase() === name);
+        if (!agent) return;
+        const probes = agent.probes || [];
+        const real = probes.filter(p => p.status === 'REAL').length;
+        const degraded = probes.filter(p => p.status === 'DEGRADED').length;
+        const broken = probes.filter(p => p.status === 'BROKEN').length;
+        const health = probes.length > 0 ? Math.round(((real + degraded) / probes.length) * 100) : 0;
+        const healthColor = health >= 80 ? '#00ff88' : health >= 50 ? '#ffaa00' : '#ff3366';
+        showPreview(card,
+            '<div class="cortex-preview-title">' + cortex.esc(agent.name || agent.id) + '</div>' +
+            '<div class="cortex-preview-row"><span class="cortex-preview-lbl">Health</span><span class="cortex-preview-val" style="color:' + healthColor + ';">' + health + '%</span></div>' +
+            '<div class="cortex-preview-row"><span class="cortex-preview-lbl">Probes</span><span class="cortex-preview-val" style="color:#00ff88;">' + real + ' real</span></div>' +
+            (degraded > 0 ? '<div class="cortex-preview-row"><span class="cortex-preview-lbl">Degraded</span><span class="cortex-preview-val" style="color:#ffaa00;">' + degraded + '</span></div>' : '') +
+            (broken > 0 ? '<div class="cortex-preview-row"><span class="cortex-preview-lbl">Broken</span><span class="cortex-preview-val" style="color:#ff3366;">' + broken + '</span></div>' : '') +
+            '<div class="cortex-preview-row"><span class="cortex-preview-lbl">Events</span><span class="cortex-preview-val">' + cortex.fmtNum(agent.event_count || 0) + '</span></div>' +
+            (agent.signing_enabled ? '<div class="cortex-preview-row"><span class="cortex-preview-lbl">Signing</span><span class="cortex-preview-val" style="color:#00ff88;">Ed25519</span></div>' : '') +
+            '<div class="cortex-preview-bar"><div class="cortex-preview-fill" style="width:' + health + '%;background:' + healthColor + ';"></div></div>'
+        );
+    });
+    document.getElementById('agent-fleet').addEventListener('mouseout', (e) => {
+        if (!e.target.closest('.af-card')) return;
+        previewTimer = setTimeout(hidePreview, 100);
+    });
+
+    // Threat feed hover preview
+    document.getElementById('threat-feed').addEventListener('mouseover', (e) => {
+        const item = e.target.closest('.tf-item');
+        if (!item || e.target.closest('.triage-btn')) return;
+        clearTimeout(previewTimer);
+        const idx = parseInt(item.dataset.idx, 10);
+        const t = cortex.threatCache[idx];
+        if (!t) return;
+        const sev = (t.severity || 'low').toLowerCase();
+        const sevColors = { critical: '#ff3366', high: '#ff6600', medium: '#ffaa00', low: '#0088ff' };
+        const mitreStr = (t.mitre_techniques || []).join(', ') || 'None';
+        showPreview(item,
+            '<div class="cortex-preview-title">' + cortex.fmtType(t.type) + '</div>' +
+            '<div class="cortex-preview-row"><span class="cortex-preview-lbl">Severity</span><span class="cortex-preview-val" style="color:' + (sevColors[sev] || '#0088ff') + ';text-transform:uppercase;">' + sev + '</span></div>' +
+            '<div class="cortex-preview-row"><span class="cortex-preview-lbl">Risk</span><span class="cortex-preview-val">' + ((t.risk_score || 0) * 100).toFixed(0) + '%</span></div>' +
+            '<div class="cortex-preview-row"><span class="cortex-preview-lbl">Agent</span><span class="cortex-preview-val">' + cortex.esc(t.agent_id || '--') + '</span></div>' +
+            '<div class="cortex-preview-row"><span class="cortex-preview-lbl">MITRE</span><span class="cortex-preview-val" style="color:var(--neural-primary);">' + cortex.esc(mitreStr) + '</span></div>' +
+            (t.source_ip ? '<div class="cortex-preview-row"><span class="cortex-preview-lbl">Source IP</span><span class="cortex-preview-val" style="font-family:monospace;">' + cortex.esc(t.source_ip) + '</span></div>' : '') +
+            '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.4rem;">Click to view in Threat Feed</div>'
+        );
+    });
+    document.getElementById('threat-feed').addEventListener('mouseout', (e) => {
+        if (!e.target.closest('.tf-item')) return;
+        previewTimer = setTimeout(hidePreview, 100);
+    });
+
+    // Hide preview on scroll
+    window.addEventListener('scroll', hidePreview, { passive: true });
 });
 </script>
 {% endblock %}
