@@ -50,10 +50,10 @@
         </div>
 
         <div class="hero-stats">
-            <div class="hero-stat" style="position:relative;">
+            <div class="hero-stat hero-stat-link" onclick="window.location='/dashboard/agent-monitor'" title="View all events in Agent Monitor" style="position:relative;">
                 <span class="hero-stat-val" id="cb-events">0</span>
                 <span class="hero-stat-lbl">Events
-                    <select id="time-range-select" class="cc-time-select" title="Time range">
+                    <select id="time-range-select" class="cc-time-select" title="Time range" onclick="event.stopPropagation()">
                         <option value="1">(1h)</option>
                         <option value="6">(6h)</option>
                         <option value="24" selected>(24h)</option>
@@ -62,7 +62,7 @@
                 </span>
             </div>
             <div class="hero-stat-sep"></div>
-            <div class="hero-stat">
+            <div class="hero-stat hero-stat-link" onclick="window.location='/dashboard/threat-feed'" title="View all threats">
                 <span class="hero-stat-val" id="cb-threats">0</span>
                 <span class="hero-stat-lbl">Threats</span>
             </div>
@@ -352,6 +352,10 @@
     font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase;
     letter-spacing: 1px; margin-top: 2px; font-weight: 600;
 }
+.hero-stat-link { cursor: pointer; border-radius: 8px; transition: background 0.2s; }
+.hero-stat-link:hover { background: rgba(0,217,255,0.06); }
+.hero-stat-link .hero-stat-val { transition: color 0.2s; }
+.hero-stat-link:hover .hero-stat-val { color: var(--neural-primary); }
 .hero-stat-sep {
     width: 1px; height: 28px; background: rgba(255,255,255,0.08); flex-shrink: 0;
 }
@@ -467,7 +471,7 @@
 /* ── Top IPs ── */
 .ip-bar-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem; font-size: 0.78rem; border-radius: 4px; padding: 2px 4px; cursor: pointer; transition: background 0.2s, transform 0.15s; }
 .ip-bar-row:hover { background: rgba(0,217,255,0.08); transform: translateX(2px); }
-.ip-label { width: 120px; font-family: monospace; color: var(--text-secondary); font-size: 0.75rem; flex-shrink: 0; text-align: right; }
+.ip-label { width: 150px; font-family: monospace; color: var(--text-secondary); font-size: 0.72rem; flex-shrink: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ip-bar-bg { flex: 1; height: 16px; background: rgba(255,255,255,0.04); border-radius: 3px; overflow: hidden; }
 .ip-bar { height: 100%; border-radius: 3px; background: var(--neural-primary); opacity: 0.7; transition: width 0.4s; }
 .ip-count { width: 40px; font-size: 0.7rem; color: var(--text-muted); }
@@ -481,11 +485,42 @@
 .mm-bar { height: 100%; border-radius: 3px; transition: width 0.4s ease; min-width: 0; }
 .mm-pct { width: 36px; font-size: 0.65rem; color: var(--text-muted); text-align: right; flex-shrink: 0; }
 
-/* ── Heatmap ── */
-.heatmap-grid { display: flex; flex-direction: column; gap: 2px; }
-.heatmap-row { display: flex; gap: 2px; align-items: center; }
-.heatmap-lbl { width: 28px; font-size: 0.55rem; color: var(--text-muted); text-align: right; flex-shrink: 0; }
-.heatmap-cell { width: 100%; aspect-ratio: 1.6; border-radius: 2px; transition: background 0.3s; }
+/* ── Severity Traffic Flow ── */
+.sev-flow-wrap { display: flex; align-items: center; gap: 1.5rem; width: 100%; }
+.sev-flow-total { text-align: center; min-width: 60px; flex-shrink: 0; }
+.sev-flow-total-num { display: block; font-size: 1.4rem; font-weight: 800; color: var(--text-primary); }
+.sev-flow-total-lbl { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); }
+.sev-flow-lanes { flex: 1; display: flex; flex-direction: column; gap: 0.4rem; }
+.sev-lane { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; border-radius: 6px; padding: 2px 4px; transition: background 0.15s; }
+.sev-lane:hover { background: rgba(255,255,255,0.03); }
+.sev-lane-label { width: 50px; font-size: 0.65rem; font-weight: 700; text-align: right; text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; }
+.sev-lane-track { flex: 1; height: 18px; background: rgba(255,255,255,0.04); border-radius: 9px; overflow: hidden; position: relative; }
+.sev-lane-fill { height: 100%; border-radius: 9px; position: relative; overflow: hidden; min-width: 4px; }
+.sev-lane-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); animation: sev-shimmer 2s linear infinite; }
+@keyframes sev-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.sev-particles { position: absolute; inset: 0; overflow: hidden; }
+.sev-particle { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.7); top: 50%; transform: translateY(-50%); animation: sev-packet 1.8s linear infinite; }
+@keyframes sev-packet { from { left: -3px; opacity: 0; } 10% { opacity: 1; } 85% { opacity: 0.8; } to { left: calc(100% + 3px); opacity: 0; } }
+.sev-lane-count { width: 40px; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-align: right; }
+
+/* ── Weather Heatmap ── */
+.hm-grid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; }
+.hm-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; animation: hm-rise 0.5s ease both; }
+@keyframes hm-rise { from { opacity: 0; transform: translateY(8px) scale(0.85); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.hm-cell-inner {
+    width: 100%; aspect-ratio: 1; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s, box-shadow 0.3s; cursor: default;
+}
+.hm-cell:hover .hm-cell-inner { transform: scale(1.25); z-index: 2; }
+.hm-cold .hm-cell-inner { background: rgba(255,255,255,0.03); }
+.hm-pulse .hm-cell-inner { animation: hm-throb 2.5s ease-in-out infinite; }
+@keyframes hm-throb { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
+.hm-count { font-size: 0.45rem; font-weight: 700; color: rgba(255,255,255,0.85); text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+.hm-hour { font-size: 0.4rem; color: var(--text-muted); line-height: 1; }
+.hm-legend { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem; justify-content: center; }
+.hm-legend-lbl { font-size: 0.55rem; color: var(--text-muted); }
+.hm-legend-bar { width: 100px; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #0a1628, #0066aa, #00ccaa, #ffaa00, #ff3366); }
 
 /* ── Vitals ── */
 .vitals-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
@@ -781,8 +816,6 @@ class CortexCommandCenter {
 
             const threatCount = d.db_total || d.count || 0;
             document.getElementById('cb-threats').innerHTML = this.fmtNum(threatCount) + this.trendArrow('threats', threatCount);
-            // Event count = real DB total (not capped by API row limit)
-            document.getElementById('cb-events').innerHTML = this.fmtNum(threatCount) + this.trendArrow('events', threatCount);
             this.updateFreshness(d.data_stale, d.last_event_time);
             const container = document.getElementById('threat-feed');
             this.threatCache = d.threats || [];
@@ -1046,27 +1079,38 @@ class CortexCommandCenter {
         const container = document.getElementById('severity-chart');
         const total = Object.values(bySev).reduce((a, b) => a + b, 0);
         if (total === 0) {
-            container.innerHTML = '<div class="cc-empty"><div class="cc-empty-msg">No severity data — events may still be in learning mode</div></div>';
+            container.innerHTML = '<div class="cc-empty"><div class="cc-empty-msg">No severity data</div></div>';
             return;
         }
-
+        container.style.display = 'block';
         const colors = { critical: '#ff3366', high: '#ff6600', medium: '#ffaa00', low: '#0088ff' };
+        const names = { critical: 'CRIT', high: 'HIGH', medium: 'MED', low: 'LOW' };
         const sevOrder = ['critical', 'high', 'medium', 'low'];
-        const r = 40, cx = 50, cy = 50;
-        const circ = 2 * Math.PI * r;
-        let offset = 0;
-        let arcs = '';
-        let legend = '';
+        let lanes = '';
         for (const sev of sevOrder) {
             const count = bySev[sev] || 0;
             if (count === 0) continue;
-            const pct = count / total;
-            const dashLen = pct * circ;
-            arcs += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + colors[sev] + '" stroke-width="14" stroke-dasharray="' + dashLen.toFixed(2) + ' ' + (circ - dashLen).toFixed(2) + '" stroke-dashoffset="' + (-offset).toFixed(2) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
-            offset += dashLen;
-            legend += '<div style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;cursor:pointer;" onclick="window.location=\'/dashboard/threat-feed?severity=' + sev + '\'"><div style="width:8px;height:8px;border-radius:2px;background:' + colors[sev] + ';"></div><span style="color:var(--text-secondary);text-transform:capitalize;">' + sev + '</span><span style="color:var(--text-muted);">' + count + '</span></div>';
+            const pct = Math.max(3, (count / total) * 100).toFixed(1);
+            const c = colors[sev];
+            const numP = Math.max(3, Math.min(6, Math.round((count / total) * 10)));
+            let particles = '';
+            for (let i = 0; i < numP; i++) {
+                particles += '<div class="sev-particle" style="animation-delay:' + (i * (1.8 / numP)).toFixed(2) + 's;"></div>';
+            }
+            lanes += '<div class="sev-lane" onclick="window.location=\'/dashboard/threat-feed?severity=' + sev + '\'">' +
+                '<div class="sev-lane-label" style="color:' + c + ';">' + names[sev] + '</div>' +
+                '<div class="sev-lane-track">' +
+                    '<div class="sev-lane-fill" style="width:' + pct + '%;background:linear-gradient(90deg,' + c + ',' + c + 'cc);">' +
+                        '<div class="sev-particles">' + particles + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="sev-lane-count">' + this.fmtNum(count) + '</div>' +
+            '</div>';
         }
-        container.innerHTML = '<svg viewBox="0 0 100 100" width="90" height="90"><circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="14"/>' + arcs + '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" fill="var(--text-primary)" font-size="16" font-weight="800">' + total + '</text><text x="' + cx + '" y="' + (cy + 10) + '" text-anchor="middle" fill="var(--text-muted)" font-size="6" text-transform="uppercase">EVENTS</text></svg><div style="display:flex;flex-direction:column;gap:0.35rem;">' + legend + '</div>';
+        container.innerHTML = '<div class="sev-flow-wrap">' +
+            '<div class="sev-flow-total"><span class="sev-flow-total-num">' + this.fmtNum(total) + '</span><span class="sev-flow-total-lbl">events</span></div>' +
+            '<div class="sev-flow-lanes">' + lanes + '</div>' +
+        '</div>';
     }
 
     renderTopIPs() {
@@ -1087,26 +1131,39 @@ class CortexCommandCenter {
         const hours = Object.keys(byHour).sort();
         if (hours.length === 0) { container.innerHTML = '<div class="cc-empty" style="padding:0.5rem;"><div class="cc-empty-msg" style="font-size:0.78rem;">No heatmap data</div></div>'; return; }
 
-        // Group hours into 24-hour buckets
         const hourBuckets = new Array(24).fill(0);
         for (const h of hours) {
-            const hourNum = parseInt(h.slice(-2), 10);
-            if (!isNaN(hourNum)) hourBuckets[hourNum] += byHour[h];
+            const hourNum = Number.parseInt(h.slice(-2), 10);
+            if (!Number.isNaN(hourNum)) hourBuckets[hourNum] += byHour[h];
         }
         const maxVal = Math.max(1, ...hourBuckets);
 
-        // Render as a single row of 24 cells
         let cells = '';
         for (let i = 0; i < 24; i++) {
-            const intensity = hourBuckets[i] / maxVal;
-            const color = intensity > 0.7 ? 'rgba(255,51,102,' + (0.3 + intensity * 0.6).toFixed(2) + ')' :
-                          intensity > 0.3 ? 'rgba(255,170,0,' + (0.2 + intensity * 0.5).toFixed(2) + ')' :
-                          intensity > 0 ? 'rgba(0,217,255,' + (0.1 + intensity * 0.4).toFixed(2) + ')' :
-                          'rgba(255,255,255,0.03)';
-            cells += '<div class="heatmap-cell" style="background:' + color + ';" title="' + String(i).padStart(2, '0') + ':00 — ' + hourBuckets[i] + ' events"></div>';
+            const v = hourBuckets[i];
+            const intensity = v / maxVal;
+            const delay = (i * 0.03).toFixed(2);
+            if (v === 0) {
+                cells += '<div class="hm-cell hm-cold" style="animation-delay:' + delay + 's;" title="' + String(i).padStart(2,'0') + ':00 — 0 events"><div class="hm-cell-inner"></div><span class="hm-hour">' + String(i).padStart(2,'0') + '</span></div>';
+                continue;
+            }
+            // Color interpolation: blue→cyan→amber→red based on intensity
+            let hue, sat, lgt, glow;
+            if (intensity < 0.25) { hue = 210; sat = 70; lgt = 20 + intensity * 40; glow = 4; }
+            else if (intensity < 0.5) { hue = 180 - (intensity - 0.25) * 4 * 140; sat = 75 + intensity * 20; lgt = 30 + intensity * 20; glow = 8; }
+            else if (intensity < 0.75) { hue = 40 - (intensity - 0.5) * 4 * 10; sat = 85; lgt = 35 + intensity * 15; glow = 14; }
+            else { hue = 355; sat = 85; lgt = 40 + intensity * 12; glow = 20; }
+            const bg = 'hsl(' + hue.toFixed(0) + ',' + sat.toFixed(0) + '%,' + lgt.toFixed(0) + '%)';
+            const shadow = '0 0 ' + glow + 'px ' + bg;
+            const pulseClass = intensity > 0.65 ? ' hm-pulse' : '';
+            cells += '<div class="hm-cell' + pulseClass + '" style="animation-delay:' + delay + 's;" title="' + String(i).padStart(2,'0') + ':00 — ' + v + ' events">' +
+                '<div class="hm-cell-inner" style="background:' + bg + ';box-shadow:' + shadow + ';">' +
+                    (v > 0 ? '<span class="hm-count">' + v + '</span>' : '') +
+                '</div>' +
+                '<span class="hm-hour">' + String(i).padStart(2,'0') + '</span></div>';
         }
-        const labels = '<div style="display:flex;justify-content:space-between;font-size:0.5rem;color:var(--text-muted);margin-top:4px;"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span></div>';
-        container.innerHTML = '<div style="display:grid;grid-template-columns:repeat(24,1fr);gap:2px;">' + cells + '</div>' + labels;
+        container.innerHTML = '<div class="hm-grid">' + cells + '</div>' +
+            '<div class="hm-legend"><span class="hm-legend-lbl">Calm</span><div class="hm-legend-bar"></div><span class="hm-legend-lbl">Intense</span></div>';
     }
 
     /* ── 5. MITRE Mini-Map ── */

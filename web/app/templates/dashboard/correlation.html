@@ -1,0 +1,533 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Correlation Engine - AMOSKYS{% endblock %}
+
+{% block content %}
+<div style="padding: 2rem;">
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">SOMA Correlation Engine</h2>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+                <span id="engine-status" style="font-size:0.8rem;padding:0.3rem 0.6rem;border-radius:4px;background:rgba(0,255,136,0.1);color:#00ff88;">Initializing...</span>
+                <button id="refresh-btn" class="neural-button" style="padding:0.5rem 0.8rem;font-size:0.8rem;cursor:pointer;">Refresh</button>
+            </div>
+        </div>
+        <p style="color: var(--text-secondary);">
+            Single-device event correlation powered by FusionEngine. Detects attack chains across the full agent fleet using correlation rules with AMRDR reliability weighting.
+        </p>
+    </div>
+
+    <!-- Device Risk + Stats Row -->
+    <div style="display:grid;grid-template-columns:280px 1fr;gap:1.5rem;margin:1.5rem 0;">
+        <!-- Device Risk Gauge -->
+        <div class="neural-card" style="text-align:center;">
+            <h3 class="card-title" style="font-size:0.95rem;margin-bottom:1rem;">Device Risk</h3>
+            <div id="risk-gauge" style="position:relative;width:160px;height:160px;margin:0 auto;">
+                <svg viewBox="0 0 120 120" style="width:100%;height:100%;">
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="10"/>
+                    <circle id="risk-arc" cx="60" cy="60" r="50" fill="none" stroke="#00ff88" stroke-width="10"
+                            stroke-dasharray="0 314" stroke-linecap="round"
+                            transform="rotate(-90 60 60)" style="transition:all 1s ease;"/>
+                </svg>
+                <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
+                    <div id="risk-score" style="font-size:2.5rem;font-weight:700;line-height:1;">--</div>
+                    <div id="risk-level" style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">unknown</div>
+                </div>
+            </div>
+            <div id="risk-tags" style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:0.3rem;justify-content:center;"></div>
+            <div id="risk-updated" style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem;"></div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div>
+            <div class="metrics-grid" style="grid-template-columns:repeat(4,1fr);">
+                <div class="metric-card">
+                    <div class="metric-value" id="total-incidents" style="color:#ff3366;">0</div>
+                    <div class="metric-label">Total Incidents</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="critical-count" style="color:#ff3366;">0</div>
+                    <div class="metric-label">Critical</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="high-count" style="color:#ffaa00;">0</div>
+                    <div class="metric-label">High</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="medium-count" style="color:#00aaff;">0</div>
+                    <div class="metric-label">Medium+Low</div>
+                </div>
+            </div>
+
+            <!-- Correlation Rules Activity -->
+            <div class="neural-card" style="margin-top:1rem;">
+                <h3 class="card-title" style="font-size:0.95rem;margin-bottom:0.75rem;">Rules Fired</h3>
+                <div id="rules-chart" style="display:flex;gap:0.5rem;flex-wrap:wrap;"></div>
+                <div id="rules-empty" style="color:var(--text-muted);font-size:0.85rem;padding:0.5rem 0;">No correlation rules have fired yet. Events are being collected...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MITRE Tactics Coverage from Incidents -->
+    <div class="neural-card" style="margin-bottom:1.5rem;">
+        <h3 class="card-title" style="font-size:0.95rem;margin-bottom:1rem;">MITRE Tactics Detected</h3>
+        <div id="tactics-bar" style="display:flex;gap:2px;height:32px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,0.03);"></div>
+        <div id="tactics-legend" style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-top:0.75rem;font-size:0.75rem;"></div>
+    </div>
+
+    <!-- Severity Filter -->
+    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;align-items:center;">
+        <button class="filter-btn active" data-severity="">All</button>
+        <button class="filter-btn" data-severity="CRITICAL">Critical</button>
+        <button class="filter-btn" data-severity="HIGH">High</button>
+        <button class="filter-btn" data-severity="MEDIUM">Medium</button>
+        <button class="filter-btn" data-severity="LOW">Low</button>
+        <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);" id="incident-summary"></span>
+    </div>
+
+    <!-- Incidents Table -->
+    <div class="neural-card" style="padding:0;overflow:hidden;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+            <thead>
+                <tr style="background:rgba(255,255,255,0.03);text-align:left;">
+                    <th style="padding:0.75rem 1rem;color:var(--text-muted);font-weight:500;">Severity</th>
+                    <th style="padding:0.75rem 0.5rem;color:var(--text-muted);font-weight:500;">Rule</th>
+                    <th style="padding:0.75rem 0.5rem;color:var(--text-muted);font-weight:500;">Summary</th>
+                    <th style="padding:0.75rem 0.5rem;color:var(--text-muted);font-weight:500;">Tactics</th>
+                    <th style="padding:0.75rem 0.5rem;color:var(--text-muted);font-weight:500;">Techniques</th>
+                    <th style="padding:0.75rem 0.5rem;color:var(--text-muted);font-weight:500;">Confidence</th>
+                    <th style="padding:0.75rem 1rem;color:var(--text-muted);font-weight:500;">Time</th>
+                </tr>
+            </thead>
+            <tbody id="incidents-body">
+                <tr><td colspan="7" style="padding:2rem;text-align:center;color:var(--text-muted);">Loading correlation data...</td></tr>
+            </tbody>
+        </table>
+        <!-- Pagination Controls -->
+        <div id="pagination-controls" style="display:flex;justify-content:center;align-items:center;gap:1rem;padding:0.75rem 1rem;border-top:1px solid rgba(255,255,255,0.06);">
+            <button id="page-prev" class="filter-btn" style="padding:0.3rem 0.7rem;">Prev</button>
+            <span id="page-info" style="font-size:0.8rem;color:var(--text-muted);">Page 1</span>
+            <button id="page-next" class="filter-btn" style="padding:0.3rem 0.7rem;">Next</button>
+        </div>
+    </div>
+
+    <!-- Agent Contributions (AMRDR) -->
+    <div class="neural-card" style="margin-top:1.5rem;">
+        <h3 class="card-title" style="font-size:0.95rem;margin-bottom:1rem;">Contributing Agents</h3>
+        <p style="color:var(--text-secondary);font-size:0.8rem;margin-bottom:0.75rem;">AMRDR-weighted agent contributions to detected incidents</p>
+        <div id="agent-weights" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0.75rem;"></div>
+    </div>
+</div>
+
+<style>
+.filter-btn { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:var(--text-secondary); padding:0.4rem 0.8rem; border-radius:4px; cursor:pointer; font-size:0.8rem; transition:all 0.2s; }
+.filter-btn:hover { background:rgba(255,255,255,0.08); }
+.filter-btn.active { background:rgba(0,170,255,0.15); border-color:rgba(0,170,255,0.3); color:#00aaff; }
+.sev-badge { display:inline-block; padding:0.2rem 0.5rem; border-radius:3px; font-size:0.75rem; font-weight:600; text-transform:uppercase; }
+.sev-CRITICAL { background:rgba(255,51,102,0.15); color:#ff3366; }
+.sev-HIGH { background:rgba(255,170,0,0.15); color:#ffaa00; }
+.sev-MEDIUM { background:rgba(0,170,255,0.15); color:#00aaff; }
+.sev-LOW { background:rgba(0,255,136,0.15); color:#00ff88; }
+.sev-INFO { background:rgba(255,255,255,0.08); color:var(--text-muted); }
+.tactic-tag { display:inline-block; padding:0.15rem 0.4rem; border-radius:3px; font-size:0.7rem; background:rgba(255,255,255,0.06); color:var(--text-secondary); margin:0.1rem; }
+.tech-tag { display:inline-block; padding:0.15rem 0.4rem; border-radius:3px; font-size:0.7rem; background:rgba(0,170,255,0.1); color:#00aaff; margin:0.1rem; font-family:monospace; }
+.rule-pill { display:inline-flex; align-items:center; gap:0.3rem; padding:0.3rem 0.6rem; border-radius:4px; font-size:0.75rem; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); }
+.rule-pill .count { background:rgba(0,170,255,0.2); color:#00aaff; padding:0.1rem 0.35rem; border-radius:3px; font-weight:600; }
+.agent-card { padding:0.75rem; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); }
+.agent-card .bar { height:6px; border-radius:3px; background:rgba(255,255,255,0.05); margin-top:0.5rem; overflow:hidden; }
+.agent-card .bar-fill { height:100%; border-radius:3px; transition:width 0.5s ease; }
+.inc-row { border-bottom:1px solid rgba(255,255,255,0.04); transition:background 0.15s; cursor:pointer; }
+.inc-row:hover { background:rgba(255,255,255,0.03); }
+.inc-row.selected { background:rgba(0,170,255,0.06); border-left:2px solid #00aaff; }
+.risk-tag { display:inline-block; padding:0.1rem 0.35rem; border-radius:3px; font-size:0.65rem; background:rgba(255,255,255,0.06); color:var(--text-muted); margin:0.1rem; }
+
+/* Incident Explanation Panel */
+.inc-explain { display:none; padding:1rem 1.5rem; background:rgba(0,170,255,0.03); border-bottom:1px solid rgba(0,170,255,0.1); }
+.inc-explain.open { display:table-row; }
+.inc-explain-inner { padding:1rem; }
+.inc-explain-narrative { font-size:0.85rem; line-height:1.5; color:var(--text-primary); margin-bottom:0.75rem; }
+.inc-explain-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:0.75rem; }
+.inc-explain-section { font-size:0.8rem; }
+.inc-explain-section h4 { font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); margin-bottom:0.4rem; }
+.inc-explain-item { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.25rem; font-size:0.8rem; }
+.inc-explain-item .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.inc-explain-item .dot.tp { background:#00ff88; }
+.inc-explain-item .dot.fp { background:#ff3366; }
+.inc-explain-conf { display:flex; gap:1rem; margin-bottom:0.75rem; }
+.inc-explain-conf-item { font-size:0.75rem; }
+.inc-explain-conf-label { color:var(--text-muted); }
+.inc-explain-conf-val { font-weight:600; }
+.inc-explain-actions { display:flex; gap:0.5rem; margin-top:0.75rem; }
+.inc-explain-actions button { padding:0.3rem 0.75rem; border-radius:4px; font-size:0.75rem; cursor:pointer; border:1px solid; }
+.inc-explain-actions .btn-confirm { background:rgba(0,255,136,0.1); color:#00ff88; border-color:rgba(0,255,136,0.3); }
+.inc-explain-actions .btn-dismiss { background:rgba(255,51,102,0.1); color:#ff3366; border-color:rgba(255,51,102,0.3); }
+.inc-explain-actions .btn-confirm:hover { background:rgba(0,255,136,0.2); }
+.inc-explain-actions .btn-dismiss:hover { background:rgba(255,51,102,0.2); }
+</style>
+
+<script>
+const TACTIC_NAMES = {
+    'TA0001':'Initial Access','TA0002':'Execution','TA0003':'Persistence',
+    'TA0004':'Privilege Escalation','TA0005':'Defense Evasion','TA0006':'Credential Access',
+    'TA0007':'Discovery','TA0008':'Lateral Movement','TA0009':'Collection',
+    'TA0010':'Exfiltration','TA0011':'Command & Control','TA0040':'Impact'
+};
+const TACTIC_COLORS = {
+    'TA0001':'#FF6B35','TA0002':'#4ECDC4','TA0003':'#FCBAD3','TA0004':'#FFD93D',
+    'TA0005':'#AA96DA','TA0006':'#ff3366','TA0007':'#6BCB77','TA0008':'#F38181',
+    'TA0009':'#00B4D8','TA0010':'#E76F51','TA0011':'#00aaff','TA0040':'#ff0000'
+};
+
+let allIncidents = [];
+let currentFilter = '';
+const PAGE_SIZE = 20;
+let currentPage = 0;
+
+async function loadAll() {
+    await Promise.all([loadRisk(), loadIncidents()]);
+}
+
+async function loadRisk() {
+    try {
+        const r = await fetch('/dashboard/api/fusion/risk');
+        const d = await r.json();
+        if (d.risk) {
+            renderRisk(d.risk);
+        } else if (d.risks && d.risks.length > 0) {
+            renderRisk(d.risks[0]);
+        } else {
+            document.getElementById('risk-score').textContent = '0';
+            document.getElementById('risk-level').textContent = 'no data';
+            document.getElementById('engine-status').textContent = 'Collecting...';
+            document.getElementById('engine-status').style.color = '#ffaa00';
+            document.getElementById('engine-status').style.background = 'rgba(255,170,0,0.1)';
+        }
+    } catch(e) {
+        document.getElementById('engine-status').textContent = 'Offline';
+        document.getElementById('engine-status').style.color = '#ff3366';
+        document.getElementById('engine-status').style.background = 'rgba(255,51,102,0.1)';
+    }
+}
+
+function renderRisk(risk) {
+    const score = risk.score || 0;
+    const level = risk.level || 'LOW';
+    const tags = risk.reason_tags || [];
+
+    document.getElementById('risk-score').textContent = score;
+    document.getElementById('risk-level').textContent = level;
+
+    // Color based on level
+    const colors = { LOW:'#00ff88', MEDIUM:'#00aaff', HIGH:'#ffaa00', CRITICAL:'#ff3366' };
+    const color = colors[level] || '#00ff88';
+    document.getElementById('risk-arc').setAttribute('stroke', color);
+    document.getElementById('risk-arc').setAttribute('stroke-dasharray', `${(score/100)*314} 314`);
+    document.getElementById('risk-score').style.color = color;
+
+    // Reason tags
+    const tagsEl = document.getElementById('risk-tags');
+    tagsEl.innerHTML = tags.slice(0,6).map(t => `<span class="risk-tag">${t}</span>`).join('');
+
+    if (risk.updated_at) {
+        document.getElementById('risk-updated').textContent = 'Updated: ' + new Date(risk.updated_at).toLocaleTimeString();
+    }
+
+    document.getElementById('engine-status').textContent = 'Active';
+    document.getElementById('engine-status').style.color = '#00ff88';
+    document.getElementById('engine-status').style.background = 'rgba(0,255,136,0.1)';
+}
+
+async function loadIncidents() {
+    try {
+        const r = await fetch('/dashboard/api/fusion/incidents?limit=200');
+        const d = await r.json();
+        allIncidents = d.incidents || [];
+        renderStats();
+        renderRulesChart();
+        renderTactics();
+        renderIncidents();
+        renderAgentWeights();
+    } catch(e) {
+        document.getElementById('incidents-body').innerHTML =
+            '<tr><td colspan="7" style="padding:2rem;text-align:center;color:var(--text-muted);">Fusion engine not yet available. Events are being collected for correlation.</td></tr>';
+    }
+}
+
+function renderStats() {
+    document.getElementById('total-incidents').textContent = allIncidents.length;
+    document.getElementById('critical-count').textContent = allIncidents.filter(i=>i.severity==='CRITICAL').length;
+    document.getElementById('high-count').textContent = allIncidents.filter(i=>i.severity==='HIGH').length;
+    const ml = allIncidents.filter(i=>!['CRITICAL','HIGH'].includes(i.severity)).length;
+    document.getElementById('medium-count').textContent = ml;
+}
+
+function renderRulesChart() {
+    const rules = {};
+    allIncidents.forEach(i => { rules[i.rule_name] = (rules[i.rule_name]||0)+1; });
+    const el = document.getElementById('rules-chart');
+    const empty = document.getElementById('rules-empty');
+    if (Object.keys(rules).length === 0) { el.innerHTML=''; empty.style.display='block'; return; }
+    empty.style.display = 'none';
+    const sorted = Object.entries(rules).sort((a,b)=>b[1]-a[1]);
+    el.innerHTML = sorted.map(([name,count]) =>
+        `<span class="rule-pill"><span style="color:var(--text-secondary);">${name}</span><span class="count">${count}</span></span>`
+    ).join('');
+}
+
+function renderTactics() {
+    const tacticCounts = {};
+    allIncidents.forEach(i => {
+        (i.tactics||[]).forEach(t => { tacticCounts[t] = (tacticCounts[t]||0)+1; });
+    });
+    const bar = document.getElementById('tactics-bar');
+    const legend = document.getElementById('tactics-legend');
+    const total = Object.values(tacticCounts).reduce((a,b)=>a+b,0) || 1;
+
+    if (Object.keys(tacticCounts).length === 0) {
+        bar.innerHTML = '<div style="width:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.8rem;">No tactics detected yet</div>';
+        legend.innerHTML = '';
+        return;
+    }
+
+    const sorted = Object.entries(tacticCounts).sort((a,b)=>b[1]-a[1]);
+    bar.innerHTML = sorted.map(([t,c]) => {
+        const pct = Math.max(2, (c/total)*100);
+        const color = TACTIC_COLORS[t] || '#666';
+        return `<div style="width:${pct}%;background:${color};min-width:4px;" title="${TACTIC_NAMES[t]||t}: ${c}"></div>`;
+    }).join('');
+
+    legend.innerHTML = sorted.map(([t,c]) => {
+        const color = TACTIC_COLORS[t] || '#666';
+        const name = TACTIC_NAMES[t] || t;
+        return `<span style="display:flex;align-items:center;gap:0.3rem;"><span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block;"></span>${name} (${c})</span>`;
+    }).join('');
+}
+
+function renderIncidents() {
+    const filtered = currentFilter ? allIncidents.filter(i=>i.severity===currentFilter) : allIncidents;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    currentPage = Math.min(currentPage, totalPages - 1);
+    const start = currentPage * PAGE_SIZE;
+    const page = filtered.slice(start, start + PAGE_SIZE);
+
+    const body = document.getElementById('incidents-body');
+    document.getElementById('incident-summary').textContent = `Showing ${start+1}-${start+page.length} of ${filtered.length} (${allIncidents.length} total)`;
+
+    // Update pagination controls
+    document.getElementById('page-info').textContent = `Page ${currentPage+1} of ${totalPages}`;
+    document.getElementById('page-prev').disabled = currentPage === 0;
+    document.getElementById('page-next').disabled = currentPage >= totalPages - 1;
+    document.getElementById('pagination-controls').style.display = filtered.length > PAGE_SIZE ? 'flex' : 'none';
+
+    if (filtered.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" style="padding:2rem;text-align:center;color:var(--text-muted);">' +
+            (allIncidents.length === 0 ? 'No correlated incidents yet. The FusionEngine evaluates every 60 seconds.' : 'No incidents match the selected filter.') +
+            '</td></tr>';
+        return;
+    }
+
+    body.innerHTML = page.map(inc => {
+        const iid = inc.incident_id || '';
+        const tactics = (inc.tactics||[]).map(t => `<span class="tactic-tag">${TACTIC_NAMES[t]||t}</span>`).join('');
+        const techs = (inc.techniques||[]).slice(0,3).map(t => `<span class="tech-tag">${t}</span>`).join('');
+        const conf = inc.weighted_confidence != null ? (inc.weighted_confidence * 100).toFixed(0) + '%' : '100%';
+        const confColor = (inc.weighted_confidence||1) >= 0.8 ? '#00ff88' : (inc.weighted_confidence||1) >= 0.5 ? '#ffaa00' : '#ff3366';
+        const time = inc.created_at ? new Date(inc.created_at).toLocaleString() : '--';
+        return `<tr class="inc-row" data-incident-id="${iid}">
+            <td style="padding:0.6rem 1rem;"><span class="sev-badge sev-${inc.severity}">${inc.severity}</span></td>
+            <td style="padding:0.6rem 0.5rem;font-family:monospace;font-size:0.8rem;color:var(--text-secondary);">${inc.rule_name||'--'}</td>
+            <td style="padding:0.6rem 0.5rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(inc.summary||'').replace(/"/g,'&quot;')}">${inc.summary||'--'}</td>
+            <td style="padding:0.6rem 0.5rem;">${tactics||'--'}</td>
+            <td style="padding:0.6rem 0.5rem;">${techs||'--'}</td>
+            <td style="padding:0.6rem 0.5rem;"><span style="color:${confColor};font-weight:600;">${conf}</span></td>
+            <td style="padding:0.6rem 1rem;font-size:0.8rem;color:var(--text-muted);white-space:nowrap;">${time}</td>
+        </tr>
+        <tr class="inc-explain" id="explain-${iid}"><td colspan="7"><div class="inc-explain-inner"></div></td></tr>`;
+    }).join('');
+}
+
+function renderAgentWeights() {
+    const agentMap = {};
+    allIncidents.forEach(inc => {
+        const agents = inc.contributing_agents || [];
+        const weights = inc.agent_weights || {};
+        agents.forEach(a => {
+            if (!agentMap[a]) agentMap[a] = { count: 0, totalWeight: 0 };
+            agentMap[a].count++;
+            agentMap[a].totalWeight += (weights[a] || 1.0);
+        });
+    });
+
+    const el = document.getElementById('agent-weights');
+    if (Object.keys(agentMap).length === 0) {
+        el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">No agent contributions recorded yet.</div>';
+        return;
+    }
+
+    const AGENT_COLORS = {
+        proc:'#4ECDC4', flow:'#F38181', dns:'#AA96DA', auth:'#FF6B35',
+        fim:'#00ff88', persistence:'#FCBAD3', peripheral:'#FF6B9D',
+        kernel_audit:'#FFD93D', device_discovery:'#6BCB77', protocol_collectors:'#00B4D8'
+    };
+
+    el.innerHTML = Object.entries(agentMap).sort((a,b)=>b[1].count-a[1].count).map(([agent, data]) => {
+        const avgWeight = data.totalWeight / data.count;
+        const color = AGENT_COLORS[agent] || '#00aaff';
+        const pct = (avgWeight * 100).toFixed(0);
+        return `<div class="agent-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-weight:600;color:${color};">${agent}</span>
+                <span style="font-size:0.75rem;color:var(--text-muted);">${data.count} incidents</span>
+            </div>
+            <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.25rem;">Avg. weight: ${pct}%</div>
+            <div class="bar"><div class="bar-fill" style="width:${pct}%;background:${color};"></div></div>
+        </div>`;
+    }).join('');
+}
+
+// Filter buttons
+document.querySelectorAll('.filter-btn[data-severity]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn[data-severity]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.severity || '';
+        currentPage = 0;  // Reset to first page on filter change
+        renderIncidents();
+    });
+});
+
+// Pagination buttons
+document.getElementById('page-prev').addEventListener('click', () => {
+    if (currentPage > 0) { currentPage--; renderIncidents(); }
+});
+document.getElementById('page-next').addEventListener('click', () => {
+    const filtered = currentFilter ? allIncidents.filter(i=>i.severity===currentFilter) : allIncidents;
+    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+    if (currentPage < totalPages - 1) { currentPage++; renderIncidents(); }
+});
+
+document.getElementById('refresh-btn').addEventListener('click', function() {
+    // Skip if an explanation panel is open — prevents DOM rebuild from destroying it
+    if (!document.querySelector('.inc-explain.open')) {
+        loadAll();
+    }
+});
+
+// HTML-escape to prevent XSS from agent names, narratives, etc.
+function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+// Incident row click → expand explanation; feedback button click → submit triage
+document.getElementById('incidents-body').addEventListener('click', function(e) {
+    // Check feedback buttons FIRST — they live in .inc-explain rows, not .inc-row
+    const fbBtn = e.target.closest('[data-feedback]');
+    if (fbBtn) {
+        submitFeedback(fbBtn.dataset.incidentId, fbBtn.dataset.feedback, fbBtn);
+        return;
+    }
+
+    const row = e.target.closest('.inc-row');
+    if (!row) return;
+    const iid = row.dataset.incidentId;
+    if (!iid) return;
+
+    const panel = document.getElementById('explain-' + iid);
+    if (!panel) return;
+
+    // Toggle
+    if (panel.classList.contains('open')) {
+        panel.classList.remove('open');
+        row.classList.remove('selected');
+        return;
+    }
+
+    // Close others
+    document.querySelectorAll('.inc-explain.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.inc-row.selected').forEach(r => r.classList.remove('selected'));
+
+    row.classList.add('selected');
+    const inner = panel.querySelector('.inc-explain-inner');
+    inner.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Loading explanation...</div>';
+    panel.classList.add('open');
+
+    fetch('/dashboard/api/explain/incident/' + encodeURIComponent(iid))
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(data => {
+            if (data.status !== 'success' || !data.explanation) {
+                inner.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Explanation unavailable</div>';
+                return;
+            }
+            const ex = data.explanation;
+            const cb = ex.confidence_breakdown || {};
+            const tpList = (ex.true_positive_indicators || []).map(t =>
+                '<div class="inc-explain-item"><span class="dot tp"></span>' + esc(t) + '</div>'
+            ).join('');
+            const fpList = (ex.false_positive_indicators || []).map(t =>
+                '<div class="inc-explain-item"><span class="dot fp"></span>' + esc(t) + '</div>'
+            ).join('');
+            const evidence = (ex.contributing_evidence || []).map(e =>
+                '<span style="margin-right:0.75rem;font-size:0.8rem;">' + esc(e.agent) +
+                ' <span style="color:var(--text-muted);">w=' + (e.weight||0).toFixed(2) + '</span></span>'
+            ).join('');
+
+            inner.innerHTML =
+                '<div class="inc-explain-narrative">' + esc(ex.narrative || 'No narrative available.') + '</div>' +
+                '<div class="inc-explain-conf">' +
+                    '<div class="inc-explain-conf-item"><span class="inc-explain-conf-label">Rule: </span><span class="inc-explain-conf-val">' + ((cb.rule_confidence||0)*100).toFixed(0) + '%</span></div>' +
+                    '<div class="inc-explain-conf-item"><span class="inc-explain-conf-label">Agent: </span><span class="inc-explain-conf-val">' + ((cb.agent_agreement||0)*100).toFixed(0) + '%</span></div>' +
+                    '<div class="inc-explain-conf-item"><span class="inc-explain-conf-label">AMRDR: </span><span class="inc-explain-conf-val">' + ((cb.amrdr_weight||0)*100).toFixed(0) + '%</span></div>' +
+                    '<div class="inc-explain-conf-item"><span class="inc-explain-conf-label">Composite: </span><span class="inc-explain-conf-val" style="color:#00aaff;">' + ((cb.composite||0)*100).toFixed(0) + '%</span></div>' +
+                    (ex.kill_chain_phase ? '<div class="inc-explain-conf-item"><span class="inc-explain-conf-label">Phase: </span><span class="inc-explain-conf-val">' + esc(ex.kill_chain_phase) + '</span></div>' : '') +
+                '</div>' +
+                (evidence ? '<div style="margin-bottom:0.5rem;">' + evidence + '</div>' : '') +
+                '<div class="inc-explain-grid">' +
+                    '<div class="inc-explain-section"><h4>True Positive Indicators</h4>' + (tpList || '<div style="color:var(--text-muted);font-size:0.8rem;">None</div>') + '</div>' +
+                    '<div class="inc-explain-section"><h4>False Positive Indicators</h4>' + (fpList || '<div style="color:var(--text-muted);font-size:0.8rem;">None</div>') + '</div>' +
+                '</div>' +
+                '<div class="inc-explain-actions">' +
+                    '<button class="btn-confirm" data-feedback="confirmed" data-incident-id="' + esc(iid) + '">Confirm (True Positive)</button>' +
+                    '<button class="btn-dismiss" data-feedback="dismissed" data-incident-id="' + esc(iid) + '">Dismiss (False Positive)</button>' +
+                '</div>';
+        })
+        .catch(() => {
+            inner.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Failed to load explanation</div>';
+        });
+});
+
+function submitFeedback(incidentId, verdict, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+    fetch('/dashboard/api/feedback', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({incident_id: incidentId, verdict: verdict})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            btn.textContent = 'Recorded';
+            btn.style.opacity = '0.5';
+        } else {
+            btn.textContent = 'Failed';
+            btn.disabled = false;
+        }
+    })
+    .catch(() => {
+        btn.textContent = 'Error';
+        btn.disabled = false;
+    });
+}
+
+// Initial load + auto-refresh (skip refresh if an explanation panel is open
+// to avoid destroying in-progress analyst interaction)
+loadAll();
+setInterval(function() {
+    if (!document.querySelector('.inc-explain.open')) {
+        loadAll();
+    }
+}, 15000);
+</script>
+{% endblock %}

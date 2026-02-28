@@ -62,6 +62,84 @@ _TECHNIQUE_CONTEXT = {
     "T1021.004": ("lateral-movement", "SSH-based lateral movement"),
     "T1048.003": ("exfiltration", "data exfiltration over DNS"),
     "T1200": ("initial-access", "hardware device insertion"),
+    # Parent techniques for agents that emit sub-technique IDs
+    "T1036": ("defense-evasion", "file or process name/location masquerading"),
+    "T1036.005": ("defense-evasion", "match legitimate name or location to evade detection"),
+    "T1547": ("persistence", "boot or logon autostart execution"),
+    "T1547.001": ("persistence", "registry run keys or startup folder persistence"),
+    "T1543": ("persistence", "creation or modification of system-level processes"),
+    "T1053": ("persistence", "abuse of task scheduling for execution or persistence"),
+    "T1204": ("execution", "user execution of malicious file or link"),
+    "T1204.002": ("execution", "user opened a malicious file"),
+    "T1218": ("defense-evasion", "system binary proxy execution to bypass controls"),
+    "T1218.010": ("defense-evasion", "abuse of Regsvr32 for proxy execution"),
+    "T1218.011": ("defense-evasion", "abuse of Rundll32 for proxy execution"),
+    # Privilege escalation & defense evasion
+    "T1548": ("privilege-escalation", "abuse of elevation control mechanism"),
+    "T1134": ("privilege-escalation", "access token manipulation"),
+    "T1068": ("privilege-escalation", "exploitation for privilege escalation"),
+    "T1055": ("defense-evasion", "process injection for code execution in another process"),
+    "T1027": ("defense-evasion", "obfuscated files or information to hinder analysis"),
+    "T1070": ("defense-evasion", "indicator removal to cover tracks on host"),
+    "T1070.004": ("defense-evasion", "file deletion to remove indicators"),
+    "T1564": ("defense-evasion", "hide artifacts to evade detection"),
+    "T1112": ("defense-evasion", "modification of registry keys for defense evasion"),
+    "T1497": ("defense-evasion", "virtualization or sandbox evasion checks"),
+    "T1014": ("defense-evasion", "rootkit to hide system activity"),
+    # Credential access
+    "T1003": ("credential-access", "OS credential dumping"),
+    "T1003.001": ("credential-access", "LSASS memory credential extraction"),
+    "T1556": ("credential-access", "modify authentication process"),
+    "T1558": ("credential-access", "Kerberos ticket theft or forgery"),
+    # Discovery
+    "T1082": ("discovery", "system information discovery"),
+    "T1016": ("discovery", "system network configuration discovery"),
+    "T1049": ("discovery", "system network connections discovery"),
+    "T1033": ("discovery", "system owner or user discovery"),
+    "T1083": ("discovery", "file and directory discovery"),
+    "T1087": ("discovery", "account discovery and enumeration"),
+    "T1018": ("discovery", "remote system discovery"),
+    "T1135": ("discovery", "network share discovery"),
+    # Lateral movement
+    "T1021": ("lateral-movement", "remote services used for lateral movement"),
+    "T1021.001": ("lateral-movement", "RDP-based lateral movement"),
+    "T1021.002": ("lateral-movement", "SMB/Windows Admin Shares lateral movement"),
+    "T1570": ("lateral-movement", "lateral tool transfer between systems"),
+    # Collection & exfiltration
+    "T1056": ("collection", "input capture including keylogging"),
+    "T1113": ("collection", "screen capture"),
+    "T1119": ("collection", "automated data collection"),
+    "T1560": ("collection", "data staged in archive for exfiltration"),
+    "T1048": ("exfiltration", "exfiltration over alternative protocol"),
+    "T1041": ("exfiltration", "exfiltration over C2 channel"),
+    "T1567": ("exfiltration", "exfiltration over web service"),
+    # Command and control
+    "T1071": ("command-and-control", "application layer protocol for C2"),
+    "T1105": ("command-and-control", "ingress tool transfer"),
+    "T1090": ("command-and-control", "proxy usage for command and control"),
+    "T1573": ("command-and-control", "encrypted channel for C2 communications"),
+    "T1095": ("command-and-control", "non-application layer protocol for C2"),
+    "T1572": ("command-and-control", "protocol tunneling for C2"),
+    "T1568": ("command-and-control", "dynamic resolution for C2 infrastructure"),
+    # Impact
+    "T1486": ("impact", "data encrypted for impact (ransomware)"),
+    "T1489": ("impact", "service stop to disrupt availability"),
+    "T1529": ("impact", "system shutdown or reboot"),
+    "T1485": ("impact", "data destruction"),
+    "T1490": ("impact", "inhibit system recovery"),
+    "T1499": ("impact", "endpoint denial of service"),
+    # Initial access
+    "T1190": ("initial-access", "exploitation of public-facing application"),
+    "T1566": ("initial-access", "phishing delivery"),
+    "T1566.001": ("initial-access", "spear-phishing with malicious attachment"),
+    "T1133": ("initial-access", "external remote services access"),
+    "T1195": ("initial-access", "supply chain compromise"),
+    # Persistence extras
+    "T1098": ("persistence", "account manipulation for persistence"),
+    "T1136": ("persistence", "create account for persistent access"),
+    "T1574": ("persistence", "hijack execution flow via DLL or path manipulation"),
+    "T1546": ("persistence", "event-triggered execution"),
+    "T1546.004": ("persistence", "Unix shell profile modification"),
 }
 
 # Rule name → narrative template
@@ -178,6 +256,9 @@ class EventExplainer:
         }
         for tid in techniques[:5]:
             ctx = _TECHNIQUE_CONTEXT.get(tid)
+            if not ctx and "." in tid:
+                # Fall back to parent technique (T1059.004 → T1059)
+                ctx = _TECHNIQUE_CONTEXT.get(tid.split(".")[0])
             if ctx:
                 tactic_slug, desc = ctx
                 detail.append({
@@ -186,7 +267,8 @@ class EventExplainer:
                     "description": desc,
                 })
             else:
-                detail.append({"id": tid, "tactic": "Unknown", "description": ""})
+                # Last resort: still provide the technique ID with generic label
+                detail.append({"id": tid, "tactic": "ATT&CK Technique", "description": "MITRE ATT&CK technique " + tid})
         return detail
 
     def _build_mitre_context(self, techniques: List[str], event: Dict[str, Any]) -> str:
