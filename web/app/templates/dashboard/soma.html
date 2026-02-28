@@ -1,0 +1,713 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}SOMA Intelligence - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="neural-dashboard">
+    <!-- Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">SOMA Intelligence</h2>
+            <div class="card-badge" id="brain-status-badge">Loading...</div>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">
+            Unified analysis pipeline, ML-driven scoring, autonomous training, and agent reliability tracking.
+        </p>
+        <!-- Section jump nav -->
+        <div id="section-nav" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="#pipeline" class="soma-nav-pill">Pipeline</a>
+            <a href="#classification" class="soma-nav-pill">Classification</a>
+            <a href="#ml-models" class="soma-nav-pill">ML Models</a>
+            <a href="#features" class="soma-nav-pill">Features</a>
+            <a href="#training" class="soma-nav-pill">Training</a>
+            <a href="#calibrator" class="soma-nav-pill">Calibrator</a>
+            <a href="#agents" class="soma-nav-pill">Agents</a>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- Section 1: Pipeline Architecture                   -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div class="neural-card" id="pipeline">
+        <div class="card-header">
+            <h3 class="card-title">Pipeline Architecture</h3>
+            <span class="neural-loading" id="pipeline-loading" style="display: none;"></span>
+        </div>
+        <div id="pipeline-flow" style="display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 1rem 0;">
+            <!-- Pipeline stages rendered by JS -->
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- Section 2: Signal vs Noise + Learning Metrics      -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div id="classification" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">Signal vs Noise</h3>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                <div class="metric-card" style="border-left: 3px solid #00ff88;">
+                    <div class="metric-value" id="class-legitimate" style="color: #00ff88;">--</div>
+                    <div class="metric-label">Legitimate</div>
+                    <div class="metric-sub" id="class-legitimate-pct" style="color: var(--text-secondary);">--%</div>
+                </div>
+                <div class="metric-card" style="border-left: 3px solid #ffaa00;">
+                    <div class="metric-value" id="class-suspicious" style="color: #ffaa00;">--</div>
+                    <div class="metric-label">Suspicious</div>
+                    <div class="metric-sub" id="class-suspicious-pct" style="color: var(--text-secondary);">--%</div>
+                </div>
+                <div class="metric-card" style="border-left: 3px solid #ff3366;">
+                    <div class="metric-value" id="class-malicious" style="color: #ff3366;">--</div>
+                    <div class="metric-label">Malicious</div>
+                    <div class="metric-sub" id="class-malicious-pct" style="color: var(--text-secondary);">--%</div>
+                </div>
+            </div>
+            <div style="position: relative; width: 100%; height: 200px;">
+                <canvas id="classification-donut"></canvas>
+            </div>
+        </div>
+
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">Learning Metrics</h3>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <div class="metric-card">
+                    <div class="metric-value" id="events-processed">--</div>
+                    <div class="metric-label">Events Scored</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="fp-rate">--</div>
+                    <div class="metric-label">FP Rate</div>
+                </div>
+            </div>
+            <div id="learning-log" style="max-height: 180px; overflow-y: auto;">
+                <div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">
+                    Feedback loop active. Triage decisions feed into AMRDR agent reliability tracking.
+                    Submit verdicts on incidents to improve classification accuracy.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- Section 3: ML Models — Brain Status + IF + GBC     -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div id="ml-models" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+        <!-- Brain Status -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">Brain Status</h3>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="metric-card" style="border-left: 3px solid var(--neural-primary);">
+                    <div class="metric-value" id="training-cycles" style="color: var(--neural-primary);">--</div>
+                    <div class="metric-label">Training Cycles</div>
+                </div>
+                <div class="metric-card" style="border-left: 3px solid var(--neural-success);">
+                    <div class="metric-value" id="events-trained" style="color: var(--neural-success);">--</div>
+                    <div class="metric-label">Events Trained On</div>
+                </div>
+                <div class="metric-card" style="border-left: 3px solid var(--neural-warning);">
+                    <div class="metric-value" id="feature-count" style="color: var(--neural-warning);">--</div>
+                    <div class="metric-label">Features</div>
+                </div>
+                <div class="metric-card" style="border-left: 3px solid #b388ff;">
+                    <div class="metric-value" id="calibrator-adj-count" style="color: #b388ff;">--</div>
+                    <div class="metric-label">Auto-Calibrations</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- IsolationForest -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">IsolationForest</h3>
+                <div class="card-badge" id="if-status-badge">--</div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="metric-card" style="border-left: 3px solid var(--neural-danger);">
+                    <div class="metric-value" id="if-anomaly-rate" style="color: var(--neural-danger);">--</div>
+                    <div class="metric-label">Anomaly Rate</div>
+                </div>
+                <div class="metric-card" style="border-left: 3px solid var(--neural-secondary);">
+                    <div class="metric-value" id="if-samples" style="color: var(--neural-secondary);">--</div>
+                    <div class="metric-label">Samples</div>
+                </div>
+            </div>
+            <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+                <div>Calibration p5: <span id="if-cal-p5" style="color: var(--text-secondary);">--</span></div>
+                <div>Calibration p95: <span id="if-cal-p95" style="color: var(--text-secondary);">--</span></div>
+            </div>
+        </div>
+
+        <!-- GradientBoosting -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">GradientBoosting</h3>
+                <div class="card-badge" id="gbc-status-badge">--</div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="metric-card" style="border-left: 3px solid var(--neural-success);">
+                    <div class="metric-value" id="gbc-accuracy" style="color: var(--neural-success);">--</div>
+                    <div class="metric-label">Accuracy</div>
+                </div>
+                <div class="metric-card" style="border-left: 3px solid var(--neural-primary);">
+                    <div class="metric-value" id="gbc-f1" style="color: var(--neural-primary);">--</div>
+                    <div class="metric-label">F1 (Macro)</div>
+                </div>
+            </div>
+            <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+                <div>High-trust labels: <span id="gbc-labels" style="color: var(--text-secondary);">--</span></div>
+                <div>Requires: 50+ incident/IOC-confirmed labels</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- Section 4: Feature Importances                     -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div class="neural-card" id="features">
+        <div class="card-header">
+            <h3 class="card-title">Top Feature Importances</h3>
+            <span style="color: var(--text-muted); font-size: 0.85rem;">From GradientBoosting model (when trained)</span>
+        </div>
+        <div id="feature-bars" style="padding: 1rem 0;">
+            <div style="color: var(--text-muted); text-align: center;">No features available yet. Train a model to see importances.</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- Section 5: Training History                        -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div class="neural-card" id="training">
+        <div class="card-header">
+            <h3 class="card-title">Training History</h3>
+            <button class="btn-neural" id="force-train-btn" style="padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer; background: rgba(0,217,255,0.15); border: 1px solid rgba(0,217,255,0.3); color: var(--neural-primary); border-radius: 6px;">
+                Force Train Now
+            </button>
+        </div>
+        <div id="training-history" style="max-height: 400px; overflow-y: auto;">
+            <div style="color: var(--text-muted); text-align: center; padding: 2rem;">No training history yet.</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- Section 6: AutoCalibrator                          -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div class="neural-card" id="calibrator">
+        <div class="card-header">
+            <h3 class="card-title">AutoCalibrator Adjustments</h3>
+            <span style="color: var(--text-muted); font-size: 0.85rem;">Max 10/cycle, min 200 evidence (G5 guardrails)</span>
+        </div>
+        <div id="calibrator-log" style="max-height: 300px; overflow-y: auto;">
+            <div style="color: var(--text-muted); text-align: center; padding: 2rem;">No adjustments yet.</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- Section 7: Agent Reliability Grid                  -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div class="neural-card" id="agents">
+        <div class="card-header">
+            <h3 class="card-title">Agent Reliability (AMRDR)</h3>
+            <span class="neural-loading" id="agents-loading" style="display: none;"></span>
+        </div>
+        <div id="agent-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+            <div style="color: var(--text-secondary); padding: 1rem;">Loading agent states...</div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Section jump nav pills */
+    .soma-nav-pill {
+        display: inline-block;
+        padding: 0.3rem 0.75rem;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+    .soma-nav-pill:hover {
+        color: var(--neural-primary);
+        border-color: rgba(0,217,255,0.3);
+        background: rgba(0,217,255,0.08);
+    }
+
+    /* Pipeline flow */
+    .pipeline-stage {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        background: rgba(0, 255, 136, 0.05);
+        border: 1px solid rgba(0, 255, 136, 0.15);
+        min-width: 120px;
+        text-align: center;
+        transition: all 0.3s;
+    }
+    .pipeline-stage.inactive {
+        background: rgba(255, 170, 0, 0.05);
+        border-color: rgba(255, 170, 0, 0.2);
+    }
+    .pipeline-stage-name {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 0.25rem;
+    }
+    .pipeline-stage-status {
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-weight: 500;
+    }
+    .pipeline-stage-status.active {
+        background: rgba(0, 255, 136, 0.15);
+        color: #00ff88;
+    }
+    .pipeline-stage-status.inactive {
+        background: rgba(255, 170, 0, 0.15);
+        color: #ffaa00;
+    }
+    .pipeline-arrow {
+        color: rgba(0, 255, 136, 0.4);
+        font-size: 1.5rem;
+        padding: 0 0.25rem;
+        flex-shrink: 0;
+    }
+
+    /* Metric cards */
+    .metric-card {
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+    }
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1.2;
+    }
+    .metric-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .metric-sub {
+        font-size: 0.7rem;
+        margin-top: 2px;
+    }
+
+    /* Agent cards */
+    .agent-card {
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        padding: 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .agent-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+    }
+    .agent-name {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: var(--text-primary);
+    }
+    .agent-tier {
+        font-size: 0.65rem;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .tier-nominal { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
+    .tier-soft { background: rgba(255, 170, 0, 0.15); color: #ffaa00; }
+    .tier-hard { background: rgba(255, 51, 102, 0.15); color: #ff3366; }
+    .tier-quarantine { background: rgba(255, 0, 0, 0.2); color: #ff0000; }
+
+    .agent-metric {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.8rem;
+        margin-bottom: 0.4rem;
+    }
+    .agent-metric-label { color: var(--text-secondary); }
+    .agent-metric-value { color: var(--text-primary); font-weight: 500; }
+
+    .reliability-bar {
+        width: 100%;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 3px;
+        margin-top: 0.5rem;
+        overflow: hidden;
+    }
+    .reliability-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.5s ease;
+    }
+
+    .drift-badge {
+        font-size: 0.65rem;
+        padding: 1px 6px;
+        border-radius: 8px;
+        margin-left: 0.5rem;
+    }
+    .drift-none { background: rgba(0, 255, 136, 0.1); color: #00ff88; }
+    .drift-gradual { background: rgba(255, 170, 0, 0.15); color: #ffaa00; }
+    .drift-abrupt { background: rgba(255, 51, 102, 0.15); color: #ff3366; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    'use strict';
+
+    let donutChart = null;
+
+    // ─── Pipeline ───────────────────────────────────────
+    function renderPipeline(stages) {
+        const container = document.getElementById('pipeline-flow');
+        if (!container) return;
+        container.innerHTML = '';
+        stages.forEach((stage, i) => {
+            if (i > 0) {
+                const arrow = document.createElement('div');
+                arrow.className = 'pipeline-arrow';
+                arrow.textContent = '\u2192';
+                container.appendChild(arrow);
+            }
+            const el = document.createElement('div');
+            el.className = 'pipeline-stage' + (stage.status !== 'active' ? ' inactive' : '');
+            el.innerHTML = '<div class="pipeline-stage-name">' + esc(stage.name) + '</div>' +
+                '<div class="pipeline-stage-status ' + stage.status + '">' + stage.status + '</div>';
+            container.appendChild(el);
+        });
+    }
+
+    // ─── Classification donut ───────────────────────────
+    function renderClassification(data, total) {
+        const pct = (v) => total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
+        document.getElementById('class-legitimate').textContent = (data.legitimate || 0).toLocaleString();
+        document.getElementById('class-suspicious').textContent = (data.suspicious || 0).toLocaleString();
+        document.getElementById('class-malicious').textContent = (data.malicious || 0).toLocaleString();
+        document.getElementById('class-legitimate-pct').textContent = pct(data.legitimate) + '%';
+        document.getElementById('class-suspicious-pct').textContent = pct(data.suspicious) + '%';
+        document.getElementById('class-malicious-pct').textContent = pct(data.malicious) + '%';
+
+        const ctx = document.getElementById('classification-donut');
+        if (!ctx) return;
+        const values = [data.legitimate || 0, data.suspicious || 0, data.malicious || 0];
+        if (donutChart) {
+            donutChart.data.datasets[0].data = values;
+            donutChart.update();
+        } else {
+            donutChart = new Chart(ctx.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Legitimate', 'Suspicious', 'Malicious'],
+                    datasets: [{
+                        data: values,
+                        backgroundColor: ['rgba(0,255,136,0.7)', 'rgba(255,170,0,0.7)', 'rgba(255,51,102,0.7)'],
+                        borderColor: ['#00ff88', '#ffaa00', '#ff3366'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: {
+                        legend: { display: true, position: 'bottom', labels: { color: '#8899aa', font: { size: 11 } } }
+                    }
+                }
+            });
+        }
+    }
+
+    // ─── Agent Reliability Grid ─────────────────────────
+    function renderAgents(agents) {
+        const grid = document.getElementById('agent-grid');
+        if (!grid) return;
+        if (!agents || agents.length === 0) {
+            grid.innerHTML = '<div style="color: var(--text-secondary); padding: 1rem;">No agents tracked yet. Agent reliability data populates as events flow through the pipeline.</div>';
+            return;
+        }
+        grid.innerHTML = agents.map(function(a) {
+            var tierClass = 'tier-' + (a.tier || 'nominal').toLowerCase();
+            var hasDrift = (a.drift_status || '');
+            var driftClass = hasDrift.includes('No drift') ? 'drift-none' :
+                             hasDrift.includes('Gradual') ? 'drift-gradual' : 'drift-abrupt';
+            var driftLabel = hasDrift.includes('No drift') ? '' :
+                             hasDrift.includes('Gradual') ? 'Gradual Drift' : 'Abrupt Drift';
+            var rel = (a.reliability || 0);
+            var barColor = rel >= 0.8 ? '#00ff88' : rel >= 0.5 ? '#ffaa00' : '#ff3366';
+            var obs = a.observations || {};
+            return '<div class="agent-card">' +
+                '<div class="agent-header">' +
+                    '<span class="agent-name">' + esc(a.agent_id || 'Unknown') + '</span>' +
+                    '<span class="agent-tier ' + tierClass + '">' + esc(a.tier || 'NOMINAL') + '</span>' +
+                '</div>' +
+                '<div class="agent-metric"><span class="agent-metric-label">Reliability</span><span class="agent-metric-value">' + (rel * 100).toFixed(1) + '%</span></div>' +
+                '<div class="agent-metric"><span class="agent-metric-label">Fusion Weight</span><span class="agent-metric-value">' + (a.fusion_weight || 0).toFixed(3) + '</span></div>' +
+                '<div class="agent-metric"><span class="agent-metric-label">Observations</span><span class="agent-metric-value">' + (obs.total || 0) + ' (' + (obs.confirmed || 0) + '/' + (obs.dismissed || 0) + ')</span></div>' +
+                '<div class="agent-metric"><span class="agent-metric-label">Trend</span><span class="agent-metric-value">' + esc(a.trend || 'stable') + (driftLabel ? '<span class="drift-badge ' + driftClass + '">' + driftLabel + '</span>' : '') + '</span></div>' +
+                '<div class="reliability-bar"><div class="reliability-fill" style="width: ' + (rel * 100) + '%; background: ' + barColor + ';"></div></div>' +
+            '</div>';
+        }).join('');
+    }
+
+    // ─── Brain Status ───────────────────────────────────
+    async function loadBrainStatus() {
+        try {
+            var resp = await fetch('/api/soma/brain');
+            var data = await resp.json();
+            if (data.status !== 'success') return;
+
+            var brain = data.brain;
+            var metrics = brain.latest_metrics || {};
+            var cal = brain.if_calibration || {};
+
+            // Status badge
+            var statusBadge = document.getElementById('brain-status-badge');
+            var status = metrics.status || 'cold_start';
+            statusBadge.textContent = status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
+            statusBadge.className = 'card-badge ' + (
+                status === 'completed' ? 'badge-success' :
+                status === 'training' ? 'badge-warning' :
+                status === 'error' ? 'badge-critical' : 'badge-warning'
+            );
+
+            // Brain metrics
+            document.getElementById('training-cycles').textContent = metrics.cycle || 0;
+            document.getElementById('events-trained').textContent = (metrics.event_count || 0).toLocaleString();
+            document.getElementById('feature-count').textContent = metrics.feature_count || 0;
+            document.getElementById('calibrator-adj-count').textContent = brain.calibrator_adjustments || 0;
+
+            // IF metrics
+            var ifData = metrics.isolation_forest || {};
+            var ifBadge = document.getElementById('if-status-badge');
+            if (brain.models_available.isolation_forest) {
+                ifBadge.textContent = 'Loaded';
+                ifBadge.className = 'card-badge badge-success';
+            } else {
+                ifBadge.textContent = 'Not Trained';
+                ifBadge.className = 'card-badge badge-warning';
+            }
+            document.getElementById('if-anomaly-rate').textContent =
+                ifData.anomaly_rate != null ? (ifData.anomaly_rate * 100).toFixed(1) + '%' : '--';
+            document.getElementById('if-samples').textContent =
+                ifData.samples ? ifData.samples.toLocaleString() : '--';
+            document.getElementById('if-cal-p5').textContent =
+                cal.p5 != null ? cal.p5.toFixed(4) : '--';
+            document.getElementById('if-cal-p95').textContent =
+                cal.p95 != null ? cal.p95.toFixed(4) : '--';
+
+            // GBC metrics
+            var gbcData = metrics.gradient_boost || {};
+            var gbcBadge = document.getElementById('gbc-status-badge');
+            if (brain.models_available.gradient_boost) {
+                gbcBadge.textContent = 'Loaded';
+                gbcBadge.className = 'card-badge badge-success';
+            } else if (gbcData.status === 'skipped') {
+                gbcBadge.textContent = 'Skipped';
+                gbcBadge.className = 'card-badge badge-warning';
+            } else {
+                gbcBadge.textContent = 'Not Trained';
+                gbcBadge.className = 'card-badge badge-warning';
+            }
+            document.getElementById('gbc-accuracy').textContent =
+                gbcData.accuracy != null && gbcData.accuracy !== 'n/a'
+                    ? (gbcData.accuracy * 100).toFixed(1) + '%' : '--';
+            document.getElementById('gbc-f1').textContent =
+                gbcData.f1_macro != null && gbcData.f1_macro !== 'n/a'
+                    ? gbcData.f1_macro.toFixed(3) : '--';
+            document.getElementById('gbc-labels').textContent =
+                metrics.high_trust_label_count != null
+                    ? metrics.high_trust_label_count : '--';
+
+        } catch (e) {
+            console.error('Brain status error:', e);
+        }
+    }
+
+    // ─── Feature Importances ────────────────────────────
+    async function loadFeatures() {
+        try {
+            var resp = await fetch('/api/soma/brain/features');
+            var data = await resp.json();
+            if (data.status !== 'success' || !data.features.length) return;
+
+            var container = document.getElementById('feature-bars');
+            var maxImportance = Math.max.apply(null, data.features.map(function(f) { return f.importance; }));
+
+            container.innerHTML = data.features.map(function(f) {
+                var pct = maxImportance > 0 ? (f.importance / maxImportance * 100) : 0;
+                return '<div style="display: flex; align-items: center; margin-bottom: 0.5rem;">' +
+                    '<span style="width: 200px; font-size: 0.85rem; color: var(--text-secondary); text-align: right; padding-right: 1rem;">' + esc(f.feature) + '</span>' +
+                    '<div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 4px; height: 24px; overflow: hidden;">' +
+                        '<div style="width: ' + pct + '%; height: 100%; background: linear-gradient(90deg, rgba(0,217,255,0.3), rgba(0,217,255,0.7)); border-radius: 4px; transition: width 0.5s;"></div>' +
+                    '</div>' +
+                    '<span style="width: 60px; font-size: 0.85rem; color: var(--neural-primary); text-align: right; padding-left: 0.5rem;">' + (f.importance * 100).toFixed(1) + '%</span>' +
+                '</div>';
+            }).join('');
+        } catch (e) {
+            console.error('Features error:', e);
+        }
+    }
+
+    // ─── Training History ───────────────────────────────
+    async function loadHistory() {
+        try {
+            var resp = await fetch('/api/soma/brain/history?limit=20');
+            var data = await resp.json();
+            if (data.status !== 'success' || !data.history.length) return;
+
+            var container = document.getElementById('training-history');
+            container.innerHTML = '<table style="width: 100%; border-collapse: collapse;">' +
+                '<thead><tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">' +
+                '<th style="text-align: left; padding: 0.5rem; color: var(--text-muted);">Cycle</th>' +
+                '<th style="text-align: left; padding: 0.5rem; color: var(--text-muted);">Time</th>' +
+                '<th style="text-align: right; padding: 0.5rem; color: var(--text-muted);">Events</th>' +
+                '<th style="text-align: right; padding: 0.5rem; color: var(--text-muted);">IF Anomaly%</th>' +
+                '<th style="text-align: right; padding: 0.5rem; color: var(--text-muted);">GBC Status</th>' +
+                '<th style="text-align: right; padding: 0.5rem; color: var(--text-muted);">Duration</th>' +
+                '</tr></thead><tbody>' +
+                data.history.reverse().map(function(h) {
+                    var ifRate = h.isolation_forest && h.isolation_forest.anomaly_rate != null
+                        ? (h.isolation_forest.anomaly_rate * 100).toFixed(1) + '%' : '--';
+                    var gbcStatus = h.gradient_boost ? h.gradient_boost.status : '--';
+                    var timeStr = h.started_at ? new Date(h.started_at).toLocaleString() : '--';
+                    return '<tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">' +
+                        '<td style="padding: 0.5rem; color: var(--neural-primary);">#' + (h.cycle || '?') + '</td>' +
+                        '<td style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">' + timeStr + '</td>' +
+                        '<td style="padding: 0.5rem; text-align: right; color: var(--text-secondary);">' + (h.event_count || 0).toLocaleString() + '</td>' +
+                        '<td style="padding: 0.5rem; text-align: right; color: var(--neural-danger);">' + ifRate + '</td>' +
+                        '<td style="padding: 0.5rem; text-align: right; color: ' + (gbcStatus === 'trained' ? 'var(--neural-success)' : 'var(--text-muted)') + ';">' + gbcStatus + '</td>' +
+                        '<td style="padding: 0.5rem; text-align: right; color: var(--text-muted);">' + (h.elapsed_seconds ? h.elapsed_seconds.toFixed(1) + 's' : '--') + '</td>' +
+                    '</tr>';
+                }).join('') +
+                '</tbody></table>';
+        } catch (e) {
+            console.error('History error:', e);
+        }
+    }
+
+    // ─── SOMA Overview (pipeline, classification, agents)
+    function loadOverview() {
+        document.getElementById('pipeline-loading').style.display = 'inline-block';
+        document.getElementById('agents-loading').style.display = 'inline-block';
+
+        fetch('/dashboard/api/soma/overview')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status !== 'success') return;
+
+                // Pipeline
+                renderPipeline(data.pipeline.stages || []);
+                document.getElementById('events-processed').textContent =
+                    (data.pipeline.events_processed || 0).toLocaleString();
+
+                // Classification
+                var total = (data.classification.legitimate || 0) +
+                            (data.classification.suspicious || 0) +
+                            (data.classification.malicious || 0);
+                renderClassification(data.classification, total);
+
+                // FP Rate
+                document.getElementById('fp-rate').textContent =
+                    ((data.learning.fp_rate || 0) * 100).toFixed(1) + '%';
+
+                // Agents
+                renderAgents(data.agents || []);
+            })
+            .catch(function(err) { console.error('SOMA overview fetch failed:', err); })
+            .finally(function() {
+                document.getElementById('pipeline-loading').style.display = 'none';
+                document.getElementById('agents-loading').style.display = 'none';
+            });
+    }
+
+    // ─── Force Train Button ─────────────────────────────
+    document.getElementById('force-train-btn').addEventListener('click', async function() {
+        var btn = this;
+        btn.textContent = 'Training...';
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        try {
+            var resp = await fetch('/api/soma/brain/train', { method: 'POST',
+                headers: { 'Content-Type': 'application/json' } });
+            var data = await resp.json();
+            if (data.status === 'success') {
+                btn.textContent = 'Done!';
+                btn.style.borderColor = 'var(--neural-success)';
+                btn.style.color = 'var(--neural-success)';
+                setTimeout(function() {
+                    loadBrainStatus();
+                    loadFeatures();
+                    loadHistory();
+                    btn.textContent = 'Force Train Now';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.borderColor = 'rgba(0,217,255,0.3)';
+                    btn.style.color = 'var(--neural-primary)';
+                }, 1500);
+            } else {
+                btn.textContent = 'Error: ' + (data.message || 'Unknown');
+                btn.style.borderColor = 'var(--neural-danger)';
+                setTimeout(function() {
+                    btn.textContent = 'Force Train Now';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.borderColor = 'rgba(0,217,255,0.3)';
+                    btn.style.color = 'var(--neural-primary)';
+                }, 3000);
+            }
+        } catch (e) {
+            btn.textContent = 'Network Error';
+            setTimeout(function() {
+                btn.textContent = 'Force Train Now';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }, 3000);
+        }
+    });
+
+    // ─── Utility ────────────────────────────────────────
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    // ─── Initial Load ───────────────────────────────────
+    loadOverview();
+    loadBrainStatus();
+    loadFeatures();
+    loadHistory();
+
+    // ─── Auto-refresh ───────────────────────────────────
+    setInterval(loadOverview, 15000);
+    setInterval(function() { loadBrainStatus(); loadFeatures(); }, 30000);
+    setInterval(loadHistory, 120000);
+
+    // ─── Scroll to hash on load ─────────────────────────
+    if (window.location.hash) {
+        var target = document.querySelector(window.location.hash);
+        if (target) setTimeout(function() { target.scrollIntoView({ behavior: 'smooth' }); }, 300);
+    }
+})();
+</script>
+{% endblock %}
