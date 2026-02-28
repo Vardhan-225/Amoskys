@@ -256,7 +256,7 @@ def create_device_telemetry(
         metadata=metadata,
         events=events,
         timestamp_ns=timestamp_ns,
-        collection_agent="amoskys-snmp-agent",
+        collection_agent="snmp",
         agent_version="0.1.0",
     )
 

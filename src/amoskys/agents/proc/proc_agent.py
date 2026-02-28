@@ -111,7 +111,6 @@ class EventBusPublisher:
                 ts_ns=timestamp_ns,
                 idempotency_key=idempotency_key,
                 device_telemetry=device_telemetry,
-                signing_algorithm="Ed25519",
                 priority="NORMAL",
                 requires_acknowledgment=True,
                 schema_version=1,
@@ -409,7 +408,7 @@ class ProcAgent(MicroProbeAgentMixin, HardenedAgentBase):
             protocol="PROC",
             events=proto_events,
             timestamp_ns=timestamp_ns,
-            collection_agent="proc-agent-v3",
+            collection_agent="proc",
             agent_version="3.0.0",
         )
 
@@ -498,7 +497,7 @@ def main():
     logger.info("AMOSKYS Process Agent v3 (Micro-Probe Architecture)")
     logger.info("=" * 70)
 
-    agent = ProcAgentV3(collection_interval=args.interval)
+    agent = ProcAgent(collection_interval=args.interval)
 
     try:
         agent.run_forever()
