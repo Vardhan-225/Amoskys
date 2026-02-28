@@ -65,6 +65,10 @@
         <div class="tf-summary-item"><span class="tf-summary-val tf-val-low" id="sum-low">0</span><span class="tf-summary-lbl">Low</span></div>
         <div class="tf-summary-sep"></div>
         <div class="tf-summary-item"><span class="tf-summary-val" id="sum-investigation">0</span><span class="tf-summary-lbl">Needs Investigation</span></div>
+        <div class="tf-summary-sep"></div>
+        <div class="tf-summary-item"><span class="tf-summary-val tf-val-fp" id="sum-fp-rate">--</span><span class="tf-summary-lbl">FP Rate</span></div>
+        <div class="tf-summary-sep"></div>
+        <div class="tf-summary-item"><span class="tf-summary-val tf-val-confidence" id="sum-confidence">--</span><span class="tf-summary-lbl">Avg Confidence</span></div>
     </div>
 
     <!-- ===== THREAT LIST ===== -->
@@ -168,6 +172,8 @@
 .tf-val-high { color: #ff6600; }
 .tf-val-medium { color: #ffaa00; }
 .tf-val-low { color: #0088ff; }
+.tf-val-fp { color: #a78bfa; }
+.tf-val-confidence { color: #34d399; }
 
 /* ── Threat List ── */
 .tf-list { display: flex; flex-direction: column; gap: 0.5rem; }
@@ -208,7 +214,8 @@
     font-weight: 600; display: inline-flex; align-items: center; gap: 0.2rem;
 }
 .tf-tag-mitre { background: rgba(0,217,255,0.1); color: var(--neural-primary); border: 1px solid rgba(0,217,255,0.15); }
-.tf-tag-agent { background: rgba(0,255,136,0.08); color: #00ff88; border: 1px solid rgba(0,255,136,0.15); }
+.tf-tag-agent { background: rgba(0,255,136,0.08); color: #00ff88; border: 1px solid rgba(0,255,136,0.15); text-transform: uppercase; letter-spacing: 0.5px; }
+.tf-tag-host { background: rgba(167,139,250,0.08); color: #a78bfa; border: 1px solid rgba(167,139,250,0.15); font-family: monospace; font-size: 0.6rem; }
 .tf-tag-ip { background: rgba(255,255,255,0.04); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.08); font-family: monospace; }
 .tf-tag-class { background: rgba(255,170,0,0.08); color: #ffaa00; border: 1px solid rgba(255,170,0,0.15); }
 .tf-tag-risk { background: rgba(255,51,102,0.08); color: #ff3366; border: 1px solid rgba(255,51,102,0.15); }
@@ -278,6 +285,26 @@
 /* ── Triaged fade-out ── */
 .tf-threat.triaged { opacity: 0.3; transition: opacity 0.5s; }
 
+/* ── Explanation panel ── */
+.tf-triage-btn.tf-triage-why { background: rgba(0,170,255,0.12); color: #00aaff; border: 1px solid rgba(0,170,255,0.25); font-size: 0.72rem; }
+.tf-triage-btn.tf-triage-why:hover { background: rgba(0,170,255,0.25); }
+.tf-explain-panel { display: none; margin-top: 0.75rem; padding: 0.75rem; background: rgba(0,170,255,0.04); border: 1px solid rgba(0,170,255,0.12); border-radius: 6px; }
+.tf-explain-panel.open { display: block; }
+.tf-explain-verdict { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.5rem; }
+.tf-explain-verdict.legitimate { background: rgba(0,255,136,0.15); color: #00ff88; }
+.tf-explain-verdict.suspicious { background: rgba(255,170,0,0.15); color: #ffaa00; }
+.tf-explain-verdict.malicious { background: rgba(255,51,102,0.15); color: #ff3366; }
+.tf-explain-factor { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; font-size: 0.8rem; }
+.tf-explain-factor-bar { width: 60px; height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+.tf-explain-factor-fill { height: 100%; background: #00aaff; border-radius: 3px; }
+.tf-explain-factor-name { color: var(--text-primary); font-weight: 500; min-width: 140px; }
+.tf-explain-factor-detail { color: var(--text-secondary); font-size: 0.75rem; }
+.tf-explain-mitre { margin-top: 0.5rem; font-size: 0.75rem; color: #00aaff; }
+.tf-explain-rec { margin-top: 0.4rem; font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; display: inline-block; }
+.tf-explain-rec.investigate { background: rgba(255,170,0,0.12); color: #ffaa00; }
+.tf-explain-rec.monitor { background: rgba(0,170,255,0.12); color: #00aaff; }
+.tf-explain-rec.dismiss { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
     .tf-filters { flex-direction: column; }
@@ -298,8 +325,14 @@ class ThreatFeedController {
         this.page = 0;
         this.perPage = 20;
         this.timer = null;
-        this.REFRESH = 5000;
+        this.REFRESH = 15000;
         this.seenAgents = new Set();
+        // DB-level aggregate stats (not limited by row limit)
+        this.dbTotal = 0;
+        this.dbBySeverity = {};
+        this.dbByClassification = {};
+        this.fpRate = null;
+        this.avgConfidence = null;
         this.init();
     }
 
@@ -324,8 +357,28 @@ class ThreatFeedController {
                 var idx = parseInt(btn.getAttribute('data-triage-idx'), 10);
                 var action = btn.getAttribute('data-triage-action');
                 self.triage(idx, action, btn);
+                return;
+            }
+            var whyBtn = e.target.closest('[data-explain-idx]');
+            if (whyBtn) {
+                var eidx = parseInt(whyBtn.getAttribute('data-explain-idx'), 10);
+                self.explainEvent(eidx);
             }
         });
+        // Parse URL params for deep-linking from Cortex
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('severity')) {
+            this.sevFilter = params.get('severity').toLowerCase();
+            var pill = document.querySelector('#filter-severity .tf-pill[data-val="' + this.sevFilter + '"]');
+            if (pill) {
+                document.querySelectorAll('#filter-severity .tf-pill').forEach(function(p) { p.classList.remove('active'); });
+                pill.classList.add('active');
+            }
+        }
+        if (params.get('search') || params.get('type')) {
+            document.getElementById('filter-search').value = params.get('search') || params.get('type');
+        }
+
         await this.refresh();
         this.timer = setInterval(() => this.refresh(), this.REFRESH);
         window.addEventListener('beforeunload', () => { if (this.timer) clearInterval(this.timer); });
@@ -349,8 +402,8 @@ class ThreatFeedController {
         // (which runs through filters/pagination properly) and slow polling
         window.addEventListener('ws:threats', () => {
             this.refresh();
-            if (this.REFRESH < 15000) {
-                this.REFRESH = 15000;
+            if (this.REFRESH < 30000) {
+                this.REFRESH = 30000;
                 clearInterval(this.timer);
                 this.timer = setInterval(() => this.refresh(), this.REFRESH);
             }
@@ -358,6 +411,10 @@ class ThreatFeedController {
     }
 
     async refresh() {
+        // Skip refresh if an explanation panel is currently open — prevents DOM rebuild from destroying it
+        if (document.querySelector('.tf-explain-panel.open')) {
+            return;
+        }
         try {
             const r = await fetch('/dashboard/api/live/threats');
             if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -365,7 +422,13 @@ class ThreatFeedController {
             if (d.status !== 'success') throw new Error('API error');
 
             this.threats = d.threats || [];
-            document.getElementById('feed-count').textContent = this.threats.length + ' events';
+            // Store DB-level aggregate stats
+            this.dbTotal = d.db_total || this.threats.length;
+            this.dbBySeverity = d.db_by_severity || {};
+            this.dbByClassification = d.db_by_classification || {};
+            this.fpRate = d.fp_rate;
+            this.avgConfidence = d.avg_confidence;
+            document.getElementById('feed-count').textContent = Number(this.dbTotal).toLocaleString() + ' events';
 
             // Populate agent filter dropdown
             const agentSelect = document.getElementById('filter-agent');
@@ -410,8 +473,9 @@ class ThreatFeedController {
             // Text search
             if (search) {
                 const haystack = [
-                    t.type, t.description, t.source_ip, t.agent_id,
-                    t.classification, ...(t.mitre_techniques || [])
+                    t.type, t.description, t.source_ip, t.agent_name,
+                    t.device_id, t.classification, t.event_action,
+                    ...(t.mitre_techniques || [])
                 ].join(' ').toLowerCase();
                 if (!haystack.includes(search)) return false;
             }
@@ -424,12 +488,17 @@ class ThreatFeedController {
 
     updateSummary() {
         const all = this.filtered;
-        document.getElementById('sum-total').textContent = all.length;
-        document.getElementById('sum-critical').textContent = all.filter(t => (t.severity || '').toLowerCase() === 'critical').length;
-        document.getElementById('sum-high').textContent = all.filter(t => (t.severity || '').toLowerCase() === 'high').length;
-        document.getElementById('sum-medium').textContent = all.filter(t => (t.severity || '').toLowerCase() === 'medium').length;
-        document.getElementById('sum-low').textContent = all.filter(t => (t.severity || '').toLowerCase() === 'low').length;
+        // Use DB-level aggregate totals for accurate header numbers
+        const dbSev = this.dbBySeverity || {};
+        document.getElementById('sum-total').textContent = Number(this.dbTotal || all.length).toLocaleString();
+        document.getElementById('sum-critical').textContent = dbSev.critical || all.filter(t => (t.severity || '').toLowerCase() === 'critical').length;
+        document.getElementById('sum-high').textContent = dbSev.high || all.filter(t => (t.severity || '').toLowerCase() === 'high').length;
+        document.getElementById('sum-medium').textContent = dbSev.medium || all.filter(t => (t.severity || '').toLowerCase() === 'medium').length;
+        document.getElementById('sum-low').textContent = dbSev.low || all.filter(t => (t.severity || '').toLowerCase() === 'low').length;
         document.getElementById('sum-investigation').textContent = all.filter(t => t.requires_investigation).length;
+        // FP rate and avg confidence from API-level stats
+        document.getElementById('sum-fp-rate').textContent = this.fpRate != null ? (this.fpRate * 100).toFixed(1) + '%' : '--';
+        document.getElementById('sum-confidence').textContent = this.avgConfidence ? (this.avgConfidence * 100).toFixed(1) + '%' : '--';
     }
 
     renderPage() {
@@ -453,20 +522,22 @@ class ThreatFeedController {
             const time = t.timestamp ? this.relTime(t.timestamp) : '';
             const absTime = t.timestamp ? new Date(t.timestamp).toLocaleString() : '';
 
-            // Tags
+            // Tags — agent name + hostname side by side, then IP, classification, risk, confidence
             let tags = '';
             if (t.mitre_techniques && t.mitre_techniques.length > 0) {
                 tags += t.mitre_techniques.map(m => '<span class="tf-tag tf-tag-mitre">' + m + '</span>').join('');
             }
-            if (t.agent_id) tags += '<span class="tf-tag tf-tag-agent">' + this.esc(t.agent_id) + '</span>';
-            if (t.source_ip) tags += '<span class="tf-tag tf-tag-ip">' + this.esc(t.source_ip) + '</span>';
+            if (t.agent_name) tags += '<span class="tf-tag tf-tag-agent">' + this.esc(t.agent_name) + '</span>';
+            if (t.device_id) tags += '<span class="tf-tag tf-tag-host">' + this.esc(t.device_id) + '</span>';
+            if (t.source_ip && t.source_ip !== t.device_id) tags += '<span class="tf-tag tf-tag-ip">' + this.esc(t.source_ip) + '</span>';
             if (t.classification) tags += '<span class="tf-tag tf-tag-class">' + this.esc(t.classification) + '</span>';
             if (t.risk_score > 0) tags += '<span class="tf-tag tf-tag-risk">Risk: ' + (t.risk_score * 100).toFixed(0) + '%</span>';
+            if (t.confidence > 0) tags += '<span class="tf-tag tf-tag-ip">Conf: ' + (t.confidence * 100).toFixed(0) + '%</span>';
 
             return '<div class="tf-threat sev-' + sev + '" id="threat-' + idx + '">' +
                 '<div class="tf-threat-sev sev-' + sev + '">' + sev + '</div>' +
                 '<div class="tf-threat-body">' +
-                    '<div class="tf-threat-title">' + this.fmtType(t.type) + '</div>' +
+                    '<div class="tf-threat-title">' + this.fmtType(t.type) + (t.event_action ? ' <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;">' + this.esc(t.event_action) + '</span>' : '') + '</div>' +
                     (t.description ? '<div class="tf-threat-desc">' + this.esc(t.description) + '</div>' : '') +
                     (tags ? '<div class="tf-threat-tags">' + tags + '</div>' : '') +
                     '<div class="tf-threat-meta">' +
@@ -476,10 +547,12 @@ class ThreatFeedController {
                     '</div>' +
                 '</div>' +
                 '<div class="tf-threat-actions">' +
+                    '<button class="tf-triage-btn tf-triage-why" data-explain-idx="' + idx + '" title="Why was this flagged?">Why?</button>' +
                     '<button class="tf-triage-btn tf-triage-legit" data-triage-idx="' + idx + '" data-triage-action="legit" title="Mark as Legitimate">Legit</button>' +
                     '<button class="tf-triage-btn tf-triage-inv" data-triage-idx="' + idx + '" data-triage-action="investigate" title="Investigate in Timeline">Investigate</button>' +
                     '<button class="tf-triage-btn tf-triage-inc" data-triage-idx="' + idx + '" data-triage-action="incident" title="Create Incident">Incident</button>' +
                 '</div>' +
+                '<div class="tf-explain-panel" id="explain-' + idx + '"></div>' +
             '</div>';
         }).join('');
 
@@ -551,11 +624,53 @@ class ThreatFeedController {
         }
     }
 
+    /* ── Event Explanation ── */
+    async explainEvent(idx) {
+        const t = this.filtered[idx];
+        if (!t || !t.id) return;
+        const panel = document.getElementById('explain-' + idx);
+        if (!panel) return;
+
+        // Toggle
+        if (panel.classList.contains('open')) {
+            panel.classList.remove('open');
+            return;
+        }
+
+        panel.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Loading explanation...</div>';
+        panel.classList.add('open');
+
+        try {
+            const resp = await fetch('/dashboard/api/explain/event/' + t.id);
+            const data = await resp.json();
+            if (data.status !== 'success' || !data.explanation) {
+                panel.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Explanation unavailable</div>';
+                return;
+            }
+            const ex = data.explanation;
+            const factors = (ex.factors || []).map(f =>
+                '<div class="tf-explain-factor">' +
+                    '<span class="tf-explain-factor-name">' + this.esc(f.name) + '</span>' +
+                    '<div class="tf-explain-factor-bar"><div class="tf-explain-factor-fill" style="width:' + Math.min(100, (f.contribution || 0) * 100) + '%"></div></div>' +
+                    '<span class="tf-explain-factor-detail">' + this.esc(f.detail || '') + '</span>' +
+                '</div>'
+            ).join('');
+            panel.innerHTML =
+                '<span class="tf-explain-verdict ' + (ex.verdict || 'legitimate') + '">' + (ex.verdict || 'legitimate').toUpperCase() + '</span>' +
+                ' <span style="color:var(--text-muted);font-size:0.75rem;">Confidence: ' + ((ex.confidence || 0) * 100).toFixed(0) + '%</span>' +
+                (factors || '') +
+                (ex.mitre_context ? '<div class="tf-explain-mitre">MITRE: ' + this.esc(ex.mitre_context) + '</div>' : '') +
+                (ex.recommendation ? '<span class="tf-explain-rec ' + ex.recommendation + '">Rec: ' + ex.recommendation + '</span>' : '');
+        } catch (e) {
+            panel.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Failed to load explanation</div>';
+        }
+    }
+
     /* ── CSV Export ── */
     exportCSV() {
         const data = this.filtered.length > 0 ? this.filtered : this.threats;
         if (data.length === 0) { this.toast('No data to export', 'info'); return; }
-        const headers = ['id','timestamp','type','severity','risk_score','classification','agent_id','source_ip','description','mitre_techniques'];
+        const headers = ['id','timestamp','type','severity','risk_score','confidence','classification','agent_name','device_id','source_ip','event_action','description','mitre_techniques'];
         const rows = data.map(t => headers.map(h => {
             let v = t[h] || '';
             if (Array.isArray(v)) v = v.join('; ');

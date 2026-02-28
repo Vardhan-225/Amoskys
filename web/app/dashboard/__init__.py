@@ -19,6 +19,8 @@ from ..middleware import get_current_user, require_login
 
 # Constants
 UTC_TIMEZONE_SUFFIX = "+00:00"
+_MSG_DB_UNAVAILABLE = "Database unavailable"
+_MSG_FUSION_UNAVAILABLE = "Fusion engine not available"
 
 # Dashboard Blueprint
 dashboard_bp = Blueprint("dashboard", __name__, url_prefix="/dashboard")
@@ -200,6 +202,29 @@ def incident_management():
     return render_template("dashboard/incidents.html", user=user)
 
 
+@dashboard_bp.route("/correlation")
+@require_login
+def correlation_dashboard():
+    """SOMA Correlation — FusionEngine incidents, device risk, MITRE coverage"""
+    user = get_current_user()
+    return render_template("dashboard/correlation.html", user=user)
+
+
+@dashboard_bp.route("/soma")
+@require_login
+def soma_dashboard():
+    """SOMA — Architecture, scoring, agent reliability, learning"""
+    user = get_current_user()
+    return render_template("dashboard/soma.html", user=user)
+
+
+@dashboard_bp.route("/soma/brain")
+@require_login
+def soma_brain_dashboard():
+    """Redirect to unified SOMA Intelligence page (ML Models section)."""
+    return redirect(url_for("dashboard.soma_dashboard") + "#ml-models")
+
+
 @dashboard_bp.route("/network")
 @require_login
 def network_topology():
@@ -232,8 +257,16 @@ def proof_spine_dashboard():
     return render_template("dashboard/proof-spine.html", user=user)
 
 
+# Normalize legacy agent names for display
+_AGENT_NAME_MAP = {
+    "proc-agent-v3": "proc",
+    "amoskys-snmp-agent": "snmp",
+}
+
+
 # Real-time Data Endpoints
 @dashboard_bp.route("/api/live/threats")
+@require_login
 @require_rate_limit(max_requests=100, window_seconds=60)
 def live_threats():
     """Real-time threat feed from TelemetryStore."""
@@ -252,8 +285,16 @@ def live_threats():
             }
         )
 
-    hours = min(int(request.args.get("hours", 24)), 8760)
-    rows = store.get_recent_security_events(limit=50, hours=hours)
+    try:
+        hours = min(int(request.args.get("hours", 24)), 8760)
+    except (ValueError, TypeError):
+        hours = 24
+
+    # DB-level aggregate counts (not limited by row limit)
+    counts = store.get_security_event_counts(hours=hours)
+    threat_data = store.get_threat_score_data(hours=hours)
+
+    rows = store.get_recent_security_events(limit=200, hours=hours)
     data_stale = False
     if not rows:
         # Fallback: show most recent events regardless of age
@@ -281,21 +322,33 @@ def live_threats():
         except (json.JSONDecodeError, TypeError):
             mitre = []
 
+        # Resolve agent name: indicators.agent → collection_agent column → fallback
+        agent_name = indicators.get("agent") or row.get("collection_agent") or ""
+        agent_name = _AGENT_NAME_MAP.get(agent_name, agent_name)
+        device_id = row.get("device_id", "")
+        confidence = round(row.get("confidence", 0), 3)
+        risk_score = round(row.get("risk_score", 0), 3)
+
         recent_events.append(
             {
                 "id": row.get("id"),
                 "type": row.get("event_category", "unknown"),
-                "severity": _risk_to_severity(row.get("risk_score", 0)),
-                "risk_score": round(row.get("risk_score", 0), 3),
+                "severity": _risk_to_severity(risk_score),
+                "risk_score": risk_score,
+                "confidence": confidence,
                 "source_ip": source_ip,
                 "description": row.get("description", ""),
                 "timestamp": row.get("timestamp_dt", ""),
-                "agent_id": indicators.get("agent", row.get("device_id", "")),
+                "agent_name": agent_name,
+                "device_id": device_id,
+                # Keep agent_id for backward compat (dropdown filter key)
+                "agent_id": agent_name or device_id,
                 "classification": row.get("final_classification", ""),
                 "mitre_techniques": mitre if isinstance(mitre, list) else [],
                 "requires_investigation": bool(
                     row.get("requires_investigation", False)
                 ),
+                "event_action": row.get("event_action", ""),
                 "indicators": indicators,
             }
         )
@@ -306,12 +359,23 @@ def live_threats():
     # Determine when the most recent event occurred
     last_event_time = recent_events[0]["timestamp"] if recent_events else None
 
+    # Aggregate stats: false-positive rate, avg confidence
+    legit_count = sum(1 for e in recent_events if e["classification"] == "legitimate")
+    fp_rate = round(legit_count / len(recent_events), 3) if recent_events else 0
+    confidences = [e["confidence"] for e in recent_events if e["confidence"] > 0]
+    avg_confidence = round(sum(confidences) / len(confidences), 3) if confidences else 0
+
     return jsonify(
         {
             "status": "success",
             "threats": recent_events,
             "count": len(recent_events),
+            "db_total": counts.get("total", 0),
+            "db_by_classification": counts.get("by_classification", {}),
+            "db_by_severity": threat_data.get("by_severity", {}),
             "investigating_count": investigating_count,
+            "fp_rate": fp_rate,
+            "avg_confidence": avg_confidence,
             "data_stale": data_stale,
             "last_event_time": last_event_time,
             "timestamp": now.isoformat(),
@@ -331,6 +395,7 @@ def _risk_to_severity(risk_score: float) -> str:
 
 
 @dashboard_bp.route("/api/live/agents")
+@require_login
 @require_rate_limit(max_requests=100, window_seconds=60)
 def live_agents():
     """Real-time agent status for dashboard with actual process detection"""
@@ -380,6 +445,7 @@ def live_agents():
 
 
 @dashboard_bp.route("/api/available-agents")
+@require_login
 def available_agents():
     """List available agent types that can be deployed on this platform"""
     from .agent_discovery import get_available_agents, get_platform_name
@@ -399,6 +465,7 @@ def available_agents():
 
 
 @dashboard_bp.route("/api/live/metrics")
+@require_login
 @require_rate_limit(max_requests=100, window_seconds=60)
 def live_metrics():
     """Real-time system metrics for dashboard"""
@@ -522,6 +589,7 @@ _metrics_last_store = [0.0]
 
 
 @dashboard_bp.route("/api/live/threat-score")
+@require_login
 def live_threat_score():
     """Real-time threat score from TelemetryStore."""
     from .telemetry_bridge import get_telemetry_store
@@ -567,6 +635,7 @@ def live_threat_score():
 
 
 @dashboard_bp.route("/api/live/event-clustering")
+@require_login
 def event_clustering():
     """Event clustering data from TelemetryStore."""
     from .telemetry_bridge import get_telemetry_store
@@ -589,31 +658,33 @@ def event_clustering():
             }
         )
 
-    hours = min(int(request.args.get("hours", 24)), 8760)
+    try:
+        hours = min(int(request.args.get("hours", 24)), 8760)
+    except (ValueError, TypeError):
+        hours = 24
     data = store.get_security_event_clustering(hours=hours)
 
-    # Extract source_ip counts from security_events indicators
-    # Use targeted SQL query instead of scanning all events
+    # Extract top source IPs from recent events only (limited scan)
     by_source_ip = {}
     try:
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        # Use JSON extract on a limited sample for IP counts
         cursor = store.db.execute(
-            """SELECT indicators FROM security_events
-               WHERE timestamp_ns > ? AND indicators LIKE '%_ip%'""",
+            """SELECT ip, COUNT(*) as cnt FROM (
+                SELECT COALESCE(
+                    JSON_EXTRACT(indicators, '$.source_ip'),
+                    JSON_EXTRACT(indicators, '$.src_ip'),
+                    JSON_EXTRACT(indicators, '$.dst_ip')
+                ) AS ip
+                FROM security_events
+                WHERE timestamp_ns > ? AND indicators IS NOT NULL
+                ORDER BY timestamp_ns DESC LIMIT 5000
+            ) WHERE ip IS NOT NULL
+            GROUP BY ip ORDER BY cnt DESC LIMIT 50""",
             (cutoff_ns,),
         )
         for row in cursor.fetchall():
-            try:
-                indicators = json.loads(row[0]) if row[0] else {}
-            except (json.JSONDecodeError, TypeError):
-                continue
-            ip = (
-                indicators.get("source_ip")
-                or indicators.get("src_ip")
-                or indicators.get("dst_ip")
-            )
-            if ip:
-                by_source_ip[ip] = by_source_ip.get(ip, 0) + 1
+            by_source_ip[row[0]] = row[1]
     except Exception:
         pass
 
@@ -661,6 +732,7 @@ _probe_health_cache = {"data": None, "ts": 0}
 
 
 @dashboard_bp.route("/api/live/probe-health")
+@require_login
 def live_probe_health():
     """Probe coverage metrics from Observability Contract audit (60s cache)."""
     import platform as _platform
@@ -699,6 +771,7 @@ def live_probe_health():
 
 
 @dashboard_bp.route("/api/neural/readiness")
+@require_login
 def neural_readiness():
     """Neural engine readiness assessment"""
     from .utils import get_neural_readiness_status
@@ -729,6 +802,7 @@ def neural_readiness():
 
 # Agent Control Endpoints (Phase 8)
 @dashboard_bp.route("/api/agents/status", methods=["GET"])
+@require_login
 @require_rate_limit(max_requests=100, window_seconds=60)
 def agents_detailed_status():
     """Get detailed status of all agents with health checks"""
@@ -757,6 +831,7 @@ def agents_detailed_status():
 
 
 @dashboard_bp.route("/api/agents/<agent_id>/status", methods=["GET"])
+@require_login
 @require_rate_limit(max_requests=100, window_seconds=60)
 def agent_status(agent_id):
     """Get detailed status of a specific agent"""
@@ -785,6 +860,7 @@ def agent_status(agent_id):
 
 
 @dashboard_bp.route("/api/agents/<agent_id>/start", methods=["POST"])
+@require_login
 @require_rate_limit(max_requests=20, window_seconds=60)
 def start_agent(agent_id):
     """Start a stopped agent"""
@@ -811,6 +887,7 @@ def start_agent(agent_id):
 
 
 @dashboard_bp.route("/api/agents/<agent_id>/stop", methods=["POST"])
+@require_login
 @require_rate_limit(max_requests=20, window_seconds=60)
 def stop_agent(agent_id):
     """Stop a running agent"""
@@ -839,6 +916,7 @@ def stop_agent(agent_id):
 
 
 @dashboard_bp.route("/api/agents/<agent_id>/health", methods=["GET"])
+@require_login
 @require_rate_limit(max_requests=100, window_seconds=60)
 def agent_health_check(agent_id):
     """Perform health check on a specific agent"""
@@ -871,6 +949,7 @@ def agent_health_check(agent_id):
 
 
 @dashboard_bp.route("/api/agents/<agent_id>/logs", methods=["GET"])
+@require_login
 @require_rate_limit(max_requests=50, window_seconds=60)
 def agent_logs(agent_id):
     """Get startup logs for an agent"""
@@ -901,6 +980,7 @@ def agent_logs(agent_id):
 
 
 @dashboard_bp.route("/api/agents/restart-all", methods=["POST"])
+@require_login
 @require_rate_limit(max_requests=5, window_seconds=60)
 def restart_all_agents():
     """Restart all agents (with proper shutdown and restart)"""
@@ -962,6 +1042,7 @@ def restart_all_agents():
 
 
 @dashboard_bp.route("/api/mitre/coverage")
+@require_login
 @require_rate_limit(max_requests=30, window_seconds=60)
 def mitre_coverage_data():
     """MITRE ATT&CK technique coverage from real security events."""
@@ -984,6 +1065,7 @@ def mitre_coverage_data():
 
 
 @dashboard_bp.route("/api/hunt/search")
+@require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
 def hunt_search():
     """Log search / threat hunting endpoint."""
@@ -996,7 +1078,19 @@ def hunt_search():
         )
 
     query = request.args.get("q", "")
+    ALLOWED_TABLES = {
+        "security_events",
+        "process_events",
+        "flow_events",
+        "dns_events",
+        "fim_events",
+        "audit_events",
+        "persistence_events",
+        "peripheral_events",
+    }
     table = request.args.get("table", "security_events")
+    if table not in ALLOWED_TABLES:
+        return jsonify({"status": "error", "message": "Invalid table name"}), 400
     hours = request.args.get("hours", 24, type=int)
     limit = min(request.args.get("limit", 50, type=int), 200)
     offset = request.args.get("offset", 0, type=int)
@@ -1018,6 +1112,7 @@ def hunt_search():
 
 
 @dashboard_bp.route("/api/incidents", methods=["GET"])
+@require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
 def list_incidents():
     """List security incidents."""
@@ -1040,6 +1135,7 @@ def list_incidents():
 
 
 @dashboard_bp.route("/api/incidents", methods=["POST"])
+@require_login
 @require_rate_limit(max_requests=20, window_seconds=60)
 def create_incident():
     """Create a new security incident."""
@@ -1047,7 +1143,7 @@ def create_incident():
 
     store = get_telemetry_store()
     if store is None:
-        return jsonify({"status": "error", "message": "Database unavailable"}), 500
+        return jsonify({"status": "error", "message": _MSG_DB_UNAVAILABLE}), 500
 
     data = request.get_json(silent=True) or {}
     incident_id = store.create_incident(data)
@@ -1057,6 +1153,7 @@ def create_incident():
 
 
 @dashboard_bp.route("/api/incidents/<int:incident_id>", methods=["GET"])
+@require_login
 def get_incident_route(incident_id):
     """Get a single incident."""
     from .telemetry_bridge import get_telemetry_store
@@ -1072,6 +1169,7 @@ def get_incident_route(incident_id):
 
 
 @dashboard_bp.route("/api/incidents/<int:incident_id>", methods=["PATCH"])
+@require_login
 @require_rate_limit(max_requests=30, window_seconds=60)
 def update_incident_route(incident_id):
     """Update an incident."""
@@ -1089,6 +1187,7 @@ def update_incident_route(incident_id):
 
 
 @dashboard_bp.route("/api/network/topology")
+@require_login
 @require_rate_limit(max_requests=30, window_seconds=60)
 def network_topology_data():
     """Network topology from device_telemetry and flow_events."""
@@ -1101,9 +1200,10 @@ def network_topology_data():
     nodes = []
     edges = []
     try:
+        # Devices — deduplicate via GROUP BY instead of fetching all rows
         cursor = store.db.execute(
-            "SELECT DISTINCT device_id, ip_address, device_type, manufacturer "
-            "FROM device_telemetry ORDER BY timestamp_ns DESC"
+            "SELECT device_id, MAX(ip_address), MAX(device_type), MAX(manufacturer) "
+            "FROM device_telemetry GROUP BY device_id LIMIT 200"
         )
         seen_ids = set()
         for row in cursor.fetchall():
@@ -1119,9 +1219,14 @@ def network_topology_data():
                         "manufacturer": row[3] or "",
                     }
                 )
+        # Flow edges — limit to recent 24h and top 200 connections
+        flow_cutoff = int((time.time() - 24 * 3600) * 1e9)
         cursor = store.db.execute(
             "SELECT src_ip, dst_ip, protocol, SUM(bytes_tx), COUNT(*) "
-            "FROM flow_events GROUP BY src_ip, dst_ip, protocol"
+            "FROM flow_events WHERE timestamp_ns > ? "
+            "GROUP BY src_ip, dst_ip, protocol "
+            "ORDER BY COUNT(*) DESC LIMIT 200",
+            (flow_cutoff,),
         )
         for row in cursor.fetchall():
             if row[0] and row[1]:
@@ -1134,7 +1239,10 @@ def network_topology_data():
                         "count": row[4],
                     }
                 )
-        cursor = store.db.execute("SELECT DISTINCT device_id FROM security_events")
+        # Security device IDs — use index, limit to 200
+        cursor = store.db.execute(
+            "SELECT DISTINCT device_id FROM security_events LIMIT 200"
+        )
         for row in cursor.fetchall():
             did = row[0]
             if did and did not in seen_ids:
@@ -1162,6 +1270,7 @@ def network_topology_data():
 
 
 @dashboard_bp.route("/api/correlate")
+@require_login
 @require_rate_limit(max_requests=30, window_seconds=60)
 def correlate_events():
     """Correlate events around a seed event for timeline replay and evidence chain."""
@@ -1173,7 +1282,7 @@ def correlate_events():
     max_results = request.args.get("max_results", 100, type=int)
 
     if store is None:
-        return jsonify({"status": "error", "message": "Database unavailable"}), 500
+        return jsonify({"status": "error", "message": _MSG_DB_UNAVAILABLE}), 500
 
     if not event_id:
         return jsonify({"status": "error", "message": "event_id required"}), 400
@@ -1352,6 +1461,7 @@ def correlate_events():
 
 
 @dashboard_bp.route("/api/metrics/history")
+@require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
 def metrics_history_api():
     """Historical metrics for time-series charts."""
@@ -1577,6 +1687,7 @@ _deep_overview_cache = {"data": None, "ts": 0}
 
 
 @dashboard_bp.route("/api/agents/deep-overview")
+@require_login
 @require_rate_limit(max_requests=30, window_seconds=60)
 def agents_deep_overview():
     """Comprehensive agent overview with probes, MITRE, events, and health."""
@@ -1602,12 +1713,17 @@ def agents_deep_overview():
     except Exception:
         pass
 
-    # 2) Get event counts per category from DB
+    # 2) Get event counts per category from DB (last 7 days for performance)
     event_counts_by_cat = {}
     if store:
         try:
+            cutoff_ns = int((time.time() - 7 * 24 * 3600) * 1e9)
             cursor = store.db.execute(
-                "SELECT event_category, COUNT(*) FROM security_events GROUP BY event_category"
+                "SELECT event_category, COUNT(*) FROM ("
+                "  SELECT event_category FROM security_events "
+                "  WHERE timestamp_ns > ? ORDER BY timestamp_ns DESC LIMIT 100000"
+                ") GROUP BY event_category",
+                (cutoff_ns,),
             )
             for row in cursor.fetchall():
                 event_counts_by_cat[row[0]] = row[1]
@@ -1742,6 +1858,7 @@ def agents_deep_overview():
 
 
 @dashboard_bp.route("/api/agents/<agent_id>/live-data")
+@require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
 def agent_live_data(agent_id):
     """Live telemetry data for a specific agent — events, process info, logs."""
@@ -2275,3 +2392,491 @@ def deploy_stats():
             )
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ── SOMA: Fusion Intelligence API ──
+
+
+def _get_fusion_engine():
+    """Get a FusionEngine instance for read-only queries."""
+    from pathlib import Path
+
+    fusion_db = Path("data/intel/fusion.db")
+    if not fusion_db.exists():
+        return None
+    try:
+        from amoskys.intel.fusion_engine import FusionEngine
+
+        return FusionEngine(db_path=str(fusion_db))
+    except Exception:
+        return None
+
+
+@dashboard_bp.route("/api/fusion/risk", methods=["GET"])
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def fusion_device_risk():
+    """Get device risk snapshot from FusionEngine correlation.
+
+    Query params:
+        device_id: Optional device ID filter (defaults to all devices)
+    """
+    engine = _get_fusion_engine()
+    if engine is None:
+        return jsonify(
+            {"status": "success", "risk": None, "message": _MSG_FUSION_UNAVAILABLE}
+        )
+
+    device_id = request.args.get("device_id")
+    try:
+        if device_id:
+            risk = engine.get_device_risk(device_id)
+            return jsonify({"status": "success", "risk": risk})
+        else:
+            risks = []
+            for row in engine.db.execute(
+                "SELECT * FROM device_risk ORDER BY score DESC"
+            ).fetchall():
+                risks.append(
+                    {
+                        "device_id": row[0],
+                        "score": row[1],
+                        "level": row[2],
+                        "reason_tags": json.loads(row[3]),
+                        "supporting_events": json.loads(row[4]),
+                        "metadata": json.loads(row[5]),
+                        "updated_at": row[6],
+                    }
+                )
+            return jsonify({"status": "success", "risks": risks})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@dashboard_bp.route("/api/fusion/incidents", methods=["GET"])
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def fusion_incidents():
+    """Get correlated incidents from FusionEngine with full AMRDR detail.
+
+    Query params:
+        severity: Optional severity filter (CRITICAL, HIGH, MEDIUM, LOW, INFO)
+        device_id: Optional device ID filter
+        limit: Max results (default 50)
+    """
+    engine = _get_fusion_engine()
+    if engine is None:
+        return jsonify(
+            {"status": "success", "incidents": [], "message": _MSG_FUSION_UNAVAILABLE}
+        )
+
+    try:
+        limit = min(int(request.args.get("limit", 50)), 200)
+    except (ValueError, TypeError):
+        return jsonify({"status": "error", "message": "Invalid limit parameter"}), 400
+
+    device_id = request.args.get("device_id")
+    severity_filter = request.args.get("severity")
+
+    try:
+        incidents = engine.get_recent_incidents(device_id=device_id, limit=limit)
+        if severity_filter:
+            incidents = [i for i in incidents if i["severity"] == severity_filter]
+        return jsonify(
+            {
+                "status": "success",
+                "incidents": incidents,
+                "total": len(incidents),
+            }
+        )
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ── Brain / Intelligence APIs ──────────────────────────────────────────
+
+
+_classification_cache = {"data": None, "ts": 0}
+
+
+def _get_classification_stats(store):
+    """Compute signal/noise distribution from composite scores.
+
+    Uses SQL aggregation to classify events without fetching rows into Python.
+    Cached for 30 seconds to avoid repeated full-table scans.
+    """
+    classification = {"legitimate": 0, "suspicious": 0, "malicious": 0}
+    total = 0
+    if store is None:
+        return classification, total
+
+    now = time.time()
+    if _classification_cache["data"] and (now - _classification_cache["ts"]) < 30:
+        cached = _classification_cache["data"]
+        return cached[0], cached[1]
+
+    try:
+        row = store.db.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN composite >= 0.70 THEN 1 ELSE 0 END) AS malicious,
+                SUM(CASE WHEN composite >= 0.40 AND composite < 0.70 THEN 1 ELSE 0 END) AS suspicious,
+                SUM(CASE WHEN composite < 0.40 THEN 1 ELSE 0 END) AS legitimate
+            FROM (
+                SELECT
+                    CASE
+                        WHEN geometric_score > 0.001
+                        THEN 0.35*geometric_score + 0.25*temporal_score
+                             + 0.40*behavioral_score
+                        ELSE 0.38*temporal_score + 0.62*behavioral_score
+                    END AS composite
+                FROM security_events
+                WHERE geometric_score IS NOT NULL
+                ORDER BY timestamp_ns DESC LIMIT 100000
+            )
+            """
+        ).fetchone()
+        if row:
+            total = row[0] or 0
+            classification["malicious"] = row[1] or 0
+            classification["suspicious"] = row[2] or 0
+            classification["legitimate"] = row[3] or 0
+        _classification_cache["data"] = (classification, total)
+        _classification_cache["ts"] = now
+    except Exception:
+        pass
+    return classification, total
+
+
+def _get_agent_explanations(engine):
+    """Get AMRDR agent reliability explanations from FusionEngine."""
+    if engine is None:
+        return []
+    try:
+        from amoskys.intel.explanation import AgentExplainer
+
+        explainer = AgentExplainer()
+        return [
+            explainer.explain_agent(aid, engine.reliability_tracker.get_state(aid))
+            for aid in engine.reliability_tracker.list_agents()
+        ]
+    except Exception:
+        return []
+
+
+@dashboard_bp.route("/api/soma/overview", methods=["GET"])
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def soma_overview():
+    """Full SOMA dashboard data: pipeline, classification, agents, learning."""
+    from .telemetry_bridge import get_telemetry_store
+
+    store = get_telemetry_store()
+    engine = _get_fusion_engine()
+
+    pipeline_stages = [
+        {"name": "Agents", "status": "active"},
+        {"name": "WAL Processor", "status": "active"},
+        {"name": "Enrichment", "status": "active"},
+        {"name": "Scoring Engine", "status": "active"},
+        {"name": "FusionEngine", "status": "active" if engine else "inactive"},
+        {"name": "Incidents", "status": "active"},
+    ]
+
+    classification, events_processed = _get_classification_stats(store)
+    agents = _get_agent_explanations(engine)
+
+    total_flagged = classification["suspicious"] + classification["malicious"]
+    fp_rate = (
+        round(classification["suspicious"] / total_flagged, 3)
+        if total_flagged > 0
+        else 0.0
+    )
+
+    return jsonify(
+        {
+            "status": "success",
+            "pipeline": {
+                "stages": pipeline_stages,
+                "events_processed": events_processed,
+            },
+            "classification": classification,
+            "agents": agents,
+            "learning": {
+                "total_feedback": 0,
+                "fp_rate": fp_rate,
+                "calibrations": [],
+            },
+        }
+    )
+
+
+@dashboard_bp.route("/api/soma/agents", methods=["GET"])
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def soma_agents():
+    """Get agent reliability states from AMRDR."""
+    engine = _get_fusion_engine()
+    if engine is None:
+        return jsonify({"status": "success", "agents": []})
+
+    try:
+        from amoskys.intel.explanation import AgentExplainer
+
+        explainer = AgentExplainer()
+        agents = []
+        for agent_id in engine.reliability_tracker.list_agents():
+            state = engine.reliability_tracker.get_state(agent_id)
+            agents.append(explainer.explain_agent(agent_id, state))
+        return jsonify({"status": "success", "agents": agents})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@dashboard_bp.route("/api/soma/status", methods=["GET"])
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def soma_baseline_status():
+    """Get SOMA baseline learning/detection status."""
+    try:
+        from amoskys.intel.scoring import ScoringEngine
+
+        scorer = ScoringEngine()
+        device_id = request.args.get("device_id")
+        status = scorer.get_baseline_status(device_id)
+        return jsonify({"status": "success", "baseline": status})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@dashboard_bp.route("/api/soma/mode", methods=["POST"])
+@require_login
+@require_rate_limit(max_requests=10, window_seconds=60)
+def soma_set_mode():
+    """Manually override SOMA baseline mode (learning/detection).
+
+    Body: {
+        "mode": "learning" | "detection",
+        "device_id": optional str,
+        "learning_hours": optional int (default 24, for learning mode)
+    }
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        mode = data.get("mode", "").strip().lower()
+        if mode not in ("learning", "detection"):
+            return jsonify({"status": "error", "message": "mode must be 'learning' or 'detection'"}), 400
+
+        device_id = data.get("device_id")
+        learning_hours = min(int(data.get("learning_hours", 24)), 168)
+
+        from amoskys.intel.scoring import ScoringEngine
+
+        scorer = ScoringEngine(learning_hours=learning_hours if mode == "learning" else 0)
+        success = scorer.set_baseline_mode(mode, device_id)
+        if not success and mode == "learning":
+            # No baselines exist yet — will be created on next event ingestion
+            return jsonify({
+                "status": "success", "mode": mode, "device_id": device_id,
+                "message": f"Learning mode activated ({learning_hours}h). Baselines will be created on next event ingestion."
+            })
+
+        return jsonify({"status": "success", "mode": mode, "device_id": device_id})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@dashboard_bp.route("/api/explain/event/<int:event_id>", methods=["GET"])
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def explain_event(event_id):
+    """Explain why a security event was classified the way it was."""
+    from .telemetry_bridge import get_telemetry_store
+
+    store = get_telemetry_store()
+    if store is None:
+        return jsonify({"status": "error", "message": _MSG_DB_UNAVAILABLE}), 500
+
+    try:
+        row = store.db.execute(
+            "SELECT * FROM security_events WHERE id = ?", (event_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"status": "error", "message": "Event not found"}), 404
+
+        columns = [
+            desc[0]
+            for desc in store.db.execute(
+                "SELECT * FROM security_events LIMIT 0"
+            ).description
+        ]
+        event_dict = dict(zip(columns, row))
+
+        # Parse JSON fields
+        for field in ("mitre_techniques", "indicators"):
+            if isinstance(event_dict.get(field), str):
+                try:
+                    event_dict[field] = json.loads(event_dict[field])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        from amoskys.intel.explanation import EventExplainer
+
+        explainer = EventExplainer()
+        explanation = explainer.explain_event(event_dict)
+        return jsonify({"status": "success", "explanation": explanation})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@dashboard_bp.route("/api/explain/incident/<incident_id>", methods=["GET"])
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def explain_incident(incident_id):
+    """Explain an incident with narrative, confidence, and TP/FP indicators."""
+    engine = _get_fusion_engine()
+    if engine is None:
+        return jsonify({"status": "error", "message": _MSG_FUSION_UNAVAILABLE}), 500
+
+    try:
+        incidents = engine.get_recent_incidents(limit=500)
+        incident = next(
+            (inc for inc in incidents if inc.get("incident_id") == incident_id),
+            None,
+        )
+        if incident is None:
+            return jsonify({"status": "error", "message": "Incident not found"}), 404
+
+        # Fetch contributing events for richer explanation
+        from .telemetry_bridge import get_telemetry_store
+
+        events = []
+        event_ids = incident.get("event_ids", [])
+        if isinstance(event_ids, str):
+            try:
+                event_ids = json.loads(event_ids)
+            except (json.JSONDecodeError, TypeError):
+                event_ids = []
+        store = get_telemetry_store()
+        if store and event_ids:
+            try:
+                placeholders = ",".join("?" for _ in event_ids)
+                rows = store.db.execute(
+                    f"SELECT * FROM security_events WHERE id IN ({placeholders})",
+                    event_ids,
+                ).fetchall()
+                cols = [
+                    d[0]
+                    for d in store.db.execute(
+                        "SELECT * FROM security_events LIMIT 0"
+                    ).description
+                ]
+                events = [dict(zip(cols, row)) for row in rows]
+            except Exception:
+                pass  # Proceed without events — explainer handles None
+
+        from amoskys.intel.explanation import IncidentExplainer
+
+        explainer = IncidentExplainer()
+        explanation = explainer.explain_incident(incident, events or None)
+        return jsonify({"status": "success", "explanation": explanation})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@dashboard_bp.route("/api/feedback", methods=["POST"])
+@require_login
+@require_rate_limit(max_requests=20, window_seconds=60)
+def submit_feedback():
+    """Record analyst triage decision for AMRDR learning.
+
+    Body: {"incident_id": str, "verdict": "confirmed"|"dismissed"}
+    """
+    engine = _get_fusion_engine()
+    if engine is None:
+        return jsonify({"status": "error", "message": _MSG_FUSION_UNAVAILABLE}), 500
+
+    data = request.get_json(silent=True) or {}
+    incident_id = data.get("incident_id")
+    verdict = data.get("verdict")
+
+    if not incident_id or verdict not in ("confirmed", "dismissed"):
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "Required: incident_id and verdict (confirmed|dismissed)",
+                }
+            ),
+            400,
+        )
+
+    try:
+        user = get_current_user()
+        if isinstance(user, dict):
+            analyst = user.get("username") or user.get("email") or "unknown"
+        elif user:
+            analyst = getattr(user, "email", "unknown")
+        else:
+            analyst = "unknown"
+        result = engine.provide_incident_feedback(
+            incident_id=incident_id,
+            is_confirmed=(verdict == "confirmed"),
+            analyst=analyst,
+        )
+        if result:
+            return jsonify({"status": "success", "message": "Feedback recorded"})
+        return jsonify({"status": "error", "message": "Incident not found"}), 404
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@dashboard_bp.route("/api/feedback/stats", methods=["GET"])
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def feedback_stats():
+    """Get learning metrics: feedback counts, FP rates, reliability trends."""
+    from .telemetry_bridge import get_telemetry_store
+
+    engine = _get_fusion_engine()
+    store = get_telemetry_store()
+
+    stats = {
+        "total_feedback": 0,
+        "fp_rate": 0.0,
+        "agent_reliability": {},
+    }
+
+    if engine:
+        try:
+            for agent_id in engine.reliability_tracker.list_agents():
+                state = engine.reliability_tracker.get_state(agent_id)
+                stats["agent_reliability"][agent_id] = {
+                    "reliability": round(state.reliability_score, 3),
+                    "tier": state.tier.name if state.tier else "NOMINAL",
+                    "weight": round(state.fusion_weight, 3),
+                }
+        except Exception:
+            pass
+
+    if store:
+        try:
+            # Limit to last 7 days for performance on large tables
+            cutoff_ns = int((time.time() - 7 * 24 * 3600) * 1e9)
+            row = store.db.execute(
+                "SELECT "
+                "  SUM(CASE WHEN final_classification = 'suspicious' THEN 1 ELSE 0 END), "
+                "  SUM(CASE WHEN final_classification != 'legitimate' THEN 1 ELSE 0 END) "
+                "FROM security_events WHERE timestamp_ns > ?",
+                (cutoff_ns,),
+            ).fetchone()
+            if row:
+                suspicious = row[0] or 0
+                flagged = row[1] or 0
+                if flagged > 0:
+                    stats["fp_rate"] = round(suspicious / flagged, 3)
+        except Exception:
+            pass
+
+    return jsonify({"status": "success", "stats": stats})

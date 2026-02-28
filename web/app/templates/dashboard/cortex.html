@@ -462,7 +462,8 @@
 .af-sparkline svg { display: block; }
 
 /* ── Top IPs ── */
-.ip-bar-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem; font-size: 0.78rem; }
+.ip-bar-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem; font-size: 0.78rem; border-radius: 4px; padding: 2px 4px; transition: background 0.2s; }
+.ip-bar-row:hover { background: rgba(0,217,255,0.08); }
 .ip-label { width: 120px; font-family: monospace; color: var(--text-secondary); font-size: 0.75rem; flex-shrink: 0; text-align: right; }
 .ip-bar-bg { flex: 1; height: 16px; background: rgba(255,255,255,0.04); border-radius: 3px; overflow: hidden; }
 .ip-bar { height: 100%; border-radius: 3px; background: var(--neural-primary); opacity: 0.7; transition: width 0.4s; }
@@ -470,7 +471,8 @@
 
 /* ── MITRE Mini-Map ── */
 .mitre-mini { display: flex; flex-direction: column; gap: 0.35rem; }
-.mm-row { display: flex; align-items: center; gap: 0.5rem; }
+.mm-row { display: flex; align-items: center; gap: 0.5rem; border-radius: 4px; padding: 2px 4px; transition: background 0.2s; }
+.mm-row:hover { background: rgba(0,217,255,0.08); }
 .mm-label { width: 120px; font-size: 0.7rem; color: var(--text-secondary); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
 .mm-bar-bg { flex: 1; height: 14px; background: rgba(255,255,255,0.04); border-radius: 3px; overflow: hidden; }
 .mm-bar { height: 100%; border-radius: 3px; transition: width 0.4s ease; min-width: 0; }
@@ -582,7 +584,7 @@
 class CortexCommandCenter {
     constructor() {
         this.timer = null;
-        this.REFRESH = 5000;
+        this.REFRESH = 15000;
         this.CIRC_POSTURE = 2 * Math.PI * 58;  // 364.4
         this.CIRC_GAUGE = 2 * Math.PI * 34;    // 213.6
         this.SLA_HOURS = { critical: 4, high: 8, medium: 24, low: 72 };
@@ -639,8 +641,8 @@ class CortexCommandCenter {
     }
 
     slowPolling() {
-        if (this.REFRESH < 15000) {
-            this.REFRESH = 15000;
+        if (this.REFRESH < 30000) {
+            this.REFRESH = 30000;
             clearInterval(this.timer);
             this.timer = setInterval(() => this.refreshAll(), this.REFRESH);
         }
@@ -745,9 +747,9 @@ class CortexCommandCenter {
             const d = await r.json();
             if (d.status !== 'success') throw new Error('API error');
 
-            const threatCount = d.count || 0;
-            document.getElementById('cb-threats').innerHTML = threatCount + this.trendArrow('threats', threatCount);
-            // Update event count from the time-range-filtered response
+            const threatCount = d.db_total || d.count || 0;
+            document.getElementById('cb-threats').innerHTML = this.fmtNum(threatCount) + this.trendArrow('threats', threatCount);
+            // Event count = real DB total (not capped by API row limit)
             document.getElementById('cb-events').innerHTML = this.fmtNum(threatCount) + this.trendArrow('events', threatCount);
             this.updateFreshness(d.data_stale, d.last_event_time);
             const container = document.getElementById('threat-feed');
@@ -799,7 +801,7 @@ class CortexCommandCenter {
                 const time = t.timestamp ? this.relTime(t.timestamp) : '';
                 const mitreList = (t.mitre_techniques || []).map(m => '<span class="tf-mitre">' + m + '</span>').join(' ');
 
-                return '<div class="tf-item sev-' + sev + '" data-idx="' + idx + '">' +
+                return '<div class="tf-item sev-' + sev + '" data-idx="' + idx + '" style="cursor:pointer;" onclick="window.location=\'/dashboard/threat-feed?search=' + encodeURIComponent(t.type || '') + '\'">' +
                     '<div class="tf-sev sev-' + sev + '">' + sev + '</div>' +
                     '<div class="tf-body">' +
                         '<div class="tf-type">' + this.fmtType(t.type) + '</div>' +
@@ -924,7 +926,7 @@ class CortexCommandCenter {
                     probeDots += '<div class="af-probe-dot" style="background:' + c + ';" title="' + this.esc(p.name || '') + ' (' + p.status + ')"></div>';
                 });
                 const sparkline = this.buildSparkline(a);
-                return '<div class="af-card" data-action="navigate-agents">' +
+                return '<div class="af-card" data-action="navigate-agents" data-agent-name="' + this.esc(a.name || a.id || '') + '" style="cursor:pointer;">' +
                     '<div class="af-header"><span class="af-name">' + this.esc(a.name || a.id || 'Unknown') + '</span><span class="af-dot ' + status + '"></span></div>' +
                     '<div class="af-stats"><span>' + real + '/' + total + ' probes</span><span>' + this.fmtNum(evts) + ' events</span>' + signed + '</div>' +
                     '<div class="af-probes">' + probeDots + '</div>' +
@@ -975,7 +977,25 @@ class CortexCommandCenter {
         const byHour = this.clusterCache.by_hour || {};
         const container = document.getElementById('activity-chart');
         const hours = Object.keys(byHour).sort();
-        if (hours.length === 0) { container.innerHTML = '<div class="cc-empty"><div class="cc-empty-msg">No activity data</div></div>'; return; }
+        if (hours.length === 0) {
+            // Auto-expand time window if no data in current range
+            if (this.hoursRange < 168 && !this._activityRetried) {
+                this._activityRetried = true;
+                const wider = this.hoursRange <= 24 ? 168 : 8760;
+                fetch('/dashboard/api/live/event-clustering?hours=' + wider)
+                    .then(r => r.json()).then(d => {
+                        if (d.status === 'success' && d.clusters) {
+                            this.clusterCache.by_hour = d.clusters.by_hour || {};
+                            this.clusterCache.by_severity = d.clusters.by_severity || {};
+                            this.renderActivityChart();
+                            this.renderSeverityChart();
+                        }
+                    }).catch(() => {});
+            }
+            container.innerHTML = '<div class="cc-empty"><div class="cc-empty-msg">No activity data</div></div>';
+            return;
+        }
+        this._activityRetried = false;
         const vals = hours.map(h => byHour[h]);
         const maxVal = Math.max(1, ...vals);
         const w = 600, h = 70, barW = Math.max(4, (w - 4) / Math.max(1, hours.length) - 2);
@@ -993,7 +1013,10 @@ class CortexCommandCenter {
         const bySev = this.clusterCache.by_severity || {};
         const container = document.getElementById('severity-chart');
         const total = Object.values(bySev).reduce((a, b) => a + b, 0);
-        if (total === 0) { container.innerHTML = '<div class="cc-empty"><div class="cc-empty-msg">No data</div></div>'; return; }
+        if (total === 0) {
+            container.innerHTML = '<div class="cc-empty"><div class="cc-empty-msg">No severity data — events may still be in learning mode</div></div>';
+            return;
+        }
 
         const colors = { critical: '#ff3366', high: '#ff6600', medium: '#ffaa00', low: '#0088ff' };
         const sevOrder = ['critical', 'high', 'medium', 'low'];
@@ -1009,7 +1032,7 @@ class CortexCommandCenter {
             const dashLen = pct * circ;
             arcs += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + colors[sev] + '" stroke-width="14" stroke-dasharray="' + dashLen.toFixed(2) + ' ' + (circ - dashLen).toFixed(2) + '" stroke-dashoffset="' + (-offset).toFixed(2) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
             offset += dashLen;
-            legend += '<div style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;"><div style="width:8px;height:8px;border-radius:2px;background:' + colors[sev] + ';"></div><span style="color:var(--text-secondary);text-transform:capitalize;">' + sev + '</span><span style="color:var(--text-muted);">' + count + '</span></div>';
+            legend += '<div style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;cursor:pointer;" onclick="window.location=\'/dashboard/threat-feed?severity=' + sev + '\'"><div style="width:8px;height:8px;border-radius:2px;background:' + colors[sev] + ';"></div><span style="color:var(--text-secondary);text-transform:capitalize;">' + sev + '</span><span style="color:var(--text-muted);">' + count + '</span></div>';
         }
         container.innerHTML = '<svg viewBox="0 0 100 100" width="90" height="90"><circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="14"/>' + arcs + '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" fill="var(--text-primary)" font-size="16" font-weight="800">' + total + '</text><text x="' + cx + '" y="' + (cy + 10) + '" text-anchor="middle" fill="var(--text-muted)" font-size="6" text-transform="uppercase">EVENTS</text></svg><div style="display:flex;flex-direction:column;gap:0.35rem;">' + legend + '</div>';
     }
@@ -1022,7 +1045,7 @@ class CortexCommandCenter {
         const maxVal = Math.max(1, entries[0][1]);
         container.innerHTML = entries.map(([ip, count]) => {
             const pct = Math.round((count / maxVal) * 100);
-            return '<div class="ip-bar-row"><div class="ip-label">' + this.esc(ip) + '</div><div class="ip-bar-bg"><div class="ip-bar" style="width:' + pct + '%;"></div></div><div class="ip-count">' + count + '</div></div>';
+            return '<div class="ip-bar-row" style="cursor:pointer;" onclick="window.location=\'/dashboard/threat-feed?search=' + encodeURIComponent(ip) + '\'"><div class="ip-label">' + this.esc(ip) + '</div><div class="ip-bar-bg"><div class="ip-bar" style="width:' + pct + '%;"></div></div><div class="ip-count">' + count + '</div></div>';
         }).join('');
     }
 
@@ -1088,7 +1111,7 @@ class CortexCommandCenter {
                 techs.forEach(t => { if (coverage[t]) covered++; });
                 const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
                 const color = pct >= 60 ? '#00ff88' : pct >= 30 ? '#ffaa00' : pct > 0 ? '#ff6600' : 'rgba(255,255,255,0.08)';
-                rows += '<div class="mm-row"><div class="mm-label" title="' + tactic + '">' + tactic + '</div><div class="mm-bar-bg"><div class="mm-bar" style="width:' + pct + '%;background:' + color + ';"></div></div><div class="mm-pct">' + covered + '/' + total + '</div></div>';
+                rows += '<div class="mm-row" style="cursor:pointer;" onclick="window.location=\'/dashboard/mitre\'"><div class="mm-label" title="' + tactic + '">' + tactic + '</div><div class="mm-bar-bg"><div class="mm-bar" style="width:' + pct + '%;background:' + color + ';"></div></div><div class="mm-pct">' + covered + '/' + total + '</div></div>';
             }
             container.innerHTML = rows;
         } catch (e) { /* silent */ }
@@ -1246,9 +1269,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('cortex-export-agents-btn').addEventListener('click', () => cortex.exportAgents());
 
     // Event delegation for dynamically rendered agent fleet cards
+    const agentRoutes = {
+        'proc': '/dashboard/processes',
+        'peripheral': '/dashboard/peripherals',
+    };
     document.getElementById('agent-fleet').addEventListener('click', (e) => {
         const card = e.target.closest('[data-action="navigate-agents"]');
-        if (card) window.location = '/dashboard/agents';
+        if (card) {
+            const name = (card.dataset.agentName || '').toLowerCase();
+            window.location = agentRoutes[name] || '/dashboard/agent-monitor?agent=' + encodeURIComponent(name);
+        }
     });
 
     // Event delegation for dynamically rendered triage buttons in threat feed
