@@ -16,12 +16,8 @@ from .probes import (
     create_peripheral_probes,
 )
 
-# B5.1: Deprecated alias
-PeripheralAgentV2 = PeripheralAgent
-
 __all__ = [
     "PeripheralAgent",
-    "PeripheralAgentV2",
     "BluetoothDeviceProbe",
     "create_peripheral_probes",
     "HighRiskPeripheralScoreProbe",

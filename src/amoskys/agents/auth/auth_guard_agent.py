@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""AMOSKYS AuthGuard Agent v2 - Micro-Probe Architecture.
+"""AMOSKYS AuthGuard Agent - Micro-Probe Architecture.
 
 This is the modernized authentication monitoring agent using the "swarm of eyes"
-pattern. 8 micro-probes each watch one specific auth/privilege threat vector.
+pattern. 7 micro-probes each watch one specific auth/privilege threat vector.
 
 Probes:
-    1. SSHBruteForceProbe - Multiple failures from single IP/user
-    2. SSHPasswordSprayProbe - Low-and-slow across many users
-    3. SSHGeoImpossibleTravelProbe - Geographic impossibility
-    4. SudoElevationProbe - Privilege escalation patterns
-    5. SudoSuspiciousCommandProbe - Dangerous sudo commands
-    6. OffHoursLoginProbe - Access outside business hours
-    7. MFABypassOrAnomalyProbe - MFA fatigue/bypass attempts
-    8. AccountLockoutStormProbe - Mass lockout attacks
+    1. SSHPasswordSprayProbe - Low-and-slow across many users
+    2. SSHGeoImpossibleTravelProbe - Geographic impossibility
+    3. SudoElevationProbe - Privilege escalation patterns
+    4. SudoSuspiciousCommandProbe - Dangerous sudo commands
+    5. OffHoursLoginProbe - Access outside business hours
+    6. MFABypassOrAnomalyProbe - MFA fatigue/bypass attempts
+    7. AccountLockoutStormProbe - Mass lockout attacks
+
+Note: SSHBruteForceProbe moved to protocol_collectors (canonical location).
 
 MITRE ATT&CK Coverage:
     - T1110: Brute Force
@@ -23,7 +24,7 @@ MITRE ATT&CK Coverage:
     - T1621: Multi-Factor Authentication Request Generation
 
 Usage:
-    >>> agent = AuthGuardAgentV2()
+    >>> agent = AuthGuardAgent()
     >>> agent.run_forever()
 """
 
@@ -54,7 +55,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("AuthGuardAgentV2")
+logger = logging.getLogger("AuthGuardAgent")
 
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
@@ -107,19 +108,22 @@ class EventBusPublisher:
         """Publish events to EventBus."""
         self._ensure_channel()
 
-        for device_telemetry in events:
-            timestamp_ns = int(time.time() * 1e9)
-            idempotency_key = f"{device_telemetry.device_id}_{timestamp_ns}"
-            envelope = telemetry_pb2.UniversalEnvelope(
-                version="v1",
-                ts_ns=timestamp_ns,
-                idempotency_key=idempotency_key,
-                device_telemetry=device_telemetry,
-                signing_algorithm="Ed25519",
-                priority="NORMAL",
-                requires_acknowledgment=True,
-                schema_version=1,
-            )
+        for event in events:
+            # Already-wrapped envelopes (e.g. from drain path) go directly
+            if isinstance(event, telemetry_pb2.UniversalEnvelope):
+                envelope = event
+            else:
+                timestamp_ns = int(time.time() * 1e9)
+                idempotency_key = f"{event.device_id}_{timestamp_ns}"
+                envelope = telemetry_pb2.UniversalEnvelope(
+                    version="v1",
+                    ts_ns=timestamp_ns,
+                    idempotency_key=idempotency_key,
+                    device_telemetry=event,
+                    priority="NORMAL",
+                    requires_acknowledgment=True,
+                    schema_version=1,
+                )
 
             ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
 
@@ -863,7 +867,7 @@ def get_auth_collector() -> AuthLogCollector:
 
 
 # =============================================================================
-# AuthGuard Agent V2
+# AuthGuard Agent
 # =============================================================================
 
 
@@ -888,7 +892,7 @@ class AuthGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
         queue_path_override: Optional[str] = None,
         device_id_override: Optional[str] = None,
     ):
-        """Initialize AuthGuard Agent v2.
+        """Initialize AuthGuard Agent.
 
         Args:
             collection_interval: Seconds between collection cycles
@@ -930,7 +934,7 @@ class AuthGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
         # Register all auth probes
         self.register_probes(create_auth_probes())
 
-        logger.info(f"AuthGuardAgentV2 initialized with {len(self._probes)} probes")
+        logger.info(f"AuthGuardAgent initialized with {len(self._probes)} probes")
 
     def setup(self) -> bool:
         """Initialize agent resources.
@@ -972,7 +976,7 @@ class AuthGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
                 logger.error("No probes initialized successfully")
                 return False
 
-            logger.info("AuthGuardAgentV2 setup complete")
+            logger.info("AuthGuardAgent setup complete")
             return True
 
         except Exception as e:
@@ -1183,13 +1187,13 @@ class AuthGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
     def shutdown(self) -> None:
         """Graceful shutdown."""
-        logger.info("AuthGuardAgentV2 shutting down...")
+        logger.info("AuthGuardAgent shutting down...")
 
         # Close EventBus connection
         if self.eventbus_publisher:
             self.eventbus_publisher.close()
 
-        logger.info("AuthGuardAgentV2 shutdown complete")
+        logger.info("AuthGuardAgent shutdown complete")
 
     def get_health(self) -> Dict[str, Any]:
         """Get agent health status.
@@ -1215,10 +1219,10 @@ class AuthGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
 
 def main():
-    """Run AuthGuard Agent v2."""
+    """Run AuthGuard Agent."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="AMOSKYS AuthGuard Agent v2")
+    parser = argparse.ArgumentParser(description="AMOSKYS AuthGuard Agent")
     parser.add_argument(
         "--interval",
         type=float,
@@ -1258,10 +1262,10 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     logger.info("=" * 70)
-    logger.info("AMOSKYS AuthGuard Agent v2 (Micro-Probe Architecture)")
+    logger.info("AMOSKYS AuthGuard Agent (Micro-Probe Architecture)")
     logger.info("=" * 70)
 
-    agent = AuthGuardAgentV2(
+    agent = AuthGuardAgent(
         collection_interval=args.interval,
         queue_path_override=args.queue_path,
         device_id_override=args.device_id,
@@ -1276,7 +1280,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# B5.1: Deprecated alias — will be removed in v1.0
-AuthGuardAgentV2 = AuthGuardAgent

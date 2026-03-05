@@ -168,7 +168,7 @@ class MacOSFSEventsCollector:
         self._observer: Optional[Observer] = None
 
     def start(self) -> None:
-        """Start watching all monitor paths. Call from FIMAgentV2.setup()."""
+        """Start watching all monitor paths. Call from FIMAgent.setup()."""
         self._observer = Observer()
         scheduled = 0
         for path in self._monitor_paths:
@@ -202,7 +202,7 @@ class MacOSFSEventsCollector:
         return changes
 
     def stop(self) -> None:
-        """Stop watching. Call from FIMAgentV2.shutdown()."""
+        """Stop watching. Call from FIMAgent.shutdown()."""
         if self._observer is not None:
             self._observer.stop()
             self._observer.join(timeout=5)

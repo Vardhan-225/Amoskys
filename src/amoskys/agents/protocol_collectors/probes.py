@@ -16,7 +16,7 @@ Each probe focuses on a specific protocol-level threat category:
 import logging
 import re
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from amoskys.agents.common.probes import (
@@ -225,7 +225,7 @@ class SSHBruteForceProbe(MicroProbe):
         protocol_events: List[ProtocolEvent] = context.shared_data.get(
             "protocol_events", []
         )
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         cutoff = now - timedelta(seconds=self.TIME_WINDOW_SECONDS)
 
         for pe in protocol_events:
@@ -235,9 +235,12 @@ class SSHBruteForceProbe(MicroProbe):
             auth_result = pe.metadata.get("auth_result", "")
 
             if auth_result == "failed":
-                # Track failed attempt
+                # Track failed attempt — normalize to UTC-aware
                 src_ip = pe.src_ip
-                self._failed_attempts[src_ip].append(pe.timestamp)
+                ts = pe.timestamp
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                self._failed_attempts[src_ip].append(ts)
 
                 # Clean old entries
                 self._failed_attempts[src_ip] = [
@@ -286,7 +289,7 @@ class DNSTunnelingProbe(MicroProbe):
     description = "Detect DNS tunneling and data exfiltration"
     mitre_techniques = ["T1048.003"]
 
-    MAX_NORMAL_SUBDOMAIN_LENGTH = 30
+    MAX_NORMAL_SUBDOMAIN_LENGTH = 50  # Aligned with DNS agent's threshold
     TXT_QUERY_THRESHOLD = 10  # TXT queries per minute to same domain
 
     def __init__(self):
@@ -299,7 +302,7 @@ class DNSTunnelingProbe(MicroProbe):
         protocol_events: List[ProtocolEvent] = context.shared_data.get(
             "protocol_events", []
         )
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         cutoff = now - timedelta(seconds=60)
 
         for pe in protocol_events:
@@ -323,7 +326,10 @@ class DNSTunnelingProbe(MicroProbe):
             # Track TXT queries
             if query_type == "TXT":
                 base_domain = ".".join(parts[-2:]) if len(parts) >= 2 else domain
-                self._txt_queries[base_domain].append(pe.timestamp)
+                ts = pe.timestamp
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                self._txt_queries[base_domain].append(ts)
 
                 # Clean old entries
                 self._txt_queries[base_domain] = [

@@ -1005,10 +1005,18 @@
                     <span class="sidebar-link-icon">🤖</span>
                     <span>Agent Network</span>
                 </a>
+                <a href="/dashboard/igris" class="sidebar-link">
+                    <span class="sidebar-link-icon">👁️</span>
+                    <span>IGRIS</span>
+                </a>
+                <a href="/dashboard/guardian" class="sidebar-link">
+                    <span class="sidebar-link-icon">🖥️</span>
+                    <span>Guardian C2</span>
+                </a>
 
                 <div class="sidebar-section-label">Threat Intelligence</div>
                 <a href="/dashboard/threat-feed" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#128680;</span>
+                    <span class="sidebar-link-icon">🚨</span>
                     <span>Live Threat Feed</span>
                 </a>
                 <a href="/dashboard/mitre" class="sidebar-link">
@@ -1024,11 +1032,11 @@
                     <span>Incidents</span>
                 </a>
                 <a href="/dashboard/correlation" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#9784;</span>
+                    <span class="sidebar-link-icon">🔗</span>
                     <span>Correlation</span>
                 </a>
                 <a href="/dashboard/soma" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#129504;</span>
+                    <span class="sidebar-link-icon">🔮</span>
                     <span>SOMA Intelligence</span>
                 </a>
                 <a href="/dashboard/network" class="sidebar-link">
@@ -1038,8 +1046,12 @@
 
                 <div class="sidebar-section-label">Monitoring</div>
                 <a href="/dashboard/agent-monitor" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#128225;</span>
+                    <span class="sidebar-link-icon">📡</span>
                     <span>Agent Monitor</span>
+                </a>
+                <a href="/dashboard/event-stream" class="sidebar-link">
+                    <span class="sidebar-link-icon">⚡</span>
+                    <span>Event Stream</span>
                 </a>
                 <a href="/dashboard/probe-explorer" class="sidebar-link">
                     <span class="sidebar-link-icon">🔬</span>
@@ -1060,39 +1072,39 @@
 
                 <div class="sidebar-section-label">Deployment</div>
                 <a href="/dashboard/deploy" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#128640;</span>
+                    <span class="sidebar-link-icon">🚀</span>
                     <span>Deploy Agent</span>
                 </a>
                 <a href="/dashboard/my-agents" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#128187;</span>
+                    <span class="sidebar-link-icon">💻</span>
                     <span>My Agents</span>
                 </a>
                 <a href="/dashboard/marketplace" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#127978;</span>
+                    <span class="sidebar-link-icon">🏪</span>
                     <span>Marketplace</span>
                 </a>
 
                 <div class="sidebar-section-label">Proof &amp; Trust</div>
                 <a href="/dashboard/reliability" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#9878;</span>
+                    <span class="sidebar-link-icon">⚖️</span>
                     <span>Agent Reliability</span>
                 </a>
                 <a href="/dashboard/proof-spine" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#128274;</span>
+                    <span class="sidebar-link-icon">🔒</span>
                     <span>Proof Spine</span>
                 </a>
 
                 <div class="sidebar-section-label">Tools</div>
                 <a href="/dashboard/evidence-chain" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#128279;</span>
+                    <span class="sidebar-link-icon">⛓️</span>
                     <span>Evidence Chain</span>
                 </a>
                 <a href="/dashboard/query-builder" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#128221;</span>
+                    <span class="sidebar-link-icon">📝</span>
                     <span>Query Builder</span>
                 </a>
                 <a href="/dashboard/database" class="sidebar-link">
-                    <span class="sidebar-link-icon">&#128452;</span>
+                    <span class="sidebar-link-icon">🗄️</span>
                     <span>Database</span>
                 </a>
 
@@ -1159,6 +1171,15 @@
     
     <!-- Real-time Update Script -->
     <script nonce="{{ csp_nonce() }}">
+        /**
+         * Visibility-aware setInterval — pauses when tab is hidden.
+         * Usage: const id = visInterval(fn, ms);  clearInterval(id) to stop.
+         */
+        function visInterval(fn, ms) {
+            let id = setInterval(() => { if (!document.hidden) fn(); }, ms);
+            return id;
+        }
+
         // Real-time dashboard updates
         class NeuralDashboard {
             constructor() {
@@ -1190,6 +1211,11 @@
                     '/dashboard/threat-feed': 'Live Threat Feed', '/dashboard/timeline-replay': 'Timeline Replay',
                     '/dashboard/reliability': 'Agent Reliability', '/dashboard/proof-spine': 'Proof Spine',
                     '/dashboard/agent-monitor': 'Agent Monitor',
+                    '/dashboard/igris': 'IGRIS Supervisor',
+                    '/dashboard/guardian': 'Guardian C2',
+                    '/dashboard/event-stream': 'Event Stream',
+                    '/dashboard/correlation': 'Correlation',
+                    '/dashboard/soma': 'SOMA Brain',
                 };
                 const path = window.location.pathname.replace(/\/$/, '') || '/dashboard';
                 const pageName = PAGE_NAMES[path] || path.split('/').pop().replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());

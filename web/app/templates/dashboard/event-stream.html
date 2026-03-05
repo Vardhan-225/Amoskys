@@ -1,0 +1,419 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AMOSKYS — Unified Event Stream{% endblock %}
+
+{% block content %}
+<div class="es-page">
+
+    <!-- ===== HEADER ===== -->
+    <div class="es-header">
+        <div class="es-header-left">
+            <h1 class="es-title">Unified Event Stream</h1>
+            <span class="es-subtitle">All agents — real-time collective view</span>
+        </div>
+        <div class="es-header-right">
+            <span class="es-live-dot"></span>
+            <span class="es-count" id="es-total">--</span>
+            <span class="es-count-label">events</span>
+        </div>
+    </div>
+
+    <!-- ===== MINI TIMELINE ===== -->
+    <div class="es-card es-timeline-card">
+        <div class="es-card-hdr">
+            <h3>Event Activity</h3>
+            <span class="es-ts" id="es-timeline-ts">--</span>
+        </div>
+        <div id="es-timeline" class="es-timeline-wrap" style="height:80px;position:relative;"></div>
+        <div id="es-timeline-tip" class="es-tip" style="display:none;"></div>
+    </div>
+
+    <!-- ===== FILTER BAR ===== -->
+    <div class="es-filters">
+        <select id="es-agent-filter" class="es-select">
+            <option value="">All Agents</option>
+            <option value="ProcAgent">ProcAgent</option>
+            <option value="FIM">FIM</option>
+            <option value="DNS">DNS</option>
+            <option value="AuthGuard">AuthGuard</option>
+            <option value="KernelAudit">KernelAudit</option>
+            <option value="Peripheral">Peripheral</option>
+            <option value="FlowAgent">FlowAgent</option>
+            <option value="PersistenceGuard">PersistenceGuard</option>
+        </select>
+        <select id="es-severity-filter" class="es-select">
+            <option value="">All Severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+        </select>
+        <select id="es-hours-filter" class="es-select">
+            <option value="1">Last 1h</option>
+            <option value="6">Last 6h</option>
+            <option value="24" selected>Last 24h</option>
+            <option value="168">Last 7d</option>
+        </select>
+        <input type="text" id="es-search" class="es-search" placeholder="Search events...">
+        <button id="es-refresh-btn" class="es-btn" onclick="esApp.load()">Refresh</button>
+    </div>
+
+    <!-- ===== EVENT LIST ===== -->
+    <div id="es-events" class="es-event-list"></div>
+
+    <!-- ===== PAGINATION ===== -->
+    <div class="es-pagination" id="es-pagination" style="display:none;">
+        <button class="es-btn es-btn-sm" id="es-prev" onclick="esApp.prevPage()">Previous</button>
+        <span class="es-page-info" id="es-page-info">--</span>
+        <button class="es-btn es-btn-sm" id="es-next" onclick="esApp.nextPage()">Next</button>
+    </div>
+</div>
+
+<style>
+/* ── Event Stream Page ── */
+.es-page { padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+.es-header { display: flex; justify-content: space-between; align-items: center; }
+.es-title { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin: 0; }
+.es-subtitle { font-size: 0.8rem; color: var(--text-muted); }
+.es-header-right { display: flex; align-items: center; gap: 0.5rem; }
+.es-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--neural-success); animation: es-pulse 2s ease infinite; }
+@keyframes es-pulse { 0%,100% { opacity: 1; box-shadow: 0 0 4px var(--neural-success); } 50% { opacity: 0.5; box-shadow: 0 0 12px var(--neural-success); } }
+.es-count { font-size: 1.3rem; font-weight: 700; color: var(--neural-primary); }
+.es-count-label { font-size: 0.8rem; color: var(--text-muted); }
+
+/* Cards */
+.es-card { background: var(--bg-secondary); border-radius: 12px; padding: 1rem 1.25rem; border: 1px solid rgba(255,255,255,0.04); }
+.es-card-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+.es-card-hdr h3 { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0; }
+.es-ts { font-size: 0.7rem; color: var(--text-muted); }
+
+/* Timeline */
+.es-timeline-wrap { cursor: crosshair; }
+.es-tip {
+    position: absolute; z-index: 300; min-width: 200px; padding: 0.65rem 0.85rem;
+    border-radius: 8px; background: rgba(10,14,39,0.97); border: 1px solid rgba(0,217,255,0.2);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5); pointer-events: none; font-size: 0.78rem;
+    animation: es-tip-in 0.12s ease;
+}
+@keyframes es-tip-in { from { opacity: 0; } to { opacity: 1; } }
+.es-tip-hour { font-weight: 700; color: var(--neural-primary); }
+.es-tip-count { color: var(--text-primary); font-weight: 600; }
+
+/* Filters */
+.es-filters {
+    display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;
+    background: var(--bg-secondary); border-radius: 10px; padding: 0.75rem 1rem;
+    border: 1px solid rgba(255,255,255,0.04);
+}
+.es-select {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-primary); border-radius: 6px; padding: 0.4rem 0.6rem;
+    font-size: 0.8rem; outline: none; cursor: pointer;
+}
+.es-select:focus { border-color: var(--neural-primary); }
+.es-search {
+    flex: 1; min-width: 180px; background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08); color: var(--text-primary);
+    border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.8rem; outline: none;
+}
+.es-search:focus { border-color: var(--neural-primary); }
+.es-search::placeholder { color: var(--text-muted); }
+.es-btn {
+    background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.2);
+    color: var(--neural-primary); border-radius: 6px; padding: 0.4rem 1rem;
+    font-size: 0.8rem; cursor: pointer; font-weight: 600; transition: all 0.15s;
+}
+.es-btn:hover { background: rgba(0,217,255,0.2); }
+.es-btn-sm { padding: 0.3rem 0.75rem; font-size: 0.75rem; }
+
+/* Event list */
+.es-event-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.es-event {
+    background: var(--bg-secondary); border-radius: 10px; padding: 0.85rem 1.1rem;
+    border: 1px solid rgba(255,255,255,0.04); cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.es-event:hover { border-color: rgba(0,217,255,0.15); background: rgba(0,217,255,0.02); }
+.es-event.expanded { border-color: rgba(0,217,255,0.25); }
+
+.es-event-top { display: flex; align-items: center; gap: 0.75rem; }
+.es-event-time { font-size: 0.72rem; color: var(--text-muted); min-width: 70px; font-family: monospace; }
+.es-event-agent {
+    font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 4px;
+    background: rgba(0,217,255,0.1); color: var(--neural-primary); white-space: nowrap;
+}
+.es-event-sev {
+    font-size: 0.65rem; font-weight: 700; padding: 0.12rem 0.45rem; border-radius: 4px;
+    text-transform: uppercase; white-space: nowrap;
+}
+.es-sev-critical { background: rgba(255,51,102,0.15); color: #ff3366; }
+.es-sev-high { background: rgba(255,102,0,0.15); color: #ff6600; }
+.es-sev-medium { background: rgba(255,170,0,0.15); color: #ffaa00; }
+.es-sev-low { background: rgba(0,136,255,0.15); color: #0088ff; }
+.es-event-type { font-size: 0.8rem; color: var(--text-primary); font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.es-event-desc { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.es-event-risk { font-size: 0.72rem; font-weight: 600; min-width: 40px; text-align: right; }
+
+/* Expanded detail */
+.es-event-detail {
+    display: none; margin-top: 0.75rem; padding-top: 0.75rem;
+    border-top: 1px solid rgba(255,255,255,0.06);
+}
+.es-event.expanded .es-event-detail { display: block; }
+.es-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.es-detail-item { font-size: 0.75rem; }
+.es-detail-label { color: var(--text-muted); margin-bottom: 0.1rem; }
+.es-detail-value { color: var(--text-primary); font-weight: 500; word-break: break-all; }
+.es-detail-json {
+    margin-top: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 6px;
+    padding: 0.6rem 0.8rem; font-family: monospace; font-size: 0.7rem;
+    color: var(--text-muted); max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+}
+
+/* Pagination */
+.es-pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; padding: 0.5rem 0; }
+.es-page-info { font-size: 0.8rem; color: var(--text-muted); }
+
+/* Loading / Empty */
+.es-loading { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 0.9rem; }
+.es-empty { text-align: center; padding: 3rem; color: var(--text-muted); }
+.es-empty-icon { font-size: 2.5rem; margin-bottom: 0.5rem; opacity: 0.4; }
+.es-empty-msg { font-size: 0.9rem; }
+
+@media (max-width: 900px) {
+    .es-header { flex-direction: column; gap: 0.5rem; }
+    .es-filters { flex-direction: column; }
+    .es-event-top { flex-wrap: wrap; }
+    .es-detail-grid { grid-template-columns: 1fr; }
+    .es-tip { display: none !important; }
+}
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+const esApp = {
+    events: [],
+    total: 0,
+    limit: 200,
+    offset: 0,
+    clusterCache: {},
+    _debounce: null,
+
+    init() {
+        // Parse URL params for deep-linking
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('severity')) document.getElementById('es-severity-filter').value = params.get('severity');
+        if (params.get('agent')) document.getElementById('es-agent-filter').value = params.get('agent');
+        if (params.get('search')) document.getElementById('es-search').value = params.get('search');
+        if (params.get('hours')) document.getElementById('es-hours-filter').value = params.get('hours');
+        // Hour filter from Cortex timeline click
+        this._hourFilter = params.get('hour') || '';
+
+        // Filter change listeners
+        ['es-agent-filter', 'es-severity-filter', 'es-hours-filter'].forEach(id => {
+            document.getElementById(id).addEventListener('change', () => { this.offset = 0; this.load(); });
+        });
+        document.getElementById('es-search').addEventListener('input', () => {
+            clearTimeout(this._debounce);
+            this._debounce = setTimeout(() => { this.offset = 0; this.load(); }, 400);
+        });
+
+        this.load();
+        this.loadTimeline();
+        // Auto-refresh every 30s
+        setInterval(() => this.load(), 30000);
+    },
+
+    async load() {
+        const agent = document.getElementById('es-agent-filter').value;
+        const severity = document.getElementById('es-severity-filter').value;
+        const hours = document.getElementById('es-hours-filter').value;
+        const search = document.getElementById('es-search').value;
+        const container = document.getElementById('es-events');
+
+        let url = '/dashboard/api/live/unified-events?hours=' + hours +
+            '&limit=' + this.limit + '&offset=' + this.offset;
+        if (agent) url += '&agent=' + encodeURIComponent(agent);
+        if (severity) url += '&severity=' + encodeURIComponent(severity);
+        if (search) url += '&search=' + encodeURIComponent(search);
+        if (this._hourFilter) url += '&hour=' + encodeURIComponent(this._hourFilter);
+
+        container.innerHTML = '<div class="es-loading">Loading events...</div>';
+        try {
+            const r = await fetch(url);
+            const d = await r.json();
+            this.events = d.events || [];
+            this.total = d.total || 0;
+            document.getElementById('es-total').textContent = this.fmtNum(this.total);
+            this.renderEvents();
+            this.renderPagination();
+        } catch (e) {
+            container.innerHTML = '<div class="es-empty"><div class="es-empty-icon">&#9888;</div><div class="es-empty-msg">Failed to load events</div></div>';
+        }
+    },
+
+    async loadTimeline() {
+        const hours = document.getElementById('es-hours-filter').value;
+        try {
+            const r = await fetch('/dashboard/api/live/event-clustering?hours=' + hours);
+            const d = await r.json();
+            if (d.status === 'success' && d.clusters) {
+                this.clusterCache = d.clusters;
+                this.renderTimeline();
+                document.getElementById('es-timeline-ts').textContent = new Date().toLocaleTimeString();
+            }
+        } catch (e) { /* silent */ }
+    },
+
+    renderTimeline() {
+        const byHour = this.clusterCache.by_hour || {};
+        const container = document.getElementById('es-timeline');
+        const tip = document.getElementById('es-timeline-tip');
+        const hours = Object.keys(byHour).sort();
+        if (hours.length === 0) {
+            container.innerHTML = '<div class="es-empty" style="padding:1rem;"><div class="es-empty-msg">No timeline data</div></div>';
+            return;
+        }
+        const vals = hours.map(h => byHour[h]);
+        const maxVal = Math.max(1, ...vals);
+        const W = 800, H = 70, padT = 6, padB = 16, padL = 2, padR = 2;
+        const chartH = H - padT - padB;
+        const n = vals.length;
+        const step = (W - padL - padR) / Math.max(1, n - 1);
+
+        const pts = vals.map((v, i) => ({
+            x: padL + i * step,
+            y: padT + chartH - (v / maxVal) * chartH,
+            v, h: hours[i]
+        }));
+        let pathD = 'M ' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
+        for (let i = 1; i < pts.length; i++) {
+            const cx = (pts[i-1].x + pts[i].x) / 2;
+            pathD += ' C ' + cx.toFixed(1) + ' ' + pts[i-1].y.toFixed(1) + ', ' + cx.toFixed(1) + ' ' + pts[i].y.toFixed(1) + ', ' + pts[i].x.toFixed(1) + ' ' + pts[i].y.toFixed(1);
+        }
+        const fillD = pathD + ' L ' + pts[n-1].x.toFixed(1) + ' ' + (H - padB) + ' L ' + pts[0].x.toFixed(1) + ' ' + (H - padB) + ' Z';
+
+        const colW = step > 0 ? step : (W - padL - padR);
+        let cols = '';
+        let dots = '';
+        let labels = '';
+        const labelStep = Math.max(1, Math.floor(n / 16));
+        pts.forEach((p, i) => {
+            const x = Math.max(0, p.x - colW / 2);
+            const active = this._hourFilter === p.h;
+            const intensity = p.v / maxVal;
+            const dc = intensity > 0.7 ? '#ff3366' : intensity > 0.3 ? '#ffaa00' : '#00d9ff';
+            cols += '<rect data-idx="' + i + '" x="' + x.toFixed(1) + '" y="0" width="' + colW.toFixed(1) + '" height="' + H + '" fill="' + (active ? 'rgba(0,217,255,0.08)' : 'transparent') + '" style="cursor:pointer;"/>';
+            dots += '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (active ? '5' : '3') + '" fill="' + dc + '" fill-opacity="0.8" pointer-events="none"/>';
+            if (i % labelStep === 0) labels += '<text x="' + p.x.toFixed(1) + '" y="' + (H - 2) + '" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="8">' + p.h + ':00</text>';
+        });
+
+        container.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" preserveAspectRatio="none" style="display:block;">' +
+            '<defs><linearGradient id="es-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00d9ff" stop-opacity="0.2"/><stop offset="100%" stop-color="#00d9ff" stop-opacity="0.01"/></linearGradient></defs>' +
+            '<path d="' + fillD + '" fill="url(#es-grad)"/>' +
+            '<path d="' + pathD + '" fill="none" stroke="#00d9ff" stroke-width="1.5" stroke-linecap="round"/>' +
+            dots + labels + cols + '</svg>';
+
+        // Interactions
+        container.querySelectorAll('rect[data-idx]').forEach(col => {
+            col.addEventListener('mouseenter', function(e) {
+                const idx = parseInt(this.dataset.idx);
+                const p = pts[idx];
+                tip.style.display = 'block';
+                tip.innerHTML = '<span class="es-tip-hour">' + p.h + ':00</span> — <span class="es-tip-count">' + esApp.fmtNum(p.v) + ' events</span>';
+                const rect = container.getBoundingClientRect();
+                tip.style.left = Math.min(rect.width - 200, Math.max(0, e.clientX - rect.left - 80)) + 'px';
+                tip.style.top = '-40px';
+            });
+            col.addEventListener('mouseleave', function() { tip.style.display = 'none'; });
+            col.addEventListener('click', function() {
+                const idx = parseInt(this.dataset.idx);
+                esApp._hourFilter = esApp._hourFilter === pts[idx].h ? '' : pts[idx].h;
+                esApp.offset = 0;
+                esApp.load();
+                esApp.renderTimeline();
+            });
+        });
+    },
+
+    renderEvents() {
+        const container = document.getElementById('es-events');
+        if (this.events.length === 0) {
+            container.innerHTML = '<div class="es-empty"><div class="es-empty-icon">&#128269;</div><div class="es-empty-msg">No events match your filters</div></div>';
+            return;
+        }
+        const sevColors = { critical: 'es-sev-critical', high: 'es-sev-high', medium: 'es-sev-medium', low: 'es-sev-low' };
+        const riskColor = r => r >= 0.75 ? '#ff3366' : r >= 0.5 ? '#ff6600' : r >= 0.25 ? '#ffaa00' : '#0088ff';
+
+        container.innerHTML = this.events.map((ev, i) => {
+            const ts = ev.timestamp_dt || '--';
+            const time = ts.length >= 19 ? ts.substring(11, 19) : ts;
+            const sev = ev.severity || 'low';
+            const risk = ev.risk_score || 0;
+            const cat = ev.event_category || 'unknown';
+            const agent = ev.agent || 'Other';
+            const desc = ev.description || '';
+            const indicators = typeof ev.indicators === 'object' ? JSON.stringify(ev.indicators, null, 2) : (ev.indicators || '');
+            const mitre = ev.mitre_technique || '';
+
+            return '<div class="es-event" data-idx="' + i + '" onclick="esApp.toggleEvent(this)">' +
+                '<div class="es-event-top">' +
+                    '<span class="es-event-time">' + time + '</span>' +
+                    '<span class="es-event-agent">' + agent + '</span>' +
+                    '<span class="es-event-sev ' + (sevColors[sev] || 'es-sev-low') + '">' + sev + '</span>' +
+                    '<span class="es-event-type">' + cat.replace(/_/g, ' ') + '</span>' +
+                    '<span class="es-event-risk" style="color:' + riskColor(risk) + ';">' + (risk * 100).toFixed(0) + '%</span>' +
+                '</div>' +
+                (desc ? '<div class="es-event-desc">' + desc + '</div>' : '') +
+                '<div class="es-event-detail">' +
+                    '<div class="es-detail-grid">' +
+                        '<div class="es-detail-item"><div class="es-detail-label">Category</div><div class="es-detail-value">' + cat + '</div></div>' +
+                        '<div class="es-detail-item"><div class="es-detail-label">Risk Score</div><div class="es-detail-value" style="color:' + riskColor(risk) + ';">' + (risk * 100).toFixed(1) + '%</div></div>' +
+                        '<div class="es-detail-item"><div class="es-detail-label">Classification</div><div class="es-detail-value">' + (ev.final_classification || '--') + '</div></div>' +
+                        (mitre ? '<div class="es-detail-item"><div class="es-detail-label">MITRE ATT&CK</div><div class="es-detail-value" style="color:var(--neural-primary);">' + mitre + '</div></div>' : '') +
+                        '<div class="es-detail-item"><div class="es-detail-label">Timestamp</div><div class="es-detail-value">' + ts + '</div></div>' +
+                        '<div class="es-detail-item"><div class="es-detail-label">Agent</div><div class="es-detail-value">' + agent + '</div></div>' +
+                    '</div>' +
+                    (indicators ? '<div class="es-detail-json">' + this.escHtml(indicators) + '</div>' : '') +
+                '</div>' +
+            '</div>';
+        }).join('');
+    },
+
+    toggleEvent(el) {
+        el.classList.toggle('expanded');
+    },
+
+    renderPagination() {
+        const pag = document.getElementById('es-pagination');
+        if (this.total <= this.limit && this.offset === 0) {
+            pag.style.display = 'none';
+            return;
+        }
+        pag.style.display = 'flex';
+        const page = Math.floor(this.offset / this.limit) + 1;
+        const totalPages = Math.ceil(this.total / this.limit);
+        document.getElementById('es-page-info').textContent = 'Page ' + page + ' of ' + totalPages + ' (' + this.total + ' total)';
+        document.getElementById('es-prev').disabled = this.offset === 0;
+        document.getElementById('es-next').disabled = this.offset + this.limit >= this.total;
+    },
+
+    prevPage() { this.offset = Math.max(0, this.offset - this.limit); this.load(); },
+    nextPage() { this.offset += this.limit; this.load(); },
+
+    fmtNum(n) {
+        if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+        if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+        return String(n);
+    },
+
+    escHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => esApp.init());
+</script>
+{% endblock %}

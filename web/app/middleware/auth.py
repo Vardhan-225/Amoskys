@@ -21,7 +21,16 @@ Usage:
 from functools import wraps
 from typing import Optional
 
-from flask import flash, g, jsonify, make_response, redirect, request, url_for
+from flask import (
+    current_app,
+    flash,
+    g,
+    jsonify,
+    make_response,
+    redirect,
+    request,
+    url_for,
+)
 
 from amoskys.auth import AuthService, User
 from amoskys.common.logging import get_logger
@@ -65,6 +74,19 @@ def require_login(f):
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Bypass auth entirely in test mode
+        if current_app.config.get("LOGIN_DISABLED"):
+            from types import SimpleNamespace
+
+            g.current_user = SimpleNamespace(
+                id="test-user-id",
+                username="test",
+                email="test@amoskys.local",
+                role=SimpleNamespace(value="admin"),
+                is_active=True,
+            )
+            return f(*args, **kwargs)
+
         # Check if session cookie exists
         session_token = request.cookies.get(SESSION_COOKIE_NAME)
 

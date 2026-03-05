@@ -35,6 +35,7 @@ from amoskys.intel.advanced_rules import (
     rule_ssh_key_theft_and_pivot,
     rule_staged_exfiltration,
     rule_suid_privilege_escalation,
+    rule_unknown_service_persistence,
     rule_webshell_deployment,
 )
 from amoskys.intel.models import Incident, MitreTactic, Severity, TelemetryEventView
@@ -68,16 +69,18 @@ def _security_event(
     user_name: str = "",
     source_ip: str = "",
     process_path: str = "",
+    event_category: str = "",
     **extra,
 ) -> TelemetryEventView:
     sec = {
         "event_action": action,
         "event_outcome": outcome,
+        "event_category": event_category,
         "process_name": process_name,
         "details": json.dumps(details) if details else "{}",
         "user_name": user_name,
         "source_ip": source_ip,
-        "process_path": process_path,
+        "target_resource": process_path,
     }
     sec.update(extra)
     return TelemetryEventView(
@@ -822,15 +825,23 @@ class TestRuleBinaryReplacementAttack:
 class TestRuleSUIDPrivilegeEscalation:
     """rule_suid_privilege_escalation"""
 
-    def test_fires_on_new_suid_bit(self):
-        events = [
-            _security_event(
-                "FILE_INTEGRITY",
-                "MODIFIED",
-                process_path="/tmp/evil_binary",
-                details={"description": "Permission changed: NEW SUID BIT detected"},
-            ),
-        ]
+    def test_fires_on_multiple_suid_in_nonstandard_paths(self):
+        """Rule requires >= 2 non-system-path SUID changes to fire."""
+        evt1 = _security_event(
+            "FILE_INTEGRITY",
+            "MODIFIED",
+            process_path="/tmp/evil_binary",
+            event_category="suid_bit_added",
+        )
+        evt1.attributes["reason"] = "SUID bit added (privilege escalation risk)"
+        evt2 = _security_event(
+            "FILE_INTEGRITY",
+            "MODIFIED",
+            process_path="/opt/backdoor",
+            event_category="suid_bit_added",
+        )
+        evt2.attributes["reason"] = "SUID bit added (privilege escalation risk)"
+        events = [evt1, evt2]
         inc = rule_suid_privilege_escalation(events, _DEVICE)
 
         assert inc is not None
@@ -838,18 +849,34 @@ class TestRuleSUIDPrivilegeEscalation:
         assert "T1548.001" in inc.techniques
         assert MitreTactic.PRIVILEGE_ESCALATION.value in inc.tactics
 
-    def test_fires_on_sgid_bit(self):
-        events = [
-            _security_event(
-                "FILE_INTEGRITY",
-                "MODIFIED",
-                process_path="/tmp/sgid_binary",
-                details={"description": "NEW SGID BIT set on binary"},
-            ),
-        ]
-        inc = rule_suid_privilege_escalation(events, _DEVICE)
+    def test_no_fire_on_single_suid(self):
+        """A single SUID event is not enough to fire (threshold >= 2)."""
+        evt = _security_event(
+            "FILE_INTEGRITY",
+            "MODIFIED",
+            process_path="/tmp/evil_binary",
+            event_category="suid_bit_added",
+        )
+        evt.attributes["reason"] = "SUID bit added (privilege escalation risk)"
+        events = [evt]
+        assert rule_suid_privilege_escalation(events, _DEVICE) is None
 
-        assert inc is not None
+    def test_no_fire_on_system_suid_paths(self):
+        """Known system SUID paths (sudo, passwd) should not fire."""
+        evt1 = _security_event(
+            "FILE_INTEGRITY",
+            "MODIFIED",
+            process_path="/usr/bin/sudo",
+            event_category="suid_bit_added",
+        )
+        evt2 = _security_event(
+            "FILE_INTEGRITY",
+            "MODIFIED",
+            process_path="/usr/bin/passwd",
+            event_category="suid_bit_added",
+        )
+        events = [evt1, evt2]
+        assert rule_suid_privilege_escalation(events, _DEVICE) is None
 
     def test_no_fire_without_suid_description(self):
         events = [
@@ -1161,6 +1188,7 @@ class TestAdvancedRulesRegistry:
             rule_kernel_privilege_escalation,
             rule_container_escape,
             rule_process_injection,
+            rule_unknown_service_persistence,
         ]
         assert len(ADVANCED_RULES) == len(expected)
         for fn in expected:

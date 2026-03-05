@@ -14,6 +14,7 @@ The adapter handles:
 
 import hashlib
 import logging
+import os
 import time
 from typing import Any, Callable, Optional
 
@@ -49,6 +50,43 @@ def _load_signing_key(path: str):
             exc,
         )
         return None
+
+
+def _resolve_agent_key(signing_key_path: str, agent_name: str) -> tuple[Any, str]:
+    """Resolve the best Ed25519 signing key for *agent_name*.
+
+    Resolution order:
+        1. Exact match: ``certs/agents/{agent_name}.ed25519``
+        2. Prefix match: first file in ``certs/agents/`` whose name starts
+           with *agent_name* (handles registry IDs like ``proc_agent``).
+        3. Shared key: ``certs/agent.ed25519`` (fallback).
+
+    Returns:
+        (signing_key_or_None, agent_id_for_collection_agent)
+    """
+    per_agent_path = signing_key_path.replace(
+        "/agent.ed25519", f"/agents/{agent_name}.ed25519"
+    )
+    if os.path.exists(per_agent_path):
+        return _load_signing_key(per_agent_path), agent_name
+
+    # Key files use registry IDs (e.g. proc_agent, auth_guard_agent)
+    # which differ from runtime agent_name (proc, auth).  Scan the
+    # agents directory for a key whose filename starts with agent_name.
+    agents_dir = os.path.dirname(per_agent_path)
+    if os.path.isdir(agents_dir):
+        for fname in sorted(os.listdir(agents_dir)):
+            if (
+                fname.startswith(agent_name)
+                and fname.endswith(".ed25519")
+                and not fname.endswith(".pub")
+            ):
+                candidate = os.path.join(agents_dir, fname)
+                agent_id = fname.removesuffix(".ed25519")
+                return _load_signing_key(candidate), agent_id
+
+    # Fall back to shared key
+    return _load_signing_key(signing_key_path), agent_name
 
 
 class LocalQueueAdapter:
@@ -98,10 +136,15 @@ class LocalQueueAdapter:
         # AOC-1: Metrics handle — set by HardenedAgentBase after construction
         self._metrics: Optional[Any] = None
 
-        # Signing state
-        self._signing_key = (
-            _load_signing_key(signing_key_path) if signing_key_path else None
-        )
+        # Signing state — prefer per-agent key, fall back to shared key.
+        # _signing_agent_id: the registry agent_id used as collection_agent
+        # so EventBus can look up the correct public key for verification.
+        self._signing_key = None
+        self._signing_agent_id = agent_name
+        if signing_key_path:
+            self._signing_key, self._signing_agent_id = _resolve_agent_key(
+                signing_key_path, agent_name
+            )
         self._prev_sig: bytes = b""  # Hash chain: starts empty
 
         # AOC-1: Wire LocalQueue callbacks to metrics (P0-10, P0-11, P0-12)
@@ -144,6 +187,9 @@ class LocalQueueAdapter:
             telemetry = event.device_telemetry
         elif isinstance(event, dict):
             telemetry = self._dict_to_telemetry(event)
+        elif hasattr(event, "to_dict"):
+            # Micro-probe TelemetryEvent or similar — convert via dict path
+            telemetry = self._dict_to_telemetry(event.to_dict())
         else:
             telemetry = event
 
@@ -356,7 +402,9 @@ class LocalQueueAdapter:
         telemetry = pb.DeviceTelemetry()
         telemetry.device_id = event.get("device_id", self.device_id)
         telemetry.device_type = event.get("device_type", "endpoint")
-        telemetry.collection_agent = event.get("collection_agent", self.agent_name)
+        telemetry.collection_agent = event.get(
+            "collection_agent", self._signing_agent_id
+        )
         telemetry.timestamp_ns = now_ns
 
         # --- Build the inner TelemetryEvent ---

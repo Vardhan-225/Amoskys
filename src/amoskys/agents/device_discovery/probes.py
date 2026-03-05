@@ -1,4 +1,4 @@
-"""Micro-probes for DeviceDiscoveryV2 agent.
+"""Micro-probes for DeviceDiscovery agent.
 
 6 probes for network asset discovery and risk assessment:
     1. ARPDiscoveryProbe - ARP table enumeration (T1018)

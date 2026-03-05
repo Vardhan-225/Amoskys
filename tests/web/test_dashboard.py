@@ -30,6 +30,7 @@ def app():
     else:
         app_instance = result
     app_instance.config["TESTING"] = True
+    app_instance.config["LOGIN_DISABLED"] = True
     return app_instance
 
 

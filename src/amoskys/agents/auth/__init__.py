@@ -1,12 +1,14 @@
 """Authentication and authorization monitoring agent.
 
-Micro-probe architecture with 8 specialized detectors:
-    - SSH brute force and password spraying
+Micro-probe architecture with 7 specialized detectors:
+    - SSH password spraying
     - Geographic impossible travel
     - Sudo elevation and suspicious commands
     - Off-hours login detection
     - MFA bypass/fatigue attacks
     - Account lockout storms
+
+Note: SSHBruteForceProbe moved to protocol_collectors (canonical location).
 """
 
 from amoskys.agents.auth.auth_guard_agent import AuthGuardAgent
@@ -15,7 +17,6 @@ from amoskys.agents.auth.probes import (
     AuthEvent,
     MFABypassOrAnomalyProbe,
     OffHoursLoginProbe,
-    SSHBruteForceProbe,
     SSHGeoImpossibleTravelProbe,
     SSHPasswordSprayProbe,
     SudoElevationProbe,
@@ -23,15 +24,10 @@ from amoskys.agents.auth.probes import (
     create_auth_probes,
 )
 
-# B5.1: Deprecated alias
-AuthGuardAgentV2 = AuthGuardAgent
-
 __all__ = [
     "AuthGuardAgent",
-    "AuthGuardAgentV2",
     "AuthEvent",
     "create_auth_probes",
-    "SSHBruteForceProbe",
     "SSHPasswordSprayProbe",
     "SSHGeoImpossibleTravelProbe",
     "SudoElevationProbe",

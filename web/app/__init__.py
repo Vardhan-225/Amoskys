@@ -204,6 +204,16 @@ def create_app():
 
     socketio = init_socketio(app)
 
+    # Start IGRIS supervisory daemon (singleton, idempotent)
+    if not is_testing:
+        try:
+            from amoskys.igris import start_igris
+
+            start_igris()
+            logging.info("IGRIS supervisor daemon started")
+        except Exception as e:
+            logging.warning("IGRIS supervisor failed to start: %s", e)
+
     # Register unified error handlers (P1-002)
     from .errors import register_error_handlers
 
@@ -232,3 +242,12 @@ def create_app():
         return jsonify({"status": "ok"})
 
     return app, socketio
+
+
+def main():
+    """CLI entry point for amoskys-dashboard."""
+    port = int(os.environ.get("FLASK_PORT", "5001"))
+    host = os.environ.get("FLASK_HOST", "127.0.0.1")
+    debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+    app, socketio = create_app()
+    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=debug)

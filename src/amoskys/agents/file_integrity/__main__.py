@@ -1,6 +1,6 @@
 """AMOSKYS File Integrity Agent - Module Entry Point (Legacy).
 
-The v1 FIMAgent has been removed. Use amoskys.agents.fim (FIMAgentV2) instead.
+The v1 FIMAgent has been removed. Use amoskys.agents.fim (FIMAgent) instead.
 """
 
 import sys

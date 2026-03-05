@@ -11,7 +11,6 @@ from amoskys.agents.auth.probes import (
     AuthEvent,
     MFABypassOrAnomalyProbe,
     OffHoursLoginProbe,
-    SSHBruteForceProbe,
     SSHGeoImpossibleTravelProbe,
     SSHPasswordSprayProbe,
     SudoElevationProbe,
@@ -25,12 +24,11 @@ class TestAuthProbes:
     """Test suite for AuthGuard probes."""
 
     def test_create_auth_probes(self):
-        """Test probe factory creates all 8 probes."""
+        """Test probe factory creates all 7 probes."""
         probes = create_auth_probes()
-        assert len(probes) == 8
+        assert len(probes) == 7
 
         probe_names = [p.name for p in probes]
-        assert "ssh_bruteforce" in probe_names
         assert "ssh_password_spray" in probe_names
         assert "ssh_geo_impossible_travel" in probe_names
         assert "sudo_elevation" in probe_names
@@ -39,36 +37,8 @@ class TestAuthProbes:
         assert "mfa_bypass_anomaly" in probe_names
         assert "account_lockout_storm" in probe_names
 
-    def test_ssh_bruteforce_detection(self):
-        """Test SSH brute force detection."""
-        probe = SSHBruteForceProbe()
-        now_ns = int(time.time() * 1e9)
-
-        # Create 6 failed login attempts (threshold is 5)
-        auth_events = [
-            AuthEvent(
-                timestamp_ns=now_ns + i * 1_000_000_000,  # 1 second apart
-                event_type="SSH_LOGIN",
-                status="FAILURE",
-                username="admin",
-                source_ip="1.2.3.4",
-            )
-            for i in range(6)
-        ]
-
-        context = ProbeContext(
-            device_id="test-device",
-            agent_name="test-agent",
-            shared_data={"auth_events": auth_events},
-        )
-        events = probe.scan(context)
-
-        assert len(events) == 1
-        assert events[0].event_type == "ssh_bruteforce_detected"
-        assert events[0].severity == Severity.HIGH
-        assert events[0].data["source_ip"] == "1.2.3.4"
-        assert events[0].data["username"] == "admin"
-        assert events[0].data["failure_count"] == 6
+    # NOTE: SSH brute force test moved to test_protocol_collectors.py
+    # (SSHBruteForceProbe canonical location is protocol_collectors)
 
     def test_password_spray_detection(self):
         """Test password spray detection."""

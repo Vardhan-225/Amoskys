@@ -21,6 +21,8 @@ Rule Categories:
 """
 
 import logging
+import os
+import re
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set
@@ -28,6 +30,47 @@ from typing import Dict, List, Optional, Set
 from amoskys.intel.models import Incident, MitreTactic, Severity, TelemetryEventView
 
 logger = logging.getLogger(__name__)
+
+# Pre-compiled patterns for fileless attack detection (avoid per-call recompilation)
+_FILELESS_PATTERNS = [
+    (re.compile(r"curl.*\|.*sh", re.IGNORECASE), "download_and_execute"),
+    (re.compile(r"curl.*\|.*bash", re.IGNORECASE), "download_and_execute"),
+    (re.compile(r"wget.*-O.*-.*\|", re.IGNORECASE), "download_and_execute"),
+    (re.compile(r"curl.*\|.*python", re.IGNORECASE), "download_and_execute"),
+    (re.compile(r"base64.*-d.*\|.*sh", re.IGNORECASE), "encoded_execution"),
+    (re.compile(r"base64.*-d.*\|.*bash", re.IGNORECASE), "encoded_execution"),
+    (re.compile(r"echo.*\|.*base64.*-d.*\|", re.IGNORECASE), "encoded_execution"),
+    (re.compile(r"python.*-c.*import", re.IGNORECASE), "memory_execution"),
+    (re.compile(r"perl.*-e.*", re.IGNORECASE), "memory_execution"),
+    (re.compile(r"ruby.*-e.*", re.IGNORECASE), "memory_execution"),
+    (re.compile(r"pwsh.*-enc", re.IGNORECASE), "encoded_execution"),
+    (re.compile(r"pwsh.*-e.*FromBase64", re.IGNORECASE), "encoded_execution"),
+]
+
+# Discovery command prefixes for O(1) lookup in APT rule
+_DISCOVERY_COMMANDS = frozenset(
+    [
+        "whoami",
+        "id",
+        "uname",
+        "hostname",
+        "ifconfig",
+        "ipconfig",
+        "netstat",
+        "ps",
+        "cat",
+        "env",
+        "printenv",
+        "set",
+    ]
+)
+
+# Full discovery strings for substring match (multi-word commands)
+_DISCOVERY_STRINGS = [
+    "ps aux",
+    "cat /etc/passwd",
+    "cat /etc/shadow",
+]
 
 
 # =============================================================================
@@ -62,22 +105,6 @@ def rule_apt_initial_access_chain(
         return None
 
     # Step 2: Find discovery commands within 10 min of auth
-    discovery_commands = [
-        "whoami",
-        "id",
-        "uname",
-        "hostname",
-        "ifconfig",
-        "ipconfig",
-        "netstat",
-        "ps aux",
-        "cat /etc/passwd",
-        "cat /etc/shadow",
-        "env",
-        "printenv",
-        "set",
-    ]
-
     process_events = [
         e for e in events if e.event_type == "PROCESS" and e.process_event
     ]
@@ -93,16 +120,26 @@ def rule_apt_initial_access_chain(
                 cmdline = proc_event.process_event.get("cmdline", "").lower()
                 exe = proc_event.process_event.get("executable_path", "").lower()
 
-                for cmd in discovery_commands:
-                    if cmd in cmdline or cmd in exe:
-                        discovery_found.append(
-                            {
-                                "event": proc_event,
-                                "command": cmd,
-                                "time_after_auth": time_diff,
-                            }
-                        )
-                        break
+                # O(1) prefix check against discovery command set
+                first_token = cmdline.split()[0] if cmdline else ""
+                matched_cmd = None
+                if first_token in _DISCOVERY_COMMANDS:
+                    matched_cmd = first_token
+                else:
+                    # Fall back to multi-word substring match
+                    for cmd in _DISCOVERY_STRINGS:
+                        if cmd in cmdline or cmd in exe:
+                            matched_cmd = cmd
+                            break
+
+                if matched_cmd:
+                    discovery_found.append(
+                        {
+                            "event": proc_event,
+                            "command": matched_cmd,
+                            "time_after_auth": time_diff,
+                        }
+                    )
 
         # Need at least 3 different discovery commands
         if len(discovery_found) >= 3:
@@ -163,28 +200,6 @@ def rule_fileless_attack(
 
     Fileless attacks avoid writing to disk, making them harder to detect.
     """
-    # Suspicious interpreter patterns
-    fileless_patterns = [
-        # Download and execute
-        ("curl.*\\|.*sh", "download_and_execute"),
-        ("curl.*\\|.*bash", "download_and_execute"),
-        ("wget.*-O.*-.*\\|", "download_and_execute"),
-        ("curl.*\\|.*python", "download_and_execute"),
-        # Base64 decode and execute
-        ("base64.*-d.*\\|.*sh", "encoded_execution"),
-        ("base64.*-d.*\\|.*bash", "encoded_execution"),
-        ("echo.*\\|.*base64.*-d.*\\|", "encoded_execution"),
-        # In-memory execution
-        ("python.*-c.*import", "memory_execution"),
-        ("perl.*-e.*", "memory_execution"),
-        ("ruby.*-e.*", "memory_execution"),
-        # PowerShell-style (if on cross-platform)
-        ("pwsh.*-enc", "encoded_execution"),
-        ("pwsh.*-e.*FromBase64", "encoded_execution"),
-    ]
-
-    import re
-
     process_events = [
         e for e in events if e.event_type == "PROCESS" and e.process_event
     ]
@@ -195,8 +210,8 @@ def rule_fileless_attack(
         cmdline = proc_event.process_event.get("cmdline", "")
         exe_path = proc_event.process_event.get("executable_path", "")
 
-        for pattern, attack_type in fileless_patterns:
-            if re.search(pattern, cmdline, re.IGNORECASE):
+        for compiled_re, attack_type in _FILELESS_PATTERNS:
+            if compiled_re.search(cmdline):
                 # Check for associated network activity
                 has_network = False
                 network_dest = None
@@ -1044,7 +1059,8 @@ def rule_binary_replacement_attack(
             continue
 
         outcome = sec.get("event_outcome", "")
-        path = sec.get("process_path", "")
+        # target_resource holds the file path (preferred); fall back to attributes
+        path = sec.get("target_resource") or event.attributes.get("path", "")
 
         # Check if it's a modification to a critical binary
         if outcome == "MODIFIED":
@@ -1090,11 +1106,46 @@ def rule_suid_privilege_escalation(
 
     Pattern:
         - FIM event showing permission change with SUID/SGID bit set
-        - Especially on newly created files or non-standard locations
+        - Filters out known-good system SUID files (sudo, passwd, etc.)
+        - Requires >= 2 non-system SUID changes to fire
         - Often precedes privilege escalation exploitation
 
     MITRE: T1548.001 - Setuid and Setgid
     """
+    # Known-good system SUID paths — matches SUIDBitChangeProbe whitelist
+    _KNOWN_SYSTEM_SUID = frozenset(
+        {
+            "/usr/bin/sudo",
+            "/usr/bin/su",
+            "/usr/bin/passwd",
+            "/usr/bin/login",
+            "/usr/bin/newgrp",
+            "/usr/bin/chsh",
+            "/usr/bin/chfn",
+            "/usr/bin/at",
+            "/usr/bin/crontab",
+            "/usr/sbin/traceroute",
+            "/usr/bin/wall",
+            "/usr/bin/ssh-agent",
+            "/usr/bin/locate",
+            "/usr/bin/write",
+            "/usr/bin/top",
+            "/usr/sbin/authopen",
+            "/usr/bin/quota",
+            "/usr/bin/mail",
+            "/usr/sbin/postdrop",
+            "/usr/sbin/postqueue",
+        }
+    )
+    _SYSTEM_DIRS = (
+        "/usr/bin/",
+        "/usr/sbin/",
+        "/usr/lib/",
+        "/usr/libexec/",
+        "/sbin/",
+        "/bin/",
+    )
+
     fim_events = [
         e
         for e in events
@@ -1110,22 +1161,32 @@ def rule_suid_privilege_escalation(
         if not sec:
             continue
 
-        details = sec.get("details", "{}")
-        if isinstance(details, str):
-            try:
-                import json
+        # Match SUID events by event_category (from FIM probe) or analyst notes
+        category = sec.get("event_category", "")
+        notes = sec.get("analyst_notes", "")
+        reason = event.attributes.get("reason", "")
 
-                details = json.loads(details)
-            except Exception:
-                details = {}
+        is_suid = (
+            category in ("suid_bit_added", "sgid_bit_added")
+            or "SUID" in reason.upper()
+            or "SGID" in reason.upper()
+            or "SUID" in notes.upper()
+        )
 
-        description = details.get("description", "")
+        if is_suid:
+            path = sec.get("target_resource") or event.attributes.get("path", "")
 
-        # Look for SUID indicators
-        if "NEW SUID BIT" in description or "NEW SGID BIT" in description:
-            suid_changes.append({"event": event, "path": sec.get("process_path", "")})
+            # Filter out known-good system SUID files
+            if path in _KNOWN_SYSTEM_SUID:
+                continue
+            # Skip paths in standard system directories (low risk)
+            if any(path.startswith(d) for d in _SYSTEM_DIRS):
+                continue
 
-    if suid_changes:
+            suid_changes.append({"event": event, "path": path})
+
+    # Require >= 2 non-system SUID changes to fire (reduces FP from single anomalies)
+    if len(suid_changes) >= 2:
         incident = Incident(
             incident_id=f"suid_privesc_{device_id}_{int(datetime.now().timestamp())}",
             device_id=device_id,
@@ -1133,7 +1194,7 @@ def rule_suid_privilege_escalation(
             tactics=[MitreTactic.PRIVILEGE_ESCALATION.value],
             techniques=["T1548.001"],  # Setuid and Setgid
             rule_name="suid_privilege_escalation",
-            summary=f"SUID/SGID bit set on {len(suid_changes)} file(s) - "
+            summary=f"SUID/SGID bit set on {len(suid_changes)} non-system file(s) - "
             f"possible privilege escalation preparation",
             event_ids=[s["event"].event_id for s in suid_changes],
             metadata={
@@ -1178,7 +1239,7 @@ def rule_webshell_deployment(
         if not sec:
             continue
 
-        path = sec.get("process_path", "")
+        path = sec.get("target_resource") or event.attributes.get("path", "")
 
         # Check if in web root
         in_webroot = any(path.startswith(root) for root in web_roots)
@@ -1481,6 +1542,89 @@ def rule_process_injection(
 
 
 # =============================================================================
+# FIM-AWARE PERSISTENCE DETECTION (macOS-tuned)
+# =============================================================================
+
+# Known-good vendor prefixes — services from these vendors are legitimate and
+# should not trigger incidents on their own.
+_KNOWN_GOOD_SERVICE_PREFIXES = (
+    "com.apple.",
+    "com.microsoft.",
+    "com.docker.",
+    "us.zoom.",
+    "com.google.",
+    "org.mozilla.",
+    "com.brave.",
+    "com.github.",
+    "com.jetbrains.",
+    "com.slack.",
+    "com.openssh.",
+    "org.ntp.",
+)
+
+
+def rule_unknown_service_persistence(
+    events: List[TelemetryEventView], device_id: str
+) -> Optional[Incident]:
+    """Detect unknown service/LaunchAgent persistence via FIM events.
+
+    Pattern:
+        - FIM SECURITY event with event_category 'service_created'
+        - Service file NOT from a known vendor prefix
+        - Fires when >= 3 unknown services appear in the same evaluation window,
+          indicating batch persistence installation (single unknown services are
+          common from legitimate app installs)
+
+    macOS-tuned: ignores com.apple.*, com.microsoft.*, etc.
+    MITRE: T1543 (Create/Modify System Process), T1053 (Scheduled Task)
+    """
+    unknown_services = []
+
+    for event in events:
+        if event.event_type != "SECURITY" or not event.security_event:
+            continue
+        sec = event.security_event
+        if sec.get("event_category") != "service_created":
+            continue
+
+        path = sec.get("target_resource") or event.attributes.get("path", "")
+        filename = os.path.basename(path)
+
+        # Skip known-good vendors
+        if any(filename.startswith(p) for p in _KNOWN_GOOD_SERVICE_PREFIXES):
+            continue
+
+        unknown_services.append({"event": event, "path": path, "filename": filename})
+
+    # Threshold: >= 3 unknown services in one window is suspicious
+    if len(unknown_services) >= 3:
+        incident = Incident(
+            incident_id=f"unknown_persistence_{device_id}_{int(datetime.now().timestamp())}",
+            device_id=device_id,
+            severity=Severity.HIGH,
+            tactics=[MitreTactic.PERSISTENCE.value],
+            techniques=["T1543", "T1053"],
+            rule_name="unknown_service_persistence",
+            summary=(
+                f"{len(unknown_services)} unknown services created: "
+                f"{', '.join(s['filename'] for s in unknown_services[:5])}"
+            ),
+            event_ids=[s["event"].event_id for s in unknown_services],
+            metadata={
+                "service_count": str(len(unknown_services)),
+                "service_paths": ",".join(s["path"] for s in unknown_services[:10]),
+            },
+        )
+
+        logger.warning(
+            f"Unknown service persistence on {device_id}: {len(unknown_services)} services"
+        )
+        return incident
+
+    return None
+
+
+# =============================================================================
 # ADVANCED RULE REGISTRY
 # =============================================================================
 
@@ -1510,6 +1654,8 @@ ADVANCED_RULES = [
     rule_kernel_privilege_escalation,
     rule_container_escape,
     rule_process_injection,
+    # FIM-aware Persistence (macOS-tuned)
+    rule_unknown_service_persistence,
 ]
 
 

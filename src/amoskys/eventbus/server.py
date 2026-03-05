@@ -101,6 +101,123 @@ logger = logging.getLogger("EventBus")
 WAL_PATH = config.agent.wal_path
 wal_storage = None  # Will be initialized in serve()
 _wal_lock = threading.Lock()  # Thread-safe WAL access
+_wal_batch_writer = None  # Group-commit writer (initialized in serve())
+
+
+class WALBatchWriter:
+    """Group-commit WAL writer. Amortizes fsync across concurrent Publish RPCs.
+
+    Instead of one SQLite transaction per event (one fsync each), batches
+    multiple events into a single BEGIN/COMMIT, paying one fsync for the whole
+    batch.  Preserves P0-EB-2 (ACK after durable write) — callers block until
+    their batch is committed.
+    """
+
+    def __init__(self, wal: SQLiteWAL, max_batch: int = 100, max_wait_s: float = 0.05):
+        self._wal = wal
+        self._max_batch = max_batch
+        self._max_wait = max_wait_s
+        self._pending: list = []
+        self._cond = threading.Condition()
+        self._thread = threading.Thread(
+            target=self._loop, daemon=True, name="wal-batch"
+        )
+        self._running = False
+
+    def start(self):
+        self._running = True
+        self._thread.start()
+        logger.info(
+            "WAL batch writer started (batch=%d, flush=%.0fms)",
+            self._max_batch,
+            self._max_wait * 1000,
+        )
+
+    def stop(self):
+        self._running = False
+        with self._cond:
+            self._cond.notify_all()
+        self._thread.join(timeout=5)
+
+    def write(self, idem: str, ts_ns: int, env_bytes: bytes) -> bool:
+        """Queue a write and block until the batch commits.
+
+        Returns True if written, False if duplicate.
+        """
+        done = threading.Event()
+        result = [False]  # mutable so the flusher can set it
+
+        with self._cond:
+            self._pending.append((idem, ts_ns, env_bytes, done, result))
+            if len(self._pending) >= self._max_batch:
+                self._cond.notify()
+
+        done.wait()  # block until our batch is flushed
+        return result[0]
+
+    # ── background flusher ──
+
+    def _loop(self):
+        while self._running:
+            with self._cond:
+                self._cond.wait(timeout=self._max_wait)
+                if not self._pending:
+                    continue
+                batch = self._pending[:]
+                self._pending.clear()
+
+            self._commit(batch)
+
+        # Final drain on shutdown
+        with self._cond:
+            if self._pending:
+                self._commit(self._pending[:])
+                self._pending.clear()
+
+    def _commit(self, batch: list):
+        import hashlib as _hlib
+        import sqlite3 as _sql
+
+        from amoskys.agents.flowagent.wal_sqlite import _compute_chain_sig
+
+        wal = self._wal
+        with wal._lock:
+            wal.db.execute("BEGIN IMMEDIATE")
+            try:
+                for idem, ts_ns, env_bytes, _done, result in batch:
+                    checksum = _hlib.blake2b(env_bytes, digest_size=32).digest()
+                    prev_sig = wal._get_last_sig()
+                    sig = _compute_chain_sig(env_bytes, prev_sig)
+                    try:
+                        wal.db.execute(
+                            "INSERT INTO wal(idem, ts_ns, bytes, checksum, sig, prev_sig) "
+                            "VALUES(?, ?, ?, ?, ?, ?)",
+                            (
+                                idem,
+                                ts_ns,
+                                _sql.Binary(env_bytes),
+                                checksum,
+                                sig,
+                                prev_sig,
+                            ),
+                        )
+                        result[0] = True
+                    except _sql.IntegrityError:
+                        result[0] = False  # duplicate
+                wal.db.execute("COMMIT")
+            except Exception as exc:
+                logger.error("WAL batch commit failed: %s", exc)
+                try:
+                    wal.db.execute("ROLLBACK")
+                except Exception:
+                    pass
+                for _, _, _, _done, result in batch:
+                    result[0] = False
+
+        # Signal all waiters after releasing the WAL lock
+        for _, _, _, done, _ in batch:
+            done.set()
+
 
 # Prometheus metrics
 try:
@@ -258,6 +375,55 @@ def _sizeof_env(env):
 
 
 _dedupe_lock = threading.Lock()
+
+
+# =============================================================================
+# Per-Agent Token Bucket Rate Limiter
+# =============================================================================
+
+
+class _AgentRateLimiter:
+    """Token bucket rate limiter keyed by agent/device ID.
+
+    Prevents any single agent from overwhelming the EventBus by limiting
+    the sustained publish rate per agent while allowing short bursts.
+    """
+
+    def __init__(
+        self,
+        rate: float = float(os.getenv("BUS_AGENT_RATE", "100")),
+        burst: float = float(os.getenv("BUS_AGENT_BURST", "200")),
+    ):
+        self._rate = rate  # tokens per second (sustained rate)
+        self._burst = burst  # max tokens (burst capacity)
+        self._buckets: dict[str, list] = {}  # agent_id → [tokens, last_refill]
+        self._lock = threading.Lock()
+
+    def allow(self, agent_id: str) -> bool:
+        """Return True if the agent is within rate limits, False otherwise."""
+        now = time.time()
+        with self._lock:
+            if agent_id not in self._buckets:
+                self._buckets[agent_id] = [self._burst - 1, now]
+                return True
+            bucket = self._buckets[agent_id]
+            elapsed = now - bucket[1]
+            bucket[0] = min(self._burst, bucket[0] + elapsed * self._rate)
+            bucket[1] = now
+            if bucket[0] >= 1.0:
+                bucket[0] -= 1.0
+                return True
+            return False
+
+
+_agent_limiter = _AgentRateLimiter()
+
+try:
+    BUS_RATE_LIMITED = Counter(
+        "bus_agent_rate_limited_total", "Events rejected by per-agent rate limiter"
+    )
+except ValueError:
+    BUS_RATE_LIMITED = Counter("_bus_dummy_rl", "dummy")
 
 
 def _seen(idem):
@@ -451,24 +617,20 @@ def _load_agent_key_registry():
     The registry maps agent_id → Ed25519 public key for per-agent
     signature verification (D4: Agent Key Registry).
     """
-    global _AGENT_KEY_REGISTRY
     registry_path = os.getenv("AGENT_KEY_REGISTRY_PATH", "agent_key_registry.json")
     try:
         import json as _json
 
         with open(registry_path, "r") as f:
             data = _json.load(f)
+        from cryptography.hazmat.primitives.serialization import load_pem_public_key
+
         for entry in data.get("agents", []):
             if entry.get("status") != "active":
                 continue
             agent_id = entry["agent_id"]
-            pubkey_b64 = entry["public_key"]
-            import base64
-
-            pubkey_bytes = base64.b64decode(pubkey_b64)
-            from cryptography.hazmat.primitives.asymmetric import ed25519 as _ed
-
-            pk = _ed.Ed25519PublicKey.from_public_bytes(pubkey_bytes)
+            pubkey_pem = entry["public_key"]
+            pk = load_pem_public_key(pubkey_pem.encode())
             _AGENT_KEY_REGISTRY[agent_id] = pk
         logger.info(
             "Loaded agent key registry: %d active agents", len(_AGENT_KEY_REGISTRY)
@@ -1131,30 +1293,35 @@ class EventBusServicer(pbrpc.EventBusServicer):
                 wal_duplicate = False
 
                 if wal_storage:
+                    # Extract idempotency key
+                    if hasattr(request, "idempotency_key"):
+                        idem = request.idempotency_key
+                    elif hasattr(request, "idem"):
+                        idem = request.idem
+                    else:
+                        idem = f"unknown_{request.ts_ns}"
+
+                    ts_ns = request.ts_ns
+                    env_bytes = request.SerializeToString()
+
                     try:
-                        with _wal_lock:
-                            # Handle both UniversalEnvelope (idempotency_key) and Envelope (idem)
-                            if hasattr(request, "idempotency_key"):
-                                idem = request.idempotency_key
-                            elif hasattr(request, "idem"):
-                                idem = request.idem
-                            else:
-                                idem = f"unknown_{request.ts_ns}"
+                        # Use group-commit batch writer if available (amortizes fsync)
+                        if _wal_batch_writer:
+                            written = _wal_batch_writer.write(idem, ts_ns, env_bytes)
+                        else:
+                            with _wal_lock:
+                                written = wal_storage.write_raw(idem, ts_ns, env_bytes)
 
-                            ts_ns = request.ts_ns
-                            env_bytes = request.SerializeToString()
-
-                            written = wal_storage.write_raw(idem, ts_ns, env_bytes)
-                            if written:
-                                wal_written = True
-                                logger.debug(
-                                    "[Publish] Stored event in WAL (idem=%s)", idem
-                                )
-                            else:
-                                wal_duplicate = True
-                                logger.debug(
-                                    "[Publish] Duplicate event (idem=%s), skipped", idem
-                                )
+                        if written:
+                            wal_written = True
+                            logger.debug(
+                                "[Publish] Stored event in WAL (idem=%s)", idem
+                            )
+                        else:
+                            wal_duplicate = True
+                            logger.debug(
+                                "[Publish] Duplicate event (idem=%s), skipped", idem
+                            )
                     except Exception as wal_err:
                         logger.error("AOC1_WAL_WRITE_FAILURE: [Publish] %s", wal_err)
                         BUS_WAL_FAILURES.inc()
@@ -1273,6 +1440,25 @@ class UniversalEventBusServicer(telemetry_grpc.UniversalEventBusServicer):
                     reason=f"Signature verification failed: {sig_error}",
                 )
 
+            # Per-agent rate limiting
+            agent_id = ""
+            if request.HasField("device_telemetry"):
+                agent_id = request.device_telemetry.device_id or ""
+            elif request.HasField("process"):
+                agent_id = getattr(request.process, "device_id", "") or ""
+            if not agent_id and request.idempotency_key:
+                agent_id = request.idempotency_key.split("_")[0]
+            agent_id = agent_id or "unknown"
+            if not _agent_limiter.allow(agent_id):
+                BUS_RATE_LIMITED.inc()
+                logger.warning("[PublishTelemetry] Rate limited agent=%s", agent_id)
+                BUS_LAT.observe((time.time() - t0) * 1000.0)
+                return telemetry_pb2.UniversalAck(
+                    status=telemetry_pb2.UniversalAck.Status.RETRY,
+                    reason=f"Rate limit exceeded for agent {agent_id}",
+                    backoff_hint_ms=3000,
+                )
+
             # Application-level dedup (P1-EB-1)
             tel_idem = request.idempotency_key or f"unknown_{request.ts_ns}"
             if _seen(tel_idem):
@@ -1325,24 +1511,28 @@ class UniversalEventBusServicer(telemetry_grpc.UniversalEventBusServicer):
                 wal_duplicate = False
 
                 if wal_storage:
-                    try:
-                        with _wal_lock:
-                            idem = request.idempotency_key or f"unknown_{request.ts_ns}"
-                            ts_ns = request.ts_ns
-                            env_bytes = request.SerializeToString()
+                    idem = request.idempotency_key or f"unknown_{request.ts_ns}"
+                    ts_ns = request.ts_ns
+                    env_bytes = request.SerializeToString()
 
-                            written = wal_storage.write_raw(idem, ts_ns, env_bytes)
-                            if written:
-                                wal_written = True
-                                logger.debug(
-                                    "[PublishTelemetry] Stored in WAL (idem=%s)", idem
-                                )
-                            else:
-                                wal_duplicate = True
-                                logger.debug(
-                                    "[PublishTelemetry] Duplicate (idem=%s), skipped",
-                                    idem,
-                                )
+                    try:
+                        if _wal_batch_writer:
+                            written = _wal_batch_writer.write(idem, ts_ns, env_bytes)
+                        else:
+                            with _wal_lock:
+                                written = wal_storage.write_raw(idem, ts_ns, env_bytes)
+
+                        if written:
+                            wal_written = True
+                            logger.debug(
+                                "[PublishTelemetry] Stored in WAL (idem=%s)", idem
+                            )
+                        else:
+                            wal_duplicate = True
+                            logger.debug(
+                                "[PublishTelemetry] Duplicate (idem=%s), skipped",
+                                idem,
+                            )
                     except Exception as wal_err:
                         logger.error(
                             "AOC1_WAL_WRITE_FAILURE: [PublishTelemetry] %s", wal_err
@@ -1579,7 +1769,7 @@ def serve():
         (cli vs env vs default) to help operators understand the server's runtime
         configuration.
     """
-    global _OVERLOAD, BUS_IS_OVERLOADED, wal_storage
+    global _OVERLOAD, BUS_IS_OVERLOADED, wal_storage, _wal_batch_writer
 
     try:
         # Initialize WAL storage for persistent event storage
@@ -1587,11 +1777,14 @@ def serve():
             wal_storage = SQLiteWAL(
                 path=WAL_PATH, max_bytes=config.storage.max_wal_bytes
             )
+            _wal_batch_writer = WALBatchWriter(wal_storage)
+            _wal_batch_writer.start()
             logger.info(f"Initialized WAL storage at {WAL_PATH}")
         except Exception as e:
             logger.error(f"Failed to initialize WAL storage: {e}")
             logger.warning("EventBus will run without persistent storage")
             wal_storage = None
+            _wal_batch_writer = None
 
         # Determine source for logging
         if _OVERLOAD is None:
@@ -1726,6 +1919,8 @@ def serve():
             "AOC1_GRACEFUL_SHUTDOWN: draining in-flight requests (grace=%ds)",
             GRACE_PERIOD,
         )
+        if _wal_batch_writer:
+            _wal_batch_writer.stop()
         server.stop(GRACE_PERIOD)
         logger.info("AOC1_GRACEFUL_SHUTDOWN: complete")
 

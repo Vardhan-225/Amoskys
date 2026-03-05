@@ -30,10 +30,10 @@ from typing import Any, Callable, Optional, Type
 
 logger = logging.getLogger(__name__)
 
-# Default heartbeat directory
-DEFAULT_HEARTBEAT_DIR = Path(
-    os.getenv("AMOSKYS_HEARTBEATS", "/opt/amoskys/data/heartbeats")
-)
+# Default heartbeat directory — relative to cwd (PROJECT_ROOT when launcher starts agents)
+DEFAULT_HEARTBEAT_DIR = Path(os.getenv("AMOSKYS_HEARTBEATS", "data/heartbeats"))
+
+_heartbeat_warn_logged = False
 
 
 def build_agent_parser(
@@ -179,7 +179,10 @@ def write_heartbeat(
         logger.debug("Heartbeat written: %s", heartbeat_path)
 
     except Exception as e:
-        logger.warning("Failed to write heartbeat: %s", e)
+        global _heartbeat_warn_logged
+        if not _heartbeat_warn_logged:
+            logger.warning("Failed to write heartbeat to %s: %s", heartbeat_dir, e)
+            _heartbeat_warn_logged = True
 
 
 def run_agent(
@@ -304,16 +307,17 @@ def run_agent(
         cycle_fn = collect_method
         logger.info("Using bare collection (no publish pipeline)")
     else:
-        logger.error(
-            "Agent has no _run_one_cycle/collect/run_once/collect_data method"
-        )
+        logger.error("Agent has no _run_one_cycle/collect/run_once/collect_data method")
         sys.exit(1)
 
-    # Drain helper — flush local queue to EventBus between cycles
-    drain_fn = getattr(agent, "_drain_local_queue", None)
+    # Drain helper — disabled: WAL processor handles queue draining.
+    # Agent-side drain causes signature verification failures when
+    # re-publishing signed envelopes through EventBus.
+    drain_fn = None
 
     # Run loop
     cycle = 0
+    error_count = 0
     try:
         while not shutdown_requested:
             cycle += 1
@@ -343,19 +347,28 @@ def run_agent(
                 logger.exception("Collection error: %s", e)
                 hb_status = "error"
                 hb_error = str(e)
+                error_count += 1
 
             if write_heartbeat_enabled:
                 hb_data = {
                     "cycle": cycle,
                     "duration_ms": round(duration_ms, 1),
                     "status": hb_status,
+                    "error_count": error_count,
                 }
                 if hb_error:
                     hb_data["error"] = hb_error
                 write_heartbeat(name, heartbeat_dir, extra_data=hb_data)
 
-            # Single-run mode
+            # Single-run mode — flush buffered events before exit
             if args.once:
+                if drain_fn:
+                    try:
+                        flushed = drain_fn(limit=500)
+                        if flushed:
+                            logger.info("Flushed %d buffered events on exit", flushed)
+                    except Exception as e:
+                        logger.warning("Queue flush failed on exit: %s", e)
                 logger.info("Single-run mode, exiting")
                 break
 

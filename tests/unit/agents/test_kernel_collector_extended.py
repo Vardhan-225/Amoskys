@@ -1,6 +1,6 @@
 """Extended tests for kernel_audit/collector.py — targeting uncovered code paths.
 
-Focus areas NOT covered by test_macos_audit_collector.py or test_kernel_audit_v2.py:
+Focus areas NOT covered by test_macos_audit_collector.py or test_kernel_audit.py:
     - AuditdLogCollector: full lifecycle (collect_batch, rotation, truncation, parsing)
     - AuditdLogCollector: _parse_audit_line edge cases
     - AuditdLogCollector: _build_event with various syscalls and edge cases
@@ -26,6 +26,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
+from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 from amoskys.agents.kernel_audit.collector import (
     AuditdLogCollector,
     BaseKernelAuditCollector,
@@ -34,7 +35,6 @@ from amoskys.agents.kernel_audit.collector import (
     StubKernelAuditCollector,
     create_kernel_audit_collector,
 )
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 
 # =============================================================================
 # BaseKernelAuditCollector

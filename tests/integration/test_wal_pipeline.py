@@ -363,7 +363,6 @@ class TestWALConcurrentWrites:
                 time.sleep(0.001)
 
         def reader_thread():
-            nonlocal read_count
             for _ in range(5):
 
                 def mock_pub(env):

@@ -360,6 +360,7 @@ class DataExfilVolumeSpikeProbe(MicroProbe):
                             "reason": "Large outbound data transfer detected",
                         },
                         mitre_techniques=["T1041", "T1048"],
+                        tags=["correlation_group:data_exfiltration"],
                     )
                 )
 

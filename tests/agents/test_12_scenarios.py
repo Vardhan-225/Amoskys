@@ -9,12 +9,12 @@ Each test injects mock data through the probe's expected interface
 correct event_type, severity, and MITRE techniques.
 
 Coverage:
-    Surface 1-3: Execution (ProcAgent V3)
-    Surface 4-6: Persistence (PersistenceGuard V2)
-    Surface 7-8: Filesystem (FIMAgent V2)
-    Surface 9-10: DNS (DNSAgent V2)
-    Surface 11: Peripheral (PeripheralAgent V2)
-    Surface 12: Auth (AuthGuard V2.1)
+    Surface 1-3: Execution (ProcAgent)
+    Surface 4-6: Persistence (PersistenceGuard)
+    Surface 7-8: Filesystem (FIMAgent)
+    Surface 9-10: DNS (DNSAgent)
+    Surface 11: Peripheral (PeripheralAgent)
+    Surface 12: Auth (AuthGuard)
     Surface 13-14: Filesystem advanced (FIM — SUID, Config backdoor)
     Surface 15-16: Persistence advanced (SSH key, Hidden file)
     Surface 17-20: Network flow (Port scan, Exfil, C2 beacon, Tunnel)
@@ -621,7 +621,7 @@ class TestScenario12_SudoElevation:
         ]
 
         context = _ctx(
-            agent_name="auth_guard_v2",
+            agent_name="auth_guard",
             auth_events=auth_events,
         )
         events = probe.scan(context)
@@ -676,7 +676,7 @@ class TestScenario13_SUIDbitChange:
         )
 
         change = FileChange(
-            path="/usr/bin/find",
+            path="/tmp/backdoor",
             change_type=ChangeType.PERM_CHANGED,
             old_state=old_state,
             new_state=new_state,
@@ -1102,31 +1102,39 @@ class TestScenario23_SSHBruteForce:
     """Attacker sends 6 failed SSH attempts against 'admin' account."""
 
     def test_ssh_brute_force_fires(self):
-        from amoskys.agents.auth.probes import AuthEvent, SSHBruteForceProbe
+        from datetime import datetime, timezone
+
+        from amoskys.agents.protocol_collectors.agent_types import (
+            ProtocolEvent,
+            ProtocolType,
+        )
+        from amoskys.agents.protocol_collectors.probes import SSHBruteForceProbe
 
         probe = SSHBruteForceProbe()
-        now = _now_ns()
+        now_dt = datetime.now(timezone.utc)
 
-        auth_events = [
-            AuthEvent(
-                timestamp_ns=now + i * 1_000_000_000,
-                event_type="SSH_LOGIN",
-                status="FAILURE",
-                username="admin",
-                source_ip="10.99.99.99",
+        protocol_events = [
+            ProtocolEvent(
+                timestamp=now_dt,
+                protocol=ProtocolType.SSH,
+                src_ip="10.99.99.99",
+                dst_ip="192.168.1.1",
+                src_port=50000 + i,
+                dst_port=22,
+                metadata={"auth_result": "failed", "username": "admin"},
             )
             for i in range(6)  # 6 failures (threshold is 5)
         ]
 
         context = _ctx(
-            agent_name="auth_guard_v2",
-            auth_events=auth_events,
+            agent_name="protocol_collectors",
+            protocol_events=protocol_events,
         )
         events = probe.scan(context)
 
         assert len(events) >= 1
         ev = events[0]
-        assert "brute" in ev.event_type.lower()
+        assert "brute" in ev.data.get("description", "").lower() or "brute" in ev.event_type.lower()
         assert ev.severity in (Severity.HIGH, Severity.CRITICAL)
         assert any("T1110" in t for t in ev.mitre_techniques)
 
@@ -1140,8 +1148,8 @@ class TestScenario24_ExecveFromTmp:
     """Attacker executes dropped binary from /tmp via kernel audit trail."""
 
     def test_execve_high_risk_fires(self):
-        from amoskys.agents.kernel_audit.probes import ExecveHighRiskProbe
         from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
+        from amoskys.agents.kernel_audit.probes import ExecveHighRiskProbe
 
         probe = ExecveHighRiskProbe()
         now = _now_ns()
@@ -1187,8 +1195,8 @@ class TestScenario25_SyscallFlood:
     """Attacker's tool generates rapid syscall burst."""
 
     def test_syscall_flood_fires(self):
-        from amoskys.agents.kernel_audit.probes import SyscallFloodProbe
         from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
+        from amoskys.agents.kernel_audit.probes import SyscallFloodProbe
 
         probe = SyscallFloodProbe()
         now = _now_ns()

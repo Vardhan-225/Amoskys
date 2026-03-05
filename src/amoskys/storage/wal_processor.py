@@ -9,9 +9,11 @@ and storing them in the permanent telemetry database for dashboard queries.
 import hashlib
 import json
 import logging
+import os
 import socket
 import sqlite3
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,7 +23,11 @@ from typing import Any, List
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from amoskys.enrichment import EnrichmentPipeline
+from amoskys.intel.fusion_engine import FusionEngine
+from amoskys.intel.models import TelemetryEventView
+from amoskys.intel.scoring import ScoringEngine
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
+from amoskys.storage.dedup import EventDeduplicator
 from amoskys.storage.telemetry_store import TelemetryStore
 
 logging.basicConfig(
@@ -51,7 +57,7 @@ class WALProcessor:
         self.quarantine_count = 0
         self.chain_break_count = 0
 
-        # A4.4: Enrichment pipeline (GeoIP → ASN → ThreatIntel)
+        # A4.4: Enrichment pipeline (GeoIP → ASN → ThreatIntel → MITRE)
         try:
             self._pipeline = EnrichmentPipeline()
             logger.info("Enrichment pipeline initialized: %s", self._pipeline.status())
@@ -59,15 +65,57 @@ class WALProcessor:
             logger.warning("Enrichment pipeline unavailable: %s", e)
             self._pipeline = None
 
-    def process_batch(self, batch_size: int = 100) -> int:
+        # Scoring engine for signal/noise classification
+        try:
+            self._scorer = ScoringEngine()
+            logger.info(
+                "ScoringEngine initialized (signal/noise classification active)"
+            )
+        except Exception as e:
+            logger.warning("ScoringEngine unavailable: %s", e)
+            self._scorer = None
+
+        # Event deduplication (BLAKE2b content-hash, configurable TTL)
+        dedup_ttl = int(os.environ.get("DEDUP_TTL_SECONDS", "300"))
+        self._dedup = EventDeduplicator(ttl_seconds=dedup_ttl, max_cache=50000)
+
+        # SOMA: FusionEngine for single-device correlation
+        try:
+            self._fusion = FusionEngine(db_path="data/intel/fusion.db")
+            logger.info("FusionEngine initialized (correlation active)")
+        except Exception as e:
+            logger.warning("FusionEngine unavailable: %s", e)
+            self._fusion = None
+        self._last_fusion_eval = 0.0
+        self._fusion_eval_interval = 60  # seconds between correlation evaluations
+        self._bridged_incident_ids: set = set()
+        self._fusion_thread: threading.Thread | None = None
+
+        # SOMA Brain: autonomous self-training ML engine
+        self._brain = None
+        try:
+            from amoskys.intel.soma_brain import SomaBrain
+
+            self._brain = SomaBrain(
+                telemetry_db_path=store_path,
+                scoring_engine=self._scorer,
+            )
+            logger.info("SomaBrain initialized (autonomous training active)")
+        except Exception as e:
+            logger.warning("SomaBrain unavailable: %s", e)
+
+    def process_batch(self, batch_size: int = 500) -> int:
         """Process a batch of events from WAL with BLAKE2b integrity verification.
 
         Each event's checksum is verified before processing. Events that fail
         checksum verification are quarantined to the dead letter table with the
         error reason, preserving the original bytes for forensic analysis.
 
+        Uses batch mode for database commits — a single commit per batch
+        instead of per-event, reducing I/O by 10-50x.
+
         Args:
-            batch_size: Number of events to process in one batch (max 500)
+            batch_size: Number of events to process in one batch (max 2000)
 
         Returns:
             Number of events successfully processed
@@ -76,7 +124,7 @@ class WALProcessor:
             sqlite3.OperationalError: If WAL database is locked or corrupt
         """
         batch_size = min(
-            batch_size, 500
+            batch_size, 2000
         )  # Cap batch size to prevent resource exhaustion
         conn = None
         try:
@@ -107,6 +155,9 @@ class WALProcessor:
 
             processed_ids = []
             processed = 0
+
+            # Batch mode: single commit for all inserts in this batch
+            self.store.begin_batch()
 
             for row in rows:
                 row_id, env_bytes, ts_ns, idem, stored_checksum = row[:5]
@@ -179,6 +230,14 @@ class WALProcessor:
                     self._quarantine(row_id, raw, str(e))
                     processed_ids.append(row_id)
 
+            # Flush all buffered inserts with a single commit
+            try:
+                self.store.end_batch()
+            except Exception as e:
+                logger.error("Batch commit failed: %s", e)
+                # On commit failure, don't ACK WAL entries — they'll retry
+                return 0
+
             # Delete processed entries from WAL (ACK-after-store)
             if processed_ids:
                 placeholders = ",".join("?" * len(processed_ids))
@@ -200,6 +259,10 @@ class WALProcessor:
             logger.error(f"Batch processing error: {e}")
             return 0
         finally:
+            # Ensure batch mode is exited even on error
+            if self.store._batch_mode:
+                self.store._batch_mode = False
+                self.store._batch_count = 0
             if conn is not None:
                 try:
                     conn.close()
@@ -258,6 +321,79 @@ class WALProcessor:
 
         return total_processes, cpu_percent, mem_percent
 
+    def _feed_fusion_engine(self, events: Any, device_id: str) -> None:
+        """Convert protobuf TelemetryEvents to TelemetryEventView and feed to FusionEngine.
+
+        Args:
+            events: List of protobuf TelemetryEvent messages
+            device_id: Device that generated these events
+        """
+        if self._fusion is None:
+            return
+        fed = 0
+        for event in events:
+            try:
+                view = TelemetryEventView.from_protobuf(event, device_id)
+                self._fusion.add_event(view)
+                fed += 1
+            except Exception as e:
+                logger.debug("Fusion feed skip: %s", e)
+        if fed > 0:
+            logger.debug("Fed %d events to FusionEngine for %s", fed, device_id)
+
+    def _bridge_fusion_incidents(self) -> None:
+        """Copy new FusionEngine incidents to TelemetryStore for dashboard visibility.
+
+        FusionEngine persists to fusion.db; the dashboard reads from telemetry.db.
+        This method bridges the gap by creating TelemetryStore incidents from
+        newly detected fusion incidents, with dedup tracking.
+        """
+        if self._fusion is None:
+            return
+        recent = self._fusion.get_recent_incidents(limit=50)
+        bridged = 0
+        for inc in recent:
+            fid = inc["incident_id"]
+            if fid in self._bridged_incident_ids:
+                continue
+            try:
+                self.store.create_incident(
+                    {
+                        "title": f"[{inc['rule_name']}] {inc['summary'][:120]}",
+                        "description": inc["summary"],
+                        "severity": inc["severity"].lower(),
+                        "source_event_ids": inc["event_ids"],
+                        "mitre_techniques": inc["techniques"],
+                        "indicators": {
+                            "rule_name": inc["rule_name"],
+                            "tactics": inc["tactics"],
+                            "weighted_confidence": inc.get("weighted_confidence", 1.0),
+                            "contributing_agents": inc.get("contributing_agents", []),
+                            "fusion_incident_id": fid,
+                        },
+                    }
+                )
+                self._bridged_incident_ids.add(fid)
+                bridged += 1
+            except Exception as e:
+                logger.error("Failed to bridge incident %s: %s", fid, e)
+        if bridged > 0:
+            logger.info("Bridged %d fusion incidents to dashboard", bridged)
+
+    def _run_fusion_eval(self) -> None:
+        """Run fusion evaluation + incident bridging in a background thread.
+
+        This prevents the correlation engine from blocking the main
+        WAL processing loop, which is critical for throughput at 2M+ events/day.
+        """
+        if self._fusion is None:
+            return
+        try:
+            self._fusion.evaluate_all_devices()
+            self._bridge_fusion_incidents()
+        except Exception as e:
+            logger.error("Async fusion evaluation failed: %s", e)
+
     def _route_events(
         self,
         events: List[Any],
@@ -285,12 +421,24 @@ class WALProcessor:
 
             # SecurityEvent sub-message → security_events table
             if event.HasField("security_event"):
+                # Extract and enrich attrs ONCE before both consumers
+                enriched_attrs = {k: event.attributes[k] for k in event.attributes}
+                if self._pipeline is not None:
+                    try:
+                        self._pipeline.enrich(enriched_attrs)
+                    except Exception:
+                        logger.debug(
+                            "Enrichment failed for event — continuing",
+                            exc_info=True,
+                        )
+
                 self._process_security_event(
                     event,
                     device_id,
                     ts_ns,
                     timestamp_dt,
                     collection_agent,
+                    enriched_attrs=enriched_attrs,
                 )
                 self._route_security_to_domain_tables(
                     event,
@@ -299,6 +447,7 @@ class WALProcessor:
                     timestamp_dt,
                     collection_agent,
                     agent_version,
+                    enriched_attrs=enriched_attrs,
                 )
 
     def _route_security_to_domain_tables(
@@ -309,16 +458,15 @@ class WALProcessor:
         timestamp_dt,
         collection_agent,
         agent_version,
+        enriched_attrs: dict | None = None,
     ) -> None:
         """Extract structured data from security events into domain-specific tables."""
-        attrs = {k: event.attributes[k] for k in event.attributes}
-
-        # A4.4: Enrich attributes with GeoIP, ASN, and threat intelligence
-        if self._pipeline is not None:
-            try:
-                self._pipeline.enrich(attrs)
-            except Exception:
-                logger.debug("Enrichment failed for event — continuing", exc_info=True)
+        # Use pre-enriched attrs from caller, or extract fresh (fallback)
+        attrs = (
+            enriched_attrs
+            if enriched_attrs is not None
+            else {k: event.attributes[k] for k in event.attributes}
+        )
 
         cat = event.security_event.event_category or ""
         se = event.security_event
@@ -326,8 +474,8 @@ class WALProcessor:
 
         # Process events from proc-agent probes
         if attrs.get("pid") and collection_agent in (
-            "proc-agent-v3",
-            "proc_agent_v3",
+            "proc-agent",
+            "proc_agent",
             "proc",
         ):
             self._extract_process_from_security(
@@ -435,6 +583,9 @@ class WALProcessor:
             dt.agent_version,
         )
 
+        # SOMA: Feed events to FusionEngine for correlation
+        self._feed_fusion_engine(dt.events, dt.device_id)
+
         # Store device telemetry
         try:
             self.store.db.execute(
@@ -463,9 +614,57 @@ class WALProcessor:
                     dt.agent_version,
                 ),
             )
-            self.store.db.commit()
+            self.store._commit()
         except Exception as e:
             logger.error(f"Failed to insert device telemetry: {e}")
+
+    @staticmethod
+    def _classify_risk(risk: float) -> str:
+        """Map numeric risk score to classification label."""
+        if risk >= 0.75:
+            return "malicious"
+        if risk >= 0.5:
+            return "suspicious"
+        return "legitimate"
+
+    @staticmethod
+    def _build_security_event_dict(
+        se: Any,
+        event: Any,
+        device_id: str,
+        ts_ns: int,
+        timestamp_dt: str,
+        collection_agent: str,
+    ) -> dict:
+        """Build event dict from protobuf SecurityEvent for storage."""
+        mitre = list(se.mitre_techniques) if se.mitre_techniques else []
+        risk = se.risk_score
+
+        description = se.analyst_notes or ""
+        if event.source_component and event.source_component not in description:
+            description = f"[{event.source_component}] {description}"
+
+        indicators = {key: event.attributes[key] for key in event.attributes}
+        if collection_agent and "agent" not in indicators:
+            indicators["agent"] = collection_agent
+
+        return {
+            "timestamp_ns": ts_ns,
+            "timestamp_dt": timestamp_dt,
+            "device_id": device_id,
+            "event_category": se.event_category or event.event_type,
+            "event_action": se.event_action or None,
+            "event_outcome": se.event_outcome or None,
+            "risk_score": risk,
+            "confidence": event.confidence_score,
+            "mitre_techniques": mitre,
+            "final_classification": WALProcessor._classify_risk(risk),
+            "description": description,
+            "indicators": indicators,
+            "requires_investigation": se.requires_investigation or risk >= 0.7,
+            "collection_agent": collection_agent,
+            "agent_version": None,
+        }
 
     def _process_security_event(
         self,
@@ -474,59 +673,81 @@ class WALProcessor:
         ts_ns: int,
         timestamp_dt: str,
         collection_agent: str,
+        enriched_attrs: dict | None = None,
     ) -> None:
         """Extract SecurityEvent from TelemetryEvent and insert into security_events table.
 
         This is the critical bridge: agent probes detect threats, wrap them as
         SecurityEvent inside TelemetryEvent, publish via EventBus → WAL.
         This method completes the pipeline by persisting them for dashboard queries.
+
+        Args:
+            enriched_attrs: Pre-enriched attributes dict (GeoIP/ASN/ThreatIntel/MITRE).
+                When provided, replaces the raw indicators with enriched data so that
+                ScoringEngine sees threat intel matches and enrichment is persisted.
         """
         try:
             se = event.security_event
-            mitre = list(se.mitre_techniques) if se.mitre_techniques else []
-
-            # Map risk_score to classification
-            risk = se.risk_score
-            if risk >= 0.75:
-                classification = "malicious"
-            elif risk >= 0.5:
-                classification = "suspicious"
-            else:
-                classification = "legitimate"
-
-            # Build description from analyst_notes + source_component
-            description = se.analyst_notes or ""
-            if event.source_component and event.source_component not in description:
-                description = f"[{event.source_component}] {description}"
-
-            # Build indicators from event attributes
-            indicators = {}
-            for key in event.attributes:
-                indicators[key] = event.attributes[key]
-
-            self.store.insert_security_event(
-                {
-                    "timestamp_ns": ts_ns,
-                    "timestamp_dt": timestamp_dt,
-                    "device_id": device_id,
-                    "event_category": se.event_category or event.event_type,
-                    "event_action": se.event_action or None,
-                    "event_outcome": se.event_outcome or None,
-                    "risk_score": risk,
-                    "confidence": event.confidence_score,
-                    "mitre_techniques": mitre,
-                    "final_classification": classification,
-                    "description": description,
-                    "indicators": indicators,
-                    "requires_investigation": se.requires_investigation or risk >= 0.7,
-                    "collection_agent": collection_agent,
-                    "agent_version": None,
-                }
+            event_data = self._build_security_event_dict(
+                se,
+                event,
+                device_id,
+                ts_ns,
+                timestamp_dt,
+                collection_agent,
             )
+
+            # Merge enrichment data into event_data so ScoringEngine and
+            # storage both see GeoIP, ASN, ThreatIntel, and MITRE results.
+            if enriched_attrs is not None:
+                event_data["indicators"] = enriched_attrs
+                event_data["enrichment_status"] = enriched_attrs.get(
+                    "enrichment_status", "raw"
+                )
+                event_data["threat_intel_match"] = enriched_attrs.get(
+                    "threat_intel_match", False
+                )
+                event_data["geo_src_country"] = enriched_attrs.get("geo_src_country")
+                event_data["asn_src_org"] = enriched_attrs.get("asn_src_org")
+                # Promote enriched MITRE techniques to top-level list
+                if enriched_attrs.get("mitre_techniques"):
+                    existing = set(event_data.get("mitre_techniques") or [])
+                    for t in enriched_attrs["mitre_techniques"]:
+                        if t not in existing:
+                            event_data.setdefault("mitre_techniques", []).append(t)
+
+            # Deduplicate: skip if semantically identical event seen within TTL
+            if self._dedup.is_duplicate(event_data):
+                logger.debug(
+                    "Dedup: suppressed %s/%s from %s",
+                    event_data.get("event_category", ""),
+                    event_data.get("event_action", ""),
+                    collection_agent,
+                )
+                return
+            self._dedup.record(event_data)
+
+            # Score event for signal/noise classification
+            if self._scorer is not None:
+                try:
+                    self._scorer.score_event(event_data)
+                except Exception:
+                    logger.warning(
+                        "Scoring failed for event — continuing", exc_info=True
+                    )
+
+            # Feed AutoCalibrator for autonomous FP detection
+            if self._brain and self._brain._auto_calibrator:
+                try:
+                    self._brain._auto_calibrator.observe(event_data)
+                except Exception:
+                    pass
+
+            self.store.insert_security_event(event_data)
             logger.debug(
                 "Stored security event: %s (risk=%.2f, agent=%s)",
                 se.event_category,
-                risk,
+                se.risk_score,
                 collection_agent,
             )
         except Exception as e:
@@ -577,7 +798,7 @@ class WALProcessor:
                     version,
                 ),
             )
-            self.store.db.commit()
+            self.store._commit()
             logger.debug(
                 f"Stored peripheral event: {attrs.get('device_type')} {status_data.status if status_data else 'N/A'}"
             )
@@ -1016,7 +1237,7 @@ class WALProcessor:
                     False,
                 ),
             )
-            self.store.db.commit()
+            self.store._commit()
         except Exception as e:
             logger.error(f"Failed to insert flow event: {e}")
 
@@ -1104,12 +1325,22 @@ class WALProcessor:
         logger.info(f"Store: {self.store.db_path}")
         logger.info(f"Interval: {interval}s")
 
+        # Start SomaBrain daemon thread
+        if self._brain:
+            self._brain.start()
+            logger.info(
+                "SomaBrain daemon started (training every %ds)", self._brain._interval
+            )
+
         cycle = 0
+        retention_interval = (
+            720  # Run retention cleanup every 720 cycles (~1 hour at 5s)
+        )
         while True:
             cycle += 1
             try:
-                # Process EventBus WAL
-                processed = self.process_batch(batch_size=100)
+                # Process EventBus WAL (batch mode: single commit per batch)
+                processed = self.process_batch(batch_size=500)
 
                 # Also drain agent local queues (data/queue/*.db)
                 queue_processed = self.process_local_queues("data/queue")
@@ -1123,6 +1354,29 @@ class WALProcessor:
                 elif cycle % 12 == 0:  # Log every minute when idle
                     logger.debug(f"Cycle #{cycle}: No events to process")
 
+                # SOMA: Periodic fusion evaluation (every 60s, async)
+                now = time.time()
+                if (
+                    self._fusion
+                    and (now - self._last_fusion_eval) >= self._fusion_eval_interval
+                    and (
+                        self._fusion_thread is None
+                        or not self._fusion_thread.is_alive()
+                    )
+                ):
+                    self._last_fusion_eval = now
+                    self._fusion_thread = threading.Thread(
+                        target=self._run_fusion_eval, daemon=True
+                    )
+                    self._fusion_thread.start()
+
+                # Periodic data retention cleanup
+                if cycle % retention_interval == 0:
+                    try:
+                        self.store.cleanup_old_data(max_age_days=90)
+                    except Exception as e:
+                        logger.warning("Retention cleanup error: %s", e)
+
                 time.sleep(interval)
 
             except KeyboardInterrupt:
@@ -1132,6 +1386,10 @@ class WALProcessor:
                 logger.error(f"Cycle error: {e}")
                 time.sleep(interval)
 
+        # Stop SomaBrain daemon
+        if self._brain:
+            self._brain.stop()
+
         # Show final stats
         stats = self.store.get_statistics()
         logger.info(f"Final statistics: {stats}")
@@ -1139,11 +1397,98 @@ class WALProcessor:
         if self._pipeline is not None:
             self._pipeline.close()
 
+    def backfill_enrichment(self, batch_size: int = 500) -> int:
+        """One-time enrichment backfill for historical events missing enrichment.
+
+        Reads events where enrichment_status IS NULL or 'raw', runs them
+        through the EnrichmentPipeline, and updates both the JSON indicators
+        column and the dedicated enrichment columns.
+
+        Returns:
+            Total number of events updated.
+        """
+        if self._pipeline is None:
+            logger.error("EnrichmentPipeline unavailable — cannot backfill")
+            return 0
+
+        total_updated = 0
+        while True:
+            rows = self.store.db.execute(
+                "SELECT id, indicators FROM security_events "
+                "WHERE enrichment_status IS NULL OR enrichment_status = 'raw' "
+                "LIMIT ?",
+                (batch_size,),
+            ).fetchall()
+
+            if not rows:
+                break
+
+            for row in rows:
+                row_id = row[0]
+                indicators_json = row[1]
+                try:
+                    indicators = json.loads(indicators_json) if indicators_json else {}
+                except (json.JSONDecodeError, TypeError):
+                    indicators = {}
+
+                try:
+                    self._pipeline.enrich(indicators)
+                except Exception:
+                    indicators["enrichment_status"] = "raw"
+
+                self.store.db.execute(
+                    "UPDATE security_events SET "
+                    "indicators=?, enrichment_status=?, "
+                    "threat_intel_match=?, geo_src_country=?, asn_src_org=? "
+                    "WHERE id=?",
+                    (
+                        json.dumps(indicators),
+                        indicators.get("enrichment_status", "raw"),
+                        indicators.get("threat_intel_match", False),
+                        indicators.get("geo_src_country"),
+                        indicators.get("asn_src_org"),
+                        row_id,
+                    ),
+                )
+                total_updated += 1
+
+            self.store.db.commit()
+            logger.info(
+                "Backfill batch: updated %d events (total: %d)",
+                len(rows),
+                total_updated,
+            )
+
+        logger.info("Enrichment backfill complete: %d events updated", total_updated)
+        return total_updated
+
 
 def main():
     """Entry point"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="AMOSKYS WAL Processor")
+    parser.add_argument(
+        "--backfill-enrichment",
+        action="store_true",
+        help="One-time enrichment backfill for historical events",
+    )
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=5,
+        help="Processing interval in seconds (default: 5)",
+    )
+    args = parser.parse_args()
+
     processor = WALProcessor()
-    processor.run(interval=5)
+
+    if args.backfill_enrichment:
+        count = processor.backfill_enrichment()
+        print(f"Enrichment backfill complete: {count} events updated")
+        return
+
+    processor.run(interval=args.interval)
 
 
 if __name__ == "__main__":

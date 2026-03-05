@@ -14,7 +14,9 @@ from typing import Any, Callable, Dict, List, Optional
 
 # Import our new components
 try:
-    from ...agents.discovery.device_scanner import DeviceDiscoveryEngine
+    from ...agents.device_discovery.device_discovery import (
+        DeviceDiscovery as DeviceDiscoveryEngine,
+    )
     from ...agents.protocols.universal_collector import UniversalTelemetryCollector
     from ...edge.edge_optimizer import EdgeOptimizer
     from ..features.network_features import NetworkFeatureExtractor, NetworkFeatures

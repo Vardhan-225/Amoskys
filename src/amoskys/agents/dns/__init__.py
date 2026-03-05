@@ -18,12 +18,8 @@ from amoskys.agents.dns.probes import (
     create_dns_probes,
 )
 
-# B5.1: Deprecated alias
-DNSAgentV2 = DNSAgent
-
 __all__ = [
     "DNSAgent",
-    "DNSAgentV2",
     "BeaconingPatternProbe",
     "BlockedDomainHitProbe",
     "create_dns_probes",

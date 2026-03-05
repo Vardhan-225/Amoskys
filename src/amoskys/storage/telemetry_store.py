@@ -20,6 +20,7 @@ Supports the 3-layer ML architecture:
 import json
 import logging
 import sqlite3
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -170,7 +171,13 @@ CREATE TABLE IF NOT EXISTS security_events (
 
     -- Collection metadata
     collection_agent TEXT,
-    agent_version TEXT
+    agent_version TEXT,
+
+    -- Enrichment pipeline results (A4.4)
+    enrichment_status TEXT DEFAULT 'raw',  -- raw, partial, enriched
+    threat_intel_match BOOLEAN DEFAULT 0,
+    geo_src_country TEXT,
+    asn_src_org TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_security_timestamp ON security_events(timestamp_ns DESC);
@@ -504,6 +511,38 @@ class TelemetryStore:
 
         logger.info(f"Initialized TelemetryStore at {db_path}")
 
+        # Thread-safety: serialize all SQLite operations through a lock.
+        # The dashboard WebSocket updater thread and Flask request threads
+        # share this singleton — concurrent access causes SQLITE_MISUSE.
+        self._lock = threading.Lock()
+
+        # Batch mode: when active, inserts skip per-row commits.
+        # WALProcessor calls begin_batch() before a batch and end_batch() after.
+        self._batch_mode: bool = False
+        self._batch_count: int = 0
+
+    # ── Batch API (used by WALProcessor for single-commit batches) ──
+
+    def begin_batch(self) -> None:
+        """Enter batch mode — per-insert commits are suppressed."""
+        self._batch_mode = True
+        self._batch_count = 0
+
+    def end_batch(self) -> None:
+        """Commit all buffered inserts and leave batch mode."""
+        try:
+            self.db.commit()
+        finally:
+            self._batch_mode = False
+            self._batch_count = 0
+
+    def _commit(self) -> None:
+        """Commit unless in batch mode."""
+        if self._batch_mode:
+            self._batch_count += 1
+            return
+        self.db.commit()
+
     def insert_process_event(self, event_data: dict[str, Any]) -> Optional[int]:
         """Insert a process event
 
@@ -544,7 +583,7 @@ class TelemetryStore:
                 event_data.get("agent_version"),
             ),
         )
-        self.db.commit()
+        self._commit()
         return cursor.lastrowid
 
     def get_recent_processes(
@@ -585,41 +624,42 @@ class TelemetryStore:
         """
         stats = {}
 
-        cursor = self.db.execute("SELECT COUNT(*) FROM process_events")
-        stats["process_events_count"] = cursor.fetchone()[0]
+        with self._lock:
+            cursor = self.db.execute("SELECT COUNT(*) FROM process_events")
+            stats["process_events_count"] = cursor.fetchone()[0]
 
-        cursor = self.db.execute("SELECT COUNT(*) FROM device_telemetry")
-        stats["device_telemetry_count"] = cursor.fetchone()[0]
+            cursor = self.db.execute("SELECT COUNT(*) FROM device_telemetry")
+            stats["device_telemetry_count"] = cursor.fetchone()[0]
 
-        cursor = self.db.execute("SELECT COUNT(*) FROM flow_events")
-        stats["flow_events_count"] = cursor.fetchone()[0]
+            cursor = self.db.execute("SELECT COUNT(*) FROM flow_events")
+            stats["flow_events_count"] = cursor.fetchone()[0]
 
-        cursor = self.db.execute("SELECT COUNT(*) FROM security_events")
-        stats["security_events_count"] = cursor.fetchone()[0]
+            cursor = self.db.execute("SELECT COUNT(*) FROM security_events")
+            stats["security_events_count"] = cursor.fetchone()[0]
 
-        for tbl in (
-            "dns_events",
-            "audit_events",
-            "persistence_events",
-            "fim_events",
-            "peripheral_events",
-        ):
-            try:
-                cursor = self.db.execute(f"SELECT COUNT(*) FROM {tbl}")
-                stats[f"{tbl}_count"] = cursor.fetchone()[0]
-            except sqlite3.Error:
-                stats[f"{tbl}_count"] = 0
+            for tbl in (
+                "dns_events",
+                "audit_events",
+                "persistence_events",
+                "fim_events",
+                "peripheral_events",
+            ):
+                try:
+                    cursor = self.db.execute(f"SELECT COUNT(*) FROM {tbl}")
+                    stats[f"{tbl}_count"] = cursor.fetchone()[0]
+                except sqlite3.Error:
+                    stats[f"{tbl}_count"] = 0
 
-        cursor = self.db.execute(
+            cursor = self.db.execute(
+                """
+                SELECT
+                    MIN(timestamp_dt) as oldest,
+                    MAX(timestamp_dt) as newest
+                FROM process_events
             """
-            SELECT
-                MIN(timestamp_dt) as oldest,
-                MAX(timestamp_dt) as newest
-            FROM process_events
-        """
-        )
-        row = cursor.fetchone()
-        stats["time_range"] = {"oldest": row[0], "newest": row[1]}
+            )
+            row = cursor.fetchone()
+            stats["time_range"] = {"oldest": row[0], "newest": row[1]}
 
         return stats
 
@@ -642,8 +682,11 @@ class TelemetryStore:
                     event_category, event_action, event_outcome,
                     risk_score, confidence, mitre_techniques,
                     final_classification, description, indicators,
-                    requires_investigation, collection_agent, agent_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    requires_investigation, collection_agent, agent_version,
+                    enrichment_status, threat_intel_match,
+                    geo_src_country, asn_src_org
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                          ?, ?, ?, ?)
                 """,
                 (
                     event_data.get("timestamp_ns", int(time.time() * 1e9)),
@@ -664,9 +707,13 @@ class TelemetryStore:
                     event_data.get("requires_investigation", False),
                     event_data.get("collection_agent"),
                     event_data.get("agent_version"),
+                    event_data.get("enrichment_status", "raw"),
+                    event_data.get("threat_intel_match", False),
+                    event_data.get("geo_src_country"),
+                    event_data.get("asn_src_org"),
                 ),
             )
-            self.db.commit()
+            self._commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert security event: %s", e)
@@ -704,7 +751,7 @@ class TelemetryStore:
                     event_data.get("threat_score", 0.0),
                 ),
             )
-            self.db.commit()
+            self._commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert flow event: %s", e)
@@ -752,7 +799,7 @@ class TelemetryStore:
                     event_data.get("agent_version"),
                 ),
             )
-            self.db.commit()
+            self._commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert peripheral event: %s", e)
@@ -795,7 +842,7 @@ class TelemetryStore:
                     event_data.get("agent_version"),
                 ),
             )
-            self.db.commit()
+            self._commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert DNS event: %s", e)
@@ -844,7 +891,7 @@ class TelemetryStore:
                     event_data.get("agent_version"),
                 ),
             )
-            self.db.commit()
+            self._commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert audit event: %s", e)
@@ -887,7 +934,7 @@ class TelemetryStore:
                     event_data.get("agent_version"),
                 ),
             )
-            self.db.commit()
+            self._commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert persistence event: %s", e)
@@ -931,7 +978,7 @@ class TelemetryStore:
                     event_data.get("agent_version"),
                 ),
             )
-            self.db.commit()
+            self._commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert FIM event: %s", e)
@@ -973,7 +1020,7 @@ class TelemetryStore:
                     event_data.get("agent_version"),
                 ),
             )
-            self.db.commit()
+            self._commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert device telemetry: %s", e)
@@ -1007,7 +1054,7 @@ class TelemetryStore:
                     event_data.get("sample_count", 1),
                 ),
             )
-            self.db.commit()
+            self._commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to insert metrics timeseries: %s", e)
@@ -1018,6 +1065,7 @@ class TelemetryStore:
         limit: int = 50,
         hours: int = 24,
         severity: Optional[str] = None,
+        offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """Query security_events with time window and optional filter.
 
@@ -1025,6 +1073,7 @@ class TelemetryStore:
             limit: Maximum events to return.
             hours: Time window in hours.
             severity: Optional filter on final_classification.
+            offset: Number of rows to skip (for pagination).
 
         Returns:
             List of event dicts.
@@ -1037,15 +1086,17 @@ class TelemetryStore:
             query += " AND final_classification = ?"
             params.append(severity)
 
-        query += " ORDER BY timestamp_ns DESC LIMIT ?"
+        query += " ORDER BY timestamp_ns DESC LIMIT ? OFFSET ?"
         params.append(limit)
+        params.append(offset)
 
-        try:
-            cursor = self.db.execute(query, params)
-            return [dict(row) for row in cursor.fetchall()]
-        except sqlite3.Error as e:
-            logger.error("Failed to query security events: %s", e)
-            return []
+        with self._lock:
+            try:
+                cursor = self.db.execute(query, params)
+                return [dict(row) for row in cursor.fetchall()]
+            except sqlite3.Error as e:
+                logger.error("Failed to query security events: %s", e)
+                return []
 
     def get_security_event_counts(self, hours: int = 24) -> Dict[str, Any]:
         """Aggregate counts by category and classification.
@@ -1061,35 +1112,36 @@ class TelemetryStore:
             "by_classification": {},
         }
 
-        try:
-            cursor = self.db.execute(
-                "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
-                (cutoff_ns,),
-            )
-            result["total"] = cursor.fetchone()[0]
+        with self._lock:
+            try:
+                cursor = self.db.execute(
+                    "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
+                    (cutoff_ns,),
+                )
+                result["total"] = cursor.fetchone()[0]
 
-            cursor = self.db.execute(
-                """SELECT event_category, COUNT(*) as cnt
-                   FROM security_events WHERE timestamp_ns > ?
-                   GROUP BY event_category""",
-                (cutoff_ns,),
-            )
-            for row in cursor.fetchall():
-                if row[0]:
-                    result["by_category"][row[0]] = row[1]
+                cursor = self.db.execute(
+                    """SELECT event_category, COUNT(*) as cnt
+                       FROM security_events WHERE timestamp_ns > ?
+                       GROUP BY event_category""",
+                    (cutoff_ns,),
+                )
+                for row in cursor.fetchall():
+                    if row[0]:
+                        result["by_category"][row[0]] = row[1]
 
-            cursor = self.db.execute(
-                """SELECT final_classification, COUNT(*) as cnt
-                   FROM security_events WHERE timestamp_ns > ?
-                   GROUP BY final_classification""",
-                (cutoff_ns,),
-            )
-            for row in cursor.fetchall():
-                if row[0]:
-                    result["by_classification"][row[0]] = row[1]
+                cursor = self.db.execute(
+                    """SELECT final_classification, COUNT(*) as cnt
+                       FROM security_events WHERE timestamp_ns > ?
+                       GROUP BY final_classification""",
+                    (cutoff_ns,),
+                )
+                for row in cursor.fetchall():
+                    if row[0]:
+                        result["by_classification"][row[0]] = row[1]
 
-        except sqlite3.Error as e:
-            logger.error("Failed to count security events: %s", e)
+            except sqlite3.Error as e:
+                logger.error("Failed to count security events: %s", e)
 
         return result
 
@@ -1102,17 +1154,18 @@ class TelemetryStore:
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
 
         try:
-            cursor = self.db.execute(
-                """SELECT
-                       COUNT(*) as cnt,
-                       COALESCE(AVG(risk_score), 0) as avg_risk,
-                       COALESCE(MAX(risk_score), 0) as max_risk,
-                       COALESCE(SUM(CASE WHEN risk_score > 0.7 THEN 1 ELSE 0 END), 0) as critical_count
-                   FROM security_events
-                   WHERE timestamp_ns > ?""",
-                (cutoff_ns,),
-            )
-            row = cursor.fetchone()
+            with self._lock:
+                cursor = self.db.execute(
+                    """SELECT
+                           COUNT(*) as cnt,
+                           COALESCE(AVG(risk_score), 0) as avg_risk,
+                           COALESCE(MAX(risk_score), 0) as max_risk,
+                           COALESCE(SUM(CASE WHEN risk_score > 0.7 THEN 1 ELSE 0 END), 0) as critical_count
+                       FROM security_events
+                       WHERE timestamp_ns > ?""",
+                    (cutoff_ns,),
+                )
+                row = cursor.fetchone()
             cnt = row[0]
             avg_risk = row[1]
             max_risk = row[2]
@@ -1168,50 +1221,51 @@ class TelemetryStore:
             "by_hour": {},
         }
 
-        try:
-            # By category
-            cursor = self.db.execute(
-                """SELECT event_category, COUNT(*) as cnt
-                   FROM security_events WHERE timestamp_ns > ?
-                   GROUP BY event_category ORDER BY cnt DESC""",
-                (cutoff_ns,),
-            )
-            for row in cursor.fetchall():
-                if row[0]:
-                    result["by_category"][row[0]] = row[1]
+        with self._lock:
+            try:
+                # By category
+                cursor = self.db.execute(
+                    """SELECT event_category, COUNT(*) as cnt
+                       FROM security_events WHERE timestamp_ns > ?
+                       GROUP BY event_category ORDER BY cnt DESC""",
+                    (cutoff_ns,),
+                )
+                for row in cursor.fetchall():
+                    if row[0]:
+                        result["by_category"][row[0]] = row[1]
 
-            # By severity (map risk_score to levels)
-            cursor = self.db.execute(
-                """SELECT
-                       SUM(CASE WHEN risk_score < 0.25 THEN 1 ELSE 0 END) as low_cnt,
-                       SUM(CASE WHEN risk_score >= 0.25 AND risk_score < 0.5 THEN 1 ELSE 0 END) as med_cnt,
-                       SUM(CASE WHEN risk_score >= 0.5 AND risk_score < 0.75 THEN 1 ELSE 0 END) as high_cnt,
-                       SUM(CASE WHEN risk_score >= 0.75 THEN 1 ELSE 0 END) as crit_cnt
-                   FROM security_events WHERE timestamp_ns > ?""",
-                (cutoff_ns,),
-            )
-            row = cursor.fetchone()
-            if row:
-                result["by_severity"] = {
-                    "low": row[0] or 0,
-                    "medium": row[1] or 0,
-                    "high": row[2] or 0,
-                    "critical": row[3] or 0,
-                }
+                # By severity (map risk_score to levels)
+                cursor = self.db.execute(
+                    """SELECT
+                           SUM(CASE WHEN risk_score < 0.25 THEN 1 ELSE 0 END) as low_cnt,
+                           SUM(CASE WHEN risk_score >= 0.25 AND risk_score < 0.5 THEN 1 ELSE 0 END) as med_cnt,
+                           SUM(CASE WHEN risk_score >= 0.5 AND risk_score < 0.75 THEN 1 ELSE 0 END) as high_cnt,
+                           SUM(CASE WHEN risk_score >= 0.75 THEN 1 ELSE 0 END) as crit_cnt
+                       FROM security_events WHERE timestamp_ns > ?""",
+                    (cutoff_ns,),
+                )
+                row = cursor.fetchone()
+                if row:
+                    result["by_severity"] = {
+                        "low": row[0] or 0,
+                        "medium": row[1] or 0,
+                        "high": row[2] or 0,
+                        "critical": row[3] or 0,
+                    }
 
-            # By hour (extract hour from timestamp_dt)
-            cursor = self.db.execute(
-                """SELECT SUBSTR(timestamp_dt, 12, 2) as hour, COUNT(*) as cnt
-                   FROM security_events WHERE timestamp_ns > ?
-                   GROUP BY hour ORDER BY hour""",
-                (cutoff_ns,),
-            )
-            for row in cursor.fetchall():
-                if row[0]:
-                    result["by_hour"][row[0]] = row[1]
+                # By hour (extract hour from timestamp_dt)
+                cursor = self.db.execute(
+                    """SELECT SUBSTR(timestamp_dt, 12, 2) as hour, COUNT(*) as cnt
+                       FROM security_events WHERE timestamp_ns > ?
+                       GROUP BY hour ORDER BY hour""",
+                    (cutoff_ns,),
+                )
+                for row in cursor.fetchall():
+                    if row[0]:
+                        result["by_hour"][row[0]] = row[1]
 
-        except sqlite3.Error as e:
-            logger.error("Failed to cluster security events: %s", e)
+            except sqlite3.Error as e:
+                logger.error("Failed to cluster security events: %s", e)
 
         return result
 
@@ -1417,7 +1471,7 @@ class TelemetryStore:
                     json.dumps(data.get("indicators", {})),
                 ),
             )
-            self.db.commit()
+            self._commit()
             return cursor.lastrowid
         except sqlite3.Error as e:
             logger.error("Failed to create incident: %s", e)
@@ -1448,7 +1502,7 @@ class TelemetryStore:
             self.db.execute(
                 f"UPDATE incidents SET {', '.join(sets)} WHERE id = ?", params
             )
-            self.db.commit()
+            self._commit()
             return True
         except sqlite3.Error as e:
             logger.error("Failed to update incident: %s", e)
@@ -1458,33 +1512,35 @@ class TelemetryStore:
         self, status: Optional[str] = None, limit: int = 50
     ) -> List[Dict[str, Any]]:
         """Get incidents with optional status filter."""
-        try:
-            if status:
-                cursor = self.db.execute(
-                    "SELECT * FROM incidents WHERE status = ? ORDER BY created_at DESC LIMIT ?",
-                    (status, limit),
-                )
-            else:
-                cursor = self.db.execute(
-                    "SELECT * FROM incidents ORDER BY created_at DESC LIMIT ?",
-                    (limit,),
-                )
-            return [dict(r) for r in cursor.fetchall()]
-        except sqlite3.Error as e:
-            logger.error("Failed to get incidents: %s", e)
-            return []
+        with self._lock:
+            try:
+                if status:
+                    cursor = self.db.execute(
+                        "SELECT * FROM incidents WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+                        (status, limit),
+                    )
+                else:
+                    cursor = self.db.execute(
+                        "SELECT * FROM incidents ORDER BY created_at DESC LIMIT ?",
+                        (limit,),
+                    )
+                return [dict(r) for r in cursor.fetchall()]
+            except sqlite3.Error as e:
+                logger.error("Failed to get incidents: %s", e)
+                return []
 
     def get_incident(self, incident_id: int) -> Optional[Dict[str, Any]]:
         """Get a single incident by ID."""
-        try:
-            cursor = self.db.execute(
-                "SELECT * FROM incidents WHERE id = ?", (incident_id,)
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-        except sqlite3.Error as e:
-            logger.error("Failed to get incident: %s", e)
-            return None
+        with self._lock:
+            try:
+                cursor = self.db.execute(
+                    "SELECT * FROM incidents WHERE id = ?", (incident_id,)
+                )
+                row = cursor.fetchone()
+                return dict(row) if row else None
+            except sqlite3.Error as e:
+                logger.error("Failed to get incident: %s", e)
+                return None
 
     # --- Metrics History ---
 
@@ -1508,6 +1564,78 @@ class TelemetryStore:
         except sqlite3.Error as e:
             logger.error("Failed to get metrics history: %s", e)
             return []
+
+    # ── Data Retention ──
+
+    def cleanup_old_data(self, max_age_days: int = 90) -> Dict[str, int]:
+        """Delete telemetry data older than max_age_days.
+
+        Called periodically by WALProcessor to prevent unbounded DB growth.
+
+        Returns:
+            Dict mapping table name to number of rows deleted.
+        """
+        cutoff_ns = int((time.time() - max_age_days * 86400) * 1e9)
+        cutoff_dt = datetime.fromtimestamp(
+            time.time() - max_age_days * 86400, tz=timezone.utc
+        ).isoformat()
+
+        tables_ns = [
+            "process_events",
+            "flow_events",
+            "security_events",
+            "peripheral_events",
+            "dns_events",
+            "audit_events",
+            "persistence_events",
+            "fim_events",
+        ]
+        tables_dt = ["device_telemetry", "metrics_timeseries"]
+        deleted: Dict[str, int] = {}
+
+        for table in tables_ns:
+            try:
+                cursor = self.db.execute(
+                    f"DELETE FROM {table} WHERE timestamp_ns < ?", (cutoff_ns,)
+                )
+                deleted[table] = cursor.rowcount
+            except sqlite3.Error:
+                deleted[table] = 0
+
+        for table in tables_dt:
+            try:
+                cursor = self.db.execute(
+                    f"DELETE FROM {table} WHERE timestamp_dt < ?", (cutoff_dt,)
+                )
+                deleted[table] = cursor.rowcount
+            except sqlite3.Error:
+                deleted[table] = 0
+
+        # Dead letters and WAL archive: keep 30 days
+        short_cutoff_dt = datetime.fromtimestamp(
+            time.time() - 30 * 86400, tz=timezone.utc
+        ).isoformat()
+        for table in ["wal_dead_letter", "wal_archive"]:
+            try:
+                cursor = self.db.execute(
+                    f"DELETE FROM {table} WHERE quarantined_at < ? OR created_at < ?",
+                    (short_cutoff_dt, short_cutoff_dt),
+                )
+                deleted[table] = cursor.rowcount
+            except sqlite3.Error:
+                deleted[table] = 0
+
+        self.db.commit()
+
+        total = sum(deleted.values())
+        if total > 0:
+            logger.info(
+                "Retention cleanup: deleted %d rows across %d tables (age > %dd)",
+                total,
+                sum(1 for v in deleted.values() if v > 0),
+                max_age_days,
+            )
+        return deleted
 
     def close(self) -> None:
         """Close database connection."""

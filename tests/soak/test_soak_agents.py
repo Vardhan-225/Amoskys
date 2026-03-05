@@ -94,35 +94,33 @@ class TestSoakAgents:
             (self.queue_root / agent).mkdir(parents=True, exist_ok=True)
         self.log_root.mkdir(parents=True, exist_ok=True)
 
-        # Launch agents
+        # Launch agents using standardized CLI
         self.procs: dict = {}
         for agent in AGENTS:
-            extra_args = []
-            if agent == "kernel_audit" and sys.platform == "darwin":
-                extra_args = ["--audit-log-path=/dev/null"]
-
             log_path = self.log_root / f"{agent}.log"
             log_file = open(log_path, "w")
+
+            agent_env = {
+                **self.env,
+                f"AMOSKYS_{agent.upper()}_QUEUE_PATH": str(self.queue_root / agent),
+            }
+            if agent == "kernel_audit":
+                agent_env["AMOSKYS_KERNEL_AUDIT_LOG_PATH"] = "/dev/null"
+            extra_args = []
 
             proc = subprocess.Popen(
                 [
                     sys.executable,
                     "-m",
-                    f"amoskys.agents.{agent}.run_agent_v2",
-                    "--device-id",
-                    self.device_id,
-                    "--queue-path",
-                    str(self.queue_root / agent),
-                    "--collection-interval",
+                    f"amoskys.agents.{agent}",
+                    "--interval",
                     "30",
-                    "--metrics-interval",
-                    "60",
                     "--log-level",
                     "INFO",
                     *extra_args,
                 ],
                 cwd=str(PROJECT_ROOT),
-                env=self.env,
+                env=agent_env,
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
             )

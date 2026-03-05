@@ -1,0 +1,42 @@
+probe_id: long_lived_process
+agent: proc
+version: "1.0.0"
+mitre_techniques:
+  - id: T1036
+    name: "Masquerading"
+mitre_tactic: defense_evasion
+intent: >
+  Detect normally short-lived utility processes (grep, awk, cat, ls, find)
+  that have been running for an unexpectedly long time. Attackers often rename
+  their C2 implants or reverse shells to common utility names. A grep process
+  running for 4 hours is a strong indicator of process masquerading.
+required_inputs:
+  - source: psutil.process_iter
+    fields: [pid, name, create_time, username]
+correlation_group: persistence
+severity_policy:
+  unexpectedly_long_process: MEDIUM
+confidence_policy:
+  unexpectedly_long_process: 0.60
+thresholds:
+  longevity_threshold_seconds: 3600
+  scan_interval_seconds: 300.0
+  monitored_names:
+    - grep, awk, sed, cat, ls, ps, find, xargs, cut, sort, uniq, wc, head, tail
+testing_approach: psutil_mock
+known_evasions:
+  - id: unknown_name
+    title: "C2 implant named 'kworker' or 'systemd-helper'"
+    description: >
+      The probe only flags processes whose name is in the monitored short-lived
+      list. Masquerading as a plausible long-lived daemon (kworker) evades.
+    status: EVADES
+    reason: "Fixed monitored-names list; must cover attacker naming patterns"
+  - id: process_restart
+    title: "C2 restarts every 55 minutes to reset create_time"
+    description: >
+      If the implant restarts itself before hitting the 60-minute threshold,
+      it never appears in the long-lived check. Periodic restart is a known
+      counter-detection technique.
+    status: EVADES
+    reason: "Probe checks current runtime, not cumulative uptime"

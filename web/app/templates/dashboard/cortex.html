@@ -442,6 +442,13 @@
 .inc-sla.breach { background: rgba(255,51,102,0.15); color: #ff3366; }
 .inc-sla.ok { background: rgba(0,255,136,0.1); color: #00ff88; }
 
+/* ── Threat Feed Pagination ── */
+.tf-pagination { display: flex; align-items: center; justify-content: center; gap: 0.75rem; padding: 0.5rem 0 0.25rem; border-top: 1px solid rgba(255,255,255,0.06); margin-top: 0.25rem; }
+.tf-pg-btn { background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.2); color: #00d9ff; font-size: 0.72rem; padding: 0.25rem 0.6rem; border-radius: 4px; cursor: pointer; transition: all 0.15s; }
+.tf-pg-btn:hover:not(:disabled) { background: rgba(0,217,255,0.2); }
+.tf-pg-btn:disabled { opacity: 0.3; cursor: default; }
+.tf-pg-info { font-size: 0.7rem; color: var(--text-muted); }
+
 /* ── Agent Fleet ── */
 .agent-fleet { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; }
 .af-card {
@@ -523,7 +530,7 @@
 .hm-legend-bar { width: 100px; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #0a1628, #0066aa, #00ccaa, #ffaa00, #ff3366); }
 
 /* ── Vitals ── */
-.vitals-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.vitals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; }
 .vital-gauge { text-align: center; }
 .vital-gauge svg { width: 72px; height: 72px; display: block; margin: 0 auto; }
 .vital-val { font-size: 1rem; font-weight: 700; color: var(--text-primary); margin-top: 0.3rem; }
@@ -667,12 +674,14 @@ class CortexCommandCenter {
         this.seenCritical = new Set();
         this.clusterCache = null;
         this.hoursRange = 24;
+        this.threatPage = 0;
+        this.THREATS_PER_PAGE = 8;
         this.init();
     }
 
     async init() {
         await this.refreshAll();
-        this.timer = setInterval(() => this.refreshAll(), this.REFRESH);
+        this.timer = visInterval(() => this.refreshAll(), this.REFRESH);
         window.addEventListener('beforeunload', () => { if (this.timer) clearInterval(this.timer); });
         this.initKeyboard();
         this.initSocketIO();
@@ -711,7 +720,7 @@ class CortexCommandCenter {
         if (this.REFRESH < 30000) {
             this.REFRESH = 30000;
             clearInterval(this.timer);
-            this.timer = setInterval(() => this.refreshAll(), this.REFRESH);
+            this.timer = visInterval(() => this.refreshAll(), this.REFRESH);
         }
     }
 
@@ -765,7 +774,7 @@ class CortexCommandCenter {
     /* ── 1. Health / Command Hero ── */
     async fetchHealth() {
         try {
-            const r = await fetch('/api/v1/health/system');
+            const r = await fetch('/dashboard/api/health-summary');
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const d = await r.json();
             if (d.status !== 'success') throw new Error('API error');
@@ -782,7 +791,9 @@ class CortexCommandCenter {
             document.getElementById('cb-agents').innerHTML = (ag.online || 0) + '/' + (ag.total || 0) + this.trendArrow('agents', ag.online || 0);
             const evCount = d.events_last_24h || 0;
             document.getElementById('cb-events').innerHTML = this.fmtNum(evCount) + this.trendArrow('events', evCount);
-        } catch (e) { /* silent */ }
+        } catch (e) {
+            console.warn('Health fetch failed:', e);
+        }
     }
 
     setPosture(score) {
@@ -806,10 +817,10 @@ class CortexCommandCenter {
         return '';
     }
 
-    /* ── 2. Compact Threat Feed (5 items + triage) ── */
+    /* ── 2. Compact Threat Feed with Triage Pagination ── */
     async fetchThreats() {
         try {
-            const r = await fetch('/dashboard/api/live/threats?hours=' + this.hoursRange);
+            const r = await fetch('/dashboard/api/live/threats?hours=' + this.hoursRange + '&per_page=200');
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const d = await r.json();
             if (d.status !== 'success') throw new Error('API error');
@@ -817,8 +828,8 @@ class CortexCommandCenter {
             const threatCount = d.db_total || d.count || 0;
             document.getElementById('cb-threats').innerHTML = this.fmtNum(threatCount) + this.trendArrow('threats', threatCount);
             this.updateFreshness(d.data_stale, d.last_event_time);
-            const container = document.getElementById('threat-feed');
             this.threatCache = d.threats || [];
+            this.threatPage = 0;
 
             // Compute MTTD as median inter-arrival time between detections
             if (this.threatCache.length >= 2) {
@@ -842,11 +853,6 @@ class CortexCommandCenter {
                 document.getElementById('cb-mttd').textContent = 'N/A';
             }
 
-            if (this.threatCache.length === 0) {
-                container.innerHTML = '<div class="cc-empty"><div class="cc-empty-icon">&#x1f6e1;</div><div class="cc-empty-msg">No threats detected.<br><span style="font-size:0.75rem;color:var(--text-muted);"><a href="/dashboard/deploy" style="color:var(--neural-primary);">Deploy agents</a> to begin monitoring.</span></div></div>';
-                return;
-            }
-
             // Critical event toast
             let newCritCount = 0;
             let lastCritType = '';
@@ -860,30 +866,57 @@ class CortexCommandCenter {
             if (newCritCount === 1) { this.toast('CRITICAL: ' + lastCritType, 'critical'); }
             else if (newCritCount > 1) { this.toast(newCritCount + ' new CRITICAL events', 'critical'); }
 
-            // Render compact feed (8 items with triage)
-            container.innerHTML = this.threatCache.slice(0, 8).map((t, idx) => {
-                const sev = (t.severity || 'low').toLowerCase();
-                const time = t.timestamp ? this.relTime(t.timestamp) : '';
-                const mitreList = (t.mitre_techniques || []).map(m => '<span class="tf-mitre">' + m + '</span>').join(' ');
+            this.renderThreatPage();
+        } catch (e) { console.warn('Threats fetch failed:', e); }
+    }
 
-                return '<div class="tf-item sev-' + sev + '" data-idx="' + idx + '" style="cursor:pointer;" onclick="window.location=\'/dashboard/threat-feed?search=' + encodeURIComponent(t.type || '') + '\'">' +
-                    '<div class="tf-sev sev-' + sev + '">' + sev + '</div>' +
-                    '<div class="tf-body">' +
-                        '<div class="tf-type">' + this.fmtType(t.type) + '</div>' +
-                        '<div class="tf-meta">' +
-                            (t.agent_id ? '<span>' + this.esc(t.agent_id) + '</span>' : '') +
-                            '<span>' + time + '</span>' +
-                            mitreList +
-                        '</div>' +
+    renderThreatPage() {
+        const container = document.getElementById('threat-feed');
+        if (this.threatCache.length === 0) {
+            container.innerHTML = '<div class="cc-empty"><div class="cc-empty-icon">&#x1f6e1;</div><div class="cc-empty-msg">No threats detected.<br><span style="font-size:0.75rem;color:var(--text-muted);"><a href="/dashboard/deploy" style="color:var(--neural-primary);">Deploy agents</a> to begin monitoring.</span></div></div>';
+            return;
+        }
+
+        const pp = this.THREATS_PER_PAGE;
+        const totalPages = Math.ceil(this.threatCache.length / pp);
+        this.threatPage = Math.max(0, Math.min(this.threatPage, totalPages - 1));
+        const start = this.threatPage * pp;
+        const pageItems = this.threatCache.slice(start, start + pp);
+
+        let html = pageItems.map((t, i) => {
+            const idx = start + i;
+            const sev = (t.severity || 'low').toLowerCase();
+            const time = t.timestamp ? this.relTime(t.timestamp) : '';
+            const mitreList = (t.mitre_techniques || []).map(m => '<span class="tf-mitre">' + m + '</span>').join(' ');
+
+            return '<div class="tf-item sev-' + sev + '" data-idx="' + idx + '" style="cursor:pointer;" onclick="window.location=\'/dashboard/threat-feed?search=' + encodeURIComponent(t.type || '') + '\'">' +
+                '<div class="tf-sev sev-' + sev + '">' + sev + '</div>' +
+                '<div class="tf-body">' +
+                    '<div class="tf-type">' + this.fmtType(t.type) + '</div>' +
+                    '<div class="tf-meta">' +
+                        (t.agent_id ? '<span>' + this.esc(t.agent_id) + '</span>' : '') +
+                        '<span>' + time + '</span>' +
+                        mitreList +
                     '</div>' +
-                    '<div class="tf-triage">' +
-                        '<button class="triage-btn triage-legit" data-action="triage" data-triage-idx="' + idx + '" data-triage-action="legit" title="Mark Legitimate">&#10003;</button>' +
-                        '<button class="triage-btn triage-inv" data-action="triage" data-triage-idx="' + idx + '" data-triage-action="investigate" title="Investigate">&#128269;</button>' +
-                        '<button class="triage-btn triage-inc" data-action="triage" data-triage-idx="' + idx + '" data-triage-action="incident" title="Create Incident">&#9888;</button>' +
-                    '</div>' +
-                '</div>';
-            }).join('');
-        } catch (e) { /* silent */ }
+                '</div>' +
+                '<div class="tf-triage">' +
+                    '<button class="triage-btn triage-legit" data-action="triage" data-triage-idx="' + idx + '" data-triage-action="legit" title="Mark Legitimate">&#10003;</button>' +
+                    '<button class="triage-btn triage-inv" data-action="triage" data-triage-idx="' + idx + '" data-triage-action="investigate" title="Investigate">&#128269;</button>' +
+                    '<button class="triage-btn triage-inc" data-action="triage" data-triage-idx="' + idx + '" data-triage-action="incident" title="Create Incident">&#9888;</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+
+        // Pagination controls
+        if (totalPages > 1) {
+            html += '<div class="tf-pagination">' +
+                '<button class="tf-pg-btn" ' + (this.threatPage <= 0 ? 'disabled' : '') + ' onclick="event.stopPropagation();cortex.threatPage--;cortex.renderThreatPage();">&laquo; Prev</button>' +
+                '<span class="tf-pg-info">Page ' + (this.threatPage + 1) + ' / ' + totalPages + ' (' + this.threatCache.length + ' events)</span>' +
+                '<button class="tf-pg-btn" ' + (this.threatPage >= totalPages - 1 ? 'disabled' : '') + ' onclick="event.stopPropagation();cortex.threatPage++;cortex.renderThreatPage();">Next &raquo;</button>' +
+            '</div>';
+        }
+
+        container.innerHTML = html;
     }
 
     /* ── Triage Actions ── */
@@ -893,13 +926,13 @@ class CortexCommandCenter {
 
         if (action === 'legit') {
             try {
-                await fetch('/api/v1/reliability/feedback', {
+                await fetch('/api/reliability/feedback', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         agent_id: t.agent_id || 'unknown',
                         event_id: t.id,
-                        action: 'confirm_benign'
+                        action: 'dismiss'
                     })
                 });
             } catch (e) { console.warn('Reliability feedback failed:', e); }

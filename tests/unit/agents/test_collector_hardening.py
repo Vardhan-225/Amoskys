@@ -14,14 +14,14 @@ import time
 from typing import Dict
 from unittest.mock import patch
 
-from amoskys.agents.auth.auth_guard_agent_v2 import MacOSAuthLogCollector
+from amoskys.agents.auth.auth_guard_agent import MacOSAuthLogCollector
 from amoskys.agents.auth.probes import (
     AccountLockoutStormProbe,
     AuthEvent,
     MFABypassOrAnomalyProbe,
 )
 from amoskys.agents.common.probes import ProbeContext, Severity
-from amoskys.agents.dns.dns_agent_v2 import MacOSDNSCollector
+from amoskys.agents.dns.dns_agent import MacOSDNSCollector
 from amoskys.agents.fim.probes import (
     BootloaderTamperProbe,
     ChangeType,

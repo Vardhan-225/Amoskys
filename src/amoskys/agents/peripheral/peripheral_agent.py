@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AMOSKYS Peripheral Agent v2 - Micro-Probe Architecture.
+"""AMOSKYS Peripheral Agent - Micro-Probe Architecture.
 
 This is the modernized Peripheral agent using the "swarm of eyes" pattern.
 7 micro-probes each watch one specific peripheral threat vector.
@@ -21,7 +21,7 @@ MITRE ATT&CK Coverage:
     - T1557: Adversary-in-the-Middle
 
 Usage:
-    >>> agent = PeripheralAgentV2()
+    >>> agent = PeripheralAgent()
     >>> agent.run_forever()
 """
 
@@ -49,14 +49,12 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("PeripheralAgentV2")
+logger = logging.getLogger("PeripheralAgent")
 
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
-QUEUE_PATH = getattr(
-    config.agent, "peripheral_queue_path", "data/queue/peripheral.db"
-)
+QUEUE_PATH = getattr(config.agent, "peripheral_queue_path", "data/queue/peripheral.db")
 
 
 # =============================================================================
@@ -101,19 +99,22 @@ class EventBusPublisher:
         """Publish events to EventBus."""
         self._ensure_channel()
 
-        for device_telemetry in events:
-            timestamp_ns = int(time.time() * 1e9)
-            idempotency_key = f"{device_telemetry.device_id}_{timestamp_ns}"
-            envelope = telemetry_pb2.UniversalEnvelope(
-                version="v1",
-                ts_ns=timestamp_ns,
-                idempotency_key=idempotency_key,
-                device_telemetry=device_telemetry,
-                signing_algorithm="Ed25519",
-                priority="NORMAL",
-                requires_acknowledgment=True,
-                schema_version=1,
-            )
+        for event in events:
+            # Already-wrapped envelopes (e.g. from drain path) go directly
+            if isinstance(event, telemetry_pb2.UniversalEnvelope):
+                envelope = event
+            else:
+                timestamp_ns = int(time.time() * 1e9)
+                idempotency_key = f"{event.device_id}_{timestamp_ns}"
+                envelope = telemetry_pb2.UniversalEnvelope(
+                    version="v1",
+                    ts_ns=timestamp_ns,
+                    idempotency_key=idempotency_key,
+                    device_telemetry=event,
+                    priority="NORMAL",
+                    requires_acknowledgment=True,
+                    schema_version=1,
+                )
 
             ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
 
@@ -129,7 +130,7 @@ class EventBusPublisher:
 
 
 # =============================================================================
-# Peripheral Agent V2
+# Peripheral Agent
 # =============================================================================
 
 
@@ -148,7 +149,7 @@ class PeripheralAgent(MicroProbeAgentMixin, HardenedAgentBase):
     """
 
     def __init__(self, collection_interval: float = 10.0):
-        """Initialize Peripheral Agent v2.
+        """Initialize Peripheral Agent.
 
         Args:
             collection_interval: Seconds between collection cycles
@@ -181,7 +182,7 @@ class PeripheralAgent(MicroProbeAgentMixin, HardenedAgentBase):
         # Register all peripheral probes
         self.register_probes(create_peripheral_probes())
 
-        logger.info(f"PeripheralAgentV2 initialized with {len(self._probes)} probes")
+        logger.info(f"PeripheralAgent initialized with {len(self._probes)} probes")
 
     def setup(self) -> bool:
         """Initialize agent resources.
@@ -210,7 +211,7 @@ class PeripheralAgent(MicroProbeAgentMixin, HardenedAgentBase):
                 logger.error("No probes initialized successfully")
                 return False
 
-            logger.info("PeripheralAgentV2 setup complete")
+            logger.info("PeripheralAgent setup complete")
             return True
 
         except Exception as e:
@@ -344,12 +345,12 @@ class PeripheralAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
     def shutdown(self) -> None:
         """Graceful shutdown."""
-        logger.info("PeripheralAgentV2 shutting down...")
+        logger.info("PeripheralAgent shutting down...")
 
         if self.eventbus_publisher:
             self.eventbus_publisher.close()
 
-        logger.info("PeripheralAgentV2 shutdown complete")
+        logger.info("PeripheralAgent shutdown complete")
 
     def get_health(self) -> Dict[str, Any]:
         """Get agent health status.
@@ -375,10 +376,10 @@ class PeripheralAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
 
 def main():
-    """Run Peripheral Agent v2."""
+    """Run Peripheral Agent."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="AMOSKYS Peripheral Agent v2")
+    parser = argparse.ArgumentParser(description="AMOSKYS Peripheral Agent")
     parser.add_argument(
         "--interval",
         type=float,
@@ -404,7 +405,7 @@ def main():
     else:
         logging.getLogger().setLevel(getattr(logging, args.log_level))
 
-    agent = PeripheralAgentV2(collection_interval=args.interval)
+    agent = PeripheralAgent(collection_interval=args.interval)
 
     try:
         agent.run_forever()
@@ -415,7 +416,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# B5.1: Deprecated alias — will be removed in v1.0
-PeripheralAgentV2 = PeripheralAgent

@@ -292,37 +292,75 @@ def get_config():
     return jsonify({"status": "success", "config": config})
 
 
+def _parse_log_file(path, pattern, limit):
+    """Parse a single log file into structured entries."""
+    component = path.stem.replace(".err", "").replace(".out", "")
+    entries = []
+    try:
+        lines = path.read_text(errors="replace").strip().splitlines()
+    except Exception:
+        return entries
+
+    for line in lines[-limit:]:
+        m = pattern.match(line)
+        if m:
+            entries.append(
+                {
+                    "timestamp": m.group(1),
+                    "component": m.group(2),
+                    "level": m.group(3),
+                    "message": m.group(4)[:500],
+                }
+            )
+        elif line.strip():
+            entries.append(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "component": component,
+                    "level": "INFO",
+                    "message": line.strip()[:500],
+                }
+            )
+    return entries
+
+
 @system_bp.route("/logs", methods=["GET"])
 @require_auth(permissions=["system.logs"])
 def get_logs():
-    """Get recent system logs (admin only)"""
-    # This is a placeholder - in production, integrate with proper logging system
-    logs = [
-        {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "level": "INFO",
-            "component": "api_gateway",
-            "message": "API Gateway Phase 2.3 initialized successfully",
-        },
-        {
-            "timestamp": (
-                datetime.now(timezone.utc).replace(minute=datetime.now().minute - 1)
-            ).isoformat(),
-            "level": "INFO",
-            "component": "auth",
-            "message": "JWT authentication enabled",
-        },
-        {
-            "timestamp": (
-                datetime.now(timezone.utc).replace(minute=datetime.now().minute - 2)
-            ).isoformat(),
-            "level": "INFO",
-            "component": "events",
-            "message": "Event ingestion endpoint activated",
-        },
-    ]
+    """Get recent system logs (admin only).
 
-    return jsonify({"status": "success", "logs": logs})
+    Reads real log files from the logs/ directory.
+    Query params:
+        component: Filter by component name (e.g., 'eventbus', 'wal_processor')
+        limit: Max log lines to return (default 100, max 500)
+    """
+    import re
+    from pathlib import Path
+
+    component_filter = request.args.get("component")
+    try:
+        limit = min(int(request.args.get("limit", 100)), 500)
+    except (ValueError, TypeError):
+        limit = 100
+
+    log_dir = Path("logs")
+    logs = []
+    log_pattern = re.compile(
+        r"^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,.]?\d*)\s+-\s+(\S+)\s+-\s+(\w+)\s+-\s+(.+)$"
+    )
+
+    if log_dir.exists():
+        log_files = sorted(
+            log_dir.glob("*.log"), key=lambda f: f.stat().st_mtime, reverse=True
+        )
+        for lf in log_files[:10]:
+            component = lf.stem.replace(".err", "").replace(".out", "")
+            if component_filter and component_filter not in component:
+                continue
+            logs.extend(_parse_log_file(lf, log_pattern, limit))
+
+    logs.sort(key=lambda x: x["timestamp"], reverse=True)
+    return jsonify({"status": "success", "logs": logs[:limit]})
 
 
 @system_bp.route("/stats", methods=["GET"])

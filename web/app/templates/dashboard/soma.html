@@ -156,10 +156,44 @@
 
         <div class="soma-card">
             <div class="soma-card-hdr"><h3>Learning Metrics</h3></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
                 <div class="sm-metric"><span class="sm-val" id="events-processed">--</span><span class="sm-lbl">Events Scored</span></div>
-                <div class="sm-metric"><span class="sm-val" id="fp-rate">--</span><span class="sm-lbl">FP Rate</span></div>
+                <div class="sm-metric">
+                    <span class="sm-val" id="fp-rate">--</span>
+                    <span class="sm-lbl" id="fp-rate-lbl">FP Rate</span>
+                </div>
             </div>
+
+            <!-- GBC Training Progress -->
+            <div class="soma-progress-section" id="gbc-progress-section">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
+                    <span class="sm-lbl" style="font-weight:700;color:var(--text-secondary);">GBC Training Progress</span>
+                    <span class="sm-lbl" id="gbc-progress-text" style="color:var(--neural-primary);">--</span>
+                </div>
+                <div class="soma-progress-bar">
+                    <div class="soma-progress-fill" id="gbc-progress-fill" style="width:0%;"></div>
+                </div>
+                <div class="sm-lbl" id="gbc-progress-hint" style="margin-top:0.3rem;font-size:0.65rem;color:var(--text-muted);">
+                    Needs high-trust labels from triage feedback to activate supervised learning.
+                </div>
+            </div>
+
+            <!-- Embedding Metrics -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin:1rem 0;">
+                <div class="sm-metric-sm">
+                    <span class="sm-val-sm" id="emb-vocab">--</span>
+                    <span class="sm-lbl-sm">Vocab Size</span>
+                </div>
+                <div class="sm-metric-sm">
+                    <span class="sm-val-sm" id="emb-dim-overview">--</span>
+                    <span class="sm-lbl-sm">Embed Dims</span>
+                </div>
+                <div class="sm-metric-sm">
+                    <span class="sm-val-sm" id="emb-variance">--</span>
+                    <span class="sm-lbl-sm">Variance Explained</span>
+                </div>
+            </div>
+
             <div class="soma-info-box">
                 <div class="soma-info-icon">&#9432;</div>
                 <div>
@@ -214,7 +248,7 @@
                 </div>
                 <div class="model-info">
                     <div class="model-name">GradientBoosting<span class="model-badge" id="gbc-badge">--</span></div>
-                    <div class="model-desc">Supervised classification. Learns from high-trust incident/IOC-confirmed labels (requires 50+ samples).</div>
+                    <div class="model-desc">Supervised classification. Learns from high-trust incident/IOC-confirmed labels.</div>
                     <div class="model-stats">
                         <div><span class="model-stat-lbl">Accuracy</span><span class="model-stat-val" id="gbc-accuracy">--</span></div>
                         <div><span class="model-stat-lbl">F1 (Macro)</span><span class="model-stat-val" id="gbc-f1">--</span></div>
@@ -237,9 +271,9 @@
                 </div>
                 <div class="model-info">
                     <div class="model-name">EventEmbedder<span class="model-badge" id="emb-badge">--</span></div>
-                    <div class="model-desc">Co-occurrence matrix + TruncatedSVD (32 dims). Creates semantic embeddings for event similarity.</div>
+                    <div class="model-desc">Co-occurrence matrix + TruncatedSVD. Creates semantic embeddings for event similarity.</div>
                     <div class="model-stats">
-                        <div><span class="model-stat-lbl">Dimensions</span><span class="model-stat-val">32</span></div>
+                        <div><span class="model-stat-lbl">Dimensions</span><span class="model-stat-val" id="emb-dims">--</span></div>
                         <div><span class="model-stat-lbl">Method</span><span class="model-stat-val">SVD</span></div>
                     </div>
                 </div>
@@ -454,6 +488,19 @@
 .sm-metric { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 0.75rem 1rem; }
 .sm-val { display: block; font-size: 1.5rem; font-weight: 700; color: var(--text-primary); line-height: 1.2; }
 .sm-lbl { display: block; font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ── Small Metric (compact) ── */
+.sm-metric-sm { background: rgba(255,255,255,0.03); border-radius: 6px; padding: 0.5rem 0.75rem; text-align: center; }
+.sm-val-sm { display: block; font-size: 1.1rem; font-weight: 700; color: var(--neural-primary); line-height: 1.3; }
+.sm-lbl-sm { display: block; font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+
+/* ── GBC Progress Bar ── */
+.soma-progress-section { padding: 0.75rem 1rem; background: rgba(255,255,255,0.02); border-radius: 8px; margin-bottom: 0.5rem; }
+.soma-progress-bar { height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+.soma-progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #00d9ff, #00ff88); transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+
+/* ── FP Rate contextual ── */
+.fp-context { font-size: 0.6rem; color: var(--text-muted); margin-top: 2px; }
 
 /* ── Model Grid ── */
 .model-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem; }
@@ -774,13 +821,15 @@
 
             // EventEmbedder model card
             var embBadge = document.getElementById('emb-badge');
+            var embDim = (metrics.embedder && metrics.embedder.embedding_dim) || 32;
             if (brain.models_available.event_embedder) {
                 embBadge.textContent = 'Loaded'; embBadge.className = 'model-badge loaded';
                 setRing('emb-ring', 100, '#00d9ff');
-                document.getElementById('emb-ring-val').textContent = '32d';
+                document.getElementById('emb-ring-val').textContent = embDim + 'd';
             } else {
                 embBadge.textContent = 'Not Trained'; embBadge.className = 'model-badge pending';
             }
+            document.getElementById('emb-dims').textContent = embDim;
         } catch (e) { console.error('Brain load error:', e); }
     }
 
@@ -867,7 +916,38 @@
             var total = (d.classification.legitimate || 0) + (d.classification.suspicious || 0) + (d.classification.malicious || 0);
             renderClassification(d.classification, total);
 
-            document.getElementById('fp-rate').textContent = ((d.learning.fp_rate || 0) * 100).toFixed(1) + '%';
+            // FP Rate — contextual display
+            var fpEl = document.getElementById('fp-rate');
+            var fpLbl = document.getElementById('fp-rate-lbl');
+            var learn = d.learning || {};
+            if (learn.fp_rate === null || learn.fp_rate === undefined) {
+                fpEl.textContent = 'N/A';
+                fpEl.style.color = 'var(--text-muted)';
+                fpLbl.innerHTML = 'FP Rate<div class="fp-context">No confirmed threats yet</div>';
+            } else {
+                fpEl.textContent = (learn.fp_rate * 100).toFixed(1) + '%';
+                fpLbl.textContent = 'FP Rate';
+            }
+
+            // GBC Training Progress
+            var labels = learn.high_trust_labels || 0;
+            var threshold = learn.gbc_label_threshold || 50;
+            var pct = Math.min(100, Math.round(labels / threshold * 100));
+            document.getElementById('gbc-progress-fill').style.width = pct + '%';
+            document.getElementById('gbc-progress-text').textContent = labels + ' / ' + threshold + ' labels';
+            var hintEl = document.getElementById('gbc-progress-hint');
+            if (learn.gbc_status === 'trained') {
+                hintEl.textContent = 'GBC model trained and active.';
+                hintEl.style.color = 'var(--neural-success)';
+            } else if (labels > 0) {
+                hintEl.textContent = 'Collecting labels — ' + (threshold - labels) + ' more needed to train GBC.';
+            }
+
+            // Embedding Metrics
+            document.getElementById('emb-vocab').textContent = learn.embedder_vocab_size || '--';
+            document.getElementById('emb-dim-overview').textContent = learn.embedder_dim ? learn.embedder_dim + 'd' : '--';
+            document.getElementById('emb-variance').textContent = learn.embedder_variance != null ? (learn.embedder_variance * 100).toFixed(0) + '%' : '--';
+
             renderAgents(d.agents || []);
         } catch (e) { console.error('Overview error:', e); }
     }

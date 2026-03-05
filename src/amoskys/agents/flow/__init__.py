@@ -17,12 +17,8 @@ from amoskys.agents.flow.probes import (
     create_flow_probes,
 )
 
-# B5.1: Deprecated alias
-FlowAgentV2 = FlowAgent
-
 __all__ = [
     "FlowAgent",
-    "FlowAgentV2",
     "MacOSFlowCollector",
     "FlowEvent",
     "create_flow_probes",

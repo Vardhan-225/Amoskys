@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AMOSKYS Process Agent v3 - Micro-Probe Architecture.
+"""AMOSKYS Process Agent - Micro-Probe Architecture.
 
 This is the modernized Process agent using the "swarm of eyes" pattern.
 8 micro-probes each watch one specific process threat vector.
@@ -24,7 +24,7 @@ MITRE ATT&CK Coverage:
     - T1078: Valid Accounts
 
 Usage:
-    >>> agent = ProcAgentV3()
+    >>> agent = ProcAgent()
     >>> agent.run_forever()
 """
 
@@ -53,7 +53,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("ProcAgentV3")
+logger = logging.getLogger("ProcAgent")
 
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
@@ -103,18 +103,22 @@ class EventBusPublisher:
         """Publish events to EventBus."""
         self._ensure_channel()
 
-        for device_telemetry in events:
-            timestamp_ns = int(time.time() * 1e9)
-            idempotency_key = f"{device_telemetry.device_id}_{timestamp_ns}"
-            envelope = telemetry_pb2.UniversalEnvelope(
-                version="v1",
-                ts_ns=timestamp_ns,
-                idempotency_key=idempotency_key,
-                device_telemetry=device_telemetry,
-                priority="NORMAL",
-                requires_acknowledgment=True,
-                schema_version=1,
-            )
+        for event in events:
+            # Already-wrapped envelopes (e.g. from drain path) go directly
+            if isinstance(event, telemetry_pb2.UniversalEnvelope):
+                envelope = event
+            else:
+                timestamp_ns = int(time.time() * 1e9)
+                idempotency_key = f"{event.device_id}_{timestamp_ns}"
+                envelope = telemetry_pb2.UniversalEnvelope(
+                    version="v1",
+                    ts_ns=timestamp_ns,
+                    idempotency_key=idempotency_key,
+                    device_telemetry=event,
+                    priority="NORMAL",
+                    requires_acknowledgment=True,
+                    schema_version=1,
+                )
 
             ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
 
@@ -152,7 +156,7 @@ class SystemMetricsCollector:
 
 
 # =============================================================================
-# Process Agent V3
+# Process Agent
 # =============================================================================
 
 
@@ -172,7 +176,7 @@ class ProcAgent(MicroProbeAgentMixin, HardenedAgentBase):
     """
 
     def __init__(self, collection_interval: float = 10.0):
-        """Initialize Process Agent v3.
+        """Initialize Process Agent.
 
         Args:
             collection_interval: Seconds between collection cycles
@@ -208,7 +212,7 @@ class ProcAgent(MicroProbeAgentMixin, HardenedAgentBase):
         # Register all process probes
         self.register_probes(create_proc_probes())
 
-        logger.info(f"ProcAgentV3 initialized with {len(self._probes)} probes")
+        logger.info(f"ProcAgent initialized with {len(self._probes)} probes")
 
     def setup(self) -> bool:
         """Initialize agent resources.
@@ -245,7 +249,7 @@ class ProcAgent(MicroProbeAgentMixin, HardenedAgentBase):
                 logger.error("No probes initialized successfully")
                 return False
 
-            logger.info("ProcAgentV3 setup complete")
+            logger.info("ProcAgent setup complete")
             return True
 
         except Exception as e:
@@ -441,12 +445,12 @@ class ProcAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
     def shutdown(self) -> None:
         """Graceful shutdown."""
-        logger.info("ProcAgentV3 shutting down...")
+        logger.info("ProcAgent shutting down...")
 
         if self.eventbus_publisher:
             self.eventbus_publisher.close()
 
-        logger.info("ProcAgentV3 shutdown complete")
+        logger.info("ProcAgent shutdown complete")
 
     def get_health(self) -> Dict[str, Any]:
         """Get agent health status.
@@ -472,10 +476,10 @@ class ProcAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
 
 def main():
-    """Run Process Agent v3."""
+    """Run Process Agent."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="AMOSKYS Process Agent v3")
+    parser = argparse.ArgumentParser(description="AMOSKYS Process Agent")
     parser.add_argument(
         "--interval",
         type=float,
@@ -494,7 +498,7 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     logger.info("=" * 70)
-    logger.info("AMOSKYS Process Agent v3 (Micro-Probe Architecture)")
+    logger.info("AMOSKYS Process Agent (Micro-Probe Architecture)")
     logger.info("=" * 70)
 
     agent = ProcAgent(collection_interval=args.interval)
@@ -508,7 +512,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# B5.1: Deprecated alias — will be removed in v1.0
-ProcAgentV3 = ProcAgent

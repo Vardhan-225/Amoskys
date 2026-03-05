@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=["5000 per hour", "300 per minute"],
     storage_uri=os.environ.get("RATE_LIMIT_STORAGE_URL", "memory://"),
     strategy="fixed-window",
     headers_enabled=True,
@@ -53,11 +53,9 @@ def rate_limit_exempt():
     if request.path == "/v1/health/ping" or request.path == "/health":
         return True
 
-    # Exempt all dashboard API endpoints (real-time polling, agent control,
-    # deep-overview, hunt, incidents, MITRE, network — these are authenticated
-    # by session cookie and need high-frequency access for dashboard updates)
-    if request.path.startswith("/dashboard/api/"):
-        return True
+    # Dashboard API routes are now protected by @require_login and have
+    # per-endpoint @require_rate_limit decorators where needed. Apply a
+    # generous global cap (300/min) instead of blanket exemption.
 
     # Exempt static assets
     if request.path.startswith("/static/"):

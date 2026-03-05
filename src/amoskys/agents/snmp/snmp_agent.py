@@ -470,13 +470,30 @@ def main():
         logger.error(f"❌ Failed to load private key: {e}")
         sys.exit(1)
 
-    # Configure devices to monitor
-    # TODO: Load from configuration file
-    devices = [
-        {"host": "localhost", "community": "public"},
-        # Add more devices here
-        # {'host': '192.168.1.1', 'community': 'public'},
-    ]
+    # Load devices from config / environment.
+    # Config key: agent.snmp_devices  (list of {host, community, port?})
+    # Env override: AMOSKYS_SNMP_DEVICES — JSON array, e.g.
+    #   '[{"host":"10.0.0.1","community":"public"}]'
+    import json as _json
+
+    devices: list = []
+    env_devices = os.environ.get("AMOSKYS_SNMP_DEVICES")
+    if env_devices:
+        try:
+            devices = _json.loads(env_devices)
+            logger.info("Loaded SNMP devices from AMOSKYS_SNMP_DEVICES env var")
+        except Exception as exc:
+            logger.error(f"Failed to parse AMOSKYS_SNMP_DEVICES: {exc}")
+            sys.exit(1)
+    else:
+        devices = getattr(config.agent, "snmp_devices", [])
+
+    if not devices:
+        logger.error(
+            "No SNMP devices configured. Set agent.snmp_devices in "
+            "config/amoskys.yaml or AMOSKYS_SNMP_DEVICES env var."
+        )
+        sys.exit(1)
 
     logger.info(f"📋 Configured devices: {len(devices)}")
     for i, device in enumerate(devices, 1):

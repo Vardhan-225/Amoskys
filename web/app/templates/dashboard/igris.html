@@ -1,0 +1,571 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AMOSKYS — IGRIS Supervisor{% endblock %}
+
+{% block content %}
+<div class="igris-page">
+
+    <!-- ===== STATUS HEADER ===== -->
+    <div class="igris-status-bar">
+        <div class="igris-status-left">
+            <span class="igris-eye">&#128065;</span>
+            <span class="igris-status-title">IGRIS</span>
+            <span class="igris-status-dash">&mdash;</span>
+            <span class="igris-status-desc">Autonomous Supervisory Layer</span>
+        </div>
+        <div class="igris-status-right">
+            <span class="igris-verdict-badge" id="igris-verdict">[--] ...</span>
+            <span class="igris-status-sep">|</span>
+            <span class="igris-meta" id="igris-cycle">Cycle --</span>
+            <span class="igris-status-sep">|</span>
+            <span class="igris-meta" id="igris-metric-count">-- metrics</span>
+            <span class="igris-status-sep">|</span>
+            <span class="igris-meta" id="igris-cycle-dur">--ms</span>
+        </div>
+    </div>
+
+    <!-- ===== SUBSYSTEM HEALTH GRID ===== -->
+    <div class="igris-section-label">Subsystem Health</div>
+    <div class="igris-subsystem-grid" id="igris-subsystems">
+        <div class="igris-sub-box" data-sub="fleet"><span class="igris-sub-marker">[.]</span> Fleet</div>
+        <div class="igris-sub-box" data-sub="transport"><span class="igris-sub-marker">[.]</span> Transport</div>
+        <div class="igris-sub-box" data-sub="ingestion"><span class="igris-sub-marker">[.]</span> Ingestion</div>
+        <div class="igris-sub-box" data-sub="intelligence"><span class="igris-sub-marker">[.]</span> Intelligence</div>
+        <div class="igris-sub-box" data-sub="amrdr"><span class="igris-sub-marker">[.]</span> AMRDR</div>
+        <div class="igris-sub-box" data-sub="soma"><span class="igris-sub-marker">[.]</span> SOMA</div>
+        <div class="igris-sub-box" data-sub="enrichment"><span class="igris-sub-marker">[.]</span> Enrichment</div>
+        <div class="igris-sub-box" data-sub="integrity"><span class="igris-sub-marker">[.]</span> Integrity</div>
+    </div>
+
+    <!-- ===== TWO TERMINALS ===== -->
+    <div class="igris-terminals">
+
+        <!-- LEFT: AMOSKYS CLI -->
+        <div class="igris-term-wrap igris-term-cli">
+            <div class="igris-term-header">
+                <div class="igris-term-dots">
+                    <span class="igris-tdot igris-tdot-red"></span>
+                    <span class="igris-tdot igris-tdot-yellow"></span>
+                    <span class="igris-tdot igris-tdot-green"></span>
+                </div>
+                <span class="igris-term-title">amoskys@local ~ cli</span>
+                <button class="igris-term-btn" onclick="cli.clear()" title="Clear">CLR</button>
+            </div>
+            <div id="cli-output" class="igris-term-output"></div>
+            <div class="igris-term-input-row">
+                <span class="igris-term-prompt">amoskys@local:~$</span>
+                <input type="text" id="cli-input" class="igris-term-input" placeholder="fleet, status, events, soma status, threats..." autocomplete="off" spellcheck="false">
+            </div>
+        </div>
+
+        <!-- RIGHT: IGRIS Observation -->
+        <div class="igris-term-wrap igris-term-igris">
+            <div class="igris-term-header igris-term-header-igris">
+                <div class="igris-term-dots">
+                    <span class="igris-tdot igris-tdot-cyan"></span>
+                    <span class="igris-tdot igris-tdot-dim"></span>
+                    <span class="igris-tdot igris-tdot-dim"></span>
+                </div>
+                <div class="igris-obs-tabs">
+                    <button class="igris-obs-tab active" data-tab="logs" onclick="obs.switchTab('logs')">Logs</button>
+                    <button class="igris-obs-tab" data-tab="cmd" onclick="obs.switchTab('cmd')">Command</button>
+                </div>
+                <span class="igris-term-title igris-term-title-igris">igris@amoskys ~ observation</span>
+                <button class="igris-term-btn igris-term-btn-igris" onclick="obs.clear()" title="Clear">CLR</button>
+            </div>
+            <!-- Logs panel (real IGRIS log stream) -->
+            <div id="obs-logs" class="igris-term-output igris-logs-panel"></div>
+            <!-- Command panel (igris commands) -->
+            <div id="obs-cmd-output" class="igris-term-output" style="display:none;"></div>
+            <div id="obs-input-row" class="igris-term-input-row igris-term-input-row-igris">
+                <span class="igris-term-prompt igris-term-prompt-igris">igris@amoskys:~$</span>
+                <input type="text" id="obs-input" class="igris-term-input igris-term-input-igris" placeholder="status, metrics, coherence, explain <id>..." autocomplete="off" spellcheck="false">
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<style>
+/* ══════════════════════════════════════════════════════════════
+   IGRIS — Autonomous Supervisory Dashboard
+   ══════════════════════════════════════════════════════════════ */
+.igris-page {
+    padding: 1rem 1.25rem; display: flex; flex-direction: column;
+    gap: 0.65rem; height: calc(100vh - 60px);
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+}
+
+/* ── Status Header ── */
+.igris-status-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 0.5rem; flex-shrink: 0;
+    padding: 0.55rem 1rem; border-radius: 8px;
+    background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.08);
+}
+.igris-status-left { display: flex; align-items: center; gap: 0.5rem; }
+.igris-eye { font-size: 1.1rem; }
+.igris-status-title { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); }
+.igris-status-dash { color: var(--text-muted); }
+.igris-status-desc { font-size: 0.7rem; color: var(--text-muted); }
+.igris-status-right { display: flex; align-items: center; gap: 0.6rem; }
+.igris-status-sep { color: rgba(255,255,255,0.1); font-size: 0.7rem; }
+.igris-meta { font-size: 0.68rem; color: var(--text-muted); }
+.igris-verdict-badge {
+    font-size: 0.7rem; font-weight: 700; padding: 0.12rem 0.55rem;
+    border-radius: 4px; letter-spacing: 0.03em;
+}
+.igris-verdict-coherent { background: rgba(0,255,136,0.08); color: #00ff88; border: 1px solid rgba(0,255,136,0.2); }
+.igris-verdict-degraded { background: rgba(255,170,0,0.08); color: #ffaa00; border: 1px solid rgba(255,170,0,0.2); }
+.igris-verdict-compromised { background: rgba(255,51,102,0.08); color: #ff3366; border: 1px solid rgba(255,51,102,0.2); }
+.igris-verdict-blind { background: rgba(128,128,255,0.08); color: #8080ff; border: 1px solid rgba(128,128,255,0.2); }
+
+/* ── Section Labels ── */
+.igris-section-label {
+    font-size: 0.58rem; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 1px; flex-shrink: 0;
+}
+
+/* ── Subsystem Grid ── */
+.igris-subsystem-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.35rem; flex-shrink: 0;
+}
+.igris-sub-box {
+    padding: 0.4rem 0.55rem; border-radius: 6px; font-size: 0.68rem;
+    background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.04);
+    color: var(--text-muted); display: flex; align-items: center; gap: 0.35rem;
+}
+.igris-sub-marker { font-weight: 700; }
+.igris-sub-nominal .igris-sub-marker { color: #00ff88; }
+.igris-sub-nominal { border-color: rgba(0,255,136,0.1); color: var(--text-primary); }
+.igris-sub-degraded .igris-sub-marker,
+.igris-sub-elevated .igris-sub-marker,
+.igris-sub-drifting .igris-sub-marker,
+.igris-sub-stale .igris-sub-marker,
+.igris-sub-warning .igris-sub-marker { color: #ffaa00; }
+.igris-sub-degraded, .igris-sub-elevated, .igris-sub-drifting,
+.igris-sub-stale, .igris-sub-warning { border-color: rgba(255,170,0,0.15); color: #ffaa00; }
+.igris-sub-critical .igris-sub-marker,
+.igris-sub-error .igris-sub-marker { color: #ff3366; }
+.igris-sub-critical, .igris-sub-error { border-color: rgba(255,51,102,0.15); color: #ff3366; }
+.igris-sub-unknown .igris-sub-marker { color: rgba(255,255,255,0.2); }
+.igris-sub-uninitialized .igris-sub-marker { color: rgba(255,255,255,0.25); }
+
+/* ══════════════════════════════════════════════════════════════
+   TWO TERMINALS — Side by Side
+   ══════════════════════════════════════════════════════════════ */
+.igris-terminals {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
+    flex: 1; min-height: 0; overflow: hidden;
+}
+
+/* ── Shared Terminal Chrome ── */
+.igris-term-wrap {
+    display: flex; flex-direction: column; border-radius: 8px; overflow: hidden;
+    min-height: 0;
+}
+.igris-term-header {
+    display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.7rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04); flex-shrink: 0;
+}
+.igris-term-dots { display: flex; gap: 4px; }
+.igris-tdot { width: 8px; height: 8px; border-radius: 50%; }
+.igris-tdot-red { background: #ff5f56; }
+.igris-tdot-yellow { background: #ffbd2e; }
+.igris-tdot-green { background: #27c93f; }
+.igris-tdot-cyan { background: rgba(0,217,255,0.6); box-shadow: 0 0 4px rgba(0,217,255,0.3); }
+.igris-tdot-dim { background: rgba(255,255,255,0.08); }
+.igris-term-title {
+    flex: 1; font-size: 0.66rem; color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+}
+.igris-term-btn {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-muted); border-radius: 3px; padding: 0.1rem 0.4rem;
+    font-size: 0.56rem; cursor: pointer; font-family: 'JetBrains Mono', monospace;
+}
+.igris-term-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+.igris-term-output {
+    flex: 1; overflow-y: auto; padding: 0.6rem 0.7rem; min-height: 0;
+    font-size: 0.72rem; line-height: 1.5; color: #b0b8c8;
+}
+.igris-term-output::-webkit-scrollbar { width: 5px; }
+.igris-term-output::-webkit-scrollbar-track { background: transparent; }
+.igris-term-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+.igris-term-input-row {
+    display: flex; align-items: center; padding: 0.4rem 0.7rem;
+    border-top: 1px solid rgba(255,255,255,0.04); flex-shrink: 0;
+}
+.igris-term-prompt {
+    font-size: 0.72rem; font-weight: 600; white-space: nowrap; margin-right: 0.45rem; opacity: 0.7;
+}
+.igris-term-input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+}
+.igris-term-input::placeholder { color: rgba(255,255,255,0.12); }
+
+/* ── Output line types (shared) ── */
+.tl { margin-bottom: 0.08rem; white-space: pre-wrap; }
+.tl-cmd { color: var(--neural-primary); }
+.tl-info { color: #b0b8c8; }
+.tl-ok { color: #00ff88; }
+.tl-warn { color: #ffaa00; }
+.tl-err { color: #ff3366; }
+.tl-system { color: rgba(255,255,255,0.3); font-style: italic; }
+.tl-ts { color: rgba(255,255,255,0.12); font-size: 0.6rem; }
+
+/* ── CLI Terminal (left) — standard terminal look ── */
+.igris-term-cli {
+    background: #0c0f1a; border: 1px solid rgba(255,255,255,0.06);
+}
+.igris-term-cli .igris-term-header { background: rgba(255,255,255,0.02); }
+.igris-term-cli .igris-term-input-row { background: rgba(0,0,0,0.2); }
+.igris-term-cli .igris-term-prompt { color: var(--neural-primary); }
+.igris-term-cli .igris-term-input { caret-color: var(--neural-primary); }
+.igris-term-cli .igris-term-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+
+/* ── IGRIS Terminal (right) — cyan IGRIS accent ── */
+.igris-term-igris {
+    background: #0a0d18; border: 1px solid rgba(0,217,255,0.08);
+}
+.igris-term-header-igris { background: rgba(0,217,255,0.02); border-color: rgba(0,217,255,0.06); }
+.igris-term-title-igris { color: rgba(0,217,255,0.4); }
+.igris-term-btn-igris {
+    background: rgba(0,217,255,0.04); border-color: rgba(0,217,255,0.1); color: rgba(0,217,255,0.4);
+}
+.igris-term-btn-igris:hover { background: rgba(0,217,255,0.08); color: rgba(0,217,255,0.7); }
+.igris-term-input-row-igris { background: rgba(0,0,0,0.25); border-color: rgba(0,217,255,0.06); }
+.igris-term-prompt-igris { color: rgba(0,217,255,0.5); }
+.igris-term-input-igris { caret-color: rgba(0,217,255,0.6); }
+.igris-term-input-igris::placeholder { color: rgba(0,217,255,0.12); }
+.igris-term-igris .igris-term-output::-webkit-scrollbar-thumb { background: rgba(0,217,255,0.12); }
+
+/* IGRIS-specific line colors */
+.tl-igris-cycle { color: rgba(0,217,255,0.5); }
+.tl-igris-signal { color: #ffaa00; }
+.tl-igris-cleared { color: #00ff88; opacity: 0.7; }
+.tl-igris-cmd { color: rgba(0,217,255,0.65); }
+
+/* ── Observation Tabs ── */
+.igris-obs-tabs { display: flex; gap: 2px; margin-right: 0.4rem; }
+.igris-obs-tab {
+    background: transparent; border: 1px solid rgba(0,217,255,0.1);
+    color: rgba(0,217,255,0.35); border-radius: 3px; padding: 0.08rem 0.45rem;
+    font-size: 0.58rem; cursor: pointer; font-family: 'JetBrains Mono', monospace;
+    font-weight: 600; letter-spacing: 0.03em; transition: all 0.15s;
+}
+.igris-obs-tab:hover { background: rgba(0,217,255,0.06); color: rgba(0,217,255,0.6); }
+.igris-obs-tab.active {
+    background: rgba(0,217,255,0.08); color: rgba(0,217,255,0.7);
+    border-color: rgba(0,217,255,0.25);
+}
+
+/* ── Log lines (Agent Monitor style) ── */
+.igris-log-line {
+    padding: 0.1rem 0; border-bottom: 1px solid rgba(255,255,255,0.015);
+    white-space: pre-wrap; word-break: break-all; line-height: 1.45;
+    font-size: 0.7rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+    .igris-subsystem-grid { grid-template-columns: repeat(2, 1fr); }
+    .igris-terminals { grid-template-columns: 1fr; }
+}
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+/* ══════════════════════════════════════════════════════════════
+   CLI Terminal — AMOSKYS system commands
+   ══════════════════════════════════════════════════════════════ */
+const cli = {
+    el: null, input: null, history: [], histIdx: -1,
+
+    init() {
+        this.el = document.getElementById('cli-output');
+        this.input = document.getElementById('cli-input');
+        this._bindKeys(this.input);
+        this.el.addEventListener('click', () => this.input.focus());
+
+        this.line('AMOSKYS CLI — System Interface', 'system');
+        this.line('Connected. Type "help" for commands.', 'system');
+        this.line('', 'info');
+    },
+
+    _bindKeys(input) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const cmd = input.value.trim();
+                if (cmd) { this.history.unshift(cmd); this.histIdx = -1; input.value = ''; this.exec(cmd); }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (this.histIdx < this.history.length - 1) { this.histIdx++; input.value = this.history[this.histIdx]; }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (this.histIdx > 0) { this.histIdx--; input.value = this.history[this.histIdx]; }
+                else { this.histIdx = -1; input.value = ''; }
+            }
+        });
+    },
+
+    async exec(cmd) {
+        this.line('amoskys@local:~$ ' + cmd, 'cmd');
+        if (cmd === 'clear') { this.clear(); return; }
+
+        const loadId = 'cli-load-' + Date.now();
+        this.line('Executing...', 'system', loadId);
+
+        try {
+            const r = await fetch('/dashboard/api/guardian/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: cmd }),
+            });
+            const d = await r.json();
+            const ld = document.getElementById(loadId);
+            if (ld) ld.remove();
+
+            if (d.cmd_type === 'clear') { this.clear(); return; }
+            (d.output || '').split('\n').forEach(l => this.line(l, d.cmd_type || 'info'));
+            this.line('', 'info');
+        } catch (e) {
+            const ld = document.getElementById(loadId);
+            if (ld) ld.remove();
+            this.line('Error: ' + e.message, 'err');
+        }
+        this.scroll();
+    },
+
+    line(text, type, id) {
+        const div = document.createElement('div');
+        div.className = 'tl tl-' + (type || 'info');
+        if (id) div.id = id;
+        div.textContent = text;
+        this.el.appendChild(div);
+        this.scroll();
+    },
+
+    clear() { this.el.innerHTML = ''; this.line('CLI cleared.', 'system'); },
+    scroll() { this.el.scrollTop = this.el.scrollHeight; },
+};
+
+
+/* ══════════════════════════════════════════════════════════════
+   IGRIS Observation Terminal — real log stream + command interface
+   ══════════════════════════════════════════════════════════════ */
+const obs = {
+    logsEl: null, cmdEl: null, input: null,
+    history: [], histIdx: -1,
+    currentTab: 'logs',
+    lastLogCount: 0,
+    _autoScroll: true,
+
+    init() {
+        this.logsEl = document.getElementById('obs-logs');
+        this.cmdEl = document.getElementById('obs-cmd-output');
+        this.input = document.getElementById('obs-input');
+        this._bindKeys(this.input);
+        this.logsEl.addEventListener('click', () => this.input.focus());
+        this.cmdEl.addEventListener('click', () => this.input.focus());
+
+        // Track scroll to pause auto-scroll when user scrolls up
+        this.logsEl.addEventListener('scroll', () => {
+            const el = this.logsEl;
+            this._autoScroll = (el.scrollHeight - el.scrollTop - el.clientHeight) < 40;
+        });
+
+        // Initial fetch
+        this.fetchLogs();
+        this.fetchStatus();
+        visInterval(() => { this.fetchLogs(); this.fetchStatus(); }, 15000);
+    },
+
+    _bindKeys(input) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const cmd = input.value.trim();
+                if (cmd) {
+                    this.history.unshift(cmd);
+                    this.histIdx = -1;
+                    input.value = '';
+                    this.switchTab('cmd');
+                    this.exec(cmd);
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (this.histIdx < this.history.length - 1) { this.histIdx++; input.value = this.history[this.histIdx]; }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (this.histIdx > 0) { this.histIdx--; input.value = this.history[this.histIdx]; }
+                else { this.histIdx = -1; input.value = ''; }
+            }
+        });
+    },
+
+    switchTab(tab) {
+        this.currentTab = tab;
+        document.querySelectorAll('.igris-obs-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.tab === tab);
+        });
+        this.logsEl.style.display = tab === 'logs' ? '' : 'none';
+        this.cmdEl.style.display = tab === 'cmd' ? '' : 'none';
+    },
+
+    // ── Real log stream (centralized: IGRIS + agents + all subsystems) ──
+    async fetchLogs() {
+        try {
+            const r = await fetch('/dashboard/api/igris/logs?lines=200');
+            const d = await r.json();
+            if (d.status !== 'success' || !d.available) return;
+
+            const lines = d.log_tail || [];
+            if (lines.length === this.lastLogCount) return;
+            this.lastLogCount = lines.length;
+
+            this.logsEl.innerHTML = lines.map(line => {
+                const color = this._logColor(line);
+                return '<div class="igris-log-line" style="color:' + color + ';">' + this.esc(line) + '</div>';
+            }).join('');
+
+            if (this._autoScroll) {
+                this.logsEl.scrollTop = this.logsEl.scrollHeight;
+            }
+        } catch (e) { /* silent */ }
+    },
+
+    // Log color rules — ordered by priority. First match wins.
+    _colorRules: [
+        // Severity
+        ['ERROR',               '#ff3366'],
+        ['SIGNAL EMITTED',      '#ff8844'],
+        ['SIGNAL CLEARED',      '#00ff88'],
+        ['WARNING',             '#ffaa00'],
+        ['Circuit',             '#ffaa00'],
+        // IGRIS
+        ['Coherence:',          'rgba(0,217,255,0.8)'],
+        ['IGRIS cycle',         'rgba(0,217,255,0.6)'],
+        ['\u2500\u2500\u2500',  'rgba(0,217,255,0.15)'],  // ───
+        ['[igris',              '#00ff88'],
+        // Storage / transport
+        ['[TelemetryStore]',    '#88ccff'],
+        ['[WALProcessor]',      '#88ccff'],
+        ['[amoskys.storage',    '#88ccff'],
+        ['[EventBus]',          '#aa88ff'],
+        ['[amoskys.eventbus',   '#aa88ff'],
+        // Intelligence / fusion
+        ['[ScoreJunction]',     '#ff88cc'],
+        ['[amoskys.intel',      '#ff88cc'],
+        // Enrichment / proof
+        ['[amoskys.enrichment', '#88ffcc'],
+        ['[amoskys.proof',      '#ccaa88'],
+        // Agent processes
+        ['[Proc',   '#88ddaa'], ['[FIM',        '#88ddaa'],
+        ['[DNS',    '#88ddaa'], ['[Flow',       '#88ddaa'],
+        ['[Auth',   '#88ddaa'], ['[Peripheral', '#88ddaa'],
+        ['[Kernel', '#88ddaa'], ['[Protocol',   '#88ddaa'],
+        // Fallback INFO
+        ['INFO',                '#8bb8a8'],
+    ],
+
+    _logColor(line) {
+        for (const [needle, color] of this._colorRules) {
+            if (line.includes(needle)) return color;
+        }
+        return 'var(--text-secondary, #6b7585)';
+    },
+
+    // ── Status + coherence polling for header/grid ──
+    async fetchStatus() {
+        try {
+            const [statusR, coherenceR] = await Promise.all([
+                fetch('/dashboard/api/igris/status'),
+                fetch('/dashboard/api/igris/coherence'),
+            ]);
+            const st = await statusR.json();
+            const co = await coherenceR.json();
+            if (st.status !== 'error') {
+                document.getElementById('igris-cycle').textContent = 'Cycle #' + (st.cycle_count || 0);
+                document.getElementById('igris-metric-count').textContent = (st.metrics_count || 0) + ' metrics';
+                document.getElementById('igris-cycle-dur').textContent = (st.cycle_duration_ms || 0) + 'ms';
+            }
+            if (co.status !== 'error') this._updateCoherence(co);
+        } catch (e) { /* silent */ }
+    },
+
+    _updateCoherence(d) {
+        const verdict = d.verdict || 'unknown';
+        const subsystems = d.subsystem_status || {};
+
+        const badge = document.getElementById('igris-verdict');
+        const icons = { coherent: '[OK]', 'alive but degraded': '[!!]', compromised: '[XX]', blind: '[??]' };
+        badge.textContent = (icons[verdict] || '[--]') + ' ' + verdict.toUpperCase();
+        badge.className = 'igris-verdict-badge';
+        const cls = { coherent: 'coherent', 'alive but degraded': 'degraded', compromised: 'compromised', blind: 'blind' };
+        if (cls[verdict]) badge.classList.add('igris-verdict-' + cls[verdict]);
+
+        document.querySelectorAll('.igris-sub-box').forEach(box => {
+            const sub = box.dataset.sub;
+            const st = subsystems[sub] || 'unknown';
+            box.querySelector('.igris-sub-marker').textContent = st === 'nominal' ? '[+]' : '[-]';
+            box.className = 'igris-sub-box igris-sub-' + st.replaceAll(' ', '-');
+        });
+    },
+
+    // ── Command execution ──
+    async exec(cmd) {
+        this.cmdLine('igris@amoskys:~$ ' + cmd, 'igris-cmd');
+        if (cmd === 'clear') { this.cmdEl.innerHTML = ''; return; }
+
+        const fullCmd = cmd.startsWith('igris ') ? cmd : 'igris ' + cmd;
+        try {
+            const r = await fetch('/dashboard/api/guardian/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: fullCmd }),
+            });
+            const d = await r.json();
+            (d.output || '').split('\n').forEach(l => this.cmdLine(l, d.cmd_type || 'info'));
+            this.cmdLine('', 'info');
+        } catch (e) {
+            this.cmdLine('Error: ' + e.message, 'err');
+        }
+    },
+
+    cmdLine(text, type) {
+        const div = document.createElement('div');
+        div.className = 'tl tl-' + (type || 'info');
+        div.textContent = text;
+        this.cmdEl.appendChild(div);
+        this.cmdEl.scrollTop = this.cmdEl.scrollHeight;
+    },
+
+    clear() {
+        if (this.currentTab === 'logs') {
+            this.lastLogCount = 0;
+            this.logsEl.innerHTML = '';
+            this.fetchLogs();
+        } else {
+            this.cmdEl.innerHTML = '';
+        }
+    },
+
+    esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+    }
+};
+
+
+/* ══════════════════════════════════════════════════════════════
+   Init
+   ══════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+    cli.init();
+    obs.init();
+    // Focus the CLI by default
+    setTimeout(() => document.getElementById('cli-input').focus(), 300);
+});
+</script>
+{% endblock %}

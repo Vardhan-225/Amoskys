@@ -28,7 +28,7 @@ import datetime
 import math
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 
 from amoskys.agents.common.probes import (
     MicroProbe,
@@ -93,79 +93,15 @@ OFF_HOURS_END = 6  # 6am
 LOCKOUT_STORM_THRESHOLD = 5  # accounts locked
 LOCKOUT_STORM_WINDOW_SECONDS = 300
 
-
-# =============================================================================
-# Probe 1: SSH Brute Force Detection
-# =============================================================================
-
-
-class SSHBruteForceProbe(MicroProbe):
-    """Detects SSH brute force attacks (multiple failures from single source).
-
-    Watches for:
-        - 5+ SSH login failures from same IP to same user in 5 minutes
-        - Classic credential guessing pattern
-
-    MITRE: T1110 (Brute Force), T1078 (Valid Accounts)
-    """
-
-    name = "ssh_bruteforce"
-    description = "SSH brute force detection"
-    mitre_techniques = ["T1110", "T1078"]
-    mitre_tactics = ["Credential Access", "Initial Access"]
-    default_enabled = True
-    scan_interval = 10.0
-    requires_fields = ["auth_events"]
-    field_semantics = {
-        "source_ip": "ipv4_or_ipv6",
-        "username": "os_username",
-        "timestamp_ns": "monotonic_ns",
-    }
-
-    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
-        """Detect SSH brute force attempts."""
-        events: List[TelemetryEvent] = []
-        auth_events: List[AuthEvent] = context.shared_data.get("auth_events", [])
-
-        # Count failures per (source_ip, username)
-        failures: Dict[Tuple[str, str], List[AuthEvent]] = collections.defaultdict(list)
-
-        for ev in auth_events:
-            if ev.event_type == "SSH_LOGIN" and ev.status == "FAILURE":
-                key = (ev.source_ip, ev.username)
-                failures[key].append(ev)
-
-        # Flag if threshold exceeded
-        for (src_ip, user), fail_events in failures.items():
-            if len(fail_events) >= BRUTE_FORCE_THRESHOLD:
-                # Calculate time span
-                timestamps = [e.timestamp_ns for e in fail_events]
-                span_seconds = (max(timestamps) - min(timestamps)) / 1e9
-
-                if span_seconds <= BRUTE_FORCE_WINDOW_SECONDS:
-                    events.append(
-                        TelemetryEvent(
-                            event_type="ssh_bruteforce_detected",
-                            severity=Severity.HIGH,
-                            probe_name=self.name,
-                            data={
-                                "source_ip": src_ip,
-                                "username": user,
-                                "failure_count": len(fail_events),
-                                "window_seconds": span_seconds,
-                                "first_attempt_ns": min(timestamps),
-                                "last_attempt_ns": max(timestamps),
-                            },
-                            mitre_techniques=["T1110", "T1078"],
-                        )
-                    )
-
-        return events
+# Correlation group tag for cross-agent event fusion
+TAG_PRIVESC = "correlation_group:privilege_escalation"
 
 
 # =============================================================================
-# Probe 2: SSH Password Spray Detection
+# Probe 1: SSH Password Spray Detection
 # =============================================================================
+# NOTE: SSHBruteForceProbe removed — canonical implementation lives in
+# protocol_collectors/probes.py to avoid duplicate detection.
 
 
 class SSHPasswordSprayProbe(MicroProbe):
@@ -213,6 +149,7 @@ class SSHPasswordSprayProbe(MicroProbe):
                             "usernames": sorted(list(users))[:20],  # First 20
                         },
                         mitre_techniques=["T1110.003"],
+                        tags=["correlation_group:initial_access"],
                     )
                 )
 
@@ -412,6 +349,7 @@ class SudoElevationProbe(MicroProbe):
                         "sudo_count": sudo_counts[user],
                     },
                     mitre_techniques=["T1548.003"],
+                    tags=[TAG_PRIVESC],
                 )
             )
         return events
@@ -440,6 +378,7 @@ class SudoElevationProbe(MicroProbe):
                             ],
                         },
                         mitre_techniques=["T1548.003"],
+                        tags=[TAG_PRIVESC],
                     )
                 )
         return events
@@ -465,6 +404,7 @@ class SudoElevationProbe(MicroProbe):
                             "multiplier": round(current_count / baseline, 2),
                         },
                         mitre_techniques=["T1548.003"],
+                        tags=[TAG_PRIVESC],
                     )
                 )
         return events
@@ -780,7 +720,6 @@ def create_auth_probes() -> List[MicroProbe]:
         List of 8 auth monitoring probes
     """
     return [
-        SSHBruteForceProbe(),
         SSHPasswordSprayProbe(),
         SSHGeoImpossibleTravelProbe(),
         SudoElevationProbe(),

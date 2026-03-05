@@ -15,11 +15,7 @@ import sqlite3
 import time
 from typing import Dict, List, Optional
 
-from amoskys.intel.reliability import (
-    DriftType,
-    RecalibrationTier,
-    ReliabilityState,
-)
+from amoskys.intel.reliability import DriftType, RecalibrationTier, ReliabilityState
 
 logger = logging.getLogger(__name__)
 

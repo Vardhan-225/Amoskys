@@ -32,7 +32,13 @@ def app():
     # Set environment variables BEFORE creating app to ensure proper test configuration
     os.environ["FLASK_DEBUG"] = "true"
     os.environ["FORCE_HTTPS"] = "false"
-    os.environ["SECRET_KEY"] = "test-secret-key-for-testing"
+    os.environ["SECRET_KEY"] = "test-secret-key-for-testing-purposes"
+    # Use in-memory SQLite to guarantee a fresh schema every run
+    os.environ["DATABASE_URL"] = "sqlite://"
+
+    from amoskys.db import reset_engine
+
+    reset_engine()
 
     result = create_app()
     if isinstance(result, tuple):
@@ -43,7 +49,7 @@ def app():
     app_instance.config["TESTING"] = True
     app_instance.config["WTF_CSRF_ENABLED"] = False  # Disable CSRF for testing
 
-    # Initialize database tables
+    # Initialize database tables with fresh schema
     init_db()
 
     return app_instance

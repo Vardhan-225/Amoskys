@@ -17,6 +17,7 @@ from typing import List
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
+from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 from amoskys.agents.kernel_audit.probes import (
     AuditTamperProbe,
     ExecveHighRiskProbe,
@@ -27,7 +28,6 @@ from amoskys.agents.kernel_audit.probes import (
     SyscallFloodProbe,
     create_kernel_audit_probes,
 )
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 
 
 def make_context(events: List[KernelAuditEvent]) -> ProbeContext:
@@ -84,7 +84,7 @@ class TestProbeFactory:
     def test_create_kernel_audit_probes_returns_all_probes(self):
         """Verify all 7 probes are created."""
         probes = create_kernel_audit_probes()
-        assert len(probes) == 7
+        assert len(probes) == 8
 
         probe_names = {p.name for p in probes}
         expected = {
@@ -95,6 +95,7 @@ class TestProbeFactory:
             "file_permission_tamper",
             "audit_tamper",
             "syscall_flood",
+            "credential_dump",
         }
         assert probe_names == expected
 
@@ -580,38 +581,38 @@ class TestSyscallFloodProbe:
 
 
 # =============================================================================
-# Test: Integration with KernelAuditAgentV2
+# Test: Integration with KernelAuditAgent
 # =============================================================================
 
 
-class TestKernelAuditAgentV2Integration:
+class TestKernelAuditAgentIntegration:
     """Integration tests for the v2 agent."""
 
     def test_agent_setup_with_stub_collector(self):
         """Agent should initialize with stub collector."""
         from amoskys.agents.kernel_audit import (
-            KernelAuditAgentV2,
+            KernelAuditAgent,
             StubKernelAuditCollector,
         )
 
         collector = StubKernelAuditCollector()
-        agent = KernelAuditAgentV2(
+        agent = KernelAuditAgent(
             device_id="test-001",
             collector=collector,
         )
 
         assert agent.setup()
-        assert len(agent.probes) == 7
+        assert len(agent.probes) == 8
 
     def test_agent_collects_with_injected_events(self):
         """Agent should process injected events."""
         from amoskys.agents.kernel_audit import (
-            KernelAuditAgentV2,
+            KernelAuditAgent,
             StubKernelAuditCollector,
         )
 
         collector = StubKernelAuditCollector()
-        agent = KernelAuditAgentV2(
+        agent = KernelAuditAgent(
             device_id="test-001",
             collector=collector,
         )
@@ -636,12 +637,12 @@ class TestKernelAuditAgentV2Integration:
     def test_agent_health(self):
         """Agent health should include probe stats."""
         from amoskys.agents.kernel_audit import (
-            KernelAuditAgentV2,
+            KernelAuditAgent,
             StubKernelAuditCollector,
         )
 
         collector = StubKernelAuditCollector()
-        agent = KernelAuditAgentV2(
+        agent = KernelAuditAgent(
             device_id="test-001",
             collector=collector,
         )
@@ -652,4 +653,4 @@ class TestKernelAuditAgentV2Integration:
         assert health["agent_name"] == "kernel_audit"
         assert health["device_id"] == "test-001"
         assert "probes" in health
-        assert len(health["probes"]) == 7
+        assert len(health["probes"]) == 8

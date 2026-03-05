@@ -150,14 +150,43 @@ def get_fusion_weights():
     )
 
 
+def _write_event_label(event_id, classification, label_source="manual"):
+    """Write analyst label back to telemetry.db for GBC training."""
+    if not event_id:
+        return
+    try:
+        from ..dashboard.telemetry_bridge import get_telemetry_store
+
+        store = get_telemetry_store()
+        if store:
+            store.db.execute(
+                "UPDATE security_events SET label_source=?, final_classification=? "
+                "WHERE id=?",
+                (label_source, classification, event_id),
+            )
+            store.db.commit()
+            logger.info(
+                "Label writeback: event=%s classification=%s source=%s",
+                event_id,
+                classification,
+                label_source,
+            )
+    except Exception:
+        logger.warning("Label writeback failed for event %s", event_id, exc_info=True)
+
+
 @reliability_bp.route("/feedback", methods=["POST"])
 def submit_feedback():
     """Submit analyst feedback for an agent event or action.
 
     Supports two schemas:
       1. Frontend schema: {agent_id, event_id, action}
-         action: "confirm" | "dismiss" | "quarantine" | "restore"
+         action: "confirm" | "confirm_benign" | "dismiss" | "quarantine" | "restore"
       2. Fusion engine schema: {incident_id, is_confirmed, analyst}
+
+    Label writeback: ``confirm`` and ``dismiss``/``confirm_benign`` also write
+    ``label_source='manual'`` to the security_events table so SomaBrain GBC
+    can use them as high-trust training labels.
 
     Returns:
         JSON confirmation.
@@ -167,6 +196,7 @@ def submit_feedback():
         return jsonify({"error": "Request body required"}), 400
 
     tracker = _get_tracker()
+    event_id = data.get("event_id")
 
     # Schema 1: Frontend feedback (agent_id + action)
     agent_id = data.get("agent_id")
@@ -174,11 +204,13 @@ def submit_feedback():
     if agent_id and action:
         if action == "confirm":
             tracker.update(agent_id, ground_truth_match=True)
+            _write_event_label(event_id, "malicious")
             return jsonify(
                 {"status": "ok", "message": f"Agent {agent_id} confirmed (TP)."}
             )
-        elif action == "dismiss":
+        elif action in ("dismiss", "confirm_benign"):
             tracker.update(agent_id, ground_truth_match=False)
+            _write_event_label(event_id, "legitimate")
             return jsonify(
                 {"status": "ok", "message": f"Agent {agent_id} dismissed (FP)."}
             )
@@ -198,9 +230,7 @@ def submit_feedback():
 
             state.tier = RecalibrationTier.NOMINAL
             state.drift_type = DriftType.NONE
-            return jsonify(
-                {"status": "ok", "message": f"Agent {agent_id} restored."}
-            )
+            return jsonify({"status": "ok", "message": f"Agent {agent_id} restored."})
         else:
             return jsonify({"error": f"Unknown action: {action}"}), 400
 
@@ -212,7 +242,10 @@ def submit_feedback():
     if incident_id is not None and is_confirmed is not None:
         if _fusion_engine is None:
             return jsonify(
-                {"status": "ok", "message": "Feedback recorded (fusion engine offline)."}
+                {
+                    "status": "ok",
+                    "message": "Feedback recorded (fusion engine offline).",
+                }
             )
         success = _fusion_engine.provide_incident_feedback(
             incident_id=incident_id,
@@ -230,7 +263,10 @@ def submit_feedback():
             }
         )
 
-    return jsonify({"error": "Provide {agent_id, action} or {incident_id, is_confirmed}"}), 400
+    return (
+        jsonify({"error": "Provide {agent_id, action} or {incident_id, is_confirmed}"}),
+        400,
+    )
 
 
 @reliability_bp.route("/drifts", methods=["GET"])
@@ -250,14 +286,13 @@ def get_drift_alerts():
                     "agent_id": agent_id,
                     "drift_type": state.drift_type.value,
                     "drift_state": (
-                        "ALERT"
-                        if state.drift_type.value == "abrupt"
-                        else "WARNING"
+                        "ALERT" if state.drift_type.value == "abrupt" else "WARNING"
                     ),
                     "detector": state.drift_type.value,
                     "weight": state.fusion_weight,
                     "recalibration_tier": state.tier.value,
-                    "reliability_score": state.alpha / max(state.alpha + state.beta, 1e-9),
+                    "reliability_score": state.alpha
+                    / max(state.alpha + state.beta, 1e-9),
                     "alpha": state.alpha,
                     "beta": state.beta,
                 }

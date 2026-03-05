@@ -11,6 +11,7 @@ from threading import Thread
 
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
+from .dashboard.telemetry_bridge import get_telemetry_store
 from .dashboard.utils import (
     calculate_threat_score,
     get_event_clustering_data,
@@ -38,12 +39,25 @@ active_connections = {}
 update_threads = {}
 
 
+def _get_live_incidents() -> dict:
+    """Fetch open incidents from TelemetryStore for real-time push."""
+    try:
+        store = get_telemetry_store()
+        if store is None:
+            return {"incidents": [], "incident_count": 0}
+        incidents = store.get_incidents(status="open", limit=10)
+        return {"incidents": incidents, "incident_count": len(incidents)}
+    except Exception:
+        return {"incidents": [], "incident_count": 0}
+
+
 class DashboardUpdater:
     """Real-time dashboard data updater"""
 
     def __init__(self, socketio_instance):
         self.socketio = socketio_instance
         self.running = False
+        self._prev_incident_count = 0
 
     def start_updates(self):
         """Start real-time data updates"""
@@ -67,21 +81,48 @@ class DashboardUpdater:
                 time.sleep(5)
 
                 if len(active_connections) > 0:
-                    # Collect all real-time data
-                    updates = {
-                        "threats": get_live_threats_data(),
-                        "agents": get_live_agents_data(),
-                        "metrics": get_live_metrics_data(),
-                        "threat_score": calculate_threat_score(),
-                        "events": get_event_clustering_data(),
-                        "neural": get_neural_readiness_status(),
-                        "timestamp": time.time(),
-                    }
+                    # Collect all real-time data — isolate each fetch so
+                    # one failure doesn't kill the entire update cycle.
+                    updates = {"timestamp": time.time()}
+
+                    try:
+                        incident_data = _get_live_incidents()
+                        updates["incidents"] = incident_data["incidents"]
+                        updates["incident_count"] = incident_data["incident_count"]
+                    except Exception:
+                        incident_data = {"incidents": [], "incident_count": 0}
+                        updates["incidents"] = []
+                        updates["incident_count"] = 0
+
+                    for key, fn in (
+                        ("threats", get_live_threats_data),
+                        ("agents", get_live_agents_data),
+                        ("metrics", get_live_metrics_data),
+                        ("threat_score", calculate_threat_score),
+                        ("events", get_event_clustering_data),
+                        ("neural", get_neural_readiness_status),
+                    ):
+                        try:
+                            updates[key] = fn()
+                        except Exception as exc:
+                            logger.debug("Update fetch '%s' failed: %s", key, exc)
+                            updates[key] = {}
 
                     # Emit to all connected clients
                     self.socketio.emit(
                         "dashboard_update", updates, namespace="/dashboard"
                     )
+
+                    # Push dedicated incident update to SOC room on new incidents
+                    if incident_data["incident_count"] != self._prev_incident_count:
+                        self.socketio.emit(
+                            "incidents_update",
+                            incident_data,
+                            namespace="/dashboard",
+                            to="soc",
+                        )
+                        self._prev_incident_count = incident_data["incident_count"]
+
                     logger.debug(f"Sent updates to {len(active_connections)} clients")
 
             except Exception as e:
@@ -94,9 +135,35 @@ updater = DashboardUpdater(socketio)
 
 
 @socketio.on("connect", namespace="/dashboard")
-def handle_connect():
-    """Handle client connection"""
+def handle_connect(_auth=None):
+    """Handle client connection — requires valid session cookie."""
     from flask import request as flask_request
+
+    # Authenticate: reject unauthenticated WebSocket connections
+    session_token = flask_request.cookies.get("amoskys_session")
+    if not session_token:
+        logger.warning("WebSocket connect rejected: no session cookie")
+        return False  # SocketIO disconnects the client
+
+    try:
+        from amoskys.auth import AuthService
+        from amoskys.db.web_db import get_web_session_context
+
+        with get_web_session_context() as db:
+            auth = AuthService(db)
+            result = auth.validate_and_refresh_session(
+                token=session_token,
+                ip_address=flask_request.headers.get(
+                    "X-Forwarded-For", flask_request.remote_addr
+                ),
+                user_agent=flask_request.headers.get("User-Agent"),
+            )
+            if not result.is_valid:
+                logger.warning("WebSocket connect rejected: invalid session")
+                return False
+    except Exception as e:
+        logger.error("WebSocket auth check failed: %s", e)
+        return False
 
     client_id = flask_request.sid
     active_connections[client_id] = {"connected_at": time.time(), "rooms": []}
@@ -108,6 +175,7 @@ def handle_connect():
         updater.start_updates()
 
     # Send initial data
+    incident_data = _get_live_incidents()
     initial_data = {
         "threats": get_live_threats_data(),
         "agents": get_live_agents_data(),
@@ -115,6 +183,8 @@ def handle_connect():
         "threat_score": calculate_threat_score(),
         "events": get_event_clustering_data(),
         "neural": get_neural_readiness_status(),
+        "incidents": incident_data["incidents"],
+        "incident_count": incident_data["incident_count"],
         "timestamp": time.time(),
     }
 
@@ -198,9 +268,12 @@ def handle_request_update(data):
             emit("dashboard_update", updates)
 
         elif dashboard_type == "soc":
+            soc_incidents = _get_live_incidents()
             updates = {
                 "threats": get_live_threats_data(),
                 "events": get_event_clustering_data(),
+                "incidents": soc_incidents["incidents"],
+                "incident_count": soc_incidents["incident_count"],
                 "timestamp": time.time(),
             }
             emit("soc_update", updates)

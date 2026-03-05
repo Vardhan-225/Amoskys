@@ -1,0 +1,53 @@
+probe_id: privesc_syscall
+agent: kernel_audit
+version: "1.0.0"
+mitre_techniques:
+  - id: T1068
+    name: "Exploitation for Privilege Escalation"
+  - id: T1548.001
+    name: "Setuid and Setgid"
+mitre_tactic: privilege_escalation
+intent: >
+  Detect privilege escalation via setuid/setgid family syscalls. Legitimate
+  escalation (via sudo, su, setuid binaries) is expected; direct syscall-level
+  UID manipulation by non-root processes is highly suspicious. Fires when a
+  non-root UID issues a privilege syscall that succeeds.
+required_inputs:
+  - syscall: setuid
+    required_fields: [uid, euid, result]
+  - syscall: seteuid
+    required_fields: [uid, euid, result]
+  - syscall: setreuid
+    required_fields: [uid, euid, result]
+  - syscall: capset
+    required_fields: [uid, result]
+correlation_group: privilege_escalation
+severity_policy:
+  kernel_privesc_syscall_root_gain: CRITICAL
+  kernel_privesc_syscall_uid_mismatch: HIGH
+  kernel_privesc_syscall: MEDIUM
+confidence_policy:
+  kernel_privesc_syscall: 0.90
+thresholds: {}
+known_evasions:
+  - id: failed_result
+    title: "setuid() call that fails — result != 'success'"
+    description: >
+      Probe only fires on result == 'success'. A failed escalation attempt
+      (e.g., calling setuid(0) as non-root without a suid bit) does not fire.
+    status: EVADES
+    reason: "Probe only fires on successful privilege changes by design"
+  - id: capability_drop
+    title: "capset() to drop capabilities (privilege reduction)"
+    description: >
+      A process dropping its own capabilities fires at MEDIUM, but this is
+      defensive behavior. FP rate is low because capset is unusual outside
+      privilege-aware daemons.
+    status: LOW_FP_RISK
+  - id: kernel_exploit_pre_setuid
+    title: "Kernel exploit elevates ring directly, no setuid syscall"
+    description: >
+      A kernel privilege escalation exploit (e.g., dirty pipe) may not issue
+      a setuid syscall — it modifies credentials in-kernel directly.
+    status: EVADES
+    reason: "No setuid syscall emitted; requires kernel memory audit"

@@ -446,9 +446,11 @@ class TestEnrichmentMigrations:
             assert "threat_intel_match" in cols, f"{table} missing threat_intel_match"
             assert "threat_source" in cols, f"{table} missing threat_source"
 
-    def test_all_three_migrations_recorded(self, migrated_db):
+    def test_all_migrations_recorded(self, migrated_db):
         rows = migrated_db.execute(
             "SELECT version FROM schema_migrations ORDER BY version"
         ).fetchall()
         versions = [r[0] for r in rows]
-        assert versions == [1, 2, 3]
+        # At least the original 3 migrations must be present; new ones may be added
+        assert versions[:3] == [1, 2, 3]
+        assert len(versions) >= 3

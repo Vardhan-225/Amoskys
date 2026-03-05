@@ -23,12 +23,8 @@ from amoskys.agents.persistence.probes import (
     create_persistence_probes,
 )
 
-# B5.1: Deprecated alias
-PersistenceGuardV2 = PersistenceGuard
-
 __all__ = [
     "PersistenceGuard",
-    "PersistenceGuardV2",
     "PersistenceCollector",
     "PersistenceEntry",
     "PersistenceChangeType",

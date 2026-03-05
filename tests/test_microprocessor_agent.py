@@ -13,20 +13,19 @@ from unittest.mock import Mock, patch
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-try:
-    from amoskys.edge import EdgeOptimizer  # Use package import for CI compatibility
-    from src.amoskys.agents.discovery.device_scanner import DeviceDiscoveryEngine
-    from src.amoskys.agents.protocols.universal_collector import (
-        UniversalTelemetryCollector,
-    )
-    from src.amoskys.intelligence.fusion.threat_correlator import (
-        DeviceType,
-        IntelligenceFusionEngine,
-        TelemetryEvent,
-    )
-    from src.amoskys.intelligence.integration.agent_core import MicroprocessorAgentCore
-except ImportError as e:
-    print(f"Import warning: {e}")
+from amoskys.agents.protocols.universal_collector import UniversalTelemetryCollector
+from amoskys.edge import EdgeOptimizer
+from amoskys.intelligence.fusion.threat_correlator import (
+    DeviceType,
+    IntelligenceFusionEngine,
+    TelemetryEvent,
+)
+from amoskys.intelligence.integration.agent_core import MicroprocessorAgentCore
+
+# DeviceDiscoveryEngine was never implemented; the v2 DeviceDiscovery agent
+# uses a probe-based architecture and does not expose the _scan_ports /
+# _fingerprint_device / scan_network API these tests expect.
+DeviceDiscoveryEngine = None
 
 
 class TestMicroprocessorAgent(unittest.TestCase):
@@ -222,6 +221,7 @@ class TestIntelligenceFusionEngine(unittest.TestCase):
         self.assertEqual(profile.device_type, DeviceType.MEDICAL_DEVICE)
 
 
+@unittest.skip("DeviceDiscoveryEngine API not implemented; v2 uses probe architecture")
 class TestDeviceDiscovery(unittest.TestCase):
     """Test device discovery functionality."""
 
@@ -545,6 +545,9 @@ class TestErrorHandling(unittest.TestCase):
         except Exception as e:
             self.fail(f"Should handle invalid data gracefully: {e}")
 
+    @unittest.skip(
+        "DeviceDiscoveryEngine API not implemented; v2 uses probe architecture"
+    )
     def test_network_error_resilience(self):
         """Test resilience to network errors."""
         # Test device scanner resilience

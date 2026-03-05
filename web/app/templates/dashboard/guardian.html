@@ -1,0 +1,460 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AMOSKYS — Guardian C2{% endblock %}
+
+{% block content %}
+<div class="c2-page">
+
+    <!-- ===== C2 HEADER ===== -->
+    <div class="c2-header">
+        <div class="c2-header-left">
+            <span class="c2-term-prompt-icon">&gt;_</span>
+            <div>
+                <h1 class="c2-title">Guardian C2</h1>
+                <span class="c2-subtitle">Command &amp; Control Terminal</span>
+            </div>
+        </div>
+        <div class="c2-header-stats" id="c2-stats">
+            <div class="c2-stat"><span class="c2-stat-val" id="c2-total">--</span><span class="c2-stat-lbl">Agents</span></div>
+            <div class="c2-stat-sep"></div>
+            <div class="c2-stat"><span class="c2-stat-val c2-ok" id="c2-online">--</span><span class="c2-stat-lbl">Online</span></div>
+            <div class="c2-stat-sep"></div>
+            <div class="c2-stat"><span class="c2-stat-val c2-danger" id="c2-offline">--</span><span class="c2-stat-lbl">Offline</span></div>
+            <div class="c2-stat-sep"></div>
+            <div class="c2-stat"><span class="c2-stat-val c2-warn" id="c2-anomalies">--</span><span class="c2-stat-lbl">Anomalies</span></div>
+        </div>
+    </div>
+
+    <!-- ===== MAIN LAYOUT: FLEET PANEL + TERMINAL ===== -->
+    <div class="c2-main">
+
+        <!-- Fleet sidebar -->
+        <div class="c2-fleet-panel">
+            <div class="c2-panel-hdr">Fleet</div>
+            <div id="c2-fleet-list" class="c2-fleet-list"></div>
+            <div class="c2-panel-hdr" style="margin-top:0.75rem;">Quick Actions</div>
+            <div class="c2-quick-actions">
+                <button class="c2-qbtn" onclick="c2.exec('status')">Status All</button>
+                <button class="c2-qbtn" onclick="c2.exec('scan')">Fleet Scan</button>
+                <button class="c2-qbtn" onclick="c2.exec('threats')">Threats</button>
+                <button class="c2-qbtn" onclick="c2.exec('soma status')">SOMA Brain</button>
+                <button class="c2-qbtn" onclick="c2.exec('report')">Report</button>
+                <button class="c2-qbtn" onclick="c2.exec('sysinfo')">System</button>
+                <button class="c2-qbtn c2-qbtn-igris" onclick="c2.exec('igris')">IGRIS</button>
+            </div>
+        </div>
+
+        <!-- Terminal -->
+        <div class="c2-terminal-wrap">
+            <div class="c2-term-header">
+                <div class="c2-term-dots">
+                    <span class="c2-dot c2-dot-red"></span>
+                    <span class="c2-dot c2-dot-yellow"></span>
+                    <span class="c2-dot c2-dot-green"></span>
+                </div>
+                <span class="c2-term-title">guardian@amoskys ~ C2</span>
+                <div class="igris-indicator" id="igris-indicator" title="IGRIS Supervisory Layer">
+                    <span class="igris-dot" id="igris-dot"></span>
+                    <span class="igris-label">IGRIS</span>
+                </div>
+                <button class="c2-term-btn" onclick="c2.exec('clear')" title="Clear">CLR</button>
+            </div>
+            <div id="c2-output" class="c2-output"></div>
+            <div class="c2-input-row">
+                <span class="c2-prompt">guardian@amoskys:~$</span>
+                <input type="text" id="c2-input" class="c2-input" placeholder="Type a command... (try 'help')" autocomplete="off" spellcheck="false">
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ANOMALY STRIP ===== -->
+    <div class="c2-anomaly-strip" id="c2-anomaly-strip" style="display:none;">
+        <div class="c2-anomaly-hdr">Active Anomalies</div>
+        <div id="c2-anomaly-cards" class="c2-anomaly-cards"></div>
+    </div>
+</div>
+
+<style>
+/* ══════════════════════════════════════════════════════════════
+   GUARDIAN C2 — Command & Control Terminal Interface
+   ══════════════════════════════════════════════════════════════ */
+.c2-page { padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 1rem; height: calc(100vh - 60px); }
+
+/* Header */
+.c2-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; flex-shrink: 0; }
+.c2-header-left { display: flex; align-items: center; gap: 0.75rem; }
+.c2-term-prompt-icon {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 1.6rem; font-weight: 700; color: var(--neural-primary);
+    opacity: 0.7; flex-shrink: 0;
+}
+.c2-title { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); margin: 0; }
+.c2-subtitle { font-size: 0.75rem; color: var(--text-muted); }
+.c2-header-stats { display: flex; align-items: center; gap: 0.8rem; }
+.c2-stat { text-align: center; }
+.c2-stat-val { font-size: 1.2rem; font-weight: 700; display: block; color: var(--neural-primary); }
+.c2-stat-lbl { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.c2-ok { color: var(--neural-success); }
+.c2-warn { color: var(--neural-warning); }
+.c2-danger { color: var(--neural-danger); }
+.c2-stat-sep { width: 1px; height: 24px; background: rgba(255,255,255,0.06); }
+
+/* Main layout */
+.c2-main { display: grid; grid-template-columns: 200px 1fr; gap: 1rem; flex: 1; min-height: 0; overflow: hidden; }
+
+/* Fleet panel */
+.c2-fleet-panel {
+    background: var(--bg-secondary); border-radius: 10px; padding: 0.75rem;
+    border: 1px solid rgba(255,255,255,0.04); overflow-y: auto;
+    display: flex; flex-direction: column;
+}
+.c2-panel-hdr {
+    font-size: 0.65rem; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 1px; padding: 0 0 0.4rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04); margin-bottom: 0.4rem;
+}
+.c2-fleet-list { display: flex; flex-direction: column; gap: 0.2rem; }
+.c2-fleet-item {
+    display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.4rem;
+    border-radius: 6px; cursor: pointer; transition: background 0.15s;
+    font-size: 0.72rem;
+}
+.c2-fleet-item:hover { background: rgba(255,255,255,0.04); }
+.c2-fleet-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.c2-fleet-dot-ok { background: var(--neural-success); box-shadow: 0 0 4px var(--neural-success); }
+.c2-fleet-dot-off { background: var(--neural-danger); box-shadow: 0 0 4px rgba(255,51,102,0.3); }
+.c2-fleet-dot-deg { background: var(--neural-warning); box-shadow: 0 0 4px rgba(255,170,0,0.3); }
+.c2-fleet-name { color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.c2-fleet-type { font-size: 0.6rem; color: var(--text-muted); }
+
+/* Quick action buttons */
+.c2-quick-actions { display: flex; flex-direction: column; gap: 0.25rem; }
+.c2-qbtn {
+    background: rgba(0,217,255,0.06); border: 1px solid rgba(0,217,255,0.1);
+    color: var(--neural-primary); border-radius: 5px; padding: 0.3rem 0.5rem;
+    font-size: 0.68rem; cursor: pointer; text-align: left; font-weight: 500;
+    transition: all 0.15s; font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.c2-qbtn:hover { background: rgba(0,217,255,0.12); border-color: rgba(0,217,255,0.25); }
+
+/* ── Terminal ── */
+.c2-terminal-wrap {
+    display: flex; flex-direction: column; border-radius: 10px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: #0c0f1a;
+}
+.c2-term-header {
+    display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem;
+    background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.c2-term-dots { display: flex; gap: 5px; }
+.c2-dot { width: 10px; height: 10px; border-radius: 50%; }
+.c2-dot-red { background: #ff5f56; }
+.c2-dot-yellow { background: #ffbd2e; }
+.c2-dot-green { background: #27c93f; }
+.c2-term-title { flex: 1; font-size: 0.72rem; color: var(--text-muted); font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+.c2-term-btn {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-muted); border-radius: 4px; padding: 0.15rem 0.5rem;
+    font-size: 0.6rem; cursor: pointer; font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.c2-term-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+
+/* IGRIS indicator */
+.igris-indicator {
+    display: flex; align-items: center; gap: 0.35rem;
+    margin-right: 0.5rem; padding: 0.15rem 0.55rem;
+    border-radius: 4px; background: rgba(0,217,255,0.04);
+    border: 1px solid rgba(0,217,255,0.12);
+}
+.igris-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 6px rgba(0,255,136,0.5);
+    animation: igris-pulse 3s ease-in-out infinite;
+}
+.igris-dot.igris-warn { background: #ffaa00; box-shadow: 0 0 6px rgba(255,170,0,0.5); }
+.igris-dot.igris-error { background: #ff3366; box-shadow: 0 0 6px rgba(255,51,102,0.5); }
+@keyframes igris-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.igris-label {
+    font-size: 0.58rem; color: rgba(0,217,255,0.6); font-weight: 700;
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.08em;
+}
+.c2-qbtn-igris { border-color: rgba(0,217,255,0.25); color: var(--neural-primary); }
+.c2-qbtn-igris:hover { background: rgba(0,217,255,0.12); }
+
+/* Output area */
+.c2-output {
+    flex: 1; overflow-y: auto; padding: 0.75rem; min-height: 0;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.75rem; line-height: 1.5;
+}
+.c2-output::-webkit-scrollbar { width: 6px; }
+.c2-output::-webkit-scrollbar-track { background: transparent; }
+.c2-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+.c2-line { margin-bottom: 0.15rem; }
+.c2-line-cmd { color: var(--neural-primary); }
+.c2-line-info { color: #b0b8c8; }
+.c2-line-success { color: var(--neural-success); }
+.c2-line-warning { color: var(--neural-warning); }
+.c2-line-error { color: var(--neural-danger); }
+.c2-line-log { color: #8b95a5; }
+.c2-line-system { color: rgba(0,217,255,0.5); font-style: italic; }
+.c2-prompt-echo { color: rgba(0,217,255,0.6); }
+.c2-timestamp { color: rgba(255,255,255,0.15); font-size: 0.6rem; margin-left: 0.5rem; }
+
+/* Input row */
+.c2-input-row {
+    display: flex; align-items: center; padding: 0.5rem 0.75rem;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    background: rgba(0,0,0,0.2);
+}
+.c2-prompt {
+    color: var(--neural-primary); font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.75rem; font-weight: 600; white-space: nowrap; margin-right: 0.5rem;
+    opacity: 0.7;
+}
+.c2-input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--text-primary); font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.75rem; caret-color: var(--neural-primary);
+}
+.c2-input::placeholder { color: rgba(255,255,255,0.15); }
+
+/* Anomaly strip */
+.c2-anomaly-strip {
+    background: var(--bg-secondary); border-radius: 10px; padding: 0.65rem 0.85rem;
+    border: 1px solid rgba(255,51,102,0.15); flex-shrink: 0;
+}
+.c2-anomaly-hdr { font-size: 0.7rem; font-weight: 700; color: var(--neural-danger); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.c2-anomaly-cards { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.2rem; }
+.c2-anomaly-card {
+    flex-shrink: 0; padding: 0.4rem 0.65rem; border-radius: 6px; font-size: 0.7rem;
+    border-left: 3px solid; background: rgba(255,255,255,0.02); min-width: 180px; cursor: pointer;
+}
+.c2-anomaly-card:hover { background: rgba(255,255,255,0.04); }
+.c2-anom-high { border-color: var(--neural-danger); }
+.c2-anom-medium { border-color: var(--neural-warning); }
+.c2-anom-agent { font-weight: 700; color: var(--text-primary); margin-bottom: 0.1rem; }
+.c2-anom-msg { color: var(--text-muted); font-size: 0.65rem; }
+
+/* Responsive */
+@media (max-width: 900px) {
+    .c2-main { grid-template-columns: 1fr; }
+    .c2-fleet-panel { display: none; }
+    .c2-header { flex-direction: column; }
+}
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+const c2 = {
+    history: [],
+    histIdx: -1,
+    outputEl: null,
+    inputEl: null,
+
+    init() {
+        this.outputEl = document.getElementById('c2-output');
+        this.inputEl = document.getElementById('c2-input');
+
+        // Key handlers
+        this.inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const cmd = this.inputEl.value.trim();
+                if (cmd) {
+                    this.history.unshift(cmd);
+                    this.histIdx = -1;
+                    this.inputEl.value = '';
+                    this.exec(cmd);
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (this.histIdx < this.history.length - 1) {
+                    this.histIdx++;
+                    this.inputEl.value = this.history[this.histIdx];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (this.histIdx > 0) {
+                    this.histIdx--;
+                    this.inputEl.value = this.history[this.histIdx];
+                } else {
+                    this.histIdx = -1;
+                    this.inputEl.value = '';
+                }
+            }
+        });
+
+        // Focus terminal on click
+        this.outputEl.addEventListener('click', () => this.inputEl.focus());
+
+        // Boot sequence
+        this.bootSequence();
+        this.poll();
+        visInterval(() => this.poll(), 20000);
+
+        // Auto-focus
+        setTimeout(() => this.inputEl.focus(), 500);
+    },
+
+    bootSequence() {
+        const lines = [
+            { text: '  ___  __  __  ___  ___ _  ____   ___', type: 'cmd' },
+            { text: ' / _ |/  |/  |/ _ \\/ __| |/ /\\ \\ / / /', type: 'cmd' },
+            { text: '/ __ / /|_/ / (_) \\__ \\   /  \\ V /\\_\\', type: 'cmd' },
+            { text: '/_/ |_/_/  /_/\\___/|___/_|\\_\\  |_| /_/', type: 'cmd' },
+            { text: '', type: 'info' },
+            { text: 'GUARDIAN C2 — Command & Control Interface', type: 'system' },
+            { text: 'AMOSKYS Neural Security Platform v2.4', type: 'system' },
+            { text: '', type: 'info' },
+            { text: '[INIT] IGRIS supervisory layer... ACTIVE', type: 'success' },
+            { text: '[IGRIS] Baseline warmup in progress. Observing.', type: 'system' },
+            { text: '', type: 'info' },
+            { text: 'Type "help" for available commands.', type: 'system' },
+            { text: '', type: 'info' },
+        ];
+        lines.forEach(l => this.appendLine(l.text, l.type));
+    },
+
+    async exec(cmd) {
+        // Echo command
+        this.appendLine('guardian@amoskys:~$ ' + cmd, 'cmd');
+
+        if (cmd === 'clear') {
+            this.outputEl.innerHTML = '';
+            return;
+        }
+
+        // Show loading indicator
+        const loadingId = 'loading-' + Date.now();
+        this.appendLine('Executing...', 'system', loadingId);
+
+        try {
+            const r = await fetch('/dashboard/api/guardian/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: cmd }),
+            });
+            const d = await r.json();
+
+            // Remove loading line
+            const loadEl = document.getElementById(loadingId);
+            if (loadEl) loadEl.remove();
+
+            if (d.cmd_type === 'clear') {
+                this.outputEl.innerHTML = '';
+                return;
+            }
+
+            const output = d.output || '';
+            const type = d.cmd_type || 'info';
+            const lines = output.split('\n');
+            lines.forEach(line => this.appendLine(line, type));
+            this.appendLine('', 'info'); // blank separator
+        } catch (e) {
+            const loadEl = document.getElementById(loadingId);
+            if (loadEl) loadEl.remove();
+            this.appendLine('Error: ' + e.message, 'error');
+            this.appendLine('', 'info');
+        }
+
+        this.scrollToBottom();
+    },
+
+    appendLine(text, type, id) {
+        const div = document.createElement('div');
+        div.className = 'c2-line c2-line-' + (type || 'info');
+        if (id) div.id = id;
+        // Preserve whitespace for formatted output
+        div.style.whiteSpace = 'pre-wrap';
+        div.textContent = text;
+        this.outputEl.appendChild(div);
+        this.scrollToBottom();
+    },
+
+    scrollToBottom() {
+        this.outputEl.scrollTop = this.outputEl.scrollHeight;
+    },
+
+    async poll() {
+        // Single coalesced fetch replaces three independent requests
+        try {
+            const r = await fetch('/dashboard/api/c2/poll');
+            const d = await r.json();
+            if (d.status !== 'success') return;
+            this.updateFleet(d.fleet);
+            this.updateAnomalies(d.anomalies || []);
+            this.updateIgris(d.igris || {});
+        } catch (e) { /* silent */ }
+    },
+
+    updateFleet(f) {
+        if (!f) return;
+        document.getElementById('c2-total').textContent = f.total;
+        document.getElementById('c2-online').textContent = f.healthy;
+        document.getElementById('c2-offline').textContent = f.offline;
+        this.renderFleetList(f.agents);
+    },
+
+    renderFleetList(agents) {
+        const container = document.getElementById('c2-fleet-list');
+        if (!agents || agents.length === 0) {
+            container.innerHTML = '<div style="font-size:0.7rem;color:var(--text-muted);padding:0.5rem;">No agents</div>';
+            return;
+        }
+        container.innerHTML = agents.map(a => {
+            const dotCls = a.status === 'healthy' ? 'c2-fleet-dot-ok' : a.status === 'degraded' ? 'c2-fleet-dot-deg' : 'c2-fleet-dot-off';
+            const short = (a.name || a.id).replace(/ Agent$| Monitor Agent$| Server$/, '');
+            return '<div class="c2-fleet-item" onclick="c2.exec(\'status ' + a.id + '\')" title="Click for status">' +
+                '<span class="c2-fleet-dot ' + dotCls + '"></span>' +
+                '<span class="c2-fleet-name">' + short + '</span>' +
+            '</div>';
+        }).join('');
+    },
+
+    updateAnomalies(anomalies) {
+        document.getElementById('c2-anomalies').textContent = anomalies.length;
+        const strip = document.getElementById('c2-anomaly-strip');
+        const cards = document.getElementById('c2-anomaly-cards');
+        if (anomalies.length === 0) {
+            strip.style.display = 'none';
+            return;
+        }
+        strip.style.display = 'block';
+        cards.innerHTML = anomalies.map(a => {
+            const cls = a.severity === 'high' ? 'c2-anom-high' : 'c2-anom-medium';
+            return '<div class="c2-anomaly-card ' + cls + '" onclick="c2.exec(\'status ' + (a.agent || '') + '\')">' +
+                '<div class="c2-anom-agent">' + this.esc(a.agent_name || a.agent) + '</div>' +
+                '<div class="c2-anom-msg">' + this.esc(a.message) + '</div>' +
+            '</div>';
+        }).join('');
+    },
+
+    updateIgris(d) {
+        const dot = document.getElementById('igris-dot');
+        const ind = document.getElementById('igris-indicator');
+        if (!dot || !ind) return;
+        const signalCount = d.active_signal_count || 0;
+        const status = d.status || 'stopped';
+        dot.className = 'igris-dot';
+        if (status === 'stopped' || status === 'error') {
+            dot.classList.add('igris-error');
+            ind.title = 'IGRIS: ' + status.toUpperCase();
+        } else if (signalCount > 0) {
+            dot.classList.add('igris-warn');
+            ind.title = 'IGRIS: ' + signalCount + ' active signal(s) | Cycle #' + (d.cycle_count || 0);
+        } else {
+            ind.title = 'IGRIS: Observing | Cycle #' + (d.cycle_count || 0) + ' | ' + (d.cycle_duration_ms || 0) + 'ms';
+        }
+    },
+
+    esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => c2.init());
+</script>
+{% endblock %}

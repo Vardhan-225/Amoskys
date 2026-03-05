@@ -53,6 +53,27 @@ AGENT_PROBE_MAP: Dict[str, Dict[str, str]] = {
         "module": "amoskys.agents.protocol_collectors.probes",
         "factory": "create_protocol_collector_probes",
     },
+    # L7 Gap-Closure Agents
+    "applog": {
+        "module": "amoskys.agents.applog.probes",
+        "factory": "create_applog_probes",
+    },
+    "db_activity": {
+        "module": "amoskys.agents.db_activity.probes",
+        "factory": "create_db_activity_probes",
+    },
+    "http_inspector": {
+        "module": "amoskys.agents.http_inspector.probes",
+        "factory": "create_http_inspector_probes",
+    },
+    "internet_activity": {
+        "module": "amoskys.agents.internet_activity.probes",
+        "factory": "create_internet_activity_probes",
+    },
+    "net_scanner": {
+        "module": "amoskys.agents.net_scanner.probes",
+        "factory": "create_net_scanner_probes",
+    },
 }
 
 # Known collector event types per agent

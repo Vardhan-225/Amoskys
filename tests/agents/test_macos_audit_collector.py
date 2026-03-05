@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 from amoskys.agents.kernel_audit.collector import (
     BaseKernelAuditCollector,
     MacOSAuditCollector,
@@ -24,7 +25,6 @@ from amoskys.agents.kernel_audit.collector import (
     StubKernelAuditCollector,
     create_kernel_audit_collector,
 )
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
 
 # =============================================================================
 # Sample praudit -x XML output
@@ -435,7 +435,7 @@ class TestProbePlatforms:
         from amoskys.agents.kernel_audit.probes import create_kernel_audit_probes
 
         probes = create_kernel_audit_probes()
-        assert len(probes) == 7
+        assert len(probes) == 8
         for probe in probes:
             assert (
                 "darwin" in probe.platforms

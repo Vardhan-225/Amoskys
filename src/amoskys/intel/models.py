@@ -271,6 +271,7 @@ class TelemetryEventView:
                 "event_outcome": se.event_outcome,
                 "user_name": se.user_name,
                 "source_ip": se.source_ip,
+                "target_resource": se.target_resource,
                 "risk_score": se.risk_score,
                 "mitre_techniques": list(se.mitre_techniques),
                 "requires_investigation": se.requires_investigation,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PersistenceGuardV2 - Persistence Mechanism Monitoring with Micro-Probe Architecture.
+"""PersistenceGuard - Persistence Mechanism Monitoring with Micro-Probe Architecture.
 
 Monitors autostart mechanisms and persistence techniques for threat detection:
     - macOS LaunchAgents/LaunchDaemons
@@ -20,10 +20,10 @@ Architecture:
 CLI Usage:
     ```bash
     # Create baseline
-    python persistence_agent_v2.py --mode create
+    python persistence_agent.py --mode create
 
     # Monitor for changes
-    python persistence_agent_v2.py --mode monitor --interval 300
+    python persistence_agent.py --mode monitor --interval 300
     ```
 
 MITRE ATT&CK Coverage:
@@ -45,6 +45,8 @@ import socket
 import time
 from typing import Any, Dict, Optional, Sequence
 
+import grpc
+
 from amoskys.agents.common.base import HardenedAgentBase, ValidationResult
 from amoskys.agents.common.probes import (
     MicroProbeAgentMixin,
@@ -57,9 +59,87 @@ from amoskys.agents.persistence.probes import (
     PersistenceEntry,
     create_persistence_probes,
 )
+from amoskys.config import get_config
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
+from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
 
 logger = logging.getLogger(__name__)
+
+config = get_config()
+EVENTBUS_ADDRESS = config.agent.bus_address
+CERT_DIR = config.agent.cert_dir
+
+
+# =============================================================================
+# EventBus Publisher
+# =============================================================================
+
+
+class EventBusPublisher:
+    """Wrapper for EventBus gRPC client."""
+
+    def __init__(self, address: str, cert_dir: str):
+        self.address = address
+        self.cert_dir = cert_dir
+        self._channel = None
+        self._stub = None
+
+    def _ensure_channel(self):
+        """Create gRPC channel if needed."""
+        if self._channel is None:
+            try:
+                with open(f"{self.cert_dir}/ca.crt", "rb") as f:
+                    ca_cert = f.read()
+                with open(f"{self.cert_dir}/agent.crt", "rb") as f:
+                    client_cert = f.read()
+                with open(f"{self.cert_dir}/agent.key", "rb") as f:
+                    client_key = f.read()
+
+                credentials = grpc.ssl_channel_credentials(
+                    root_certificates=ca_cert,
+                    private_key=client_key,
+                    certificate_chain=client_cert,
+                )
+                self._channel = grpc.secure_channel(self.address, credentials)
+                self._stub = universal_pbrpc.UniversalEventBusStub(self._channel)
+                logger.info("Created secure gRPC channel with mTLS")
+            except FileNotFoundError as e:
+                raise RuntimeError(f"Certificate not found: {e}")
+            except Exception as e:
+                raise RuntimeError(f"Failed to create gRPC channel: {e}")
+
+    def publish(self, events: list) -> None:
+        """Publish events to EventBus."""
+        self._ensure_channel()
+
+        for event in events:
+            # Already-wrapped envelopes (e.g. from drain path) go directly
+            if isinstance(event, telemetry_pb2.UniversalEnvelope):
+                envelope = event
+            else:
+                timestamp_ns = int(time.time() * 1e9)
+                idempotency_key = f"{event.device_id}_{timestamp_ns}"
+                envelope = telemetry_pb2.UniversalEnvelope(
+                    version="v1",
+                    ts_ns=timestamp_ns,
+                    idempotency_key=idempotency_key,
+                    device_telemetry=event,
+                    priority="NORMAL",
+                    requires_acknowledgment=True,
+                    schema_version=1,
+                )
+
+            ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+
+            if ack.status != telemetry_pb2.UniversalAck.OK:
+                raise Exception(f"EventBus returned status: {ack.status}")
+
+    def close(self):
+        """Close gRPC channel."""
+        if self._channel:
+            self._channel.close()
+            self._channel = None
+            self._stub = None
 
 
 # =============================================================================
@@ -257,7 +337,7 @@ class PersistenceCollector:
                 file_hash = self._sha256_file(ak_path)
                 with open(ak_path) as f:
                     lines = [
-                        l.strip() for l in f if l.strip() and not l.startswith("#")
+                        ln.strip() for ln in f if ln.strip() and not ln.startswith("#")
                     ]
                 # Extract forced commands from key lines
                 forced_commands = []
@@ -528,7 +608,7 @@ class PersistenceCollector:
 
 
 # =============================================================================
-# PersistenceGuardV2 - Main Agent
+# PersistenceGuard - Main Agent
 # =============================================================================
 
 
@@ -557,13 +637,15 @@ class PersistenceGuard(MicroProbeAgentMixin, HardenedAgentBase):
         baseline_path: str = "data/persistence_baseline.json",
         collection_interval: float = COLLECTION_INTERVAL_SECONDS,
     ):
-        """Initialize PersistenceGuardV2."""
+        """Initialize PersistenceGuard."""
         if device_id is None:
             device_id = socket.gethostname()
 
         from pathlib import Path
 
         Path(queue_path).parent.mkdir(parents=True, exist_ok=True)
+
+        publisher = EventBusPublisher(EVENTBUS_ADDRESS, CERT_DIR)
 
         queue_adapter = LocalQueueAdapter(
             queue_path=queue_path,
@@ -578,6 +660,7 @@ class PersistenceGuard(MicroProbeAgentMixin, HardenedAgentBase):
             agent_name=self.AGENT_NAME,
             device_id=device_id,
             collection_interval=collection_interval,
+            eventbus_publisher=publisher,
             local_queue=queue_adapter,
         )
 
@@ -598,7 +681,7 @@ class PersistenceGuard(MicroProbeAgentMixin, HardenedAgentBase):
                 self.baseline_mode = "auto_create"
 
         logger.info(
-            f"PersistenceGuardV2 initialized: device={device_id}, "
+            f"PersistenceGuard initialized: device={device_id}, "
             f"mode={baseline_mode}, baseline={baseline_path}, "
             f"interval={collection_interval}s, probes={len(self._probes)}"
         )
@@ -764,9 +847,9 @@ class PersistenceGuard(MicroProbeAgentMixin, HardenedAgentBase):
 
 
 def main():
-    """CLI entry point for PersistenceGuardV2."""
+    """CLI entry point for PersistenceGuard."""
     parser = argparse.ArgumentParser(
-        description="PersistenceGuardV2 - Persistence Mechanism Monitoring with Micro-Probe Architecture"
+        description="PersistenceGuard - Persistence Mechanism Monitoring with Micro-Probe Architecture"
     )
     parser.add_argument(
         "--device-id",
@@ -796,7 +879,7 @@ def main():
     parser.add_argument(
         "--interval",
         type=float,
-        default=PersistenceGuardV2.COLLECTION_INTERVAL_SECONDS,
+        default=PersistenceGuard.COLLECTION_INTERVAL_SECONDS,
         help="Collection interval in seconds (default: 300)",
     )
     parser.add_argument(
@@ -816,7 +899,7 @@ def main():
     )
 
     # Create and run agent
-    agent = PersistenceGuardV2(
+    agent = PersistenceGuard(
         device_id=args.device_id,
         queue_path=args.queue_path,
         baseline_mode=args.mode,
@@ -831,7 +914,7 @@ def main():
             agent.collect_data()
             logger.info(f"Baseline created and saved to {args.baseline_path}")
         else:
-            logger.info("Starting PersistenceGuardV2 in monitor mode...")
+            logger.info("Starting PersistenceGuard in monitor mode...")
             agent.run_forever()
     except KeyboardInterrupt:
         logger.info("Received interrupt signal, shutting down...")
@@ -844,7 +927,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# B5.1: Deprecated alias — will be removed in v1.0
-PersistenceGuardV2 = PersistenceGuard

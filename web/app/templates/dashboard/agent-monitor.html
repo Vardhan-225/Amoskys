@@ -254,6 +254,11 @@
         { id: 'kernel_audit', name: 'Kernel Audit',     color: '#FFD93D' },
         { id: 'device_discovery', name: 'Device Discovery', color: '#6BCB77' },
         { id: 'protocol_collectors', name: 'Protocol Collectors', color: '#00B4D8' },
+        { id: 'applog',  name: 'AppLog Analyzer',    color: '#E8A87C' },
+        { id: 'db_activity', name: 'DB Activity',    color: '#20B2AA' },
+        { id: 'http_inspector', name: 'HTTP Inspector', color: '#7B68EE' },
+        { id: 'internet_activity', name: 'Internet Activity', color: '#DA70D6' },
+        { id: 'net_scanner', name: 'Network Scanner', color: '#FF7F50' },
     ];
 
     var ID_MAP = {
@@ -261,6 +266,9 @@
         'fim':'fim_agent','flow':'flow_agent','persistence':'persistence_agent',
         'peripheral':'peripheral_agent','kernel_audit':'kernel_audit_agent',
         'device_discovery':'device_discovery_agent','protocol_collectors':'protocol_collectors_agent',
+        'applog':'applog_agent','db_activity':'db_activity_agent',
+        'http_inspector':'http_inspector_agent','internet_activity':'internet_activity_agent',
+        'net_scanner':'net_scanner_agent',
     };
 
     // Domain data columns per agent
@@ -292,7 +300,7 @@
         setupToggleBtn();
         updateHeader();
         loadAll();
-        pollingTimer = setInterval(pollLiveData, 8000);
+        pollingTimer = visInterval(pollLiveData, 15000);
         // SocketIO
         window.addEventListener('ws:agents', function() {
             var now = Date.now();

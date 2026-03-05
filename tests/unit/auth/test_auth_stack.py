@@ -549,7 +549,7 @@ class TestPasswordPolicy:
 # ============================================================================
 
 
-def _make_user(db: DbSession, **overrides) -> "User":
+def _make_user(db: DbSession, **overrides) -> "User":  # noqa: F821
     """Helper to insert a test User record."""
     from amoskys.auth.models import User, UserRole
     from amoskys.auth.password import hash_password

@@ -19,12 +19,8 @@ from amoskys.agents.fim.probes import (
     create_fim_probes,
 )
 
-# B5.1: Deprecated alias
-FIMAgentV2 = FIMAgent
-
 __all__ = [
     "FIMAgent",
-    "FIMAgentV2",
     "BaselineEngine",
     "FileState",
     "FileChange",

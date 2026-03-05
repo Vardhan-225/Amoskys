@@ -255,10 +255,11 @@ class CriticalSystemFileChangeProbe(MicroProbe):
         file_changes: List[FileChange] = context.shared_data.get("file_changes", [])
 
         for change in file_changes:
-            # Check if it's a critical binary
-            is_critical_binary = any(
-                binary in change.path for binary in CRITICAL_BINARIES
-            )
+            # Check if it's a critical binary — match the filename (basename),
+            # not a substring of the full path.  The old `binary in change.path`
+            # caused "sh" to match /usr/share/*, generating massive noise.
+            filename = os.path.basename(change.path)
+            is_critical_binary = filename in CRITICAL_BINARIES
 
             # Check if it's a critical config
             is_critical_config = any(
@@ -313,11 +314,55 @@ class SUIDBitChangeProbe(MicroProbe):
         - Ownership changes to root on user-writable paths
 
     Flags:
-        - New SUID/SGID binaries
-        - Removed SUID from legitimate binaries
+        - New SUID/SGID binaries in non-system locations (CRITICAL)
+        - SUID in standard system dirs but not in whitelist (HIGH)
+        - Skips known-good system SUID files (sudo, passwd, etc.)
 
     MITRE: T1548.001 (Setuid/Setgid), T1068 (Exploitation for Privilege Escalation)
     """
+
+    # Known-good SUID/SGID files — legitimate system tools that should not trigger alerts
+    KNOWN_SUID_PATHS = frozenset(
+        {
+            # Standard Unix SUID binaries
+            "/usr/bin/sudo",
+            "/usr/bin/su",
+            "/usr/bin/passwd",
+            "/usr/bin/login",
+            "/usr/bin/newgrp",
+            "/usr/bin/chsh",
+            "/usr/bin/chfn",
+            "/usr/bin/at",
+            "/usr/bin/crontab",
+            "/usr/sbin/traceroute",
+            "/usr/bin/wall",
+            "/usr/bin/ssh-agent",
+            "/usr/bin/locate",
+            "/usr/bin/write",
+            "/usr/lib/policykit-1/polkit-agent-helper-1",
+            # macOS-specific SUID/SGID binaries
+            "/usr/bin/top",
+            "/usr/sbin/authopen",
+            "/usr/bin/quota",
+            "/usr/bin/mail",
+            "/usr/sbin/postdrop",
+            "/usr/sbin/postqueue",
+            "/usr/bin/lockfile",
+            "/usr/bin/procmail",
+            "/usr/sbin/traceroute6",
+            "/usr/bin/expiry",
+        }
+    )
+
+    # System directories where SUID is expected (downgrade to HIGH, not CRITICAL)
+    SYSTEM_SUID_DIRS = (
+        "/usr/bin/",
+        "/usr/sbin/",
+        "/usr/lib/",
+        "/usr/libexec/",
+        "/sbin/",
+        "/bin/",
+    )
 
     name = "suid_bit_change"
     description = "SUID/SGID privilege escalation detection"
@@ -327,52 +372,79 @@ class SUIDBitChangeProbe(MicroProbe):
     scan_interval = 60.0
     requires_fields = ["file_changes"]
 
+    def _is_system_dir(self, path: str) -> bool:
+        return any(path.startswith(d) for d in self.SYSTEM_SUID_DIRS)
+
+    def _check_suid(self, change: FileChange) -> Optional[TelemetryEvent]:
+        new_state = change.new_state
+        if new_state is None:
+            return None
+        old_suid = change.old_state.has_suid() if change.old_state else False
+        if not new_state.has_suid() or old_suid:
+            return None
+        if change.path in self.KNOWN_SUID_PATHS:
+            return None
+        if self._is_system_dir(change.path):
+            severity = Severity.HIGH
+            reason = "SUID bit added in system directory (review recommended)"
+        else:
+            severity = Severity.CRITICAL
+            reason = "SUID bit added in non-system path (privilege escalation risk)"
+        return TelemetryEvent(
+            event_type="suid_bit_added",
+            severity=severity,
+            probe_name=self.name,
+            data={
+                "path": change.path,
+                "mode": oct(new_state.mode),
+                "owner_uid": new_state.uid,
+                "reason": reason,
+            },
+            mitre_techniques=["T1548.001"],
+        )
+
+    def _check_sgid(self, change: FileChange) -> Optional[TelemetryEvent]:
+        new_state = change.new_state
+        if new_state is None:
+            return None
+        old_sgid = change.old_state.has_sgid() if change.old_state else False
+        if not new_state.has_sgid() or old_sgid:
+            return None
+        if change.path in self.KNOWN_SUID_PATHS:
+            return None
+        if self._is_system_dir(change.path):
+            severity = Severity.MEDIUM
+            reason = "SGID bit added in system directory"
+        else:
+            severity = Severity.HIGH
+            reason = "SGID bit added in non-system path"
+        return TelemetryEvent(
+            event_type="sgid_bit_added",
+            severity=severity,
+            probe_name=self.name,
+            data={
+                "path": change.path,
+                "mode": oct(new_state.mode),
+                "owner_gid": new_state.gid,
+                "reason": reason,
+            },
+            mitre_techniques=["T1548.001"],
+        )
+
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
-        """Detect SUID/SGID changes."""
+        """Detect SUID/SGID changes, filtering known-good system files."""
         events: List[TelemetryEvent] = []
         file_changes: List[FileChange] = context.shared_data.get("file_changes", [])
 
         for change in file_changes:
             if not change.new_state or change.new_state.is_dir:
                 continue
-
-            # Check for SUID/SGID bit changes
-            old_suid = change.old_state.has_suid() if change.old_state else False
-            new_suid = change.new_state.has_suid() if change.new_state else False
-            old_sgid = change.old_state.has_sgid() if change.old_state else False
-            new_sgid = change.new_state.has_sgid() if change.new_state else False
-
-            if new_suid and not old_suid:
-                events.append(
-                    TelemetryEvent(
-                        event_type="suid_bit_added",
-                        severity=Severity.CRITICAL,
-                        probe_name=self.name,
-                        data={
-                            "path": change.path,
-                            "mode": oct(change.new_state.mode),
-                            "owner_uid": change.new_state.uid,
-                            "reason": "SUID bit added (privilege escalation risk)",
-                        },
-                        mitre_techniques=["T1548.001"],
-                    )
-                )
-
-            if new_sgid and not old_sgid:
-                events.append(
-                    TelemetryEvent(
-                        event_type="sgid_bit_added",
-                        severity=Severity.HIGH,
-                        probe_name=self.name,
-                        data={
-                            "path": change.path,
-                            "mode": oct(change.new_state.mode),
-                            "owner_gid": change.new_state.gid,
-                            "reason": "SGID bit added",
-                        },
-                        mitre_techniques=["T1548.001"],
-                    )
-                )
+            evt = self._check_suid(change)
+            if evt:
+                events.append(evt)
+            evt = self._check_sgid(change)
+            if evt:
+                events.append(evt)
 
         return events
 
@@ -421,6 +493,28 @@ class ServiceCreationProbe(MicroProbe):
         "/var/spool/cron",
     }
 
+    # Known-good service prefixes — these are legitimate OS and vendor
+    # services that should be tracked but at lower severity to reduce
+    # noise on production macOS/Linux systems.
+    _KNOWN_GOOD_PREFIXES = (
+        "com.apple.",
+        "com.microsoft.",
+        "com.docker.",
+        "us.zoom.",
+        "com.google.",
+        "org.mozilla.",
+        "com.brave.",
+        "com.github.",
+        "com.jetbrains.",
+        "com.slack.",
+    )
+
+    @classmethod
+    def _is_known_good_service(cls, path: str) -> bool:
+        """Check if a service file is from a known vendor."""
+        filename = os.path.basename(path)
+        return any(filename.startswith(p) for p in cls._KNOWN_GOOD_PREFIXES)
+
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         """Detect service creation/modification."""
         events: List[TelemetryEvent] = []
@@ -435,15 +529,19 @@ class ServiceCreationProbe(MicroProbe):
             if not is_persistence_path:
                 continue
 
+            # Differentiate known-good services (lower severity)
+            is_known = self._is_known_good_service(change.path)
+
             if change.change_type == ChangeType.CREATED:
                 events.append(
                     TelemetryEvent(
                         event_type="service_created",
-                        severity=Severity.HIGH,
+                        severity=Severity.LOW if is_known else Severity.HIGH,
                         probe_name=self.name,
                         data={
                             "path": change.path,
                             "reason": "New service/launch agent created",
+                            "known_vendor": is_known,
                         },
                         mitre_techniques=["T1543", "T1053"],
                     )
@@ -453,12 +551,13 @@ class ServiceCreationProbe(MicroProbe):
                 events.append(
                     TelemetryEvent(
                         event_type="service_modified",
-                        severity=Severity.MEDIUM,
+                        severity=Severity.LOW if is_known else Severity.MEDIUM,
                         probe_name=self.name,
                         data={
                             "path": change.path,
                             "change_type": change.change_type.value,
                             "reason": "Existing service modified",
+                            "known_vendor": is_known,
                         },
                         mitre_techniques=["T1543"],
                     )

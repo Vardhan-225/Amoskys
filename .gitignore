@@ -115,6 +115,7 @@ certs/*.crt
 certs/*.csr
 certs/*.pem
 certs/ca.srl
+certs/agents/*.ed25519
 
 # ---- Environment & Secrets ----
 .env

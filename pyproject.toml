@@ -140,10 +140,28 @@ amoskys-peripheral = "amoskys.agents.peripheral.peripheral_agent:main"
 # Legacy flow agent (WAL integration — retained for pipeline compatibility)
 amoskys-flowagent = "amoskys.agents.flowagent.main:main"
 
+# ─── L7 Gap-Closure Agents ───
+amoskys-applog = "amoskys.agents.applog.applog_agent:main"
+amoskys-db-activity = "amoskys.agents.db_activity.db_activity_agent:main"
+amoskys-http-inspector = "amoskys.agents.http_inspector.http_inspector_agent:main"
+amoskys-internet-activity = "amoskys.agents.internet_activity.internet_activity_agent:main"
+amoskys-net-scanner = "amoskys.agents.net_scanner.net_scanner_agent:main"
+
 # ─── EventBus & Intelligence ───
 amoskys-eventbus = "amoskys.eventbus.server:serve"
 amoskys-fusion = "amoskys.intel.fusion_engine:main"
 amoskys-ingest = "amoskys.intel.ingest:main"
+amoskys-wal = "amoskys.storage.wal_processor:main"
+
+# ─── Supervisory Intelligence ───
+amoskys-igris = "amoskys.igris.cli:main"
+amoskys-soma = "amoskys.intel.soma_cli:main"
+
+# ─── Red-Team Contract Framework ───
+amoskys-redteam = "amoskys.redteam.cli:main"
+
+# ─── Platform Orchestration ───
+amoskys-launch = "amoskys.launcher:main"
 
 # ─── Dashboard ───
 amoskys-dashboard = "web.app:main"
@@ -306,6 +324,7 @@ markers = [
     "integration: Full integration tests",
     "golden: Golden reference tests",
     "smoke: Smoke tests for deployment verification (quick, critical path)",
+    "asyncio: Async tests using asyncio event loop",
 ]
 
 [tool.coverage.run]

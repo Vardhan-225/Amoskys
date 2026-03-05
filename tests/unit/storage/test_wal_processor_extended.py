@@ -307,7 +307,7 @@ class TestRouteEvents:
             "dev-1",
             1000,
             "2024-01-01T00:00:00",
-            "proc-agent-v3",
+            "proc-agent",
             "3.0",
         )
 
@@ -1106,7 +1106,7 @@ class TestExtractProcessFromSecurity:
             "dev-1",
             1000,
             "2024-01-01T00:00:00",
-            "proc-agent-v3",
+            "proc-agent",
             "3.0",
             "suspicious_process",
         )
@@ -1130,7 +1130,7 @@ class TestExtractProcessFromSecurity:
             "dev-1",
             1000,
             "2024-01-01T00:00:00",
-            "proc-agent-v3",
+            "proc-agent",
             "3.0",
             "reverse_shell",
         )

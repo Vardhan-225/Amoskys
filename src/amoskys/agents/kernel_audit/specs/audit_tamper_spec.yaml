@@ -1,0 +1,48 @@
+probe_id: audit_tamper
+agent: kernel_audit
+version: "1.0.0"
+mitre_techniques:
+  - id: T1562.001
+    name: "Impair Defenses: Disable or Modify Tools"
+  - id: T1070.002
+    name: "Indicator Removal: Clear Linux or Mac System Logs"
+mitre_tactic: defense_evasion
+intent: >
+  Detect attempts to blind the audit subsystem. Attackers disable or tamper
+  with auditd/BSM to cover their tracks. Detects: non-audit processes writing
+  to audit log files, non-root executing audit tools (auditctl, ausearch),
+  and direct modification of audit configuration files.
+required_inputs:
+  - syscall: open
+    required_fields: [path, comm, uid]
+  - syscall: openat
+    required_fields: [path, comm, uid]
+  - syscall: write
+    required_fields: [path, comm, uid]
+  - syscall: unlink
+    required_fields: [path, comm, uid]
+  - syscall: execve
+    required_fields: [exe, uid]
+correlation_group: defense_evasion
+severity_policy:
+  kernel_audit_tamper: CRITICAL
+  kernel_audit_tool_exec_non_root: HIGH
+confidence_policy:
+  kernel_audit_tamper: 0.95
+  kernel_audit_tool_exec_non_root: 0.85
+thresholds: {}
+known_evasions:
+  - id: log_rotation
+    title: "logrotate truncating /var/log/audit/audit.log"
+    description: >
+      logrotate legitimately truncates audit logs. The probe fires because
+      logrotate is not in the audit binary whitelist. Should be whitelisted.
+    status: FP_RISK
+    mitigation: "Add logrotate to probe whitelist"
+  - id: container_escape_no_audit
+    title: "Container without auditd — kernel audit is disabled"
+    description: >
+      If the host doesn't run auditd, the probe gets no data and silently
+      fails to detect anything. Probe status will be DEGRADED.
+    status: EVADES
+    reason: "No audit data without kernel audit enabled"

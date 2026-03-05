@@ -312,6 +312,37 @@ class HardenedAgentBase(abc.ABC):
         """
         return ValidationResult(is_valid=True)
 
+    def _validate_event_shape(self, event: Any) -> ValidationResult:
+        """Base-level structural validation applied to every event.
+
+        Ensures fundamental fields are present regardless of subclass
+        validate_event() overrides. Runs before per-agent validation.
+        Handles both dict events and protobuf message objects.
+        """
+        errors: list[str] = []
+
+        # Protobuf messages and dict-like objects are both valid event shapes
+        if isinstance(event, dict):
+            device_id = event.get("device_id")
+            ts = event.get("timestamp_ns")
+        elif hasattr(event, "device_id"):
+            # Protobuf DeviceTelemetry or similar message
+            device_id = getattr(event, "device_id", None)
+            ts = getattr(event, "timestamp_ns", None)
+        else:
+            return ValidationResult(
+                is_valid=False,
+                errors=[f"event has unsupported type: {type(event).__name__}"],
+            )
+
+        if not device_id or not str(device_id).strip():
+            errors.append("missing or empty device_id")
+
+        if ts is not None and isinstance(ts, (int, float)) and ts <= 0:
+            errors.append(f"invalid timestamp_ns: {ts}")
+
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors)
+
     def enrich_event(self, event: Any) -> Any:
         """Add contextual metadata to validated event.
 
@@ -771,10 +802,30 @@ class HardenedAgentBase(abc.ABC):
             # Step 1: Collect raw data
             raw_events = self.collect_data()
 
-            # Step 2: Validate events
+            # Step 1.5: Structural pre-validation (base-level shape check)
+            if not raw_events:
+                logger.debug(
+                    "Agent %s cycle %s: collect_data returned empty",
+                    self.agent_name,
+                    cycle_id,
+                )
+                self.metrics.record_loop_success()
+                return
+
+            # Step 2: Validate events (shape check + agent-specific rules)
             validated: list[Any] = []
             rejected: int = 0
             for ev in raw_events:
+                shape = self._validate_event_shape(ev)
+                if not shape.is_valid:
+                    rejected += 1
+                    logger.error(
+                        "Agent %s shape validation failed in cycle %s: %s",
+                        self.agent_name,
+                        cycle_id,
+                        shape.errors,
+                    )
+                    continue
                 vr = self.validate_event(ev)
                 if vr.is_valid:
                     validated.append(ev)
@@ -803,9 +854,15 @@ class HardenedAgentBase(abc.ABC):
                     )
                     enriched.append(ev)  # Pass through unenriched
 
-            # Step 4: Publish to EventBus
+            # Step 4: Publish — prefer queue_adapter (signed envelopes) over
+            # direct EventBus publish (which lacks signing and gets rejected).
+            # WAL processor drains local queues into the telemetry store.
             if enriched:
-                self._publish_with_retry(enriched)
+                if self.local_queue:
+                    for ev in enriched:
+                        self.local_queue.enqueue(ev)
+                else:
+                    self._publish_with_retry(enriched)
                 self.metrics.record_events_emitted(len(enriched))
 
             self.last_successful_collection = time.time()

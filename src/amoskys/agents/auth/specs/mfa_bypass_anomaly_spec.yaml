@@ -1,0 +1,47 @@
+probe_id: mfa_bypass_anomaly
+agent: auth
+version: "1.0.0"
+mitre_techniques:
+  - id: T1621
+    name: "Multi-Factor Authentication Request Generation"
+mitre_tactic: credential_access
+intent: >
+  Detect MFA fatigue attacks (attacker spams MFA challenges until victim
+  approves) and MFA bypass (attacker achieves login success without a
+  corresponding MFA success event). MFA fatigue is the primary vector for
+  bypassing hardware token and push-notification MFA.
+required_inputs:
+  - event_type: MFA_CHALLENGE
+    required_fields: [username, timestamp_ns]
+  - event_type: MFA_SUCCESS
+    required_fields: [username, timestamp_ns]
+  - event_type: SSH_LOGIN
+    status: SUCCESS
+    required_fields: [username, timestamp_ns]
+correlation_group: credential_access
+severity_policy:
+  mfa_bypass_suspected: CRITICAL
+  mfa_fatigue_attack: HIGH
+confidence_policy:
+  mfa_bypass_suspected: 0.82
+  mfa_fatigue_attack: 0.78
+thresholds:
+  mfa_fatigue_threshold: 10    # challenges before success
+platforms: [linux, windows]
+known_evasions:
+  - id: no_mfa_events
+    title: "Auth system doesn't emit MFA_CHALLENGE events"
+    description: >
+      If the MFA provider doesn't integrate with the auth event pipeline,
+      MFA_CHALLENGE events are never emitted. The bypass detector cannot
+      fire (no absence-of-evidence without the expected evidence). Probe
+      goes BROKEN for mfa_bypass_suspected.
+    status: EVADES
+    reason: "Requires MFA event integration in the auth collector"
+  - id: session_hijacking
+    title: "Attacker steals authenticated session token post-MFA"
+    description: >
+      If the attacker hijacks a session after the legitimate MFA, the
+      login event doesn't happen again — no new SSH_LOGIN to correlate.
+    status: EVADES
+    reason: "Session hijack doesn't produce a new login event"

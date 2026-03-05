@@ -134,6 +134,7 @@
                     <option value="Identity">Identity</option>
                     <option value="Physical">Physical</option>
                     <option value="Kernel">Kernel</option>
+                    <option value="Application">Application</option>
                 </select>
                 <button id="refresh-agent-data-btn" class="neural-button" style="padding: 0.3rem 0.7rem; font-size: 0.78rem;">Refresh</button>
             </div>
@@ -678,6 +679,9 @@ function createAgentCard(a) {
         'fim':'fim_agent','flow':'flow_agent','persistence':'persistence_agent',
         'peripheral':'peripheral_agent','kernel_audit':'kernel_audit_agent',
         'device_discovery':'device_discovery_agent','protocol_collectors':'protocol_collectors_agent',
+        'applog':'applog_agent','db_activity':'db_activity_agent',
+        'http_inspector':'http_inspector_agent','internet_activity':'internet_activity_agent',
+        'net_scanner':'net_scanner_agent',
     };
     const catalogId = idMap[a.id] || a.id;
     const procStatus = agentStatusData[catalogId] || {};
@@ -788,9 +792,9 @@ function openAgentModal(agentId) {
     // Fetch live data
     fetchAgentLiveData(agentId);
 
-    // Auto-refresh every 5 seconds
+    // Auto-refresh every 15 seconds (visibility-aware)
     if (modalRefreshTimer) clearInterval(modalRefreshTimer);
-    modalRefreshTimer = setInterval(() => fetchAgentLiveData(agentId), 5000);
+    modalRefreshTimer = visInterval(() => fetchAgentLiveData(agentId), 15000);
 }
 
 function closeAgentModal() {
@@ -1190,7 +1194,7 @@ document.addEventListener('keydown', function(e) {
 let refreshTimer = null;
 document.addEventListener('DOMContentLoaded', () => {
     loadAgentData();
-    refreshTimer = setInterval(loadAgentData, 30000);
+    refreshTimer = visInterval(loadAgentData, 30000);
 
     // Refresh button
     document.getElementById('refresh-agent-data-btn').addEventListener('click', loadAgentData);

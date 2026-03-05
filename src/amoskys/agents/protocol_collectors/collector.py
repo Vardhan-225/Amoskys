@@ -1,4 +1,4 @@
-"""Protocol event collectors for ProtocolCollectorsV2 agent.
+"""Protocol event collectors for ProtocolCollectors agent.
 
 Provides collectors for various protocol event sources:
     - NetworkLogCollector: Parse network/protocol logs

@@ -35,6 +35,7 @@ from .process_telemetry import process_bp  # Process telemetry API
 from .proofs import proofs_bp  # Proof Spine API (D5)
 from .reliability import reliability_bp  # AMRDR Reliability API (Sprint 2)
 from .snmp_simple import snmp_simple_bp  # Simple SNMP telemetry API
+from .soma_brain import soma_brain_bp  # SOMA Brain ML intelligence API
 from .system import system_bp
 from .telemetry import telemetry_bp  # Real-time telemetry from EventBus WAL
 from .user_auth import user_auth_bp  # User authentication (Phase 3)
@@ -55,6 +56,7 @@ api_bp.register_blueprint(telemetry_bp)  # Register telemetry API
 api_bp.register_blueprint(onboarding_bp)  # Register onboarding API
 api_bp.register_blueprint(proofs_bp)  # Register proof spine API
 api_bp.register_blueprint(reliability_bp)  # Register AMRDR reliability API
+api_bp.register_blueprint(soma_brain_bp)  # Register SOMA Brain API
 
 
 # Add API documentation endpoint

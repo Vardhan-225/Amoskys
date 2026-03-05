@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""ProtocolCollectors Agent v2 - Micro-Probe Based Protocol Monitoring.
+"""ProtocolCollectors Agent - Micro-Probe Based Protocol Monitoring.
 
-This is the v2 implementation using the micro-probe architecture.
+This is the implementation using the micro-probe architecture.
 Each probe focuses on a specific protocol-level threat vector:
 
     1. HTTPSuspiciousHeadersProbe - Suspicious HTTP headers (T1071.001)
@@ -22,17 +22,21 @@ Architecture:
     - Inherits metrics/observability from HardenedAgentBase
 
 Usage:
-    >>> from amoskys.agents.protocol_collectors import ProtocolCollectorsV2
-    >>> agent = ProtocolCollectorsV2(device_id="host-001")
+    >>> from amoskys.agents.protocol_collectors import ProtocolCollectors
+    >>> agent = ProtocolCollectors(device_id="host-001")
     >>> agent.run_forever()
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import socket
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
+
+import grpc
 
 from amoskys.agents.common.base import HardenedAgentBase
 from amoskys.agents.common.probes import (
@@ -43,21 +47,100 @@ from amoskys.agents.common.probes import (
 )
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
 from amoskys.config import get_config
+from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
+from amoskys.proto import universal_telemetry_pb2_grpc as universal_pbrpc
+
+from .agent_types import ProtocolEvent
 
 # Use relative imports to avoid triggering amoskys.agents.__init__
 from .collector import BaseProtocolCollector, create_protocol_collector
 from .probes import PROTOCOL_PROBES
-from .agent_types import ProtocolEvent
 
 logger = logging.getLogger(__name__)
 
 config = get_config()
+EVENTBUS_ADDRESS = config.agent.bus_address
 CERT_DIR = config.agent.cert_dir
-QUEUE_PATH = getattr(
-    config.agent,
-    "protocol_collectors_queue_path",
-    "data/queue/protocol_collectors.db",
+QUEUE_PATH = os.environ.get(
+    "AMOSKYS_PROTOCOL_COLLECTORS_QUEUE_PATH",
+    getattr(
+        config.agent,
+        "protocol_collectors_queue_path",
+        "data/queue/protocol_collectors.db",
+    ),
 )
+
+
+# =============================================================================
+# EventBus Publisher
+# =============================================================================
+
+
+class EventBusPublisher:
+    """Wrapper for EventBus gRPC client."""
+
+    def __init__(self, address: str, cert_dir: str):
+        self.address = address
+        self.cert_dir = cert_dir
+        self._channel = None
+        self._stub = None
+
+    def _ensure_channel(self):
+        """Create gRPC channel if needed."""
+        if self._channel is None:
+            try:
+                with open(f"{self.cert_dir}/ca.crt", "rb") as f:
+                    ca_cert = f.read()
+                with open(f"{self.cert_dir}/agent.crt", "rb") as f:
+                    client_cert = f.read()
+                with open(f"{self.cert_dir}/agent.key", "rb") as f:
+                    client_key = f.read()
+
+                credentials = grpc.ssl_channel_credentials(
+                    root_certificates=ca_cert,
+                    private_key=client_key,
+                    certificate_chain=client_cert,
+                )
+                self._channel = grpc.secure_channel(self.address, credentials)
+                self._stub = universal_pbrpc.UniversalEventBusStub(self._channel)
+                logger.info("Created secure gRPC channel with mTLS")
+            except FileNotFoundError as e:
+                raise RuntimeError(f"Certificate not found: {e}")
+            except Exception as e:
+                raise RuntimeError(f"Failed to create gRPC channel: {e}")
+
+    def publish(self, events: list) -> None:
+        """Publish events to EventBus."""
+        self._ensure_channel()
+
+        for event in events:
+            # Already-wrapped envelopes (e.g. from drain path) go directly
+            if isinstance(event, telemetry_pb2.UniversalEnvelope):
+                envelope = event
+            else:
+                timestamp_ns = int(time.time() * 1e9)
+                idempotency_key = f"{event.device_id}_{timestamp_ns}"
+                envelope = telemetry_pb2.UniversalEnvelope(
+                    version="v1",
+                    ts_ns=timestamp_ns,
+                    idempotency_key=idempotency_key,
+                    device_telemetry=event,
+                    priority="NORMAL",
+                    requires_acknowledgment=True,
+                    schema_version=1,
+                )
+
+            ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
+
+            if ack.status != telemetry_pb2.UniversalAck.OK:
+                raise Exception(f"EventBus returned status: {ack.status}")
+
+    def close(self):
+        """Close gRPC channel."""
+        if self._channel:
+            self._channel.close()
+            self._channel = None
+            self._stub = None
 
 
 class ProtocolCollectors(MicroProbeAgentMixin, HardenedAgentBase):
@@ -85,7 +168,7 @@ class ProtocolCollectors(MicroProbeAgentMixin, HardenedAgentBase):
         metrics_interval: float = 60.0,
         probes: Optional[Sequence[MicroProbe]] = None,
     ):
-        """Initialize ProtocolCollectorsV2.
+        """Initialize ProtocolCollectors agent.
 
         Args:
             collection_interval: Seconds between collection cycles
@@ -113,12 +196,18 @@ class ProtocolCollectors(MicroProbeAgentMixin, HardenedAgentBase):
                 signing_key_path=f"{CERT_DIR}/agent.ed25519",
             )
 
+        eventbus_publisher = None
+        if _auto_infra:
+            eventbus_publisher = EventBusPublisher(EVENTBUS_ADDRESS, CERT_DIR)
+
         # Initialize using super() for proper MRO handling
         super().__init__(
             agent_name=agent_name,
             device_id=device_id,
             collection_interval=collection_interval,
             probes=probes,
+            eventbus_publisher=eventbus_publisher,
+            local_queue=queue_adapter,
             queue_adapter=queue_adapter,
             metrics_interval=metrics_interval,
         )
@@ -211,18 +300,14 @@ class ProtocolCollectors(MicroProbeAgentMixin, HardenedAgentBase):
 def create_protocol_collectors(
     device_id: str,
     **kwargs,
-) -> ProtocolCollectorsV2:
-    """Create and configure a ProtocolCollectorsV2 agent.
+) -> "ProtocolCollectors":
+    """Create and configure a ProtocolCollectors agent.
 
     Args:
         device_id: Unique device identifier
         **kwargs: Additional configuration options
 
     Returns:
-        Configured ProtocolCollectorsV2 instance
+        Configured ProtocolCollectors instance
     """
-    return ProtocolCollectorsV2(device_id=device_id, **kwargs)
-
-
-# B5.1: Deprecated alias — will be removed in v1.0
-ProtocolCollectorsV2 = ProtocolCollectors
+    return ProtocolCollectors(device_id=device_id, **kwargs)

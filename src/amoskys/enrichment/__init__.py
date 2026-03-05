@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 from amoskys.enrichment.asn import ASNEnricher
 from amoskys.enrichment.geoip import GeoIPEnricher
+from amoskys.enrichment.mitre import MITREEnricher
 from amoskys.enrichment.threat_intel import ThreatIntelEnricher
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ __all__ = [
     "GeoIPEnricher",
     "ASNEnricher",
     "ThreatIntelEnricher",
+    "MITREEnricher",
 ]
 
 
@@ -54,10 +56,12 @@ class EnrichmentPipeline:
         self._threat_intel = ThreatIntelEnricher(
             db_path=threat_intel_db_path or "data/threat_intel.db"
         )
+        self._mitre = MITREEnricher()
         self._stages: List[tuple] = [
             ("geoip", self._geoip),
             ("asn", self._asn),
             ("threat_intel", self._threat_intel),
+            ("mitre", self._mitre),
         ]
 
     @property
@@ -122,6 +126,10 @@ class EnrichmentPipeline:
                 "indicators": self._threat_intel.indicator_count(),
                 "cache": self._threat_intel.cache_info(),
             },
+            "mitre": {
+                "available": self._mitre.available,
+                "cache": self._mitre.cache_info(),
+            },
         }
 
     def close(self) -> None:
@@ -129,3 +137,4 @@ class EnrichmentPipeline:
         self._geoip.close()
         self._asn.close()
         self._threat_intel.close()
+        self._mitre.close()

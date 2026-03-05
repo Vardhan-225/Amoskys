@@ -308,7 +308,13 @@ class TestHardenedAgentBaseCollectionCycle:
         assert agent.metrics.loops_failed >= 1
 
     def test_cycle_with_validation_rejects_invalid_events(self):
-        agent = StubAgent(collect_fn=lambda: [{"good": True}, {"bad": True}])
+        _ts = int(time.time() * 1e9)
+        agent = StubAgent(
+            collect_fn=lambda: [
+                {"good": True, "device_id": "host", "timestamp_ns": _ts},
+                {"bad": True, "device_id": "host", "timestamp_ns": _ts},
+            ]
+        )
 
         # Override validate to reject second event
         call_count = [0]

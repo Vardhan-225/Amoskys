@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FlowAgentV2 — Network Flow Monitoring with Micro-Probe Architecture.
+"""FlowAgent — Network Flow Monitoring with Micro-Probe Architecture.
 
 Monitors network traffic (TCP/UDP flows) for threat detection:
     - Port scanning and reconnaissance
@@ -59,7 +59,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("FlowAgentV2")
+logger = logging.getLogger("FlowAgent")
 
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
@@ -68,7 +68,7 @@ QUEUE_PATH = getattr(config.agent, "flow_queue_path", "data/queue/flow.db")
 
 
 # =============================================================================
-# EventBus Publisher (same pattern as DNSAgentV2)
+# EventBus Publisher (same pattern as DNSAgent)
 # =============================================================================
 
 
@@ -106,19 +106,21 @@ class EventBusPublisher:
 
     def publish(self, events: list) -> None:
         self._ensure_channel()
-        for device_telemetry in events:
-            timestamp_ns = int(time.time() * 1e9)
-            idempotency_key = f"{device_telemetry.device_id}_{timestamp_ns}"
-            envelope = telemetry_pb2.UniversalEnvelope(
-                version="v1",
-                ts_ns=timestamp_ns,
-                idempotency_key=idempotency_key,
-                device_telemetry=device_telemetry,
-                signing_algorithm="Ed25519",
-                priority="NORMAL",
-                requires_acknowledgment=True,
-                schema_version=1,
-            )
+        for event in events:
+            if isinstance(event, telemetry_pb2.UniversalEnvelope):
+                envelope = event
+            else:
+                timestamp_ns = int(time.time() * 1e9)
+                idempotency_key = f"{event.device_id}_{timestamp_ns}"
+                envelope = telemetry_pb2.UniversalEnvelope(
+                    version="v1",
+                    ts_ns=timestamp_ns,
+                    idempotency_key=idempotency_key,
+                    device_telemetry=event,
+                    priority="NORMAL",
+                    requires_acknowledgment=True,
+                    schema_version=1,
+                )
             ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
             if ack.status != telemetry_pb2.UniversalAck.OK:
                 raise Exception(f"EventBus returned status: {ack.status}")
@@ -429,7 +431,7 @@ class MacOSFlowCollector:
 
 
 # =============================================================================
-# FlowAgentV2 — Main Agent
+# FlowAgent — Main Agent
 # =============================================================================
 
 
@@ -490,7 +492,7 @@ class FlowAgent(MicroProbeAgentMixin, HardenedAgentBase):
         self.register_probes(create_flow_probes())
 
         logger.info(
-            "FlowAgentV2 initialised: device=%s, interface=%s, interval=%.0fs, probes=%d",
+            "FlowAgent initialised: device=%s, interface=%s, interval=%.0fs, probes=%d",
             device_id,
             interface or "all",
             collection_interval,
@@ -524,7 +526,7 @@ class FlowAgent(MicroProbeAgentMixin, HardenedAgentBase):
                 logger.error("No probes initialised successfully")
                 return False
 
-            logger.info("FlowAgentV2 setup complete")
+            logger.info("FlowAgent setup complete")
             return True
         except Exception as e:
             logger.error("Setup failed: %s", e)
@@ -696,10 +698,10 @@ class FlowAgent(MicroProbeAgentMixin, HardenedAgentBase):
         return event
 
     def shutdown(self) -> None:
-        logger.info("FlowAgentV2 shutting down...")
+        logger.info("FlowAgent shutting down...")
         if self.eventbus_publisher:
             self.eventbus_publisher.close()
-        logger.info("FlowAgentV2 shutdown complete")
+        logger.info("FlowAgent shutdown complete")
 
     def get_health(self) -> Dict[str, Any]:
         return {
@@ -723,7 +725,7 @@ class FlowAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="FlowAgentV2 — Network Flow Monitoring (Micro-Probe Architecture)"
+        description="FlowAgent — Network Flow Monitoring (Micro-Probe Architecture)"
     )
     parser.add_argument(
         "--device-id",
@@ -770,10 +772,10 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     logger.info("=" * 70)
-    logger.info("AMOSKYS FlowAgent V2 (Micro-Probe Architecture)")
+    logger.info("AMOSKYS FlowAgent (Micro-Probe Architecture)")
     logger.info("=" * 70)
 
-    agent = FlowAgentV2(
+    agent = FlowAgent(
         collection_interval=args.interval,
         interface=args.interface,
         queue_path=args.queue_path,
@@ -789,7 +791,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# B5.1: Deprecated alias — will be removed in v1.0
-FlowAgentV2 = FlowAgent

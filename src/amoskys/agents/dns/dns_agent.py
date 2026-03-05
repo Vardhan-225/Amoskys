@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AMOSKYS DNS Agent v2 - Micro-Probe Architecture.
+"""AMOSKYS DNS Agent - Micro-Probe Architecture.
 
 This is the modernized DNS agent using the "swarm of eyes" pattern.
 9 micro-probes each watch one specific DNS threat vector.
@@ -25,7 +25,7 @@ MITRE ATT&CK Coverage:
     - T1046: Network Service Discovery
 
 Usage:
-    >>> agent = DNSAgentV2()
+    >>> agent = DNSAgent()
     >>> agent.run_forever()
 """
 
@@ -56,7 +56,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("DNSAgentV2")
+logger = logging.getLogger("DNSAgent")
 
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
@@ -106,19 +106,22 @@ class EventBusPublisher:
         """Publish events to EventBus."""
         self._ensure_channel()
 
-        for device_telemetry in events:
-            timestamp_ns = int(time.time() * 1e9)
-            idempotency_key = f"{device_telemetry.device_id}_{timestamp_ns}"
-            envelope = telemetry_pb2.UniversalEnvelope(
-                version="v1",
-                ts_ns=timestamp_ns,
-                idempotency_key=idempotency_key,
-                device_telemetry=device_telemetry,
-                signing_algorithm="Ed25519",
-                priority="NORMAL",
-                requires_acknowledgment=True,
-                schema_version=1,
-            )
+        for event in events:
+            # Already-wrapped envelopes (e.g. from drain path) go directly
+            if isinstance(event, telemetry_pb2.UniversalEnvelope):
+                envelope = event
+            else:
+                timestamp_ns = int(time.time() * 1e9)
+                idempotency_key = f"{event.device_id}_{timestamp_ns}"
+                envelope = telemetry_pb2.UniversalEnvelope(
+                    version="v1",
+                    ts_ns=timestamp_ns,
+                    idempotency_key=idempotency_key,
+                    device_telemetry=event,
+                    priority="NORMAL",
+                    requires_acknowledgment=True,
+                    schema_version=1,
+                )
 
             ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
 
@@ -311,7 +314,7 @@ def get_dns_collector() -> DNSCollector:
 
 
 # =============================================================================
-# DNS Agent V2
+# DNS Agent
 # =============================================================================
 
 
@@ -331,7 +334,7 @@ class DNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
     """
 
     def __init__(self, collection_interval: float = 10.0):
-        """Initialize DNS Agent v2.
+        """Initialize DNS Agent.
 
         Args:
             collection_interval: Seconds between collection cycles
@@ -367,7 +370,7 @@ class DNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
         # Register all DNS probes
         self.register_probes(create_dns_probes())
 
-        logger.info(f"DNSAgentV2 initialized with {len(self._probes)} probes")
+        logger.info(f"DNSAgent initialized with {len(self._probes)} probes")
 
     def setup(self) -> bool:
         """Initialize agent resources.
@@ -405,7 +408,7 @@ class DNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
                 logger.error("No probes initialized successfully")
                 return False
 
-            logger.info("DNSAgentV2 setup complete")
+            logger.info("DNSAgent setup complete")
             return True
 
         except Exception as e:
@@ -560,13 +563,13 @@ class DNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
     def shutdown(self) -> None:
         """Graceful shutdown."""
-        logger.info("DNSAgentV2 shutting down...")
+        logger.info("DNSAgent shutting down...")
 
         # Close EventBus connection
         if self.eventbus_publisher:
             self.eventbus_publisher.close()
 
-        logger.info("DNSAgentV2 shutdown complete")
+        logger.info("DNSAgent shutdown complete")
 
     def get_health(self) -> Dict[str, Any]:
         """Get agent health status.
@@ -592,10 +595,10 @@ class DNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
 
 def main():
-    """Run DNS Agent v2."""
+    """Run DNS Agent."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="AMOSKYS DNS Agent v2")
+    parser = argparse.ArgumentParser(description="AMOSKYS DNS Agent")
     parser.add_argument(
         "--interval",
         type=float,
@@ -623,10 +626,10 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     logger.info("=" * 70)
-    logger.info("AMOSKYS DNS Agent v2 (Micro-Probe Architecture)")
+    logger.info("AMOSKYS DNS Agent (Micro-Probe Architecture)")
     logger.info("=" * 70)
 
-    agent = DNSAgentV2(collection_interval=args.interval)
+    agent = DNSAgent(collection_interval=args.interval)
 
     try:
         agent.run_forever()
@@ -637,7 +640,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# B5.1: Deprecated alias — will be removed in v1.0
-DNSAgentV2 = DNSAgent

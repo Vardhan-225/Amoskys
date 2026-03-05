@@ -30,7 +30,7 @@ import logging
 import sqlite3
 import time
 import uuid
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -92,12 +92,15 @@ class FusionEngine:
         )
 
         # Per-device state: event buffers + risk scores
+        # events: capped deque prevents unbounded memory growth
+        # known_ips: dict {ip: last_seen_ts} with eviction in _trim_device
+        self._event_buffer_max = 1000
         self.device_state: Dict[str, Dict[str, Any]] = defaultdict(
             lambda: {
-                "events": [],
+                "events": deque(maxlen=self._event_buffer_max),
                 "risk_score": 10,  # Base score
                 "last_eval": None,
-                "known_ips": set(),
+                "known_ips": {},  # {ip: last_seen_timestamp}
                 "incident_count": 0,
             }
         )
@@ -114,6 +117,11 @@ class FusionEngine:
             "drift_alerts_emitted": 0,
         }
 
+        # Incident cooldown: suppress duplicate incidents per (rule_name, device_id)
+        # Key: (rule_name, device_id) → last fire timestamp
+        self._incident_cooldowns: Dict[tuple, float] = {}
+        self._cooldown_seconds = 300  # 5 min suppression per rule+device
+
         # Initialize database
         self._init_db()
 
@@ -127,12 +135,15 @@ class FusionEngine:
         """Initialize SQLite database for incidents and device risk"""
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
 
-        self.db = sqlite3.connect(self.db_path, isolation_level=None)
+        self.db = sqlite3.connect(
+            self.db_path, isolation_level=None, check_same_thread=False
+        )
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
 
         # Incidents table (with AMRDR columns)
-        self.db.execute("""
+        self.db.execute(
+            """
             CREATE TABLE IF NOT EXISTS incidents (
                 incident_id TEXT PRIMARY KEY,
                 device_id TEXT NOT NULL,
@@ -150,7 +161,8 @@ class FusionEngine:
                 weighted_confidence REAL NOT NULL DEFAULT 1.0,
                 contributing_agents TEXT NOT NULL DEFAULT '[]'
             )
-        """)
+        """
+        )
 
         # Migration: add AMRDR columns to existing databases
         self._migrate_amrdr_columns()
@@ -162,7 +174,8 @@ class FusionEngine:
         )
 
         # Device risk snapshots table
-        self.db.execute("""
+        self.db.execute(
+            """
             CREATE TABLE IF NOT EXISTS device_risk (
                 device_id TEXT PRIMARY KEY,
                 score INTEGER NOT NULL,
@@ -172,7 +185,8 @@ class FusionEngine:
                 metadata TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
-        """)
+        """
+        )
 
         logger.info("Fusion database schema initialized")
 
@@ -232,21 +246,22 @@ class FusionEngine:
         device_id = event.device_id
         state = self.device_state[device_id]
 
-        # Add to event buffer
+        # Add to event buffer (deque auto-evicts oldest when maxlen reached)
         state["events"].append(event)
 
         # Update metrics
         self.metrics["total_events_processed"] += 1
 
-        # Trim events outside window
+        # Trim events outside correlation window
         cutoff = datetime.now() - timedelta(minutes=self.window_minutes)
-        state["events"] = [e for e in state["events"] if e.timestamp >= cutoff]
+        while state["events"] and state["events"][0].timestamp < cutoff:
+            state["events"].popleft()
 
-        # Track known IPs for anomaly detection
+        # Track known IPs for anomaly detection (with timestamp for eviction)
         if event.security_event:
             source_ip = event.security_event.get("source_ip")
             if source_ip:
-                state["known_ips"].add(source_ip)
+                state["known_ips"][source_ip] = time.time()
 
         logger.debug(
             f"Added event {event.event_id} to {device_id} buffer ({len(state['events'])} events)"
@@ -736,8 +751,22 @@ class FusionEngine:
             try:
                 incidents, risk_snapshot = self.evaluate_device(device_id)
 
-                # Persist incidents
+                # Persist incidents (with cooldown dedup)
+                now = time.time()
                 for incident in incidents:
+                    # Cooldown: suppress if same rule+device fired recently
+                    cooldown_key = (incident.rule_name, device_id)
+                    last_fire = self._incident_cooldowns.get(cooldown_key, 0)
+                    if (now - last_fire) < self._cooldown_seconds:
+                        logger.debug(
+                            "Incident cooldown: suppressed %s for %s (%.0fs remaining)",
+                            incident.rule_name,
+                            device_id,
+                            self._cooldown_seconds - (now - last_fire),
+                        )
+                        continue
+                    self._incident_cooldowns[cooldown_key] = now
+
                     self.persist_incident(incident)
 
                     # Update metrics

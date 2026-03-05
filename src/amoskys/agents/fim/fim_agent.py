@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AMOSKYS FIM Agent v2 - File Integrity Monitoring with Micro-Probe Architecture.
+"""AMOSKYS FIM Agent - File Integrity Monitoring with Micro-Probe Architecture.
 
 This is the modernized FIM agent using the "swarm of eyes" pattern.
 8 micro-probes each watch one specific file tampering / persistence vector.
@@ -28,11 +28,11 @@ MITRE ATT&CK Coverage:
 
 Usage:
     >>> # First run: create baseline
-    >>> agent = FIMAgentV2(baseline_mode="create")
+    >>> agent = FIMAgent(baseline_mode="create")
     >>> agent.run_forever()
 
     >>> # Normal monitoring mode
-    >>> agent = FIMAgentV2(baseline_mode="monitor")
+    >>> agent = FIMAgent(baseline_mode="monitor")
     >>> agent.run_forever()
 """
 
@@ -67,7 +67,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("FIMAgentV2")
+logger = logging.getLogger("FIMAgent")
 
 config = get_config()
 EVENTBUS_ADDRESS = config.agent.bus_address
@@ -118,19 +118,22 @@ class EventBusPublisher:
         """Publish events to EventBus."""
         self._ensure_channel()
 
-        for device_telemetry in events:
-            timestamp_ns = int(time.time() * 1e9)
-            idempotency_key = f"{device_telemetry.device_id}_{timestamp_ns}"
-            envelope = telemetry_pb2.UniversalEnvelope(
-                version="v1",
-                ts_ns=timestamp_ns,
-                idempotency_key=idempotency_key,
-                device_telemetry=device_telemetry,
-                signing_algorithm="Ed25519",
-                priority="NORMAL",
-                requires_acknowledgment=True,
-                schema_version=1,
-            )
+        for event in events:
+            # Already-wrapped envelopes (e.g. from drain path) go directly
+            if isinstance(event, telemetry_pb2.UniversalEnvelope):
+                envelope = event
+            else:
+                timestamp_ns = int(time.time() * 1e9)
+                idempotency_key = f"{event.device_id}_{timestamp_ns}"
+                envelope = telemetry_pb2.UniversalEnvelope(
+                    version="v1",
+                    ts_ns=timestamp_ns,
+                    idempotency_key=idempotency_key,
+                    device_telemetry=event,
+                    priority="NORMAL",
+                    requires_acknowledgment=True,
+                    schema_version=1,
+                )
 
             ack = self._stub.PublishTelemetry(envelope, timeout=5.0)
 
@@ -326,7 +329,7 @@ class BaselineEngine:
 
 
 # =============================================================================
-# FIM Agent V2
+# FIM Agent
 # =============================================================================
 
 
@@ -373,7 +376,7 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
         baseline_mode: str = "monitor",  # "create" or "monitor"
         monitor_paths: Optional[List[str]] = None,
     ):
-        """Initialize FIM Agent v2.
+        """Initialize FIM Agent.
 
         Args:
             collection_interval: Seconds between collection cycles
@@ -414,7 +417,7 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
         # Register all FIM probes
         self.register_probes(create_fim_probes())
 
-        logger.info(f"FIMAgentV2 initialized with {len(self._probes)} probes")
+        logger.info(f"FIMAgent initialized with {len(self._probes)} probes")
         logger.info(f"Baseline mode: {baseline_mode}")
         logger.info(f"Monitoring {len(self.monitor_paths)} paths")
 
@@ -491,7 +494,7 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
                 logger.error("No probes initialized successfully")
                 return False
 
-            logger.info("FIMAgentV2 setup complete")
+            logger.info("FIMAgent setup complete")
             return True
 
         except Exception as e:
@@ -712,14 +715,48 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
             "CRITICAL": "CRITICAL",
         }
 
+        # Severity → base risk score mapping (granular instead of binary)
+        _severity_risk = {
+            "DEBUG": 0.1,
+            "INFO": 0.2,
+            "LOW": 0.3,
+            "MEDIUM": 0.5,
+            "HIGH": 0.7,
+            "CRITICAL": 0.9,
+        }
+
         for event in events:
+            # Compute nuanced risk score from severity, confidence, and evidence
+            base_risk = _severity_risk.get(event.severity.value, 0.5)
+            # Blend with probe confidence (default 0.8) to temper uncertain findings
+            risk_score = base_risk * event.confidence
+            # Known-vendor services are further dampened
+            if event.data.get("known_vendor"):
+                risk_score *= 0.5
+
+            # Derive event_outcome from change_type for rule matching
+            change_type = event.data.get("change_type", "")
+            event_outcome = {
+                "CREATED": "CREATED",
+                "MODIFIED": "MODIFIED",
+                "DELETED": "DELETED",
+                "HASH_CHANGED": "MODIFIED",
+                "PERM_CHANGED": "MODIFIED",
+                "OWNER_CHANGED": "MODIFIED",
+            }.get(change_type, "UNKNOWN")
+
             # Build SecurityEvent sub-message with MITRE techniques
             security_event = telemetry_pb2.SecurityEvent(
                 event_category=event.event_type,
-                risk_score=0.8 if event.severity.value in ("HIGH", "CRITICAL") else 0.5,
+                event_action="FILE_INTEGRITY",
+                event_outcome=event_outcome,
+                risk_score=round(min(risk_score, 1.0), 3),
                 analyst_notes=f"Probe: {event.probe_name}, "
                 f"Severity: {event.severity.value}",
             )
+            # Set target_resource for rule matching (file path that was changed)
+            if event.data.get("path"):
+                security_event.target_resource = event.data["path"]
             security_event.mitre_techniques.extend(event.mitre_techniques)
 
             tel_event = telemetry_pb2.TelemetryEvent(
@@ -730,7 +767,7 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
                 source_component=event.probe_name or "fim_agent",
                 tags=["fim", "threat"],
                 security_event=security_event,
-                confidence_score=0.7,
+                confidence_score=event.confidence,
             )
 
             # Populate attributes map with evidence from probe data
@@ -776,7 +813,7 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
     def shutdown(self) -> None:
         """Graceful shutdown."""
-        logger.info("FIMAgentV2 shutting down...")
+        logger.info("FIMAgent shutting down...")
 
         # Stop FSEvents watcher
         if self._fsevents_collector:
@@ -786,7 +823,7 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
         if self.eventbus_publisher:
             self.eventbus_publisher.close()
 
-        logger.info("FIMAgentV2 shutdown complete")
+        logger.info("FIMAgent shutdown complete")
 
     def get_health(self) -> Dict[str, Any]:
         """Get agent health status.
@@ -813,10 +850,10 @@ class FIMAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
 
 def main():
-    """Run FIM Agent v2."""
+    """Run FIM Agent."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="AMOSKYS FIM Agent v2")
+    parser = argparse.ArgumentParser(description="AMOSKYS FIM Agent")
     parser.add_argument(
         "--interval",
         type=float,
@@ -876,7 +913,7 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     logger.info("=" * 70)
-    logger.info("AMOSKYS FIM Agent v2 (Micro-Probe Architecture)")
+    logger.info("AMOSKYS FIM Agent (Micro-Probe Architecture)")
     logger.info("=" * 70)
 
     # Override globals from CLI args if provided
@@ -886,7 +923,7 @@ def main():
     if args.baseline_path:
         BASELINE_PATH = args.baseline_path
 
-    agent = FIMAgentV2(
+    agent = FIMAgent(
         collection_interval=args.interval,
         baseline_mode=args.mode,
         monitor_paths=args.monitor_paths,
@@ -909,7 +946,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# B5.1: Deprecated alias — will be removed in v1.0
-FIMAgentV2 = FIMAgent

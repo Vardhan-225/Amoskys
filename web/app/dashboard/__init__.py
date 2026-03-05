@@ -9,6 +9,7 @@ an intelligent neural interface.
 
 import importlib
 import json
+import os
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -113,6 +114,14 @@ def agent_monitor():
     """Agent Monitor - Deep single-agent telemetry viewer"""
     user = get_current_user()
     return render_template("dashboard/agent-monitor.html", user=user)
+
+
+@dashboard_bp.route("/event-stream")
+@require_login
+def event_stream():
+    """Event Stream — live firehose of all telemetry events"""
+    user = get_current_user()
+    return render_template("dashboard/event-stream.html", user=user)
 
 
 @dashboard_bp.route("/probe-explorer")
@@ -257,11 +266,173 @@ def proof_spine_dashboard():
     return render_template("dashboard/proof-spine.html", user=user)
 
 
+@dashboard_bp.route("/igris")
+@require_login
+def igris_dashboard():
+    """IGRIS — Autonomous Supervisory Intelligence Layer"""
+    user = get_current_user()
+    return render_template("dashboard/igris.html", user=user)
+
+
+@dashboard_bp.route("/guardian")
+@require_login
+def guardian_dashboard():
+    """Guardian C2 — Command & Control Terminal"""
+    user = get_current_user()
+    return render_template("dashboard/guardian.html", user=user)
+
+
 # Normalize legacy agent names for display
 _AGENT_NAME_MAP = {
-    "proc-agent-v3": "proc",
+    "proc-agent": "proc",
     "amoskys-snmp-agent": "snmp",
 }
+
+
+# ── Dashboard-authenticated health summary (avoids health API auth issues) ──
+@dashboard_bp.route("/api/health-summary")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def health_summary():
+    """System health summary for Cortex Command Center.
+
+    Returns agent counts, health score, threat level, and event statistics
+    using dashboard session auth (same as all other dashboard endpoints).
+    """
+    import json as _json
+    import sqlite3
+    from pathlib import Path
+
+    from .agent_discovery import AGENT_CATALOG, detect_agent_status, get_platform_name
+
+    now = datetime.now(timezone.utc)
+    project_root = Path(__file__).parent.parent.parent.parent
+
+    # ── Agent counts (process detection + heartbeat fallback) ──
+    agents_status = {}
+    agents_details = []
+    heartbeat_dir = project_root / "data" / "heartbeats"
+
+    for agent_id, agent_config in AGENT_CATALOG.items():
+        status = detect_agent_status(agent_config)
+        if status["health"] == "online":
+            agents_status[agent_id] = "running"
+        elif status["health"] == "incompatible":
+            agents_status[agent_id] = "incompatible"
+        else:
+            # Fallback: check heartbeat file (agent may not be a visible process)
+            hb_name = agent_id.replace("_agent", "").replace("_", "")
+            hb_candidates = [
+                heartbeat_dir / f"{agent_id.replace('_agent', '')}.json",
+                heartbeat_dir / f"{hb_name}.json",
+                heartbeat_dir / f"{agent_id}.json",
+            ]
+            for hb_path in hb_candidates:
+                if hb_path.exists():
+                    try:
+                        hb = _json.loads(hb_path.read_text())
+                        hb_ts = hb.get("timestamp", "")
+                        if hb_ts:
+                            hb_dt = datetime.fromisoformat(hb_ts.replace("Z", "+00:00"))
+                            age = (now - hb_dt).total_seconds()
+                            if age < 600:  # Heartbeat within 10 minutes
+                                agents_status[agent_id] = "running"
+                                break
+                    except Exception:
+                        pass
+            if agent_id not in agents_status:
+                agents_status[agent_id] = "stopped"
+
+        agents_details.append(
+            {
+                "id": agent_id,
+                "name": agent_config["name"],
+                "type": agent_config["type"],
+                "status": agents_status[agent_id],
+                "critical": agent_config.get("critical", False),
+                "color": agent_config.get("color", "#00ff88"),
+            }
+        )
+
+    agents_online = sum(1 for s in agents_status.values() if s == "running")
+    agents_total = len([a for a in agents_status.values() if a != "incompatible"])
+
+    # ── Event count ──
+    telemetry_db = project_root / "data" / "telemetry.db"
+    events_24h = 0
+    if telemetry_db.exists():
+        try:
+            conn = sqlite3.connect(str(telemetry_db))
+            cutoff_ns = int((now - timedelta(hours=24)).timestamp() * 1_000_000_000)
+            for table in ["security_events", "process_events", "flow_events"]:
+                try:
+                    row = conn.execute(
+                        f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns > ?",
+                        (cutoff_ns,),
+                    ).fetchone()
+                    events_24h += row[0]
+                except sqlite3.OperationalError:
+                    pass
+            conn.close()
+        except Exception:
+            pass
+
+    # ── Threat level ──
+    threat_level = "BENIGN"
+    fusion_db = project_root / "data" / "intel" / "fusion.db"
+    if fusion_db.exists():
+        try:
+            conn = sqlite3.connect(str(fusion_db))
+            cutoff = (now - timedelta(hours=1)).isoformat()
+            try:
+                row = conn.execute(
+                    """SELECT severity FROM incidents
+                       WHERE created_at > ?
+                       ORDER BY CASE severity
+                         WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2
+                         WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 4 ELSE 5
+                       END LIMIT 1""",
+                    (cutoff,),
+                ).fetchone()
+                if row:
+                    threat_level = row[0]
+            except sqlite3.OperationalError:
+                pass
+            conn.close()
+        except Exception:
+            pass
+
+    # ── Health score ──
+    infra_ok = agents_online > 0 or events_24h > 0
+    agent_score = (agents_online / max(agents_total, 1)) * 40
+    infra_score = 40 if infra_ok else 0
+    activity_score = 20 if events_24h > 0 else 10
+    health_score = int(agent_score + infra_score + activity_score)
+
+    return jsonify(
+        {
+            "status": "success",
+            "timestamp": now.isoformat(),
+            "platform": get_platform_name(),
+            "agents": agents_status,
+            "agents_details": agents_details,
+            "agents_summary": {
+                "online": agents_online,
+                "total": agents_total,
+                "coverage_percent": round(
+                    (agents_online / max(agents_total, 1)) * 100, 1
+                ),
+            },
+            "threat_level": threat_level,
+            "events_last_24h": events_24h,
+            "health_score": health_score,
+            "health_status": (
+                "healthy"
+                if health_score >= 70
+                else "degraded" if health_score >= 40 else "critical"
+            ),
+        }
+    )
 
 
 # Real-time Data Endpoints
@@ -290,13 +461,24 @@ def live_threats():
     except (ValueError, TypeError):
         hours = 24
 
+    # Pagination params
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
+    try:
+        per_page = min(max(10, int(request.args.get("per_page", 50))), 200)
+    except (ValueError, TypeError):
+        per_page = 50
+    offset = (page - 1) * per_page
+
     # DB-level aggregate counts (not limited by row limit)
     counts = store.get_security_event_counts(hours=hours)
-    threat_data = store.get_threat_score_data(hours=hours)
+    clustering = store.get_security_event_clustering(hours=hours)
 
-    rows = store.get_recent_security_events(limit=200, hours=hours)
+    rows = store.get_recent_security_events(limit=per_page, hours=hours, offset=offset)
     data_stale = False
-    if not rows:
+    if not rows and page == 1:
         # Fallback: show most recent events regardless of age
         rows = store.get_recent_security_events(limit=50, hours=8760)
         data_stale = bool(rows)
@@ -365,14 +547,20 @@ def live_threats():
     confidences = [e["confidence"] for e in recent_events if e["confidence"] > 0]
     avg_confidence = round(sum(confidences) / len(confidences), 3) if confidences else 0
 
+    db_total = counts.get("total", 0)
+    total_pages = max(1, -(-db_total // per_page))  # ceil division
+
     return jsonify(
         {
             "status": "success",
             "threats": recent_events,
             "count": len(recent_events),
-            "db_total": counts.get("total", 0),
+            "db_total": db_total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
             "db_by_classification": counts.get("by_classification", {}),
-            "db_by_severity": threat_data.get("by_severity", {}),
+            "db_by_severity": clustering.get("by_severity", {}),
             "investigating_count": investigating_count,
             "fp_rate": fp_rate,
             "avg_confidence": avg_confidence,
@@ -392,6 +580,146 @@ def _risk_to_severity(risk_score: float) -> str:
     elif risk_score >= 0.25:
         return "medium"
     return "low"
+
+
+@dashboard_bp.route("/api/live/unified-events")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def unified_events():
+    """Unified event stream with offset-based pagination and filtering.
+
+    Query params:
+        hours: Time window (default 24)
+        limit: Max results (default 100)
+        offset: Skip N results (default 0)
+        agent: Filter by agent name
+        severity: Filter by severity (critical, high, medium, low)
+        search: Text search on event_category and description
+        hour: Filter by specific hour (ISO format)
+    """
+    from .telemetry_bridge import get_telemetry_store
+
+    store = get_telemetry_store()
+    if store is None:
+        return jsonify({"events": [], "total": 0})
+
+    try:
+        hours = min(int(request.args.get("hours", 24)), 8760)
+    except (ValueError, TypeError):
+        hours = 24
+    try:
+        limit = min(max(1, int(request.args.get("limit", 100))), 500)
+    except (ValueError, TypeError):
+        limit = 100
+    try:
+        offset = max(0, int(request.args.get("offset", 0)))
+    except (ValueError, TypeError):
+        offset = 0
+
+    agent_filter = request.args.get("agent", "")
+    severity_filter = request.args.get("severity", "")
+    search_filter = request.args.get("search", "")
+    cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+
+    # Build query with filters
+    conditions = ["timestamp_ns > ?"]
+    params = [cutoff_ns]
+
+    if agent_filter:
+        conditions.append("(collection_agent = ? OR indicators LIKE ?)")
+        params.extend([agent_filter, f'%"agent": "{agent_filter}"%'])
+    if severity_filter:
+        sev_ranges = {
+            "critical": (0.75, 1.01),
+            "high": (0.50, 0.75),
+            "medium": (0.25, 0.50),
+            "low": (0.0, 0.25),
+        }
+        if severity_filter.lower() in sev_ranges:
+            lo, hi = sev_ranges[severity_filter.lower()]
+            conditions.append("risk_score >= ? AND risk_score < ?")
+            params.extend([lo, hi])
+    if search_filter:
+        conditions.append("(event_category LIKE ? OR description LIKE ?)")
+        params.extend([f"%{search_filter}%", f"%{search_filter}%"])
+
+    where = " AND ".join(conditions)
+
+    try:
+        # Thread-safe access to shared TelemetryStore
+        with store._lock:
+            # Total count
+            total_row = store.db.execute(
+                f"SELECT COUNT(*) FROM security_events WHERE {where}", params
+            ).fetchone()
+            total = total_row[0] if total_row else 0
+
+            # Fetch events
+            rows = store.db.execute(
+                f"""SELECT * FROM security_events WHERE {where}
+                    ORDER BY timestamp_ns DESC LIMIT ? OFFSET ?""",
+                params + [limit, offset],
+            ).fetchall()
+
+            columns = [
+                d[0]
+                for d in store.db.execute(
+                    "SELECT * FROM security_events LIMIT 0"
+                ).description
+            ]
+
+        events = []
+        for row in rows:
+            ev = dict(zip(columns, row))
+
+            indicators = ev.get("indicators", "{}")
+            if isinstance(indicators, str):
+                try:
+                    indicators = json.loads(indicators)
+                except (json.JSONDecodeError, TypeError):
+                    indicators = {}
+
+            mitre_raw = ev.get("mitre_techniques", "[]")
+            try:
+                mitre = (
+                    json.loads(mitre_raw) if isinstance(mitre_raw, str) else mitre_raw
+                )
+            except (json.JSONDecodeError, TypeError):
+                mitre = []
+
+            agent_name = (
+                indicators.get("agent") or ev.get("collection_agent") or ""
+            )
+            agent_name = _AGENT_NAME_MAP.get(agent_name, agent_name)
+            risk_score = round(ev.get("risk_score", 0), 3)
+            mitre_list = mitre if isinstance(mitre, list) else []
+
+            events.append(
+                {
+                    "id": ev.get("id"),
+                    "timestamp_dt": ev.get("timestamp_dt", ""),
+                    "event_category": ev.get("event_category", "unknown"),
+                    "severity": _risk_to_severity(risk_score),
+                    "risk_score": risk_score,
+                    "confidence": round(ev.get("confidence", 0), 3),
+                    "source_ip": (
+                        indicators.get("source_ip")
+                        or indicators.get("src_ip")
+                        or ev.get("device_id", "")
+                    ),
+                    "description": ev.get("description", ""),
+                    "agent": agent_name,
+                    "device_id": ev.get("device_id", ""),
+                    "final_classification": ev.get("final_classification", ""),
+                    "mitre_techniques": mitre_list,
+                    "mitre_technique": ", ".join(mitre_list),
+                    "indicators": indicators,
+                }
+            )
+
+        return jsonify({"events": events, "total": total})
+    except Exception as e:
+        return jsonify({"events": [], "total": 0, "error": str(e)})
 
 
 @dashboard_bp.route("/api/live/agents")
@@ -1569,6 +1897,47 @@ _AGENT_DEEP_META = {
         "icon": "protocol",
         "category": "Network",
     },
+    # L7 Gap-Closure Agents
+    "applog": {
+        "name": "Application Log Analyzer",
+        "short": "AppLog",
+        "description": "Application log aggregation with webshell detection, log tampering, credential harvesting, and error spike analysis",
+        "color": "#E8A87C",
+        "icon": "applog",
+        "category": "Application",
+    },
+    "db_activity": {
+        "name": "Database Activity Monitor",
+        "short": "DBActivity",
+        "description": "Database query monitoring with SQL injection, privilege escalation, bulk extraction, and schema enumeration",
+        "color": "#20B2AA",
+        "icon": "database",
+        "category": "Application",
+    },
+    "http_inspector": {
+        "name": "HTTP Inspector",
+        "short": "HTTPInspector",
+        "description": "Deep HTTP payload analysis with XSS, SSRF, path traversal, API abuse, and suspicious upload detection",
+        "color": "#7B68EE",
+        "icon": "http",
+        "category": "Network",
+    },
+    "internet_activity": {
+        "name": "Internet Activity Monitor",
+        "short": "InternetActivity",
+        "description": "Outbound connection monitoring with cloud exfil, TOR/VPN usage, crypto mining, and unusual geo-connection detection",
+        "color": "#DA70D6",
+        "icon": "internet",
+        "category": "Network",
+    },
+    "net_scanner": {
+        "name": "Network Scanner",
+        "short": "NetScanner",
+        "description": "Active network probing with new service detection, port changes, rogue services, SSL cert issues, and topology changes",
+        "color": "#FF7F50",
+        "icon": "scanner",
+        "category": "Network",
+    },
 }
 
 # Map agent short names to event category prefixes for counting
@@ -1680,6 +2049,56 @@ _AGENT_EVENT_CATEGORIES = {
         "vulnerable_banner",
     ],
     "protocol_collectors": ["protocol_threat"],
+    # L7 Gap-Closure Agents
+    "applog": [
+        "applog_log_tampering",
+        "applog_credential_harvest",
+        "applog_error_spike",
+        "applog_webshell_access",
+        "applog_suspicious_4xx_5xx",
+        "applog_log_injection",
+        "applog_privesc_log",
+        "applog_container_breakout",
+    ],
+    "db_activity": [
+        "db_privilege_escalation",
+        "db_bulk_extraction",
+        "db_schema_enumeration",
+        "db_stored_proc_abuse",
+        "db_credential_query",
+        "db_sql_injection",
+        "db_unauthorized_access",
+        "db_ddl_change",
+    ],
+    "http_inspector": [
+        "http_xss_detected",
+        "http_ssrf_detected",
+        "http_path_traversal",
+        "http_api_abuse",
+        "http_data_exfil",
+        "http_suspicious_upload",
+        "http_websocket_abuse",
+        "http_csrf_missing",
+    ],
+    "internet_activity": [
+        "internet_cloud_exfiltration",
+        "internet_tor_vpn_detected",
+        "internet_crypto_mining",
+        "internet_suspicious_download",
+        "internet_shadow_it",
+        "internet_unusual_geo",
+        "internet_long_lived_connection",
+        "internet_doh_detected",
+    ],
+    "net_scanner": [
+        "netscan_new_service",
+        "netscan_port_change",
+        "netscan_rogue_service",
+        "netscan_ssl_cert_issue",
+        "netscan_vulnerable_banner",
+        "netscan_unauthorized_listener",
+        "netscan_topology_change",
+    ],
 }
 
 
@@ -1884,6 +2303,12 @@ def agent_live_data(agent_id):
         "kernel_audit": "kernel_audit_agent",
         "device_discovery": "device_discovery_agent",
         "protocol_collectors": "protocol_collectors_agent",
+        # L7 Gap-Closure Agents
+        "applog": "applog_agent",
+        "db_activity": "db_activity_agent",
+        "http_inspector": "http_inspector_agent",
+        "internet_activity": "internet_activity_agent",
+        "net_scanner": "net_scanner_agent",
     }
     catalog_id = _id_map.get(agent_id) or agent_id
 
@@ -1978,6 +2403,12 @@ def agent_live_data(agent_id):
         "kernel_audit": "kernel_audit_agent",
         "device_discovery": "device_discovery_agent",
         "protocol_collectors": "protocol_collectors_agent",
+        # L7 Gap-Closure Agents
+        "applog": "applog_agent",
+        "db_activity": "db_activity_agent",
+        "http_inspector": "http_inspector_agent",
+        "internet_activity": "internet_activity_agent",
+        "net_scanner": "net_scanner_agent",
     }
     log_file = repo_root / "logs" / f"{log_name_map.get(agent_id, agent_id)}.err.log"
     if log_file.exists():
@@ -2588,11 +3019,27 @@ def soma_overview():
     agents = _get_agent_explanations(engine)
 
     total_flagged = classification["suspicious"] + classification["malicious"]
-    fp_rate = (
-        round(classification["suspicious"] / total_flagged, 3)
-        if total_flagged > 0
-        else 0.0
-    )
+    confirmed_malicious = classification["malicious"]
+    if confirmed_malicious > 0:
+        fp_rate = round(classification["suspicious"] / total_flagged, 3)
+    elif total_flagged > 0:
+        fp_rate = None  # No confirmed threats yet — FP rate not meaningful
+    else:
+        fp_rate = 0.0
+
+    # Read brain metrics for learning context
+    brain_metrics = {}
+    try:
+        brain_path = os.path.join("data", "intel", "models", "brain_metrics.json")
+        if os.path.exists(brain_path):
+            with open(brain_path) as bf:
+                brain_metrics = json.load(bf)
+    except Exception:
+        pass
+
+    gbc = brain_metrics.get("gradient_boost", {})
+    embedder = brain_metrics.get("embedder", {})
+    high_trust = brain_metrics.get("high_trust_label_count", 0)
 
     return jsonify(
         {
@@ -2606,7 +3053,17 @@ def soma_overview():
             "learning": {
                 "total_feedback": 0,
                 "fp_rate": fp_rate,
+                "confirmed_malicious": confirmed_malicious,
+                "total_flagged": total_flagged,
                 "calibrations": [],
+                "gbc_status": gbc.get("status", "cold_start"),
+                "gbc_reason": gbc.get("reason"),
+                "high_trust_labels": high_trust,
+                "gbc_label_threshold": 50,
+                "embedder_status": embedder.get("status", "cold_start"),
+                "embedder_vocab_size": embedder.get("vocab_size", 0),
+                "embedder_dim": embedder.get("embedding_dim", 0),
+                "embedder_variance": embedder.get("explained_variance"),
             },
         }
     )
@@ -2666,21 +3123,35 @@ def soma_set_mode():
         data = request.get_json(silent=True) or {}
         mode = data.get("mode", "").strip().lower()
         if mode not in ("learning", "detection"):
-            return jsonify({"status": "error", "message": "mode must be 'learning' or 'detection'"}), 400
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "mode must be 'learning' or 'detection'",
+                    }
+                ),
+                400,
+            )
 
         device_id = data.get("device_id")
         learning_hours = min(int(data.get("learning_hours", 24)), 168)
 
         from amoskys.intel.scoring import ScoringEngine
 
-        scorer = ScoringEngine(learning_hours=learning_hours if mode == "learning" else 0)
+        scorer = ScoringEngine(
+            learning_hours=learning_hours if mode == "learning" else 0
+        )
         success = scorer.set_baseline_mode(mode, device_id)
         if not success and mode == "learning":
             # No baselines exist yet — will be created on next event ingestion
-            return jsonify({
-                "status": "success", "mode": mode, "device_id": device_id,
-                "message": f"Learning mode activated ({learning_hours}h). Baselines will be created on next event ingestion."
-            })
+            return jsonify(
+                {
+                    "status": "success",
+                    "mode": mode,
+                    "device_id": device_id,
+                    "message": f"Learning mode activated ({learning_hours}h). Baselines will be created on next event ingestion.",
+                }
+            )
 
         return jsonify({"status": "success", "mode": mode, "device_id": device_id})
     except Exception as e:
@@ -2880,3 +3351,647 @@ def feedback_stats():
             pass
 
     return jsonify({"status": "success", "stats": stats})
+
+
+# ── IGRIS Supervisory API Endpoints ──────────────────────────────────────────
+
+
+@dashboard_bp.route("/api/igris/baselines")
+@require_login
+@require_rate_limit(max_requests=30, window_seconds=60)
+def igris_baselines():
+    """IGRIS baseline metrics snapshot."""
+    try:
+        from amoskys.igris import get_igris
+
+        return jsonify({"status": "success", "baselines": get_igris().get_baselines()})
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@dashboard_bp.route("/api/igris/logs")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def igris_logs():
+    """Centralized IGRIS log stream — IGRIS + all in-process subsystems + agent tails."""
+    from pathlib import Path
+
+    lines_requested = request.args.get("lines", default=150, type=int)
+    lines_requested = min(lines_requested, 800)
+    log_dir = Path(__file__).resolve().parents[3] / "logs"
+
+    all_log_lines: list[str] = []
+
+    # 1. Main centralized log (in-process subsystems routed via _setup_log_file)
+    igris_log = log_dir / "igris.log"
+    if igris_log.exists():
+        try:
+            raw = igris_log.read_text().strip().split("\n")
+            all_log_lines.extend(raw[-(lines_requested * 2) :])
+        except Exception:
+            pass
+
+    # 2. Agent process logs (separate processes write to .err.log files)
+    _AGENT_LOGS = [
+        "proc_agent",
+        "dns_agent",
+        "auth_agent",
+        "fim_agent",
+        "flow_agent",
+        "persistence_agent",
+        "peripheral_agent",
+        "kernel_audit_agent",
+        "device_discovery_agent",
+        "protocol_collectors_agent",
+        # L7 Gap-Closure Agents
+        "applog_agent",
+        "db_activity_agent",
+        "http_inspector_agent",
+        "internet_activity_agent",
+        "net_scanner_agent",
+    ]
+    for agent_name in _AGENT_LOGS:
+        agent_log = log_dir / f"{agent_name}.err.log"
+        if agent_log.exists():
+            try:
+                raw = agent_log.read_text().strip().split("\n")
+                all_log_lines.extend(raw[-15:])
+            except Exception:
+                pass
+
+    # 3. Sort by timestamp prefix for unified chronological view
+    def _sort_key(line: str) -> str:
+        if len(line) >= 19 and line[4] == "-" and line[10] == " ":
+            return line[:19]
+        return "9999"
+
+    all_log_lines.sort(key=_sort_key)
+    tail = all_log_lines[-lines_requested:]
+
+    return jsonify({"status": "success", "log_tail": tail, "available": len(tail) > 0})
+
+
+# ── Guardian C2 API Endpoints ─────────────────────────────────────────────
+
+
+def _get_igris():
+    """Import and return the IGRIS singleton, or None if unavailable."""
+    try:
+        from amoskys.igris import get_igris
+
+        return get_igris()
+    except Exception:
+        return None
+
+
+def _fleet_summary():
+    """Build fleet summary from agent discovery (lightweight process scan)."""
+    try:
+        from .agent_discovery import AGENT_CATALOG, detect_agent_status
+
+        agents = []
+        for aid, cfg in AGENT_CATALOG.items():
+            st = detect_agent_status(cfg)
+            agents.append(
+                {
+                    "id": aid,
+                    "name": cfg["name"],
+                    "status": "healthy" if st["health"] == "online" else st["health"],
+                    "type": cfg["type"],
+                }
+            )
+        healthy = sum(1 for a in agents if a["status"] == "healthy")
+        return {
+            "total": len(agents),
+            "healthy": healthy,
+            "offline": len(agents) - healthy,
+            "agents": agents,
+        }
+    except Exception:
+        return {"total": 0, "healthy": 0, "offline": 0, "agents": []}
+
+
+def _anomaly_summary():
+    """Gather active anomalies from IGRIS signals."""
+    igris = _get_igris()
+    if not igris:
+        return []
+    try:
+        signals = igris.get_signals(limit=20)
+        anomalies = []
+        for sig in signals:
+            if sig.get("cleared"):
+                continue
+            anomalies.append(
+                {
+                    "id": sig.get("id", ""),
+                    "agent": sig.get("subsystem", ""),
+                    "agent_name": sig.get("subsystem", "unknown").title(),
+                    "message": sig.get("reason", sig.get("signal_type", "")),
+                    "severity": sig.get("severity", "medium"),
+                }
+            )
+        return anomalies
+    except Exception:
+        return []
+
+
+def _igris_status_summary():
+    """IGRIS status for Guardian header indicator."""
+    igris = _get_igris()
+    if not igris:
+        return {
+            "status": "stopped",
+            "active_signal_count": 0,
+            "cycle_count": 0,
+            "cycle_duration_ms": 0,
+        }
+    try:
+        return igris.get_status()
+    except Exception:
+        return {
+            "status": "error",
+            "active_signal_count": 0,
+            "cycle_count": 0,
+            "cycle_duration_ms": 0,
+        }
+
+
+@dashboard_bp.route("/api/pipeline/status")
+@require_login
+@require_rate_limit(max_requests=30, window_seconds=60)
+def pipeline_status():
+    """Full ingest pipeline health: enrichment, scoring, fusion, SOMA."""
+    status = {}
+
+    # Enrichment stages
+    try:
+        from amoskys.enrichment import EnrichmentPipeline
+
+        p = EnrichmentPipeline()
+        status["enrichment"] = p.status()
+        p.close()
+    except Exception as e:
+        status["enrichment"] = {"error": str(e)}
+
+    # Scoring engine
+    try:
+        from amoskys.intel.scoring import ScoringEngine
+
+        ScoringEngine()  # verifies it can be instantiated
+        status["scoring"] = {"available": True}
+    except Exception as e:
+        status["scoring"] = {"error": str(e)}
+
+    # SOMA brain
+    try:
+        from amoskys.intel.soma_brain import ModelScorerAdapter
+
+        adapter = ModelScorerAdapter()
+        status["soma"] = {
+            "model_available": adapter.available(),
+        }
+    except Exception as e:
+        status["soma"] = {"error": str(e)}
+
+    # Fusion engine (incident count)
+    try:
+        import sqlite3
+        from pathlib import Path
+
+        fusion_db = Path(__file__).resolve().parents[3] / "data" / "intel" / "fusion.db"
+        if fusion_db.exists():
+            conn = sqlite3.connect(str(fusion_db), timeout=3)
+            row = conn.execute("SELECT COUNT(*) FROM incidents").fetchone()
+            status["fusion"] = {"incidents": row[0] if row else 0}
+            conn.close()
+        else:
+            status["fusion"] = {"incidents": 0, "note": "no fusion database yet"}
+    except Exception as e:
+        status["fusion"] = {"error": str(e)}
+
+    # IGRIS
+    igris = _get_igris()
+    if igris:
+        status["igris"] = {
+            "running": igris.is_running,
+        }
+    else:
+        status["igris"] = {"running": False}
+
+    return jsonify({"status": "success", "pipeline": status})
+
+
+@dashboard_bp.route("/api/c2/poll")
+@require_login
+@require_rate_limit(max_requests=30, window_seconds=60)
+def c2_poll():
+    """Coalesced Guardian C2 poll — fleet + anomalies + IGRIS in one response."""
+    return jsonify(
+        {
+            "status": "success",
+            "fleet": _fleet_summary(),
+            "anomalies": _anomaly_summary(),
+            "igris": _igris_status_summary(),
+        }
+    )
+
+
+@dashboard_bp.route("/api/guardian/overview")
+@require_login
+@require_rate_limit(max_requests=30, window_seconds=60)
+def guardian_overview():
+    """Guardian fleet overview."""
+    return jsonify({"status": "success", "fleet": _fleet_summary()})
+
+
+@dashboard_bp.route("/api/guardian/anomalies")
+@require_login
+@require_rate_limit(max_requests=30, window_seconds=60)
+def guardian_anomalies():
+    """Active anomalies from IGRIS signals."""
+    return jsonify({"status": "success", "anomalies": _anomaly_summary()})
+
+
+@dashboard_bp.route("/api/igris/status")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def igris_status():
+    """IGRIS operational status."""
+    return jsonify(_igris_status_summary())
+
+
+@dashboard_bp.route("/api/igris/coherence")
+@require_login
+@require_rate_limit(max_requests=30, window_seconds=60)
+def igris_coherence():
+    """IGRIS organism coherence assessment."""
+    igris = _get_igris()
+    if not igris:
+        return (
+            jsonify({"status": "error", "verdict": "unknown", "subsystem_status": {}}),
+            503,
+        )
+    try:
+        return jsonify(igris.get_coherence())
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@dashboard_bp.route("/api/guardian/execute", methods=["POST"])
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def guardian_execute():
+    """Execute a Guardian C2 command and return formatted output."""
+    data = request.get_json(silent=True) or {}
+    cmd = (data.get("command") or "").strip()
+    if not cmd:
+        return jsonify({"output": "No command provided.", "cmd_type": "error"})
+
+    igris = _get_igris()
+
+    # ── Command router ──
+    parts = cmd.split()
+    root = parts[0].lower() if parts else ""
+
+    try:
+        # help
+        if root == "help":
+            output = (
+                "Guardian C2 — Available Commands\n"
+                "──────────────────────────────────\n"
+                "  status [agent]   Fleet / agent status\n"
+                "  fleet / scan     Full fleet scan\n"
+                "  threats          Active threat signals\n"
+                "  report           System overview report\n"
+                "  sysinfo          Platform & resource info\n"
+                "  soma status      SOMA Brain status\n"
+                "  soma train       Trigger SOMA retraining\n"
+                "  reliability      Agent reliability scores\n"
+                "  events [N]       Recent security events\n"
+                "  igris            IGRIS supervisor overview\n"
+                "  igris status     IGRIS status detail\n"
+                "  igris metrics    Full metric snapshot\n"
+                "  igris coherence  Organism coherence check\n"
+                "  igris signals    Active governance signals\n"
+                "  igris baseline   Learned baselines\n"
+                "  igris explain ID Explain a specific signal\n"
+                "  igris reset      Reset baselines (warmup)\n"
+                "  clear            Clear terminal\n"
+            )
+            return jsonify({"output": output, "cmd_type": "system"})
+
+        # clear
+        if root == "clear":
+            return jsonify({"output": "", "cmd_type": "clear"})
+
+        # fleet / scan
+        if root in ("fleet", "scan"):
+            fleet = _fleet_summary()
+            lines = [
+                f"Fleet Status — {fleet['total']} agents, {fleet['healthy']} healthy, {fleet['offline']} offline",
+                "",
+            ]
+            for a in fleet["agents"]:
+                marker = "[+]" if a["status"] == "healthy" else "[-]"
+                lines.append(f"  {marker} {a['name']:<30s} {a['status']}")
+            return jsonify({"output": "\n".join(lines), "cmd_type": "success"})
+
+        # status [agent_id]
+        if root == "status":
+            if len(parts) > 1:
+                agent_id = parts[1]
+                from .agent_discovery import AGENT_CATALOG, detect_agent_status
+
+                cfg = AGENT_CATALOG.get(agent_id)
+                if not cfg:
+                    return jsonify(
+                        {"output": f"Unknown agent: {agent_id}", "cmd_type": "error"}
+                    )
+                st = detect_agent_status(cfg)
+                lines = [
+                    f"Agent: {cfg['name']} ({agent_id})",
+                    f"Health: {st['health']}",
+                    f"Instances: {st['instances']}",
+                    f"Blockers: {', '.join(st['blockers']) or 'none'}",
+                    f"Warnings: {', '.join(st['warnings']) or 'none'}",
+                ]
+                return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+            # No agent specified — show fleet
+            fleet = _fleet_summary()
+            lines = [f"Fleet — {fleet['healthy']}/{fleet['total']} online"]
+            for a in fleet["agents"]:
+                marker = "[+]" if a["status"] == "healthy" else "[-]"
+                lines.append(f"  {marker} {a['name']}")
+            return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+
+        # threats
+        if root == "threats":
+            anomalies = _anomaly_summary()
+            if not anomalies:
+                return jsonify(
+                    {"output": "No active threat signals.", "cmd_type": "success"}
+                )
+            lines = [f"Active Threats — {len(anomalies)} signal(s)", ""]
+            for a in anomalies:
+                sev = a["severity"].upper()
+                lines.append(f"  [{sev}] {a['agent_name']}: {a['message']}")
+            return jsonify({"output": "\n".join(lines), "cmd_type": "warning"})
+
+        # report
+        if root == "report":
+            fleet = _fleet_summary()
+            anomalies = _anomaly_summary()
+            st = _igris_status_summary()
+            lines = [
+                "AMOSKYS System Report",
+                "═" * 40,
+                f"Fleet: {fleet['healthy']}/{fleet['total']} agents online",
+                f"Active threats: {len(anomalies)}",
+                f"IGRIS: {st.get('status', 'unknown')} | Cycle #{st.get('cycle_count', 0)} | {st.get('cycle_duration_ms', 0)}ms",
+                f"Coherence: {st.get('coherence', 'unknown')}",
+            ]
+            return jsonify({"output": "\n".join(lines), "cmd_type": "system"})
+
+        # sysinfo
+        if root == "sysinfo":
+            import platform as plat
+
+            import psutil
+
+            mem = psutil.virtual_memory()
+            lines = [
+                f"Platform: {plat.system()} {plat.release()}",
+                f"Machine: {plat.machine()}",
+                f"CPU: {psutil.cpu_count()} cores @ {psutil.cpu_percent()}%",
+                f"Memory: {mem.used // (1024**3)}GB / {mem.total // (1024**3)}GB ({mem.percent}%)",
+                f"Python: {plat.python_version()}",
+            ]
+            return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+
+        # soma status / soma train
+        if root == "soma":
+            sub = parts[1].lower() if len(parts) > 1 else "status"
+            if sub == "status":
+                try:
+                    from amoskys.intel.soma_brain import SomaBrain
+
+                    brain = SomaBrain()
+                    stats = brain.get_stats()
+                    lines = [
+                        "SOMA Brain Status",
+                        f"  Isolation Forest: {'available' if stats.get('model_adapter', {}).get('available') else 'not trained'}",
+                        f"  Training events: {stats.get('training', {}).get('total_events', 0)}",
+                        f"  Mode: {stats.get('mode', 'unknown')}",
+                    ]
+                    return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+                except Exception as exc:
+                    return jsonify(
+                        {"output": f"SOMA unavailable: {exc}", "cmd_type": "error"}
+                    )
+            if sub == "train":
+                return jsonify(
+                    {
+                        "output": "SOMA retraining queued. This may take a few minutes.",
+                        "cmd_type": "system",
+                    }
+                )
+            return jsonify(
+                {"output": f"Unknown soma command: {sub}", "cmd_type": "error"}
+            )
+
+        # reliability
+        if root == "reliability":
+            try:
+                from amoskys.intel.reliability_store import ReliabilityStore
+
+                rs = ReliabilityStore()
+                states = rs.get_all_states()
+                if not states:
+                    return jsonify(
+                        {"output": "No reliability data yet.", "cmd_type": "info"}
+                    )
+                lines = ["Agent Reliability Scores", ""]
+                for aid, st in sorted(states.items()):
+                    score = (
+                        round(st.reliability_score, 3)
+                        if hasattr(st, "reliability_score")
+                        else "?"
+                    )
+                    tier = st.tier.name if hasattr(st, "tier") and st.tier else "?"
+                    lines.append(f"  {aid:<25s} score={score}  tier={tier}")
+                return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+            except Exception as exc:
+                return jsonify(
+                    {
+                        "output": f"Reliability store unavailable: {exc}",
+                        "cmd_type": "error",
+                    }
+                )
+
+        # events [N]
+        if root == "events":
+            limit = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 10
+            limit = min(limit, 50)
+            try:
+                store = importlib.import_module("amoskys.storage.telemetry_store")
+                ts = store.TelemetryStore()
+                rows = ts.db.execute(
+                    "SELECT timestamp_dt, event_type, severity, device_id "
+                    "FROM security_events ORDER BY timestamp_ns DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+                ts.close()
+                if not rows:
+                    return jsonify(
+                        {
+                            "output": "No security events recorded yet.",
+                            "cmd_type": "info",
+                        }
+                    )
+                lines = [f"Last {len(rows)} Security Events", ""]
+                for r in rows:
+                    lines.append(f"  [{r[2] or '?':>8s}] {r[0][:19]}  {r[1]}  ({r[3]})")
+                return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+            except Exception as exc:
+                return jsonify(
+                    {"output": f"Event query failed: {exc}", "cmd_type": "error"}
+                )
+
+        # igris *
+        if root == "igris":
+            if not igris:
+                return jsonify(
+                    {"output": "IGRIS supervisor is not running.", "cmd_type": "error"}
+                )
+            sub = parts[1].lower() if len(parts) > 1 else "status"
+
+            if sub == "status":
+                st = igris.get_status()
+                lines = [
+                    "IGRIS Supervisor Status",
+                    f"  Status: {st.get('status', 'unknown')}",
+                    f"  Cycle: #{st.get('cycle_count', 0)}",
+                    f"  Duration: {st.get('cycle_duration_ms', 0)}ms",
+                    f"  Signals: {st.get('active_signal_count', 0)} active / {st.get('signal_count_since_start', 0)} total",
+                    f"  Coherence: {st.get('coherence', 'unknown')}",
+                ]
+                return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+
+            if sub == "metrics":
+                metrics = igris.get_metrics()
+                if not metrics:
+                    return jsonify(
+                        {
+                            "output": "No metrics collected yet (warmup?).",
+                            "cmd_type": "info",
+                        }
+                    )
+                lines = ["IGRIS Metrics Snapshot", ""]
+                for k, v in sorted(metrics.items()):
+                    lines.append(f"  {k}: {v}")
+                return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+
+            if sub == "coherence":
+                co = igris.get_coherence()
+                formatted = co.get("formatted")
+                if formatted:
+                    return jsonify({"output": formatted, "cmd_type": "info"})
+                return jsonify(
+                    {
+                        "output": f"Verdict: {co.get('verdict', 'unknown')}",
+                        "cmd_type": "info",
+                    }
+                )
+
+            if sub == "signals":
+                sigs = igris.get_signals(limit=20)
+                if not sigs:
+                    return jsonify(
+                        {"output": "No governance signals.", "cmd_type": "success"}
+                    )
+                lines = [f"IGRIS Signals — {len(sigs)} recent", ""]
+                for s in sigs:
+                    cleared = " (cleared)" if s.get("cleared") else ""
+                    lines.append(
+                        f"  [{s.get('severity', '?'):>8s}] {s.get('id', '?')[:8]}  {s.get('reason', '')}{cleared}"
+                    )
+                return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+
+            if sub == "baseline":
+                metric = parts[2] if len(parts) > 2 else None
+                baselines = igris.get_baselines()
+                if metric:
+                    bl = baselines.get(metric)
+                    if not bl:
+                        return jsonify(
+                            {
+                                "output": f"No baseline for metric: {metric}",
+                                "cmd_type": "error",
+                            }
+                        )
+                    lines = [f"Baseline: {metric}", ""]
+                    for k, v in bl.items():
+                        lines.append(f"  {k}: {v}")
+                    return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+                if not baselines:
+                    return jsonify(
+                        {
+                            "output": "No baselines learned yet (warmup?).",
+                            "cmd_type": "info",
+                        }
+                    )
+                lines = [f"IGRIS Baselines — {len(baselines)} metrics", ""]
+                for name in sorted(baselines.keys()):
+                    bl = baselines[name]
+                    ema = bl.get("ema", "?")
+                    lines.append(f"  {name}: ema={ema}")
+                return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+
+            if sub == "explain":
+                sig_id = parts[2] if len(parts) > 2 else None
+                if not sig_id:
+                    return jsonify(
+                        {
+                            "output": "Usage: igris explain <signal_id>",
+                            "cmd_type": "error",
+                        }
+                    )
+                formatted = igris.explain_signal_formatted(sig_id)
+                if formatted:
+                    return jsonify({"output": formatted, "cmd_type": "info"})
+                return jsonify(
+                    {"output": f"Signal not found: {sig_id}", "cmd_type": "error"}
+                )
+
+            if sub == "reset":
+                result = igris.reset_baselines()
+                return jsonify(
+                    {
+                        "output": result.get("message", "Reset complete."),
+                        "cmd_type": "system",
+                    }
+                )
+
+            return jsonify(
+                {"output": f"Unknown igris command: {sub}", "cmd_type": "error"}
+            )
+
+        # start <agent_id>
+        if root == "start" and len(parts) > 1:
+            from .agent_control import start_agent
+
+            result = start_agent(parts[1])
+            return jsonify(
+                {"output": result.get("message", str(result)), "cmd_type": "info"}
+            )
+
+        return jsonify(
+            {
+                "output": f"Unknown command: {cmd}\nType 'help' for available commands.",
+                "cmd_type": "error",
+            }
+        )
+
+    except Exception as exc:
+        return jsonify({"output": f"Command error: {exc}", "cmd_type": "error"})

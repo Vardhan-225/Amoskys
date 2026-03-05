@@ -386,10 +386,10 @@ class TestCommonFieldMappings:
         """source_component falls back to source_component field."""
         event = {
             "event_type": "METRIC",
-            "source_component": "ProtocolCollectorsV2",
+            "source_component": "ProtocolCollectors",
         }
         telemetry = adapter._dict_to_telemetry(event)
-        assert telemetry.events[0].source_component == "ProtocolCollectorsV2"
+        assert telemetry.events[0].source_component == "ProtocolCollectors"
 
     def test_source_component_fallback_to_agent_name(self, adapter):
         """source_component falls back to adapter.agent_name."""

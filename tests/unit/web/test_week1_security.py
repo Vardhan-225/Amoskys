@@ -357,9 +357,9 @@ class TestRateLimitExemptions:
         """Old /api/health/* pattern should no longer be exempt."""
         assert self._check_exempt("/api/health/system") is False
 
-    def test_dashboard_api_still_exempt(self):
-        """Dashboard API endpoints remain exempt."""
-        assert self._check_exempt("/dashboard/api/events") is True
+    def test_dashboard_api_rate_limited(self):
+        """Dashboard API endpoints are now subject to rate limiting (Phase 2C hardening)."""
+        assert self._check_exempt("/dashboard/api/events") is False
 
 
 # ---------------------------------------------------------------------------

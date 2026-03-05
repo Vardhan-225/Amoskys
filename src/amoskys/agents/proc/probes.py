@@ -826,6 +826,7 @@ class BinaryFromTempProbe(MicroProbe):
                                 },
                                 confidence=0.85,
                                 correlation_id=guid,
+                                tags=["correlation_group:execution"],
                             )
                         )
                         break

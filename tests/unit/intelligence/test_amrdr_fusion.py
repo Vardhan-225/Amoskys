@@ -374,7 +374,8 @@ class TestIncidentPersistence:
         # Create a "legacy" DB without AMRDR columns
         legacy_path = os.path.join(self.tmp_dir, "legacy.db")
         db = sqlite3.connect(legacy_path)
-        db.execute("""
+        db.execute(
+            """
             CREATE TABLE incidents (
                 incident_id TEXT PRIMARY KEY,
                 device_id TEXT NOT NULL,
@@ -389,8 +390,10 @@ class TestIncidentPersistence:
                 metadata TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
-        """)
-        db.execute("""
+        """
+        )
+        db.execute(
+            """
             CREATE TABLE device_risk (
                 device_id TEXT PRIMARY KEY,
                 score INTEGER NOT NULL,
@@ -400,7 +403,8 @@ class TestIncidentPersistence:
                 metadata TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
-        """)
+        """
+        )
         db.close()
 
         # Now open with FusionEngine (should migrate)

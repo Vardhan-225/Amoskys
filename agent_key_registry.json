@@ -3,82 +3,122 @@
     {
       "agent_id": "proc_agent",
       "key_id": "k-proc-2026-02",
-      "public_key": "",
-      "valid_from": "2026-02-01T00:00:00Z",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEATlZUfiuURKvyppO8eXpXGiurzmnLYCasIgOt3RkRyZU=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
       "valid_until": null,
-      "status": "placeholder"
+      "status": "active"
     },
     {
       "agent_id": "flow_agent",
       "key_id": "k-flow-2026-02",
-      "public_key": "",
-      "valid_from": "2026-02-01T00:00:00Z",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAniScxoN0/afkl5YpTGdfp9YOfM+f52ASXvl2EmHyaNI=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
       "valid_until": null,
-      "status": "placeholder"
+      "status": "active"
     },
     {
       "agent_id": "dns_agent",
       "key_id": "k-dns-2026-02",
-      "public_key": "",
-      "valid_from": "2026-02-01T00:00:00Z",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAPYEmcIDmuasyQwRqoCvoI58HBUooYpiF8MC8hHOdbs4=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
       "valid_until": null,
-      "status": "placeholder"
+      "status": "active"
     },
     {
       "agent_id": "fim_agent",
       "key_id": "k-fim-2026-02",
-      "public_key": "",
-      "valid_from": "2026-02-01T00:00:00Z",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAswrHPAIlpl9neOnqTbQTnqmrKRtDtN4vy0kX4zN+d0s=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
       "valid_until": null,
-      "status": "placeholder"
+      "status": "active"
     },
     {
       "agent_id": "auth_guard_agent",
       "key_id": "k-auth-2026-02",
-      "public_key": "",
-      "valid_from": "2026-02-01T00:00:00Z",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA/fEVupDegGxrzsQC9k9f6cKO7xvtzoOm+x6irnw9Uso=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
       "valid_until": null,
-      "status": "placeholder"
+      "status": "active"
     },
     {
       "agent_id": "persistence_guard",
       "key_id": "k-persist-2026-02",
-      "public_key": "",
-      "valid_from": "2026-02-01T00:00:00Z",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAbsYpypiNRyUVPx2OGNPAMdnvdPiWgJM20jrCnldHmXc=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
       "valid_until": null,
-      "status": "placeholder"
+      "status": "active"
     },
     {
       "agent_id": "peripheral_agent",
       "key_id": "k-peripheral-2026-02",
-      "public_key": "",
-      "valid_from": "2026-02-01T00:00:00Z",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAAM/OM5z/4TCasE23JfsR2MUJ22yE56Pq4kL2/Zwg8w0=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
       "valid_until": null,
-      "status": "placeholder"
+      "status": "active"
     },
     {
       "agent_id": "kernel_audit_agent",
       "key_id": "k-kernel-2026-02",
-      "public_key": "",
-      "valid_from": "2026-02-01T00:00:00Z",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAs2AGB5iiEAP6MJy8vKGIgxnxf3D3SncUiGRmK0QQvXg=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
       "valid_until": null,
-      "status": "placeholder"
+      "status": "active"
     },
     {
       "agent_id": "device_discovery",
       "key_id": "k-discovery-2026-02",
-      "public_key": "",
-      "valid_from": "2026-02-01T00:00:00Z",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA8tuyj1JUsmyOfJeVI5qgxrHqFbCVj7xDGSJKq1VJxGw=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
       "valid_until": null,
-      "status": "placeholder"
+      "status": "active"
     },
     {
       "agent_id": "protocol_collectors",
       "key_id": "k-protocol-2026-02",
-      "public_key": "",
-      "valid_from": "2026-02-01T00:00:00Z",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAgoIXxWHFZsvNB7e+uSKDFGSP705Z5EbzSVbBr0sQAoQ=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
       "valid_until": null,
-      "status": "placeholder"
+      "status": "active"
+    },
+    {
+      "agent_id": "applog_agent",
+      "key_id": "k-applog-2026-03",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEApm2X53cGIMbGr1wLRoH1DvHK5PIfmvMxBq5i2dTLi+Q=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
+      "valid_until": null,
+      "status": "active"
+    },
+    {
+      "agent_id": "db_activity_agent",
+      "key_id": "k-dbactivity-2026-03",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAgKUMEmy4eFzwADdSbhlw+PuuIG7tb01S8h/Izs4FN4g=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
+      "valid_until": null,
+      "status": "active"
+    },
+    {
+      "agent_id": "http_inspector_agent",
+      "key_id": "k-httpinspector-2026-03",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAMPud+UsXGuewmB7f4yql93waD2LweDlADw/9h8ZSH5A=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
+      "valid_until": null,
+      "status": "active"
+    },
+    {
+      "agent_id": "internet_activity_agent",
+      "key_id": "k-internetactivity-2026-03",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAITkf+1iyvYFEMg5AEL/ax973Q2UUG58u/qk3EetE6po=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
+      "valid_until": null,
+      "status": "active"
+    },
+    {
+      "agent_id": "net_scanner_agent",
+      "key_id": "k-netscanner-2026-03",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAmfyryLTEvKJvTVAWHuelsHxzc5oegbBSKLr2MmILOko=\n-----END PUBLIC KEY-----",
+      "valid_from": "2026-03-01T17:54:30.214765+00:00",
+      "valid_until": null,
+      "status": "active"
     }
   ]
 }

@@ -135,10 +135,25 @@ def _create_app():
             app = Flask(__name__)
             app.config["TESTING"] = True
             app.register_blueprint(auth_bp)
-            return app
+
+    # Disable Flask-Limiter globally for this test app.  When auth_bp is
+    # already imported by another test module the decorators are bound to
+    # the real limiter — TESTING=True alone isn't enough.
+    try:
+        from amoskys.api.security import limiter
+
+        limiter.init_app(app)
+        limiter.enabled = False
+    except Exception:
+        pass
+
+    return app
 
 
-# We build the app once per module; each test gets a fresh test client.
+# Build a fresh app for this module's test session.  The old pattern used a
+# global ``_app`` singleton that leaked state when other test modules imported
+# ``auth_bp`` first (with different patches).  Rebuilding per-module via a
+# session-scoped fixture avoids ordering flakiness while still being fast.
 _app = None
 
 
@@ -147,6 +162,16 @@ def _get_app():
     if _app is None:
         _app = _create_app()
     return _app
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _reset_app_singleton():
+    """Ensure a fresh app is created for this module, not reused from a
+    previous test module that may have imported auth_bp differently."""
+    global _app
+    _app = None
+    yield
+    _app = None
 
 
 @pytest.fixture()

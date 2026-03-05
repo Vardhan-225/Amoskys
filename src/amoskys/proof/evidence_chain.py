@@ -46,7 +46,8 @@ class EvidenceChain:
         conn = sqlite3.connect(self.db_path)
         try:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS evidence_chain (
                     evidence_id TEXT PRIMARY KEY,
                     correlation_id TEXT NOT NULL,
@@ -57,7 +58,8 @@ class EvidenceChain:
                     rule_name TEXT NOT NULL,
                     created_at_ns INTEGER NOT NULL
                 )
-                """)
+                """
+            )
             conn.commit()
             logger.debug(f"Evidence Chain database initialized at {self.db_path}")
         finally:

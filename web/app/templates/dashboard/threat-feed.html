@@ -13,7 +13,13 @@
             <span class="tf-count" id="feed-count">0 events</span>
         </div>
         <div class="tf-header-right">
-            <button class="tf-action-btn" id="export-csv-btn" title="Export as CSV">Export CSV</button>
+            <select class="tf-select" id="per-page-select" title="Events per page">
+                <option value="25">25 / page</option>
+                <option value="50" selected>50 / page</option>
+                <option value="100">100 / page</option>
+                <option value="200">200 / page</option>
+            </select>
+            <button class="tf-action-btn" id="export-csv-btn" title="Export current page as CSV">Export CSV</button>
             <button class="tf-action-btn tf-action-refresh" id="refresh-feed-btn" title="Refresh now">Refresh</button>
         </div>
     </div>
@@ -71,16 +77,45 @@
         <div class="tf-summary-item"><span class="tf-summary-val tf-val-confidence" id="sum-confidence">--</span><span class="tf-summary-lbl">Avg Confidence</span></div>
     </div>
 
-    <!-- ===== THREAT LIST ===== -->
-    <div class="tf-list" id="threat-list">
-        <div class="tf-loading">Connecting to threat feed...</div>
+    <!-- ===== THREAT TABLE ===== -->
+    <div class="tf-table-wrap">
+        <table class="tf-table" id="threat-table">
+            <thead>
+                <tr>
+                    <th class="tf-th-sev">Sev</th>
+                    <th class="tf-th-time">Date / Time</th>
+                    <th class="tf-th-type">Event Type</th>
+                    <th class="tf-th-agent">Agent</th>
+                    <th class="tf-th-host">Host / IP</th>
+                    <th class="tf-th-mitre">MITRE</th>
+                    <th class="tf-th-risk">Risk</th>
+                    <th class="tf-th-conf">Conf</th>
+                    <th class="tf-th-class">Class</th>
+                    <th class="tf-th-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="threat-tbody">
+                <tr><td colspan="10" class="tf-loading">Connecting to threat feed...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ===== EVENT DETAIL PANEL (shown on row click) ===== -->
+    <div class="tf-detail-panel" id="detail-panel" style="display:none;">
+        <div class="tf-detail-header">
+            <span class="tf-detail-title" id="detail-title">Event Detail</span>
+            <button class="tf-detail-close" id="detail-close">&times;</button>
+        </div>
+        <div class="tf-detail-body" id="detail-body"></div>
     </div>
 
     <!-- ===== PAGINATION ===== -->
     <div class="tf-pagination" id="pagination" style="display:none;">
+        <button class="tf-page-btn" id="first-btn" disabled title="First page">&laquo;</button>
         <button class="tf-page-btn" id="prev-btn" disabled>Previous</button>
         <span class="tf-page-info" id="page-info">Page 1</span>
         <button class="tf-page-btn" id="next-btn">Next</button>
+        <button class="tf-page-btn" id="last-btn" title="Last page">&raquo;</button>
     </div>
 
     <!-- ===== TOAST CONTAINER ===== -->
@@ -107,7 +142,7 @@
 }
 @keyframes pulse-live { 0%,100%{ opacity:1; } 50%{ opacity:0.5; } }
 .tf-count { font-size: 0.8rem; color: var(--text-muted); }
-.tf-header-right { display: flex; gap: 0.5rem; }
+.tf-header-right { display: flex; gap: 0.5rem; align-items: center; }
 .tf-action-btn {
     padding: 0.4rem 0.9rem; border-radius: 8px; font-size: 0.78rem;
     font-weight: 600; cursor: pointer; border: 1px solid rgba(255,255,255,0.1);
@@ -175,90 +210,205 @@
 .tf-val-fp { color: #a78bfa; }
 .tf-val-confidence { color: #34d399; }
 
-/* ── Threat List ── */
-.tf-list { display: flex; flex-direction: column; gap: 0.5rem; }
-.tf-loading { color: var(--text-muted); text-align: center; padding: 2rem; font-size: 0.85rem; }
-
-/* ── Threat Item (Full Detail) ── */
-.tf-threat {
-    display: flex; gap: 1rem; padding: 1rem 1.25rem; border-radius: 10px;
+/* ── Table ── */
+.tf-table-wrap {
+    overflow-x: auto; border-radius: 10px;
     background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.06);
-    border-left: 4px solid #00ff88; transition: all 0.15s;
 }
-.tf-threat:hover { background: rgba(26,31,58,0.9); border-color: rgba(255,255,255,0.1); }
-.tf-threat.sev-critical { border-left-color: #ff3366; }
-.tf-threat.sev-high { border-left-color: #ff6600; }
-.tf-threat.sev-medium { border-left-color: #ffaa00; }
+.tf-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 0.8rem; table-layout: fixed;
+}
+.tf-table thead {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(15,20,45,0.98);
+}
+.tf-table th {
+    padding: 0.7rem 0.6rem; text-align: left;
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.8px; color: var(--text-muted);
+    border-bottom: 2px solid rgba(255,255,255,0.08);
+    white-space: nowrap;
+}
+.tf-table td {
+    padding: 0.55rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle; color: var(--text-secondary);
+}
+.tf-table tbody tr { transition: background 0.1s; cursor: pointer; }
+.tf-table tbody tr:hover { background: rgba(0,217,255,0.04); }
+.tf-table tbody tr.selected { background: rgba(0,217,255,0.08); }
 
-.tf-threat-sev {
-    flex-shrink: 0; width: 60px; text-align: center;
-    padding: 0.2rem 0; border-radius: 6px; font-size: 0.6rem;
-    font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;
-    align-self: flex-start; margin-top: 2px;
-}
-.tf-threat-sev.sev-critical { background: rgba(255,51,102,0.2); color: #ff3366; }
-.tf-threat-sev.sev-high { background: rgba(255,102,0,0.2); color: #ff6600; }
-.tf-threat-sev.sev-medium { background: rgba(255,170,0,0.2); color: #ffaa00; }
-.tf-threat-sev.sev-low { background: rgba(0,136,255,0.15); color: #0088ff; }
+/* Column widths */
+.tf-th-sev { width: 60px; }
+.tf-th-time { width: 145px; }
+.tf-th-type { width: auto; }
+.tf-th-agent { width: 90px; }
+.tf-th-host { width: 120px; }
+.tf-th-mitre { width: 100px; }
+.tf-th-risk { width: 50px; text-align: center; }
+.tf-th-conf { width: 50px; text-align: center; }
+.tf-th-class { width: 80px; }
+.tf-th-actions { width: 120px; text-align: center; }
 
-.tf-threat-body { flex: 1; min-width: 0; }
-.tf-threat-title { font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.3rem; }
-.tf-threat-desc {
-    font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;
-    margin-bottom: 0.5rem; max-height: 4.5em; overflow: hidden;
+/* ── Severity badge ── */
+.tf-sev {
+    display: inline-block; padding: 0.15rem 0.45rem; border-radius: 4px;
+    font-size: 0.6rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.4px; text-align: center; min-width: 50px;
 }
+.tf-sev-critical { background: rgba(255,51,102,0.2); color: #ff3366; }
+.tf-sev-high { background: rgba(255,102,0,0.2); color: #ff6600; }
+.tf-sev-medium { background: rgba(255,170,0,0.2); color: #ffaa00; }
+.tf-sev-low { background: rgba(0,136,255,0.15); color: #0088ff; }
 
-.tf-threat-tags { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-.tf-tag {
-    padding: 0.1rem 0.5rem; border-radius: 4px; font-size: 0.65rem;
-    font-weight: 600; display: inline-flex; align-items: center; gap: 0.2rem;
+/* ── Cell-specific styles ── */
+.tf-cell-time {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+    color: var(--text-muted); line-height: 1.4;
 }
-.tf-tag-mitre { background: rgba(0,217,255,0.1); color: var(--neural-primary); border: 1px solid rgba(0,217,255,0.15); }
-.tf-tag-agent { background: rgba(0,255,136,0.08); color: #00ff88; border: 1px solid rgba(0,255,136,0.15); text-transform: uppercase; letter-spacing: 0.5px; }
-.tf-tag-host { background: rgba(167,139,250,0.08); color: #a78bfa; border: 1px solid rgba(167,139,250,0.15); font-family: monospace; font-size: 0.6rem; }
-.tf-tag-ip { background: rgba(255,255,255,0.04); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.08); font-family: monospace; }
-.tf-tag-class { background: rgba(255,170,0,0.08); color: #ffaa00; border: 1px solid rgba(255,170,0,0.15); }
-.tf-tag-risk { background: rgba(255,51,102,0.08); color: #ff3366; border: 1px solid rgba(255,51,102,0.15); }
+.tf-cell-time .tf-date { color: var(--text-secondary); font-weight: 500; }
+.tf-cell-time .tf-time { color: var(--text-muted); font-size: 0.68rem; }
+.tf-cell-type {
+    font-weight: 600; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tf-cell-agent {
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.3px; color: #00ff88;
+}
+.tf-cell-host {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+    color: #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tf-cell-mitre {
+    display: flex; flex-wrap: wrap; gap: 3px;
+}
+.tf-mitre-tag {
+    display: inline-block; padding: 0.1rem 0.35rem; border-radius: 3px;
+    font-size: 0.6rem; font-weight: 700; font-family: monospace;
+    background: rgba(0,217,255,0.1); color: var(--neural-primary);
+    border: 1px solid rgba(0,217,255,0.12); cursor: help;
+    position: relative;
+}
+.tf-mitre-tag .mitre-tip {
+    display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    width: 220px; padding: 0.4rem 0.6rem; border-radius: 6px; z-index: 100;
+    background: rgba(10,14,39,0.97); border: 1px solid rgba(0,217,255,0.2);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5); pointer-events: none;
+    text-align: left; white-space: normal;
+}
+.tf-mitre-tag:hover .mitre-tip { display: block; }
+.mitre-tip-id { font-size: 0.7rem; font-weight: 800; color: var(--neural-primary); }
+.mitre-tip-tactic { font-size: 0.58rem; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; margin-top: 2px; }
+.mitre-tip-desc { font-size: 0.68rem; color: var(--text-secondary); line-height: 1.3; margin-top: 2px; }
+.mitre-tip::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 4px solid transparent; border-top-color: rgba(0,217,255,0.2);
+}
+.tf-cell-risk, .tf-cell-conf {
+    text-align: center; font-weight: 700; font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+}
+.tf-cell-class {
+    font-size: 0.68rem; font-weight: 600; text-transform: capitalize;
+}
+.tf-class-malicious { color: #ff3366; }
+.tf-class-suspicious { color: #ffaa00; }
+.tf-class-legitimate { color: #00ff88; }
 
-.tf-threat-meta {
-    display: flex; gap: 1rem; align-items: center; font-size: 0.7rem;
-    color: var(--text-muted); flex-wrap: wrap;
+/* ── Inline action buttons ── */
+.tf-actions-cell { display: flex; gap: 4px; justify-content: center; }
+.tf-act-btn {
+    padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.62rem;
+    font-weight: 700; cursor: pointer; border: 1px solid; transition: all 0.12s;
+    background: transparent; white-space: nowrap;
 }
-.tf-threat-meta span { white-space: nowrap; }
+.tf-act-btn:hover { filter: brightness(1.3); }
+.tf-act-legit { color: #00ff88; border-color: rgba(0,255,136,0.25); }
+.tf-act-legit:hover { background: rgba(0,255,136,0.1); }
+.tf-act-inc { color: #ff3366; border-color: rgba(255,51,102,0.25); }
+.tf-act-inc:hover { background: rgba(255,51,102,0.1); }
+.tf-act-why { color: #00aaff; border-color: rgba(0,170,255,0.2); }
+.tf-act-why:hover { background: rgba(0,170,255,0.1); }
 
-/* ── Triage Actions (right-side column) ── */
-.tf-threat-actions {
-    display: flex; flex-direction: column; gap: 0.4rem; flex-shrink: 0;
-    align-self: center;
+/* ── Detail panel ── */
+.tf-detail-panel {
+    background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.15);
+    border-radius: 10px; margin-top: -0.5rem; overflow: hidden;
 }
-.tf-triage-btn {
-    padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.7rem;
-    font-weight: 700; cursor: pointer; border: 1px solid;
-    transition: all 0.15s; background: transparent; white-space: nowrap;
-    text-align: center;
+.tf-detail-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.8rem 1.2rem; background: rgba(0,217,255,0.04);
+    border-bottom: 1px solid rgba(0,217,255,0.1);
 }
-.tf-triage-btn:hover { filter: brightness(1.3); }
-.tf-triage-legit { color: #00ff88; border-color: rgba(0,255,136,0.25); }
-.tf-triage-legit:hover { background: rgba(0,255,136,0.1); }
-.tf-triage-inv { color: #00d9ff; border-color: rgba(0,217,255,0.25); }
-.tf-triage-inv:hover { background: rgba(0,217,255,0.1); }
-.tf-triage-inc { color: #ff3366; border-color: rgba(255,51,102,0.25); }
-.tf-triage-inc:hover { background: rgba(255,51,102,0.1); }
+.tf-detail-title { font-size: 0.9rem; font-weight: 700; color: var(--text-primary); }
+.tf-detail-close {
+    background: none; border: none; color: var(--text-muted); font-size: 1.2rem;
+    cursor: pointer; padding: 0.2rem 0.5rem; border-radius: 4px;
+}
+.tf-detail-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.tf-detail-body { padding: 1rem 1.2rem; }
+.tf-detail-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem; margin-bottom: 1rem;
+}
+.tf-detail-field {}
+.tf-detail-label {
+    font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 2px;
+}
+.tf-detail-val { font-size: 0.82rem; color: var(--text-primary); word-break: break-all; }
+.tf-detail-desc {
+    font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;
+    padding: 0.6rem 0.8rem; border-radius: 6px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
+    margin-bottom: 0.75rem;
+}
+.tf-detail-explain { margin-top: 0.75rem; }
+
+/* ── Explain sub-panel ── */
+.tf-explain-verdict { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.5rem; }
+.tf-explain-verdict.legitimate { background: rgba(0,255,136,0.15); color: #00ff88; }
+.tf-explain-verdict.suspicious { background: rgba(255,170,0,0.15); color: #ffaa00; }
+.tf-explain-verdict.malicious { background: rgba(255,51,102,0.15); color: #ff3366; }
+.tf-explain-factor { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; font-size: 0.8rem; }
+.tf-explain-factor-bar { width: 60px; height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+.tf-explain-factor-fill { height: 100%; background: #00aaff; border-radius: 3px; }
+.tf-explain-factor-name { color: var(--text-primary); font-weight: 500; min-width: 140px; }
+.tf-explain-factor-detail { color: var(--text-secondary); font-size: 0.75rem; }
+.tf-explain-rec { margin-top: 0.4rem; font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; display: inline-block; }
+.tf-explain-rec.investigate { background: rgba(255,170,0,0.12); color: #ffaa00; }
+.tf-explain-rec.monitor { background: rgba(0,170,255,0.12); color: #00aaff; }
+.tf-explain-rec.dismiss { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+
+/* ── MITRE Cards in detail ── */
+.tf-mitre-cards { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+.tf-mitre-card {
+    display: flex; gap: 0.75rem; padding: 0.5rem 0.65rem; border-radius: 6px;
+    background: rgba(0,217,255,0.04); border: 1px solid rgba(0,217,255,0.1);
+    cursor: pointer; transition: all 0.15s;
+}
+.tf-mitre-card:hover { background: rgba(0,217,255,0.08); border-color: rgba(0,217,255,0.2); }
+.tf-mitre-card-id { font-size: 0.72rem; font-weight: 800; color: var(--neural-primary); font-family: monospace; min-width: 60px; }
+.tf-mitre-card-body { flex: 1; min-width: 0; }
+.tf-mitre-card-tactic { font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: #a78bfa; }
+.tf-mitre-card-desc { font-size: 0.72rem; color: var(--text-secondary); line-height: 1.3; }
+.tf-mitre-card-arrow { color: var(--text-muted); font-size: 0.75rem; align-self: center; }
 
 /* ── Pagination ── */
 .tf-pagination {
-    display: flex; justify-content: center; align-items: center; gap: 1rem;
+    display: flex; justify-content: center; align-items: center; gap: 0.5rem;
     padding: 0.75rem; margin-top: 0.5rem;
 }
 .tf-page-btn {
-    padding: 0.4rem 1rem; border-radius: 8px; font-size: 0.78rem;
+    padding: 0.4rem 0.8rem; border-radius: 8px; font-size: 0.78rem;
     font-weight: 600; cursor: pointer; border: 1px solid rgba(255,255,255,0.1);
     background: rgba(255,255,255,0.05); color: var(--text-secondary);
     transition: all 0.2s;
 }
 .tf-page-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #fff; }
 .tf-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.tf-page-info { font-size: 0.78rem; color: var(--text-muted); }
+.tf-page-info { font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
 /* ── Toast ── */
 #tf-toast-container {
@@ -277,83 +427,24 @@
 @keyframes tf-toast-in { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
 @keyframes tf-toast-out { from { opacity:1; } to { opacity:0; transform:translateX(40px); } }
 
-/* ── Empty state ── */
-.tf-empty { text-align: center; padding: 3rem 2rem; }
-.tf-empty-icon { font-size: 3rem; margin-bottom: 0.75rem; opacity: 0.4; }
-.tf-empty-msg { font-size: 0.9rem; color: var(--text-muted); }
+/* ── Loading / Empty ── */
+.tf-loading { text-align: center; padding: 2rem; font-size: 0.85rem; color: var(--text-muted); }
+.tf-empty-row td { text-align: center; padding: 3rem 2rem; color: var(--text-muted); font-size: 0.9rem; }
 
-/* ── Triaged fade-out ── */
-.tf-threat.triaged { opacity: 0.3; transition: opacity 0.5s; }
-
-/* ── Explanation panel ── */
-.tf-triage-btn.tf-triage-why { background: rgba(0,170,255,0.12); color: #00aaff; border: 1px solid rgba(0,170,255,0.25); font-size: 0.72rem; }
-.tf-triage-btn.tf-triage-why:hover { background: rgba(0,170,255,0.25); }
-.tf-explain-panel { display: none; margin-top: 0.75rem; padding: 0.75rem; background: rgba(0,170,255,0.04); border: 1px solid rgba(0,170,255,0.12); border-radius: 6px; animation: explain-fadein 0.25s ease; }
-@keyframes explain-fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-.tf-explain-panel.open { display: block; }
-.tf-explain-verdict { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.5rem; }
-.tf-explain-verdict.legitimate { background: rgba(0,255,136,0.15); color: #00ff88; }
-.tf-explain-verdict.suspicious { background: rgba(255,170,0,0.15); color: #ffaa00; }
-.tf-explain-verdict.malicious { background: rgba(255,51,102,0.15); color: #ff3366; }
-.tf-explain-factor { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; font-size: 0.8rem; }
-.tf-explain-factor-bar { width: 60px; height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
-.tf-explain-factor-fill { height: 100%; background: #00aaff; border-radius: 3px; }
-.tf-explain-factor-name { color: var(--text-primary); font-weight: 500; min-width: 140px; }
-.tf-explain-factor-detail { color: var(--text-secondary); font-size: 0.75rem; }
-.tf-explain-mitre { margin-top: 0.5rem; font-size: 0.75rem; color: #00aaff; }
-.tf-explain-rec { margin-top: 0.4rem; font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; display: inline-block; }
-.tf-explain-rec.investigate { background: rgba(255,170,0,0.12); color: #ffaa00; }
-.tf-explain-rec.monitor { background: rgba(0,170,255,0.12); color: #00aaff; }
-.tf-explain-rec.dismiss { background: rgba(255,255,255,0.05); color: var(--text-muted); }
-
-/* ── MITRE Technique Cards in Explanation ── */
-.tf-mitre-cards { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
-.tf-mitre-card {
-    display: flex; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 8px;
-    background: rgba(0,217,255,0.04); border: 1px solid rgba(0,217,255,0.1);
-    transition: all 0.2s; cursor: pointer;
-}
-.tf-mitre-card:hover { background: rgba(0,217,255,0.08); border-color: rgba(0,217,255,0.2); }
-.tf-mitre-card-id {
-    font-size: 0.75rem; font-weight: 800; color: var(--neural-primary);
-    font-family: monospace; white-space: nowrap; min-width: 65px;
-}
-.tf-mitre-card-body { flex: 1; min-width: 0; }
-.tf-mitre-card-tactic {
-    font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-    color: #a78bfa; margin-bottom: 2px;
-}
-.tf-mitre-card-desc { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4; }
-.tf-mitre-card-arrow { color: var(--text-muted); font-size: 0.8rem; align-self: center; flex-shrink: 0; }
-
-/* ── MITRE Tag Hover Tooltip ── */
-.tf-tag-mitre {
-    position: relative; cursor: help;
-}
-.tf-tag-mitre .mitre-tip {
-    display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-    width: 240px; padding: 0.5rem 0.65rem; border-radius: 8px; z-index: 100;
-    background: rgba(10,14,39,0.97); border: 1px solid rgba(0,217,255,0.2);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5); pointer-events: none;
-    animation: tip-fadein 0.15s ease;
-}
-@keyframes tip-fadein { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-.tf-tag-mitre:hover .mitre-tip { display: block; }
-.mitre-tip-id { font-size: 0.72rem; font-weight: 800; color: var(--neural-primary); font-family: monospace; }
-.mitre-tip-tactic { font-size: 0.6rem; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; margin-top: 2px; }
-.mitre-tip-desc { font-size: 0.7rem; color: var(--text-secondary); line-height: 1.4; margin-top: 3px; }
-.mitre-tip::after {
-    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
-    border: 5px solid transparent; border-top-color: rgba(0,217,255,0.2);
-}
+/* ── Triaged ── */
+.tf-table tbody tr.triaged { opacity: 0.3; }
 
 /* ── Responsive ── */
+@media (max-width: 1100px) {
+    .tf-th-conf, .tf-table td:nth-child(8) { display: none; }
+    .tf-th-class, .tf-table td:nth-child(9) { display: none; }
+}
 @media (max-width: 900px) {
     .tf-filters { flex-direction: column; }
     .tf-summary { flex-wrap: wrap; }
     .tf-summary-sep { display: none; }
-    .tf-threat { flex-direction: column; gap: 0.5rem; }
-    .tf-threat-actions { flex-direction: row; }
+    .tf-th-mitre, .tf-table td:nth-child(6) { display: none; }
+    .tf-th-host, .tf-table td:nth-child(5) { display: none; }
     .tf-header-bar { flex-direction: column; align-items: stretch; }
 }
 </style>
@@ -394,8 +485,6 @@ var MITRE_DB = {
     'T1204':     { tactic: 'Execution',              desc: 'User execution of malicious file or link' },
     'T1204.002': { tactic: 'Execution',              desc: 'User opened a malicious file' },
     'T1218':     { tactic: 'Defense Evasion',        desc: 'System binary proxy execution to bypass controls' },
-    'T1218.010': { tactic: 'Defense Evasion',        desc: 'Abuse of Regsvr32 for proxy execution' },
-    'T1218.011': { tactic: 'Defense Evasion',        desc: 'Abuse of Rundll32 for proxy execution' },
     'T1548':     { tactic: 'Privilege Escalation',   desc: 'Abuse of elevation control mechanism' },
     'T1134':     { tactic: 'Privilege Escalation',   desc: 'Access token manipulation' },
     'T1068':     { tactic: 'Privilege Escalation',   desc: 'Exploitation for privilege escalation' },
@@ -404,11 +493,8 @@ var MITRE_DB = {
     'T1070':     { tactic: 'Defense Evasion',        desc: 'Indicator removal to cover tracks on host' },
     'T1070.004': { tactic: 'Defense Evasion',        desc: 'File deletion to remove indicators' },
     'T1564':     { tactic: 'Defense Evasion',        desc: 'Hide artifacts to evade detection' },
-    'T1112':     { tactic: 'Defense Evasion',        desc: 'Modify registry keys for defense evasion' },
-    'T1497':     { tactic: 'Defense Evasion',        desc: 'Virtualization or sandbox evasion checks' },
     'T1014':     { tactic: 'Defense Evasion',        desc: 'Rootkit to hide system activity' },
     'T1003':     { tactic: 'Credential Access',      desc: 'OS credential dumping' },
-    'T1003.001': { tactic: 'Credential Access',      desc: 'LSASS memory credential extraction' },
     'T1556':     { tactic: 'Credential Access',      desc: 'Modify authentication process' },
     'T1558':     { tactic: 'Credential Access',      desc: 'Kerberos ticket theft or forgery' },
     'T1082':     { tactic: 'Discovery',              desc: 'System information discovery' },
@@ -421,7 +507,6 @@ var MITRE_DB = {
     'T1135':     { tactic: 'Discovery',              desc: 'Network share discovery' },
     'T1021':     { tactic: 'Lateral Movement',       desc: 'Remote services for lateral movement' },
     'T1021.001': { tactic: 'Lateral Movement',       desc: 'RDP-based lateral movement' },
-    'T1021.002': { tactic: 'Lateral Movement',       desc: 'SMB/Admin Shares lateral movement' },
     'T1570':     { tactic: 'Lateral Movement',       desc: 'Lateral tool transfer between systems' },
     'T1056':     { tactic: 'Collection',             desc: 'Input capture including keylogging' },
     'T1113':     { tactic: 'Collection',             desc: 'Screen capture' },
@@ -453,61 +538,68 @@ var MITRE_DB = {
     'T1574':     { tactic: 'Persistence',            desc: 'Hijack execution flow (DLL/path)' },
     'T1546':     { tactic: 'Persistence',            desc: 'Event-triggered execution' },
     'T1546.004': { tactic: 'Persistence',            desc: 'Unix shell profile modification' },
+    'T1091':     { tactic: 'Lateral Movement',       desc: 'Replication through removable media' },
+    'T1052':     { tactic: 'Exfiltration',           desc: 'Exfiltration over physical medium' },
+    'T1056.001': { tactic: 'Collection',             desc: 'Input capture: keylogging' },
+    'T1557':     { tactic: 'Credential Access',      desc: 'Adversary-in-the-middle' },
 };
 
 class ThreatFeedController {
     constructor() {
         this.threats = [];
-        this.filtered = [];
-        this.sevFilter = 'all';
-        this.page = 0;
-        this.perPage = 20;
-        this.timer = null;
-        this.REFRESH = 15000;
-        this.seenAgents = new Set();
-        // DB-level aggregate stats (not limited by row limit)
+        this.page = 1;
+        this.perPage = 50;
+        this.totalPages = 1;
         this.dbTotal = 0;
         this.dbBySeverity = {};
-        this.dbByClassification = {};
         this.fpRate = null;
         this.avgConfidence = null;
+        this.selectedIdx = -1;
+        this.seenAgents = new Set();
+        this.timer = null;
+        this.REFRESH = 15000;
         this.init();
     }
 
     async init() {
         var self = this;
         document.getElementById('export-csv-btn').addEventListener('click', function() { self.exportCSV(); });
-        document.getElementById('refresh-feed-btn').addEventListener('click', function() { self.refresh(); });
-        document.getElementById('filter-time').addEventListener('change', function() { self.refresh(); });
-        document.getElementById('filter-agent').addEventListener('change', function() { self.applyFilters(); });
-        document.getElementById('filter-search').addEventListener('input', function() { self.applyFilters(); });
-        document.getElementById('prev-btn').addEventListener('click', function() { self.prevPage(); });
-        document.getElementById('next-btn').addEventListener('click', function() { self.nextPage(); });
-        /* Event delegation for severity filter pills */
+        document.getElementById('refresh-feed-btn').addEventListener('click', function() { self.page = 1; self.refresh(); });
+        document.getElementById('filter-time').addEventListener('change', function() { self.page = 1; self.refresh(); });
+        document.getElementById('filter-agent').addEventListener('change', function() { self.page = 1; self.refresh(); });
+        document.getElementById('per-page-select').addEventListener('change', function() { self.perPage = parseInt(this.value); self.page = 1; self.refresh(); });
+        document.getElementById('filter-search').addEventListener('input', function() { self.page = 1; self.refresh(); });
+        document.getElementById('prev-btn').addEventListener('click', function() { self.goPage(self.page - 1); });
+        document.getElementById('next-btn').addEventListener('click', function() { self.goPage(self.page + 1); });
+        document.getElementById('first-btn').addEventListener('click', function() { self.goPage(1); });
+        document.getElementById('last-btn').addEventListener('click', function() { self.goPage(self.totalPages); });
+        document.getElementById('detail-close').addEventListener('click', function() { self.closeDetail(); });
         document.getElementById('filter-severity').addEventListener('click', function(e) {
             var pill = e.target.closest('.tf-pill[data-val]');
-            if (pill) self.setSevFilter(pill.getAttribute('data-val'), pill);
+            if (!pill) return;
+            document.querySelectorAll('#filter-severity .tf-pill').forEach(function(p) { p.classList.remove('active'); });
+            pill.classList.add('active');
+            self.page = 1;
+            self.refresh();
         });
-        /* Event delegation for triage buttons */
-        document.getElementById('threat-list').addEventListener('click', function(e) {
-            var btn = e.target.closest('[data-triage-action]');
+        document.getElementById('threat-tbody').addEventListener('click', function(e) {
+            var btn = e.target.closest('[data-action]');
             if (btn) {
-                var idx = parseInt(btn.getAttribute('data-triage-idx'), 10);
-                var action = btn.getAttribute('data-triage-action');
-                self.triage(idx, action, btn);
+                e.stopPropagation();
+                var idx = parseInt(btn.getAttribute('data-idx'), 10);
+                var action = btn.getAttribute('data-action');
+                self.handleAction(idx, action, btn);
                 return;
             }
-            var whyBtn = e.target.closest('[data-explain-idx]');
-            if (whyBtn) {
-                var eidx = parseInt(whyBtn.getAttribute('data-explain-idx'), 10);
-                self.explainEvent(eidx);
-            }
+            var row = e.target.closest('tr[data-row-idx]');
+            if (row) self.toggleDetail(parseInt(row.getAttribute('data-row-idx'), 10));
         });
-        // Parse URL params for deep-linking from Cortex
+
+        // URL params for deep-linking
         var params = new URLSearchParams(window.location.search);
         if (params.get('severity')) {
-            this.sevFilter = params.get('severity').toLowerCase();
-            var pill = document.querySelector('#filter-severity .tf-pill[data-val="' + this.sevFilter + '"]');
+            var sv = params.get('severity').toLowerCase();
+            var pill = document.querySelector('#filter-severity .tf-pill[data-val="' + sv + '"]');
             if (pill) {
                 document.querySelectorAll('#filter-severity .tf-pill').forEach(function(p) { p.classList.remove('active'); });
                 pill.classList.add('active');
@@ -530,14 +622,12 @@ class ThreatFeedController {
             if (e.ctrlKey || e.metaKey || e.altKey) return;
             switch (e.key.toLowerCase()) {
                 case 'r': e.preventDefault(); this.refresh(); this.toast('Refreshing...', 'info'); break;
-                case 'escape': document.getElementById('filter-search').value = ''; this.applyFilters(); break;
+                case 'escape': this.closeDetail(); document.getElementById('filter-search').value = ''; this.refresh(); break;
             }
         });
     }
 
     initSocketIO() {
-        // When SocketIO pushes new threat data, trigger a full refresh
-        // (which runs through filters/pagination properly) and slow polling
         window.addEventListener('ws:threats', () => {
             this.refresh();
             if (this.REFRESH < 30000) {
@@ -548,41 +638,49 @@ class ThreatFeedController {
         });
     }
 
+    buildUrl() {
+        var hours = document.getElementById('filter-time').value || '24';
+        return '/dashboard/api/live/threats?hours=' + hours +
+               '&page=' + this.page +
+               '&per_page=' + this.perPage;
+    }
+
     async refresh() {
-        // Skip refresh if an explanation panel is currently open — prevents DOM rebuild from destroying it
-        if (document.querySelector('.tf-explain-panel.open')) {
-            return;
-        }
+        if (document.getElementById('detail-panel').style.display !== 'none') return;
         try {
-            const r = await fetch('/dashboard/api/live/threats');
+            const r = await fetch(this.buildUrl());
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const d = await r.json();
             if (d.status !== 'success') throw new Error('API error');
 
             this.threats = d.threats || [];
-            // Store DB-level aggregate stats
-            this.dbTotal = d.db_total || this.threats.length;
+            this.dbTotal = d.db_total || 0;
+            this.totalPages = d.total_pages || 1;
+            this.page = d.page || 1;
             this.dbBySeverity = d.db_by_severity || {};
-            this.dbByClassification = d.db_by_classification || {};
             this.fpRate = d.fp_rate;
             this.avgConfidence = d.avg_confidence;
-            document.getElementById('feed-count').textContent = Number(this.dbTotal).toLocaleString() + ' events';
 
-            // Populate agent filter dropdown
+            document.getElementById('feed-count').textContent = Number(this.dbTotal).toLocaleString() + ' events';
+            document.getElementById('feed-status').textContent = 'LIVE';
+            document.getElementById('feed-status').style.color = '#ff3366';
+            document.getElementById('feed-status').style.borderColor = 'rgba(255,51,102,0.3)';
+            document.getElementById('feed-status').style.background = 'rgba(255,51,102,0.15)';
+
+            // Populate agent filter
             const agentSelect = document.getElementById('filter-agent');
             const currentAgent = agentSelect.value;
             const agents = new Set();
-            for (const t of this.threats) {
-                if (t.agent_id) agents.add(t.agent_id);
-            }
+            for (const t of this.threats) { if (t.agent_id) agents.add(t.agent_id); }
             if (agents.size !== this.seenAgents.size || ![...agents].every(a => this.seenAgents.has(a))) {
                 this.seenAgents = agents;
-                const opts = '<option value="all">All Agents</option>' +
+                agentSelect.innerHTML = '<option value="all">All Agents</option>' +
                     [...agents].sort().map(a => '<option value="' + this.esc(a) + '"' + (a === currentAgent ? ' selected' : '') + '>' + this.esc(a) + '</option>').join('');
-                agentSelect.innerHTML = opts;
             }
 
-            this.applyFilters();
+            this.renderTable();
+            this.updateSummary();
+            this.updatePagination();
         } catch (e) {
             document.getElementById('feed-status').textContent = 'OFFLINE';
             document.getElementById('feed-status').style.color = '#ffaa00';
@@ -591,291 +689,272 @@ class ThreatFeedController {
         }
     }
 
-    setSevFilter(val, btn) {
-        this.sevFilter = val;
-        document.querySelectorAll('#filter-severity .tf-pill').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        this.page = 0;
-        this.applyFilters();
-    }
-
-    applyFilters() {
-        const search = (document.getElementById('filter-search').value || '').toLowerCase();
-        const agentFilter = document.getElementById('filter-agent').value;
-
-        this.filtered = this.threats.filter(t => {
-            // Severity filter
-            if (this.sevFilter !== 'all' && (t.severity || '').toLowerCase() !== this.sevFilter) return false;
-            // Agent filter
-            if (agentFilter !== 'all' && t.agent_id !== agentFilter) return false;
-            // Text search
-            if (search) {
-                const haystack = [
-                    t.type, t.description, t.source_ip, t.agent_name,
-                    t.device_id, t.classification, t.event_action,
-                    ...(t.mitre_techniques || [])
-                ].join(' ').toLowerCase();
-                if (!haystack.includes(search)) return false;
-            }
-            return true;
-        });
-
-        this.updateSummary();
-        this.renderPage();
-    }
-
     updateSummary() {
-        const all = this.filtered;
-        // Use DB-level aggregate totals for accurate header numbers
-        const dbSev = this.dbBySeverity || {};
-        document.getElementById('sum-total').textContent = Number(this.dbTotal || all.length).toLocaleString();
-        document.getElementById('sum-critical').textContent = dbSev.critical || all.filter(t => (t.severity || '').toLowerCase() === 'critical').length;
-        document.getElementById('sum-high').textContent = dbSev.high || all.filter(t => (t.severity || '').toLowerCase() === 'high').length;
-        document.getElementById('sum-medium').textContent = dbSev.medium || all.filter(t => (t.severity || '').toLowerCase() === 'medium').length;
-        document.getElementById('sum-low').textContent = dbSev.low || all.filter(t => (t.severity || '').toLowerCase() === 'low').length;
-        document.getElementById('sum-investigation').textContent = all.filter(t => t.requires_investigation).length;
-        // FP rate and avg confidence from API-level stats
+        var dbSev = this.dbBySeverity || {};
+        document.getElementById('sum-total').textContent = Number(this.dbTotal).toLocaleString();
+        document.getElementById('sum-critical').textContent = dbSev.critical || 0;
+        document.getElementById('sum-high').textContent = dbSev.high || 0;
+        document.getElementById('sum-medium').textContent = dbSev.medium || 0;
+        document.getElementById('sum-low').textContent = dbSev.low || 0;
+        document.getElementById('sum-investigation').textContent = this.threats.filter(t => t.requires_investigation).length;
         document.getElementById('sum-fp-rate').textContent = this.fpRate != null ? (this.fpRate * 100).toFixed(1) + '%' : '--';
         document.getElementById('sum-confidence').textContent = this.avgConfidence ? (this.avgConfidence * 100).toFixed(1) + '%' : '--';
     }
 
-    renderPage() {
-        const container = document.getElementById('threat-list');
-        const pag = document.getElementById('pagination');
-
-        if (this.filtered.length === 0) {
-            container.innerHTML = '<div class="tf-empty"><div class="tf-empty-icon">&#x1f6e1;</div><div class="tf-empty-msg">No threats match your filters</div></div>';
-            pag.style.display = 'none';
+    renderTable() {
+        var tbody = document.getElementById('threat-tbody');
+        if (this.threats.length === 0) {
+            tbody.innerHTML = '<tr class="tf-empty-row"><td colspan="10">No threats match your filters</td></tr>';
             return;
         }
+        tbody.innerHTML = this.threats.map((t, i) => {
+            var sev = (t.severity || 'low').toLowerCase();
+            var dt = t.timestamp ? new Date(t.timestamp) : null;
+            var dateStr = dt ? this.fmtDate(dt) : '--';
+            var timeStr = dt ? this.fmtTime(dt) : '';
+            var mitreTags = (t.mitre_techniques || []).slice(0, 3).map(m => {
+                var info = MITRE_DB[m];
+                var tip = info ? '<span class="mitre-tip"><span class="mitre-tip-id">' + m + '</span><span class="mitre-tip-tactic">' + this.esc(info.tactic) + '</span><span class="mitre-tip-desc">' + this.esc(info.desc) + '</span></span>' : '';
+                return '<span class="tf-mitre-tag">' + m + tip + '</span>';
+            }).join('');
+            if ((t.mitre_techniques || []).length > 3) mitreTags += '<span class="tf-mitre-tag">+' + (t.mitre_techniques.length - 3) + '</span>';
+            var riskPct = t.risk_score > 0 ? (t.risk_score * 100).toFixed(0) + '%' : '--';
+            var confPct = t.confidence > 0 ? (t.confidence * 100).toFixed(0) + '%' : '--';
+            var cls = t.classification || '';
+            var clsClass = cls === 'malicious' ? 'tf-class-malicious' : cls === 'suspicious' ? 'tf-class-suspicious' : cls === 'legitimate' ? 'tf-class-legitimate' : '';
 
-        const totalPages = Math.ceil(this.filtered.length / this.perPage);
-        if (this.page >= totalPages) this.page = totalPages - 1;
-        const start = this.page * this.perPage;
-        const pageItems = this.filtered.slice(start, start + this.perPage);
-
-        container.innerHTML = pageItems.map((t, localIdx) => {
-            const idx = start + localIdx;
-            const sev = (t.severity || 'low').toLowerCase();
-            const time = t.timestamp ? this.relTime(t.timestamp) : '';
-            const absTime = t.timestamp ? new Date(t.timestamp).toLocaleString() : '';
-
-            // Tags — agent name + hostname side by side, then IP, classification, risk, confidence
-            let tags = '';
-            if (t.mitre_techniques && t.mitre_techniques.length > 0) {
-                tags += t.mitre_techniques.map(m => {
-                    var info = MITRE_DB[m];
-                    var tip = info
-                        ? '<span class="mitre-tip"><span class="mitre-tip-id">' + m + '</span><span class="mitre-tip-tactic">' + this.esc(info.tactic) + '</span><span class="mitre-tip-desc">' + this.esc(info.desc) + '</span></span>'
-                        : '';
-                    return '<span class="tf-tag tf-tag-mitre">' + m + tip + '</span>';
-                }).join('');
-            }
-            if (t.agent_name) tags += '<span class="tf-tag tf-tag-agent">' + this.esc(t.agent_name) + '</span>';
-            if (t.device_id) tags += '<span class="tf-tag tf-tag-host">' + this.esc(t.device_id) + '</span>';
-            if (t.source_ip && t.source_ip !== t.device_id) tags += '<span class="tf-tag tf-tag-ip">' + this.esc(t.source_ip) + '</span>';
-            if (t.classification) tags += '<span class="tf-tag tf-tag-class">' + this.esc(t.classification) + '</span>';
-            if (t.risk_score > 0) tags += '<span class="tf-tag tf-tag-risk">Risk: ' + (t.risk_score * 100).toFixed(0) + '%</span>';
-            if (t.confidence > 0) tags += '<span class="tf-tag tf-tag-ip">Conf: ' + (t.confidence * 100).toFixed(0) + '%</span>';
-
-            return '<div class="tf-threat sev-' + sev + '" id="threat-' + idx + '">' +
-                '<div class="tf-threat-sev sev-' + sev + '">' + sev + '</div>' +
-                '<div class="tf-threat-body">' +
-                    '<div class="tf-threat-title">' + this.fmtType(t.type) + (t.event_action ? ' <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;">' + this.esc(t.event_action) + '</span>' : '') + '</div>' +
-                    (t.description ? '<div class="tf-threat-desc">' + this.esc(t.description) + '</div>' : '') +
-                    (tags ? '<div class="tf-threat-tags">' + tags + '</div>' : '') +
-                    '<div class="tf-threat-meta">' +
-                        '<span title="' + absTime + '">' + time + '</span>' +
-                        (t.id ? '<span>Event #' + t.id + '</span>' : '') +
-                        (t.requires_investigation ? '<span style="color:#ff3366;">Needs Investigation</span>' : '') +
-                    '</div>' +
-                '</div>' +
-                '<div class="tf-threat-actions">' +
-                    '<button class="tf-triage-btn tf-triage-why" data-explain-idx="' + idx + '" title="Why was this flagged?">Why?</button>' +
-                    '<button class="tf-triage-btn tf-triage-legit" data-triage-idx="' + idx + '" data-triage-action="legit" title="Mark as Legitimate">Legit</button>' +
-                    '<button class="tf-triage-btn tf-triage-inv" data-triage-idx="' + idx + '" data-triage-action="investigate" title="Investigate in Timeline">Investigate</button>' +
-                    '<button class="tf-triage-btn tf-triage-inc" data-triage-idx="' + idx + '" data-triage-action="incident" title="Create Incident">Incident</button>' +
-                '</div>' +
-                '<div class="tf-explain-panel" id="explain-' + idx + '"></div>' +
-            '</div>';
+            return '<tr data-row-idx="' + i + '">' +
+                '<td><span class="tf-sev tf-sev-' + sev + '">' + sev + '</span></td>' +
+                '<td class="tf-cell-time"><span class="tf-date">' + dateStr + '</span><br><span class="tf-time">' + timeStr + '</span></td>' +
+                '<td class="tf-cell-type" title="' + this.esc(t.description || '') + '">' + this.fmtType(t.type) + '</td>' +
+                '<td class="tf-cell-agent">' + this.esc(t.agent_name || '--') + '</td>' +
+                '<td class="tf-cell-host" title="' + this.esc(t.device_id || '') + '">' + this.esc(t.source_ip || t.device_id || '--') + '</td>' +
+                '<td><div class="tf-cell-mitre">' + (mitreTags || '--') + '</div></td>' +
+                '<td class="tf-cell-risk" style="color:' + this.riskColor(t.risk_score) + '">' + riskPct + '</td>' +
+                '<td class="tf-cell-conf">' + confPct + '</td>' +
+                '<td class="tf-cell-class ' + clsClass + '">' + (cls || '--') + '</td>' +
+                '<td><div class="tf-actions-cell">' +
+                    '<button class="tf-act-btn tf-act-why" data-idx="' + i + '" data-action="why" title="Why flagged?">Why</button>' +
+                    '<button class="tf-act-btn tf-act-legit" data-idx="' + i + '" data-action="legit" title="Mark Legitimate">FP</button>' +
+                    '<button class="tf-act-btn tf-act-inc" data-idx="' + i + '" data-action="incident" title="Create Incident">Inc</button>' +
+                '</div></td>' +
+            '</tr>';
         }).join('');
+    }
 
-        // Pagination
-        if (totalPages > 1) {
-            pag.style.display = 'flex';
-            document.getElementById('prev-btn').disabled = this.page === 0;
-            document.getElementById('next-btn').disabled = this.page >= totalPages - 1;
-            document.getElementById('page-info').textContent = 'Page ' + (this.page + 1) + ' of ' + totalPages + ' (' + this.filtered.length + ' events)';
-        } else {
-            pag.style.display = 'none';
+    updatePagination() {
+        var pag = document.getElementById('pagination');
+        if (this.totalPages <= 1) { pag.style.display = 'none'; return; }
+        pag.style.display = 'flex';
+        document.getElementById('first-btn').disabled = this.page <= 1;
+        document.getElementById('prev-btn').disabled = this.page <= 1;
+        document.getElementById('next-btn').disabled = this.page >= this.totalPages;
+        document.getElementById('last-btn').disabled = this.page >= this.totalPages;
+        document.getElementById('page-info').textContent =
+            'Page ' + this.page + ' of ' + this.totalPages + ' (' + Number(this.dbTotal).toLocaleString() + ' events)';
+    }
+
+    goPage(n) {
+        if (n < 1 || n > this.totalPages) return;
+        this.page = n;
+        this.refresh();
+        window.scrollTo(0, 0);
+    }
+
+    /* ── Row Detail ── */
+    toggleDetail(idx) {
+        var t = this.threats[idx];
+        if (!t) return;
+        var panel = document.getElementById('detail-panel');
+        if (this.selectedIdx === idx && panel.style.display !== 'none') {
+            this.closeDetail();
+            return;
         }
+        this.selectedIdx = idx;
+        document.querySelectorAll('#threat-tbody tr').forEach(r => r.classList.remove('selected'));
+        var row = document.querySelector('tr[data-row-idx="' + idx + '"]');
+        if (row) row.classList.add('selected');
+
+        var dt = t.timestamp ? new Date(t.timestamp) : null;
+        var fullTime = dt ? dt.toLocaleString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '--';
+        var relT = dt ? this.relTime(t.timestamp) : '';
+
+        document.getElementById('detail-title').textContent = this.fmtType(t.type) + (t.event_action ? ' - ' + t.event_action : '');
+        var body = '<div class="tf-detail-grid">' +
+            this.detailField('Event ID', t.id || '--') +
+            this.detailField('Timestamp', fullTime + (relT ? ' (' + relT + ')' : '')) +
+            this.detailField('Severity', (t.severity || '--').toUpperCase()) +
+            this.detailField('Risk Score', t.risk_score > 0 ? (t.risk_score * 100).toFixed(1) + '%' : '--') +
+            this.detailField('Confidence', t.confidence > 0 ? (t.confidence * 100).toFixed(1) + '%' : '--') +
+            this.detailField('Classification', t.classification || '--') +
+            this.detailField('Agent', t.agent_name || '--') +
+            this.detailField('Device', t.device_id || '--') +
+            this.detailField('Source IP', t.source_ip || '--') +
+            this.detailField('Investigation', t.requires_investigation ? 'Yes' : 'No') +
+        '</div>';
+        if (t.description) body += '<div class="tf-detail-desc">' + this.esc(t.description) + '</div>';
+        if (t.mitre_techniques && t.mitre_techniques.length > 0) {
+            body += '<div style="margin-bottom:0.5rem;font-size:0.6rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">MITRE ATT&CK</div>';
+            body += '<div class="tf-mitre-cards">' + t.mitre_techniques.map(m => {
+                var info = MITRE_DB[m] || {};
+                return '<div class="tf-mitre-card" onclick="window.open(\'https://attack.mitre.org/techniques/' + this.esc(m).replace('.', '/') + '/\', \'_blank\')">' +
+                    '<div class="tf-mitre-card-id">' + m + '</div><div class="tf-mitre-card-body">' +
+                    '<div class="tf-mitre-card-tactic">' + this.esc(info.tactic || '') + '</div>' +
+                    '<div class="tf-mitre-card-desc">' + this.esc(info.desc || '') + '</div></div>' +
+                    '<div class="tf-mitre-card-arrow">&rarr;</div></div>';
+            }).join('') + '</div>';
+        }
+        body += '<div class="tf-detail-explain" id="detail-explain"></div>';
+        document.getElementById('detail-body').innerHTML = body;
+        panel.style.display = 'block';
     }
 
-    prevPage() { if (this.page > 0) { this.page--; this.renderPage(); window.scrollTo(0, 0); } }
-    nextPage() {
-        const totalPages = Math.ceil(this.filtered.length / this.perPage);
-        if (this.page < totalPages - 1) { this.page++; this.renderPage(); window.scrollTo(0, 0); }
+    closeDetail() {
+        document.getElementById('detail-panel').style.display = 'none';
+        this.selectedIdx = -1;
+        document.querySelectorAll('#threat-tbody tr').forEach(r => r.classList.remove('selected'));
     }
 
-    /* ── Triage Actions ── */
-    async triage(idx, action, btn) {
-        const t = this.filtered[idx];
+    detailField(label, value) {
+        return '<div class="tf-detail-field"><div class="tf-detail-label">' + label + '</div><div class="tf-detail-val">' + this.esc(String(value)) + '</div></div>';
+    }
+
+    /* ── Actions ── */
+    async handleAction(idx, action, btn) {
+        var t = this.threats[idx];
         if (!t) return;
 
-        if (action === 'legit') {
-            const row = document.getElementById('threat-' + idx);
-            if (row) row.classList.add('triaged');
-            this.toast('Marked as legitimate', 'success');
+        if (action === 'why') {
+            this.toggleDetail(idx);
+            await this.loadExplanation(t.id);
             return;
         }
-        if (action === 'investigate') {
-            window.location = '/dashboard/timeline-replay?event_id=' + t.id;
+        if (action === 'legit') {
+            try {
+                await fetch('/api/reliability/feedback', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ agent_id: t.agent_name || 'unknown', action: 'dismiss', event_id: t.id })
+                });
+            } catch(e) {}
+            var row = document.querySelector('tr[data-row-idx="' + idx + '"]');
+            if (row) row.classList.add('triaged');
+            this.toast('Marked as legitimate (FP)', 'success');
             return;
         }
         if (action === 'incident') {
             try {
-                btn.disabled = true;
-                btn.textContent = 'Creating...';
-                const body = {
+                btn.disabled = true; btn.textContent = '...';
+                var body = {
                     title: '[Auto] ' + this.fmtType(t.type) + ' - ' + (t.severity || 'medium').toUpperCase(),
-                    description: (t.description || 'Auto-created from threat feed. Event #' + t.id),
+                    description: t.description || 'Auto-created from threat feed. Event #' + t.id,
                     severity: t.severity || 'medium',
                     source_event_ids: [t.id],
                     mitre_techniques: t.mitre_techniques || [],
                     indicators: t.indicators || {}
                 };
-                const resp = await fetch('/dashboard/api/incidents', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(body)
-                });
-                const data = await resp.json();
+                var resp = await fetch('/dashboard/api/incidents', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+                var data = await resp.json();
                 if (data.status === 'success') {
                     this.toast('Incident #' + data.incident_id + ' created', 'success');
-                    btn.textContent = 'Created';
-                    btn.style.color = '#00ff88';
-                    btn.style.borderColor = 'rgba(0,255,136,0.4)';
+                    btn.textContent = 'OK'; btn.style.color = '#00ff88';
                 } else {
-                    this.toast('Failed: ' + (data.message || 'Unknown error'), 'error');
-                    btn.textContent = 'Incident';
-                    btn.disabled = false;
+                    this.toast('Failed: ' + (data.message || 'error'), 'error');
+                    btn.textContent = 'Inc'; btn.disabled = false;
                 }
-            } catch (e) {
-                this.toast('Failed to create incident', 'error');
-                btn.textContent = 'Incident';
-                btn.disabled = false;
+            } catch(e) {
+                this.toast('Incident creation failed', 'error');
+                btn.textContent = 'Inc'; btn.disabled = false;
             }
         }
     }
 
-    /* ── Event Explanation ── */
-    async explainEvent(idx) {
-        const t = this.filtered[idx];
-        if (!t || !t.id) return;
-        const panel = document.getElementById('explain-' + idx);
-        if (!panel) return;
-
-        // Toggle
-        if (panel.classList.contains('open')) {
-            panel.classList.remove('open');
-            return;
-        }
-
+    async loadExplanation(eventId) {
+        var panel = document.getElementById('detail-explain');
+        if (!panel || !eventId) return;
         panel.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Loading explanation...</div>';
-        panel.classList.add('open');
-
         try {
-            const resp = await fetch('/dashboard/api/explain/event/' + t.id);
-            const data = await resp.json();
-            if (data.status !== 'success' || !data.explanation) {
-                panel.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Explanation unavailable</div>';
-                return;
-            }
-            const ex = data.explanation;
-            const factors = (ex.factors || []).map(f =>
-                '<div class="tf-explain-factor">' +
-                    '<span class="tf-explain-factor-name">' + this.esc(f.name) + '</span>' +
-                    '<div class="tf-explain-factor-bar"><div class="tf-explain-factor-fill" style="width:' + Math.min(100, (f.contribution || 0) * 100) + '%"></div></div>' +
-                    '<span class="tf-explain-factor-detail">' + this.esc(f.detail || '') + '</span>' +
-                '</div>'
+            var resp = await fetch('/dashboard/api/explain/event/' + eventId);
+            var data = await resp.json();
+            if (data.status !== 'success' || !data.explanation) { panel.innerHTML = ''; return; }
+            var ex = data.explanation;
+            var factors = (ex.factors || []).map(f =>
+                '<div class="tf-explain-factor"><span class="tf-explain-factor-name">' + this.esc(f.name) + '</span>' +
+                '<div class="tf-explain-factor-bar"><div class="tf-explain-factor-fill" style="width:' + Math.min(100, (f.contribution || 0) * 100) + '%"></div></div>' +
+                '<span class="tf-explain-factor-detail">' + this.esc(f.detail || '') + '</span></div>'
             ).join('');
-
-            /* Build MITRE technique cards from structured detail */
-            var mitreCards = '';
-            var techniques = ex.mitre_techniques_detail || [];
-            if (techniques.length > 0) {
-                mitreCards = '<div style="margin-top:0.6rem;margin-bottom:0.4rem;font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">MITRE ATT&CK Mapping</div>' +
-                    '<div class="tf-mitre-cards">' + techniques.map(m =>
-                        '<div class="tf-mitre-card" onclick="window.open(\'https://attack.mitre.org/techniques/' + this.esc(m.id).replace('.', '/') + '/\', \'_blank\')">' +
-                            '<div class="tf-mitre-card-id">' + this.esc(m.id) + '</div>' +
-                            '<div class="tf-mitre-card-body">' +
-                                '<div class="tf-mitre-card-tactic">' + this.esc(m.tactic || '') + '</div>' +
-                                '<div class="tf-mitre-card-desc">' + this.esc(m.description || '') + '</div>' +
-                            '</div>' +
-                            '<div class="tf-mitre-card-arrow">&rarr;</div>' +
-                        '</div>'
-                    ).join('') + '</div>';
-            } else if (ex.mitre_context) {
-                mitreCards = '<div class="tf-explain-mitre">MITRE: ' + this.esc(ex.mitre_context) + '</div>';
-            }
-
             panel.innerHTML =
+                '<div style="margin-top:0.75rem;margin-bottom:0.5rem;font-size:0.6rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Explanation</div>' +
                 '<span class="tf-explain-verdict ' + (ex.verdict || 'legitimate') + '">' + (ex.verdict || 'legitimate').toUpperCase() + '</span>' +
                 ' <span style="color:var(--text-muted);font-size:0.75rem;">Confidence: ' + ((ex.confidence || 0) * 100).toFixed(0) + '%</span>' +
-                (factors || '') +
-                mitreCards +
+                factors +
                 (ex.recommendation ? '<span class="tf-explain-rec ' + ex.recommendation + '">Rec: ' + ex.recommendation + '</span>' : '');
-        } catch (e) {
-            panel.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Failed to load explanation</div>';
-        }
+        } catch(e) { panel.innerHTML = ''; }
     }
 
     /* ── CSV Export ── */
     exportCSV() {
-        const data = this.filtered.length > 0 ? this.filtered : this.threats;
+        var data = this.threats;
         if (data.length === 0) { this.toast('No data to export', 'info'); return; }
-        const headers = ['id','timestamp','type','severity','risk_score','confidence','classification','agent_name','device_id','source_ip','event_action','description','mitre_techniques'];
-        const rows = data.map(t => headers.map(h => {
-            let v = t[h] || '';
+        var headers = ['id','timestamp','type','severity','risk_score','confidence','classification','agent_name','device_id','source_ip','event_action','description','mitre_techniques'];
+        var rows = data.map(t => headers.map(h => {
+            var v = t[h] || '';
             if (Array.isArray(v)) v = v.join('; ');
             return '"' + String(v).replace(/"/g, '""') + '"';
         }).join(','));
-        const csv = [headers.join(','), ...rows].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        var csv = [headers.join(','), ...rows].join('\n');
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
         a.href = url;
-        a.download = 'amoskys_threats_' + new Date().toISOString().slice(0, 10) + '.csv';
+        a.download = 'amoskys_threats_page' + this.page + '_' + new Date().toISOString().slice(0, 10) + '.csv';
         a.style.display = 'none';
         document.body.appendChild(a); a.click();
         document.body.removeChild(a); URL.revokeObjectURL(url);
-        this.toast('Exported ' + data.length + ' events', 'info');
+        this.toast('Exported ' + data.length + ' events (page ' + this.page + ')', 'info');
     }
 
     /* ── Toast ── */
     toast(msg, type) {
-        const container = document.getElementById('tf-toast-container');
+        var container = document.getElementById('tf-toast-container');
         if (!container) return;
         while (container.children.length >= 3) container.removeChild(container.firstChild);
-        const el = document.createElement('div');
+        var el = document.createElement('div');
         el.className = 'tf-toast' + (type === 'error' ? ' toast-error' : type === 'info' ? ' toast-info' : '');
         el.textContent = msg;
         container.appendChild(el);
-        setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 5000);
+        setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 5000);
     }
 
     /* ── Helpers ── */
-    fmtType(t) { return (t || 'unknown').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
-    esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    fmtType(t) { return (t || 'unknown').replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }); }
+    esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    fmtDate(dt) {
+        var m = String(dt.getMonth() + 1).padStart(2, '0');
+        var d = String(dt.getDate()).padStart(2, '0');
+        return dt.getFullYear() + '-' + m + '-' + d;
+    }
+    fmtTime(dt) {
+        return String(dt.getHours()).padStart(2, '0') + ':' +
+               String(dt.getMinutes()).padStart(2, '0') + ':' +
+               String(dt.getSeconds()).padStart(2, '0');
+    }
     relTime(ts) {
-        const diff = (Date.now() - new Date(ts).getTime()) / 1000;
+        var diff = (Date.now() - new Date(ts).getTime()) / 1000;
         if (diff < 60) return Math.floor(diff) + 's ago';
         if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
         if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
         return Math.floor(diff / 86400) + 'd ago';
     }
+    riskColor(score) {
+        if (!score || score <= 0) return 'var(--text-muted)';
+        if (score >= 0.8) return '#ff3366';
+        if (score >= 0.6) return '#ff6600';
+        if (score >= 0.4) return '#ffaa00';
+        return '#0088ff';
+    }
 }
 
-document.addEventListener('DOMContentLoaded', () => { window.feed = new ThreatFeedController(); });
+document.addEventListener('DOMContentLoaded', function() { window.feed = new ThreatFeedController(); });
 </script>
 {% endblock %}

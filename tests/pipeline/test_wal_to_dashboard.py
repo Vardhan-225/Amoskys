@@ -128,6 +128,8 @@ def pipeline(tmp_path):
     _create_wal_db(wal_path)
 
     processor = WALProcessor(wal_path=wal_path, store_path=store_path)
+    # Disable scorer so tests see raw risk_score → classification mapping
+    processor._scorer = None
     return {
         "wal_path": wal_path,
         "store_path": store_path,
@@ -393,6 +395,7 @@ class TestDashboardAPIIntegration:
         result = create_app()
         app_instance = result[0] if isinstance(result, tuple) else result
         app_instance.config["TESTING"] = True
+        app_instance.config["LOGIN_DISABLED"] = True
 
         # Monkey-patch the telemetry bridge to return our test store
         from app.dashboard import telemetry_bridge

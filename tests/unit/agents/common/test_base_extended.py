@@ -424,7 +424,11 @@ class TestEnqueueLocallyMetrics:
 class TestRunOneCycleEnrichFailure:
 
     def test_enrich_failure_passes_original_event(self):
-        events = [{"id": 1}, {"id": 2}]
+        _ts = int(time.time() * 1e9)
+        events = [
+            {"id": 1, "device_id": "test-host", "timestamp_ns": _ts},
+            {"id": 2, "device_id": "test-host", "timestamp_ns": _ts},
+        ]
 
         def collect():
             return events
@@ -438,7 +442,12 @@ class TestRunOneCycleEnrichFailure:
         assert agent.last_successful_collection > 0
 
     def test_enrich_failure_records_metric(self):
-        agent = StubAgent(collect_fn=lambda: [{"id": 1}])
+        _ts = int(time.time() * 1e9)
+        agent = StubAgent(
+            collect_fn=lambda: [
+                {"id": 1, "device_id": "test-host", "timestamp_ns": _ts}
+            ]
+        )
         agent.enrich_event = MagicMock(side_effect=ValueError("bad"))
         agent._run_one_cycle()
         assert agent.metrics.enrich_failures == 1

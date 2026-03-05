@@ -22,6 +22,7 @@ Usage:
 
 from typing import Any, Dict, Optional
 
+from amoskys.agents.applog.applog_agent import AppLogAgent
 from amoskys.agents.auth.auth_guard_agent import AuthGuardAgent
 
 # Common base classes (canonical — from common/base.py)
@@ -29,14 +30,24 @@ from amoskys.agents.common.base import HardenedAgentBase
 
 # Micro-probe architecture
 from amoskys.agents.common.probes import MicroProbe, MicroProbeAgentMixin
+from amoskys.agents.db_activity.db_activity_agent import DBActivityAgent
 from amoskys.agents.device_discovery.device_discovery import DeviceDiscovery
 from amoskys.agents.dns.dns_agent import DNSAgent
 from amoskys.agents.fim.fim_agent import FIMAgent
 from amoskys.agents.flow.flow_agent import FlowAgent
-from amoskys.agents.kernel_audit.kernel_audit_agent import KernelAuditAgent
+from amoskys.agents.http_inspector.http_inspector_agent import HTTPInspectorAgent
+from amoskys.agents.internet_activity.internet_activity_agent import (
+    InternetActivityAgent,
+)
+from amoskys.agents.linux.kernel_audit.kernel_audit_agent import KernelAuditAgent
+from amoskys.agents.macos.security_monitor.security_monitor_agent import (
+    MacOSSecurityMonitorAgent,
+)
+from amoskys.agents.net_scanner.net_scanner_agent import NetScannerAgent
 from amoskys.agents.peripheral.peripheral_agent import PeripheralAgent
 from amoskys.agents.persistence.persistence_agent import PersistenceGuard
 from amoskys.agents.proc.proc_agent import ProcAgent
+from amoskys.agents.protocol_collectors.protocol_collectors import ProtocolCollectors
 from amoskys.agents.protocols.universal_collector import (
     HL7FHIRCollector,
     ModbusCollector,
@@ -44,18 +55,6 @@ from amoskys.agents.protocols.universal_collector import (
     SyslogCollector,
     UniversalTelemetryCollector,
 )
-
-# B5.1: Deprecated aliases — will be removed in v1.0
-AuthGuardAgentV2 = AuthGuardAgent
-ProcAgentV3 = ProcAgent
-PersistenceGuardV2 = PersistenceGuard
-FIMAgentV2 = FIMAgent
-DNSAgentV2 = DNSAgent
-FlowAgentV2 = FlowAgent
-KernelAuditAgentV2 = KernelAuditAgent
-PeripheralAgentV2 = PeripheralAgent
-DeviceDiscoveryV2 = DeviceDiscovery
-
 
 __all__ = [
     # Base classes
@@ -69,6 +68,7 @@ __all__ = [
     "FIMAgent",
     "DNSAgent",
     "KernelAuditAgent",
+    "MacOSSecurityMonitorAgent",
     "FlowAgent",
     # Peripheral Agents
     "PeripheralAgent",
@@ -80,16 +80,13 @@ __all__ = [
     "ModbusCollector",
     "HL7FHIRCollector",
     "SyslogCollector",
-    # Deprecated aliases (B5.1)
-    "AuthGuardAgentV2",
-    "ProcAgentV3",
-    "PersistenceGuardV2",
-    "FIMAgentV2",
-    "DNSAgentV2",
-    "FlowAgentV2",
-    "KernelAuditAgentV2",
-    "PeripheralAgentV2",
-    "DeviceDiscoveryV2",
+    "ProtocolCollectors",
+    # L7 Gap-Closure Agents
+    "AppLogAgent",
+    "DBActivityAgent",
+    "HTTPInspectorAgent",
+    "InternetActivityAgent",
+    "NetScannerAgent",
 ]
 
 # Agent type metadata for dynamic discovery
@@ -132,9 +129,16 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "kernel_audit": {
         "class": KernelAuditAgent,
         "name": "Kernel Audit Agent",
-        "description": "Kernel-level security monitoring (syscall audit, privilege escalation)",
-        "platforms": ["darwin", "linux"],
-        "probes": 3,
+        "description": "Linux kernel-level syscall monitoring (auditd: exec, privesc, ptrace, module load)",
+        "platforms": ["linux"],
+        "probes": 8,
+    },
+    "macos_security_monitor": {
+        "class": MacOSSecurityMonitorAgent,
+        "name": "macOS Security Monitor",
+        "description": "macOS security framework monitoring (Gatekeeper, PKI/trust, certificate anomalies)",
+        "platforms": ["darwin"],
+        "probes": 4,
     },
     "peripheral": {
         "class": PeripheralAgent,
@@ -156,6 +160,49 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Network device enumeration and asset tracking",
         "platforms": ["darwin", "linux"],
         "probes": 6,
+    },
+    "protocol_collectors": {
+        "class": ProtocolCollectors,
+        "name": "Protocol Threat Collector",
+        "description": "Protocol-level threat detection for HTTP, TLS, SSH, DNS, SQL injection",
+        "platforms": ["darwin", "linux"],
+        "probes": 10,
+    },
+    # L7 Gap-Closure Agents
+    "applog": {
+        "class": AppLogAgent,
+        "name": "AppLog Agent",
+        "description": "Application log analysis with webshell, tampering, and credential detection",
+        "platforms": ["darwin", "linux"],
+        "probes": 8,
+    },
+    "db_activity": {
+        "class": DBActivityAgent,
+        "name": "Database Activity Agent",
+        "description": "Database query monitoring for SQL injection, privilege escalation, bulk extraction",
+        "platforms": ["darwin", "linux"],
+        "probes": 8,
+    },
+    "http_inspector": {
+        "class": HTTPInspectorAgent,
+        "name": "HTTP Inspector Agent",
+        "description": "Deep HTTP payload analysis for XSS, SSRF, path traversal, API abuse",
+        "platforms": ["darwin", "linux"],
+        "probes": 8,
+    },
+    "internet_activity": {
+        "class": InternetActivityAgent,
+        "name": "Internet Activity Agent",
+        "description": "Outbound connection monitoring for cloud exfil, TOR/VPN, crypto mining",
+        "platforms": ["darwin", "linux"],
+        "probes": 8,
+    },
+    "net_scanner": {
+        "class": NetScannerAgent,
+        "name": "Network Scanner Agent",
+        "description": "Active network probing with diff-based service/port/topology change detection",
+        "platforms": ["darwin", "linux"],
+        "probes": 7,
     },
 }
 

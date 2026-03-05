@@ -340,6 +340,26 @@ class AgentControlPanel {
             'protocol_collectors_agent': {
                 desc: 'Protocol-level threat detection: HTTP anomalies, TLS issues, SSH brute-force, SQL injection, and RDP abuse.',
                 type: 'Collector', typeColor: 'rgba(149,225,211,0.15);color:#95E1D3', accentColor: '#95E1D3'
+            },
+            'applog_agent': {
+                desc: 'Application log analysis: webshell detection, log tampering, credential harvesting, error spikes, and container breakout.',
+                type: 'Collector', typeColor: 'rgba(232,168,124,0.15);color:#E8A87C', accentColor: '#E8A87C'
+            },
+            'db_activity_agent': {
+                desc: 'Database monitoring: SQL injection, privilege escalation, bulk extraction, schema enumeration, and DDL changes.',
+                type: 'Collector', typeColor: 'rgba(32,178,170,0.15);color:#20B2AA', accentColor: '#20B2AA'
+            },
+            'http_inspector_agent': {
+                desc: 'Deep HTTP payload analysis: XSS, SSRF, path traversal, API abuse, suspicious uploads, and WebSocket abuse.',
+                type: 'Collector', typeColor: 'rgba(123,104,238,0.15);color:#7B68EE', accentColor: '#7B68EE'
+            },
+            'internet_activity_agent': {
+                desc: 'Outbound connection monitoring: cloud exfil, TOR/VPN usage, crypto mining, geo-anomalies, and DNS-over-HTTPS.',
+                type: 'Collector', typeColor: 'rgba(218,112,214,0.15);color:#DA70D6', accentColor: '#DA70D6'
+            },
+            'net_scanner_agent': {
+                desc: 'Active network probing: new services, port changes, rogue services, SSL cert issues, and topology changes.',
+                type: 'Discovery', typeColor: 'rgba(255,127,80,0.15);color:#FF7F50', accentColor: '#FF7F50'
             }
         };
         this.init();
@@ -678,7 +698,7 @@ class AgentControlPanel {
             clearInterval(this.metricsInterval);
         }
         var self = this;
-        this.metricsInterval = setInterval(async function() {
+        this.metricsInterval = visInterval(async function() {
             try {
                 var response = await fetch('/dashboard/api/agents/status', {
                     signal: AbortSignal.timeout(5000)

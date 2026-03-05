@@ -1,0 +1,40 @@
+probe_id: binary_from_temp
+agent: proc
+version: "1.0.0"
+mitre_techniques:
+  - id: T1204
+    name: "User Execution"
+  - id: T1059
+    name: "Command and Scripting Interpreter"
+mitre_tactic: execution
+intent: >
+  Detect process execution where the executable path is in a temporary
+  directory (/tmp, /var/tmp, /dev/shm, macOS /private/var/folders/).
+  Attackers stage payloads in temp directories before execution; legitimate
+  software almost never executes from /tmp in production.
+required_inputs:
+  - source: psutil.process_iter
+    fields: [pid, name, exe, cmdline, username]
+correlation_group: execution
+severity_policy:
+  execution_from_temp: HIGH
+confidence_policy:
+  execution_from_temp: 0.85
+thresholds: {}
+testing_approach: psutil_mock
+known_evasions:
+  - id: macOS_launchd_tmpdir
+    title: "macOS: /private/var/folders/*/T/ is the system temp"
+    description: >
+      On macOS, many legitimate apps extract and run from system temp
+      (/private/var/folders/.../T/). The TEMP_PATTERNS list includes this
+      prefix, generating FPs for legitimate macOS app bundles.
+    status: FP_RISK
+    mitigation: "Whitelist Apple-signed executables from system temp"
+  - id: installer_temp
+    title: "Software installers staging in /tmp during install"
+    description: >
+      Package installers (npm, pip, brew, dpkg) frequently execute scripts
+      from /tmp during installation. These fire HIGH.
+    status: FP_RISK
+    mitigation: "Suppress during known installation windows"

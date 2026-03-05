@@ -64,7 +64,10 @@ _TECHNIQUE_CONTEXT = {
     "T1200": ("initial-access", "hardware device insertion"),
     # Parent techniques for agents that emit sub-technique IDs
     "T1036": ("defense-evasion", "file or process name/location masquerading"),
-    "T1036.005": ("defense-evasion", "match legitimate name or location to evade detection"),
+    "T1036.005": (
+        "defense-evasion",
+        "match legitimate name or location to evade detection",
+    ),
     "T1547": ("persistence", "boot or logon autostart execution"),
     "T1547.001": ("persistence", "registry run keys or startup folder persistence"),
     "T1543": ("persistence", "creation or modification of system-level processes"),
@@ -78,7 +81,10 @@ _TECHNIQUE_CONTEXT = {
     "T1548": ("privilege-escalation", "abuse of elevation control mechanism"),
     "T1134": ("privilege-escalation", "access token manipulation"),
     "T1068": ("privilege-escalation", "exploitation for privilege escalation"),
-    "T1055": ("defense-evasion", "process injection for code execution in another process"),
+    "T1055": (
+        "defense-evasion",
+        "process injection for code execution in another process",
+    ),
     "T1027": ("defense-evasion", "obfuscated files or information to hinder analysis"),
     "T1070": ("defense-evasion", "indicator removal to cover tracks on host"),
     "T1070.004": ("defense-evasion", "file deletion to remove indicators"),
@@ -261,14 +267,22 @@ class EventExplainer:
                 ctx = _TECHNIQUE_CONTEXT.get(tid.split(".")[0])
             if ctx:
                 tactic_slug, desc = ctx
-                detail.append({
-                    "id": tid,
-                    "tactic": _TACTIC_DISPLAY.get(tactic_slug, tactic_slug),
-                    "description": desc,
-                })
+                detail.append(
+                    {
+                        "id": tid,
+                        "tactic": _TACTIC_DISPLAY.get(tactic_slug, tactic_slug),
+                        "description": desc,
+                    }
+                )
             else:
                 # Last resort: still provide the technique ID with generic label
-                detail.append({"id": tid, "tactic": "ATT&CK Technique", "description": "MITRE ATT&CK technique " + tid})
+                detail.append(
+                    {
+                        "id": tid,
+                        "tactic": "ATT&CK Technique",
+                        "description": "MITRE ATT&CK technique " + tid,
+                    }
+                )
         return detail
 
     def _build_mitre_context(self, techniques: List[str], event: Dict[str, Any]) -> str:

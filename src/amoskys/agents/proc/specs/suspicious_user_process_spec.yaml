@@ -1,0 +1,43 @@
+probe_id: suspicious_user_process
+agent: proc
+version: "1.0.0"
+mitre_techniques:
+  - id: T1078
+    name: "Valid Accounts"
+mitre_tactic: privilege_escalation
+intent: >
+  Detect system services running under the wrong user account. Services like
+  sshd, nginx, mysqld should run as root or their dedicated service account.
+  An attacker who has compromised a service account and relaunched a daemon
+  under a different user, or exploited a service to gain a shell, will show
+  these processes under unexpected user identities.
+required_inputs:
+  - source: psutil.process_iter
+    fields: [pid, name, username]
+correlation_group: privilege_escalation
+severity_policy:
+  process_wrong_user: HIGH
+confidence_policy:
+  process_wrong_user: 0.80
+thresholds:
+  scan_interval_seconds: 60.0
+  root_only_processes:
+    - sshd, httpd, nginx, mysqld, postgres, dockerd, containerd, systemd, init, cron, auditd
+testing_approach: psutil_mock
+known_evasions:
+  - id: user_namespaced_container
+    title: "nginx in user namespace runs as uid 1000 (maps to root inside)"
+    description: >
+      User namespaces allow a process to appear as non-root to the host while
+      being root inside the namespace. psutil reports the host UID (1000)
+      which triggers the probe — but this may be legitimate containerization.
+    status: FP_RISK
+    mitigation: "Whitelist container runtimes"
+  - id: renamed_malicious_process
+    title: "Reverse shell named 'kworker' — not in ROOT_ONLY_PROCESSES"
+    description: >
+      The probe only flags processes in the ROOT_ONLY_PROCESSES list running
+      as non-root. A malicious process named 'kworker' at uid 1000 is not
+      flagged regardless of how suspicious it is.
+    status: EVADES
+    reason: "Fixed process name list; doesn't catch arbitrary renamed processes"

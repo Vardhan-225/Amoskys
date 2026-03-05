@@ -111,7 +111,14 @@ def apply_migration(
     try:
         # Execute each statement separately (executescript commits implicitly)
         for stmt in _split_statements(sql):
-            conn.execute(stmt)
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError as col_err:
+                # Tolerate "duplicate column" from idempotent re-runs
+                if "duplicate column name" in str(col_err):
+                    logger.debug("Column already exists, skipping: %s", col_err)
+                    continue
+                raise
         conn.execute(
             "INSERT INTO schema_migrations (version, applied_at, description) "
             "VALUES (?, ?, ?)",

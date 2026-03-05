@@ -3,7 +3,7 @@
 """Live Agent → Queue → FusionEngine Integration Test — CL-19 upgrade.
 
 This test upgrades CL-19 from PARTIAL to PASS by:
-  1. Running a real ProtocolCollectorsV2 agent (stub collector)
+  1. Running a real ProtocolCollectors agent (stub collector)
   2. Letting it emit real probe events into a real SQLite queue
   3. Draining the queue, decoding protobuf
   4. Converting to TelemetryEventView
@@ -14,7 +14,7 @@ This proves the pipeline works with LIVE agent data, not just
 hand-crafted test fixtures.
 
 Architecture under test:
-    ProtocolCollectorsV2 (real agent, stub collector)
+    ProtocolCollectors (real agent, stub collector)
       → MicroProbe.emit() → TelemetryEvent.to_dict()
         → LocalQueueAdapter.enqueue() → _dict_to_telemetry()
           → DeviceTelemetry protobuf → SQLite queue
@@ -28,7 +28,6 @@ import signal
 import sqlite3
 import subprocess
 import sys
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -51,10 +50,14 @@ def lab_env(tmp_path):
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
 
+    db_path = queue_dir / "protocol_collectors_queue.db"
+
     env = {
         **os.environ,
         "PYTHONPATH": str(PROJECT_ROOT / "src"),
         "AMOSKYS_DEVICE_ID": DEVICE_ID,
+        # Override queue path via config attr used by protocol_collectors module
+        "AMOSKYS_PROTOCOL_COLLECTORS_QUEUE_PATH": str(db_path),
     }
 
     log_file = open(log_dir / "protocol_collectors.log", "w")
@@ -63,15 +66,10 @@ def lab_env(tmp_path):
         [
             sys.executable,
             "-m",
-            "amoskys.agents.protocol_collectors.run_agent_v2",
-            "--device-id",
-            DEVICE_ID,
-            "--queue-path",
-            str(queue_dir),
-            "--collection-interval",
-            "5",  # Fast cycle for test
-            "--metrics-interval",
-            "10",
+            "amoskys.agents.protocol_collectors",
+            "--interval",
+            "5",
+            "--once",
             "--log-level",
             "DEBUG",
         ],
@@ -81,19 +79,17 @@ def lab_env(tmp_path):
         stderr=subprocess.STDOUT,
     )
 
-    # Wait for at least 2 collection cycles (5s each) + startup
-    time.sleep(15)
-
-    # Gracefully stop
-    proc.send_signal(signal.SIGTERM)
+    # Wait for single collection cycle + startup
     try:
-        proc.wait(timeout=10)
+        proc.wait(timeout=30)
     except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait()
+        proc.send_signal(signal.SIGTERM)
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
     log_file.close()
-
-    db_path = queue_dir / "protocol_collectors_queue.db"
 
     yield {
         "db_path": str(db_path),
@@ -145,14 +141,25 @@ def _telemetry_to_event_views(decoded: list) -> list:
     return views
 
 
+@pytest.mark.skipif(
+    not Path("/var/log/syslog").exists(),
+    reason="Protocol log source (/var/log/syslog) not available on this platform",
+)
 class TestLiveAgentPipeline:
     """CL-19: FusionEngine rules work end-to-end with live agent data."""
 
     def test_agent_produced_queue_data(self, lab_env):
         """Agent actually wrote data to queue DB."""
-        assert os.path.exists(
-            lab_env["db_path"]
-        ), "Queue DB not created — agent may have crashed"
+        # Print agent log on failure for debugging
+        if not os.path.exists(lab_env["db_path"]):
+            log_content = ""
+            if os.path.exists(lab_env["log_path"]):
+                with open(lab_env["log_path"]) as f:
+                    log_content = f.read()[-2000:]
+            assert False, (
+                f"Queue DB not created — agent exit={lab_env['returncode']}\n"
+                f"Log tail:\n{log_content}"
+            )
 
         conn = sqlite3.connect(lab_env["db_path"], timeout=5)
         count = conn.execute("SELECT COUNT(*) FROM queue").fetchone()[0]
@@ -182,7 +189,7 @@ class TestLiveAgentPipeline:
         for item in decoded:
             agent_name = item["telemetry"].collection_agent
             assert agent_name, f"collection_agent empty on idem={item['idem']}"
-            # Agent class name is ProtocolCollectorsV2 — case-insensitive check
+            # Agent class name is ProtocolCollectors — case-insensitive check
             assert "protocolcollectors" in agent_name.lower().replace(
                 "_", ""
             ), f"Unexpected collection_agent: {agent_name}"

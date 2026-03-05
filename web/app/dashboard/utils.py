@@ -345,12 +345,14 @@ def get_event_clustering_data() -> Dict[str, Any]:
     by_source_ip: Dict[str, int] = {}
     try:
         cutoff_ns = int((_time.time() - 24 * 3600) * 1e9)
-        cursor = store.db.execute(
-            """SELECT indicators FROM security_events
-               WHERE timestamp_ns > ? AND indicators LIKE '%_ip%'""",
-            (cutoff_ns,),
-        )
-        for row in cursor.fetchall():
+        with store._lock:
+            cursor = store.db.execute(
+                """SELECT indicators FROM security_events
+                   WHERE timestamp_ns > ? AND indicators LIKE '%_ip%'""",
+                (cutoff_ns,),
+            )
+            rows = cursor.fetchall()
+        for row in rows:
             try:
                 indicators = json.loads(row[0]) if row[0] else {}
             except (json.JSONDecodeError, TypeError):
@@ -640,12 +642,24 @@ def get_live_metrics_data() -> Dict[str, Any]:
     """Get live system metrics for real-time dashboard updates"""
     metrics = get_system_metrics_snapshot()
 
+    # get_system_metrics_snapshot returns {"error": ...} on failure
+    if "error" in metrics:
+        return {
+            "cpu_usage": 0,
+            "memory_usage": 0,
+            "disk_usage": 0,
+            "network_io": {},
+            "process_count": 0,
+            "uptime": 0,
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+        }
+
     return {
         "cpu_usage": metrics["cpu"]["percent"],
         "memory_usage": metrics["memory"]["percent"],
         "disk_usage": metrics["disk"]["percent"],
         "network_io": metrics["network"],
         "process_count": metrics.get("processes", {}).get("total", 0),
-        "uptime": 0,  # Could be calculated from system boot time
+        "uptime": 0,
         "last_updated": datetime.now(timezone.utc).isoformat(),
     }
