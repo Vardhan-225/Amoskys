@@ -22,8 +22,8 @@ sys.path.insert(0, str(project_root / "src"))
 
 import grpc
 
-from amoskys.agents.proc.proc_agent import ProcAgent
-from amoskys.agents.snmp.enhanced_collector import (
+from amoskys.agents.shared.process.agent import ProcAgent
+from amoskys.agents.shared.snmp.enhanced_collector import (
     EnhancedSNMPCollector,
     SNMPMetricsConfig,
 )

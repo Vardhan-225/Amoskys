@@ -31,62 +31,62 @@ def test_agent(agent_name: str) -> bool:
     try:
         # Dynamic import based on agent name
         if agent_name == "kernel_audit":
-            from amoskys.agents.kernel_audit.kernel_audit_agent import (
+            from amoskys.agents.os.linux.kernel_audit.kernel_audit_agent import (
                 KernelAuditAgent as AgentClass,
             )
         elif agent_name == "protocol_collectors":
-            from amoskys.agents.protocol_collectors import (
+            from amoskys.agents.shared.protocol_collectors import (
                 ProtocolCollectors as AgentClass,
             )
         elif agent_name == "device_discovery":
-            from amoskys.agents.device_discovery import DeviceDiscovery as AgentClass
+            from amoskys.agents.shared.device_discovery import DeviceDiscovery as AgentClass
         elif agent_name == "auth_guard":
-            from amoskys.agents.auth import AuthGuardAgent as AgentClass
+            from amoskys.agents.shared.auth import AuthGuardAgent as AgentClass
         elif agent_name == "proc":
-            from amoskys.agents.proc import ProcAgent as AgentClass
+            from amoskys.agents.shared.process import ProcAgent as AgentClass
         elif agent_name == "dns":
-            from amoskys.agents.dns import DNSAgent as AgentClass
+            from amoskys.agents.shared.dns import DNSAgent as AgentClass
         elif agent_name == "peripheral":
-            from amoskys.agents.peripheral import PeripheralAgent as AgentClass
+            from amoskys.agents.shared.peripheral import PeripheralAgent as AgentClass
         elif agent_name == "persistence":
-            from amoskys.agents.persistence import PersistenceGuard as AgentClass
+            from amoskys.agents.shared.persistence import PersistenceGuard as AgentClass
         elif agent_name == "fim":
-            from amoskys.agents.fim import FIMAgent as AgentClass
+            from amoskys.agents.shared.filesystem import FIMAgent as AgentClass
         elif agent_name == "flow":
-            from amoskys.agents.flow import FlowAgent as AgentClass
+            from amoskys.agents.shared.network import FlowAgent as AgentClass
         else:
-            print(f"  ❌ Unknown agent: {agent_name}")
+            print(f"  Unknown agent: {agent_name}")
             return False
 
-        print(f"  ✓ Import successful: {AgentClass.__name__}")
+        print(f"  Import successful: {AgentClass.__name__}")
 
     except ImportError as e:
-        print(f"  ❌ Import failed: {e}")
+        print(f"  Import failed: {e}")
         return False
     except Exception as e:
-        print(f"  ❌ Import error: {e}")
+        print(f"  Import error: {e}")
         return False
 
     # Test instantiation
     try:
         agent = AgentClass(device_id="selftest-node")
-        print(f"  ✓ Instantiation successful")
+        print(f"  Instantiation successful")
     except TypeError as e:
-        print(f"  ❌ Instantiation failed (missing abstract method?): {e}")
+        print(f"  Instantiation failed (missing abstract method?): {e}")
         return False
     except Exception as e:
-        print(f"  ❌ Instantiation failed: {e}")
+        print(f"  Instantiation failed: {e}")
         return False
 
     # Test setup
     try:
         result = agent.setup()
         if result:
-            print(f"  ✓ setup() returned True")
+            print(f"  setup() returned True")
         else:
-            print(f"  ⚠ setup() returned False (probe init may have failed)")
+            print(f"  setup() returned False (probe init may have failed)")
     except Exception as e:
-        print(f"  ❌ setup() failed: {e}")
+        print(f"  setup() failed: {e}")
         return False
 
     # Test collect_data
@@ -95,7 +95,7 @@ def test_agent(agent_name: str) -> bool:
         if events is None:
             events = []
         events = list(events) if hasattr(events, "__iter__") else [events]
-        print(f"  ✓ collect_data() returned {len(events)} events")
+        print(f"  collect_data() returned {len(events)} events")
 
         # Validate event types (should not be plain strings)
         invalid_events = []
@@ -115,23 +115,23 @@ def test_agent(agent_name: str) -> bool:
                 invalid_events.append((i, type(event).__name__))
 
         if invalid_events:
-            print(f"  ⚠ Invalid event types found: {invalid_events}")
+            print(f"  Invalid event types found: {invalid_events}")
         else:
-            print(f"  ✓ All events have valid types")
+            print(f"  All events have valid types")
 
     except Exception as e:
-        print(f"  ❌ collect_data() failed: {e}")
+        print(f"  collect_data() failed: {e}")
         return False
 
     # Check probe count if available
     if hasattr(agent, "probes") or hasattr(agent, "_probes"):
         probes = getattr(agent, "probes", getattr(agent, "_probes", []))
-        print(f"  ✓ Probes registered: {len(probes)}")
+        print(f"  Probes registered: {len(probes)}")
         for p in probes:
-            status = "✓" if getattr(p, "enabled", True) else "○"
+            status = "+" if getattr(p, "enabled", True) else "o"
             print(f"      {status} {p.name}")
 
-    print(f"\n  ✅ {agent_name} PASSED all checks")
+    print(f"\n  {agent_name} PASSED all checks")
     return True
 
 
@@ -189,7 +189,7 @@ def main():
     failed = len(results) - passed
 
     for agent, result in results.items():
-        status = "✅ PASS" if result else "❌ FAIL"
+        status = "PASS" if result else "FAIL"
         print(f"  {status}  {agent}")
 
     print(f"\nTotal: {passed}/{len(results)} passed")

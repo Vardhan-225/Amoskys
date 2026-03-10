@@ -139,6 +139,14 @@ def main():
     except ImportError as e:
         logger.warning("Cannot import PeripheralAgent: %s", e)
 
+    # NetworkSentinel — HTTP access log analysis, scan detection
+    try:
+        from amoskys.agents.shared.network_sentinel.agent import NetworkSentinelAgent
+
+        agents.append(("NetworkSentinel", NetworkSentinelAgent, {}))
+    except ImportError as e:
+        logger.warning("Cannot import NetworkSentinel: %s", e)
+
     for name, cls, kwargs in agents:
         logger.info("--- %s ---", name)
         items = collect_from_agent(cls, name, **kwargs)

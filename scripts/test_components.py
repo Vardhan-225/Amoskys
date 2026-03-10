@@ -40,7 +40,7 @@ class ComponentTester:
         logger.info("=" * 60)
 
         try:
-            from amoskys.agents.snmp.enhanced_collector import SNMPMetricsConfig
+            from amoskys.agents.shared.snmp.enhanced_collector import SNMPMetricsConfig
 
             config_path = project_root / "config" / "snmp_metrics_config.yaml"
             config = SNMPMetricsConfig(str(config_path))
@@ -71,7 +71,7 @@ class ComponentTester:
         logger.info("=" * 60)
 
         try:
-            from amoskys.agents.snmp.enhanced_collector import (
+            from amoskys.agents.shared.snmp.enhanced_collector import (
                 EnhancedSNMPCollector,
                 SNMPMetricsConfig,
             )
@@ -110,7 +110,7 @@ class ComponentTester:
 
         try:
             # Use simplified version that doesn't need protobuf
-            from amoskys.agents.proc.proc_agent_simple import ProcAgent
+            from amoskys.agents.shared.process.agent_simple import ProcAgent
 
             agent = ProcAgent(collection_interval=30)
 

@@ -109,14 +109,14 @@ start_agents() {
 
     # Start proc_agent
     if [ ! -f "$PID_DIR/proc_agent.pid" ] || ! kill -0 $(cat "$PID_DIR/proc_agent.pid") 2>/dev/null; then
-        nohup "$VENV_PATH/bin/python" -m amoskys.agents.proc_agent > "$LOG_DIR/proc_agent.log" 2>&1 &
+        nohup "$VENV_PATH/bin/python" -m amoskys.agents.shared.process_agent > "$LOG_DIR/proc_agent.log" 2>&1 &
         echo $! > "$PID_DIR/proc_agent.pid"
         log_info "✓ proc_agent started (PID: $!)"
     fi
 
     # Start flowagent
     if [ ! -f "$PID_DIR/flowagent.pid" ] || ! kill -0 $(cat "$PID_DIR/flowagent.pid") 2>/dev/null; then
-        nohup "$VENV_PATH/bin/python" -m amoskys.agents.flowagent > "$LOG_DIR/flowagent.log" 2>&1 &
+        nohup "$VENV_PATH/bin/python" -m amoskys.agents.shared.networkagent > "$LOG_DIR/flowagent.log" 2>&1 &
         echo $! > "$PID_DIR/flowagent.pid"
         log_info "✓ flowagent started (PID: $!)"
     fi

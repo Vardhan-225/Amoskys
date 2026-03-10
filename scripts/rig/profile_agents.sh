@@ -64,7 +64,7 @@ echo ""
 KA_EXTRA_ARGS=""
 [[ "$(uname -s)" == "Darwin" ]] && KA_EXTRA_ARGS="--audit-log-path=/dev/null"
 
-python3 -m amoskys.agents.kernel_audit.run_agent_v2 \
+python3 -m amoskys.agents.os.linux.kernel_audit.run_agent_v2 \
   --device-id="$AMOSKYS_DEVICE_ID" \
   --queue-path="$AMOSKYS_QUEUE_ROOT/kernel_audit" \
   --collection-interval=30 --metrics-interval=60 --log-level=INFO \
@@ -72,14 +72,14 @@ python3 -m amoskys.agents.kernel_audit.run_agent_v2 \
   > "$AMOSKYS_LOG_ROOT/kernel_audit.log" 2>&1 &
 KA_PID=$!
 
-python3 -m amoskys.agents.protocol_collectors.run_agent_v2 \
+python3 -m amoskys.agents.shared.protocol_collectors.run_agent_v2 \
   --device-id="$AMOSKYS_DEVICE_ID" \
   --queue-path="$AMOSKYS_QUEUE_ROOT/protocol_collectors" \
   --collection-interval=30 --metrics-interval=60 --log-level=INFO \
   > "$AMOSKYS_LOG_ROOT/protocol_collectors.log" 2>&1 &
 PC_PID=$!
 
-python3 -m amoskys.agents.device_discovery.run_agent_v2 \
+python3 -m amoskys.agents.shared.device_discovery.run_agent_v2 \
   --device-id="$AMOSKYS_DEVICE_ID" \
   --queue-path="$AMOSKYS_QUEUE_ROOT/device_discovery" \
   --collection-interval=30 --metrics-interval=60 --log-level=INFO \

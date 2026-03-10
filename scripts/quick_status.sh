@@ -31,10 +31,10 @@ check_process "WAL Processor" "wal_processor" && ((running++)); ((total++))
 echo ""
 echo "AGENTS:"
 echo "------------------------------------------------------"
-check_process "Proc Agent" "amoskys.agents.proc.proc_agent" && ((running++)); ((total++))
+check_process "Proc Agent" "amoskys.agents.shared.process.agent" && ((running++)); ((total++))
 check_process "Mac Telemetry" "generate_mac_telemetry" && ((running++)); ((total++))
-check_process "Peripheral Agent" "amoskys.agents.peripheral.peripheral_agent" && ((running++)); ((total++))
-check_process "SNMP Agent" "amoskys.agents.snmp.snmp_agent" && ((running++)); ((total++))
+check_process "Peripheral Agent" "amoskys.agents.shared.peripheral.agent" && ((running++)); ((total++))
+check_process "SNMP Agent" "amoskys.agents.shared.snmp.agent" && ((running++)); ((total++))
 
 echo ""
 echo "DASHBOARD:"

@@ -41,35 +41,35 @@ sys.path.insert(0, str(_root / "src"))
 # (module_path, factory_function_or_probe_classes)
 AGENT_PROBE_MAP = {
     "proc": {
-        "module": "amoskys.agents.proc.probes",
+        "module": "amoskys.agents.shared.process.probes",
         "factory": "create_proc_probes",
     },
     "fim": {
-        "module": "amoskys.agents.fim.probes",
+        "module": "amoskys.agents.shared.filesystem.probes",
         "factory": "create_fim_probes",
     },
     "flow": {
-        "module": "amoskys.agents.flow.probes",
+        "module": "amoskys.agents.shared.network.probes",
         "factory": "create_flow_probes",
     },
     "dns": {
-        "module": "amoskys.agents.dns.probes",
+        "module": "amoskys.agents.shared.dns.probes",
         "factory": "create_dns_probes",
     },
     "peripheral": {
-        "module": "amoskys.agents.peripheral.probes",
+        "module": "amoskys.agents.shared.peripheral.probes",
         "factory": "create_peripheral_probes",
     },
     "auth": {
-        "module": "amoskys.agents.auth.probes",
+        "module": "amoskys.agents.shared.auth.probes",
         "factory": "create_auth_probes",
     },
     "persistence": {
-        "module": "amoskys.agents.persistence.probes",
+        "module": "amoskys.agents.shared.persistence.probes",
         "factory": "create_persistence_probes",
     },
     "kernel_audit": {
-        "module": "amoskys.agents.kernel_audit.probes",
+        "module": "amoskys.agents.os.linux.kernel_audit.probes",
         "factory": "create_kernel_audit_probes",
     },
 }

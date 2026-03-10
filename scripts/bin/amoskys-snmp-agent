@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 # Import and run the main function from snmp_agent module
-from amoskys.agents.snmp.snmp_agent import main
+from amoskys.agents.shared.snmp.agent import main
 
 if __name__ == "__main__":
     main()

@@ -19,19 +19,19 @@ echo ""
 
 # Check processes
 echo -e "${BLUE}Running Processes:${NC}"
-AUTH_RUNNING=$(pgrep -f "amoskys.agents.auth.auth_agent" | wc -l)
-PERSIST_RUNNING=$(pgrep -f "amoskys.agents.persistence.persistence_agent" | wc -l)
+AUTH_RUNNING=$(pgrep -f "amoskys.agents.shared.auth.agent" | wc -l)
+PERSIST_RUNNING=$(pgrep -f "amoskys.agents.shared.persistence.agent" | wc -l)
 INGEST_RUNNING=$(pgrep -f "amoskys.intel.ingest" | wc -l)
 FUSION_RUNNING=$(pgrep -f "amoskys.intel.fusion_engine" | wc -l)
 
 if [ "$AUTH_RUNNING" -gt 0 ]; then
-    echo -e "  ${GREEN}✓${NC} AuthGuardAgent ($(pgrep -f amoskys.agents.auth.auth_agent))"
+    echo -e "  ${GREEN}✓${NC} AuthGuardAgent ($(pgrep -f amoskys.agents.shared.auth.agent))"
 else
     echo -e "  ${RED}✗${NC} AuthGuardAgent (not running)"
 fi
 
 if [ "$PERSIST_RUNNING" -gt 0 ]; then
-    echo -e "  ${GREEN}✓${NC} PersistenceGuardAgent ($(pgrep -f amoskys.agents.persistence.persistence_agent))"
+    echo -e "  ${GREEN}✓${NC} PersistenceGuardAgent ($(pgrep -f amoskys.agents.shared.persistence.agent))"
 else
     echo -e "  ${RED}✗${NC} PersistenceGuardAgent (not running)"
 fi

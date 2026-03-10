@@ -73,13 +73,13 @@ echo ""
 info "Checking for stale services..."
 pkill -f "eventbus/server.py" 2>/dev/null && warn "Killed stale EventBus" || true
 pkill -f "wal_processor" 2>/dev/null && warn "Killed stale WAL Processor" || true
-pkill -f "amoskys.agents.proc" 2>/dev/null && warn "Killed stale ProcAgent" || true
-pkill -f "amoskys.agents.auth" 2>/dev/null && warn "Killed stale AuthAgent" || true
-pkill -f "amoskys.agents.dns" 2>/dev/null && warn "Killed stale DNSAgent" || true
-pkill -f "amoskys.agents.fim" 2>/dev/null && warn "Killed stale FIMAgent" || true
-pkill -f "amoskys.agents.flow" 2>/dev/null && warn "Killed stale FlowAgent" || true
-pkill -f "amoskys.agents.persistence" 2>/dev/null && warn "Killed stale PersistenceAgent" || true
-pkill -f "amoskys.agents.peripheral" 2>/dev/null && warn "Killed stale PeripheralAgent" || true
+pkill -f "amoskys.agents.shared.process" 2>/dev/null && warn "Killed stale ProcAgent" || true
+pkill -f "amoskys.agents.shared.auth" 2>/dev/null && warn "Killed stale AuthAgent" || true
+pkill -f "amoskys.agents.shared.dns" 2>/dev/null && warn "Killed stale DNSAgent" || true
+pkill -f "amoskys.agents.shared.filesystem" 2>/dev/null && warn "Killed stale FIMAgent" || true
+pkill -f "amoskys.agents.shared.network" 2>/dev/null && warn "Killed stale FlowAgent" || true
+pkill -f "amoskys.agents.shared.persistence" 2>/dev/null && warn "Killed stale PersistenceAgent" || true
+pkill -f "amoskys.agents.shared.peripheral" 2>/dev/null && warn "Killed stale PeripheralAgent" || true
 pkill -f "kernel_audit/run_agent_v2" 2>/dev/null && warn "Killed stale KernelAuditAgent" || true
 pkill -f "device_discovery/run_agent_v2" 2>/dev/null && warn "Killed stale DeviceDiscovery" || true
 pkill -f "protocol_collectors/run_agent_v2" 2>/dev/null && warn "Killed stale ProtocolCollectors" || true
@@ -117,71 +117,71 @@ fi
 
 # ── 4. Seed initial data (single collection cycle) ────────────
 info "Seeding initial telemetry (single collection cycle)..."
-python3 -m amoskys.agents.proc --interval 1 --once --no-heartbeat --log-level WARNING > logs/proc_seed.log 2>&1 || warn "Proc seed had issues (non-fatal)"
-python3 -m amoskys.agents.auth --interval 1 --once --no-heartbeat --log-level WARNING > logs/auth_seed.log 2>&1 || warn "Auth seed had issues (non-fatal)"
-python3 -m amoskys.agents.fim --interval 1 --once --no-heartbeat --log-level WARNING > logs/fim_seed.log 2>&1 || warn "FIM seed had issues (non-fatal)"
+python3 -m amoskys.agents.shared.process --interval 1 --once --no-heartbeat --log-level WARNING > logs/proc_seed.log 2>&1 || warn "Proc seed had issues (non-fatal)"
+python3 -m amoskys.agents.shared.auth --interval 1 --once --no-heartbeat --log-level WARNING > logs/auth_seed.log 2>&1 || warn "Auth seed had issues (non-fatal)"
+python3 -m amoskys.agents.shared.filesystem --interval 1 --once --no-heartbeat --log-level WARNING > logs/fim_seed.log 2>&1 || warn "FIM seed had issues (non-fatal)"
 ok "Initial telemetry seeded"
 
 # ── 5. Start all 10 agents (continuous) ───────────────────────
 
 # --- Standard agents (7) ---
 info "Starting Proc Agent (15s interval)..."
-python3 -m amoskys.agents.proc --interval 15 --no-heartbeat --log-level INFO > logs/proc_agent.log 2>&1 &
+python3 -m amoskys.agents.shared.process --interval 15 --no-heartbeat --log-level INFO > logs/proc_agent.log 2>&1 &
 PROC_PID=$!
 PIDS+=($PROC_PID)
 ok "Proc Agent (PID $PROC_PID)"
 
 info "Starting Auth Agent (15s interval)..."
-python3 -m amoskys.agents.auth --interval 15 --no-heartbeat --log-level INFO > logs/auth_agent.log 2>&1 &
+python3 -m amoskys.agents.shared.auth --interval 15 --no-heartbeat --log-level INFO > logs/auth_agent.log 2>&1 &
 AUTH_PID=$!
 PIDS+=($AUTH_PID)
 ok "Auth Agent (PID $AUTH_PID)"
 
 info "Starting DNS Agent (20s interval)..."
-python3 -m amoskys.agents.dns --interval 20 --no-heartbeat --log-level INFO > logs/dns_agent.log 2>&1 &
+python3 -m amoskys.agents.shared.dns --interval 20 --no-heartbeat --log-level INFO > logs/dns_agent.log 2>&1 &
 DNS_PID=$!
 PIDS+=($DNS_PID)
 ok "DNS Agent (PID $DNS_PID)"
 
 info "Starting FIM Agent (20s interval)..."
-python3 -m amoskys.agents.fim --interval 20 --no-heartbeat --log-level INFO > logs/fim_agent.log 2>&1 &
+python3 -m amoskys.agents.shared.filesystem --interval 20 --no-heartbeat --log-level INFO > logs/fim_agent.log 2>&1 &
 FIM_PID=$!
 PIDS+=($FIM_PID)
 ok "FIM Agent (PID $FIM_PID)"
 
 info "Starting Flow Agent (20s interval)..."
-python3 -m amoskys.agents.flow --interval 20 --no-heartbeat --log-level INFO > logs/flow_agent.log 2>&1 &
+python3 -m amoskys.agents.shared.network --interval 20 --no-heartbeat --log-level INFO > logs/flow_agent.log 2>&1 &
 FLOW_PID=$!
 PIDS+=($FLOW_PID)
 ok "Flow Agent (PID $FLOW_PID)"
 
 info "Starting Persistence Agent (20s interval)..."
-python3 -m amoskys.agents.persistence --interval 20 --no-heartbeat --log-level INFO > logs/persistence_agent.log 2>&1 &
+python3 -m amoskys.agents.shared.persistence --interval 20 --no-heartbeat --log-level INFO > logs/persistence_agent.log 2>&1 &
 PERSIST_PID=$!
 PIDS+=($PERSIST_PID)
 ok "Persistence Agent (PID $PERSIST_PID)"
 
 info "Starting Peripheral Agent (20s interval)..."
-python3 -m amoskys.agents.peripheral --interval 20 --no-heartbeat --log-level INFO > logs/peripheral_agent.log 2>&1 &
+python3 -m amoskys.agents.shared.peripheral --interval 20 --no-heartbeat --log-level INFO > logs/peripheral_agent.log 2>&1 &
 PERIPH_PID=$!
 PIDS+=($PERIPH_PID)
 ok "Peripheral Agent (PID $PERIPH_PID)"
 
 # --- Remaining agents (3) — same canonical pattern ---
 info "Starting Kernel Audit Agent (30s interval)..."
-python3 -m amoskys.agents.kernel_audit --interval 30 --no-heartbeat --log-level INFO > logs/kernel_audit_agent.log 2>&1 &
+python3 -m amoskys.agents.os.linux.kernel_audit --interval 30 --no-heartbeat --log-level INFO > logs/kernel_audit_agent.log 2>&1 &
 KAUDIT_PID=$!
 PIDS+=($KAUDIT_PID)
 ok "Kernel Audit Agent (PID $KAUDIT_PID)"
 
 info "Starting Device Discovery Agent (60s interval)..."
-python3 -m amoskys.agents.device_discovery --interval 60 --no-heartbeat --log-level INFO > logs/device_discovery_agent.log 2>&1 &
+python3 -m amoskys.agents.shared.device_discovery --interval 60 --no-heartbeat --log-level INFO > logs/device_discovery_agent.log 2>&1 &
 DISCO_PID=$!
 PIDS+=($DISCO_PID)
 ok "Device Discovery Agent (PID $DISCO_PID)"
 
 info "Starting Protocol Collectors Agent (30s interval)..."
-python3 -m amoskys.agents.protocol_collectors --interval 30 --no-heartbeat --log-level INFO > logs/protocol_collectors_agent.log 2>&1 &
+python3 -m amoskys.agents.shared.protocol_collectors --interval 30 --no-heartbeat --log-level INFO > logs/protocol_collectors_agent.log 2>&1 &
 PROTO_PID=$!
 PIDS+=($PROTO_PID)
 ok "Protocol Collectors Agent (PID $PROTO_PID)"

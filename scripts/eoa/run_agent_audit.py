@@ -52,7 +52,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "proc": {
-        "module": "amoskys.agents.proc.proc_agent",
+        "module": "amoskys.agents.shared.process.agent",
         "entry_fn": "main",
         "label": "ProcAgent",
         "probes": 8,
@@ -64,7 +64,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "cli_args": ["--interval", "10", "--debug"],
     },
     "fim": {
-        "module": "amoskys.agents.fim.fim_agent",
+        "module": "amoskys.agents.shared.filesystem.agent",
         "entry_fn": "main",
         "label": "FIMAgent",
         "probes": 8,
@@ -86,7 +86,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         ],
     },
     "persistence": {
-        "module": "amoskys.agents.persistence.persistence_agent",
+        "module": "amoskys.agents.shared.persistence.agent",
         "entry_fn": "main",
         "label": "PersistenceGuard",
         "probes": 8,
@@ -106,7 +106,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "cli_args": ["--interval", "10", "--log-level", "DEBUG", "--mode", "monitor"],
     },
     "dns": {
-        "module": "amoskys.agents.dns.dns_agent",
+        "module": "amoskys.agents.shared.dns.agent",
         "entry_fn": "main",
         "label": "DNSAgent",
         "probes": 9,
@@ -118,7 +118,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "cli_args": ["--interval", "10", "--log-level", "DEBUG"],
     },
     "auth": {
-        "module": "amoskys.agents.auth.auth_guard_agent",
+        "module": "amoskys.agents.shared.auth.agent",
         "entry_fn": "main",
         "label": "AuthGuard",
         "probes": 8,
@@ -130,7 +130,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "cli_args": ["--interval", "10", "--log-level", "DEBUG"],
     },
     "flow": {
-        "module": "amoskys.agents.flow.flow_agent",
+        "module": "amoskys.agents.shared.network.agent",
         "entry_fn": "main",
         "label": "FlowAgent",
         "probes": 8,
@@ -142,7 +142,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "cli_args": ["--interval", "15", "--log-level", "DEBUG"],
     },
     "peripheral": {
-        "module": "amoskys.agents.peripheral.peripheral_agent",
+        "module": "amoskys.agents.shared.peripheral.agent",
         "entry_fn": "main",
         "label": "PeripheralAgent",
         "probes": 7,
@@ -154,7 +154,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "cli_args": ["--interval", "10", "--log-level", "DEBUG"],
     },
     "kernel_audit": {
-        "module": "amoskys.agents.kernel_audit.kernel_audit_agent",
+        "module": "amoskys.agents.os.linux.kernel_audit.kernel_audit_agent",
         "entry_fn": None,
         "label": "KernelAudit",
         "probes": 7,
@@ -165,7 +165,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "trigger_hint": "Linux only — no macOS audit source.",
     },
     "device_discovery": {
-        "module": "amoskys.agents.device_discovery.run_agent_v2",
+        "module": "amoskys.agents.shared.device_discovery.run_agent_v2",
         "entry_fn": None,
         "label": "DeviceDiscovery V2",
         "probes": 6,
@@ -176,7 +176,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "trigger_hint": "Linux only — needs arp -a fallback for macOS.",
     },
     "protocol_collectors": {
-        "module": "amoskys.agents.protocol_collectors.run_agent_v2",
+        "module": "amoskys.agents.shared.protocol_collectors.run_agent_v2",
         "entry_fn": None,
         "label": "ProtocolCollectors V2",
         "probes": 10,

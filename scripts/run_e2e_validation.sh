@@ -37,8 +37,8 @@ echo -e "${GREEN}✓${NC} Directories ready"
 echo -e "${BLUE}[3/6]${NC} Cleaning up previous test state..."
 
 # Stop old processes
-pkill -f "amoskys.agents.auth.auth_agent" 2>/dev/null || true
-pkill -f "amoskys.agents.persistence.persistence_agent" 2>/dev/null || true
+pkill -f "amoskys.agents.shared.auth.agent" 2>/dev/null || true
+pkill -f "amoskys.agents.shared.persistence.agent" 2>/dev/null || true
 pkill -f "amoskys.intel.ingest" 2>/dev/null || true
 pkill -f "amoskys.intel.fusion_engine" 2>/dev/null || true
 sleep 2
@@ -76,7 +76,7 @@ echo -e "${BLUE}[4/6]${NC} Starting agents..."
 
 # AuthGuard Agent
 echo "  Starting AuthGuardAgent..."
-PYTHONPATH=src python -m amoskys.agents.auth.auth_agent \
+PYTHONPATH=src python -m amoskys.agents.shared.auth.agent \
     --device-id "$(hostname)" \
     --queue-db data/queue/auth_agent.db \
     > logs/auth_agent.log 2>&1 &
@@ -85,7 +85,7 @@ echo -e "  ${GREEN}✓${NC} AuthGuardAgent (PID: $AUTH_PID)"
 
 # PersistenceGuard Agent
 echo "  Starting PersistenceGuardAgent..."
-PYTHONPATH=src python -m amoskys.agents.persistence.persistence_agent \
+PYTHONPATH=src python -m amoskys.agents.shared.persistence.agent \
     --device-id "$(hostname)" \
     --queue-db data/queue/persistence_agent.db \
     > logs/persistence_agent.log 2>&1 &

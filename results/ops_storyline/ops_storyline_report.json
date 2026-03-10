@@ -1,0 +1,59 @@
+{
+  "generated_at": "2026-03-08T07:49:21.752929+00:00",
+  "steps": [
+    {
+      "name": "collect_and_store",
+      "success": true,
+      "elapsed_seconds": 3.92
+    }
+  ],
+  "collect": {
+    "success": true,
+    "elapsed_seconds": 3.92,
+    "command": "/opt/anaconda3/bin/python scripts/collect_and_store.py --agents 1 --skip-drain",
+    "exit_code": 0,
+    "timed_out": false,
+    "timeout_seconds": 120.0,
+    "skip_drain": true,
+    "drain_max_events": 5000,
+    "drain_timeout_seconds": 90.0
+  },
+  "positioning": {
+    "tier": "Foundational",
+    "dimensions": {
+      "detection_efficacy": 0.0,
+      "positive_detection": 0.0,
+      "false_positive_control": 0.0,
+      "scenario_reality": 0.0,
+      "probe_proof": 0.0,
+      "contract_health": 100.0,
+      "ml_training_status": 0.0
+    },
+    "rubric_note": "Internal rubric aligned to common SOC dimensions: efficacy, false-positive control, ATT&CK simulation coverage, contract health, and ML readiness."
+  },
+  "gates": {
+    "all_passed": false,
+    "checks": {
+      "redteam_pass_rate": {
+        "actual": 0.0,
+        "target": 95.0,
+        "pass": false
+      },
+      "positive_detection_rate": {
+        "actual": 0.0,
+        "target": 95.0,
+        "pass": false
+      },
+      "benign_false_positive_rate": {
+        "actual": 100.0,
+        "target": 5.0,
+        "pass": false
+      },
+      "probe_proof_rate": {
+        "actual": 0.0,
+        "target": 80.0,
+        "pass": false
+      }
+    }
+  }
+}

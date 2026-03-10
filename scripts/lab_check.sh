@@ -48,10 +48,10 @@ check "Proto imports" \
   python -c "from amoskys.proto import messaging_schema_pb2, universal_telemetry_pb2"
 
 check "Entry point: amoskys-procagent" \
-  python -c "from amoskys.agents.proc.proc_agent_v3 import main"
+  python -c "from amoskys.agents.shared.process.agent_v3 import main"
 
 check "Entry point: amoskys-authguard" \
-  python -c "from amoskys.agents.auth.auth_guard_agent_v2 import main"
+  python -c "from amoskys.agents.shared.auth.agent_v2 import main"
 
 check "Entry point: amoskys-eventbus" \
   python -c "from amoskys.eventbus.server import serve"
