@@ -1,0 +1,30 @@
+title: Clipboard Data Access via LOLBin
+id: amoskys-coll-003
+status: stable
+level: low
+description: Detects clipboard data access via pbpaste or pbcopy LOLBin abuse on macOS indicating potential clipboard data collection or staging
+author: AMOSKYS
+tags:
+    - attack.collection
+    - attack.t1115
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection:
+        event_type: lolbin_execution
+        process_name:
+            - pbpaste
+            - pbcopy
+    condition: selection
+fields:
+    - process_name
+    - command_line
+    - username
+    - pid
+    - parent_process
+falsepositives:
+    - Developer workflows using clipboard in shell scripts
+    - Legitimate automation tools piping data through clipboard
+    - IDE clipboard integration utilities
+confidence: 0.40

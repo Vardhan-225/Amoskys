@@ -83,8 +83,6 @@ from prometheus_client import Counter, Gauge, Histogram, start_http_server
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
-
 # Clean imports for new structure
 from amoskys.common.crypto.signing import load_public_key, verify
 from amoskys.config import get_config
@@ -92,6 +90,14 @@ from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.proto import universal_telemetry_pb2_grpc as telemetry_grpc
+from amoskys.storage.telemetry_contract import (
+    QUALITY_DEGRADED,
+    QUALITY_INVALID,
+    QUALITY_VALID,
+    normalize_legacy_envelope,
+    normalize_universal_envelope,
+)
+from amoskys.storage.wal_sqlite import SQLiteWAL
 
 # Load configuration
 config = get_config()
@@ -139,7 +145,18 @@ class WALBatchWriter:
             self._cond.notify_all()
         self._thread.join(timeout=5)
 
-    def write(self, idem: str, ts_ns: int, env_bytes: bytes) -> bool:
+    def write(
+        self,
+        idem: str,
+        ts_ns: int,
+        env_bytes: bytes,
+        *,
+        producer_ts_ns: int | None = None,
+        ingest_ts_ns: int | None = None,
+        source: str = "unknown",
+        schema_version: int = 0,
+        status: str = "accepted",
+    ) -> bool:
         """Queue a write and block until the batch commits.
 
         Returns True if written, False if duplicate.
@@ -148,7 +165,20 @@ class WALBatchWriter:
         result = [False]  # mutable so the flusher can set it
 
         with self._cond:
-            self._pending.append((idem, ts_ns, env_bytes, done, result))
+            self._pending.append(
+                (
+                    idem,
+                    ts_ns,
+                    env_bytes,
+                    producer_ts_ns,
+                    ingest_ts_ns,
+                    source,
+                    schema_version,
+                    status,
+                    done,
+                    result,
+                )
+            )
             if len(self._pending) >= self._max_batch:
                 self._cond.notify()
 
@@ -178,23 +208,41 @@ class WALBatchWriter:
         import hashlib as _hlib
         import sqlite3 as _sql
 
-        from amoskys.agents.flowagent.wal_sqlite import _compute_chain_sig
+        from amoskys.storage.wal_sqlite import _compute_chain_sig
 
         wal = self._wal
         with wal._lock:
             wal.db.execute("BEGIN IMMEDIATE")
             try:
-                for idem, ts_ns, env_bytes, _done, result in batch:
+                for (
+                    idem,
+                    ts_ns,
+                    env_bytes,
+                    producer_ts_ns,
+                    ingest_ts_ns,
+                    source,
+                    schema_version,
+                    status,
+                    _done,
+                    result,
+                ) in batch:
                     checksum = _hlib.blake2b(env_bytes, digest_size=32).digest()
                     prev_sig = wal._get_last_sig()
                     sig = _compute_chain_sig(env_bytes, prev_sig)
                     try:
                         wal.db.execute(
-                            "INSERT INTO wal(idem, ts_ns, bytes, checksum, sig, prev_sig) "
-                            "VALUES(?, ?, ?, ?, ?, ?)",
+                            "INSERT INTO wal("
+                            "idem, ts_ns, producer_ts_ns, ingest_ts_ns, source, "
+                            "schema_version, status, bytes, checksum, sig, prev_sig"
+                            ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                             (
                                 idem,
                                 ts_ns,
+                                producer_ts_ns if producer_ts_ns is not None else ts_ns,
+                                ingest_ts_ns if ingest_ts_ns is not None else ts_ns,
+                                source,
+                                schema_version,
+                                status,
                                 _sql.Binary(env_bytes),
                                 checksum,
                                 sig,
@@ -211,11 +259,11 @@ class WALBatchWriter:
                     wal.db.execute("ROLLBACK")
                 except Exception:
                     pass
-                for _, _, _, _done, result in batch:
+                for _, _, _, _, _, _, _, _, _done, result in batch:
                     result[0] = False
 
         # Signal all waiters after releasing the WAL lock
-        for _, _, _, done, _ in batch:
+        for _, _, _, _, _, _, _, _, done, _ in batch:
             done.set()
 
 
@@ -256,6 +304,30 @@ try:
     BUS_WAL_FAILURES = Counter("bus_wal_write_failures_total", "WAL write failures")
 except ValueError:
     BUS_WAL_FAILURES = Counter("_bus_dummy7", "dummy")
+
+try:
+    BUS_CONTRACT_VALID = Counter(
+        "bus_contract_valid_total",
+        "Ingress envelopes that satisfy the v1 contract",
+    )
+except ValueError:
+    BUS_CONTRACT_VALID = Counter("_bus_dummy_contract_valid", "dummy")
+
+try:
+    BUS_CONTRACT_DEGRADED = Counter(
+        "bus_contract_degraded_total",
+        "Ingress envelopes accepted in degraded contract state",
+    )
+except ValueError:
+    BUS_CONTRACT_DEGRADED = Counter("_bus_dummy_contract_degraded", "dummy")
+
+try:
+    BUS_CONTRACT_INVALID = Counter(
+        "bus_contract_invalid_total",
+        "Ingress envelopes rejected due to contract violations",
+    )
+except ValueError:
+    BUS_CONTRACT_INVALID = Counter("_bus_dummy_contract_invalid", "dummy")
 
 # Configuration from centralized config
 BUS_MAX_INFLIGHT = config.eventbus.max_inflight
@@ -833,6 +905,16 @@ def _dec_inflight():
         BUS_INFLIGHT.set(_inflight)
 
 
+def _record_contract_quality(state: str) -> None:
+    """Track ingress contract quality counters."""
+    if state == QUALITY_VALID:
+        BUS_CONTRACT_VALID.inc()
+    elif state == QUALITY_DEGRADED:
+        BUS_CONTRACT_DEGRADED.inc()
+    elif state == QUALITY_INVALID:
+        BUS_CONTRACT_INVALID.inc()
+
+
 def _flow_from_envelope(env: "pb.Envelope") -> "pb.FlowEvent":
     """Extract a FlowEvent message from an Envelope.
 
@@ -1255,13 +1337,32 @@ class EventBusServicer(pbrpc.EventBusServicer):
                 BUS_INVALID.inc()
                 return _ack_invalid(f"Signature verification failed: {sig_error}")
 
+            # Ensure legacy payload is structurally valid flow telemetry.
+            flow = _flow_from_envelope(request)
+            logger.info(
+                "[Publish] src_ip=%s dst_ip=%s bytes_tx=%s",
+                flow.src_ip,
+                flow.dst_ip,
+                flow.bytes_tx,
+            )
+
+            # Contract normalization: legacy ingress is translated to UniversalEnvelope
+            # so downstream WAL processor sees one canonical payload type.
+            contract = normalize_legacy_envelope(
+                request,
+                ingest_time_ns=int(time.time() * 1e9),
+                source="legacy_publish",
+            )
+            _record_contract_quality(contract.quality_state)
+            if contract.quality_state == QUALITY_INVALID:
+                BUS_INVALID.inc()
+                details = ", ".join(contract.missing_fields) or "unknown"
+                return _ack_invalid(
+                    f"Contract violation: {contract.contract_violation_code} ({details})"
+                )
+
             # Application-level dedup (P1-EB-1)
-            if hasattr(request, "idempotency_key") and request.idempotency_key:
-                pub_idem = request.idempotency_key
-            elif hasattr(request, "idem") and request.idem:
-                pub_idem = request.idem
-            else:
-                pub_idem = f"unknown_{getattr(request, 'ts_ns', 0)}"
+            pub_idem = contract.idempotency_key
             if _seen(pub_idem):
                 BUS_DEDUP_HITS.inc()
                 logger.debug(
@@ -1282,35 +1383,40 @@ class EventBusServicer(pbrpc.EventBusServicer):
                         f"Server at capacity ({inflight} requests inflight)", 1000
                     )
 
-                # Process the request
-                flow = _flow_from_envelope(request)
-                logger.info(
-                    f"[Publish] src_ip={flow.src_ip} dst_ip={flow.dst_ip} bytes_tx={flow.bytes_tx}"
-                )
-
                 # Store in WAL for dashboard visibility (P0-EB-2: ACK after WAL)
                 wal_written = False
                 wal_duplicate = False
 
                 if wal_storage:
-                    # Extract idempotency key
-                    if hasattr(request, "idempotency_key"):
-                        idem = request.idempotency_key
-                    elif hasattr(request, "idem"):
-                        idem = request.idem
-                    else:
-                        idem = f"unknown_{request.ts_ns}"
-
-                    ts_ns = request.ts_ns
-                    env_bytes = request.SerializeToString()
+                    idem = contract.idempotency_key
+                    ts_ns = contract.event_time_ns
+                    env_bytes = contract.envelope.SerializeToString()
 
                     try:
                         # Use group-commit batch writer if available (amortizes fsync)
                         if _wal_batch_writer:
-                            written = _wal_batch_writer.write(idem, ts_ns, env_bytes)
+                            written = _wal_batch_writer.write(
+                                idem,
+                                ts_ns,
+                                env_bytes,
+                                producer_ts_ns=contract.event_time_ns,
+                                ingest_ts_ns=contract.ingest_time_ns,
+                                source=contract.source,
+                                schema_version=contract.schema_version,
+                                status=contract.quality_state,
+                            )
                         else:
                             with _wal_lock:
-                                written = wal_storage.write_raw(idem, ts_ns, env_bytes)
+                                written = wal_storage.write_raw(
+                                    idem,
+                                    ts_ns,
+                                    env_bytes,
+                                    producer_ts_ns=contract.event_time_ns,
+                                    ingest_ts_ns=contract.ingest_time_ns,
+                                    source=contract.source,
+                                    schema_version=contract.schema_version,
+                                    status=contract.quality_state,
+                                )
 
                         if written:
                             wal_written = True
@@ -1328,6 +1434,8 @@ class EventBusServicer(pbrpc.EventBusServicer):
 
                 # Only ACK OK if WAL write succeeded, was duplicate, or no WAL configured
                 if wal_written or wal_duplicate or not wal_storage:
+                    if contract.quality_state == QUALITY_DEGRADED:
+                        return _ack_ok("accepted_degraded")
                     return _ack_ok("accepted")
                 else:
                     BUS_RETRY_TOTAL.inc()
@@ -1440,15 +1548,26 @@ class UniversalEventBusServicer(telemetry_grpc.UniversalEventBusServicer):
                     reason=f"Signature verification failed: {sig_error}",
                 )
 
+            # Contract normalization enforces a single downstream envelope shape.
+            contract = normalize_universal_envelope(
+                request,
+                ingest_time_ns=int(time.time() * 1e9),
+                source="universal_publish",
+            )
+            _record_contract_quality(contract.quality_state)
+            if contract.quality_state == QUALITY_INVALID:
+                BUS_INVALID.inc()
+                details = ", ".join(contract.missing_fields) or "unknown"
+                return telemetry_pb2.UniversalAck(
+                    status=telemetry_pb2.UniversalAck.Status.INVALID,
+                    reason=(
+                        "Contract violation: "
+                        f"{contract.contract_violation_code} ({details})"
+                    ),
+                )
+
             # Per-agent rate limiting
-            agent_id = ""
-            if request.HasField("device_telemetry"):
-                agent_id = request.device_telemetry.device_id or ""
-            elif request.HasField("process"):
-                agent_id = getattr(request.process, "device_id", "") or ""
-            if not agent_id and request.idempotency_key:
-                agent_id = request.idempotency_key.split("_")[0]
-            agent_id = agent_id or "unknown"
+            agent_id = contract.agent_id or contract.host_id or "unknown"
             if not _agent_limiter.allow(agent_id):
                 BUS_RATE_LIMITED.inc()
                 logger.warning("[PublishTelemetry] Rate limited agent=%s", agent_id)
@@ -1511,16 +1630,34 @@ class UniversalEventBusServicer(telemetry_grpc.UniversalEventBusServicer):
                 wal_duplicate = False
 
                 if wal_storage:
-                    idem = request.idempotency_key or f"unknown_{request.ts_ns}"
-                    ts_ns = request.ts_ns
-                    env_bytes = request.SerializeToString()
+                    idem = contract.idempotency_key
+                    ts_ns = contract.event_time_ns
+                    env_bytes = contract.envelope.SerializeToString()
 
                     try:
                         if _wal_batch_writer:
-                            written = _wal_batch_writer.write(idem, ts_ns, env_bytes)
+                            written = _wal_batch_writer.write(
+                                idem,
+                                ts_ns,
+                                env_bytes,
+                                producer_ts_ns=contract.event_time_ns,
+                                ingest_ts_ns=contract.ingest_time_ns,
+                                source=contract.source,
+                                schema_version=contract.schema_version,
+                                status=contract.quality_state,
+                            )
                         else:
                             with _wal_lock:
-                                written = wal_storage.write_raw(idem, ts_ns, env_bytes)
+                                written = wal_storage.write_raw(
+                                    idem,
+                                    ts_ns,
+                                    env_bytes,
+                                    producer_ts_ns=contract.event_time_ns,
+                                    ingest_ts_ns=contract.ingest_time_ns,
+                                    source=contract.source,
+                                    schema_version=contract.schema_version,
+                                    status=contract.quality_state,
+                                )
 
                         if written:
                             wal_written = True
@@ -1544,7 +1681,11 @@ class UniversalEventBusServicer(telemetry_grpc.UniversalEventBusServicer):
                     BUS_LAT.observe((time.time() - t0) * 1000.0)
                     return telemetry_pb2.UniversalAck(
                         status=telemetry_pb2.UniversalAck.Status.OK,
-                        reason="accepted",
+                        reason=(
+                            "accepted_degraded"
+                            if contract.quality_state == QUALITY_DEGRADED
+                            else "accepted"
+                        ),
                         processed_timestamp_ns=int(time.time() * 1e9),
                         events_accepted=1,
                     )

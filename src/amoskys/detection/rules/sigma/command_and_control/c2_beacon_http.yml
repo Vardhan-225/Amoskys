@@ -1,0 +1,28 @@
+title: HTTP C2 Beaconing Detected
+id: amoskys-c2-007
+status: stable
+level: high
+description: Detects HTTP-based command and control beaconing patterns via periodic web requests to suspicious endpoints indicating C2 communication over HTTP
+author: AMOSKYS
+tags:
+    - attack.command_and_control
+    - attack.t1071.001
+logsource:
+    category: network_connection
+    product: amoskys
+detection:
+    selection:
+        event_type: c2_web_beacon
+    condition: selection
+fields:
+    - destination_ip
+    - destination_domain
+    - beacon_interval
+    - jitter
+    - user_agent
+    - source_ip
+falsepositives:
+    - Heartbeat endpoints for monitoring services
+    - Periodic API polling from legitimate applications
+    - Browser auto-refresh or keep-alive connections
+confidence: 0.80

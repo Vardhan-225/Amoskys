@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -32,6 +33,45 @@ __all__ = [
     "ThreatIntelEnricher",
     "MITREEnricher",
 ]
+
+
+# ── IP field normalization ────────────────────────────────────────────────────
+# Probes use varying IP field names (remote_ip, client_ip, remote_ips, etc.)
+# but enrichers only look for src_ip / dst_ip / source_ip.  This normalizer
+# promotes alternative names to dst_ip so all enrichers fire automatically.
+
+_DST_IP_ALIASES = ("remote_ip", "client_ip")
+_DST_IP_LIST_ALIASES = ("remote_ips", "response_ips", "tor_ips", "cdn_ips", "unusual_ips")
+_IP_RE = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")
+_PRIVATE_PREFIXES = ("127.", "10.", "192.168.", "0.", "169.254.")
+
+
+def _normalize_ip_fields(event: Dict[str, Any]) -> None:
+    """Promote alternative IP field names to canonical ``dst_ip``.
+
+    Non-destructive — only sets ``dst_ip`` if not already present.
+    Handles single-value fields (``remote_ip``, ``client_ip``) and
+    stringified-list fields (``remote_ips``, ``response_ips``, etc.).
+    """
+    if event.get("dst_ip"):
+        return
+
+    # Try single-value aliases first (fast path)
+    for alias in _DST_IP_ALIASES:
+        val = event.get(alias)
+        if val and isinstance(val, str) and not val.startswith(_PRIVATE_PREFIXES):
+            event["dst_ip"] = val
+            return
+
+    # Try list-value aliases — extract first public IPv4
+    for alias in _DST_IP_LIST_ALIASES:
+        val = event.get(alias)
+        if not val or not isinstance(val, str):
+            continue
+        for ip in _IP_RE.findall(val):
+            if not ip.startswith(_PRIVATE_PREFIXES):
+                event["dst_ip"] = ip
+                return
 
 
 class EnrichmentPipeline:
@@ -85,6 +125,7 @@ class EnrichmentPipeline:
         Returns:
             The same event dict with enrichment fields added.
         """
+        _normalize_ip_fields(event)
         succeeded = 0
         attempted = 0
 

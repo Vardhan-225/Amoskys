@@ -1,0 +1,29 @@
+title: Path Traversal Attempt in HTTP Request
+id: amoskys-ia-003
+status: stable
+level: high
+description: Detects path traversal (directory traversal) attempts in HTTP requests using sequences such as ../, ..%2f, or ..%5c to access files outside the intended web root
+author: AMOSKYS
+tags:
+    - attack.initial_access
+    - attack.t1083
+logsource:
+    category: webserver
+    product: amoskys
+detection:
+    selection:
+        event_type: path_traversal_detected
+    condition: selection
+fields:
+    - source_ip
+    - url_path
+    - query_string
+    - payload
+    - http_method
+    - user_agent
+    - response_code
+    - traversal_depth
+falsepositives:
+    - Legitimate URL paths containing encoded directory separators
+    - Security scanners performing authorized vulnerability assessments
+confidence: 0.80

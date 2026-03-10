@@ -28,6 +28,7 @@ from amoskys.intel.models import TelemetryEventView
 from amoskys.intel.scoring import ScoringEngine
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 from amoskys.storage.dedup import EventDeduplicator
+from amoskys.storage.observation_shaper import ObservationShaper
 from amoskys.storage.telemetry_store import TelemetryStore
 
 logging.basicConfig(
@@ -38,6 +39,16 @@ logger = logging.getLogger("WALProcessor")
 
 class WALProcessor:
     """Processes events from WAL to permanent storage"""
+
+    _ALLOWED_EVENT_TYPES = frozenset(
+        {"METRIC", "LOG", "ALARM", "STATUS", "SECURITY", "AUDIT", "OBSERVATION"}
+    )
+    _ALLOWED_SEVERITY = frozenset(
+        {"DEBUG", "INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL", "WARN", "ERROR"}
+    )
+    _ALLOWED_DEVICE_TYPES = frozenset(
+        {"HOST", "IOT", "MEDICAL", "INDUSTRIAL", "ENDPOINT", "NETWORK", "UNKNOWN"}
+    )
 
     def __init__(
         self,
@@ -78,6 +89,7 @@ class WALProcessor:
         # Event deduplication (BLAKE2b content-hash, configurable TTL)
         dedup_ttl = int(os.environ.get("DEDUP_TTL_SECONDS", "300"))
         self._dedup = EventDeduplicator(ttl_seconds=dedup_ttl, max_cache=50000)
+        self._observation_shaper = ObservationShaper()
 
         # SOMA: FusionEngine for single-device correlation
         try:
@@ -210,6 +222,17 @@ class WALProcessor:
                     envelope = telemetry_pb2.UniversalEnvelope()
                     envelope.ParseFromString(raw)
 
+                    self._store_envelope_truth(
+                        envelope=envelope,
+                        raw_bytes=raw,
+                        ts_ns=ts_ns,
+                        idem=idem,
+                        wal_row_id=row_id,
+                        wal_checksum=stored_checksum,
+                        wal_sig=stored_sig,
+                        wal_prev_sig=stored_prev_sig,
+                    )
+
                     # Process based on content type
                     if envelope.HasField("device_telemetry"):
                         self._process_device_telemetry(
@@ -281,13 +304,21 @@ class WALProcessor:
             error_msg: Description of failure
         """
         try:
+            reason_code = self._classify_reason_code(error_msg)
+            replay_cmd = (
+                "python -m amoskys.storage.wal_processor "
+                f"--replay-dead-letter --row-id {row_id}"
+            )
             self.store.db.execute(
                 "INSERT INTO wal_dead_letter "
-                "(row_id, error_msg, envelope_bytes, quarantined_at, source) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "(row_id, error_msg, reason_code, replay_cmd, envelope_bytes, "
+                "quarantined_at, source) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     row_id,
                     error_msg,
+                    reason_code,
+                    replay_cmd,
                     raw_bytes,
                     datetime.now(timezone.utc).isoformat(),
                     "wal_processor",
@@ -297,6 +328,20 @@ class WALProcessor:
             self.quarantine_count += 1
         except Exception as dl_err:
             logger.error(f"Failed to quarantine WAL entry {row_id}: {dl_err}")
+
+    @staticmethod
+    def _classify_reason_code(error_msg: str) -> str:
+        """Classify dead-letter reason into stable reason codes."""
+        msg = (error_msg or "").lower()
+        if "checksum" in msg:
+            return "CHECKSUM_FAILURE"
+        if "hash chain" in msg or "chain" in msg:
+            return "CHAIN_INTEGRITY_FAILURE"
+        if "parse" in msg or "protobuf" in msg:
+            return "PROTO_PARSE_FAILURE"
+        if "signature" in msg:
+            return "SIGNATURE_FAILURE"
+        return "PROCESSING_FAILURE"
 
     def _extract_metrics(self, events: List[Any]) -> tuple:
         """Extract aggregate metrics from TelemetryEvent list.
@@ -320,6 +365,229 @@ class WALProcessor:
                 mem_percent = metric.numeric_value
 
         return total_processes, cpu_percent, mem_percent
+
+    @staticmethod
+    def _payload_kind(envelope: telemetry_pb2.UniversalEnvelope) -> str:
+        if envelope.HasField("device_telemetry"):
+            return "device_telemetry"
+        if envelope.HasField("process"):
+            return "process"
+        if envelope.HasField("flow"):
+            return "flow"
+        if envelope.HasField("telemetry_batch"):
+            return "telemetry_batch"
+        return "unknown"
+
+    @staticmethod
+    def _quality_rank(quality_state: str) -> int:
+        order = {"valid": 0, "degraded": 1, "invalid": 2}
+        return order.get((quality_state or "valid").lower(), 0)
+
+    def _evaluate_event_contract(
+        self,
+        event: Any,
+        *,
+        device_type: str,
+        collection_agent: str,
+        annotate: bool = True,
+    ) -> tuple[str, str, list[str]]:
+        """Evaluate one TelemetryEvent against runtime contract rules."""
+        attrs = event.attributes
+        missing_required: list[str] = []
+        missing_degraded: list[str] = []
+        violation_code = "NONE"
+
+        event_type = (event.event_type or "").upper()
+        severity = (event.severity or "").upper()
+        dev_type = (device_type or "UNKNOWN").upper()
+
+        if not event.event_id:
+            missing_degraded.append("event_id")
+        if not event.event_type:
+            missing_required.append("event_type")
+        if not event.severity:
+            missing_degraded.append("severity")
+        if not event.event_timestamp_ns:
+            missing_degraded.append("event_timestamp_ns")
+        if not event.source_component and not event.probe_class:
+            missing_degraded.append("probe_name")
+
+        if event_type and event_type not in self._ALLOWED_EVENT_TYPES:
+            missing_required.append(f"event_type:{event_type}")
+            violation_code = "CONTRACT_UNKNOWN_EVENT_TYPE"
+        if severity and severity not in self._ALLOWED_SEVERITY:
+            missing_required.append(f"severity:{severity}")
+            violation_code = "CONTRACT_UNKNOWN_SEVERITY"
+        if dev_type and dev_type not in self._ALLOWED_DEVICE_TYPES:
+            missing_required.append(f"device_type:{dev_type}")
+            violation_code = "CONTRACT_UNKNOWN_DEVICE_TYPE"
+
+        if event_type == "OBSERVATION":
+            domain = (attrs.get("_domain", "") or "").strip().lower()
+            if domain not in self._OBSERVATION_ROUTERS:
+                missing_required.append(f"_domain:{domain or 'missing'}")
+                violation_code = "CONTRACT_UNKNOWN_OBSERVATION_DOMAIN"
+
+        probe_name = event.probe_class or event.source_component
+        if probe_name:
+            try:
+                from amoskys.observability.probe_registry import get_probe_contract_registry
+
+                registry = get_probe_contract_registry()
+                contract = registry.get_contract(probe_name)
+                if contract is not None:
+                    required = set(contract.requires_fields)
+                    degraded = set(contract.degraded_without)
+                    hard_required = required - degraded
+                    for field_name in sorted(hard_required):
+                        if field_name not in attrs:
+                            missing_required.append(f"probe:{field_name}")
+                    for field_name in sorted(degraded):
+                        if field_name not in attrs:
+                            missing_degraded.append(f"probe:{field_name}")
+            except Exception:
+                pass
+
+        existing_quality = (attrs.get("quality_state", "valid") or "valid").lower()
+        existing_violation = attrs.get("contract_violation_code", "NONE")
+        existing_missing_raw = attrs.get("missing_fields", "")
+        existing_missing = [m for m in existing_missing_raw.split(",") if m]
+
+        quality_state = "valid"
+        if missing_required:
+            quality_state = "invalid"
+            if violation_code == "NONE":
+                violation_code = "CONTRACT_MISSING_REQUIRED_FIELDS"
+        elif missing_degraded:
+            quality_state = "degraded"
+            if violation_code == "NONE":
+                violation_code = "CONTRACT_DEGRADED_FIELDS"
+
+        if self._quality_rank(existing_quality) > self._quality_rank(quality_state):
+            quality_state = existing_quality
+            if existing_violation and existing_violation != "NONE":
+                violation_code = existing_violation
+
+        missing_fields = sorted(set(existing_missing + missing_required + missing_degraded))
+        if quality_state == "valid":
+            violation_code = "NONE"
+
+        if annotate:
+            attrs["quality_state"] = quality_state
+            attrs["contract_violation_code"] = violation_code
+            if missing_fields:
+                attrs["missing_fields"] = ",".join(missing_fields)
+            elif "missing_fields" in attrs:
+                del attrs["missing_fields"]
+            if quality_state != "valid":
+                attrs["training_exclude"] = "true"
+
+        return quality_state, violation_code, missing_fields
+
+    def _extract_quality(
+        self,
+        envelope: telemetry_pb2.UniversalEnvelope,
+    ) -> tuple[str, str, str]:
+        """Read envelope contract quality by aggregating all contained events."""
+        if not envelope.HasField("device_telemetry"):
+            return "valid", "NONE", ""
+        dt = envelope.device_telemetry
+        if not dt.events:
+            return "degraded", "CONTRACT_EMPTY_EVENTS", "events"
+
+        overall_quality = "valid"
+        overall_violation = "NONE"
+        missing: list[str] = []
+        for event in dt.events:
+            quality, violation, missing_fields = self._evaluate_event_contract(
+                event,
+                device_type=dt.device_type,
+                collection_agent=dt.collection_agent,
+                annotate=True,
+            )
+            if self._quality_rank(quality) > self._quality_rank(overall_quality):
+                overall_quality = quality
+                overall_violation = violation
+            missing.extend(missing_fields)
+
+        return overall_quality, overall_violation, ",".join(sorted(set(missing)))
+
+    def _store_envelope_truth(
+        self,
+        *,
+        envelope: telemetry_pb2.UniversalEnvelope,
+        raw_bytes: bytes,
+        ts_ns: int,
+        idem: str,
+        wal_row_id: int,
+        wal_checksum: bytes | None,
+        wal_sig: bytes | None,
+        wal_prev_sig: bytes | None,
+    ) -> None:
+        """Persist canonical envelope metadata into telemetry_events."""
+        try:
+            payload_kind = self._payload_kind(envelope)
+            quality_state, violation, missing = self._extract_quality(envelope)
+            device_id = (
+                envelope.device_telemetry.device_id
+                if envelope.HasField("device_telemetry")
+                else ""
+            )
+            agent_id = (
+                envelope.device_telemetry.collection_agent
+                if envelope.HasField("device_telemetry")
+                else ""
+            )
+            probe_name = ""
+            event_type = payload_kind.upper()
+            probe_version = envelope.version or "unknown"
+            device_type = "UNKNOWN"
+            if envelope.HasField("device_telemetry"):
+                dt = envelope.device_telemetry
+                device_type = dt.device_type or "UNKNOWN"
+                probe_version = dt.agent_version or probe_version
+                if dt.events:
+                    first_event = dt.events[0]
+                    probe_name = (
+                        first_event.probe_class
+                        or first_event.source_component
+                        or dt.collection_agent
+                    )
+                    event_type = first_event.event_type or event_type
+            elif envelope.HasField("flow"):
+                probe_name = "legacy_flow_probe"
+                event_type = "FLOW"
+            elif envelope.HasField("process"):
+                probe_name = "legacy_process_probe"
+                event_type = "PROCESS"
+
+            self.store.insert_telemetry_event(
+                {
+                    "event_id": envelope.idempotency_key or idem,
+                    "idempotency_key": idem,
+                    "timestamp_ns": ts_ns,
+                    "ingest_timestamp_ns": int(time.time() * 1e9),
+                    "timestamp_dt": datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).isoformat(),
+                    "device_id": device_id,
+                    "agent_id": agent_id,
+                    "probe_name": probe_name,
+                    "probe_version": probe_version,
+                    "event_type": event_type,
+                    "device_type": device_type,
+                    "payload_kind": payload_kind,
+                    "schema_version": int(envelope.schema_version or 1),
+                    "quality_state": quality_state,
+                    "contract_violation_code": violation,
+                    "missing_fields": missing,
+                    "envelope_bytes": raw_bytes,
+                    "wal_row_id": wal_row_id,
+                    "wal_checksum": bytes(wal_checksum) if wal_checksum is not None else None,
+                    "wal_sig": bytes(wal_sig) if wal_sig is not None else None,
+                    "wal_prev_sig": bytes(wal_prev_sig) if wal_prev_sig is not None else None,
+                }
+            )
+        except Exception:
+            logger.debug("Failed to persist canonical telemetry event", exc_info=True)
 
     def _feed_fusion_engine(self, events: Any, device_id: str) -> None:
         """Convert protobuf TelemetryEvents to TelemetryEventView and feed to FusionEngine.
@@ -394,6 +662,27 @@ class WALProcessor:
         except Exception as e:
             logger.error("Async fusion evaluation failed: %s", e)
 
+    # Domain routers for OBSERVATION events → domain tables
+    # P1/P2 domains have dedicated tables; P3 domains use generic observation_events
+    _OBSERVATION_ROUTERS = {
+        # P1/P2: dedicated domain tables
+        "process": "_insert_process_observation",
+        "flow": "_insert_flow_observation",
+        "dns": "_insert_dns_observation",
+        "auth": "_insert_auth_observation",
+        "filesystem": "_insert_fim_observation",
+        "persistence": "_insert_persistence_observation",
+        "peripheral": "_insert_peripheral_observation",
+        # P3: generic observation_events table
+        "applog": "_insert_generic_observation",
+        "db_activity": "_insert_generic_observation",
+        "discovery": "_insert_generic_observation",
+        "http": "_insert_generic_observation",
+        "internet_activity": "_insert_generic_observation",
+        "security_monitor": "_insert_generic_observation",
+        "unified_log": "_insert_generic_observation",
+    }
+
     def _route_events(
         self,
         events: List[Any],
@@ -402,9 +691,35 @@ class WALProcessor:
         timestamp_dt: str,
         collection_agent: str,
         agent_version: str,
+        device_type: str = "UNKNOWN",
     ) -> None:
         """Route individual TelemetryEvents to the correct table processors."""
         for event in events:
+            quality_state, _, _ = self._evaluate_event_contract(
+                event,
+                device_type=device_type,
+                collection_agent=collection_agent,
+                annotate=True,
+            )
+            if quality_state == "invalid":
+                logger.warning(
+                    "Dropping invalid-quality event before routing: type=%s source=%s",
+                    event.event_type,
+                    event.source_component,
+                )
+                continue
+            if quality_state == "degraded":
+                event.attributes["training_exclude"] = "true"
+
+            # OBSERVATION events → domain tables directly (raw observability)
+            # Bypass dedup and scoring — these are raw collector data, not detections
+            if event.event_type == "OBSERVATION":
+                self._route_observation(
+                    event, device_id, ts_ns, timestamp_dt,
+                    collection_agent, agent_version,
+                )
+                continue
+
             # Peripheral STATUS events → peripheral_events table
             if (
                 event.event_type == "STATUS"
@@ -450,6 +765,17 @@ class WALProcessor:
                     enriched_attrs=enriched_attrs,
                 )
 
+    # Agent-name tokens that map to each domain extractor.
+    _PROCESS_AGENTS = frozenset(
+        {"proc-agent", "proc_agent", "proc", "macos_process", "process"}
+    )
+    _FLOW_TOKENS = frozenset({"flow", "network"})
+    _FIM_TOKENS = frozenset({"fim", "filesystem"})
+
+    def _agent_matches(self, collection_agent: str, tokens: frozenset) -> bool:
+        """Check if collection_agent contains any of the given tokens."""
+        return any(tok in collection_agent for tok in tokens)
+
     def _route_security_to_domain_tables(
         self,
         event,
@@ -461,114 +787,405 @@ class WALProcessor:
         enriched_attrs: dict | None = None,
     ) -> None:
         """Extract structured data from security events into domain-specific tables."""
-        # Use pre-enriched attrs from caller, or extract fresh (fallback)
-        attrs = (
-            enriched_attrs
-            if enriched_attrs is not None
-            else {k: event.attributes[k] for k in event.attributes}
-        )
+        if enriched_attrs is not None:
+            attrs = enriched_attrs
+        else:
+            attrs = {k: event.attributes[k] for k in event.attributes}
 
-        cat = event.security_event.event_category or ""
         se = event.security_event
+        cat = se.event_category or ""
         mitre = list(se.mitre_techniques) if se.mitre_techniques else []
 
-        # Process events from proc-agent probes
-        if attrs.get("pid") and collection_agent in (
-            "proc-agent",
-            "proc_agent",
-            "proc",
+        self._dispatch_domain_extraction(
+            attrs, se, cat, mitre, device_id, ts_ns, timestamp_dt,
+            collection_agent, agent_version,
+        )
+
+    def _dispatch_domain_extraction(
+        self, attrs, se, cat, mitre, device_id, ts_ns, timestamp_dt,
+        collection_agent, agent_version,
+    ) -> None:
+        """Dispatch to domain-specific extractors based on agent and attributes."""
+        common = (device_id, ts_ns, timestamp_dt, collection_agent, agent_version)
+
+        if attrs.get("pid") and collection_agent in self._PROCESS_AGENTS:
+            self._extract_process_from_security(attrs, *common, cat)
+
+        if attrs.get("dst_ip") and self._agent_matches(
+            collection_agent, self._FLOW_TOKENS
         ):
-            self._extract_process_from_security(
-                attrs,
-                device_id,
-                ts_ns,
-                timestamp_dt,
-                collection_agent,
-                agent_version,
-                cat,
-            )
+            self._extract_flow_from_security(attrs, device_id, ts_ns, timestamp_dt)
 
-        # Flow events from flow-agent probes
-        if attrs.get("dst_ip") and "flow" in collection_agent:
-            self._extract_flow_from_security(
-                attrs,
-                device_id,
-                ts_ns,
-                timestamp_dt,
-            )
-
-        # Peripheral events from peripheral-agent probes
         if "usb" in cat or "peripheral" in collection_agent:
-            self._extract_peripheral_from_security(
-                attrs,
-                device_id,
-                ts_ns,
-                timestamp_dt,
-                collection_agent,
-                agent_version,
-            )
+            self._extract_peripheral_from_security(attrs, *common)
 
-        # DNS events from dns-agent probes
         if "dns" in collection_agent or attrs.get("domain"):
-            self._extract_dns_from_security(
-                attrs,
-                se,
-                device_id,
-                ts_ns,
-                timestamp_dt,
-                collection_agent,
-                agent_version,
-                cat,
-                mitre,
-            )
+            self._extract_dns_from_security(attrs, se, *common, cat, mitre)
 
-        # Kernel audit events from kernel_audit-agent probes
         if "kernel" in collection_agent or cat.startswith("kernel_"):
-            self._extract_audit_from_security(
-                attrs,
-                se,
-                device_id,
-                ts_ns,
-                timestamp_dt,
-                collection_agent,
-                agent_version,
-                cat,
-                mitre,
-            )
+            self._extract_audit_from_security(attrs, se, *common, cat, mitre)
 
-        # Persistence events from persistence-agent probes
         if "persistence" in collection_agent or "persistence_" in cat:
-            self._extract_persistence_from_security(
-                attrs,
-                se,
-                device_id,
-                ts_ns,
-                timestamp_dt,
-                collection_agent,
-                agent_version,
-                cat,
-                mitre,
-            )
+            self._extract_persistence_from_security(attrs, se, *common, cat, mitre)
 
-        # FIM events from fim-agent probes
-        if "fim" in collection_agent and attrs.get("path"):
-            self._extract_fim_from_security(
-                attrs,
-                se,
-                device_id,
-                ts_ns,
-                timestamp_dt,
-                collection_agent,
-                agent_version,
-                cat,
-                mitre,
-            )
+        if self._agent_matches(
+            collection_agent, self._FIM_TOKENS
+        ) and attrs.get("path"):
+            self._extract_fim_from_security(attrs, se, *common, cat, mitre)
+
+    def _route_observation(
+        self, event, device_id, ts_ns, timestamp_dt, agent, version,
+    ) -> None:
+        """Route OBSERVATION events to domain-specific tables.
+
+        Observations are raw collector data — no dedup, no scoring, no security_event.
+        They go directly to domain tables with event_source='observation'.
+        Flow/DNS observations get enrichment (GeoIP/ASN) before storage.
+        """
+        attrs = {k: event.attributes[k] for k in event.attributes}
+        domain = attrs.get("_domain", "")
+        router = self._OBSERVATION_ROUTERS.get(domain)
+        if router:
+            try:
+                decision = self._observation_shaper.decide(domain, attrs, ts_ns)
+                if not decision.store_raw:
+                    self.store.upsert_observation_rollup(
+                        {
+                            "window_start_ns": decision.window_start_ns,
+                            "window_end_ns": decision.window_end_ns,
+                            "domain": decision.domain,
+                            "fingerprint": decision.fingerprint,
+                            "sample_attributes": {
+                                k: v for k, v in attrs.items() if not k.startswith("_")
+                            },
+                            "total_count": 1,
+                            "first_seen_ns": ts_ns,
+                            "last_seen_ns": ts_ns,
+                            "device_id": device_id,
+                            "collection_agent": agent,
+                        }
+                    )
+                    return
+                getattr(self, router)(attrs, device_id, ts_ns, timestamp_dt, agent, version)
+            except Exception as e:
+                logger.error("Observation routing failed for domain=%s: %s", domain, e)
+        else:
+            logger.debug("No observation router for domain=%s", domain)
+
+    @staticmethod
+    def _quality_payload(attrs: dict[str, Any]) -> dict[str, Any]:
+        quality_state = attrs.get("quality_state", "valid")
+        training_exclude = str(attrs.get("training_exclude", "")).lower() in {
+            "true",
+            "1",
+            "yes",
+        } or quality_state != "valid"
+        missing = attrs.get("missing_fields", "")
+        return {
+            "quality_state": quality_state,
+            "training_exclude": training_exclude,
+            "contract_violation_code": attrs.get("contract_violation_code", "NONE"),
+            "missing_fields": missing,
+            "raw_attributes_json": json.dumps(
+                {k: v for k, v in attrs.items() if not k.startswith("_")},
+                sort_keys=True,
+            ),
+        }
+
+    def _insert_process_observation(
+        self, attrs, device_id, ts_ns, timestamp_dt, agent, version,
+    ) -> None:
+        """Insert raw process observation into process_events."""
+        quality = self._quality_payload(attrs)
+        username = attrs.get("username", "")
+        if username == "root":
+            user_type = "root"
+        elif username:
+            user_type = "user"
+        else:
+            user_type = "unknown"
+
+        self.store.insert_process_event({
+            "timestamp_ns": ts_ns,
+            "timestamp_dt": timestamp_dt,
+            "device_id": device_id,
+            "pid": int(attrs["pid"]) if attrs.get("pid") else None,
+            "ppid": int(attrs["ppid"]) if attrs.get("ppid") else None,
+            "name": attrs.get("name", ""),
+            "parent_name": attrs.get("parent_name", ""),
+            "exe": attrs.get("exe", ""),
+            "cmdline": attrs.get("cmdline", ""),
+            "username": username,
+            "cpu_percent": float(attrs["cpu_percent"]) if attrs.get("cpu_percent") else None,
+            "memory_percent": float(attrs["memory_percent"]) if attrs.get("memory_percent") else None,
+            "num_threads": None,
+            "num_fds": None,
+            "user_type": user_type,
+            "process_category": "observed",
+            "is_suspicious": False,
+            "create_time": float(attrs["create_time"]) if attrs.get("create_time") else None,
+            "status": attrs.get("status", ""),
+            "cwd": attrs.get("cwd", ""),
+            "is_own_user": attrs.get("is_own_user", "False") == "True",
+            "process_guid": attrs.get("process_guid", ""),
+            "event_source": "observation",
+            "collection_agent": agent,
+            "agent_version": version,
+            **quality,
+        })
+
+    def _insert_flow_observation(
+        self, attrs, device_id, ts_ns, timestamp_dt, agent, version,
+    ) -> None:
+        """Insert raw flow observation into flow_events with GeoIP/ASN enrichment."""
+        quality = self._quality_payload(attrs)
+        # Enrich flow observations (GeoIP + ASN for dst_ip)
+        if self._pipeline is not None:
+            try:
+                self._pipeline.enrich(attrs)
+            except Exception:
+                logger.debug("Enrichment failed for flow observation", exc_info=True)
+
+        self.store.insert_flow_event({
+            "timestamp_ns": ts_ns,
+            "timestamp_dt": timestamp_dt,
+            "device_id": device_id,
+            "src_ip": attrs.get("src_ip"),
+            "dst_ip": attrs.get("dst_ip"),
+            "src_port": int(attrs["src_port"]) if attrs.get("src_port") else None,
+            "dst_port": int(attrs["dst_port"]) if attrs.get("dst_port") else None,
+            "protocol": attrs.get("protocol"),
+            "pid": int(attrs["pid"]) if attrs.get("pid") else None,
+            "process_name": attrs.get("process_name"),
+            "conn_user": attrs.get("conn_user"),
+            "state": attrs.get("state"),
+            "bytes_tx": 0,
+            "bytes_rx": 0,
+            "is_suspicious": False,
+            "threat_score": 0.0,
+            "event_source": "observation",
+            "collection_agent": agent,
+            "agent_version": version,
+            **quality,
+            # GeoIP enrichment
+            "geo_src_country": attrs.get("geo_src_country"),
+            "geo_src_city": attrs.get("geo_src_city"),
+            "geo_src_latitude": attrs.get("geo_src_latitude"),
+            "geo_src_longitude": attrs.get("geo_src_longitude"),
+            "geo_dst_country": attrs.get("geo_dst_country"),
+            "geo_dst_city": attrs.get("geo_dst_city"),
+            "geo_dst_latitude": attrs.get("geo_dst_latitude"),
+            "geo_dst_longitude": attrs.get("geo_dst_longitude"),
+            # ASN enrichment
+            "asn_src_number": attrs.get("asn_src_number"),
+            "asn_src_org": attrs.get("asn_src_org"),
+            "asn_src_network_type": attrs.get("asn_src_network_type"),
+            "asn_dst_number": attrs.get("asn_dst_number"),
+            "asn_dst_org": attrs.get("asn_dst_org"),
+            "asn_dst_network_type": attrs.get("asn_dst_network_type"),
+            # ThreatIntel enrichment
+            "threat_intel_match": attrs.get("threat_intel_match", False),
+            "threat_source": attrs.get("threat_source"),
+            "threat_severity": attrs.get("threat_severity"),
+        })
+
+    def _insert_dns_observation(
+        self, attrs, device_id, ts_ns, timestamp_dt, agent, version,
+    ) -> None:
+        """Insert raw DNS observation into dns_events."""
+        quality = self._quality_payload(attrs)
+        domain = attrs.get("domain", "")
+        if not domain:
+            return
+
+        self.store.insert_dns_event({
+            "timestamp_ns": ts_ns,
+            "timestamp_dt": timestamp_dt,
+            "device_id": device_id,
+            "domain": domain,
+            "query_type": attrs.get("query_type"),
+            "response_code": attrs.get("response_code"),
+            "source_ip": None,
+            "process_name": attrs.get("source_process"),
+            "pid": int(attrs["source_pid"]) if attrs.get("source_pid") else None,
+            "event_type": "observation",
+            "response_ips": attrs.get("response_ips"),
+            "ttl": int(attrs["ttl"]) if attrs.get("ttl") else None,
+            "response_size": int(attrs["response_size"]) if attrs.get("response_size") else None,
+            "is_reverse": attrs.get("is_reverse", "False") == "True",
+            "dga_score": None,
+            "is_beaconing": False,
+            "is_tunneling": False,
+            "risk_score": 0.0,
+            "confidence": 0.0,
+            "mitre_techniques": [],
+            "event_source": "observation",
+            "collection_agent": agent,
+            "agent_version": version,
+            **quality,
+        })
+
+    def _insert_auth_observation(
+        self, attrs, device_id, ts_ns, timestamp_dt, agent, version,
+    ) -> None:
+        """Insert raw auth observation into audit_events."""
+        quality = self._quality_payload(attrs)
+        self.store.insert_audit_event({
+            "timestamp_ns": ts_ns,
+            "timestamp_dt": timestamp_dt,
+            "device_id": device_id,
+            "host": device_id,
+            "syscall": "",
+            "event_type": attrs.get("event_type", "observation"),
+            "pid": None,
+            "ppid": None,
+            "uid": None,
+            "euid": None,
+            "gid": None,
+            "egid": None,
+            "exe": attrs.get("process", ""),
+            "comm": attrs.get("process", ""),
+            "cmdline": attrs.get("message", ""),
+            "cwd": None,
+            "target_path": None,
+            "target_pid": None,
+            "target_comm": None,
+            "risk_score": 0.0,
+            "confidence": 0.0,
+            "mitre_techniques": [],
+            "reason": attrs.get("category", ""),
+            "source_ip": attrs.get("source_ip"),
+            "username": attrs.get("username"),
+            "collector_timestamp": attrs.get("timestamp"),
+            "event_source": "observation",
+            "collection_agent": agent,
+            "agent_version": version,
+            **quality,
+        })
+
+    def _insert_fim_observation(
+        self, attrs, device_id, ts_ns, timestamp_dt, agent, version,
+    ) -> None:
+        """Insert raw filesystem observation into fim_events."""
+        quality = self._quality_payload(attrs)
+        self.store.insert_fim_event({
+            "timestamp_ns": ts_ns,
+            "timestamp_dt": timestamp_dt,
+            "device_id": device_id,
+            "event_type": "observation",
+            "path": attrs.get("path", ""),
+            "change_type": "snapshot",
+            "old_hash": None,
+            "new_hash": attrs.get("sha256", ""),
+            "old_mode": None,
+            "new_mode": attrs.get("mode"),
+            "file_extension": attrs.get("name", "").rsplit(".", 1)[-1] if "." in attrs.get("name", "") else None,
+            "owner_uid": int(attrs["uid"]) if attrs.get("uid") else None,
+            "owner_gid": None,
+            "is_suid": attrs.get("is_suid", "False") == "True",
+            "mtime": float(attrs["mtime"]) if attrs.get("mtime") else None,
+            "size": int(attrs["size"]) if attrs.get("size") else None,
+            "risk_score": 0.0,
+            "confidence": 0.0,
+            "mitre_techniques": [],
+            "reason": None,
+            "patterns_matched": [],
+            "event_source": "observation",
+            "collection_agent": agent,
+            "agent_version": version,
+            **quality,
+        })
+
+    def _insert_persistence_observation(
+        self, attrs, device_id, ts_ns, timestamp_dt, agent, version,
+    ) -> None:
+        """Insert raw persistence observation into persistence_events."""
+        quality = self._quality_payload(attrs)
+        self.store.insert_persistence_event({
+            "timestamp_ns": ts_ns,
+            "timestamp_dt": timestamp_dt,
+            "device_id": device_id,
+            "event_type": "observation",
+            "mechanism": attrs.get("category", ""),
+            "entry_id": attrs.get("name", ""),
+            "path": attrs.get("path", ""),
+            "command": attrs.get("program", ""),
+            "schedule": None,
+            "user": None,
+            "change_type": "snapshot",
+            "old_command": None,
+            "new_command": None,
+            "content_hash": attrs.get("content_hash", ""),
+            "program": attrs.get("program", ""),
+            "label": attrs.get("label", ""),
+            "run_at_load": attrs.get("run_at_load", "False") == "True",
+            "keep_alive": attrs.get("keep_alive", "False") == "True",
+            "risk_score": 0.0,
+            "confidence": 0.0,
+            "mitre_techniques": [],
+            "reason": None,
+            "event_source": "observation",
+            "collection_agent": agent,
+            "agent_version": version,
+            **quality,
+        })
+
+    def _insert_peripheral_observation(
+        self, attrs, device_id, ts_ns, timestamp_dt, agent, version,
+    ) -> None:
+        """Insert raw peripheral observation into peripheral_events."""
+        quality = self._quality_payload(attrs)
+        self.store.insert_peripheral_event({
+            "timestamp_ns": ts_ns,
+            "timestamp_dt": timestamp_dt,
+            "device_id": device_id,
+            "peripheral_device_id": f"{attrs.get('vendor_id', '')}:{attrs.get('product_id', '')}",
+            "event_type": "OBSERVATION",
+            "device_name": attrs.get("name", ""),
+            "device_type": attrs.get("device_type", "UNKNOWN").upper(),
+            "vendor_id": attrs.get("vendor_id"),
+            "product_id": attrs.get("product_id"),
+            "serial_number": attrs.get("serial"),
+            "manufacturer": attrs.get("manufacturer"),
+            "address": attrs.get("address"),
+            "connection_status": "CONNECTED" if attrs.get("connected", "True") == "True" else "DISCONNECTED",
+            "is_authorized": True,
+            "risk_score": 0.0,
+            "is_storage": attrs.get("is_storage", "False") == "True",
+            "mount_point": attrs.get("mount_point", ""),
+            "event_source": "observation",
+            "collection_agent": agent,
+            "agent_version": version,
+            **quality,
+        })
+
+    def _insert_generic_observation(
+        self, attrs, device_id, ts_ns, timestamp_dt, agent, version,
+    ) -> None:
+        """Insert P3 domain observation into generic observation_events table."""
+        quality = self._quality_payload(attrs)
+        domain = attrs.get("_domain", "unknown")
+        # Remove internal routing hint from stored attributes
+        clean_attrs = {k: v for k, v in attrs.items() if not k.startswith("_")}
+        self.store.insert_observation_event({
+            "timestamp_ns": ts_ns,
+            "timestamp_dt": timestamp_dt,
+            "device_id": device_id,
+            "domain": domain,
+            "event_type": "observation",
+            "attributes": clean_attrs,
+            "risk_score": 0.0,
+            "event_source": "observation",
+            "collection_agent": agent,
+            "agent_version": version,
+            **quality,
+        })
 
     def _process_device_telemetry(
         self, dt: telemetry_pb2.DeviceTelemetry, ts_ns: int, idem: str
     ) -> None:
         """Process DeviceTelemetry message"""
-        timestamp_dt = datetime.fromtimestamp(ts_ns / 1e9).isoformat()
+        timestamp_dt = datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).isoformat()
 
         # Extract aggregate metrics
         total_processes, cpu_percent, mem_percent = self._extract_metrics(dt.events)
@@ -581,6 +1198,7 @@ class WALProcessor:
             timestamp_dt,
             dt.collection_agent,
             dt.agent_version,
+            dt.device_type or "UNKNOWN",
         )
 
         # SOMA: Feed events to FusionEngine for correlation
@@ -648,6 +1266,11 @@ class WALProcessor:
         if collection_agent and "agent" not in indicators:
             indicators["agent"] = collection_agent
 
+        # Preserve probe-local detection timestamp (previously lost here)
+        evt_ts_ns = event.event_timestamp_ns if event.event_timestamp_ns else None
+        evt_id = event.event_id if event.event_id else None
+        latency = (ts_ns - evt_ts_ns) if evt_ts_ns else None
+
         return {
             "timestamp_ns": ts_ns,
             "timestamp_dt": timestamp_dt,
@@ -664,6 +1287,9 @@ class WALProcessor:
             "requires_investigation": se.requires_investigation or risk >= 0.7,
             "collection_agent": collection_agent,
             "agent_version": None,
+            "event_timestamp_ns": evt_ts_ns,
+            "event_id": evt_id,
+            "probe_latency_ns": latency,
         }
 
     def _process_security_event(
@@ -707,14 +1333,79 @@ class WALProcessor:
                 event_data["threat_intel_match"] = enriched_attrs.get(
                     "threat_intel_match", False
                 )
-                event_data["geo_src_country"] = enriched_attrs.get("geo_src_country")
-                event_data["asn_src_org"] = enriched_attrs.get("asn_src_org")
+                event_data["geo_src_country"] = enriched_attrs.get(
+                    "geo_src_country"
+                ) or enriched_attrs.get("geo_dst_country")
+                event_data["geo_src_city"] = enriched_attrs.get(
+                    "geo_src_city"
+                ) or enriched_attrs.get("geo_dst_city")
+                event_data["geo_src_latitude"] = enriched_attrs.get(
+                    "geo_src_latitude"
+                ) or enriched_attrs.get("geo_dst_latitude")
+                event_data["geo_src_longitude"] = enriched_attrs.get(
+                    "geo_src_longitude"
+                ) or enriched_attrs.get("geo_dst_longitude")
+                event_data["asn_src_org"] = enriched_attrs.get(
+                    "asn_src_org"
+                ) or enriched_attrs.get("asn_dst_org")
+                event_data["asn_src_number"] = enriched_attrs.get(
+                    "asn_src_number"
+                ) or enriched_attrs.get("asn_dst_number")
+                event_data["asn_src_network_type"] = enriched_attrs.get(
+                    "asn_src_network_type"
+                ) or enriched_attrs.get("asn_dst_network_type")
                 # Promote enriched MITRE techniques to top-level list
                 if enriched_attrs.get("mitre_techniques"):
                     existing = set(event_data.get("mitre_techniques") or [])
                     for t in enriched_attrs["mitre_techniques"]:
                         if t not in existing:
                             event_data.setdefault("mitre_techniques", []).append(t)
+
+            indicators = event_data.get("indicators", {})
+            if isinstance(indicators, str):
+                try:
+                    indicators = json.loads(indicators)
+                except (json.JSONDecodeError, TypeError):
+                    indicators = {}
+            quality_state = indicators.get("quality_state", "valid")
+            contract_violation_code = indicators.get("contract_violation_code", "NONE")
+            missing_fields = indicators.get("missing_fields", "")
+            training_exclude = str(indicators.get("training_exclude", "")).lower() in (
+                "true",
+                "1",
+                "yes",
+            ) or quality_state != "valid"
+            event_data["quality_state"] = quality_state
+            event_data["training_exclude"] = training_exclude
+            event_data["contract_violation_code"] = contract_violation_code
+            event_data["missing_fields"] = missing_fields
+            indicators["quality_state"] = quality_state
+            indicators["training_exclude"] = str(training_exclude).lower()
+            indicators["contract_violation_code"] = contract_violation_code
+            if missing_fields:
+                indicators["missing_fields"] = missing_fields
+            event_data["indicators"] = indicators
+            event_data["raw_attributes_json"] = json.dumps(indicators, sort_keys=True)
+
+            mitre_source_parts = []
+            if se.mitre_techniques:
+                mitre_source_parts.append("probe")
+            if enriched_attrs and enriched_attrs.get("mitre_techniques"):
+                mitre_source_parts.append("enricher")
+            if any(k.startswith("analyst_") for k in indicators):
+                mitre_source_parts.append("analyst")
+            event_data["mitre_source"] = (
+                "|".join(sorted(set(mitre_source_parts))) if mitre_source_parts else "probe"
+            )
+            event_data["mitre_confidence"] = event.confidence_score or 0.0
+            event_data["mitre_evidence"] = [
+                {
+                    "source_component": event.source_component,
+                    "event_category": se.event_category,
+                    "event_action": se.event_action,
+                    "event_id": event.event_id,
+                }
+            ]
 
             # Deduplicate: skip if semantically identical event seen within TTL
             if self._dedup.is_duplicate(event_data):
@@ -728,7 +1419,7 @@ class WALProcessor:
             self._dedup.record(event_data)
 
             # Score event for signal/noise classification
-            if self._scorer is not None:
+            if self._scorer is not None and not training_exclude:
                 try:
                     self._scorer.score_event(event_data)
                 except Exception:
@@ -736,8 +1427,24 @@ class WALProcessor:
                         "Scoring failed for event — continuing", exc_info=True
                     )
 
+            # Extract sequence match score from scoring factors into indicators
+            # so SOMA Brain can use it as a training feature (Step 4)
+            score_factors = event_data.get("score_factors", [])
+            for factor in score_factors:
+                if factor.get("name") == "Attack Sequence Detected":
+                    ind = event_data.get("indicators", {})
+                    if isinstance(ind, str):
+                        try:
+                            ind = json.loads(ind)
+                        except (json.JSONDecodeError, TypeError):
+                            ind = {}
+                    ind["sequence_match_score"] = factor.get("contribution", 0.0)
+                    ind["sequence_detail"] = factor.get("detail", "")
+                    event_data["indicators"] = ind
+                    break
+
             # Feed AutoCalibrator for autonomous FP detection
-            if self._brain and self._brain._auto_calibrator:
+            if self._brain and self._brain._auto_calibrator and not training_exclude:
                 try:
                     self._brain._auto_calibrator.observe(event_data)
                 except Exception:
@@ -876,6 +1583,26 @@ class WALProcessor:
                     "bytes_rx": int(attrs.get("bytes_rx", 0)),
                     "is_suspicious": True,
                     "threat_score": float(attrs.get("threat_score", 0.0)),
+                    # Enrichment: GeoIP
+                    "geo_src_country": attrs.get("geo_src_country"),
+                    "geo_src_city": attrs.get("geo_src_city"),
+                    "geo_src_latitude": attrs.get("geo_src_latitude"),
+                    "geo_src_longitude": attrs.get("geo_src_longitude"),
+                    "geo_dst_country": attrs.get("geo_dst_country"),
+                    "geo_dst_city": attrs.get("geo_dst_city"),
+                    "geo_dst_latitude": attrs.get("geo_dst_latitude"),
+                    "geo_dst_longitude": attrs.get("geo_dst_longitude"),
+                    # Enrichment: ASN
+                    "asn_src_number": attrs.get("asn_src_number"),
+                    "asn_src_org": attrs.get("asn_src_org"),
+                    "asn_src_network_type": attrs.get("asn_src_network_type"),
+                    "asn_dst_number": attrs.get("asn_dst_number"),
+                    "asn_dst_org": attrs.get("asn_dst_org"),
+                    "asn_dst_network_type": attrs.get("asn_dst_network_type"),
+                    # Enrichment: ThreatIntel
+                    "threat_intel_match": attrs.get("threat_intel_match", False),
+                    "threat_source": attrs.get("threat_source"),
+                    "threat_severity": attrs.get("threat_severity"),
                 }
             )
         except Exception as e:
@@ -1130,7 +1857,7 @@ class WALProcessor:
 
     def _process_process_event(self, proc: Any, ts_ns: int, idem: str) -> None:
         """Process ProcessEvent message"""
-        timestamp_dt = datetime.fromtimestamp(ts_ns / 1e9).isoformat()
+        timestamp_dt = datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).isoformat()
 
         # Classify user type
         if proc.uid == 0:
@@ -1211,37 +1938,41 @@ class WALProcessor:
             logger.error(f"Failed to insert process event: {e}")
 
     def _process_flow_event(self, flow: Any, ts_ns: int) -> None:
-        """Process FlowEvent message"""
-        timestamp_dt = datetime.fromtimestamp(ts_ns / 1e9).isoformat()
+        """Process FlowEvent message with enrichment."""
+        timestamp_dt = datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).isoformat()
 
         try:
-            self.store.db.execute(
-                """
-                INSERT OR REPLACE INTO flow_events (
-                    timestamp_ns, timestamp_dt, device_id,
-                    src_ip, dst_ip, src_port, dst_port, protocol,
-                    bytes_tx, bytes_rx, is_suspicious
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    ts_ns,
-                    timestamp_dt,
-                    "unknown",
-                    flow.src_ip,
-                    flow.dst_ip,
-                    flow.src_port,
-                    flow.dst_port,
-                    flow.protocol,
-                    flow.bytes_tx,
-                    flow.bytes_rx,
-                    False,
-                ),
-            )
-            self.store._commit()
+            flow_data = {
+                "timestamp_ns": ts_ns,
+                "timestamp_dt": timestamp_dt,
+                "device_id": "unknown",
+                "src_ip": flow.src_ip,
+                "dst_ip": flow.dst_ip,
+                "src_port": flow.src_port,
+                "dst_port": flow.dst_port,
+                "protocol": flow.protocol,
+                "bytes_tx": flow.bytes_tx,
+                "bytes_rx": flow.bytes_rx,
+                "is_suspicious": False,
+            }
+
+            # Enrich with GeoIP/ASN/ThreatIntel
+            if self._pipeline is not None:
+                try:
+                    self._pipeline.enrich(flow_data)
+                except Exception:
+                    logger.debug("Enrichment failed for flow event", exc_info=True)
+
+            self.store.insert_flow_event(flow_data)
         except Exception as e:
             logger.error(f"Failed to insert flow event: {e}")
 
-    def process_local_queues(self, queue_dir: str = "data/queue") -> int:
+    def process_local_queues(
+        self,
+        queue_dir: str = "data/queue",
+        max_entries: int | None = None,
+        max_seconds: float | None = None,
+    ) -> int:
         """Drain agent local queues directly into TelemetryStore.
 
         When EventBus is not running, agents buffer DeviceTelemetry in local
@@ -1251,28 +1982,60 @@ class WALProcessor:
 
         Args:
             queue_dir: Directory containing agent queue .db files.
+            max_entries: Optional maximum number of queue entries to process
+                across all queue files for this drain cycle.
+            max_seconds: Optional timeout budget for this drain cycle.
 
         Returns:
             Total number of events processed across all queues.
         """
         import glob
 
-        queue_files = glob.glob(f"{queue_dir}/*.db")
-        total_processed = 0
+        if max_entries is not None and max_entries <= 0:
+            max_entries = None
 
-        for qf in sorted(queue_files):
+        queue_files = sorted(glob.glob(f"{queue_dir}/*.db"))
+        total_processed = 0
+        remaining = max_entries
+        stopped_for_limit = False
+        stopped_for_timeout = False
+        deadline = (
+            time.monotonic() + max_seconds
+            if max_seconds is not None and max_seconds > 0
+            else None
+        )
+
+        for qf in queue_files:
+            if remaining is not None and remaining <= 0:
+                stopped_for_limit = True
+                break
+            if deadline is not None and time.monotonic() >= deadline:
+                stopped_for_timeout = True
+                break
+
             agent_name = Path(qf).stem
+            conn = None
             try:
                 conn = sqlite3.connect(qf, timeout=5.0)
-                cursor = conn.execute("SELECT id, ts_ns, bytes FROM queue ORDER BY id")
+
+                query = "SELECT id, ts_ns, bytes FROM queue ORDER BY id"
+                params = []
+                if remaining is not None:
+                    query += " LIMIT ?"
+                    params.append(remaining)
+
+                cursor = conn.execute(query, params)
                 rows = cursor.fetchall()
 
                 if not rows:
-                    conn.close()
                     continue
 
                 processed_ids = []
                 for row_id, ts_ns, payload_bytes in rows:
+                    if deadline is not None and time.monotonic() >= deadline:
+                        stopped_for_timeout = True
+                        break
+
                     try:
                         dt = telemetry_pb2.DeviceTelemetry()
                         dt.ParseFromString(bytes(payload_bytes))
@@ -1306,11 +2069,39 @@ class WALProcessor:
 
                 count = len(processed_ids)
                 total_processed += count
+                if remaining is not None:
+                    remaining -= count
                 logger.info("Drained %d events from %s", count, agent_name)
-                conn.close()
+
+                if remaining is not None and remaining <= 0:
+                    pending = conn.execute("SELECT COUNT(*) FROM queue").fetchone()[0]
+                    if pending > 0:
+                        logger.warning(
+                            "Queue drain budget exhausted for %s (%d entries pending)",
+                            agent_name,
+                            pending,
+                        )
+                    stopped_for_limit = True
 
             except Exception as e:
                 logger.error("Failed to process queue %s: %s", qf, e)
+            finally:
+                if conn is not None:
+                    conn.close()
+
+            if stopped_for_timeout or stopped_for_limit:
+                break
+
+        if stopped_for_timeout:
+            logger.warning(
+                "Stopped local queue drain after timeout budget (%ss)",
+                max_seconds,
+            )
+        if stopped_for_limit:
+            logger.warning(
+                "Stopped local queue drain after reaching max_entries=%s",
+                max_entries,
+            )
 
         return total_processed
 
@@ -1436,6 +2227,12 @@ class WALProcessor:
                 except Exception:
                     indicators["enrichment_status"] = "raw"
 
+                geo_country = indicators.get(
+                    "geo_src_country"
+                ) or indicators.get("geo_dst_country")
+                asn_org = indicators.get(
+                    "asn_src_org"
+                ) or indicators.get("asn_dst_org")
                 self.store.db.execute(
                     "UPDATE security_events SET "
                     "indicators=?, enrichment_status=?, "
@@ -1445,8 +2242,8 @@ class WALProcessor:
                         json.dumps(indicators),
                         indicators.get("enrichment_status", "raw"),
                         indicators.get("threat_intel_match", False),
-                        indicators.get("geo_src_country"),
-                        indicators.get("asn_src_org"),
+                        geo_country,
+                        asn_org,
                         row_id,
                     ),
                 )

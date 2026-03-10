@@ -1,0 +1,28 @@
+title: Process Masquerading as System Binary
+id: amoskys-de-004
+status: stable
+level: critical
+description: Detects processes masquerading as legitimate system binaries by using similar names or executing from unexpected paths to evade detection
+author: AMOSKYS
+tags:
+    - attack.defense_evasion
+    - attack.t1036
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection:
+        event_type: masquerade_detected
+    condition: selection
+fields:
+    - process_name
+    - process_path
+    - expected_path
+    - cmdline
+    - pid
+    - uid
+    - parent_process
+falsepositives:
+    - Custom-compiled system utilities in non-standard paths
+    - Containerized applications with relocated binaries
+confidence: 0.88

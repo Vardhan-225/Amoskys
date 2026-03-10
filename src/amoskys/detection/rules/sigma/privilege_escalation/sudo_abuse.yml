@@ -1,0 +1,28 @@
+title: Sudo Abuse Detection
+id: amoskys-pe-001
+status: stable
+level: high
+description: Detects repeated sudo failures or unusual sudo usage patterns indicating privilege escalation attempts via sudo abuse
+author: AMOSKYS
+tags:
+    - attack.privilege_escalation
+    - attack.t1548.003
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - sudo_failure
+            - sudo_suspicious
+    condition: selection
+fields:
+    - username
+    - command
+    - pid
+    - source_ip
+    - failure_count
+falsepositives:
+    - Legitimate users mistyping passwords
+    - Automated scripts with expired credentials
+confidence: 0.80

@@ -38,24 +38,25 @@ def get_threat_timeline_data(hours: int = 24) -> Dict[str, Any]:
             "time_range": f"Last {hours} hours",
         }
 
-    rows = store.get_recent_security_events(limit=500, hours=hours)
+    rows = store.get_unified_threat_events(limit=500, hours=hours)
     if not rows:
         # Fallback: show most recent events regardless of age
-        rows = store.get_recent_security_events(limit=500, hours=8760)
+        rows = store.get_unified_threat_events(limit=500, hours=8760)
     timeline_data = []
     hourly_counts: Dict[str, int] = {}
 
     for row in rows:
-        risk = row.get("risk_score", 0)
+        risk = row.get("risk_score", 0) or 0
         sev = _risk_to_severity_label(risk)
         ts_dt = row.get("timestamp_dt", "")
 
         timeline_data.append(
             {
                 "timestamp": ts_dt,
-                "type": row.get("event_category", "unknown"),
+                "type": row.get("type") or row.get("event_category", "unknown"),
                 "severity": sev,
                 "source": row.get("device_id", ""),
+                "source_table": row.get("source", "security"),
                 "description": row.get("description", ""),
             }
         )
@@ -336,9 +337,9 @@ def get_event_clustering_data() -> Dict[str, Any]:
             "time_range": "Last 24 hours",
         }
 
-    data = store.get_security_event_clustering(hours=24)
+    data = store.get_unified_event_clustering(hours=24)
 
-    # Extract source IP counts from indicators using targeted SQL query
+    # Extract source IP counts from indicators across all tables that store them
     import json
     import time as _time
 
@@ -346,36 +347,48 @@ def get_event_clustering_data() -> Dict[str, Any]:
     try:
         cutoff_ns = int((_time.time() - 24 * 3600) * 1e9)
         with store._lock:
+            # Security events have rich indicators JSON
             cursor = store.db.execute(
                 """SELECT indicators FROM security_events
                    WHERE timestamp_ns > ? AND indicators LIKE '%_ip%'""",
                 (cutoff_ns,),
             )
-            rows = cursor.fetchall()
-        for row in rows:
-            try:
-                indicators = json.loads(row[0]) if row[0] else {}
-            except (json.JSONDecodeError, TypeError):
-                continue
-            ip = (
-                indicators.get("source_ip")
-                or indicators.get("src_ip")
-                or indicators.get("dst_ip")
+            for row in cursor.fetchall():
+                try:
+                    indicators = json.loads(row[0]) if row[0] else {}
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                ip = (
+                    indicators.get("source_ip")
+                    or indicators.get("src_ip")
+                    or indicators.get("dst_ip")
+                )
+                if ip:
+                    by_source_ip[ip] = by_source_ip.get(ip, 0) + 1
+            # Flow events have explicit src_ip/dst_ip columns
+            cursor = store.db.execute(
+                """SELECT src_ip, dst_ip FROM flow_events
+                   WHERE timestamp_ns > ?""",
+                (cutoff_ns,),
             )
-            if ip:
-                by_source_ip[ip] = by_source_ip.get(ip, 0) + 1
+            for row in cursor.fetchall():
+                for ip in (row[0], row[1]):
+                    if ip:
+                        by_source_ip[ip] = by_source_ip.get(ip, 0) + 1
     except Exception:
         pass
 
+    by_source = data.get("by_source", {})
+    total_events = sum(by_source.values())
+
     clusters = {
-        "by_type": data.get("by_category", {}),
+        "by_type": by_source,
         "by_severity": data.get("by_severity", {}),
         "by_source_ip": by_source_ip,
         "by_hour": data.get("by_hour", {}),
-        "by_agent": {},
+        "by_agent": data.get("by_agent", {}),
     }
 
-    total_events = sum(clusters["by_type"].values())
     most_active_type = (
         max(clusters["by_type"].items(), key=lambda x: x[1])
         if clusters["by_type"]
@@ -391,7 +404,7 @@ def get_event_clustering_data() -> Dict[str, Any]:
             "total_events": total_events,
             "unique_types": len(clusters["by_type"]),
             "unique_ips": len(by_source_ip),
-            "unique_agents": 0,
+            "unique_agents": len(clusters["by_agent"]),
             "most_active_type": most_active_type,
             "most_active_ip": most_active_ip,
         },
@@ -481,20 +494,12 @@ def get_neural_readiness_status() -> Dict[str, Any]:
 
         _store = get_telemetry_store()
         if _store:
-            stats = _store.get_statistics()
-            db_event_count = (
-                stats.get("security_events_count", 0)
-                + stats.get("process_events_count", 0)
-                + stats.get("flow_events_count", 0)
-            )
-            # Count tables with data
-            for key in [
-                "security_events_count",
-                "process_events_count",
-                "flow_events_count",
-                "device_telemetry_count",
-            ]:
-                if stats.get(key, 0) > 0:
+            unified = _store.get_unified_event_counts(hours=24)
+            db_event_count = unified.get("total", 0)
+            by_source = unified.get("by_source", {})
+            # Count tables that have data
+            for count in by_source.values():
+                if count > 0:
                     db_table_coverage += 1
     except Exception:
         pass

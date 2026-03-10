@@ -36,31 +36,31 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from amoskys.agents.auth.probes import AuthEvent, SSHPasswordSprayProbe
 from amoskys.agents.common.probes import Severity
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-from amoskys.agents.kernel_audit.probes import (
+from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.os.linux.kernel_audit.probes import (
     ExecveHighRiskProbe,
     PrivEscSyscallProbe,
     PtraceAbuseProbe,
 )
-from amoskys.agents.proc.probes import BinaryFromTempProbe
+from amoskys.agents.shared.auth.probes import AuthEvent, SSHPasswordSprayProbe
+from amoskys.agents.shared.process.probes import BinaryFromTempProbe
 from amoskys.redteam.harness import AdversarialCase, Scenario
 from amoskys.redteam.scenarios import register
 
 # ─── Timeline anchors (all in nanoseconds) ───────────────────────────────────
 
-_T0       = int(1_700_000_000 * 1e9)   # 2023-11-14T22:13:20Z UTC
-_T_SPRAY  = _T0                         # +0s  — spray begins
-_T_EXEC   = _T0 + int(30 * 1e9)        # +30s — dropper executed
-_T_PRIV   = _T0 + int(90 * 1e9)        # +90s — privilege escalation
-_T_IMPL   = _T0 + int(120 * 1e9)       # +120s — implant starts
-_T_PTRACE = _T0 + int(180 * 1e9)       # +180s — ptrace credential harvest
+_T0 = int(1_700_000_000 * 1e9)  # 2023-11-14T22:13:20Z UTC
+_T_SPRAY = _T0  # +0s  — spray begins
+_T_EXEC = _T0 + int(30 * 1e9)  # +30s — dropper executed
+_T_PRIV = _T0 + int(90 * 1e9)  # +90s — privilege escalation
+_T_IMPL = _T0 + int(120 * 1e9)  # +120s — implant starts
+_T_PTRACE = _T0 + int(180 * 1e9)  # +180s — ptrace credential harvest
 
-_ATTACKER_IP = "185.220.101.1"   # known Tor exit node (Tor Project AS)
-_VICTIM_UID  = 1001
+_ATTACKER_IP = "185.220.101.1"  # known Tor exit node (Tor Project AS)
+_VICTIM_UID = 1001
 _VICTIM_USER = "jsmith"
-_HOST        = "victim-host"
+_HOST = "victim-host"
 
 
 # ─── Event factory helpers ────────────────────────────────────────────────────
@@ -99,8 +99,8 @@ def _ke(syscall: str, eid: str, ts: int = _T0, **kwargs) -> KernelAuditEvent:
 
 # ─── psutil mock helpers (proc probes) ───────────────────────────────────────
 
-_PA = "amoskys.agents.proc.probes.PSUTIL_AVAILABLE"
-_PI = "amoskys.agents.proc.probes.psutil.process_iter"
+_PA = "amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE"
+_PI = "amoskys.agents.shared.process.probes.psutil.process_iter"
 
 
 def _mk_proc(**fields) -> MagicMock:
@@ -127,7 +127,7 @@ def _mock_iter(*procs: MagicMock):
 # Phase 1: SSH Password Spray — SSHPasswordSprayProbe
 # =============================================================================
 
-_SPRAY_USERS = [f"user{i}" for i in range(10)]   # 10 distinct accounts
+_SPRAY_USERS = [f"user{i}" for i in range(10)]  # 10 distinct accounts
 
 
 def _spray_events(ip: str, usernames: list) -> list:
@@ -304,9 +304,14 @@ _SPINE_EXEC_POS1 = AdversarialCase(
     ),
     events=[
         _ke(
-            "execve", "spine-e01", ts=_T_EXEC,
-            uid=_VICTIM_UID, euid=_VICTIM_UID,
-            pid=22222, exe="/tmp/stage1", comm="stage1",
+            "execve",
+            "spine-e01",
+            ts=_T_EXEC,
+            uid=_VICTIM_UID,
+            euid=_VICTIM_UID,
+            pid=22222,
+            exe="/tmp/stage1",
+            comm="stage1",
         )
     ],
     expect_count=1,
@@ -329,9 +334,14 @@ _SPINE_EXEC_POS2 = AdversarialCase(
     ),
     events=[
         _ke(
-            "execve", "spine-e02", ts=_T_EXEC + int(5 * 1e9),
-            uid=_VICTIM_UID, euid=0,
-            pid=22223, exe="/tmp/stage2", comm="stage2",
+            "execve",
+            "spine-e02",
+            ts=_T_EXEC + int(5 * 1e9),
+            uid=_VICTIM_UID,
+            euid=0,
+            pid=22223,
+            exe="/tmp/stage2",
+            comm="stage2",
         )
     ],
     expect_count=1,
@@ -354,9 +364,14 @@ _SPINE_EXEC_EVA1 = AdversarialCase(
     ),
     events=[
         _ke(
-            "execve", "spine-e03", ts=_T_EXEC + int(10 * 1e9),
-            uid=_VICTIM_UID, euid=_VICTIM_UID,
-            pid=22224, exe="/usr/bin/update", comm="update",
+            "execve",
+            "spine-e03",
+            ts=_T_EXEC + int(10 * 1e9),
+            uid=_VICTIM_UID,
+            euid=_VICTIM_UID,
+            pid=22224,
+            exe="/usr/bin/update",
+            comm="update",
         )
     ],
     expect_count=0,
@@ -377,9 +392,14 @@ _SPINE_EXEC_BENIGN = AdversarialCase(
     ),
     events=[
         _ke(
-            "execve", "spine-e04", ts=_T_EXEC + int(15 * 1e9),
-            uid=_VICTIM_UID, euid=_VICTIM_UID,
-            pid=22225, exe="/usr/bin/curl", comm="curl",
+            "execve",
+            "spine-e04",
+            ts=_T_EXEC + int(15 * 1e9),
+            uid=_VICTIM_UID,
+            euid=_VICTIM_UID,
+            pid=22225,
+            exe="/usr/bin/curl",
+            comm="curl",
         )
     ],
     expect_count=0,
@@ -401,9 +421,13 @@ _SPINE_DEGRADED_EXEC_NO_EXE = AdversarialCase(
     ),
     events=[
         _ke(
-            "execve", "spine-deg-e01", ts=_T_EXEC,
-            uid=_VICTIM_UID, euid=_VICTIM_UID,
-            pid=22222, comm="stage1",
+            "execve",
+            "spine-deg-e01",
+            ts=_T_EXEC,
+            uid=_VICTIM_UID,
+            euid=_VICTIM_UID,
+            pid=22222,
+            comm="stage1",
         )
     ],
     expect_count=0,
@@ -451,9 +475,14 @@ _SPINE_PRIV_POS1 = AdversarialCase(
     ),
     events=[
         _ke(
-            "seteuid", "spine-p01", ts=_T_PRIV,
-            uid=_VICTIM_UID, euid=0,
-            result="success", pid=22222, comm="stage1",
+            "seteuid",
+            "spine-p01",
+            ts=_T_PRIV,
+            uid=_VICTIM_UID,
+            euid=0,
+            result="success",
+            pid=22222,
+            comm="stage1",
         )
     ],
     expect_count=1,
@@ -476,9 +505,14 @@ _SPINE_PRIV_POS2 = AdversarialCase(
     ),
     events=[
         _ke(
-            "capset", "spine-p02", ts=_T_PRIV + int(5 * 1e9),
-            uid=_VICTIM_UID, euid=_VICTIM_UID,
-            result="success", pid=22222, comm="stage1",
+            "capset",
+            "spine-p02",
+            ts=_T_PRIV + int(5 * 1e9),
+            uid=_VICTIM_UID,
+            euid=_VICTIM_UID,
+            result="success",
+            pid=22222,
+            comm="stage1",
         )
     ],
     expect_count=1,
@@ -502,9 +536,14 @@ _SPINE_PRIV_EVA1 = AdversarialCase(
     ),
     events=[
         _ke(
-            "seteuid", "spine-p03", ts=_T_PRIV + int(10 * 1e9),
-            uid=_VICTIM_UID, euid=_VICTIM_UID,
-            result="failed", pid=22222, comm="stage1",
+            "seteuid",
+            "spine-p03",
+            ts=_T_PRIV + int(10 * 1e9),
+            uid=_VICTIM_UID,
+            euid=_VICTIM_UID,
+            result="failed",
+            pid=22222,
+            comm="stage1",
         )
     ],
     expect_count=0,
@@ -526,9 +565,15 @@ _SPINE_PRIV_BENIGN = AdversarialCase(
     ),
     events=[
         _ke(
-            "execve", "spine-p04", ts=_T_PRIV + int(15 * 1e9),
-            uid=_VICTIM_UID, euid=_VICTIM_UID,
-            result="success", pid=22222, comm="stage1", exe="/tmp/stage1",
+            "execve",
+            "spine-p04",
+            ts=_T_PRIV + int(15 * 1e9),
+            uid=_VICTIM_UID,
+            euid=_VICTIM_UID,
+            result="success",
+            pid=22222,
+            comm="stage1",
+            exe="/tmp/stage1",
         )
     ],
     expect_count=0,
@@ -550,9 +595,13 @@ _SPINE_DEGRADED_PRIVESC_NO_RESULT = AdversarialCase(
     ),
     events=[
         _ke(
-            "seteuid", "spine-deg-p01", ts=_T_PRIV,
-            uid=_VICTIM_UID, euid=0,
-            pid=22222, comm="stage1",
+            "seteuid",
+            "spine-deg-p01",
+            ts=_T_PRIV,
+            uid=_VICTIM_UID,
+            euid=0,
+            pid=22222,
+            comm="stage1",
         )
     ],
     expect_count=0,
@@ -602,9 +651,13 @@ _SPINE_IMPL_POS1 = AdversarialCase(
     patch_targets={
         _PA: True,
         _PI: _mock_iter(
-            _mk_proc(pid=22222, name="c2_beacon", exe="/tmp/c2_beacon",
-                     cmdline=["/tmp/c2_beacon", "--stealth"],
-                     username=_VICTIM_USER)
+            _mk_proc(
+                pid=22222,
+                name="c2_beacon",
+                exe="/tmp/c2_beacon",
+                cmdline=["/tmp/c2_beacon", "--stealth"],
+                username=_VICTIM_USER,
+            )
         ),
     },
     expect_count=1,
@@ -630,10 +683,13 @@ _SPINE_IMPL_POS2 = AdversarialCase(
     patch_targets={
         _PA: True,
         _PI: _mock_iter(
-            _mk_proc(pid=23000, name="malware",
-                     exe="/private/var/folders/xx/abc123/T/malware",
-                     cmdline=["/private/var/folders/xx/abc123/T/malware"],
-                     username=_VICTIM_USER)
+            _mk_proc(
+                pid=23000,
+                name="malware",
+                exe="/private/var/folders/xx/abc123/T/malware",
+                cmdline=["/private/var/folders/xx/abc123/T/malware"],
+                username=_VICTIM_USER,
+            )
         ),
     },
     expect_count=1,
@@ -659,10 +715,13 @@ _SPINE_IMPL_EVA1 = AdversarialCase(
     patch_targets={
         _PA: True,
         _PI: _mock_iter(
-            _mk_proc(pid=22222, name="updater",
-                     exe="/usr/local/bin/updater",
-                     cmdline=["/usr/local/bin/updater"],
-                     username=_VICTIM_USER)
+            _mk_proc(
+                pid=22222,
+                name="updater",
+                exe="/usr/local/bin/updater",
+                cmdline=["/usr/local/bin/updater"],
+                username=_VICTIM_USER,
+            )
         ),
     },
     expect_count=0,
@@ -685,10 +744,13 @@ _SPINE_IMPL_BENIGN = AdversarialCase(
     patch_targets={
         _PA: True,
         _PI: _mock_iter(
-            _mk_proc(pid=31000, name="Google Chrome Helper",
-                     exe="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome Helper",
-                     cmdline=["Google Chrome Helper"],
-                     username=_VICTIM_USER)
+            _mk_proc(
+                pid=31000,
+                name="Google Chrome Helper",
+                exe="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome Helper",
+                cmdline=["Google Chrome Helper"],
+                username=_VICTIM_USER,
+            )
         ),
     },
     expect_count=0,
@@ -714,9 +776,9 @@ _SPINE_DEGRADED_IMPLANT_NO_EXE = AdversarialCase(
     patch_targets={
         _PA: True,
         _PI: _mock_iter(
-            _mk_proc(pid=22222, name="c2_beacon", exe=None,
-                     cmdline=[],
-                     username=_VICTIM_USER)
+            _mk_proc(
+                pid=22222, name="c2_beacon", exe=None, cmdline=[], username=_VICTIM_USER
+            )
         ),
     },
     expect_count=0,
@@ -765,11 +827,27 @@ _SPINE_PTRACE_POS1 = AdversarialCase(
     ),
     events=[
         # Populate pid_to_comm so dest_pid=888 resolves to 'sshd'
-        _ke("execve", "spine-t01-sshd", ts=_T_PTRACE,
-            uid=0, euid=0, pid=888, comm="sshd", exe="/usr/sbin/sshd"),
-        _ke("ptrace", "spine-t01", ts=_T_PTRACE + int(2 * 1e9),
-            uid=0, euid=0, pid=22222, dest_pid=888, comm="gdb",
-            exe="/usr/bin/gdb"),
+        _ke(
+            "execve",
+            "spine-t01-sshd",
+            ts=_T_PTRACE,
+            uid=0,
+            euid=0,
+            pid=888,
+            comm="sshd",
+            exe="/usr/sbin/sshd",
+        ),
+        _ke(
+            "ptrace",
+            "spine-t01",
+            ts=_T_PTRACE + int(2 * 1e9),
+            uid=0,
+            euid=0,
+            pid=22222,
+            dest_pid=888,
+            comm="gdb",
+            exe="/usr/bin/gdb",
+        ),
     ],
     expect_count=1,
     expect_event_types=["kernel_ptrace_abuse"],
@@ -791,10 +869,17 @@ _SPINE_PTRACE_POS2 = AdversarialCase(
         "All non-root ptrace deserves high-severity scrutiny."
     ),
     events=[
-        _ke("ptrace", "spine-t02", ts=_T_PTRACE + int(10 * 1e9),
-            uid=_VICTIM_UID, euid=_VICTIM_UID,
-            pid=22222, dest_pid=7777, comm="spy",
-            exe="/tmp/cookie_spy"),
+        _ke(
+            "ptrace",
+            "spine-t02",
+            ts=_T_PTRACE + int(10 * 1e9),
+            uid=_VICTIM_UID,
+            euid=_VICTIM_UID,
+            pid=22222,
+            dest_pid=7777,
+            comm="spy",
+            exe="/tmp/cookie_spy",
+        ),
     ],
     expect_count=1,
     expect_event_types=["kernel_ptrace_abuse"],
@@ -817,10 +902,17 @@ _SPINE_PTRACE_EVA1 = AdversarialCase(
         "implementation-level evasion of ptrace-based monitoring."
     ),
     events=[
-        _ke("openat", "spine-t03", ts=_T_PTRACE + int(20 * 1e9),
-            uid=_VICTIM_UID, euid=_VICTIM_UID,
-            pid=22222, dest_pid=888, comm="mem_reader",
-            exe="/tmp/mem_reader"),
+        _ke(
+            "openat",
+            "spine-t03",
+            ts=_T_PTRACE + int(20 * 1e9),
+            uid=_VICTIM_UID,
+            euid=_VICTIM_UID,
+            pid=22222,
+            dest_pid=888,
+            comm="mem_reader",
+            exe="/tmp/mem_reader",
+        ),
     ],
     expect_count=0,
     expect_evades=True,
@@ -841,10 +933,17 @@ _SPINE_PTRACE_BENIGN = AdversarialCase(
         "No false-positive kernel_ptrace_abuse event emitted."
     ),
     events=[
-        _ke("execve", "spine-t04", ts=_T_PTRACE + int(25 * 1e9),
-            uid=_VICTIM_UID, euid=_VICTIM_UID,
-            pid=22222, dest_pid=None, comm="bash",
-            exe="/bin/bash"),
+        _ke(
+            "execve",
+            "spine-t04",
+            ts=_T_PTRACE + int(25 * 1e9),
+            uid=_VICTIM_UID,
+            euid=_VICTIM_UID,
+            pid=22222,
+            dest_pid=None,
+            comm="bash",
+            exe="/bin/bash",
+        ),
     ],
     expect_count=0,
 )
@@ -867,9 +966,14 @@ _SPINE_DEGRADED_PTRACE_NO_DEST_PID = AdversarialCase(
     ),
     events=[
         _ke(
-            "ptrace", "spine-deg-t01", ts=_T_PTRACE + int(30 * 1e9),
-            uid=0, euid=0,
-            pid=22222, dest_pid=None, comm="gdb",
+            "ptrace",
+            "spine-deg-t01",
+            ts=_T_PTRACE + int(30 * 1e9),
+            uid=0,
+            euid=0,
+            pid=22222,
+            dest_pid=None,
+            comm="gdb",
             exe="/usr/bin/gdb",
         )
     ],

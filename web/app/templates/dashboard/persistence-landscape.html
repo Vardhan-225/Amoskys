@@ -1,0 +1,1051 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Persistence Landscape - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="persistence-dashboard">
+    <!-- Persistence Landscape Header -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">Persistence Landscape</h2>
+            <div class="card-badge badge-success">Live Monitoring</div>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+            Comprehensive visibility into system persistence mechanisms. Track launchd agents, cron jobs,
+            SSH keys, shell profiles, browser extensions, and other footholds that survive reboots.
+        </p>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <a href="/dashboard/cortex" class="neural-button">&larr; Back to Cortex</a>
+            <button class="neural-button" id="persist-refresh-btn">Refresh Data</button>
+            <button class="neural-button" id="persist-toggle-auto-refresh-btn">
+                <span id="auto-refresh-btn">Pause Auto-Refresh</span>
+            </button>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">Time Window:</label>
+                <select id="time-window-select" class="neural-select">
+                    <option value="1">1h</option>
+                    <option value="6">6h</option>
+                    <option value="12">12h</option>
+                    <option value="24" selected>24h</option>
+                    <option value="72">3d</option>
+                    <option value="168">7d</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="metrics-grid" id="stats-grid">
+        <div class="metric-card">
+            <div class="metric-value" id="total-entries">--</div>
+            <div class="metric-label">Total Entries</div>
+            <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted);" id="total-changes">Changes: --</div>
+        </div>
+        <!-- Dynamic mechanism metric cards inserted here by JS -->
+    </div>
+
+    <!-- Natural Language Summary -->
+    <div class="neural-card summary-card">
+        <div class="summary-icon">&#9879;</div>
+        <p class="summary-text" id="nl-summary">Loading persistence landscape summary...</p>
+    </div>
+
+    <!-- Mechanism Cards Grid -->
+    <div class="mechanism-grid" id="mechanism-grid">
+        <div style="text-align: center; padding: 3rem; color: var(--text-muted); grid-column: 1 / -1;">
+            Loading mechanism breakdown...
+        </div>
+    </div>
+
+    <!-- Persistence Inventory Table -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">Persistence Inventory</h3>
+            <span class="neural-loading" id="inventory-loading" style="display: none;"></span>
+        </div>
+        <div class="inventory-controls">
+            <div class="filter-group">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">Mechanism:</label>
+                <select id="mechanism-filter" class="neural-select">
+                    <option value="all">All Mechanisms</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">Search:</label>
+                <input type="text" id="inventory-search" class="neural-input" placeholder="Search paths, commands, users...">
+            </div>
+            <div class="filter-group">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">Risk:</label>
+                <select id="risk-filter" class="neural-select">
+                    <option value="all">All Levels</option>
+                    <option value="critical">Critical (&ge; 0.8)</option>
+                    <option value="high">High (&ge; 0.6)</option>
+                    <option value="medium">Medium (&ge; 0.3)</option>
+                    <option value="low">Low (&lt; 0.3)</option>
+                </select>
+            </div>
+        </div>
+        <div class="inventory-container">
+            <table class="persist-table" id="inventory-table">
+                <thead>
+                    <tr>
+                        <th class="th-expand"></th>
+                        <th>Mechanism</th>
+                        <th>Entry ID</th>
+                        <th>Path</th>
+                        <th>Command</th>
+                        <th>User</th>
+                        <th>Change</th>
+                        <th>Risk</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody id="inventory-body">
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                            Loading persistence inventory...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="inventory-pagination" id="inventory-pagination"></div>
+    </div>
+
+    <!-- Change Timeline -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">Persistence Change Timeline</h3>
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="neural-button-sm timeline-btn" data-hours="1">1h</button>
+                <button class="neural-button-sm timeline-btn" data-hours="6">6h</button>
+                <button class="neural-button-sm timeline-btn active" data-hours="24">24h</button>
+                <button class="neural-button-sm timeline-btn" data-hours="72">3d</button>
+                <button class="neural-button-sm timeline-btn" data-hours="168">7d</button>
+            </div>
+        </div>
+        <div style="position: relative; height: 350px; width: 100%; padding: 1rem 0;">
+            <canvas id="change-timeline-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<style>
+.persistence-dashboard {
+    max-width: 100%;
+}
+
+/* Stats grid: allow dynamic columns */
+.persistence-dashboard .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Summary card */
+.summary-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-left: 4px solid var(--neural-primary);
+    margin-bottom: 1.5rem;
+}
+
+.summary-icon {
+    font-size: 1.8rem;
+    color: var(--neural-primary);
+    flex-shrink: 0;
+}
+
+.summary-text {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+/* Mechanism cards grid */
+.mechanism-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+.mechanism-card {
+    background: var(--bg-secondary);
+    border: 1px solid rgba(0, 217, 255, 0.12);
+    border-radius: 12px;
+    padding: 1.25rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.mechanism-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--neural-primary), transparent);
+    opacity: 0.6;
+}
+
+.mechanism-card:hover {
+    border-color: rgba(0, 217, 255, 0.35);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.mechanism-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.mechanism-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 217, 255, 0.1);
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.mechanism-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.mechanism-count {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--neural-primary);
+    margin-bottom: 0.5rem;
+}
+
+.mechanism-count-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+}
+
+/* Risk distribution mini-bar */
+.risk-bar {
+    display: flex;
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+    margin-bottom: 0.5rem;
+}
+
+.risk-bar-segment {
+    height: 100%;
+    transition: width 0.4s ease;
+}
+
+.risk-bar-segment.critical { background: var(--neural-danger); }
+.risk-bar-segment.high { background: #ff6600; }
+.risk-bar-segment.medium { background: var(--neural-warning); }
+.risk-bar-segment.low { background: var(--neural-success); }
+
+.risk-legend {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.risk-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.risk-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.risk-dot.critical { background: var(--neural-danger); }
+.risk-dot.high { background: #ff6600; }
+.risk-dot.medium { background: var(--neural-warning); }
+.risk-dot.low { background: var(--neural-success); }
+
+/* Controls and filters */
+.neural-select {
+    background: var(--bg-tertiary, #242942);
+    border: 1px solid rgba(0, 217, 255, 0.2);
+    color: var(--text-primary);
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.3s ease;
+}
+
+.neural-select:focus {
+    border-color: var(--neural-primary);
+}
+
+.neural-input {
+    background: var(--bg-tertiary, #242942);
+    border: 1px solid rgba(0, 217, 255, 0.2);
+    color: var(--text-primary);
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    outline: none;
+    min-width: 200px;
+    transition: border-color 0.3s ease;
+}
+
+.neural-input:focus {
+    border-color: var(--neural-primary);
+}
+
+.neural-input::placeholder {
+    color: var(--text-muted);
+}
+
+.inventory-controls {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Inventory table */
+.inventory-container {
+    overflow-x: auto;
+    max-height: 650px;
+    overflow-y: auto;
+}
+
+.persist-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+}
+
+.persist-table thead {
+    background: rgba(0, 217, 255, 0.08);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.persist-table th {
+    padding: 0.7rem 0.6rem;
+    text-align: left;
+    color: var(--neural-primary);
+    font-weight: 600;
+    border-bottom: 2px solid rgba(0, 217, 255, 0.3);
+    white-space: nowrap;
+}
+
+.persist-table td {
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    vertical-align: top;
+}
+
+.persist-table tbody tr:hover {
+    background: rgba(0, 217, 255, 0.04);
+}
+
+.persist-table tbody tr.expanded-row {
+    background: rgba(0, 217, 255, 0.06);
+}
+
+.th-expand {
+    width: 30px;
+}
+
+.expand-btn {
+    background: none;
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: var(--neural-primary);
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.expand-btn:hover {
+    background: rgba(0, 217, 255, 0.15);
+}
+
+.expand-btn.open {
+    transform: rotate(90deg);
+}
+
+.expanded-detail {
+    display: none;
+}
+
+.expanded-detail td {
+    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    background: rgba(0, 217, 255, 0.03);
+    border-bottom: 1px solid rgba(0, 217, 255, 0.08);
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 0.5rem 2rem;
+}
+
+.detail-item {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.detail-label {
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+    min-width: 80px;
+}
+
+.detail-value {
+    color: var(--text-secondary);
+    word-break: break-all;
+}
+
+.cmd-truncate {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: bottom;
+}
+
+.path-truncate {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: bottom;
+}
+
+/* Change type badges */
+.change-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.change-badge.added { background: rgba(0, 255, 136, 0.15); color: var(--neural-success); }
+.change-badge.modified { background: rgba(0, 217, 255, 0.15); color: var(--neural-primary); }
+.change-badge.removed { background: rgba(255, 51, 102, 0.15); color: var(--neural-danger); }
+.change-badge.unchanged { background: rgba(107, 122, 153, 0.15); color: var(--text-muted); }
+
+/* Risk score pill */
+.risk-pill {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    min-width: 40px;
+    text-align: center;
+}
+
+.risk-pill.critical { background: rgba(255, 51, 102, 0.2); color: var(--neural-danger); }
+.risk-pill.high { background: rgba(255, 102, 0, 0.2); color: #ff6600; }
+.risk-pill.medium { background: rgba(240, 173, 78, 0.2); color: var(--neural-warning); }
+.risk-pill.low { background: rgba(0, 255, 136, 0.15); color: var(--neural-success); }
+
+/* Mechanism type badge */
+.mechanism-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: rgba(0, 217, 255, 0.1);
+    color: var(--neural-primary);
+    border: 1px solid rgba(0, 217, 255, 0.2);
+}
+
+/* Pagination */
+.inventory-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 1rem;
+    margin-top: 0.5rem;
+}
+
+.page-btn {
+    background: rgba(0, 217, 255, 0.08);
+    border: 1px solid rgba(0, 217, 255, 0.2);
+    color: var(--text-secondary);
+    padding: 0.3rem 0.65rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+}
+
+.page-btn:hover, .page-btn.active {
+    background: var(--neural-primary);
+    color: var(--bg-primary);
+    border-color: var(--neural-primary);
+}
+
+.page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+/* Timeline buttons */
+.neural-button-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    background: rgba(0, 217, 255, 0.08);
+    border: 1px solid rgba(0, 217, 255, 0.25);
+    color: var(--neural-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.neural-button-sm:hover, .neural-button-sm.active {
+    background: var(--neural-primary);
+    color: var(--bg-primary);
+}
+
+@media (max-width: 768px) {
+    .mechanism-grid {
+        grid-template-columns: 1fr;
+    }
+    .inventory-controls {
+        flex-direction: column;
+    }
+    .neural-input {
+        min-width: unset;
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ csp_nonce() }}">
+class PersistenceDashboard {
+    constructor() {
+        this.updateInterval = 8000;
+        this.autoRefresh = true;
+        this.timeWindow = 24;
+        this.timelineHours = 24;
+        this.charts = {};
+        this.inventoryData = [];
+        this.currentPage = 1;
+        this.pageSize = 25;
+        this.mechanismIcons = {
+            launchd: '\u2699',       // gear
+            cron: '\u23F0',          // alarm clock
+            ssh_key: '\uD83D\uDD11', // key
+            shell_profile: '\uD83D\uDCBB', // laptop
+            browser_ext: '\uD83C\uDF10', // globe
+            login_item: '\uD83D\uDD12', // lock
+            kext: '\u2697',          // alembic
+            plist: '\uD83D\uDCC4',   // page
+            daemon: '\uD83D\uDC7E',  // alien
+            startup: '\uD83D\uDE80',  // rocket
+            systemd: '\u2699',       // gear
+            at_job: '\u23F1',        // stopwatch
+            default: '\uD83D\uDD17'   // link
+        };
+        this.init();
+    }
+
+    init() {
+        this.initChart();
+        this.bindEvents();
+        this.startRealTimeUpdates();
+    }
+
+    bindEvents() {
+        document.getElementById('persist-refresh-btn').addEventListener('click', () => this.refreshAll());
+        document.getElementById('persist-toggle-auto-refresh-btn').addEventListener('click', () => this.toggleAutoRefresh());
+
+        document.getElementById('time-window-select').addEventListener('change', (e) => {
+            this.timeWindow = parseInt(e.target.value, 10);
+            this.refreshAll();
+        });
+
+        document.getElementById('mechanism-filter').addEventListener('change', () => this.renderInventory());
+        document.getElementById('risk-filter').addEventListener('change', () => this.renderInventory());
+
+        let searchTimeout;
+        document.getElementById('inventory-search').addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => this.renderInventory(), 300);
+        });
+
+        document.querySelectorAll('.timeline-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.timeline-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.timelineHours = parseInt(e.target.dataset.hours, 10);
+                this.loadChanges();
+            });
+        });
+    }
+
+    initChart() {
+        const ctx = document.getElementById('change-timeline-chart').getContext('2d');
+        this.charts.timeline = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: []
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#b4bcd0',
+                            font: { size: 11 },
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(10, 14, 39, 0.95)',
+                        titleColor: '#00d9ff',
+                        bodyColor: '#b4bcd0',
+                        borderColor: 'rgba(0, 217, 255, 0.25)',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#b4bcd0', maxRotation: 45 },
+                        grid: { color: 'rgba(0, 217, 255, 0.08)' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: '#b4bcd0', stepSize: 1 },
+                        grid: { color: 'rgba(0, 217, 255, 0.08)' }
+                    }
+                }
+            }
+        });
+    }
+
+    async startRealTimeUpdates() {
+        if (this.autoRefresh && !document.hidden) {
+            await this.refreshAll();
+        }
+        setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
+    }
+
+    async refreshAll() {
+        try {
+            await Promise.all([
+                this.loadStats(),
+                this.loadInventory(),
+                this.loadChanges()
+            ]);
+        } catch (error) {
+            console.error('Persistence dashboard update error:', error);
+        }
+    }
+
+    async loadStats() {
+        try {
+            const data = await DashboardCache.fetch(`/dashboard/api/persistence/stats?hours=${this.timeWindow}`, 25);
+
+            // Update total entries
+            const totalEntries = data.total_entries || 0;
+            document.getElementById('total-entries').textContent = totalEntries.toLocaleString();
+            document.getElementById('total-changes').textContent = `Changes: ${(data.total_changes || 0).toLocaleString()}`;
+
+            // Build dynamic metric cards for each mechanism
+            const statsGrid = document.getElementById('stats-grid');
+            const mechanisms = data.mechanism_counts || {};
+            const mechKeys = Object.keys(mechanisms);
+
+            // Keep the first metric card (total) and rebuild rest
+            const firstCard = statsGrid.children[0];
+            statsGrid.innerHTML = '';
+            statsGrid.appendChild(firstCard);
+
+            mechKeys.forEach(mech => {
+                const card = document.createElement('div');
+                card.className = 'metric-card';
+                card.innerHTML = `
+                    <div class="metric-value">${mechanisms[mech].toLocaleString()}</div>
+                    <div class="metric-label">${this.formatMechanismName(mech)}</div>
+                `;
+                statsGrid.appendChild(card);
+            });
+
+            // Natural language summary
+            const categoryCount = mechKeys.length;
+            const summaryEl = document.getElementById('nl-summary');
+            const topMech = mechKeys.length > 0
+                ? mechKeys.reduce((a, b) => mechanisms[a] >= mechanisms[b] ? a : b)
+                : null;
+
+            let summaryText = `${totalEntries.toLocaleString()} persistence mechanism${totalEntries !== 1 ? 's' : ''} monitored across ${categoryCount} categor${categoryCount !== 1 ? 'ies' : 'y'}.`;
+            if (topMech) {
+                summaryText += ` Highest concentration in ${this.formatMechanismName(topMech)} (${mechanisms[topMech]} entries).`;
+            }
+            if (data.total_changes > 0) {
+                summaryText += ` ${data.total_changes} change${data.total_changes !== 1 ? 's' : ''} detected in the last ${this.timeWindow}h.`;
+            }
+            summaryEl.textContent = summaryText;
+
+            // Build mechanism cards
+            this.renderMechanismCards(data);
+
+            // Populate mechanism filter dropdown
+            const filterSelect = document.getElementById('mechanism-filter');
+            const currentVal = filterSelect.value;
+            filterSelect.innerHTML = '<option value="all">All Mechanisms</option>';
+            mechKeys.sort().forEach(mech => {
+                const opt = document.createElement('option');
+                opt.value = mech;
+                opt.textContent = `${this.formatMechanismName(mech)} (${mechanisms[mech]})`;
+                filterSelect.appendChild(opt);
+            });
+            filterSelect.value = currentVal || 'all';
+
+        } catch (error) {
+            console.error('Stats load failed:', error);
+        }
+    }
+
+    renderMechanismCards(data) {
+        const grid = document.getElementById('mechanism-grid');
+        const mechanisms = data.mechanism_counts || {};
+        const riskBreakdown = data.risk_breakdown || {};
+
+        if (Object.keys(mechanisms).length === 0) {
+            grid.innerHTML = '<div style="text-align: center; padding: 3rem; color: var(--text-muted); grid-column: 1 / -1;">No persistence mechanisms detected</div>';
+            return;
+        }
+
+        const cards = Object.entries(mechanisms).sort((a, b) => b[1] - a[1]).map(([mech, count]) => {
+            const icon = this.mechanismIcons[mech] || this.mechanismIcons.default;
+            const risks = riskBreakdown[mech] || { critical: 0, high: 0, medium: 0, low: 0 };
+            const total = risks.critical + risks.high + risks.medium + risks.low || 1;
+
+            return `
+                <div class="mechanism-card" data-mechanism="${mech}">
+                    <div class="mechanism-header">
+                        <div class="mechanism-icon">${icon}</div>
+                        <div class="mechanism-name">${this.formatMechanismName(mech)}</div>
+                    </div>
+                    <div class="mechanism-count">${count.toLocaleString()}</div>
+                    <div class="mechanism-count-label">entries detected</div>
+                    <div class="risk-bar">
+                        <div class="risk-bar-segment critical" style="width: ${(risks.critical / total * 100).toFixed(1)}%"></div>
+                        <div class="risk-bar-segment high" style="width: ${(risks.high / total * 100).toFixed(1)}%"></div>
+                        <div class="risk-bar-segment medium" style="width: ${(risks.medium / total * 100).toFixed(1)}%"></div>
+                        <div class="risk-bar-segment low" style="width: ${(risks.low / total * 100).toFixed(1)}%"></div>
+                    </div>
+                    <div class="risk-legend">
+                        <div class="risk-legend-item"><span class="risk-dot critical"></span> ${risks.critical}</div>
+                        <div class="risk-legend-item"><span class="risk-dot high"></span> ${risks.high}</div>
+                        <div class="risk-legend-item"><span class="risk-dot medium"></span> ${risks.medium}</div>
+                        <div class="risk-legend-item"><span class="risk-dot low"></span> ${risks.low}</div>
+                    </div>
+                </div>
+            `;
+        });
+
+        grid.innerHTML = cards.join('');
+
+        // Click to filter inventory
+        grid.querySelectorAll('.mechanism-card').forEach(card => {
+            card.style.cursor = 'pointer';
+            card.addEventListener('click', () => {
+                const mech = card.dataset.mechanism;
+                document.getElementById('mechanism-filter').value = mech;
+                this.renderInventory();
+                document.getElementById('inventory-table').scrollIntoView({ behavior: 'smooth' });
+            });
+        });
+    }
+
+    async loadInventory() {
+        try {
+            document.getElementById('inventory-loading').style.display = 'inline-block';
+            const data = await DashboardCache.fetch(`/dashboard/api/persistence/inventory?limit=200`, 30);
+            this.inventoryData = data.entries || data.inventory || [];
+            this.currentPage = 1;
+            this.renderInventory();
+        } catch (error) {
+            console.error('Inventory load failed:', error);
+        } finally {
+            document.getElementById('inventory-loading').style.display = 'none';
+        }
+    }
+
+    renderInventory() {
+        const mechFilter = document.getElementById('mechanism-filter').value;
+        const riskFilter = document.getElementById('risk-filter').value;
+        const searchTerm = document.getElementById('inventory-search').value.toLowerCase().trim();
+
+        let filtered = this.inventoryData;
+
+        if (mechFilter !== 'all') {
+            filtered = filtered.filter(e => e.mechanism === mechFilter);
+        }
+
+        if (riskFilter !== 'all') {
+            filtered = filtered.filter(e => {
+                const rs = e.risk_score || 0;
+                switch (riskFilter) {
+                    case 'critical': return rs >= 0.8;
+                    case 'high': return rs >= 0.6 && rs < 0.8;
+                    case 'medium': return rs >= 0.3 && rs < 0.6;
+                    case 'low': return rs < 0.3;
+                    default: return true;
+                }
+            });
+        }
+
+        if (searchTerm) {
+            filtered = filtered.filter(e => {
+                const haystack = [
+                    e.mechanism, e.entry_id, e.path, e.command, e.user, e.change_type
+                ].filter(Boolean).join(' ').toLowerCase();
+                return haystack.includes(searchTerm);
+            });
+        }
+
+        const totalPages = Math.max(1, Math.ceil(filtered.length / this.pageSize));
+        if (this.currentPage > totalPages) this.currentPage = totalPages;
+        const start = (this.currentPage - 1) * this.pageSize;
+        const pageItems = filtered.slice(start, start + this.pageSize);
+
+        const tbody = document.getElementById('inventory-body');
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 2rem; color: var(--text-muted);">No entries match current filters</td></tr>';
+            document.getElementById('inventory-pagination').innerHTML = '';
+            return;
+        }
+
+        const rows = pageItems.map((entry, idx) => {
+            const riskClass = this.getRiskClass(entry.risk_score);
+            const changeClass = (entry.change_type || 'unchanged').toLowerCase();
+            const rowId = `detail-${start + idx}`;
+
+            return `
+                <tr class="inventory-row" data-detail="${rowId}">
+                    <td><button class="expand-btn" data-target="${rowId}">&#9654;</button></td>
+                    <td><span class="mechanism-badge">${entry.mechanism || '--'}</span></td>
+                    <td style="font-family: monospace; font-size: 0.78rem;">${entry.entry_id || '--'}</td>
+                    <td><span class="path-truncate" title="${this.escapeHtml(entry.path || '')}">${this.escapeHtml(entry.path || '--')}</span></td>
+                    <td><span class="cmd-truncate" title="${this.escapeHtml(entry.command || '')}">${this.escapeHtml(entry.command || '--')}</span></td>
+                    <td>${entry.user || '--'}</td>
+                    <td><span class="change-badge ${changeClass}">${entry.change_type || '--'}</span></td>
+                    <td><span class="risk-pill ${riskClass}">${entry.risk_score != null ? entry.risk_score.toFixed(2) : '--'}</span></td>
+                    <td style="white-space: nowrap; font-size: 0.78rem;">${this.formatTimestamp(entry.timestamp)}</td>
+                </tr>
+                <tr class="expanded-detail" id="${rowId}">
+                    <td colspan="9">
+                        <div class="detail-grid">
+                            <div class="detail-item"><span class="detail-label">Mechanism:</span><span class="detail-value">${entry.mechanism || '--'}</span></div>
+                            <div class="detail-item"><span class="detail-label">Entry ID:</span><span class="detail-value">${entry.entry_id || '--'}</span></div>
+                            <div class="detail-item"><span class="detail-label">Full Path:</span><span class="detail-value">${this.escapeHtml(entry.path || '--')}</span></div>
+                            <div class="detail-item"><span class="detail-label">Command:</span><span class="detail-value">${this.escapeHtml(entry.command || '--')}</span></div>
+                            <div class="detail-item"><span class="detail-label">User:</span><span class="detail-value">${entry.user || '--'}</span></div>
+                            <div class="detail-item"><span class="detail-label">Change Type:</span><span class="detail-value">${entry.change_type || '--'}</span></div>
+                            <div class="detail-item"><span class="detail-label">Risk Score:</span><span class="detail-value">${entry.risk_score != null ? entry.risk_score.toFixed(4) : '--'}</span></div>
+                            <div class="detail-item"><span class="detail-label">Timestamp:</span><span class="detail-value">${entry.timestamp || '--'}</span></div>
+                            ${entry.hash ? `<div class="detail-item"><span class="detail-label">Hash:</span><span class="detail-value" style="font-family: monospace; font-size: 0.75rem;">${entry.hash}</span></div>` : ''}
+                            ${entry.agent_name ? `<div class="detail-item"><span class="detail-label">Agent:</span><span class="detail-value">${entry.agent_name}</span></div>` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = rows.join('');
+
+        // Bind expand buttons
+        tbody.querySelectorAll('.expand-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const targetId = btn.dataset.target;
+                const detailRow = document.getElementById(targetId);
+                const parentRow = btn.closest('tr');
+
+                if (detailRow.style.display === 'table-row') {
+                    detailRow.style.display = 'none';
+                    btn.classList.remove('open');
+                    parentRow.classList.remove('expanded-row');
+                } else {
+                    detailRow.style.display = 'table-row';
+                    btn.classList.add('open');
+                    parentRow.classList.add('expanded-row');
+                }
+            });
+        });
+
+        // Pagination
+        this.renderPagination(filtered.length, totalPages);
+    }
+
+    renderPagination(totalItems, totalPages) {
+        const container = document.getElementById('inventory-pagination');
+
+        if (totalPages <= 1) {
+            container.innerHTML = `<span style="color: var(--text-muted); font-size: 0.8rem;">${totalItems} entries</span>`;
+            return;
+        }
+
+        let html = `<span style="color: var(--text-muted); font-size: 0.8rem; margin-right: 0.75rem;">${totalItems} entries</span>`;
+        html += `<button class="page-btn" data-page="prev" ${this.currentPage <= 1 ? 'disabled' : ''}>&laquo;</button>`;
+
+        const maxVisible = 7;
+        let startPage = Math.max(1, this.currentPage - Math.floor(maxVisible / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+        if (endPage - startPage < maxVisible - 1) startPage = Math.max(1, endPage - maxVisible + 1);
+
+        for (let p = startPage; p <= endPage; p++) {
+            html += `<button class="page-btn ${p === this.currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`;
+        }
+
+        html += `<button class="page-btn" data-page="next" ${this.currentPage >= totalPages ? 'disabled' : ''}>&raquo;</button>`;
+        container.innerHTML = html;
+
+        container.querySelectorAll('.page-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const page = btn.dataset.page;
+                if (page === 'prev') this.currentPage = Math.max(1, this.currentPage - 1);
+                else if (page === 'next') this.currentPage = Math.min(totalPages, this.currentPage + 1);
+                else this.currentPage = parseInt(page, 10);
+                this.renderInventory();
+            });
+        });
+    }
+
+    async loadChanges() {
+        try {
+            const data = await DashboardCache.fetch(`/dashboard/api/persistence/changes?hours=${this.timelineHours}`, 30);
+
+            const buckets = data.buckets || data.timeline || [];
+            const mechanismSet = new Set();
+            buckets.forEach(b => {
+                Object.keys(b.mechanisms || {}).forEach(m => mechanismSet.add(m));
+            });
+
+            const mechanisms = Array.from(mechanismSet).sort();
+            const colors = ['#00d9ff', '#00ff88', '#ff3366', '#f0ad4e', '#ff6600', '#9b59b6', '#3498db', '#e74c3c', '#2ecc71', '#e67e22'];
+
+            const datasets = mechanisms.map((mech, i) => ({
+                label: this.formatMechanismName(mech),
+                data: buckets.map(b => (b.mechanisms || {})[mech] || 0),
+                borderColor: colors[i % colors.length],
+                backgroundColor: colors[i % colors.length] + '1A',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                borderWidth: 2
+            }));
+
+            this.charts.timeline.data.labels = buckets.map(b => b.label || b.time || '');
+            this.charts.timeline.data.datasets = datasets;
+            this.charts.timeline.update();
+
+        } catch (error) {
+            console.error('Changes timeline load failed:', error);
+        }
+    }
+
+    formatMechanismName(mech) {
+        return (mech || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    getRiskClass(score) {
+        if (score == null) return 'low';
+        if (score >= 0.8) return 'critical';
+        if (score >= 0.6) return 'high';
+        if (score >= 0.3) return 'medium';
+        return 'low';
+    }
+
+    escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    formatTimestamp(ts) {
+        if (!ts) return '--';
+        try {
+            const d = new Date(ts);
+            return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        } catch {
+            return ts;
+        }
+    }
+
+    toggleAutoRefresh() {
+        this.autoRefresh = !this.autoRefresh;
+        const btn = document.getElementById('auto-refresh-btn');
+        btn.textContent = this.autoRefresh ? 'Pause Auto-Refresh' : 'Resume Auto-Refresh';
+    }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    window.persistenceDashboard = new PersistenceDashboard();
+});
+</script>
+{% endblock %}

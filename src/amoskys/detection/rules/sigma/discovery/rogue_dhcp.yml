@@ -1,0 +1,29 @@
+title: Rogue DHCP Server Detected
+id: amoskys-disc-005
+status: stable
+level: critical
+description: Detects rogue DHCP servers or multiple gateways on the network indicating potential man-in-the-middle positioning or network hijacking attempts
+author: AMOSKYS
+tags:
+    - attack.discovery
+    - attack.t1557.001
+logsource:
+    category: network_connection
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - rogue_dhcp_detected
+            - multiple_gateways
+    condition: selection
+fields:
+    - dhcp_server_ip
+    - gateway_ip
+    - offered_subnet
+    - legitimate_server_ip
+    - source_mac
+falsepositives:
+    - Legitimate secondary DHCP servers in segmented networks
+    - Network migrations with overlapping DHCP scopes
+    - VPN gateways presenting additional routes
+confidence: 0.85

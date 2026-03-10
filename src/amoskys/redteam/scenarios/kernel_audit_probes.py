@@ -27,8 +27,8 @@ Run:
 from __future__ import annotations
 
 from amoskys.agents.common.probes import Severity
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-from amoskys.agents.kernel_audit.probes import (
+from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.os.linux.kernel_audit.probes import (
     AuditTamperProbe,
     ExecveHighRiskProbe,
     FilePermissionTamperProbe,
@@ -79,7 +79,9 @@ _EXECVE_POS1 = AdversarialCase(
         "execve with exe starting with /tmp/ matches HIGH_RISK_DIRS. "
         "uid==euid==501 (neither setuid nor root) → MEDIUM severity."
     ),
-    events=[_ke("execve", "ka-e01", exe="/tmp/exploit", comm="exploit", uid=501, euid=501)],
+    events=[
+        _ke("execve", "ka-e01", exe="/tmp/exploit", comm="exploit", uid=501, euid=501)
+    ],
     expect_count=1,
     expect_event_types=["kernel_execve_high_risk"],
     expect_severity=Severity.MEDIUM,
@@ -98,7 +100,9 @@ _EXECVE_POS2 = AdversarialCase(
         "exe starts with /tmp/ → HIGH_RISK_DIRS match. "
         "uid=501 but euid=0 (uid!=0 and euid==0) → escalates to HIGH severity."
     ),
-    events=[_ke("execve", "ka-e02", exe="/tmp/rootkit", comm="rootkit", uid=501, euid=0)],
+    events=[
+        _ke("execve", "ka-e02", exe="/tmp/rootkit", comm="rootkit", uid=501, euid=0)
+    ],
     expect_count=1,
     expect_event_types=["kernel_execve_high_risk"],
     expect_severity=Severity.HIGH,
@@ -117,7 +121,9 @@ _EXECVE_POS3 = AdversarialCase(
         "exe starts with /dev/shm/ → HIGH_RISK_DIRS match. "
         "uid=0 (root execution) → HIGH severity."
     ),
-    events=[_ke("execve", "ka-e03", exe="/dev/shm/c2_agent", comm="c2_agent", uid=0, euid=0)],
+    events=[
+        _ke("execve", "ka-e03", exe="/dev/shm/c2_agent", comm="c2_agent", uid=0, euid=0)
+    ],
     expect_count=1,
     expect_event_types=["kernel_execve_high_risk"],
     expect_severity=Severity.HIGH,
@@ -140,7 +146,9 @@ _EXECVE_EVA1 = AdversarialCase(
         "On macOS hosts where audit logs report the resolved path, "
         "this is a systematic false-negative."
     ),
-    events=[_ke("execve", "ka-e04", exe="/private/tmp/evil", comm="evil", uid=501, euid=501)],
+    events=[
+        _ke("execve", "ka-e04", exe="/private/tmp/evil", comm="evil", uid=501, euid=501)
+    ],
     expect_evades=True,
 )
 
@@ -784,9 +792,7 @@ _KMOD_BEN1 = AdversarialCase(
         "execve ∉ MODULE_SYSCALLS → probe skips. Zero events emitted. "
         "Probe correctly scopes to module-related syscalls only."
     ),
-    events=[
-        _ke("execve", "ka-k07", uid=0, exe="/usr/sbin/insmod", comm="insmod")
-    ],
+    events=[_ke("execve", "ka-k07", uid=0, exe="/usr/sbin/insmod", comm="insmod")],
     expect_count=0,
     expect_evades=False,
 )
@@ -1337,7 +1343,14 @@ _FPERM_BEN2 = AdversarialCase(
         "Routine user operations do not trigger this probe."
     ),
     events=[
-        _ke("chown", "ka-f08", uid=501, euid=501, path="/home/user/project", comm="chown")
+        _ke(
+            "chown",
+            "ka-f08",
+            uid=501,
+            euid=501,
+            path="/home/user/project",
+            comm="chown",
+        )
     ],
     expect_count=0,
     expect_evades=False,
@@ -1560,9 +1573,7 @@ _AUDIT_BEN1 = AdversarialCase(
         "path=/var/log/syslog ∉ AUDIT_FILES → probe skips. "
         "No false positive on normal syslog access."
     ),
-    events=[
-        _ke("openat", "ka-a07", uid=0, path="/var/log/syslog", comm="rsyslogd")
-    ],
+    events=[_ke("openat", "ka-a07", uid=0, path="/var/log/syslog", comm="rsyslogd")],
     expect_count=0,
     expect_evades=False,
 )
@@ -1576,9 +1587,7 @@ _AUDIT_BEN2 = AdversarialCase(
         "/usr/bin/ls is not in that list."
     ),
     why="ls ∉ AUDIT_BINARIES → probe skips. Zero events emitted.",
-    events=[
-        _ke("execve", "ka-a08", uid=501, exe="/usr/bin/ls", comm="ls")
-    ],
+    events=[_ke("execve", "ka-a08", uid=501, exe="/usr/bin/ls", comm="ls")],
     expect_count=0,
     expect_evades=False,
 )

@@ -1,0 +1,30 @@
+title: ARP-Based Network Discovery
+id: amoskys-disc-002
+status: stable
+level: medium
+description: Detects new ARP entries or ARP host bursts indicating network discovery activity where an adversary is enumerating live hosts on the local network segment
+author: AMOSKYS
+tags:
+    - attack.discovery
+    - attack.t1018
+logsource:
+    category: network_connection
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - arp_new_host
+            - arp_host_burst
+    condition: selection
+fields:
+    - source_ip
+    - source_mac
+    - discovered_ip
+    - discovered_mac
+    - arp_count
+    - interface
+falsepositives:
+    - DHCP lease renewals causing ARP updates
+    - Network equipment reboots triggering ARP floods
+    - Legitimate network inventory tools
+confidence: 0.72

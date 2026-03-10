@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence
 from amoskys.agents.common.metrics import AgentMetrics
 
 if TYPE_CHECKING:
+    from amoskys.agents.common.agent_bus import AgentBus
     from amoskys.messaging_pb2 import TelemetryEvent as ProtoEvent
 
 logger = logging.getLogger(__name__)
@@ -199,6 +200,7 @@ class HardenedAgentBase(abc.ABC):
         local_queue: Optional[Any] = None,
         queue_adapter: Optional[Any] = None,
         metrics_interval: float = 60.0,
+        agent_bus: Optional["AgentBus"] = None,
     ) -> None:
         """Initialize hardened agent base.
 
@@ -210,6 +212,8 @@ class HardenedAgentBase(abc.ABC):
             local_queue: LocalQueue instance for offline resilience
             queue_adapter: LocalQueueAdapter for simplified queue interface
             metrics_interval: Seconds between metrics telemetry emissions
+            agent_bus: AgentBus for cross-agent communication. If None,
+                      agents operate in isolated mode (v1 behavior).
         """
         self.agent_name = agent_name
         self.device_id = device_id
@@ -217,6 +221,7 @@ class HardenedAgentBase(abc.ABC):
         self.eventbus_publisher = eventbus_publisher
         self.local_queue = local_queue
         self.queue_adapter = queue_adapter
+        self.agent_bus = agent_bus
 
         self.circuit_breaker = CircuitBreaker(
             _on_transition=self._on_circuit_breaker_transition,
@@ -386,6 +391,49 @@ class HardenedAgentBase(abc.ABC):
         """
         pass
 
+    # ----------------- Observation Helpers ----------------------------------
+
+    def _make_observation_events(
+        self,
+        items: list,
+        domain: str,
+        field_mapper,
+    ):
+        """Convert raw collector items to observation TelemetryEvents.
+
+        Each item in ``items`` is mapped to a TelemetryEvent with
+        ``event_type="obs_{domain}"``.  The ``field_mapper`` callable
+        receives a single item and must return a ``Dict[str, Any]``
+        of all fields to store as event data.
+
+        Args:
+            items: Raw collector output (list of dataclass instances).
+            domain: Domain identifier (e.g. "process", "flow", "dns").
+            field_mapper: Callable(item) -> Dict[str, Any].
+
+        Returns:
+            List of TelemetryEvent observation objects.
+        """
+        from amoskys.agents.common.probes import Severity, TelemetryEvent
+
+        events = []
+        for item in items:
+            try:
+                data = field_mapper(item)
+                data["_domain"] = domain
+                events.append(
+                    TelemetryEvent(
+                        event_type=f"obs_{domain}",
+                        severity=Severity.INFO,
+                        probe_name=f"{domain}_collector",
+                        data=data,
+                        confidence=0.0,
+                    )
+                )
+            except Exception:
+                pass  # Skip malformed items silently
+        return events
+
     # ----------------- EventBus Publishing & Queue -------------------------
 
     def _publish_to_eventbus(self, events: Sequence[Any]) -> None:
@@ -484,7 +532,8 @@ class HardenedAgentBase(abc.ABC):
         Behavior:
             Best-effort only. Logs failures but doesn't raise.
         """
-        if not self.local_queue:
+        queue = self.local_queue or self.queue_adapter
+        if not queue:
             logger.error(
                 "DATA_LOSS: Agent %s has no local queue; " "%d events permanently lost",
                 self.agent_name,
@@ -495,7 +544,7 @@ class HardenedAgentBase(abc.ABC):
 
         for ev in events:
             try:
-                self.local_queue.enqueue(ev)
+                queue.enqueue(ev)
             except Exception as e:
                 logger.error(
                     "Failed to enqueue event for %s: %s",
@@ -684,7 +733,7 @@ class HardenedAgentBase(abc.ABC):
         Usage:
             Can be exposed via /health endpoint or metrics
         """
-        return {
+        health = {
             "agent_name": self.agent_name,
             "device_id": self.device_id,
             "uptime_seconds": time.time() - self.start_time,
@@ -693,7 +742,14 @@ class HardenedAgentBase(abc.ABC):
             "error_count": self.error_count,
             "circuit_breaker_state": self.circuit_breaker.state,
             "local_queue_size": (self.local_queue.size() if self.local_queue else 0),
+            "agent_bus_connected": self.agent_bus is not None,
         }
+        if self.agent_bus is not None:
+            try:
+                health["peer_agents_visible"] = len(self.agent_bus.get_active_agents())
+            except Exception:
+                health["peer_agents_visible"] = 0
+        return health
 
     # ----------------- AOC-1 Observability (P0-2, P0-3) --------------------
 
@@ -854,11 +910,14 @@ class HardenedAgentBase(abc.ABC):
                     )
                     enriched.append(ev)  # Pass through unenriched
 
-            # Step 4: Publish — prefer queue_adapter (signed envelopes) over
-            # direct EventBus publish (which lacks signing and gets rejected).
+            # Step 4: Publish — prefer queue_adapter (signed envelopes),
+            # then local_queue, then EventBus retry as last resort.
             # WAL processor drains local queues into the telemetry store.
             if enriched:
-                if self.local_queue:
+                if self.queue_adapter:
+                    for ev in enriched:
+                        self.queue_adapter.enqueue(ev)
+                elif self.local_queue:
                     for ev in enriched:
                         self.local_queue.enqueue(ev)
                 else:

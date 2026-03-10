@@ -244,6 +244,9 @@ class User(TimestampMixin, Base):
         default=False,
         nullable=False,
     )
+    selected_coverage: Mapped[Optional[str]] = mapped_column(
+        Text,
+    )  # JSON list of selected agent IDs, e.g. '["proc","auth","fim","flow"]'
 
     # Relationships
     sessions: Mapped[List["Session"]] = relationship(

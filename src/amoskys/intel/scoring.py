@@ -364,13 +364,27 @@ class TemporalScorer:
         category = event.get("event_category", "")
         action = event.get("event_action", "")
         source_ip = ""
-        if isinstance(event.get("indicators"), dict):
-            source_ip = event["indicators"].get("source_ip", "")
+        indicators = (
+            event.get("indicators") if isinstance(event.get("indicators"), dict) else {}
+        )
+        if indicators:
+            source_ip = indicators.get("source_ip", "")
 
         # Factor 1: Off-hours activity
-        ts_dt = event.get("timestamp_dt", "")
+        # Prefer probe detection timestamp over ingestion timestamp
         hour = None
-        if ts_dt and "T" in str(ts_dt):
+        evt_ts_ns = event.get("event_timestamp_ns")
+        ts_dt = event.get("timestamp_dt", "")
+        if evt_ts_ns and evt_ts_ns > 0:
+            try:
+                from datetime import datetime as _dt
+                from datetime import timezone as _tz
+
+                probe_dt = _dt.fromtimestamp(evt_ts_ns / 1e9, tz=_tz.utc)
+                hour = probe_dt.hour
+            except (OSError, ValueError, OverflowError):
+                pass
+        if hour is None and ts_dt and "T" in str(ts_dt):
             try:
                 time_part = str(ts_dt).split("T")[1]
                 hour = int(time_part.split(":")[0])
@@ -412,6 +426,43 @@ class TemporalScorer:
                     "detail": f"First time seeing {source_ip} performing '{action}' on this device",
                 }
             )
+
+        # Factor 4: Probe latency anomaly — delayed events are suspicious
+        probe_latency = event.get("probe_latency_ns")
+        if probe_latency is not None and probe_latency > 30_000_000_000:  # > 30 seconds
+            contrib = 0.15
+            total += contrib
+            latency_s = probe_latency / 1e9
+            factors.append(
+                {
+                    "name": "High Probe Latency",
+                    "contribution": contrib,
+                    "detail": f"Event delayed {latency_s:.1f}s from detection to ingestion",
+                }
+            )
+
+        # Factor 5: Endpoint temporal probe signals (pass-through from correlation probes)
+        endpoint_signals = [
+            ("burst_score", 1.0, 0.10, "Endpoint Burst Score"),
+            ("acceleration", 0.003, 0.08, "Endpoint Acceleration"),
+            ("jitter_score", 0.6, 0.07, "Endpoint Periodicity"),
+        ]
+        for key, threshold, max_contrib, label in endpoint_signals:
+            val = indicators.get(key)
+            if val is not None:
+                try:
+                    val = float(val)
+                except (TypeError, ValueError):
+                    continue
+                if val > threshold:
+                    total += max_contrib
+                    factors.append(
+                        {
+                            "name": label,
+                            "contribution": max_contrib,
+                            "detail": f"{key}={val:.3f} (threshold {threshold})",
+                        }
+                    )
 
         return (min(1.0, total), factors)
 

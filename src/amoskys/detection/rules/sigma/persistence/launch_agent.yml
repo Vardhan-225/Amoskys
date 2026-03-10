@@ -1,0 +1,31 @@
+title: New LaunchAgent or LaunchDaemon Created
+id: amoskys-persist-001
+status: stable
+level: high
+description: Detects creation of new LaunchAgent or LaunchDaemon plist files on macOS, which attackers use to establish persistence by automatically executing malicious code at login or system startup
+author: AMOSKYS
+tags:
+    - attack.persistence
+    - attack.t1543.001
+logsource:
+    category: file_event
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - new_launch_agent
+            - new_launch_daemon
+    condition: selection
+fields:
+    - file_path
+    - file_name
+    - plist_label
+    - program_arguments
+    - process_name
+    - pid
+    - user
+falsepositives:
+    - Legitimate application installations registering LaunchAgents
+    - System updates creating new LaunchDaemons
+    - MDM-managed software deployments
+confidence: 0.80

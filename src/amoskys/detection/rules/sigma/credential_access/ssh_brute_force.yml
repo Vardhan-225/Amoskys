@@ -1,0 +1,25 @@
+title: SSH Brute Force Detection
+id: amoskys-cred-001
+status: stable
+level: high
+description: Detects 5+ SSH login failures indicating brute force attempt
+author: AMOSKYS
+tags:
+    - attack.credential_access
+    - attack.t1110.001
+logsource:
+    category: authentication
+    product: amoskys
+detection:
+    selection:
+        event_type: ssh_login_failure
+    condition: selection
+    timeframe: 5m
+fields:
+    - source_ip
+    - username
+    - pid
+falsepositives:
+    - Automated SSH key rotation
+    - CI/CD misconfigured credentials
+confidence: 0.85

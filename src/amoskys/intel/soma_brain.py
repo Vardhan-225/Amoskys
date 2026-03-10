@@ -317,7 +317,17 @@ class SomaBrain:
             "requires_investigation",
         ]
         # Optional columns that may or may not exist in the schema
-        optional_cols = ["target_resource", "details", "description", "label_source"]
+        optional_cols = [
+            "target_resource",
+            "details",
+            "description",
+            "label_source",
+            "event_timestamp_ns",
+            "event_id",
+            "probe_latency_ns",
+            "quality_state",
+            "training_exclude",
+        ]
 
         try:
             conn = sqlite3.connect(
@@ -336,9 +346,19 @@ class SomaBrain:
                 if oc in existing_cols:
                     select_cols.append(oc)
 
+            where_clauses = []
+            if "quality_state" in existing_cols:
+                where_clauses.append("LOWER(COALESCE(quality_state, 'valid')) = 'valid'")
+            if "training_exclude" in existing_cols:
+                where_clauses.append(
+                    "COALESCE(CAST(training_exclude AS TEXT), '0') IN ('0', 'false', 'FALSE', 'False')"
+                )
+            where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
             query = f"""
                 SELECT {', '.join(select_cols)}
                 FROM security_events
+                {where_sql}
                 ORDER BY timestamp_dt DESC
                 LIMIT ?
             """
@@ -381,6 +401,82 @@ class SomaBrain:
             features["day_of_week"] = 3.0
             features["is_business_hours"] = 1.0
             features["is_weekend"] = 0.0
+
+        # Probe-local temporal features (from event_timestamp_ns — Step 3)
+        if "event_timestamp_ns" in df.columns:
+            evt_ts = pd.to_numeric(df["event_timestamp_ns"], errors="coerce").astype(
+                "float64"
+            )
+            evt_ts = evt_ts.replace([np.inf, -np.inf], np.nan)
+            # Support mixed timestamp scales without overflowing pandas conversion.
+            valid_ts = evt_ts.dropna()
+            if not valid_ts.empty:
+                median_ts = float(valid_ts.median())
+                if median_ts > 1e17:  # nanoseconds
+                    evt_ts = evt_ts / 1e9
+                elif median_ts > 1e14:  # microseconds
+                    evt_ts = evt_ts / 1e6
+                elif median_ts > 1e11:  # milliseconds
+                    evt_ts = evt_ts / 1e3
+            evt_ts = evt_ts.where(
+                (evt_ts >= 0) & (evt_ts <= 32_503_680_000),
+                np.nan,
+            )
+            probe_dt = pd.to_datetime(
+                evt_ts.fillna(0).astype("int64"),
+                unit="s",
+                errors="coerce",
+                utc=True,
+            )
+            probe_dt = probe_dt.where(evt_ts.notna())
+            features["probe_hour_of_day"] = probe_dt.dt.hour.fillna(
+                features["hour_of_day"]
+            ).astype(float)
+            features["probe_is_off_hours"] = (
+                (features["probe_hour_of_day"] < 6)
+                | (features["probe_hour_of_day"] >= 22)
+            ).astype(float)
+        else:
+            features["probe_hour_of_day"] = features["hour_of_day"]
+            features["probe_is_off_hours"] = 0.0
+
+        if "probe_latency_ns" in df.columns:
+            latency_ns = pd.to_numeric(df["probe_latency_ns"], errors="coerce").fillna(
+                0
+            )
+            features["probe_ingestion_lag_s"] = (latency_ns / 1e9).astype(float)
+            features["is_high_latency"] = (latency_ns > 30e9).astype(float)
+        else:
+            features["probe_ingestion_lag_s"] = 0.0
+            features["is_high_latency"] = 0.0
+
+        # Endpoint temporal probe signals (from indicators JSON)
+        for sig_key in ["burst_score", "acceleration", "jitter_score", "rate"]:
+            col_name = f"endpoint_{sig_key}"
+            features[col_name] = (
+                df["indicators"]
+                .apply(lambda x, k=sig_key: self._json_float_key(x, k))
+                .astype(float)
+            )
+
+        # Inter-event gap per device+category (using event_timestamp_ns)
+        if "event_timestamp_ns" in df.columns:
+            evt_ts_vals = pd.to_numeric(df["event_timestamp_ns"], errors="coerce")
+            group_key = (
+                df["device_id"].astype(str) + "|" + df["event_category"].astype(str)
+            )
+            features["inter_event_gap_s"] = (
+                (evt_ts_vals.groupby(group_key).diff().fillna(0) / 1e9)
+                .abs()
+                .astype(float)
+            )
+            features["is_rapid_succession"] = (
+                (features["inter_event_gap_s"] > 0)
+                & (features["inter_event_gap_s"] < 2.0)
+            ).astype(float)
+        else:
+            features["inter_event_gap_s"] = 0.0
+            features["is_rapid_succession"] = 0.0
 
         # Categorical features (LabelEncoder)
         for col in ["event_category", "event_action", "collection_agent"]:
@@ -462,6 +558,17 @@ class SomaBrain:
             lambda x: 1.0 if x else 0.0
         )
 
+        # Kill chain sequence match (from Step 4 — WAL processor injects this)
+        features["in_kill_chain"] = (
+            df["indicators"]
+            .apply(
+                lambda x: (
+                    1.0 if self._json_float_key(x, "sequence_match_score") > 0 else 0.0
+                )
+            )
+            .astype(float)
+        )
+
         # Clean up any remaining NaN/inf
         features = features.fillna(0.0)
         features = features.replace([np.inf, -np.inf], 0.0)
@@ -496,6 +603,19 @@ class SomaBrain:
             return False
         except (json.JSONDecodeError, TypeError):
             return False
+
+    @staticmethod
+    def _json_float_key(val, key: str) -> float:
+        """Extract a numeric value from a JSON dict by key, defaulting to 0.0."""
+        if not val or val == "null":
+            return 0.0
+        try:
+            parsed = json.loads(val) if isinstance(val, str) else val
+            if isinstance(parsed, dict) and key in parsed:
+                return float(parsed[key])
+            return 0.0
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return 0.0
 
     @staticmethod
     def _count_json_keys(val) -> int:
@@ -1581,16 +1701,30 @@ class AutoCalibrator:
                 f"file:{db_path}?mode=ro", uri=True, check_same_thread=False
             )
             conn.execute("PRAGMA query_only = ON")
+            cols = {
+                row[1] for row in conn.execute("PRAGMA table_info(security_events)").fetchall()
+            }
+            quality_where = ""
+            if "quality_state" in cols:
+                quality_where += (
+                    " AND LOWER(COALESCE(quality_state, 'valid')) = 'valid'"
+                )
+            if "training_exclude" in cols:
+                quality_where += (
+                    " AND COALESCE(CAST(training_exclude AS TEXT), '0') "
+                    "IN ('0', 'false', 'FALSE', 'False')"
+                )
 
             # Find (category, action) pairs classified malicious for 6+ hours
             rows = conn.execute(
-                """
+                f"""
                 SELECT event_category, event_action, COUNT(*) as cnt,
                        MIN(timestamp_dt) as first_seen,
                        MAX(timestamp_dt) as last_seen
                 FROM security_events
                 WHERE final_classification = 'malicious'
                   AND timestamp_dt > datetime('now', '-24 hours')
+                  {quality_where}
                 GROUP BY event_category, event_action
                 HAVING cnt >= ?
                    AND (julianday(MAX(timestamp_dt)) - julianday(MIN(timestamp_dt))) * 24 >= 6
@@ -1624,15 +1758,29 @@ class AutoCalibrator:
                 f"file:{db_path}?mode=ro", uri=True, check_same_thread=False
             )
             conn.execute("PRAGMA query_only = ON")
+            cols = {
+                row[1] for row in conn.execute("PRAGMA table_info(security_events)").fetchall()
+            }
+            quality_where = ""
+            if "quality_state" in cols:
+                quality_where += (
+                    " AND LOWER(COALESCE(quality_state, 'valid')) = 'valid'"
+                )
+            if "training_exclude" in cols:
+                quality_where += (
+                    " AND COALESCE(CAST(training_exclude AS TEXT), '0') "
+                    "IN ('0', 'false', 'FALSE', 'False')"
+                )
 
             rows = conn.execute(
-                """
+                f"""
                 SELECT event_category, event_action, COUNT(*) as cnt
                 FROM security_events
                 WHERE final_classification = 'suspicious'
                   AND requires_investigation = 0
                   AND timestamp_dt < datetime('now', '-24 hours')
                   AND timestamp_dt > datetime('now', '-7 days')
+                  {quality_where}
                 GROUP BY event_category, event_action
                 HAVING cnt >= ?
             """,

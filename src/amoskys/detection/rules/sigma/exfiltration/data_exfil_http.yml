@@ -1,0 +1,30 @@
+title: Data Exfiltration via Large HTTP POST
+id: amoskys-exfil-002
+status: stable
+level: high
+description: Detects unusually large HTTP POST requests that may indicate data exfiltration over HTTP/HTTPS channels
+author: AMOSKYS
+tags:
+    - attack.exfiltration
+    - attack.t1048
+logsource:
+    category: network
+    product: amoskys
+detection:
+    selection:
+        event_type: data_exfil_http
+    condition: selection
+fields:
+    - source_ip
+    - destination_ip
+    - destination_host
+    - http_method
+    - content_length
+    - url_path
+    - user_agent
+    - pid
+falsepositives:
+    - Large file uploads to sanctioned services
+    - Backup agents transmitting data to authorized endpoints
+    - CI/CD artifact uploads
+confidence: 0.70

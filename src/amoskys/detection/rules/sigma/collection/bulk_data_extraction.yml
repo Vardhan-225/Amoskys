@@ -1,0 +1,28 @@
+title: Bulk Data Extraction from Database
+id: amoskys-coll-001
+status: stable
+level: high
+description: Detects bulk data extraction from databases indicating potential data collection for exfiltration via large query result sets or database dump operations
+author: AMOSKYS
+tags:
+    - attack.collection
+    - attack.t1005
+logsource:
+    category: database
+    product: amoskys
+detection:
+    selection:
+        event_type: bulk_extraction
+    condition: selection
+fields:
+    - db_user
+    - database_name
+    - table_name
+    - row_count
+    - query
+    - source_ip
+falsepositives:
+    - Scheduled ETL jobs and data warehouse loads
+    - Database backup operations
+    - Legitimate reporting queries against large tables
+confidence: 0.75

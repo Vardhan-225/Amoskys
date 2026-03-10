@@ -256,9 +256,7 @@ class ReportBuilder:
             sev_badge = f"**[{ev.severity}]**" if ev.severity != "N/A" else "[N/A]"
             status = "✓ PASS" if ev.passed else "✗ FAIL"
 
-            lines.append(
-                f"### {ev.seq}. {icon} {label}: {ev.case_title}"
-            )
+            lines.append(f"### {ev.seq}. {icon} {label}: {ev.case_title}")
             lines.append("")
             lines.append(f"| Field | Value |")
             lines.append(f"|-------|-------|")
@@ -266,7 +264,9 @@ class ReportBuilder:
             lines.append(f"| Detection | `{ev.event_type}` |")
             lines.append(f"| Severity | {sev_badge} |")
             lines.append(
-                f"| Confidence | {ev.confidence:.0%}" if ev.confidence > 0 else "| Confidence | — |"
+                f"| Confidence | {ev.confidence:.0%}"
+                if ev.confidence > 0
+                else "| Confidence | — |"
             )
             lines.append(f"| Vector | `{ev.vector}` |")
             lines.append(f"| Assertion | {status} |")
@@ -278,9 +278,7 @@ class ReportBuilder:
                 )
 
             if ev.evidence_refs:
-                lines.append(
-                    f"| Evidence Refs | `{', '.join(ev.evidence_refs)}` |"
-                )
+                lines.append(f"| Evidence Refs | `{', '.join(ev.evidence_refs)}` |")
             lines.append("")
 
             lines.append(f"> **Why:** {ev.why}")
@@ -297,13 +295,19 @@ class ReportBuilder:
         lines.append("|----------|-------|")
 
         caught = sum(
-            1 for ev in story.timeline if ev.category == "positive" and ev.event_type != "NO_FIRE"
+            1
+            for ev in story.timeline
+            if ev.category == "positive" and ev.event_type != "NO_FIRE"
         )
         evades = sum(
-            1 for ev in story.timeline if ev.category == "evasion" and ev.event_type == "NO_FIRE"
+            1
+            for ev in story.timeline
+            if ev.category == "evasion" and ev.event_type == "NO_FIRE"
         )
         benign_fp = sum(
-            1 for ev in story.timeline if ev.category == "benign" and ev.event_type != "NO_FIRE"
+            1
+            for ev in story.timeline
+            if ev.category == "benign" and ev.event_type != "NO_FIRE"
         )
         lines.append(f"| Attacks caught | {caught} |")
         lines.append(f"| Evasions (known blind spots) | {evades} |")

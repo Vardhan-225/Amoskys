@@ -1,0 +1,30 @@
+title: Network Port Scanning Detected
+id: amoskys-disc-001
+status: stable
+level: high
+description: Detects port scanning activity or reverse DNS reconnaissance indicating an adversary is mapping the network topology and identifying available services
+author: AMOSKYS
+tags:
+    - attack.discovery
+    - attack.t1046
+logsource:
+    category: network_connection
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - port_scan_detected
+            - reverse_dns_recon
+    condition: selection
+fields:
+    - source_ip
+    - destination_ip
+    - scanned_ports
+    - scan_type
+    - process_name
+    - pid
+falsepositives:
+    - Authorized vulnerability scanners (Nessus, Qualys)
+    - Network monitoring tools performing service discovery
+    - IT asset inventory systems
+confidence: 0.83

@@ -7,7 +7,7 @@ then classifies the network type.
 Usage:
     enricher = ASNEnricher("/path/to/GeoLite2-ASN.mmdb")
     result = enricher.lookup("8.8.8.8")
-    # → {"asn_number": 15169, "asn_org": "Google LLC", "network_type": "hosting"}
+    # → {"number": 15169, "org": "Google LLC", "network_type": "hosting"}
 """
 
 from __future__ import annotations
@@ -139,7 +139,7 @@ class ASNEnricher:
         """Look up ASN data for an IP address.
 
         Returns:
-            Dict with keys: asn_number, asn_org, network_type,
+            Dict with keys: number, org, network_type,
             is_hosting, is_tor, is_vpn — or None.
         """
         if not ip or not self._available:
@@ -164,8 +164,8 @@ class ASNEnricher:
             network_type = _classify_network(asn_number, asn_org)
 
             return {
-                "asn_number": asn_number,
-                "asn_org": asn_org,
+                "number": asn_number,
+                "org": asn_org,
                 "network_type": network_type,
                 "is_hosting": network_type == "hosting",
                 "is_tor": network_type == "tor",

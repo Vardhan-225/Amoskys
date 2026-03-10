@@ -1,0 +1,26 @@
+title: DNS-over-HTTPS Provider Configured
+id: amoskys-c2-004
+status: stable
+level: medium
+description: Detects configuration of DNS-over-HTTPS providers which may be used to bypass network-level DNS monitoring and exfiltrate data through encrypted channels
+author: AMOSKYS
+tags:
+    - attack.command_and_control
+    - attack.t1572
+logsource:
+    category: dns
+    product: amoskys
+detection:
+    selection:
+        event_type: doh_provider_configured
+    condition: selection
+fields:
+    - doh_provider
+    - config_file
+    - process_name
+    - pid
+    - uid
+falsepositives:
+    - Privacy-conscious users configuring DoH for legitimate use
+    - Enterprise DNS-over-HTTPS deployments
+confidence: 0.70

@@ -1,0 +1,27 @@
+title: Database Data Destruction (DROP/TRUNCATE)
+id: amoskys-impact-003
+status: stable
+level: critical
+description: Detects destructive database operations such as DROP TABLE, DROP DATABASE, or TRUNCATE TABLE that may indicate data destruction by a malicious actor or compromised application
+author: AMOSKYS
+tags:
+    - attack.impact
+    - attack.t1485
+logsource:
+    category: database
+    product: amoskys
+detection:
+    selection:
+        event_type: data_destruction
+    condition: selection
+fields:
+    - db_user
+    - db_name
+    - query
+    - table_name
+    - source_ip
+    - operation_type
+falsepositives:
+    - Authorized database migrations dropping legacy tables
+    - Scheduled data retention cleanup jobs
+confidence: 0.90

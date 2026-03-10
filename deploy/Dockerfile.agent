@@ -23,4 +23,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
 ENV IS_WAL_PATH=/wal/wal.db
 ENV IS_CERT_DIR=/certs
-CMD ["python", "-m", "amoskys.agents.flowagent.main"]
+CMD ["python", "-m", "amoskys.eventbus.flow_publisher"]

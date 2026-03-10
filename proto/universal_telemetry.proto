@@ -25,6 +25,10 @@ message DeviceTelemetry {
   uint32 batch_size = 12;
   uint64 collection_interval_ms = 13;
   uint32 schema_version = 14;        // A3.1: Schema version for forward compatibility
+
+  // v2: Agent capability declaration
+  repeated AgentCapability capabilities = 15;
+  string agent_bus_version = 16;     // AgentBus protocol version
 }
 
 message DeviceMetadata {
@@ -59,6 +63,13 @@ message DeviceMetadata {
   map<string, string> custom_properties = 19;
 }
 
+// v2: Agent capability declaration for DeviceTelemetry
+message AgentCapability {
+  string name = 1;                   // "process_monitoring", "network_flow", etc.
+  string badge = 2;                  // "REAL", "DEGRADED", "BLIND", "STUB"
+  string notes = 3;                  // Why degraded/blind, permission requirements
+}
+
 message TelemetryEvent {
   string event_id = 1;
   string event_type = 2;            // METRIC, LOG, ALARM, STATUS, SECURITY, AUDIT
@@ -88,6 +99,14 @@ message TelemetryEvent {
   float reliability_score = 17;     // 0.0 to 1.0 - Agent's assessed reliability
   string drift_indicator = 18;      // NONE, ABRUPT, GRADUAL - Reliability drift status
   string agent_id = 19;             // Source agent for fusion weighting
+
+  // v2: Cross-agent correlation and detection-as-code
+  string correlation_group = 20;         // Kill-chain group ID for multi-stage attacks
+  repeated string related_event_ids = 21; // Events this detection relates to
+  string detection_rule_id = 22;         // Sigma/YARA rule ID that fired
+  string detection_rule_source = 23;     // "sigma", "yara", "probe", "ml"
+  string probe_class = 24;              // Fully qualified probe class name
+  string probe_maturity = 25;           // "experimental" | "stable" | "deprecated"
 }
 
 message MetricData {

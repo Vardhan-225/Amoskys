@@ -144,8 +144,8 @@
         </div>
     </div>
 
-    <!-- Agent Lifecycle Control Panel (collapsible) -->
-    <details style="margin-top: 1rem;">
+    <!-- Agent Lifecycle Control Panel (collapsible, open by default) -->
+    <details open style="margin-top: 1rem;">
         <summary style="cursor:pointer;padding:0.6rem 1rem;background:var(--bg-secondary);border:1px solid rgba(0,217,255,0.15);border-radius:8px;color:var(--text-secondary);font-size:0.82rem;font-weight:600;list-style:none;display:flex;align-items:center;gap:0.5rem;">
             <span style="transition:transform 0.2s;">&#9654;</span> Advanced: Agent Lifecycle Controls
         </summary>
@@ -682,6 +682,14 @@ function createAgentCard(a) {
         'applog':'applog_agent','db_activity':'db_activity_agent',
         'http_inspector':'http_inspector_agent','internet_activity':'internet_activity_agent',
         'net_scanner':'net_scanner_agent',
+        // macOS Observatory agents
+        'macos_security_monitor':'macos_security_monitor',
+        'macos_unified_log':'macos_unified_log',
+        'macos_dns':'macos_dns','macos_applog':'macos_applog',
+        'macos_discovery':'macos_discovery',
+        'macos_internet_activity':'macos_internet_activity',
+        'macos_db_activity':'macos_db_activity',
+        'macos_http_inspector':'macos_http_inspector',
     };
     const catalogId = idMap[a.id] || a.id;
     const procStatus = agentStatusData[catalogId] || {};
@@ -696,9 +704,11 @@ function createAgentCard(a) {
     else if (upSec > 0) { uptime = upSec + 's'; }
     else { uptime = '--'; }
 
-    // Activity data
+    // Activity data — show rate if available, else total events, else "Listening"
     const activity = agentActivityData[a.id] || {};
     const evtsMin = activity.last_min || 0;
+    const evtDisplay = evtsMin > 0 ? evtsMin : (a.event_count > 0 ? formatNumber(a.event_count) : '0');
+    const evtLabel = evtsMin > 0 ? 'Evts/min' : (a.event_count > 0 ? 'Total evts' : 'Listening');
 
     // Visual style for stopped agents
     const cardStyle = isRunning ? '' : 'opacity:0.55;filter:grayscale(30%);';
@@ -709,8 +719,10 @@ function createAgentCard(a) {
         <div class="agent-card-header">
             <div>
                 <div class="agent-card-name" style="color:${a.color};">${a.name}</div>
-                <div style="display:flex;gap:0.35rem;align-items:center;margin-top:0.2rem;">
+                <div style="display:flex;gap:0.35rem;align-items:center;margin-top:0.2rem;flex-wrap:wrap;">
                     <span class="category-pill" style="background:${catStyle};">${a.category}</span>
+                    ${a.source === 'Observatory' ? '<span class="category-pill" style="background:rgba(0,255,136,0.12);color:#00ff88;font-size:0.55rem;">Observatory</span>' : a.source === 'Linux' ? '<span class="category-pill" style="background:rgba(255,217,61,0.12);color:#FFD93D;font-size:0.55rem;">Linux</span>' : '<span class="category-pill" style="background:rgba(255,255,255,0.08);color:var(--text-secondary);font-size:0.55rem;">Shared</span>'}
+                    ${(a.platforms || []).length === 1 ? `<span class="category-pill" style="background:rgba(0,217,255,0.1);color:#00d9ff;font-size:0.55rem;">${a.platforms[0] === 'darwin' ? 'macOS' : a.platforms[0]}</span>` : ''}
                     <span class="signing-badge ${a.signing_enabled ? 'enabled' : 'disabled'}">${a.signing_enabled ? 'Signed' : 'Unsigned'}</span>
                 </div>
             </div>
@@ -730,8 +742,8 @@ function createAgentCard(a) {
                 <div class="agent-stat-lbl">Probes</div>
             </div>
             <div class="agent-stat">
-                <div class="agent-stat-val" style="color:#ffaa00;">${evtsMin}</div>
-                <div class="agent-stat-lbl">Evts/min</div>
+                <div class="agent-stat-val" style="color:#ffaa00;">${evtDisplay}</div>
+                <div class="agent-stat-lbl">${evtLabel}</div>
             </div>
             <div class="agent-stat">
                 <div class="agent-stat-val" style="color:#ff6b9d;">${a.mitre_count}</div>
@@ -989,7 +1001,7 @@ function buildOverviewTab(a, live) {
     // Links
     html += `<div style="display:flex;gap:1rem;margin-top:1rem;justify-content:center;">
         <a href="/dashboard/probe-explorer#${a.id}" style="color:var(--neural-primary);text-decoration:none;font-size:0.82rem;font-weight:600;">Probe Explorer &rarr;</a>
-        <a href="/dashboard/soc" style="color:var(--neural-primary);text-decoration:none;font-size:0.82rem;font-weight:600;">SOC Dashboard &rarr;</a>
+        <a href="/dashboard/cortex" style="color:var(--neural-primary);text-decoration:none;font-size:0.82rem;font-weight:600;">Cortex &rarr;</a>
     </div>`;
 
     return html;

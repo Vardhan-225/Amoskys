@@ -1,0 +1,29 @@
+title: Log Tampering Detection
+id: amoskys-de-001
+status: stable
+level: critical
+description: Detects log tampering activity including timestamp gaps or deletion patterns indicating an adversary is covering their tracks
+author: AMOSKYS
+tags:
+    - attack.defense_evasion
+    - attack.t1070.002
+logsource:
+    category: file_event
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - log_timestamp_gap
+            - log_deletion_pattern
+    condition: selection
+fields:
+    - log_file
+    - gap_duration
+    - deleted_lines
+    - process_name
+    - pid
+    - uid
+falsepositives:
+    - Log rotation causing expected timestamp gaps
+    - Disk space cleanup scripts removing old logs
+confidence: 0.85

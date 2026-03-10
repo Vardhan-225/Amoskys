@@ -25,8 +25,8 @@ Run:
 from __future__ import annotations
 
 from amoskys.agents.common.probes import Severity
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-from amoskys.agents.kernel_audit.probes import CredentialDumpProbe
+from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.os.linux.kernel_audit.probes import CredentialDumpProbe
 from amoskys.redteam.harness import AdversarialCase, Scenario
 from amoskys.redteam.scenarios import register
 
@@ -35,14 +35,14 @@ from amoskys.redteam.scenarios import register
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Simulated attack: 2023-11-14T22:13:20Z (nice round number)
-_T0 = int(1_700_000_000 * 1e9)          # Base timestamp (ns)
-_T1 = _T0 + int(5 * 1e9)               # +5 seconds
-_T2 = _T0 + int(12 * 1e9)              # +12 seconds
-_T4_BASE = _T0 + int(25 * 1e9)         # +25s, for cross-PID burst sequence
-_T5 = _T0 + int(90 * 1e9)              # +90 seconds
-_T6 = _T0 + int(105 * 1e9)             # +105 seconds
-_T7 = _T0 + int(120 * 1e9)             # +120 seconds (benign)
-_T8 = _T0 + int(130 * 1e9)             # +130 seconds (benign)
+_T0 = int(1_700_000_000 * 1e9)  # Base timestamp (ns)
+_T1 = _T0 + int(5 * 1e9)  # +5 seconds
+_T2 = _T0 + int(12 * 1e9)  # +12 seconds
+_T4_BASE = _T0 + int(25 * 1e9)  # +25s, for cross-PID burst sequence
+_T5 = _T0 + int(90 * 1e9)  # +90 seconds
+_T6 = _T0 + int(105 * 1e9)  # +105 seconds
+_T7 = _T0 + int(120 * 1e9)  # +120 seconds (benign)
+_T8 = _T0 + int(130 * 1e9)  # +130 seconds (benign)
 
 
 def _ke(syscall: str, eid: str, ts: int = _T0, **kwargs) -> KernelAuditEvent:
@@ -173,6 +173,7 @@ _PHASE3_SH_SECURITY_DUMP = AdversarialCase(
 # Phase 4: Cross-PID burst (P0.2)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _build_cross_pid_events() -> list:
     """Build 5 PIDs × 2 calls each = 10 total calls for uid=501.
 
@@ -257,7 +258,7 @@ _PHASE5_COMM_SPOOF = AdversarialCase(
             ts=_T5,
             path="/var/db/dslocal/nodes/Default/users/admin.plist",
             comm="opendirectoryd",  # Spoofed to whitelist name
-            exe="/tmp/evil",        # Real exe doesn't match
+            exe="/tmp/evil",  # Real exe doesn't match
             pid=31340,
             uid=501,
         )

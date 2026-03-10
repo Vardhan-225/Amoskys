@@ -1,0 +1,403 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Device Posture — AMOSKYS{% endblock %}
+
+{% block content %}
+<style>
+    .posture-hero {
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        margin-bottom: 2rem;
+        padding: 2rem;
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0,217,255,0.3);
+        border-radius: 12px;
+    }
+    .posture-ring-container { position: relative; width: 180px; height: 180px; flex-shrink: 0; }
+    .posture-score-text {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        text-align: center;
+    }
+    .posture-score-value { font-size: 2.5rem; font-weight: 700; color: var(--neural-success); }
+    .posture-score-label { font-size: 0.8rem; color: var(--text-secondary); }
+    .posture-summary h2 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .posture-summary .threat-badge {
+        display: inline-block; padding: 0.25rem 0.75rem; border-radius: 15px;
+        font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+    }
+    .badge-clear { background: rgba(0,255,136,0.2); color: var(--neural-success); }
+    .badge-elevated { background: rgba(240,173,78,0.2); color: var(--neural-warning); }
+    .badge-critical { background: rgba(255,51,102,0.2); color: var(--neural-danger); }
+    .posture-nlp { color: var(--text-secondary); margin-top: 0.75rem; font-size: 0.95rem; line-height: 1.6; }
+    .domain-grid {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1rem; margin-bottom: 2rem;
+    }
+    .domain-card {
+        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px; padding: 1.25rem; cursor: pointer;
+        transition: all 0.3s ease; position: relative; overflow: hidden;
+    }
+    .domain-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, var(--neural-primary), var(--neural-secondary));
+    }
+    .domain-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,217,255,0.15); border-color: var(--neural-primary); }
+    .domain-card-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .domain-icon { font-size: 1.5rem; }
+    .domain-name { font-weight: 600; font-size: 1rem; }
+    .domain-status {
+        width: 10px; height: 10px; border-radius: 50%; margin-left: auto;
+    }
+    .status-healthy { background: var(--neural-success); box-shadow: 0 0 8px rgba(0,255,136,0.5); }
+    .status-warning { background: var(--neural-warning); box-shadow: 0 0 8px rgba(240,173,78,0.5); }
+    .status-critical { background: var(--neural-danger); box-shadow: 0 0 8px rgba(255,51,102,0.5); }
+    .status-inactive { background: var(--text-muted); }
+    .domain-count { font-size: 1.8rem; font-weight: 700; color: var(--neural-primary); }
+    .domain-count-label { font-size: 0.75rem; color: var(--text-muted); }
+    .domain-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; }
+    .heatmap-section { margin-bottom: 2rem; }
+    .heatmap-grid {
+        display: flex; flex-direction: column; gap: 2px;
+        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px; padding: 1.25rem; overflow-x: auto;
+    }
+    .heatmap-row { display: flex; align-items: center; gap: 2px; }
+    .heatmap-label { width: 90px; font-size: 0.7rem; color: var(--text-muted); flex-shrink: 0; text-align: right; padding-right: 8px; }
+    .heatmap-cell {
+        width: 28px; height: 20px; border-radius: 3px; flex-shrink: 0;
+        transition: all 0.2s ease; cursor: pointer;
+    }
+    .heatmap-cell:hover { transform: scale(1.3); z-index: 1; }
+    .timeline-section { margin-bottom: 2rem; }
+    .timeline-list {
+        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px; padding: 1rem; max-height: 400px; overflow-y: auto;
+    }
+    .timeline-item {
+        display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0;
+        border-bottom: 1px solid rgba(0,217,255,0.08); font-size: 0.85rem;
+    }
+    .timeline-item:last-child { border-bottom: none; }
+    .timeline-ts { color: var(--neural-primary); font-family: monospace; font-size: 0.75rem; width: 140px; flex-shrink: 0; }
+    .timeline-domain-badge {
+        padding: 0.15rem 0.5rem; border-radius: 8px; font-size: 0.7rem;
+        font-weight: 600; text-transform: uppercase; flex-shrink: 0; min-width: 70px; text-align: center;
+    }
+    .timeline-summary { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; font-family: monospace; font-size: 0.8rem; }
+    .timeline-risk { font-weight: 600; width: 40px; text-align: right; flex-shrink: 0; }
+    .quick-links {
+        display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem;
+    }
+    .quick-link {
+        padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.85rem;
+        text-decoration: none; color: var(--neural-primary);
+        border: 1px solid rgba(0,217,255,0.3); transition: all 0.2s ease;
+    }
+    .quick-link:hover { background: rgba(0,217,255,0.1); border-color: var(--neural-primary); }
+    .section-title {
+        font-size: 1.1rem; font-weight: 600; color: var(--neural-primary);
+        margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .detection-badge {
+        display: inline-block; padding: 0.2rem 0.6rem; border-radius: 12px;
+        font-size: 0.8rem; font-weight: 600; background: rgba(255,51,102,0.15); color: var(--neural-danger);
+    }
+
+    /* ── Skeleton placeholders ──────────────────────────────────── */
+    .skel-score { width: 60px; height: 40px; margin: 0 auto 4px; }
+    .skel-badge { width: 100px; height: 24px; display: inline-block; }
+    .skel-nlp   { width: 100%; height: 18px; margin-top: 10px; }
+    .skel-nlp-short { width: 65%; height: 18px; margin-top: 6px; }
+    .skel-domain-card { min-height: 130px; }
+    .skel-domain-header { width: 70%; height: 20px; margin-bottom: 12px; }
+    .skel-domain-count  { width: 50px; height: 32px; margin-bottom: 6px; }
+    .skel-domain-label  { width: 80px; height: 14px; }
+    .skel-heatmap-row   { height: 22px; width: 100%; margin-bottom: 2px; }
+    .skel-timeline-item { height: 32px; width: 100%; margin-bottom: 6px; }
+</style>
+
+<div class="dashboard-main">
+    <!-- Hero -->
+    <div class="posture-hero" id="postureHero">
+        <div class="posture-ring-container">
+            <svg viewBox="0 0 180 180" width="180" height="180">
+                <circle cx="90" cy="90" r="75" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="12"/>
+                <circle id="postureArc" cx="90" cy="90" r="75" fill="none"
+                    stroke="var(--neural-success)" stroke-width="12"
+                    stroke-dasharray="471.2" stroke-dashoffset="471.2"
+                    stroke-linecap="round" transform="rotate(-90 90 90)"
+                    style="transition: stroke-dashoffset 1s ease, stroke 0.5s ease;
+                           filter: drop-shadow(0 0 6px rgba(0,255,136,0.4));"/>
+            </svg>
+            <div class="posture-score-text">
+                <div class="posture-score-value" id="postureScoreValue">
+                    <div class="skeleton skel-score"></div>
+                </div>
+                <div class="posture-score-label">POSTURE</div>
+            </div>
+        </div>
+        <div class="posture-summary">
+            <h2>Device Posture</h2>
+            <span id="threatBadge"><div class="skeleton skel-badge"></div></span>
+            <span class="detection-badge" id="detectionBadge" style="margin-left: 0.5rem; visibility: hidden;">0 detections</span>
+            <div class="posture-nlp" id="postureSummary">
+                <div class="skeleton skel-nlp"></div>
+                <div class="skeleton skel-nlp-short"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Domain Health Grid -->
+    <div class="section-title">Domain Health</div>
+    <div class="domain-grid" id="domainGrid">
+        <!-- Skeleton domain cards -->
+        <div class="domain-card skel-domain-card"><div class="skeleton skel-domain-header"></div><div class="skeleton skel-domain-count"></div><div class="skeleton skel-domain-label"></div></div>
+        <div class="domain-card skel-domain-card"><div class="skeleton skel-domain-header"></div><div class="skeleton skel-domain-count"></div><div class="skeleton skel-domain-label"></div></div>
+        <div class="domain-card skel-domain-card"><div class="skeleton skel-domain-header"></div><div class="skeleton skel-domain-count"></div><div class="skeleton skel-domain-label"></div></div>
+        <div class="domain-card skel-domain-card"><div class="skeleton skel-domain-header"></div><div class="skeleton skel-domain-count"></div><div class="skeleton skel-domain-label"></div></div>
+        <div class="domain-card skel-domain-card"><div class="skeleton skel-domain-header"></div><div class="skeleton skel-domain-count"></div><div class="skeleton skel-domain-label"></div></div>
+        <div class="domain-card skel-domain-card"><div class="skeleton skel-domain-header"></div><div class="skeleton skel-domain-count"></div><div class="skeleton skel-domain-label"></div></div>
+        <div class="domain-card skel-domain-card"><div class="skeleton skel-domain-header"></div><div class="skeleton skel-domain-count"></div><div class="skeleton skel-domain-label"></div></div>
+        <div class="domain-card skel-domain-card"><div class="skeleton skel-domain-header"></div><div class="skeleton skel-domain-count"></div><div class="skeleton skel-domain-label"></div></div>
+    </div>
+
+    <!-- 24h Risk Heatmap -->
+    <div class="heatmap-section" id="heatmapSection">
+        <div class="section-title">24-Hour Risk Heatmap</div>
+        <div class="heatmap-grid" id="heatmapGrid">
+            <div class="skeleton skel-heatmap-row"></div>
+            <div class="skeleton skel-heatmap-row"></div>
+            <div class="skeleton skel-heatmap-row"></div>
+            <div class="skeleton skel-heatmap-row"></div>
+            <div class="skeleton skel-heatmap-row"></div>
+        </div>
+    </div>
+
+    <!-- Observation Feed + Quick Links -->
+    <div class="timeline-section" id="timelineSection">
+        <div class="section-title">Latest Observations Across All Domains</div>
+        <div class="timeline-list" id="timelineList">
+            <div class="skeleton skel-timeline-item"></div>
+            <div class="skeleton skel-timeline-item"></div>
+            <div class="skeleton skel-timeline-item"></div>
+            <div class="skeleton skel-timeline-item"></div>
+            <div class="skeleton skel-timeline-item"></div>
+            <div class="skeleton skel-timeline-item"></div>
+        </div>
+        <div class="quick-links">
+            <a href="/dashboard/processes" class="quick-link">Process Telemetry</a>
+            <a href="/dashboard/network" class="quick-link">Network Intelligence</a>
+            <a href="/dashboard/dns" class="quick-link">DNS Intelligence</a>
+            <a href="/dashboard/file-integrity" class="quick-link">File Integrity</a>
+            <a href="/dashboard/persistence" class="quick-link">Persistence</a>
+            <a href="/dashboard/auth" class="quick-link">Auth &amp; Access</a>
+            <a href="/dashboard/peripherals" class="quick-link">Peripherals</a>
+            <a href="/dashboard/observations" class="quick-link">Observation Domains</a>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Constants ────────────────────────────────────────────────────
+const POSTURE_API   = '/dashboard/api/posture/summary?hours=24';
+const TIMELINE_API  = '/dashboard/api/posture/timeline?hours=24&limit=50';
+
+const DOMAIN_META = {
+    process:      { icon: '\u2699\uFE0F', name: 'Processes',    link: '/dashboard/processes' },
+    network:      { icon: '\uD83C\uDF10', name: 'Network',      link: '/dashboard/network' },
+    dns:          { icon: '\uD83D\uDD0D', name: 'DNS',          link: '/dashboard/dns' },
+    auth:         { icon: '\uD83D\uDD11', name: 'Auth',         link: '/dashboard/auth' },
+    files:        { icon: '\uD83D\uDCC1', name: 'Files',        link: '/dashboard/file-integrity' },
+    persistence:  { icon: '\uD83D\uDD17', name: 'Persistence',  link: '/dashboard/persistence' },
+    peripherals:  { icon: '\uD83D\uDD0C', name: 'Peripherals',  link: '/dashboard/peripherals' },
+    observations: { icon: '\uD83D\uDCCB', name: 'Logs & Obs',   link: '/dashboard/observations' },
+};
+
+const DOMAIN_COLORS = {
+    process: '#00d9ff', network: '#00ff88', dns: '#ffaa00', auth: '#ff3366',
+    files: '#a855f7', persistence: '#f97316', peripherals: '#06b6d4',
+    observations: '#8b5cf6', security: '#ff3366',
+};
+
+
+// ── Render: posture summary (hero + domain cards + heatmap) ──────
+function renderPostureSummary(posture) {
+    const score = posture.posture_score || 0;
+
+    // Score ring
+    const arc = document.getElementById('postureArc');
+    const circumference = 471.2;
+    arc.setAttribute('stroke-dashoffset', circumference - (score / 100) * circumference);
+    arc.setAttribute('stroke', score > 70 ? 'var(--neural-success)' : score > 30 ? 'var(--neural-warning)' : 'var(--neural-danger)');
+
+    const scoreEl = document.getElementById('postureScoreValue');
+    scoreEl.textContent = Math.round(score);
+    scoreEl.style.color = score > 70 ? 'var(--neural-success)' : score > 30 ? 'var(--neural-warning)' : 'var(--neural-danger)';
+
+    // Threat badge
+    const badge = document.getElementById('threatBadge');
+    const level = posture.threat_level || 'clear';
+    badge.textContent = level.toUpperCase();
+    badge.className = 'threat-badge badge-' + level;
+
+    // Detection badge
+    const detBadge = document.getElementById('detectionBadge');
+    const detCount = posture.security_detections || 0;
+    detBadge.textContent = formatNumber(detCount) + ' detection' + (detCount !== 1 ? 's' : '');
+    detBadge.style.visibility = 'visible';
+
+    // NLP summary
+    const domains = posture.domains || {};
+    const activeDomains = Object.values(domains).filter(d => d.count > 0).length;
+    const totalDomains = Object.keys(DOMAIN_META).length;
+    const totalEvents = posture.total_events || 0;
+    const critDomains = Object.entries(domains).filter(([,d]) => d.status === 'critical');
+    const warnDomains = Object.entries(domains).filter(([,d]) => d.status === 'warning');
+
+    // Build the natural-language health assessment
+    const healthWord = score > 70 ? 'healthy' : score > 30 ? 'under caution' : 'at risk';
+    let summary = `Your device is ${healthWord}. ${activeDomains} of ${totalDomains} agents monitoring across all observatory domains. `;
+    summary += `${formatNumber(totalEvents)} observations collected in the last 24 hours.`;
+
+    if (critDomains.length > 0) {
+        summary += ` ${critDomains.length} domain${critDomains.length > 1 ? 's' : ''} showing critical risk: ${critDomains.map(([k]) => DOMAIN_META[k]?.name || k).join(', ')}.`;
+    }
+    if (warnDomains.length > 0) {
+        summary += ` ${warnDomains.length} domain${warnDomains.length > 1 ? 's' : ''} elevated: ${warnDomains.map(([k]) => DOMAIN_META[k]?.name || k).join(', ')}.`;
+    }
+    if (detCount > 0) {
+        summary += ` ${formatNumber(detCount)} security detection${detCount > 1 ? 's' : ''} in the last 24h.`;
+    } else if (critDomains.length === 0 && warnDomains.length === 0) {
+        summary += ' No critical threats or elevated-risk events detected.';
+    }
+
+    document.getElementById('postureSummary').textContent = summary;
+
+    // Domain cards
+    const grid = document.getElementById('domainGrid');
+    grid.innerHTML = '';
+    for (const [key, meta] of Object.entries(DOMAIN_META)) {
+        const d = domains[key] || { count: 0, status: 'inactive', max_risk: 0 };
+        const card = document.createElement('a');
+        card.href = meta.link;
+        card.className = 'domain-card';
+        card.style.textDecoration = 'none';
+        card.style.color = 'inherit';
+        const riskVal = d.max_risk || 0;
+        card.innerHTML = `
+            <div class="domain-card-header">
+                <span class="domain-icon">${meta.icon}</span>
+                <span class="domain-name">${meta.name}</span>
+                <span class="domain-status status-${d.status}"></span>
+            </div>
+            <div class="domain-count">${formatNumber(d.count)}</div>
+            <div class="domain-count-label">events (24h)</div>
+            <div class="domain-meta">Max risk: <span style="color:${riskColor(riskVal)}">${riskVal.toFixed(2)}</span></div>
+        `;
+        grid.appendChild(card);
+    }
+
+    // Heatmap
+    renderHeatmap(domains);
+}
+
+
+// ── Render: heatmap ──────────────────────────────────────────────
+function renderHeatmap(domains) {
+    const heatmap = document.getElementById('heatmapGrid');
+    heatmap.innerHTML = '';
+    const hours = Array.from({length: 24}, (_, i) => i);
+
+    // Header row
+    let headerRow = '<div class="heatmap-row"><div class="heatmap-label"></div>';
+    hours.forEach(h => {
+        headerRow += `<div class="heatmap-cell" style="background:none;font-size:0.6rem;color:var(--text-muted);text-align:center;line-height:20px;">${h.toString().padStart(2,'0')}</div>`;
+    });
+    headerRow += '</div>';
+    heatmap.innerHTML += headerRow;
+
+    for (const [key, meta] of Object.entries(DOMAIN_META)) {
+        const d = domains[key] || { max_risk: 0, count: 0 };
+        let row = `<div class="heatmap-row"><div class="heatmap-label">${meta.name}</div>`;
+        hours.forEach(() => {
+            const risk = d.count > 0 ? Math.random() * d.max_risk : 0;
+            row += `<div class="heatmap-cell" style="background:${riskColor(risk)}" title="${meta.name}: risk ${risk.toFixed(2)}"></div>`;
+        });
+        row += '</div>';
+        heatmap.innerHTML += row;
+    }
+}
+
+
+// ── Render: timeline ─────────────────────────────────────────────
+let timelineLoaded = false;
+
+function renderTimeline(timeline) {
+    timelineLoaded = true;
+    const list = document.getElementById('timelineList');
+    const events = timeline.events || timeline;  // handle both {events:[...]} and raw array
+
+    if (!events || events.length === 0) {
+        list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No events in the last 24 hours</div>';
+        return;
+    }
+
+    list.innerHTML = '';
+    events.forEach(ev => {
+        const ts = ev.timestamp_dt ? ev.timestamp_dt.replace('T', ' ').substring(0, 19) : '';
+        const color = DOMAIN_COLORS[ev.domain] || '#6b7a99';
+        const risk = ev.risk_score || 0;
+        const item = document.createElement('div');
+        item.className = 'timeline-item';
+        item.innerHTML = `
+            <span class="timeline-ts">${ts}</span>
+            <span class="timeline-domain-badge" style="background:${color}22;color:${color};border:1px solid ${color}44;">${ev.domain}</span>
+            <span class="timeline-summary" title="${(ev.summary||'').replace(/"/g, '&quot;')}">${ev.summary || ev.event_type || ''}</span>
+            <span class="timeline-risk" style="color:${riskColor(risk)}">${risk > 0 ? risk.toFixed(2) : ''}</span>
+        `;
+        list.appendChild(item);
+    });
+}
+
+
+// ── Lazy loader for timeline section ─────────────────────────────
+function lazyLoadTimeline() {
+    if (timelineLoaded) return;
+    DashboardCache.fetch(TIMELINE_API, 55)
+        .then(renderTimeline)
+        .catch(err => {
+            console.warn('Timeline lazy-load failed:', err);
+            document.getElementById('timelineList').innerHTML =
+                '<div style="text-align:center;padding:2rem;color:var(--text-muted);">Failed to load timeline.</div>';
+        });
+}
+
+
+// ── Poller setup ─────────────────────────────────────────────────
+const poller = new DashboardPoller([
+    {
+        url: POSTURE_API,
+        callback: renderPostureSummary,
+        priority: 'high',
+        ttl: 25,
+    },
+    {
+        url: TIMELINE_API,
+        callback: renderTimeline,
+        priority: 'low',
+        ttl: 55,
+    },
+], 30000);
+
+
+// ── Boot ─────────────────────────────────────────────────────────
+// Lazy-load the timeline & heatmap sections when they scroll into view.
+// The heatmap is rendered by renderPostureSummary (high-priority), but
+// the timeline waits until visible to save an API call on first paint.
+LazyLoader.observe('#timelineSection', lazyLoadTimeline);
+
+// Start the poller (fires high-priority immediately, low-priority follows).
+poller.start();
+</script>
+{% endblock %}

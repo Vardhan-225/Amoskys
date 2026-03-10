@@ -52,54 +52,6 @@ def cortex_dashboard():
     return render_template("dashboard/cortex.html", user=user)
 
 
-@dashboard_bp.route("/marketplace")
-@require_login
-def agent_marketplace():
-    """Agent Marketplace - Perspective Selection and Deployment"""
-    user = get_current_user()
-    return render_template("dashboard/marketplace.html", user=user)
-
-
-@dashboard_bp.route("/evidence-chain")
-@require_login
-def evidence_chain_viewer():
-    """Evidence Chain Viewer - Attack Reconstruction and Correlation"""
-    user = get_current_user()
-    return render_template("dashboard/evidence-chain.html", user=user)
-
-
-@dashboard_bp.route("/timeline-replay")
-@require_login
-def timeline_replay():
-    """Threat Timeline Replay - Step-by-step Attack Reconstruction"""
-    user = get_current_user()
-    return render_template("dashboard/timeline-replay.html", user=user)
-
-
-@dashboard_bp.route("/query-builder")
-@require_login
-def query_builder():
-    """Query Builder - Complex Security Event Query Interface"""
-    user = get_current_user()
-    return render_template("dashboard/query-builder.html", user=user)
-
-
-@dashboard_bp.route("/perspective-selector")
-@require_login
-def perspective_selector():
-    """Agent Perspective Selector - Multi-viewpoint Analysis Configuration"""
-    user = get_current_user()
-    return render_template("dashboard/perspective-selector.html", user=user)
-
-
-@dashboard_bp.route("/soc")
-@require_login
-def security_operations_center():
-    """Security Operations Center - Live Threat Monitoring"""
-    user = get_current_user()
-    return render_template("dashboard/soc.html", user=user)
-
-
 @dashboard_bp.route("/agents")
 @require_login
 def agent_management():
@@ -138,13 +90,6 @@ def system_monitoring():
     """System Health Monitoring - Platform Vitals"""
     user = get_current_user()
     return render_template("dashboard/system.html", user=user)
-
-
-@dashboard_bp.route("/neural")
-@require_login
-def neural_insights():
-    """Redirect legacy neural page to Cortex command center."""
-    return redirect(url_for("dashboard.cortex_dashboard"))
 
 
 @dashboard_bp.route("/processes")
@@ -258,14 +203,6 @@ def reliability_dashboard():
     return render_template("dashboard/reliability.html", user=user)
 
 
-@dashboard_bp.route("/proof-spine")
-@require_login
-def proof_spine_dashboard():
-    """Proof Spine - Cryptographic chain status and verification"""
-    user = get_current_user()
-    return render_template("dashboard/proof-spine.html", user=user)
-
-
 @dashboard_bp.route("/igris")
 @require_login
 def igris_dashboard():
@@ -282,11 +219,125 @@ def guardian_dashboard():
     return render_template("dashboard/guardian.html", user=user)
 
 
+# ── Observatory Pages ──
+
+
+@dashboard_bp.route("/posture")
+@require_login
+def device_posture():
+    """Device Posture — Single-screen device health overview"""
+    user = get_current_user()
+    return render_template("dashboard/posture.html", user=user)
+
+
+@dashboard_bp.route("/dns")
+@require_login
+def dns_intelligence():
+    """DNS Intelligence — DGA detection, beaconing, query analysis"""
+    user = get_current_user()
+    return render_template("dashboard/dns-intelligence.html", user=user)
+
+
+@dashboard_bp.route("/file-integrity")
+@require_login
+def file_integrity():
+    """File Integrity Monitor — Change tracking and risk analysis"""
+    user = get_current_user()
+    return render_template("dashboard/file-integrity.html", user=user)
+
+
+@dashboard_bp.route("/persistence")
+@require_login
+def persistence_landscape():
+    """Persistence Landscape — Autostart mechanism monitoring"""
+    user = get_current_user()
+    return render_template("dashboard/persistence-landscape.html", user=user)
+
+
+@dashboard_bp.route("/auth")
+@require_login
+def auth_observatory():
+    """Auth & Access — Login patterns and privilege escalation"""
+    user = get_current_user()
+    return render_template("dashboard/auth-observatory.html", user=user)
+
+
+@dashboard_bp.route("/timeline-replay")
+@require_login
+def timeline_replay():
+    """Threat Timeline Replay — step-by-step attack reconstruction"""
+    user = get_current_user()
+    return render_template("dashboard/timeline-replay.html", user=user)
+
+
+@dashboard_bp.route("/observations")
+@require_login
+def observation_domains():
+    """Observation Domains — P3 domain exploration"""
+    user = get_current_user()
+    return render_template("dashboard/observations.html", user=user)
+
+
 # Normalize legacy agent names for display
 _AGENT_NAME_MAP = {
     "proc-agent": "proc",
     "amoskys-snmp-agent": "snmp",
 }
+
+# Comprehensive agent ID normalization: all known aliases → canonical short ID
+_AGENT_ID_MAP = {
+    # Canonical short IDs
+    "proc": "proc", "proc_agent": "proc", "ProcAgent": "proc", "process": "proc",
+    "dns": "dns", "dns_agent": "dns", "DNS": "dns", "DNSAgent": "dns",
+    "auth": "auth", "auth_agent": "auth", "AuthGuard": "auth",
+    "fim": "fim", "fim_agent": "fim", "FIM": "fim",
+    "flow": "flow", "flow_agent": "flow", "FlowAgent": "flow", "network": "flow",
+    "persistence": "persistence", "persistence_agent": "persistence",
+    "PersistenceGuard": "persistence",
+    "peripheral": "peripheral", "peripheral_agent": "peripheral",
+    "Peripheral": "peripheral",
+    "kernel_audit": "kernel_audit", "kernel_audit_agent": "kernel_audit",
+    "KernelAudit": "kernel_audit",
+    "device_discovery": "device_discovery", "device_discovery_agent": "device_discovery",
+    "Discovery": "device_discovery",
+    "protocol_collectors": "protocol_collectors",
+    "protocol_collectors_agent": "protocol_collectors",
+    "ProtocolCollector": "protocol_collectors",
+    "applog": "applog", "applog_agent": "applog", "AppLog": "applog",
+    "db_activity": "db_activity", "db_activity_agent": "db_activity",
+    "DBActivity": "db_activity",
+    "http_inspector": "http_inspector", "http_inspector_agent": "http_inspector",
+    "HTTPInspector": "http_inspector",
+    "internet_activity": "internet_activity",
+    "internet_activity_agent": "internet_activity",
+    "InternetActivity": "internet_activity",
+    "net_scanner": "net_scanner", "net_scanner_agent": "net_scanner",
+    "NetScanner": "net_scanner",
+    # Hyphenated forms from WAL processor
+    "proc-agent": "proc", "dns-agent": "dns", "auth-agent": "auth",
+    "fim-agent": "fim", "flow-agent": "flow", "persistence-agent": "persistence",
+    "peripheral-agent": "peripheral", "kernel-audit-agent": "kernel_audit",
+    # macOS Observatory aliases → canonical short IDs
+    "macos_process": "proc", "macos_auth": "auth", "macos_filesystem": "fim",
+    "macos_network": "flow", "macos_peripheral": "peripheral",
+    "macos_persistence": "persistence",
+    # macOS-only agents (map to themselves)
+    "macos_security_monitor": "macos_security_monitor",
+    "macos_unified_log": "macos_unified_log",
+    "macos_dns": "macos_dns", "macos_applog": "macos_applog",
+    "macos_discovery": "macos_discovery",
+    "macos_internet_activity": "macos_internet_activity",
+    "macos_db_activity": "macos_db_activity",
+    "macos_http_inspector": "macos_http_inspector",
+    "macos_correlation": "macos_correlation",
+}
+
+
+def _normalize_agent_id(raw: str) -> str:
+    """Map any known agent alias to its canonical short ID."""
+    if not raw:
+        return ""
+    return _AGENT_ID_MAP.get(raw, raw.lower().replace("_agent", "").replace("agent", ""))
 
 
 # ── Dashboard-authenticated health summary (avoids health API auth issues) ──
@@ -364,7 +415,11 @@ def health_summary():
         try:
             conn = sqlite3.connect(str(telemetry_db))
             cutoff_ns = int((now - timedelta(hours=24)).timestamp() * 1_000_000_000)
-            for table in ["security_events", "process_events", "flow_events"]:
+            for table in [
+                "security_events", "process_events", "flow_events",
+                "dns_events", "persistence_events", "fim_events",
+                "peripheral_events", "audit_events", "observation_events",
+            ]:
                 try:
                     row = conn.execute(
                         f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns > ?",
@@ -472,49 +527,67 @@ def live_threats():
         per_page = 50
     offset = (page - 1) * per_page
 
-    # DB-level aggregate counts (not limited by row limit)
-    counts = store.get_security_event_counts(hours=hours)
+    # DB-level aggregate counts across ALL domain tables
+    counts = store.get_unified_event_counts(hours=hours)
     clustering = store.get_security_event_clustering(hours=hours)
+    # Fast threat-only count (events with risk > threshold)
+    _threat_min = 0.1
 
-    rows = store.get_recent_security_events(limit=per_page, hours=hours, offset=offset)
+    # Unified query — filter to actual detections (risk > 0.1) for threat feed
+    min_risk = 0.1
+    try:
+        min_risk = float(request.args.get("min_risk", 0.1))
+    except (ValueError, TypeError):
+        pass
+    rows = store.get_unified_threat_events(
+        limit=per_page, hours=hours, offset=offset, min_risk=min_risk
+    )
     data_stale = False
     if not rows and page == 1:
-        # Fallback: show most recent events regardless of age
-        rows = store.get_recent_security_events(limit=50, hours=8760)
+        rows = store.get_unified_threat_events(limit=50, hours=8760, min_risk=0.0)
         data_stale = bool(rows)
     recent_events = []
     for row in rows:
         # Extract source_ip from indicators JSON if available
-        indicators = row.get("indicators", "{}")
+        indicators = row.get("indicators") or "{}"
         if isinstance(indicators, str):
             try:
                 indicators = json.loads(indicators)
             except (json.JSONDecodeError, TypeError):
                 indicators = {}
-        source_ip = (
-            indicators.get("source_ip")
-            or indicators.get("src_ip")
-            or row.get("device_id", "")
-        )
+
+        source_ip = ""
+        if isinstance(indicators, dict):
+            source_ip = (
+                indicators.get("source_ip")
+                or indicators.get("src_ip")
+                or ""
+            )
+        source_ip = source_ip or row.get("device_id", "")
 
         # Parse MITRE techniques
-        mitre_raw = row.get("mitre_techniques", "[]")
+        mitre_raw = row.get("mitre_techniques") or "[]"
         try:
             mitre = json.loads(mitre_raw) if isinstance(mitre_raw, str) else mitre_raw
         except (json.JSONDecodeError, TypeError):
             mitre = []
 
-        # Resolve agent name: indicators.agent → collection_agent column → fallback
-        agent_name = indicators.get("agent") or row.get("collection_agent") or ""
-        agent_name = _AGENT_NAME_MAP.get(agent_name, agent_name)
+        # Resolve agent name with normalization
+        agent_raw = ""
+        if isinstance(indicators, dict):
+            agent_raw = indicators.get("agent", "")
+        agent_raw = agent_raw or row.get("collection_agent") or ""
+        agent_name = _normalize_agent_id(agent_raw)
         device_id = row.get("device_id", "")
-        confidence = round(row.get("confidence", 0), 3)
-        risk_score = round(row.get("risk_score", 0), 3)
+        confidence = round(row.get("confidence", 0) or 0, 3)
+        risk_score = round(row.get("risk_score", 0) or 0, 3)
+        source_table = row.get("source", "security")
 
         recent_events.append(
             {
                 "id": row.get("id"),
-                "type": row.get("event_category", "unknown"),
+                "source": source_table,
+                "type": row.get("type") or row.get("event_category", "unknown"),
                 "severity": _risk_to_severity(risk_score),
                 "risk_score": risk_score,
                 "confidence": confidence,
@@ -523,7 +596,6 @@ def live_threats():
                 "timestamp": row.get("timestamp_dt", ""),
                 "agent_name": agent_name,
                 "device_id": device_id,
-                # Keep agent_id for backward compat (dropdown filter key)
                 "agent_id": agent_name or device_id,
                 "classification": row.get("final_classification", ""),
                 "mitre_techniques": mitre if isinstance(mitre, list) else [],
@@ -531,9 +603,19 @@ def live_threats():
                     row.get("requires_investigation", False)
                 ),
                 "event_action": row.get("event_action", ""),
-                "indicators": indicators,
+                "indicators": indicators if isinstance(indicators, dict) else {},
             }
         )
+
+    # Deduplicate: same (source_table, id) pair means exact DB duplicate
+    seen_pks: set = set()
+    deduped: list = []
+    for e in recent_events:
+        pk = f"{e.get('source', '')}:{e.get('id', '')}"
+        if pk not in seen_pks:
+            seen_pks.add(pk)
+            deduped.append(e)
+    recent_events = deduped
 
     # Count events requiring investigation
     investigating_count = sum(1 for e in recent_events if e["requires_investigation"])
@@ -548,7 +630,8 @@ def live_threats():
     avg_confidence = round(sum(confidences) / len(confidences), 3) if confidences else 0
 
     db_total = counts.get("total", 0)
-    total_pages = max(1, -(-db_total // per_page))  # ceil division
+    threat_total = store.get_threat_count(hours=hours, min_risk=min_risk)
+    total_pages = max(1, -(-threat_total // per_page))  # ceil division
 
     return jsonify(
         {
@@ -556,6 +639,8 @@ def live_threats():
             "threats": recent_events,
             "count": len(recent_events),
             "db_total": db_total,
+            "threat_total": threat_total,
+            "by_source": counts.get("by_source", {}),
             "page": page,
             "per_page": per_page,
             "total_pages": total_pages,
@@ -586,7 +671,10 @@ def _risk_to_severity(risk_score: float) -> str:
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
 def unified_events():
-    """Unified event stream with offset-based pagination and filtering.
+    """Truly unified event stream across ALL domain tables.
+
+    Queries security_events, process_events, flow_events, dns_events,
+    persistence_events, and fim_events — merges into a single sorted stream.
 
     Query params:
         hours: Time window (default 24)
@@ -619,15 +707,11 @@ def unified_events():
     agent_filter = request.args.get("agent", "")
     severity_filter = request.args.get("severity", "")
     search_filter = request.args.get("search", "")
+    hour_filter = request.args.get("hour", "")
     cutoff_ns = int((time.time() - hours * 3600) * 1e9)
 
-    # Build query with filters
-    conditions = ["timestamp_ns > ?"]
-    params = [cutoff_ns]
-
-    if agent_filter:
-        conditions.append("(collection_agent = ? OR indicators LIKE ?)")
-        params.extend([agent_filter, f'%"agent": "{agent_filter}"%'])
+    # Severity filter ranges
+    sev_lo, sev_hi = 0.0, 1.01
     if severity_filter:
         sev_ranges = {
             "critical": (0.75, 1.01),
@@ -636,90 +720,459 @@ def unified_events():
             "low": (0.0, 0.25),
         }
         if severity_filter.lower() in sev_ranges:
-            lo, hi = sev_ranges[severity_filter.lower()]
-            conditions.append("risk_score >= ? AND risk_score < ?")
-            params.extend([lo, hi])
-    if search_filter:
-        conditions.append("(event_category LIKE ? OR description LIKE ?)")
-        params.extend([f"%{search_filter}%", f"%{search_filter}%"])
+            sev_lo, sev_hi = sev_ranges[severity_filter.lower()]
 
-    where = " AND ".join(conditions)
+    # Hour filter
+    hour_start_ns, hour_end_ns = None, None
+    if hour_filter:
+        try:
+            hour_dt = datetime.fromisoformat(hour_filter.replace("Z", "+00:00"))
+            hour_start_ns = int(hour_dt.timestamp() * 1e9)
+            hour_end_ns = hour_start_ns + int(3600 * 1e9)
+        except ValueError:
+            pass
+
+    # Normalize agent filter
+    norm_agent = _normalize_agent_id(agent_filter) if agent_filter else ""
 
     try:
-        # Thread-safe access to shared TelemetryStore
+        all_events = []
+
         with store._lock:
-            # Total count
-            total_row = store.db.execute(
-                f"SELECT COUNT(*) FROM security_events WHERE {where}", params
-            ).fetchone()
-            total = total_row[0] if total_row else 0
-
-            # Fetch events
-            rows = store.db.execute(
-                f"""SELECT * FROM security_events WHERE {where}
-                    ORDER BY timestamp_ns DESC LIMIT ? OFFSET ?""",
-                params + [limit, offset],
-            ).fetchall()
-
-            columns = [
-                d[0]
-                for d in store.db.execute(
-                    "SELECT * FROM security_events LIMIT 0"
-                ).description
-            ]
-
-        events = []
-        for row in rows:
-            ev = dict(zip(columns, row))
-
-            indicators = ev.get("indicators", "{}")
-            if isinstance(indicators, str):
-                try:
-                    indicators = json.loads(indicators)
-                except (json.JSONDecodeError, TypeError):
-                    indicators = {}
-
-            mitre_raw = ev.get("mitre_techniques", "[]")
-            try:
-                mitre = (
-                    json.loads(mitre_raw) if isinstance(mitre_raw, str) else mitre_raw
+            # ── 1. security_events ──
+            all_events.extend(
+                _query_table_security(
+                    store, cutoff_ns, norm_agent, sev_lo, sev_hi,
+                    search_filter, hour_start_ns, hour_end_ns,
                 )
-            except (json.JSONDecodeError, TypeError):
-                mitre = []
-
-            agent_name = (
-                indicators.get("agent") or ev.get("collection_agent") or ""
-            )
-            agent_name = _AGENT_NAME_MAP.get(agent_name, agent_name)
-            risk_score = round(ev.get("risk_score", 0), 3)
-            mitre_list = mitre if isinstance(mitre, list) else []
-
-            events.append(
-                {
-                    "id": ev.get("id"),
-                    "timestamp_dt": ev.get("timestamp_dt", ""),
-                    "event_category": ev.get("event_category", "unknown"),
-                    "severity": _risk_to_severity(risk_score),
-                    "risk_score": risk_score,
-                    "confidence": round(ev.get("confidence", 0), 3),
-                    "source_ip": (
-                        indicators.get("source_ip")
-                        or indicators.get("src_ip")
-                        or ev.get("device_id", "")
-                    ),
-                    "description": ev.get("description", ""),
-                    "agent": agent_name,
-                    "device_id": ev.get("device_id", ""),
-                    "final_classification": ev.get("final_classification", ""),
-                    "mitre_techniques": mitre_list,
-                    "mitre_technique": ", ".join(mitre_list),
-                    "indicators": indicators,
-                }
             )
 
-        return jsonify({"events": events, "total": total})
+            # ── 2. process_events ──
+            if not norm_agent or norm_agent == "proc":
+                all_events.extend(
+                    _query_table_process(
+                        store, cutoff_ns, sev_lo, sev_hi,
+                        search_filter, hour_start_ns, hour_end_ns,
+                    )
+                )
+
+            # ── 3. flow_events ──
+            if not norm_agent or norm_agent == "flow":
+                all_events.extend(
+                    _query_table_flow(
+                        store, cutoff_ns, sev_lo, sev_hi,
+                        search_filter, hour_start_ns, hour_end_ns,
+                    )
+                )
+
+            # ── 4. dns_events ──
+            if not norm_agent or norm_agent == "dns":
+                all_events.extend(
+                    _query_table_dns(
+                        store, cutoff_ns, sev_lo, sev_hi,
+                        search_filter, hour_start_ns, hour_end_ns,
+                    )
+                )
+
+            # ── 5. persistence_events ──
+            if not norm_agent or norm_agent == "persistence":
+                all_events.extend(
+                    _query_table_persistence(
+                        store, cutoff_ns, sev_lo, sev_hi,
+                        search_filter, hour_start_ns, hour_end_ns,
+                    )
+                )
+
+            # ── 6. fim_events ──
+            if not norm_agent or norm_agent == "fim":
+                all_events.extend(
+                    _query_table_fim(
+                        store, cutoff_ns, sev_lo, sev_hi,
+                        search_filter, hour_start_ns, hour_end_ns,
+                    )
+                )
+
+        # Sort all events by timestamp descending, paginate
+        all_events.sort(key=lambda e: e.get("_sort_ts", 0), reverse=True)
+        total = len(all_events)
+        page = all_events[offset : offset + limit]
+
+        # Strip internal sort key
+        for ev in page:
+            ev.pop("_sort_ts", None)
+
+        return jsonify({"events": page, "total": total})
     except Exception as e:
         return jsonify({"events": [], "total": 0, "error": str(e)})
+
+
+def _parse_mitre(raw):
+    """Parse mitre_techniques from DB value."""
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+        return parsed if isinstance(parsed, list) else []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns):
+    """Build common time filter conditions and params."""
+    conds = ["timestamp_ns > ?"]
+    params = [cutoff_ns]
+    if hour_start_ns is not None:
+        conds.append("timestamp_ns >= ? AND timestamp_ns < ?")
+        params.extend([hour_start_ns, hour_end_ns])
+    return conds, params
+
+
+def _query_table_security(store, cutoff_ns, norm_agent, sev_lo, sev_hi,
+                          search_filter, hour_start_ns, hour_end_ns):
+    """Query security_events table."""
+    conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
+
+    if norm_agent:
+        conds.append("(collection_agent = ? OR indicators LIKE ?)")
+        params.extend([norm_agent, f'%"agent": "{norm_agent}"%'])
+    if sev_lo > 0.0 or sev_hi < 1.01:
+        conds.append("risk_score >= ? AND risk_score < ?")
+        params.extend([sev_lo, sev_hi])
+    if search_filter:
+        conds.append("(event_category LIKE ? OR description LIKE ?)")
+        params.extend([f"%{search_filter}%", f"%{search_filter}%"])
+
+    where = " AND ".join(conds)
+    try:
+        rows = store.db.execute(
+            f"SELECT * FROM security_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
+            params,
+        ).fetchall()
+        columns = [d[0] for d in store.db.execute("SELECT * FROM security_events LIMIT 0").description]
+    except Exception:
+        return []
+
+    events = []
+    for row in rows:
+        ev = dict(zip(columns, row))
+        indicators = ev.get("indicators", "{}")
+        if isinstance(indicators, str):
+            try:
+                indicators = json.loads(indicators)
+            except (json.JSONDecodeError, TypeError):
+                indicators = {}
+        mitre_list = _parse_mitre(ev.get("mitre_techniques"))
+        agent_name = indicators.get("agent") or ev.get("collection_agent") or ""
+        agent_name = _normalize_agent_id(agent_name) if agent_name else ""
+        risk_score = round(ev.get("risk_score", 0) or 0, 3)
+
+        events.append({
+            "id": ev.get("id"),
+            "timestamp_dt": ev.get("timestamp_dt", ""),
+            "event_category": ev.get("event_category", "unknown"),
+            "severity": _risk_to_severity(risk_score),
+            "risk_score": risk_score,
+            "confidence": round(ev.get("confidence", 0) or 0, 3),
+            "source_ip": indicators.get("source_ip") or indicators.get("src_ip") or ev.get("device_id", ""),
+            "description": ev.get("description", ""),
+            "agent": agent_name,
+            "device_id": ev.get("device_id", ""),
+            "final_classification": ev.get("final_classification", ""),
+            "mitre_techniques": mitre_list,
+            "mitre_technique": ", ".join(mitre_list),
+            "indicators": indicators,
+            "source_table": "security",
+            "_sort_ts": ev.get("timestamp_ns", 0),
+        })
+    return events
+
+
+def _query_table_process(store, cutoff_ns, sev_lo, sev_hi,
+                         search_filter, hour_start_ns, hour_end_ns):
+    """Query process_events table."""
+    conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
+
+    # anomaly_score serves as risk_score for process events
+    if sev_lo > 0.0 or sev_hi < 1.01:
+        conds.append("anomaly_score >= ? AND anomaly_score < ?")
+        params.extend([sev_lo, sev_hi])
+    if search_filter:
+        conds.append("(exe LIKE ? OR cmdline LIKE ? OR username LIKE ?)")
+        params.extend([f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"])
+
+    where = " AND ".join(conds)
+    try:
+        rows = store.db.execute(
+            f"SELECT * FROM process_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
+            params,
+        ).fetchall()
+        columns = [d[0] for d in store.db.execute("SELECT * FROM process_events LIMIT 0").description]
+    except Exception:
+        return []
+
+    events = []
+    for row in rows:
+        ev = dict(zip(columns, row))
+        risk = round(ev.get("anomaly_score", 0) or 0, 3)
+        exe = ev.get("exe", "") or ""
+        cmdline = ev.get("cmdline", "") or ""
+        desc = f"{exe}" + (f" — {cmdline[:120]}" if cmdline and cmdline != exe else "")
+        agent = _normalize_agent_id(ev.get("collection_agent") or "proc")
+
+        events.append({
+            "id": ev.get("id"),
+            "timestamp_dt": ev.get("timestamp_dt", ""),
+            "event_category": "process_event",
+            "severity": _risk_to_severity(risk),
+            "risk_score": risk,
+            "confidence": round(ev.get("confidence_score", 0) or 0, 3),
+            "source_ip": ev.get("device_id", ""),
+            "description": desc,
+            "agent": agent,
+            "device_id": ev.get("device_id", ""),
+            "final_classification": "suspicious" if ev.get("is_suspicious") else "benign",
+            "mitre_techniques": [],
+            "mitre_technique": "",
+            "indicators": {
+                "pid": ev.get("pid"), "ppid": ev.get("ppid"),
+                "exe": exe, "username": ev.get("username", ""),
+                "cpu_percent": ev.get("cpu_percent"),
+            },
+            "source_table": "process",
+            "_sort_ts": ev.get("timestamp_ns", 0),
+        })
+    return events
+
+
+def _query_table_flow(store, cutoff_ns, sev_lo, sev_hi,
+                      search_filter, hour_start_ns, hour_end_ns):
+    """Query flow_events table."""
+    conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
+
+    # threat_score serves as risk_score for flow events
+    if sev_lo > 0.0 or sev_hi < 1.01:
+        conds.append("COALESCE(threat_score, 0) >= ? AND COALESCE(threat_score, 0) < ?")
+        params.extend([sev_lo, sev_hi])
+    if search_filter:
+        conds.append("(src_ip LIKE ? OR dst_ip LIKE ? OR protocol LIKE ?)")
+        params.extend([f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"])
+
+    where = " AND ".join(conds)
+    try:
+        rows = store.db.execute(
+            f"SELECT * FROM flow_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
+            params,
+        ).fetchall()
+        columns = [d[0] for d in store.db.execute("SELECT * FROM flow_events LIMIT 0").description]
+    except Exception:
+        return []
+
+    events = []
+    for row in rows:
+        ev = dict(zip(columns, row))
+        risk = round(ev.get("threat_score", 0) or 0, 3)
+        protocol = ev.get("protocol", "TCP") or "TCP"
+        dst = ev.get("dst_ip", "") or ""
+        port = ev.get("dst_port", "") or ""
+        desc = f"{protocol} → {dst}:{port}"
+
+        events.append({
+            "id": ev.get("id"),
+            "timestamp_dt": ev.get("timestamp_dt", ""),
+            "event_category": f"network_flow_{protocol.lower()}",
+            "severity": _risk_to_severity(risk),
+            "risk_score": risk,
+            "confidence": 0.5,
+            "source_ip": ev.get("src_ip", ""),
+            "description": desc,
+            "agent": "flow",
+            "device_id": ev.get("device_id", ""),
+            "final_classification": "suspicious" if ev.get("is_suspicious") else "benign",
+            "mitre_techniques": [],
+            "mitre_technique": "",
+            "indicators": {
+                "src_ip": ev.get("src_ip"), "dst_ip": dst,
+                "src_port": ev.get("src_port"), "dst_port": port,
+                "protocol": protocol,
+                "bytes_tx": ev.get("bytes_tx"), "bytes_rx": ev.get("bytes_rx"),
+            },
+            "source_table": "flow",
+            "_sort_ts": ev.get("timestamp_ns", 0),
+        })
+    return events
+
+
+def _query_table_dns(store, cutoff_ns, sev_lo, sev_hi,
+                     search_filter, hour_start_ns, hour_end_ns):
+    """Query dns_events table."""
+    conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
+
+    if sev_lo > 0.0 or sev_hi < 1.01:
+        conds.append("COALESCE(risk_score, 0) >= ? AND COALESCE(risk_score, 0) < ?")
+        params.extend([sev_lo, sev_hi])
+    if search_filter:
+        conds.append("(domain LIKE ? OR query_type LIKE ? OR event_type LIKE ?)")
+        params.extend([f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"])
+
+    where = " AND ".join(conds)
+    try:
+        rows = store.db.execute(
+            f"SELECT * FROM dns_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
+            params,
+        ).fetchall()
+        columns = [d[0] for d in store.db.execute("SELECT * FROM dns_events LIMIT 0").description]
+    except Exception:
+        return []
+
+    events = []
+    for row in rows:
+        ev = dict(zip(columns, row))
+        risk = round(ev.get("risk_score", 0) or 0, 3)
+        domain = ev.get("domain", "") or ""
+        qtype = ev.get("query_type", "") or ""
+        desc = f"DNS {qtype} → {domain}"
+        mitre_list = _parse_mitre(ev.get("mitre_techniques"))
+        agent = _normalize_agent_id(ev.get("collection_agent") or "dns")
+
+        events.append({
+            "id": ev.get("id"),
+            "timestamp_dt": ev.get("timestamp_dt", ""),
+            "event_category": ev.get("event_type", "dns_query") or "dns_query",
+            "severity": _risk_to_severity(risk),
+            "risk_score": risk,
+            "confidence": round(ev.get("confidence", 0) or 0, 3),
+            "source_ip": ev.get("source_ip", ""),
+            "description": desc,
+            "agent": agent,
+            "device_id": ev.get("device_id", ""),
+            "final_classification": "suspicious" if ev.get("is_beaconing") or ev.get("is_tunneling") else "benign",
+            "mitre_techniques": mitre_list,
+            "mitre_technique": ", ".join(mitre_list),
+            "indicators": {
+                "domain": domain, "query_type": qtype,
+                "dga_score": ev.get("dga_score"),
+                "is_beaconing": ev.get("is_beaconing"),
+                "response_code": ev.get("response_code"),
+            },
+            "source_table": "dns",
+            "_sort_ts": ev.get("timestamp_ns", 0),
+        })
+    return events
+
+
+def _query_table_persistence(store, cutoff_ns, sev_lo, sev_hi,
+                             search_filter, hour_start_ns, hour_end_ns):
+    """Query persistence_events table."""
+    conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
+
+    if sev_lo > 0.0 or sev_hi < 1.01:
+        conds.append("COALESCE(risk_score, 0) >= ? AND COALESCE(risk_score, 0) < ?")
+        params.extend([sev_lo, sev_hi])
+    if search_filter:
+        conds.append("(mechanism LIKE ? OR path LIKE ? OR command LIKE ?)")
+        params.extend([f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"])
+
+    where = " AND ".join(conds)
+    try:
+        rows = store.db.execute(
+            f"SELECT * FROM persistence_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
+            params,
+        ).fetchall()
+        columns = [d[0] for d in store.db.execute("SELECT * FROM persistence_events LIMIT 0").description]
+    except Exception:
+        return []
+
+    events = []
+    for row in rows:
+        ev = dict(zip(columns, row))
+        risk = round(ev.get("risk_score", 0) or 0, 3)
+        mechanism = ev.get("mechanism", "") or ""
+        path = ev.get("path", "") or ""
+        desc = f"{mechanism}: {path}" if path else mechanism
+        mitre_list = _parse_mitre(ev.get("mitre_techniques"))
+        agent = _normalize_agent_id(ev.get("collection_agent") or "persistence")
+
+        events.append({
+            "id": ev.get("id"),
+            "timestamp_dt": ev.get("timestamp_dt", ""),
+            "event_category": mechanism or "persistence_event",
+            "severity": _risk_to_severity(risk),
+            "risk_score": risk,
+            "confidence": round(ev.get("confidence", 0) or 0, 3),
+            "source_ip": ev.get("device_id", ""),
+            "description": desc,
+            "agent": agent,
+            "device_id": ev.get("device_id", ""),
+            "final_classification": "suspicious" if risk >= 0.5 else "benign",
+            "mitre_techniques": mitre_list,
+            "mitre_technique": ", ".join(mitre_list),
+            "indicators": {
+                "mechanism": mechanism, "path": path,
+                "command": ev.get("command", ""),
+                "change_type": ev.get("change_type", ""),
+                "user": ev.get("user", ""),
+            },
+            "source_table": "persistence",
+            "_sort_ts": ev.get("timestamp_ns", 0),
+        })
+    return events
+
+
+def _query_table_fim(store, cutoff_ns, sev_lo, sev_hi,
+                     search_filter, hour_start_ns, hour_end_ns):
+    """Query fim_events table."""
+    conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
+
+    if sev_lo > 0.0 or sev_hi < 1.01:
+        conds.append("COALESCE(risk_score, 0) >= ? AND COALESCE(risk_score, 0) < ?")
+        params.extend([sev_lo, sev_hi])
+    if search_filter:
+        conds.append("(path LIKE ? OR change_type LIKE ? OR reason LIKE ?)")
+        params.extend([f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"])
+
+    where = " AND ".join(conds)
+    try:
+        rows = store.db.execute(
+            f"SELECT * FROM fim_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
+            params,
+        ).fetchall()
+        columns = [d[0] for d in store.db.execute("SELECT * FROM fim_events LIMIT 0").description]
+    except Exception:
+        return []
+
+    events = []
+    for row in rows:
+        ev = dict(zip(columns, row))
+        risk = round(ev.get("risk_score", 0) or 0, 3)
+        path = ev.get("path", "") or ""
+        change = ev.get("change_type", "") or ""
+        desc = f"{change}: {path}" if change else path
+        mitre_list = _parse_mitre(ev.get("mitre_techniques"))
+
+        events.append({
+            "id": ev.get("id"),
+            "timestamp_dt": ev.get("timestamp_dt", ""),
+            "event_category": "file_modification",
+            "severity": _risk_to_severity(risk),
+            "risk_score": risk,
+            "confidence": round(ev.get("confidence", 0) or 0, 3),
+            "source_ip": ev.get("device_id", ""),
+            "description": desc,
+            "agent": "fim",
+            "device_id": ev.get("device_id", ""),
+            "final_classification": "suspicious" if risk >= 0.5 else "benign",
+            "mitre_techniques": mitre_list,
+            "mitre_technique": ", ".join(mitre_list),
+            "indicators": {
+                "path": path, "change_type": change,
+                "old_hash": ev.get("old_hash", ""),
+                "new_hash": ev.get("new_hash", ""),
+                "reason": ev.get("reason", ""),
+            },
+            "source_table": "fim",
+            "_sort_ts": ev.get("timestamp_ns", 0),
+        })
+    return events
 
 
 @dashboard_bp.route("/api/live/agents")
@@ -790,6 +1243,30 @@ def available_agents():
             "timestamp": current_time.isoformat(),
         }
     )
+
+
+@dashboard_bp.route("/api/device-info")
+@require_login
+@require_rate_limit(max_requests=30, window_seconds=60)
+def device_info():
+    """Device and OS information for the monitored host."""
+    import platform as _platform
+    import socket as _socket
+
+    try:
+        return jsonify({
+            "status": "success",
+            "system": {
+                "hostname": _socket.gethostname(),
+                "platform": _platform.platform(),
+                "system": _platform.system(),
+                "release": _platform.release(),
+                "architecture": list(_platform.architecture()),
+                "processor": _platform.processor(),
+            },
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @dashboard_bp.route("/api/live/metrics")
@@ -990,64 +1467,57 @@ def event_clustering():
         hours = min(int(request.args.get("hours", 24)), 8760)
     except (ValueError, TypeError):
         hours = 24
-    data = store.get_security_event_clustering(hours=hours)
+    data = store.get_unified_event_clustering(hours=hours)
 
-    # Extract top source IPs from recent events only (limited scan)
-    by_source_ip = {}
+    # Extract top source IPs from security_events + flow_events
+    by_source_ip: dict = {}
     try:
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
-        # Use JSON extract on a limited sample for IP counts
-        cursor = store.db.execute(
-            """SELECT ip, COUNT(*) as cnt FROM (
-                SELECT COALESCE(
-                    JSON_EXTRACT(indicators, '$.source_ip'),
-                    JSON_EXTRACT(indicators, '$.src_ip'),
-                    JSON_EXTRACT(indicators, '$.dst_ip')
-                ) AS ip
-                FROM security_events
-                WHERE timestamp_ns > ? AND indicators IS NOT NULL
-                ORDER BY timestamp_ns DESC LIMIT 5000
-            ) WHERE ip IS NOT NULL
-            GROUP BY ip ORDER BY cnt DESC LIMIT 50""",
-            (cutoff_ns,),
-        )
-        for row in cursor.fetchall():
-            by_source_ip[row[0]] = row[1]
+        with store._lock:
+            # Security events: JSON indicators
+            cursor = store.db.execute(
+                """SELECT ip, COUNT(*) as cnt FROM (
+                    SELECT COALESCE(
+                        JSON_EXTRACT(indicators, '$.source_ip'),
+                        JSON_EXTRACT(indicators, '$.src_ip'),
+                        JSON_EXTRACT(indicators, '$.dst_ip')
+                    ) AS ip
+                    FROM security_events
+                    WHERE timestamp_ns > ? AND indicators IS NOT NULL
+                    ORDER BY timestamp_ns DESC LIMIT 5000
+                ) WHERE ip IS NOT NULL
+                GROUP BY ip ORDER BY cnt DESC LIMIT 50""",
+                (cutoff_ns,),
+            )
+            for row in cursor.fetchall():
+                by_source_ip[row[0]] = row[1]
+            # Flow events: explicit columns
+            cursor = store.db.execute(
+                """SELECT ip, COUNT(*) FROM (
+                    SELECT src_ip AS ip FROM flow_events WHERE timestamp_ns > ?
+                    UNION ALL
+                    SELECT dst_ip FROM flow_events WHERE timestamp_ns > ?
+                ) WHERE ip IS NOT NULL
+                GROUP BY ip ORDER BY COUNT(*) DESC LIMIT 50""",
+                (cutoff_ns, cutoff_ns),
+            )
+            for row in cursor.fetchall():
+                by_source_ip[row[0]] = by_source_ip.get(row[0], 0) + row[1]
     except Exception:
         pass
 
-    # Derive agent from event_category (no collection_agent column in schema)
-    _CATEGORY_TO_AGENT = {
-        "service_created": "PersistenceGuard",
-        "persistence_browser_extension": "PersistenceGuard",
-        "persistence_shell_profile": "PersistenceGuard",
-        "persistence_user_launch_agent": "PersistenceGuard",
-        "critical_file_tampered": "FIM",
-        "new_system_library": "FIM",
-        "world_writable_sensitive": "FIM",
-        "code_signature_invalid": "FIM",
-        "execution_from_temp": "ProcAgent",
-        "lolbin_execution": "ProcAgent",
-        "process_wrong_user": "ProcAgent",
-        "suid_bit_added": "KernelAudit",
-        "sgid_bit_added": "KernelAudit",
-        "off_hours_login": "AuthGuard",
-        "dns_query": "DNS",
-        "usb_inventory_snapshot": "Peripheral",
-        "flow_new_external_service_seen": "FlowAgent",
-        "flow_network_extension_detected": "FlowAgent",
-    }
-    by_agent = {}
-    for cat, count in data.get("by_category", {}).items():
-        agent = _CATEGORY_TO_AGENT.get(cat, "Other")
-        by_agent[agent] = by_agent.get(agent, 0) + count
+    # Normalize agent IDs in by_agent
+    raw_by_agent = data.get("by_agent", {})
+    normalized_by_agent: dict = {}
+    for raw_id, count in raw_by_agent.items():
+        canonical = _normalize_agent_id(raw_id)
+        normalized_by_agent[canonical] = normalized_by_agent.get(canonical, 0) + count
 
-    # Reshape to match expected frontend schema
     clusters = {
-        "by_type": data.get("by_category", {}),
+        "by_type": data.get("by_source", {}),
         "by_severity": data.get("by_severity", {}),
         "by_source_ip": by_source_ip,
-        "by_agent": by_agent,
+        "by_agent": normalized_by_agent,
         "by_hour": data.get("by_hour", {}),
     }
 
@@ -1126,6 +1596,35 @@ def neural_readiness():
             ),
             500,
         )
+
+
+@dashboard_bp.route("/api/platform-capabilities", methods=["GET"])
+@require_login
+@require_rate_limit(max_requests=30, window_seconds=60)
+def platform_capabilities():
+    """Static platform capabilities from AGENT_REGISTRY + probe definitions."""
+    import platform as _platform
+
+    from .capabilities import (
+        get_agent_capabilities_summary,
+        get_declared_mitre_coverage,
+    )
+
+    target = "darwin" if _platform.system() == "Darwin" else "linux"
+    agents = get_agent_capabilities_summary(target)
+    mitre = get_declared_mitre_coverage(target)
+
+    return jsonify(
+        {
+            "status": "success",
+            "platform": target,
+            "agents": agents,
+            "total_agents": len(agents),
+            "total_probes": sum(a["probe_count"] for a in agents),
+            "mitre": mitre,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
 
 
 # Agent Control Endpoints (Phase 8)
@@ -1373,20 +1872,33 @@ def restart_all_agents():
 @require_login
 @require_rate_limit(max_requests=30, window_seconds=60)
 def mitre_coverage_data():
-    """MITRE ATT&CK technique coverage from real security events."""
+    """MITRE ATT&CK technique coverage: declared (from probes) + detected (from events)."""
+    import platform as _platform
+
+    from .capabilities import get_declared_mitre_coverage
     from .telemetry_bridge import get_telemetry_store
 
-    store = get_telemetry_store()
-    if store is None:
-        return jsonify({"status": "success", "coverage": {}, "total_techniques": 0})
+    target = "darwin" if _platform.system() == "Darwin" else "linux"
+    declared = get_declared_mitre_coverage(target)
 
-    coverage = store.get_mitre_coverage()
+    store = get_telemetry_store()
+    detected = {}
+    if store:
+        try:
+            detected = store.get_mitre_coverage()
+        except Exception:
+            pass
+
     return jsonify(
         {
             "status": "success",
-            "coverage": coverage,
-            "total_techniques": len(coverage),
-            "total_hits": sum(v["count"] for v in coverage.values()),
+            "declared": declared,
+            "detected": detected,
+            "by_tactic": declared.get("by_tactic", {}),
+            "coverage": detected,  # backward compat
+            "total_techniques": declared.get("technique_count", 0),
+            "total_detected": len(detected),
+            "total_hits": sum(v.get("count", 0) for v in detected.values()),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )
@@ -1415,6 +1927,7 @@ def hunt_search():
         "audit_events",
         "persistence_events",
         "peripheral_events",
+        "observation_events",
     }
     table = request.args.get("table", "security_events")
     if table not in ALLOWED_TABLES:
@@ -1816,129 +2329,78 @@ def metrics_history_api():
 # ── Agent Deep Overview ──────────────────────────────────────────
 
 # Static agent metadata for the 10 v2 security agents
-_AGENT_DEEP_META = {
-    "proc": {
-        "name": "Process Monitor",
-        "short": "ProcAgent",
-        "description": "Native process monitoring with behavioral analysis, LOLBin detection, code signing verification, and anomaly detection",
-        "color": "#4ECDC4",
-        "icon": "proc",
-        "category": "Endpoint",
-    },
-    "flow": {
-        "name": "Network Flow Analyzer",
-        "short": "FlowAgent",
-        "description": "Network traffic analysis with C2 beaconing detection, lateral movement, data exfiltration, and tunnel detection",
-        "color": "#F38181",
-        "icon": "flow",
-        "category": "Network",
-    },
-    "dns": {
-        "name": "DNS Threat Detector",
-        "short": "DNSAgent",
-        "description": "DNS-based threat detection including DGA, tunneling, fast-flux, beaconing patterns, and blocklist enforcement",
-        "color": "#AA96DA",
-        "icon": "dns",
-        "category": "Network",
-    },
-    "auth": {
-        "name": "Authentication Guard",
-        "short": "AuthGuard",
-        "description": "Authentication monitoring with brute-force detection, impossible travel, sudo escalation, MFA bypass, and off-hours login detection",
-        "color": "#FF6B35",
-        "icon": "auth",
-        "category": "Identity",
-    },
-    "fim": {
-        "name": "File Integrity Monitor",
-        "short": "FIM",
-        "description": "File integrity monitoring for SUID escalation, webshell drops, config backdoors, library hijacking, and bootloader tampering",
-        "color": "#00ff88",
-        "icon": "fim",
-        "category": "Endpoint",
-    },
-    "persistence": {
-        "name": "Persistence Guard",
-        "short": "PersistenceGuard",
-        "description": "Persistence mechanism detection across LaunchAgents, systemd, cron, SSH keys, shell profiles, browser extensions, and auth plugins",
-        "color": "#FCBAD3",
-        "icon": "persistence",
-        "category": "Endpoint",
-    },
-    "peripheral": {
-        "name": "Peripheral Monitor",
-        "short": "Peripheral",
-        "description": "USB/Bluetooth device monitoring with BadUSB detection, unauthorized device tracking, and composite risk scoring",
-        "color": "#FF6B9D",
-        "icon": "peripheral",
-        "category": "Physical",
-    },
-    "kernel_audit": {
-        "name": "Kernel Audit Engine",
-        "short": "KernelAudit",
-        "description": "Kernel-level syscall monitoring for privilege escalation, ptrace abuse, kernel module loads, and audit subsystem tampering",
-        "color": "#FFD93D",
-        "icon": "kernel",
-        "category": "Kernel",
-    },
-    "device_discovery": {
-        "name": "Device Discovery",
-        "short": "Discovery",
-        "description": "Network asset discovery with ARP enumeration, port scanning, rogue DHCP/DNS detection, shadow IT, and vulnerability bannering",
-        "color": "#6BCB77",
-        "icon": "discovery",
-        "category": "Network",
-    },
-    "protocol_collectors": {
-        "name": "Protocol Threat Collector",
-        "short": "ProtocolCollector",
-        "description": "Protocol-level threat detection for HTTP anomalies, TLS issues, SSH brute-force, DNS tunneling, SQL injection, and RDP abuse",
-        "color": "#00B4D8",
-        "icon": "protocol",
-        "category": "Network",
-    },
-    # L7 Gap-Closure Agents
-    "applog": {
-        "name": "Application Log Analyzer",
-        "short": "AppLog",
-        "description": "Application log aggregation with webshell detection, log tampering, credential harvesting, and error spike analysis",
-        "color": "#E8A87C",
-        "icon": "applog",
-        "category": "Application",
-    },
-    "db_activity": {
-        "name": "Database Activity Monitor",
-        "short": "DBActivity",
-        "description": "Database query monitoring with SQL injection, privilege escalation, bulk extraction, and schema enumeration",
-        "color": "#20B2AA",
-        "icon": "database",
-        "category": "Application",
-    },
-    "http_inspector": {
-        "name": "HTTP Inspector",
-        "short": "HTTPInspector",
-        "description": "Deep HTTP payload analysis with XSS, SSRF, path traversal, API abuse, and suspicious upload detection",
-        "color": "#7B68EE",
-        "icon": "http",
-        "category": "Network",
-    },
-    "internet_activity": {
-        "name": "Internet Activity Monitor",
-        "short": "InternetActivity",
-        "description": "Outbound connection monitoring with cloud exfil, TOR/VPN usage, crypto mining, and unusual geo-connection detection",
-        "color": "#DA70D6",
-        "icon": "internet",
-        "category": "Network",
-    },
-    "net_scanner": {
-        "name": "Network Scanner",
-        "short": "NetScanner",
-        "description": "Active network probing with new service detection, port changes, rogue services, SSL cert issues, and topology changes",
-        "color": "#FF7F50",
-        "icon": "scanner",
-        "category": "Network",
-    },
+_AGENT_COLORS = {
+    "proc": "#4ECDC4", "flow": "#F38181", "dns": "#AA96DA",
+    "auth": "#FF6B35", "fim": "#00ff88", "persistence": "#FCBAD3",
+    "peripheral": "#FF6B9D", "kernel_audit": "#FFD93D",
+    "device_discovery": "#6BCB77", "protocol_collectors": "#00B4D8",
+    "applog": "#E8A87C", "db_activity": "#20B2AA", "http_inspector": "#7B68EE",
+    "internet_activity": "#DA70D6", "net_scanner": "#FF7F50",
+    "macos_security_monitor": "#FFD700", "macos_unified_log": "#87CEEB",
+    "macos_dns": "#AA96DA", "macos_applog": "#E8A87C",
+    "macos_discovery": "#6BCB77", "macos_internet_activity": "#DA70D6",
+    "macos_db_activity": "#20B2AA", "macos_http_inspector": "#7B68EE",
 }
+
+_AGENT_CATEGORY_DISPLAY = {
+    "endpoint": "Endpoint", "network": "Network", "application": "Application",
+    "platform": "Platform", "physical": "Physical", "kernel": "Kernel",
+    "identity": "Identity",
+}
+
+
+_AGENT_DEEP_META_CACHE = None
+
+
+def _get_agent_deep_meta():
+    """Build agent metadata lazily from AGENT_REGISTRY (single source of truth).
+
+    Lazy because AGENT_REGISTRY imports agent classes which may fail at module
+    import time (e.g., missing certs directory).
+    """
+    global _AGENT_DEEP_META_CACHE
+    if _AGENT_DEEP_META_CACHE is not None:
+        return _AGENT_DEEP_META_CACHE
+
+    try:
+        from amoskys.agents import AGENT_REGISTRY
+    except Exception:
+        return {}
+
+    import sys as _sys
+
+    is_darwin = _sys.platform == "darwin"
+    # On macOS, these 6 agents resolve to Observatory implementations via platform routing
+    _PLATFORM_ROUTED = {"proc", "auth", "persistence", "fim", "flow", "peripheral"}
+
+    meta = {}
+    for aid, reg in AGENT_REGISTRY.items():
+        cat = reg.get("category", "endpoint")
+        platforms = reg.get("platforms", [])
+
+        # Determine agent source/provenance
+        if aid.startswith("macos_"):
+            source = "Observatory"
+        elif aid == "kernel_audit":
+            source = "Linux"
+        elif aid in _PLATFORM_ROUTED and is_darwin:
+            source = "Observatory"
+        else:
+            source = "Shared"
+
+        meta[aid] = {
+            "name": reg["name"],
+            "short": aid,
+            "description": reg["description"],
+            "color": _AGENT_COLORS.get(aid, "#00d9ff"),
+            "icon": reg.get("icon", aid),
+            "category": _AGENT_CATEGORY_DISPLAY.get(cat, cat.title()),
+            "platforms": platforms,
+            "source": source,
+        }
+
+    _AGENT_DEEP_META_CACHE = meta
+    return meta
 
 # Map agent short names to event category prefixes for counting
 _AGENT_EVENT_CATEGORIES = {
@@ -2132,11 +2594,79 @@ def agents_deep_overview():
     except Exception:
         pass
 
-    # 2) Get event counts per category from DB (last 7 days for performance)
+    # 2) Get event counts per agent across ALL domain tables (last 7 days)
     event_counts_by_cat = {}
+    event_counts_by_agent = {}  # canonical agent_id → count
     if store:
+        cutoff_ns = int((time.time() - 7 * 24 * 3600) * 1e9)
+        # Query each domain table for collection_agent counts
+        _EVENT_TABLES_WITH_AGENT = [
+            ("security_events", "collection_agent"),
+            ("process_events", "collection_agent"),
+            ("dns_events", "collection_agent"),
+            ("persistence_events", "collection_agent"),
+            ("peripheral_events", "collection_agent"),
+        ]
+        for table, col in _EVENT_TABLES_WITH_AGENT:
+            try:
+                cursor = store.db.execute(
+                    f"SELECT {col}, COUNT(*) FROM {table} "
+                    f"WHERE timestamp_ns > ? GROUP BY {col}",
+                    (cutoff_ns,),
+                )
+                for row in cursor.fetchall():
+                    raw_agent = row[0] or ""
+                    canonical = _normalize_agent_id(raw_agent)
+                    event_counts_by_agent[canonical] = (
+                        event_counts_by_agent.get(canonical, 0) + row[1]
+                    )
+            except Exception:
+                pass
+        # observation_events: count by domain → agent mapping
+        _OBS_DOMAIN_TO_AGENT = {
+            "security": "macos_security_monitor",
+            "unified_log": "macos_unified_log",
+            "dns": "macos_dns",
+            "applog": "macos_applog",
+            "discovery": "macos_discovery",
+            "internet_activity": "macos_internet_activity",
+            "db_activity": "macos_db_activity",
+            "http_inspector": "macos_http_inspector",
+            "net_scanner": "net_scanner",
+        }
         try:
-            cutoff_ns = int((time.time() - 7 * 24 * 3600) * 1e9)
+            cursor = store.db.execute(
+                "SELECT domain, COUNT(*) FROM observation_events "
+                "WHERE timestamp_ns > ? GROUP BY domain",
+                (cutoff_ns,),
+            )
+            for row in cursor.fetchall():
+                domain_val = row[0] or ""
+                mapped_agent = _OBS_DOMAIN_TO_AGENT.get(domain_val, domain_val)
+                event_counts_by_agent[mapped_agent] = (
+                    event_counts_by_agent.get(mapped_agent, 0) + row[1]
+                )
+        except Exception:
+            pass
+        # Tables without collection_agent: count totals
+        for table, agent_id in [
+            ("flow_events", "flow"),
+            ("fim_events", "fim"),
+            ("audit_events", "kernel_audit"),
+        ]:
+            try:
+                row = store.db.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns > ?",
+                    (cutoff_ns,),
+                ).fetchone()
+                if row and row[0]:
+                    event_counts_by_agent[agent_id] = (
+                        event_counts_by_agent.get(agent_id, 0) + row[0]
+                    )
+            except Exception:
+                pass
+        # Also get event_category counts for backward compat
+        try:
             cursor = store.db.execute(
                 "SELECT event_category, COUNT(*) FROM ("
                 "  SELECT event_category FROM security_events "
@@ -2172,7 +2702,7 @@ def agents_deep_overview():
     except Exception:
         pass
 
-    for agent_id, meta in _AGENT_DEEP_META.items():
+    for agent_id, meta in _get_agent_deep_meta().items():
         # Get probes for this agent from audit results
         agent_probes = [r for r in probe_results if r.get("agent") == agent_id]
         probe_list = []
@@ -2205,14 +2735,16 @@ def agents_deep_overview():
                 }
             )
 
-        # Count events for this agent
-        agent_event_count = 0
-        cat_prefixes = _AGENT_EVENT_CATEGORIES.get(agent_id, [])
-        for cat, count in event_counts_by_cat.items():
-            for prefix in cat_prefixes:
-                if cat.startswith(prefix) or cat == prefix:
-                    agent_event_count += count
-                    break
+        # Count events for this agent (multi-table unified counts)
+        agent_event_count = event_counts_by_agent.get(agent_id, 0)
+        # Fallback: also check event_category prefix matching
+        if agent_event_count == 0:
+            cat_prefixes = _AGENT_EVENT_CATEGORIES.get(agent_id, [])
+            for cat, count in event_counts_by_cat.items():
+                for prefix in cat_prefixes:
+                    if cat.startswith(prefix) or cat == prefix:
+                        agent_event_count += count
+                        break
 
         # Probe health summary
         real = sum(1 for p in probe_list if p["status"] == "REAL")
@@ -2233,6 +2765,8 @@ def agents_deep_overview():
                 "color": meta["color"],
                 "icon": meta["icon"],
                 "category": meta["category"],
+                "platforms": meta.get("platforms", []),
+                "source": meta.get("source", "Shared"),
                 "probes": probe_list,
                 "probe_summary": {
                     "total": len(probe_list),
@@ -2309,6 +2843,15 @@ def agent_live_data(agent_id):
         "http_inspector": "http_inspector_agent",
         "internet_activity": "internet_activity_agent",
         "net_scanner": "net_scanner_agent",
+        # macOS Observatory Agents (catalog ID = registry ID)
+        "macos_security_monitor": "macos_security_monitor",
+        "macos_unified_log": "macos_unified_log",
+        "macos_dns": "macos_dns",
+        "macos_applog": "macos_applog",
+        "macos_discovery": "macos_discovery",
+        "macos_internet_activity": "macos_internet_activity",
+        "macos_db_activity": "macos_db_activity",
+        "macos_http_inspector": "macos_http_inspector",
     }
     catalog_id = _id_map.get(agent_id) or agent_id
 
@@ -2320,9 +2863,11 @@ def agent_live_data(agent_id):
     except Exception:
         pass
 
-    # 2) Recent events from security_events matching this agent's categories
+    # 2) Recent events — query BOTH security_events AND domain-specific tables
     recent_events = []
     cat_prefixes = _AGENT_EVENT_CATEGORIES.get(agent_id, [])
+
+    # 2a) Security events (high-level detections)
     if store and cat_prefixes:
         try:
             placeholders = " OR ".join([f"event_category LIKE ?" for _ in cat_prefixes])
@@ -2339,12 +2884,11 @@ def agent_live_data(agent_id):
             cols = [d[0] for d in cursor.description]
             for row in cursor.fetchall():
                 evt = dict(zip(cols, row))
-                # Parse mitre_techniques JSON if stored as string
+                evt["source_table"] = "security_events"
                 mt = evt.get("mitre_techniques", "")
                 if isinstance(mt, str) and mt.startswith("["):
                     try:
                         import json as _json
-
                         evt["mitre_techniques"] = _json.loads(mt)
                     except Exception:
                         evt["mitre_techniques"] = []
@@ -2352,19 +2896,162 @@ def agent_live_data(agent_id):
         except Exception:
             pass
 
-    # 3) Recent process events (for proc agent specifically)
+    # 2b) Domain-specific events (raw observables from the agent's own table)
+    _AGENT_DOMAIN_QUERIES = {
+        "proc": (
+            "process_events",
+            "SELECT id, timestamp_dt, device_id, pid, exe, cmdline, username, "
+            "cpu_percent, memory_percent, is_suspicious, anomaly_score, "
+            "collection_agent "
+            "FROM process_events ORDER BY id DESC LIMIT ?",
+        ),
+        "dns": (
+            "dns_events",
+            "SELECT id, timestamp_dt, device_id, domain, query_type, "
+            "response_code, risk_score, dga_score, is_beaconing, "
+            "collection_agent, mitre_techniques "
+            "FROM dns_events ORDER BY id DESC LIMIT ?",
+        ),
+        "flow": (
+            "flow_events",
+            "SELECT id, timestamp_dt, device_id, src_ip, dst_ip, "
+            "src_port, dst_port, protocol, bytes_tx, bytes_rx, "
+            "threat_score, is_suspicious "
+            "FROM flow_events ORDER BY id DESC LIMIT ?",
+        ),
+        "fim": (
+            "fim_events",
+            "SELECT id, timestamp_dt, device_id, path, change_type, "
+            "risk_score, mitre_techniques, collection_agent "
+            "FROM fim_events ORDER BY id DESC LIMIT ?",
+        ),
+        "persistence": (
+            "persistence_events",
+            "SELECT id, timestamp_dt, device_id, mechanism, path, "
+            "command, risk_score, mitre_techniques, collection_agent "
+            "FROM persistence_events ORDER BY id DESC LIMIT ?",
+        ),
+        "peripheral": (
+            "peripheral_events",
+            "SELECT id, timestamp_dt, device_id, event_type, device_type, "
+            "vendor_id, product_id, serial_number, is_authorized, risk_score, "
+            "collection_agent "
+            "FROM peripheral_events ORDER BY id DESC LIMIT ?",
+        ),
+        "kernel_audit": (
+            "audit_events",
+            "SELECT id, timestamp_dt, device_id, syscall, event_type, "
+            "pid, uid, exe, target_path, risk_score, mitre_techniques "
+            "FROM audit_events ORDER BY id DESC LIMIT ?",
+        ),
+    }
+    domain_q = _AGENT_DOMAIN_QUERIES.get(agent_id)
     recent_processes = []
-    if agent_id == "proc" and store:
+    if store and domain_q:
+        table_name, sql = domain_q
+        try:
+            cursor = store.db.execute(sql, (limit,))
+            cols = [d[0] for d in cursor.description]
+            for row in cursor.fetchall():
+                evt = dict(zip(cols, row))
+                evt["source_table"] = table_name
+                # Build a description for display
+                if agent_id == "proc":
+                    evt["event_category"] = "process_event"
+                    evt["description"] = f"{evt.get('exe', '?')} (PID {evt.get('pid', '?')}) — {evt.get('username', '?')}"
+                    recent_processes.append(dict(evt))
+                elif agent_id == "dns":
+                    evt["event_category"] = "dns_query"
+                    evt["description"] = f"{evt.get('domain', '?')} ({evt.get('query_type', '?')})"
+                elif agent_id == "flow":
+                    evt["event_category"] = "network_flow"
+                    evt["description"] = f"{evt.get('protocol', '?')} → {evt.get('dst_ip', '?')}:{evt.get('dst_port', '?')}"
+                elif agent_id == "fim":
+                    evt["event_category"] = "file_modification"
+                    evt["description"] = f"{evt.get('path', '?')} ({evt.get('change_type', '?')})"
+                elif agent_id == "persistence":
+                    evt["event_category"] = evt.get("mechanism", "persistence")
+                    evt["description"] = f"{evt.get('mechanism', '?')}: {evt.get('path', '?')}"
+                elif agent_id == "peripheral":
+                    evt["event_category"] = evt.get("event_type", "peripheral")
+                    evt["description"] = f"{evt.get('device_type', '?')} — {evt.get('vendor_id', '?')}:{evt.get('product_id', '?')}"
+                elif agent_id == "kernel_audit":
+                    evt["event_category"] = evt.get("event_type", "kernel_audit")
+                    evt["description"] = f"syscall:{evt.get('syscall', '?')} — {evt.get('exe', '?')}"
+
+                # Parse MITRE techniques
+                mt = evt.get("mitre_techniques", "")
+                if isinstance(mt, str) and mt.startswith("["):
+                    try:
+                        import json as _json
+                        evt["mitre_techniques"] = _json.loads(mt)
+                    except Exception:
+                        evt["mitre_techniques"] = []
+
+                recent_events.append(evt)
+        except Exception:
+            pass
+
+    # 3) observation_events — primary data source for Observatory agents
+    #    Also covers agents without dedicated domain tables
+    _AGENT_OBS_DOMAIN = {
+        "macos_security_monitor": "security",
+        "macos_unified_log": "unified_log",
+        "macos_dns": "dns",
+        "macos_applog": "applog",
+        "macos_discovery": "discovery",
+        "macos_internet_activity": "internet_activity",
+        "macos_db_activity": "db_activity",
+        "macos_http_inspector": "http_inspector",
+        # Shared agents also write to observation_events
+        "applog": "applog",
+        "db_activity": "db_activity",
+        "http_inspector": "http_inspector",
+        "internet_activity": "internet_activity",
+        "device_discovery": "discovery",
+        "net_scanner": "net_scanner",
+    }
+    obs_domain = _AGENT_OBS_DOMAIN.get(agent_id)
+    if store and obs_domain:
         try:
             cursor = store.db.execute(
-                "SELECT timestamp_dt, device_id, pid, exe, cmdline, username, "
-                "cpu_percent, memory_percent, is_suspicious, anomaly_score "
-                "FROM process_events ORDER BY id DESC LIMIT ?",
-                (limit,),
+                "SELECT id, timestamp_dt, device_id, domain, event_type, "
+                "attributes, risk_score, collection_agent "
+                "FROM observation_events WHERE domain = ? "
+                "ORDER BY id DESC LIMIT ?",
+                (obs_domain, limit),
             )
             cols = [d[0] for d in cursor.description]
             for row in cursor.fetchall():
-                recent_processes.append(dict(zip(cols, row)))
+                evt = dict(zip(cols, row))
+                evt["source_table"] = "observation_events"
+                evt["event_category"] = evt.get("event_type") or obs_domain
+                # Extract description from attributes JSON
+                attrs = evt.get("attributes", "")
+                if isinstance(attrs, str) and attrs.startswith("{"):
+                    try:
+                        import json as _json
+
+                        parsed = _json.loads(attrs)
+                        # Build a meaningful description from attributes
+                        desc = parsed.get("description") or parsed.get("summary")
+                        if not desc:
+                            # Fallback: compose from common fields
+                            parts = []
+                            for k in ("event_type", "process", "sender", "domain", "path", "exe", "src_ip", "dst_ip"):
+                                if k in parsed and parsed[k]:
+                                    parts.append(f"{k}={parsed[k]}")
+                            msg = parsed.get("message", "")
+                            if msg:
+                                parts.append(str(msg)[:80])
+                            desc = " | ".join(parts) if parts else obs_domain + " event"
+                        evt["description"] = desc
+                        evt["mitre_techniques"] = parsed.get(
+                            "mitre_techniques", []
+                        )
+                    except Exception:
+                        evt["description"] = obs_domain + " observation"
+                recent_events.append(evt)
         except Exception:
             pass
 
@@ -2409,6 +3096,15 @@ def agent_live_data(agent_id):
         "http_inspector": "http_inspector_agent",
         "internet_activity": "internet_activity_agent",
         "net_scanner": "net_scanner_agent",
+        # macOS Observatory Agents
+        "macos_security_monitor": "macos_security_monitor",
+        "macos_unified_log": "macos_unified_log",
+        "macos_dns": "macos_dns",
+        "macos_applog": "macos_applog",
+        "macos_discovery": "macos_discovery",
+        "macos_internet_activity": "macos_internet_activity",
+        "macos_db_activity": "macos_db_activity",
+        "macos_http_inspector": "macos_http_inspector",
     }
     log_file = repo_root / "logs" / f"{log_name_map.get(agent_id, agent_id)}.err.log"
     if log_file.exists():
@@ -2419,7 +3115,10 @@ def agent_live_data(agent_id):
             pass
 
     # 6) Event timeline stats (hourly distribution over last 24h)
-    hourly_stats = []
+    #    Query BOTH security_events AND the agent's domain table
+    hourly_buckets = {}  # hour_str → count
+
+    # 6a) security_events hourly
     if store and cat_prefixes:
         try:
             placeholders = " OR ".join([f"event_category LIKE ?" for _ in cat_prefixes])
@@ -2431,9 +3130,43 @@ def agent_live_data(agent_id):
                 params,
             )
             for row in cursor.fetchall():
-                hourly_stats.append({"hour": row[0], "count": row[1]})
+                hourly_buckets[row[0]] = hourly_buckets.get(row[0], 0) + row[1]
         except Exception:
             pass
+
+    # 6b) domain table hourly
+    if store and domain_q:
+        table_name = domain_q[0]
+        try:
+            cursor = store.db.execute(
+                f"SELECT substr(timestamp_dt, 1, 13) as hour, COUNT(*) as cnt "
+                f"FROM {table_name} "
+                f"GROUP BY hour ORDER BY hour DESC LIMIT 24",
+            )
+            for row in cursor.fetchall():
+                hourly_buckets[row[0]] = hourly_buckets.get(row[0], 0) + row[1]
+        except Exception:
+            pass
+
+    # 6c) observation_events hourly (for Observatory agents)
+    if store and obs_domain:
+        try:
+            cursor = store.db.execute(
+                "SELECT substr(timestamp_dt, 1, 13) as hour, COUNT(*) as cnt "
+                "FROM observation_events WHERE domain = ? "
+                "GROUP BY hour ORDER BY hour DESC LIMIT 24",
+                (obs_domain,),
+            )
+            for row in cursor.fetchall():
+                hourly_buckets[row[0]] = hourly_buckets.get(row[0], 0) + row[1]
+        except Exception:
+            pass
+
+    hourly_stats = sorted(
+        [{"hour": h, "count": c} for h, c in hourly_buckets.items()],
+        key=lambda x: x["hour"],
+        reverse=True,
+    )[:24]
 
     return jsonify(
         {
@@ -2472,18 +3205,29 @@ def _get_local_ip():
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
 def agents_activity():
-    """Per-agent event rates for last 1 min and last 60 min."""
+    """Per-agent event rates for last 1 min and last 60 min.
+
+    Queries ALL event tables, not just security_events.
+    """
     from .telemetry_bridge import get_telemetry_store
 
     store = get_telemetry_store()
     result = {}
 
     if store:
-        try:
-            now_ns = int(time.time() * 1e9)
-            one_min_ns = now_ns - 60 * int(1e9)
-            sixty_min_ns = now_ns - 3600 * int(1e9)
+        now_ns = int(time.time() * 1e9)
+        one_min_ns = now_ns - 60 * int(1e9)
+        sixty_min_ns = now_ns - 3600 * int(1e9)
 
+        def _add_activity(agent_id, last_min, last_hour):
+            aid = _normalize_agent_id(agent_id)
+            if aid not in result:
+                result[aid] = {"last_min": 0, "last_hour": 0}
+            result[aid]["last_min"] += last_min
+            result[aid]["last_hour"] += last_hour
+
+        try:
+            # 1. security_events — use event_category prefix matching
             cursor = store.db.execute(
                 """SELECT event_category,
                    SUM(CASE WHEN timestamp_ns > ? THEN 1 ELSE 0 END) as last_min,
@@ -2498,13 +3242,47 @@ def agents_activity():
                 for agent_id, prefixes in _AGENT_EVENT_CATEGORIES.items():
                     for prefix in prefixes:
                         if cat and (cat.startswith(prefix) or cat == prefix):
-                            if agent_id not in result:
-                                result[agent_id] = {"last_min": 0, "last_hour": 0}
-                            result[agent_id]["last_min"] += last_min
-                            result[agent_id]["last_hour"] += last_hour
+                            _add_activity(agent_id, last_min, last_hour)
                             break
         except Exception:
             pass
+
+        # 2. Domain tables with collection_agent column
+        for table, default_agent in [
+            ("process_events", "proc"),
+            ("dns_events", "dns"),
+            ("persistence_events", "persistence"),
+        ]:
+            try:
+                cursor = store.db.execute(
+                    f"""SELECT COALESCE(collection_agent, ?) as agent,
+                       SUM(CASE WHEN timestamp_ns > ? THEN 1 ELSE 0 END) as last_min,
+                       COUNT(*) as last_hour
+                       FROM {table}
+                       WHERE timestamp_ns > ?
+                       GROUP BY agent""",
+                    (default_agent, one_min_ns, sixty_min_ns),
+                )
+                for row in cursor.fetchall():
+                    _add_activity(row[0] or default_agent, row[1], row[2])
+            except Exception:
+                pass
+
+        # 3. Tables without collection_agent (fixed agent assignment)
+        for table, agent_id in [("flow_events", "flow"), ("fim_events", "fim")]:
+            try:
+                row = store.db.execute(
+                    f"""SELECT
+                       SUM(CASE WHEN timestamp_ns > ? THEN 1 ELSE 0 END) as last_min,
+                       COUNT(*) as last_hour
+                       FROM {table}
+                       WHERE timestamp_ns > ?""",
+                    (one_min_ns, sixty_min_ns),
+                ).fetchone()
+                if row and (row[0] or row[1]):
+                    _add_activity(agent_id, row[0] or 0, row[1] or 0)
+            except Exception:
+                pass
 
     return jsonify(
         {
@@ -3184,13 +3962,22 @@ def explain_event(event_id):
         ]
         event_dict = dict(zip(columns, row))
 
-        # Parse JSON fields
+        # Parse JSON fields with null-safe defaults
         for field in ("mitre_techniques", "indicators"):
-            if isinstance(event_dict.get(field), str):
+            val = event_dict.get(field)
+            if isinstance(val, str):
                 try:
-                    event_dict[field] = json.loads(event_dict[field])
+                    event_dict[field] = json.loads(val)
                 except (json.JSONDecodeError, TypeError):
-                    pass
+                    event_dict[field] = [] if field == "mitre_techniques" else {}
+            elif val is None:
+                event_dict[field] = [] if field == "mitre_techniques" else {}
+
+        # Ensure indicators has meaningful content for the explainer
+        if not event_dict.get("indicators"):
+            event_dict["indicators"] = {
+                "note": "No indicator data recorded for this event"
+            }
 
         from amoskys.intel.explanation import EventExplainer
 
@@ -3995,3 +4782,453 @@ def guardian_execute():
 
     except Exception as exc:
         return jsonify({"output": f"Command error: {exc}", "cmd_type": "error"})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Observatory API Endpoints — Wire observability pipeline data to dashboard
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _get_store():
+    """Get TelemetryStore singleton, return None if unavailable."""
+    try:
+        from .telemetry_bridge import get_telemetry_store
+
+        return get_telemetry_store()
+    except Exception:
+        return None
+
+
+# ── Device Posture ──
+
+
+@dashboard_bp.route("/api/posture/summary")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def posture_summary():
+    """Device posture — cross-domain health overview."""
+    store = _get_store()
+    if not store:
+        return jsonify({"status": "error", "message": _MSG_DB_UNAVAILABLE})
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_device_posture(hours))
+
+
+@dashboard_bp.route("/api/posture/timeline")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def posture_timeline():
+    """Unified cross-domain event timeline."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 200, type=int)
+    return jsonify(store.get_cross_domain_timeline(hours, min(limit, 500)))
+
+
+# ── DNS Intelligence ──
+
+
+@dashboard_bp.route("/api/dns/stats")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def dns_stats():
+    """DNS query analytics."""
+    store = _get_store()
+    if not store:
+        return jsonify({"total_queries": 0})
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_dns_stats(hours))
+
+
+@dashboard_bp.route("/api/dns/top-domains")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def dns_top_domains():
+    """Top queried domains."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 20, type=int)
+    return jsonify(store.get_dns_top_domains(hours, min(limit, 100)))
+
+
+@dashboard_bp.route("/api/dns/dga")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def dns_dga():
+    """DGA suspect domains."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    min_score = request.args.get("min_score", 0.5, type=float)
+    limit = request.args.get("limit", 50, type=int)
+    return jsonify(store.get_dns_dga_suspects(hours, min_score, min(limit, 200)))
+
+
+@dashboard_bp.route("/api/dns/beaconing")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def dns_beaconing():
+    """Beaconing domain detection."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 50, type=int)
+    return jsonify(store.get_dns_beaconing(hours, min(limit, 200)))
+
+
+@dashboard_bp.route("/api/dns/timeline")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def dns_timeline():
+    """DNS query timeline."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_dns_timeline(hours))
+
+
+@dashboard_bp.route("/api/dns/recent")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def dns_recent():
+    """Recent DNS events with search."""
+    store = _get_store()
+    if not store:
+        return jsonify({"results": [], "total_count": 0})
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 100, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    search = request.args.get("search", "")
+    return jsonify(store.search_events(search, "dns_events", hours, min(limit, 500), offset))
+
+
+# ── Network Intelligence ──
+
+
+@dashboard_bp.route("/api/network/stats")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def network_flow_stats():
+    """Network flow summary."""
+    store = _get_store()
+    if not store:
+        return jsonify({"total_flows": 0})
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_flow_stats(hours))
+
+
+@dashboard_bp.route("/api/network/geo")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def network_geo():
+    """GeoIP destination aggregation."""
+    store = _get_store()
+    if not store:
+        return jsonify({"countries": [], "cities": []})
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_flow_geo_stats(hours))
+
+
+@dashboard_bp.route("/api/network/asn")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def network_asn():
+    """ASN breakdown."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_flow_asn_breakdown(hours))
+
+
+@dashboard_bp.route("/api/network/device-location")
+@require_login
+@require_rate_limit(max_requests=10, window_seconds=60)
+def network_device_location():
+    """Resolve device's public IP to geo-coordinates via ipinfo.io."""
+    import urllib.request
+
+    cache_key = "_device_location"
+    cached = getattr(network_device_location, cache_key, None)
+    if cached:
+        return jsonify(cached)
+    try:
+        req = urllib.request.Request(
+            "https://ipinfo.io/json",
+            headers={"Accept": "application/json", "User-Agent": "AMOSKYS/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            import json as _json
+
+            data = _json.loads(resp.read())
+        loc = data.get("loc", "0,0").split(",")
+        result = {
+            "lat": float(loc[0]),
+            "lon": float(loc[1]),
+            "city": data.get("city", ""),
+            "region": data.get("region", ""),
+            "country": data.get("country", ""),
+            "org": data.get("org", ""),
+            "ip": data.get("ip", ""),
+        }
+        setattr(network_device_location, cache_key, result)
+        return jsonify(result)
+    except Exception:
+        return jsonify({"lat": 38.2542, "lon": -85.7594, "city": "Louisville", "country": "US"})
+
+
+@dashboard_bp.route("/api/network/geo-points")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def network_geo_points():
+    """Lat/lon points for world map."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 500, type=int)
+    return jsonify(store.get_flow_geo_points(hours, min(limit, 1000)))
+
+
+@dashboard_bp.route("/api/network/top-destinations")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def network_top_destinations():
+    """Top destination IPs."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 20, type=int)
+    return jsonify(store.get_flow_top_destinations(hours, min(limit, 100)))
+
+
+@dashboard_bp.route("/api/network/by-process")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def network_by_process():
+    """Network usage by process."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 20, type=int)
+    return jsonify(store.get_flow_by_process(hours, min(limit, 100)))
+
+
+@dashboard_bp.route("/api/network/flows")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def network_flows():
+    """Recent flow events with search."""
+    store = _get_store()
+    if not store:
+        return jsonify({"results": [], "total_count": 0})
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 100, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    search = request.args.get("search", "")
+    return jsonify(store.search_events(search, "flow_events", hours, min(limit, 500), offset))
+
+
+# ── File Integrity ──
+
+
+@dashboard_bp.route("/api/fim/stats")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def fim_stats():
+    """File integrity monitoring summary."""
+    store = _get_store()
+    if not store:
+        return jsonify({"total_changes": 0})
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_fim_stats(hours))
+
+
+@dashboard_bp.route("/api/fim/critical")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def fim_critical():
+    """High-risk file changes."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    min_risk = request.args.get("min_risk", 0.3, type=float)
+    limit = request.args.get("limit", 100, type=int)
+    return jsonify(store.get_fim_critical_changes(hours, min_risk, min(limit, 500)))
+
+
+@dashboard_bp.route("/api/fim/directories")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def fim_directories():
+    """File changes by directory."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_fim_directory_summary(hours))
+
+
+@dashboard_bp.route("/api/fim/timeline")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def fim_timeline():
+    """FIM event timeline."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_fim_timeline(hours))
+
+
+@dashboard_bp.route("/api/fim/recent")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def fim_recent():
+    """Recent FIM events with search."""
+    store = _get_store()
+    if not store:
+        return jsonify({"results": [], "total_count": 0})
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 100, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    search = request.args.get("search", "")
+    return jsonify(store.search_events(search, "fim_events", hours, min(limit, 500), offset))
+
+
+# ── Persistence Landscape ──
+
+
+@dashboard_bp.route("/api/persistence/stats")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def persistence_stats():
+    """Persistence mechanism summary."""
+    store = _get_store()
+    if not store:
+        return jsonify({"total_entries": 0})
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_persistence_stats(hours))
+
+
+@dashboard_bp.route("/api/persistence/inventory")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def persistence_inventory():
+    """Persistence entry inventory."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    mechanism = request.args.get("mechanism")
+    limit = request.args.get("limit", 200, type=int)
+    return jsonify(store.get_persistence_inventory(mechanism, min(limit, 500)))
+
+
+@dashboard_bp.route("/api/persistence/changes")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def persistence_changes():
+    """Persistence modification timeline."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_persistence_changes(hours))
+
+
+# ── Auth / Audit ──
+
+
+@dashboard_bp.route("/api/audit/stats")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def audit_stats():
+    """Kernel audit / auth summary."""
+    store = _get_store()
+    if not store:
+        return jsonify({"total_events": 0})
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_audit_stats(hours))
+
+
+@dashboard_bp.route("/api/audit/high-risk")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def audit_high_risk():
+    """High-risk audit events."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    hours = request.args.get("hours", 24, type=int)
+    min_risk = request.args.get("min_risk", 0.5, type=float)
+    limit = request.args.get("limit", 100, type=int)
+    return jsonify(store.get_audit_high_risk(hours, min_risk, min(limit, 500)))
+
+
+@dashboard_bp.route("/api/audit/recent")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def audit_recent():
+    """Recent audit events with search."""
+    store = _get_store()
+    if not store:
+        return jsonify({"results": [], "total_count": 0})
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 100, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    search = request.args.get("search", "")
+    return jsonify(store.search_events(search, "audit_events", hours, min(limit, 500), offset))
+
+
+# ── Observation Domains ──
+
+
+@dashboard_bp.route("/api/observations/stats")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def observation_stats():
+    """Per-domain observation counts."""
+    store = _get_store()
+    if not store:
+        return jsonify({"total": 0, "by_domain": {}})
+    hours = request.args.get("hours", 24, type=int)
+    return jsonify(store.get_observation_domain_stats(hours))
+
+
+@dashboard_bp.route("/api/observations/<domain>")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def observation_by_domain(domain):
+    """Paginated observations for a domain."""
+    store = _get_store()
+    if not store:
+        return jsonify({"results": [], "total_count": 0})
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 100, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    return jsonify(store.get_observations_by_domain(domain, hours, min(limit, 500), offset))
+
+
+@dashboard_bp.route("/api/observations/search")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def observation_search():
+    """Search observation attributes."""
+    store = _get_store()
+    if not store:
+        return jsonify({"results": [], "total_count": 0})
+    query = request.args.get("query", "")
+    domain = request.args.get("domain")
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 100, type=int)
+    return jsonify(store.search_observations(query, domain, hours, min(limit, 500)))

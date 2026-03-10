@@ -81,6 +81,22 @@
                 <span class="hero-stat-val" id="cb-mttd">--</span>
                 <span class="hero-stat-lbl">MTTD</span>
             </div>
+            <div class="hero-stat-sep"></div>
+            <div class="hero-stat hero-stat-link" onclick="window.location='/dashboard/observations'" title="View Observation Domains">
+                <span class="hero-stat-val" id="cb-observations">0</span>
+                <span class="hero-stat-lbl">Observations</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 1B. OBSERVATORY DOMAIN COVERAGE ===== -->
+    <div class="cc-card">
+        <div class="cc-card-hdr">
+            <h3>Observatory Domain Coverage</h3>
+            <a href="/dashboard/posture" class="cc-link">Device Posture &rarr;</a>
+        </div>
+        <div class="domain-coverage" id="domain-coverage">
+            <div class="cc-loading">Loading domains...</div>
         </div>
     </div>
 
@@ -92,6 +108,7 @@
                 <span class="cc-ts" id="activity-ts">--</span>
             </div>
             <div id="activity-chart" style="height:80px;"></div>
+            <div id="activity-sources" class="activity-sources"></div>
         </div>
         <div class="cc-card">
             <div class="cc-card-hdr">
@@ -408,6 +425,7 @@
 .tf-type { font-weight: 600; color: var(--text-primary); margin-bottom: 1px; font-size: 0.78rem; }
 .tf-meta { display: flex; gap: 0.5rem; font-size: 0.65rem; color: var(--text-muted); flex-wrap: wrap; }
 .tf-mitre { padding: 0 0.3rem; background: rgba(0,217,255,0.1); border-radius: 3px; color: var(--neural-primary); font-size: 0.6rem; }
+.tf-source { padding: 0 0.3rem; background: rgba(255,255,255,0.06); border-radius: 3px; color: rgba(255,255,255,0.4); font-size: 0.6rem; text-transform: uppercase; }
 .tf-triage {
     display: flex; gap: 0.25rem; margin-left: auto; flex-shrink: 0;
 }
@@ -469,7 +487,9 @@
 .af-dot.online { background: #00ff88; box-shadow: 0 0 6px #00ff88; }
 .af-dot.degraded { background: #ffaa00; }
 .af-dot.offline { background: #ff3366; }
-.af-stats { display: flex; gap: 0.75rem; font-size: 0.7rem; color: var(--text-muted); }
+.af-stats { display: flex; gap: 0.75rem; font-size: 0.7rem; color: var(--text-muted); flex-wrap: wrap; }
+.af-mitre { color: rgba(0,217,255,0.7); font-size: 0.65rem; }
+.af-plat { font-size: 0.6rem; color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.06); padding: 0 4px; border-radius: 3px; margin-left: auto; margin-right: 0.3rem; }
 .af-probes { display: flex; gap: 2px; margin-top: 0.4rem; }
 .af-probe-dot { width: 6px; height: 6px; border-radius: 1px; }
 .af-sparkline { margin-top: 0.35rem; }
@@ -606,6 +626,40 @@
 .cc-time-select option {
     background: var(--bg-secondary); color: var(--text-primary);
 }
+
+/* ── Domain Coverage ── */
+.domain-coverage {
+    display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;
+}
+.dc-dot-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+    padding: 0.4rem 0.6rem; border-radius: 8px; cursor: pointer;
+    transition: background 0.15s, transform 0.15s;
+}
+.dc-dot-wrap:hover { background: rgba(0,217,255,0.06); transform: translateY(-1px); }
+.dc-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    transition: all 0.3s;
+}
+.dc-dot.active { box-shadow: 0 0 8px currentColor; }
+.dc-dot.inactive { background: rgba(255,255,255,0.08); }
+.dc-label { font-size: 0.55rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+.dc-count { font-size: 0.6rem; color: var(--text-secondary); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ── Activity Sources Pills ── */
+.activity-sources {
+    display: flex; gap: 0.4rem; flex-wrap: wrap; padding-top: 0.6rem;
+    border-top: 1px solid rgba(255,255,255,0.04); margin-top: 0.5rem;
+}
+.as-pill {
+    display: flex; align-items: center; gap: 0.3rem;
+    padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.6rem;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-muted); transition: all 0.15s; cursor: default;
+}
+.as-pill:hover { background: rgba(255,255,255,0.08); }
+.as-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.as-count { font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
 /* ── Empty state ── */
 .cc-empty { text-align: center; padding: 2rem; color: var(--text-muted); }
@@ -758,7 +812,8 @@ class CortexCommandCenter {
             this.fetchProbeHealth(),
             this.fetchIncidents(),
             this.fetchMitre(),
-            this.fetchClustering()
+            this.fetchClustering(),
+            this.fetchDomainCoverage()
         ]);
     }
 
@@ -809,6 +864,40 @@ class CortexCommandCenter {
         arc.style.transition = 'stroke-dashoffset 0.6s cubic-bezier(0.4,0,0.2,1), stroke 0.4s';
     }
 
+    /* ── Domain Coverage Grid ── */
+    async fetchDomainCoverage() {
+        const DOMAINS = [
+            { key: 'process', label: 'Proc', color: '#00d9ff', link: '/dashboard/processes' },
+            { key: 'network', label: 'Net', color: '#00ff88', link: '/dashboard/network' },
+            { key: 'dns', label: 'DNS', color: '#ffaa00', link: '/dashboard/dns' },
+            { key: 'auth', label: 'Auth', color: '#ff3366', link: '/dashboard/auth' },
+            { key: 'files', label: 'FIM', color: '#a855f7', link: '/dashboard/file-integrity' },
+            { key: 'persistence', label: 'Persist', color: '#f97316', link: '/dashboard/persistence' },
+            { key: 'peripherals', label: 'Periph', color: '#06b6d4', link: '/dashboard/peripherals' },
+            { key: 'observations', label: 'Obs', color: '#8b5cf6', link: '/dashboard/observations' },
+            { key: 'security', label: 'Security', color: '#ff6b9d', link: '/dashboard/threat-feed' },
+        ];
+        try {
+            const r = await fetch('/dashboard/api/posture/summary?hours=' + this.hoursRange);
+            if (!r.ok) return;
+            const d = await r.json();
+            const domains = d.domains || {};
+            const container = document.getElementById('domain-coverage');
+            let totalObs = d.total_events || 0;
+
+            container.innerHTML = DOMAINS.map(dm => {
+                const info = domains[dm.key] || { count: 0, status: 'inactive' };
+                const active = info.count > 0;
+                return '<a class="dc-dot-wrap" href="' + dm.link + '" title="' + dm.label + ': ' + this.fmtNum(info.count) + ' events">' +
+                    '<div class="dc-dot' + (active ? ' active' : ' inactive') + '" style="' + (active ? 'background:' + dm.color + ';color:' + dm.color + ';' : '') + '"></div>' +
+                    '<div class="dc-label">' + dm.label + '</div>' +
+                    '<div class="dc-count">' + (active ? this.fmtNum(info.count) : '-') + '</div></a>';
+            }).join('');
+
+            document.getElementById('cb-observations').innerHTML = this.fmtNum(totalObs) + this.trendArrow('observations', totalObs);
+        } catch (e) { /* silent */ }
+    }
+
     threatClass(level) {
         if (level === 'CRITICAL' || level === 'UNDER_ATTACK') return ' level-critical';
         if (level === 'HIGH') return ' level-high';
@@ -820,12 +909,12 @@ class CortexCommandCenter {
     /* ── 2. Compact Threat Feed with Triage Pagination ── */
     async fetchThreats() {
         try {
-            const r = await fetch('/dashboard/api/live/threats?hours=' + this.hoursRange + '&per_page=200');
+            const r = await fetch('/dashboard/api/live/threats?hours=' + this.hoursRange + '&per_page=200&min_risk=0.1');
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const d = await r.json();
             if (d.status !== 'success') throw new Error('API error');
 
-            const threatCount = d.db_total || d.count || 0;
+            const threatCount = d.threat_total || d.count || 0;
             document.getElementById('cb-threats').innerHTML = this.fmtNum(threatCount) + this.trendArrow('threats', threatCount);
             this.updateFreshness(d.data_stale, d.last_event_time);
             this.threatCache = d.threats || [];
@@ -889,6 +978,7 @@ class CortexCommandCenter {
             const time = t.timestamp ? this.relTime(t.timestamp) : '';
             const mitreList = (t.mitre_techniques || []).map(m => '<span class="tf-mitre">' + m + '</span>').join(' ');
 
+            const srcBadge = t.source ? '<span class="tf-source">' + t.source + '</span>' : '';
             return '<div class="tf-item sev-' + sev + '" data-idx="' + idx + '" style="cursor:pointer;" onclick="window.location=\'/dashboard/threat-feed?search=' + encodeURIComponent(t.type || '') + '\'">' +
                 '<div class="tf-sev sev-' + sev + '">' + sev + '</div>' +
                 '<div class="tf-body">' +
@@ -896,6 +986,7 @@ class CortexCommandCenter {
                     '<div class="tf-meta">' +
                         (t.agent_id ? '<span>' + this.esc(t.agent_id) + '</span>' : '') +
                         '<span>' + time + '</span>' +
+                        srcBadge +
                         mitreList +
                     '</div>' +
                 '</div>' +
@@ -940,7 +1031,7 @@ class CortexCommandCenter {
             return;
         }
         if (action === 'investigate') {
-            window.location = '/dashboard/timeline-replay?event_id=' + t.id;
+            window.location = '/dashboard/correlation?event_id=' + t.id;
             return;
         }
         if (action === 'incident') {
@@ -1017,7 +1108,12 @@ class CortexCommandCenter {
                 const health = total > 0 ? Math.round(((real + probes.filter(p => p.status === 'DEGRADED').length) / total) * 100) : 0;
                 const status = health >= 80 ? 'online' : health >= 50 ? 'degraded' : 'offline';
                 const evts = a.event_count || 0;
+                const mitreCnt = a.mitre_count || 0;
                 const signed = a.signing_enabled ? '<span style="color:#00ff88;font-size:0.65rem;" title="Ed25519 Signed">&#x1f512;</span>' : '';
+                const evtsLabel = evts > 0 ? this.fmtNum(evts) + ' events' : '<span style="color:var(--neural-primary);opacity:0.7;">Listening</span>';
+                const platBadge = (a.platforms || []).length === 1
+                    ? '<span class="af-plat" title="' + a.platforms[0] + '">' + (a.platforms[0] === 'darwin' ? 'macOS' : a.platforms[0]) + '</span>'
+                    : '';
                 let probeDots = '';
                 probes.slice(0, 20).forEach(p => {
                     const c = p.status === 'REAL' ? '#00ff88' : p.status === 'DEGRADED' ? '#ffaa00' : p.status === 'BROKEN' ? '#ff3366' : '#444';
@@ -1025,8 +1121,8 @@ class CortexCommandCenter {
                 });
                 const sparkline = this.buildSparkline(a);
                 return '<div class="af-card" data-action="navigate-agents" data-agent-name="' + this.esc(a.name || a.id || '') + '" style="cursor:pointer;">' +
-                    '<div class="af-header"><span class="af-name">' + this.esc(a.name || a.id || 'Unknown') + '</span><span class="af-dot ' + status + '"></span></div>' +
-                    '<div class="af-stats"><span>' + real + '/' + total + ' probes</span><span>' + this.fmtNum(evts) + ' events</span>' + signed + '</div>' +
+                    '<div class="af-header"><span class="af-name">' + this.esc(a.name || a.id || 'Unknown') + '</span>' + platBadge + '<span class="af-dot ' + status + '"></span></div>' +
+                    '<div class="af-stats"><span>' + real + '/' + total + ' probes</span><span>' + evtsLabel + '</span><span class="af-mitre" title="MITRE ATT&CK techniques">' + mitreCnt + ' ATT&CK</span>' + signed + '</div>' +
                     '<div class="af-probes">' + probeDots + '</div>' +
                     '<div class="af-sparkline">' + sparkline + '</div>' +
                 '</div>';
@@ -1063,6 +1159,7 @@ class CortexCommandCenter {
             if (d.status !== 'success') throw new Error('API error');
             this.clusterCache = d.clusters || {};
             this.renderActivityChart();
+            this.renderSourcePills();
             this.renderSeverityChart();
             this.renderTopIPs();
             this.renderHeatmap();
@@ -1105,6 +1202,34 @@ class CortexCommandCenter {
             bars += '<rect x="' + x.toFixed(1) + '" y="' + (h - bh).toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="2" fill="' + color + '" fill-opacity="0.7"><title>' + hours[i] + ': ' + v + ' events</title></rect>';
         });
         container.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" height="' + h + '" preserveAspectRatio="none" style="display:block;">' + bars + '</svg>';
+    }
+
+    renderSourcePills() {
+        const bySource = this.clusterCache.by_type || {};
+        const container = document.getElementById('activity-sources');
+        if (!container) return;
+        const colorMap = {
+            security: '#ff3366', process: '#00d9ff', persistence: '#f97316',
+            fim: '#a855f7', flow: '#00ff88', dns: '#ffaa00',
+            observation: '#8b5cf6', audit: '#06b6d4', peripheral: '#ec4899'
+        };
+        const linkMap = {
+            security: '/dashboard/threat-feed', process: '/dashboard/processes',
+            persistence: '/dashboard/persistence', fim: '/dashboard/file-integrity',
+            flow: '/dashboard/network', dns: '/dashboard/dns',
+            observation: '/dashboard/observations', audit: '/dashboard/auth',
+            peripheral: '/dashboard/peripherals'
+        };
+        const entries = Object.entries(bySource).sort((a, b) => b[1] - a[1]);
+        if (entries.length === 0) { container.innerHTML = ''; return; }
+        container.innerHTML = entries.map(([src, cnt]) => {
+            const c = colorMap[src] || '#00d9ff';
+            const link = linkMap[src] || '/dashboard/observations';
+            return '<a class="as-pill" href="' + link + '" title="' + src + ': ' + cnt.toLocaleString() + ' events">' +
+                '<span class="as-dot" style="background:' + c + ';box-shadow:0 0 4px ' + c + ';"></span>' +
+                '<span>' + src + '</span>' +
+                '<span class="as-count">' + this.fmtNum(cnt) + '</span></a>';
+        }).join('');
     }
 
     renderSeverityChart() {
@@ -1150,7 +1275,7 @@ class CortexCommandCenter {
         const byIP = this.clusterCache.by_source_ip || {};
         const container = document.getElementById('top-ips');
         const entries = Object.entries(byIP).sort((a, b) => b[1] - a[1]).slice(0, 5);
-        if (entries.length === 0) { container.innerHTML = '<div class="cc-empty" style="padding:0.5rem;"><div class="cc-empty-msg" style="font-size:0.78rem;">No source IP data</div></div>'; return; }
+        if (entries.length === 0) { container.innerHTML = '<div class="cc-empty" style="padding:0.5rem;"><div class="cc-empty-msg" style="font-size:0.78rem;">No source IP data yet.<br><span style="font-size:0.7rem;opacity:0.6;">Flow &amp; DNS agents collect IP telemetry.</span></div></div>'; return; }
         const maxVal = Math.max(1, entries[0][1]);
         container.innerHTML = entries.map(([ip, count]) => {
             const pct = Math.round((count / maxVal) * 100);
@@ -1162,7 +1287,12 @@ class CortexCommandCenter {
         const byHour = this.clusterCache.by_hour || {};
         const container = document.getElementById('heatmap-chart');
         const hours = Object.keys(byHour).sort();
-        if (hours.length === 0) { container.innerHTML = '<div class="cc-empty" style="padding:0.5rem;"><div class="cc-empty-msg" style="font-size:0.78rem;">No heatmap data</div></div>'; return; }
+        if (hours.length === 0) {
+            const agentCount = (this.agentCache || []).length || '--';
+            const probeCount = document.getElementById('cb-probes') ? document.getElementById('cb-probes').textContent : '--';
+            container.innerHTML = '<div class="cc-empty" style="padding:0.5rem;"><div class="cc-empty-msg" style="font-size:0.78rem;">No event data yet.<br><span style="font-size:0.7rem;opacity:0.6;">' + agentCount + ' agents &middot; ' + probeCount + ' probes ready</span></div></div>';
+            return;
+        }
 
         const hourBuckets = new Array(24).fill(0);
         for (const h of hours) {
@@ -1199,42 +1329,53 @@ class CortexCommandCenter {
             '<div class="hm-legend"><span class="hm-legend-lbl">Calm</span><div class="hm-legend-bar"></div><span class="hm-legend-lbl">Intense</span></div>';
     }
 
-    /* ── 5. MITRE Mini-Map ── */
+    /* ── 5. MITRE Mini-Map (declared + detected coverage) ── */
     async fetchMitre() {
         try {
             const r = await fetch('/dashboard/api/mitre/coverage');
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const d = await r.json();
-            const coverage = d.coverage || {};
+            const detected = d.detected || d.coverage || {};
+            const byTactic = d.by_tactic || {};
             const container = document.getElementById('mitre-mini');
 
-            const tacticTechniques = {
-                'Reconnaissance': ['T1595','T1592','T1589','T1590','T1591','T1597','T1596','T1593','T1594','T1598'],
-                'Resource Development': ['T1583','T1586','T1584','T1587','T1585','T1588','T1608'],
-                'Initial Access': ['T1189','T1190','T1133','T1200','T1566','T1091','T1195','T1199','T1078'],
-                'Execution': ['T1059','T1203','T1559','T1106','T1053','T1129','T1072','T1569','T1204','T1047'],
-                'Persistence': ['T1098','T1197','T1547','T1037','T1136','T1543','T1546','T1133','T1574','T1525','T1556','T1137','T1053','T1505','T1205'],
-                'Privilege Escalation': ['T1548','T1134','T1547','T1068','T1574','T1055','T1053','T1078'],
-                'Defense Evasion': ['T1548','T1134','T1197','T1140','T1006','T1480','T1211','T1222','T1564','T1574','T1562','T1070','T1202','T1036','T1556','T1578','T1112','T1601','T1599','T1027','T1542','T1055','T1207','T1014','T1218','T1216','T1553','T1221','T1205','T1127','T1535','T1550','T1078','T1497','T1600','T1220'],
-                'Credential Access': ['T1557','T1110','T1555','T1212','T1187','T1606','T1056','T1556','T1111','T1621','T1040','T1003','T1528','T1558','T1539','T1552'],
-                'Discovery': ['T1087','T1010','T1217','T1580','T1538','T1526','T1482','T1083','T1615','T1046','T1135','T1040','T1201','T1120','T1069','T1057','T1012','T1018','T1518','T1082','T1614','T1016','T1049','T1033','T1007','T1124','T1497'],
-                'Lateral Movement': ['T1210','T1534','T1570','T1563','T1021','T1091','T1072','T1080','T1550'],
-                'Collection': ['T1557','T1560','T1123','T1119','T1185','T1115','T1530','T1602','T1213','T1005','T1039','T1025','T1074','T1114','T1056','T1113','T1125'],
-                'Command and Control': ['T1071','T1092','T1132','T1001','T1568','T1573','T1008','T1105','T1104','T1095','T1571','T1572','T1090','T1219','T1205','T1102'],
-                'Exfiltration': ['T1020','T1030','T1048','T1041','T1011','T1052','T1567','T1029','T1537'],
-                'Impact': ['T1531','T1485','T1486','T1565','T1491','T1561','T1499','T1495','T1490','T1489','T1529']
-            };
+            // Map tactic display names to keys used in by_tactic
+            const tacticKeyMap = {};
+            for (const tactic of this.TACTICS) {
+                tacticKeyMap[tactic] = tactic.toLowerCase().replace(/ /g, '_').replace(/&/g, 'and');
+            }
 
             let rows = '';
+            let totalDeclared = 0, totalDetected = 0;
             for (const tactic of this.TACTICS) {
-                const techs = tacticTechniques[tactic] || [];
-                const total = techs.length;
+                const key = tacticKeyMap[tactic];
+                const declaredTechs = byTactic[key] || [];
+                const total = declaredTechs.length;
                 let covered = 0;
-                techs.forEach(t => { if (coverage[t]) covered++; });
+                declaredTechs.forEach(t => { if (detected[t]) covered++; });
+                totalDeclared += total;
+                totalDetected += covered;
+
                 const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
-                const color = pct >= 60 ? '#00ff88' : pct >= 30 ? '#ffaa00' : pct > 0 ? '#ff6600' : 'rgba(255,255,255,0.08)';
-                rows += '<div class="mm-row" style="cursor:pointer;" onclick="window.location=\'/dashboard/mitre\'"><div class="mm-label" title="' + tactic + '">' + tactic + '</div><div class="mm-bar-bg"><div class="mm-bar" style="width:' + pct + '%;background:' + color + ';"></div></div><div class="mm-pct">' + covered + '/' + total + '</div></div>';
+                // When no events yet, show declared capability bar in dim cyan
+                const hasDeclared = total > 0;
+                const color = covered > 0
+                    ? (pct >= 60 ? '#00ff88' : pct >= 30 ? '#ffaa00' : '#ff6600')
+                    : (hasDeclared ? 'rgba(0,217,255,0.25)' : 'rgba(255,255,255,0.05)');
+                const barWidth = hasDeclared ? Math.max(pct, 8) : 0;
+                const label = covered + '/' + total;
+
+                rows += '<div class="mm-row" style="cursor:pointer;" onclick="window.location=\'/dashboard/mitre\'">' +
+                    '<div class="mm-label" title="' + tactic + ' (' + total + ' declared techniques)">' + tactic + '</div>' +
+                    '<div class="mm-bar-bg"><div class="mm-bar" style="width:' + barWidth + '%;background:' + color + ';"></div></div>' +
+                    '<div class="mm-pct">' + label + '</div>' +
+                '</div>';
             }
+
+            // Summary line
+            rows += '<div class="mm-summary" style="text-align:center;padding:0.4rem 0;font-size:0.7rem;color:var(--text-muted);">' +
+                totalDeclared + ' techniques declared · ' + totalDetected + ' detected in events</div>';
+
             container.innerHTML = rows;
         } catch (e) { /* silent */ }
     }
@@ -1364,7 +1505,35 @@ class CortexCommandCenter {
     datestamp() { return new Date().toISOString().slice(0, 10); }
 
     /* ── Helpers ── */
-    fmtType(t) { return (t || 'unknown').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+    fmtType(t) {
+        if (!t) return 'Unknown';
+        const map = {
+            'TCP': 'Network Flow (TCP)', 'UDP': 'Network Flow (UDP)', 'ICMP': 'Network Flow (ICMP)',
+            'process_spawned': 'New Process', 'lolbin_execution': 'LOLBin Execution',
+            'suspicious_process_tree': 'Suspicious Process Tree', 'high_resource_process': 'High Resource Process',
+            'unexpectedly_long_process': 'Long-Running Process', 'process_wrong_user': 'Process Wrong User',
+            'execution_from_temp': 'Execution from Temp', 'suspicious_script_execution': 'Suspicious Script',
+            'dylib_injection': 'Dylib Injection', 'code_signature_invalid': 'Invalid Code Signature',
+            'dga_domain': 'DGA Domain Detected', 'dns_beaconing': 'DNS Beaconing',
+            'dns_tunneling': 'DNS Tunneling', 'fast_flux': 'Fast-Flux DNS', 'dns_rebinding': 'DNS Rebinding',
+            'nxdomain_burst': 'NXDOMAIN Burst', 'suspicious_tld': 'Suspicious TLD',
+            'blocked_domain': 'Blocked Domain', 'suspicious_domain': 'Suspicious Domain',
+            'ssh_bruteforce': 'SSH Brute Force', 'ssh_password_spray': 'SSH Password Spray',
+            'impossible_travel': 'Impossible Travel', 'off_hours_login': 'Off-Hours Login',
+            'mfa_bypass': 'MFA Bypass', 'mfa_fatigue': 'MFA Fatigue', 'account_lockout': 'Account Lockout',
+            'critical_file_tampered': 'Critical File Tampered', 'suid_bit_added': 'SUID Bit Added',
+            'webshell_detected': 'Webshell Detected', 'ssh_config_backdoor': 'SSH Config Backdoor',
+            'persistence_launchd': 'LaunchAgent Persistence', 'persistence_cron': 'Cron Persistence',
+            'persistence_ssh_key': 'SSH Key Persistence', 'persistence_shell_profile': 'Shell Profile Persistence',
+            'persistence_browser_extension': 'Browser Extension Persistence',
+            'flow_portscan': 'Port Scan', 'flow_lateral': 'Lateral Movement',
+            'flow_exfil': 'Data Exfiltration', 'flow_c2': 'C2 Communication',
+            'flow_cleartext': 'Cleartext Protocol', 'flow_suspicious_tunnel': 'Suspicious Tunnel',
+            'usb_device_connected': 'USB Device Connected', 'new_keyboard': 'New Keyboard Detected',
+            'protocol_threat': 'Protocol Threat',
+        };
+        return map[t] || t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
     fmtDesc(desc) { if (!desc) return ''; return desc.replace(/^Probe:\s*/, '').replace(/,\s*Severity:\s*\w+/i, '').replace(/\[.*?\]\s*/, '').substring(0, 120); }
     fmtNum(n) { return n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : String(n); }
     fmtDuration(h) { return h >= 24 ? Math.floor(h/24)+'d '+Math.floor(h%24)+'h' : h >= 1 ? Math.floor(h)+'h '+Math.floor((h%1)*60)+'m' : Math.floor(h*60)+'m'; }

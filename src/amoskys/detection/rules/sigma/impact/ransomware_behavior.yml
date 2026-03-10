@@ -1,0 +1,29 @@
+title: Ransomware-like File Encryption Activity
+id: amoskys-impact-004
+status: experimental
+level: critical
+description: Detects bulk file modification patterns consistent with ransomware behavior, including mass file renaming with new extensions and rapid sequential encryption of files across directories
+author: AMOSKYS
+tags:
+    - attack.impact
+    - attack.t1486
+logsource:
+    category: file_event
+    product: amoskys
+detection:
+    selection:
+        event_type: bulk_file_modification
+    condition: selection
+fields:
+    - process_name
+    - pid
+    - file_count
+    - file_extension
+    - target_directory
+    - modification_rate
+    - user
+falsepositives:
+    - Legitimate bulk file compression or archiving operations
+    - Disk encryption tools encrypting volumes during provisioning
+    - Backup software performing encrypted backups
+confidence: 0.75

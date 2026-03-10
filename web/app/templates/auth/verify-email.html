@@ -90,6 +90,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (response.ok && data.success) {
             loadingState.style.display = 'none';
             successState.style.display = 'block';
+            // Auto-redirect to login after 2s
+            setTimeout(() => { window.location.href = '/auth/login'; }, 2000);
         } else {
             switch (data.error_code) {
                 case 'ALREADY_VERIFIED':

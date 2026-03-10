@@ -1,0 +1,28 @@
+title: Lateral Movement via SSH
+id: amoskys-lat-001
+status: stable
+level: medium
+description: Detects outbound SSH connections from hosts that do not typically initiate SSH sessions indicating potential lateral movement via SSH
+author: AMOSKYS
+tags:
+    - attack.lateral_movement
+    - attack.t1021.004
+logsource:
+    category: network_connection
+    product: amoskys
+detection:
+    selection:
+        event_type: outbound_ssh
+    condition: selection
+fields:
+    - source_ip
+    - destination_ip
+    - remote_port
+    - username
+    - pid
+    - process_name
+falsepositives:
+    - System administrators performing remote management
+    - Automated deployment tools using SSH
+    - SCP/SFTP file transfer operations
+confidence: 0.60

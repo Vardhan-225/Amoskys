@@ -1,302 +1,186 @@
 """
 AMOSKYS API Telemetry Module
-Real-time agent telemetry from EventBus WAL storage
+Canonical telemetry read API backed by TelemetryStore query service.
 """
 
+from __future__ import annotations
+
 import logging
-import os
-import sqlite3
-import sys
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
+from ..dashboard.query_service import get_dashboard_query_service
+
 logger = logging.getLogger(__name__)
 
-# Add src to path for protobuf imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-
-from amoskys.proto import universal_telemetry_pb2
-
 telemetry_bp = Blueprint("telemetry", __name__, url_prefix="/telemetry")
-
-# Resolve WAL path relative to project root (3 levels up from this file)
-_PROJECT_ROOT = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
-WAL_DB_PATH = os.path.join(_PROJECT_ROOT, "data", "wal", "flowagent.db")
+_MSG_STORE_UNAVAILABLE = "Telemetry store not available yet"
 
 
-def get_wal_connection():
-    """Get a connection to the WAL database with same params as EventBus"""
-    return sqlite3.connect(
-        WAL_DB_PATH,
-        timeout=5.0,
-        isolation_level=None,  # Autocommit mode
-        check_same_thread=False,
-    )
+def _safe_int(value: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    if parsed < minimum:
+        return default
+    return min(parsed, maximum)
 
 
 @telemetry_bp.route("/recent", methods=["GET"])
 def get_recent_telemetry():
-    """Get recent telemetry events from all agents"""
-    try:
-        limit = min(int(request.args.get("limit", 50)), 500)  # Max 500
-
-        conn = get_wal_connection()
-        cursor = conn.execute(
-            "SELECT id, idem, ts_ns, bytes FROM wal ORDER BY ts_ns DESC LIMIT ?",
-            (limit,),
+    """Get recent telemetry events from canonical store."""
+    service = get_dashboard_query_service()
+    if not service.available:
+        return jsonify(
+            {
+                "status": "no_data",
+                "events": [],
+                "message": _MSG_STORE_UNAVAILABLE,
+            }
         )
-        rows = cursor.fetchall()
-        conn.close()
 
-        events = []
-        for row_id, idem, ts_ns, env_bytes in rows:
-            try:
-                # Deserialize the protobuf envelope
-                envelope = universal_telemetry_pb2.UniversalEnvelope()
-                envelope.ParseFromString(env_bytes)
+    limit = _safe_int(request.args.get("limit", "50"), 50, 1, 500)
+    hours = _safe_int(request.args.get("hours", "24"), 24, 1, 24 * 14)
 
-                # Extract telemetry data
-                event_data = {
-                    "id": row_id,
-                    "idempotency_key": idem,
-                    "timestamp_ns": ts_ns,
-                    "timestamp": datetime.fromtimestamp(
-                        ts_ns / 1e9, tz=timezone.utc
-                    ).isoformat(),
-                }
-
-                # Parse different telemetry types
-                if envelope.HasField("device_telemetry"):
-                    dt = envelope.device_telemetry
-                    event_data["type"] = "device_telemetry"
-                    event_data["device_id"] = dt.device_id
-                    event_data["device_type"] = universal_telemetry_pb2.DeviceType.Name(
-                        dt.device_type
-                    )
-
-                    # Extract metrics from events
-                    metrics = []
-                    for event in dt.events:
-                        if (
-                            event.event_type
-                            == universal_telemetry_pb2.TelemetryEvent.METRIC
-                        ):
-                            metric_data = {
-                                "name": event.metric.name,
-                                "type": universal_telemetry_pb2.MetricType.Name(
-                                    event.metric.metric_type
-                                ),
-                                "value": event.metric.value,
-                                "unit": event.metric.unit,
-                            }
-                            metrics.append(metric_data)
-
-                    event_data["metrics"] = metrics
-                    event_data["event_count"] = len(dt.events)
-
-                elif envelope.HasField("process"):
-                    proc = envelope.process
-                    event_data["type"] = "process"
-                    event_data["pid"] = proc.pid
-                    event_data["name"] = proc.name
-                    event_data["exe"] = proc.exe
-                    event_data["cmdline"] = " ".join(proc.cmdline)
-
-                elif envelope.HasField("flow"):
-                    flow = envelope.flow
-                    event_data["type"] = "flow"
-                    event_data["src_ip"] = flow.src_ip
-                    event_data["dst_ip"] = flow.dst_ip
-                    event_data["src_port"] = flow.src_port
-                    event_data["dst_port"] = flow.dst_port
-
-                else:
-                    event_data["type"] = "unknown"
-
-                events.append(event_data)
-
-            except Exception as parse_err:
-                logger.debug("Skipping unparseable WAL event %s: %s", row_id, parse_err)
-                continue
-
+    try:
+        events = service.recent_telemetry(limit=limit, hours=hours)
         return jsonify({"status": "success", "count": len(events), "events": events})
-
-    except Exception as e:
-        logger.exception("Failed to fetch recent telemetry from WAL")
-        return jsonify({"status": "error", "error": str(e)}), 500
+    except Exception as exc:
+        logger.exception("Failed to fetch recent telemetry")
+        return jsonify({"status": "error", "error": str(exc)}), 500
 
 
 @telemetry_bp.route("/agents", methods=["GET"])
 def get_agent_summary():
-    """Get summary of agent telemetry"""
-    try:
-        conn = get_wal_connection()
-
-        # Get total event count
-        cursor = conn.execute("SELECT COUNT(*) FROM wal")
-        total_events = cursor.fetchone()[0]
-
-        # Get recent events to extract agent info
-        cursor = conn.execute("SELECT bytes FROM wal ORDER BY ts_ns DESC LIMIT 100")
-        rows = cursor.fetchall()
-        conn.close()
-
-        # Track unique agents and their metrics
-        agents = {}
-
-        for (env_bytes,) in rows:
-            try:
-                envelope = universal_telemetry_pb2.UniversalEnvelope()
-                envelope.ParseFromString(env_bytes)
-
-                if envelope.HasField("device_telemetry"):
-                    dt = envelope.device_telemetry
-                    device_id = dt.device_id
-
-                    if device_id not in agents:
-                        agents[device_id] = {
-                            "device_id": device_id,
-                            "device_type": universal_telemetry_pb2.DeviceType.Name(
-                                dt.device_type
-                            ),
-                            "event_count": 0,
-                            "latest_metrics": {},
-                            "last_seen": None,
-                        }
-
-                    agents[device_id]["event_count"] += 1
-
-                    # Update timestamp
-                    ts = datetime.fromtimestamp(envelope.ts_ns / 1e9, tz=timezone.utc)
-                    if (
-                        agents[device_id]["last_seen"] is None
-                        or ts > agents[device_id]["last_seen"]
-                    ):
-                        agents[device_id]["last_seen"] = ts.isoformat()
-
-                    # Extract latest metrics
-                    for event in dt.events:
-                        if (
-                            event.event_type
-                            == universal_telemetry_pb2.TelemetryEvent.METRIC
-                        ):
-                            agents[device_id]["latest_metrics"][event.metric.name] = {
-                                "value": event.metric.value,
-                                "unit": event.metric.unit,
-                            }
-
-            except Exception:
-                continue
-
+    """Get per-agent summary from canonical telemetry tables."""
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify(
             {
-                "status": "success",
-                "total_events": total_events,
-                "agent_count": len(agents),
-                "agents": list(agents.values()),
+                "status": "no_data",
+                "agents": [],
+                "total_events": 0,
+                "agent_count": 0,
+                "message": _MSG_STORE_UNAVAILABLE,
             }
         )
 
-    except Exception as e:
+    limit = _safe_int(request.args.get("limit", "100"), 100, 1, 1000)
+    try:
+        payload = service.agent_summary(limit=limit)
+        payload["status"] = "success"
+        return jsonify(payload)
+    except Exception as exc:
         logger.exception("Failed to fetch agent telemetry summary")
-        return jsonify({"status": "error", "error": str(e)}), 500
+        return jsonify({"status": "error", "error": str(exc)}), 500
 
 
 @telemetry_bp.route("/metrics/<device_id>", methods=["GET"])
-def get_device_metrics(device_id):
-    """Get latest metrics for a specific device"""
-    try:
-        limit = min(int(request.args.get("limit", 10)), 100)
-
-        conn = get_wal_connection()
-        cursor = conn.execute(
-            "SELECT ts_ns, bytes FROM wal ORDER BY ts_ns DESC LIMIT ?",
-            (limit * 5,),  # Get more to filter
+def get_device_metrics(device_id: str):
+    """Get recent metrics timeseries for a specific device."""
+    service = get_dashboard_query_service()
+    if not service.available:
+        return jsonify(
+            {
+                "status": "no_data",
+                "device_id": device_id,
+                "metrics": [],
+                "message": _MSG_STORE_UNAVAILABLE,
+            }
         )
-        rows = cursor.fetchall()
-        conn.close()
 
-        metrics_history = []
-
-        for ts_ns, env_bytes in rows:
-            try:
-                envelope = universal_telemetry_pb2.UniversalEnvelope()
-                envelope.ParseFromString(env_bytes)
-
-                if envelope.HasField("device_telemetry"):
-                    dt = envelope.device_telemetry
-
-                    if dt.device_id == device_id:
-                        timestamp = datetime.fromtimestamp(
-                            ts_ns / 1e9, tz=timezone.utc
-                        ).isoformat()
-
-                        for event in dt.events:
-                            if (
-                                event.event_type
-                                == universal_telemetry_pb2.TelemetryEvent.METRIC
-                            ):
-                                metrics_history.append(
-                                    {
-                                        "timestamp": timestamp,
-                                        "name": event.metric.name,
-                                        "value": event.metric.value,
-                                        "unit": event.metric.unit,
-                                    }
-                                )
-
-                        if len(metrics_history) >= limit:
-                            break
-
-            except Exception:
-                continue
-
+    limit = _safe_int(request.args.get("limit", "50"), 50, 1, 500)
+    try:
+        metrics = service.device_metrics(device_id=device_id, limit=limit)
         return jsonify(
             {
                 "status": "success",
                 "device_id": device_id,
-                "count": len(metrics_history),
-                "metrics": metrics_history,
+                "count": len(metrics),
+                "metrics": metrics,
             }
         )
-
-    except Exception as e:
-        logger.exception("Failed to fetch metrics for device %s", device_id)
-        return jsonify({"status": "error", "error": str(e)}), 500
+    except Exception as exc:
+        logger.exception("Failed to fetch device metrics")
+        return jsonify({"status": "error", "error": str(exc)}), 500
 
 
 @telemetry_bp.route("/stats", methods=["GET"])
 def get_telemetry_stats():
-    """Get overall telemetry statistics"""
+    """Get telemetry statistics from canonical store."""
+    service = get_dashboard_query_service()
+    if not service.available:
+        return jsonify(
+            {
+                "status": "no_data",
+                "stats": {
+                    "total_events": 0,
+                    "earliest_event": None,
+                    "latest_event": None,
+                    "time_span_seconds": 0,
+                },
+                "message": _MSG_STORE_UNAVAILABLE,
+            }
+        )
+
     try:
-        conn = get_wal_connection()
-
-        # Get total count and time range
-        cursor = conn.execute("SELECT COUNT(*), MIN(ts_ns), MAX(ts_ns) FROM wal")
-        total, min_ts, max_ts = cursor.fetchone()
-        conn.close()
-
-        stats = {
-            "total_events": total or 0,
-            "earliest_event": None,
-            "latest_event": None,
-            "time_span_seconds": 0,
-        }
-
-        if min_ts and max_ts:
-            stats["earliest_event"] = datetime.fromtimestamp(
-                min_ts / 1e9, tz=timezone.utc
-            ).isoformat()
-            stats["latest_event"] = datetime.fromtimestamp(
-                max_ts / 1e9, tz=timezone.utc
-            ).isoformat()
-            stats["time_span_seconds"] = (max_ts - min_ts) / 1e9
-
-        return jsonify({"status": "success", "stats": stats})
-
-    except Exception as e:
+        stats = service.telemetry_stats()
+        return jsonify(
+            {
+                "status": "success",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "stats": stats,
+            }
+        )
+    except Exception as exc:
         logger.exception("Failed to fetch telemetry statistics")
-        return jsonify({"status": "error", "error": str(e)}), 500
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
+@telemetry_bp.route("/consistency", methods=["GET"])
+def get_consistency_check():
+    """Cross-check canonical counts for dashboard/API truth consistency."""
+    service = get_dashboard_query_service()
+    if not service.available:
+        return jsonify(
+            {
+                "status": "no_data",
+                "message": _MSG_STORE_UNAVAILABLE,
+                "consistent": True,
+            }
+        )
+
+    hours = _safe_int(request.args.get("hours", "24"), 24, 1, 24 * 30)
+    try:
+        result = service.consistency_check(hours=hours)
+        return jsonify({"status": "success", **result})
+    except Exception as exc:
+        logger.exception("Failed to run telemetry consistency check")
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
+@telemetry_bp.route("/attributes/catalog", methods=["GET"])
+def get_attribute_catalog():
+    """Attribute showcase catalog built from canonical table schemas + distributions."""
+    service = get_dashboard_query_service()
+    if not service.available:
+        return jsonify(
+            {
+                "status": "no_data",
+                "catalog": {"tables": []},
+                "message": _MSG_STORE_UNAVAILABLE,
+            }
+        )
+
+    max_tables = _safe_int(request.args.get("max_tables", "20"), 20, 1, 50)
+    max_top_values = _safe_int(request.args.get("max_values", "10"), 10, 1, 50)
+    try:
+        catalog = service.attribute_catalog(
+            max_tables=max_tables, max_top_values=max_top_values
+        )
+        return jsonify({"status": "success", "catalog": catalog})
+    except Exception as exc:
+        logger.exception("Failed to build attribute catalog")
+        return jsonify({"status": "error", "error": str(exc)}), 500

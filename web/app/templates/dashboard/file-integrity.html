@@ -1,0 +1,1149 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}File Integrity Monitor - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<style>
+    /* ── FIM Page Styles ── */
+    .fim-dashboard { max-width: 1400px; margin: 0 auto; }
+
+    /* Stats bar: force 5 columns */
+    .fim-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 1.25rem;
+        margin-bottom: 2rem;
+    }
+    .fim-stat-card {
+        background: var(--gradient-neural);
+        padding: 1.25rem;
+        border-radius: 10px;
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        text-align: center;
+        transition: all 0.3s ease;
+        min-height: 130px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .fim-stat-card:hover {
+        transform: scale(1.03);
+        box-shadow: 0 8px 20px rgba(0, 217, 255, 0.3);
+    }
+    .fim-stat-icon { font-size: 1.6rem; margin-bottom: 0.4rem; }
+    .fim-stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--neural-primary);
+        line-height: 1.1;
+    }
+    .fim-stat-value.success { color: var(--neural-success); }
+    .fim-stat-value.warning { color: var(--neural-warning); }
+    .fim-stat-value.danger  { color: var(--neural-danger); }
+    .fim-stat-label {
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: 0.35rem;
+    }
+
+    /* NL Summary */
+    .fim-summary-text {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        line-height: 1.7;
+        padding: 0.25rem 0;
+    }
+    .fim-summary-text strong { color: var(--neural-primary); font-weight: 600; }
+
+    /* Critical changes panel */
+    .critical-item {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 1rem;
+        padding: 1rem 0;
+        border-bottom: 1px solid rgba(0, 217, 255, 0.1);
+        align-items: start;
+    }
+    .critical-item:last-child { border-bottom: none; }
+    .critical-path {
+        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        font-size: 0.85rem;
+        color: var(--text-primary);
+        word-break: break-all;
+    }
+    .critical-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        margin-top: 0.4rem;
+    }
+    .change-badge {
+        padding: 0.15rem 0.6rem;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .change-badge.created  { background: rgba(0, 255, 136, 0.15); color: var(--neural-success); border: 1px solid rgba(0, 255, 136, 0.3); }
+    .change-badge.modified { background: rgba(240, 173, 78, 0.15); color: var(--neural-warning); border: 1px solid rgba(240, 173, 78, 0.3); }
+    .change-badge.deleted  { background: rgba(255, 51, 102, 0.15); color: var(--neural-danger); border: 1px solid rgba(255, 51, 102, 0.3); }
+    .hash-delta {
+        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        font-size: 0.72rem;
+        color: var(--text-muted);
+    }
+    .hash-delta .arrow { color: var(--neural-primary); margin: 0 0.3rem; }
+    .risk-bar-container {
+        width: 100px;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 4px;
+        overflow: hidden;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    .risk-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.4s ease;
+    }
+    .risk-score-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-left: 0.4rem;
+        vertical-align: middle;
+    }
+    .pattern-pill {
+        display: inline-block;
+        padding: 0.1rem 0.5rem;
+        border-radius: 10px;
+        font-size: 0.68rem;
+        font-weight: 500;
+        background: rgba(0, 217, 255, 0.12);
+        color: var(--neural-primary);
+        border: 1px solid rgba(0, 217, 255, 0.25);
+    }
+
+    /* Two-column layout */
+    .fim-two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    /* Directory list */
+    .dir-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.65rem 0;
+        border-bottom: 1px solid rgba(0, 217, 255, 0.08);
+    }
+    .dir-item:last-child { border-bottom: none; }
+    .dir-name {
+        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        font-size: 0.82rem;
+        color: var(--text-primary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 280px;
+    }
+    .dir-stats {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-shrink: 0;
+    }
+    .dir-count {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--neural-primary);
+    }
+    .risk-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .risk-dot.low    { background: var(--neural-success); box-shadow: 0 0 6px rgba(0, 255, 136, 0.4); }
+    .risk-dot.medium { background: var(--neural-warning); box-shadow: 0 0 6px rgba(240, 173, 78, 0.4); }
+    .risk-dot.high   { background: var(--neural-danger); box-shadow: 0 0 6px rgba(255, 51, 102, 0.4); }
+
+    /* Chart containers */
+    .chart-wrapper {
+        position: relative;
+        width: 100%;
+        height: 280px;
+    }
+
+    /* Extension chart */
+    .ext-chart-wrapper {
+        position: relative;
+        width: 100%;
+        height: 320px;
+    }
+
+    /* Table styles */
+    .fim-table-container { overflow-x: auto; }
+    .fim-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.82rem;
+    }
+    .fim-table thead th {
+        padding: 0.75rem 0.6rem;
+        text-align: left;
+        color: var(--neural-primary);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        letter-spacing: 0.8px;
+        border-bottom: 2px solid rgba(0, 217, 255, 0.2);
+        white-space: nowrap;
+    }
+    .fim-table tbody tr {
+        border-bottom: 1px solid rgba(0, 217, 255, 0.06);
+        transition: background 0.2s ease;
+    }
+    .fim-table tbody tr:hover {
+        background: rgba(0, 217, 255, 0.05);
+    }
+    .fim-table tbody td {
+        padding: 0.6rem;
+        color: var(--text-secondary);
+        vertical-align: middle;
+    }
+    .fim-table .path-cell {
+        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        font-size: 0.78rem;
+        color: var(--text-primary);
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .fim-table .ts-cell {
+        white-space: nowrap;
+        font-size: 0.76rem;
+        color: var(--text-muted);
+    }
+
+    /* Filters row */
+    .fim-filters {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .fim-input {
+        background: rgba(0, 217, 255, 0.06);
+        border: 1px solid rgba(0, 217, 255, 0.2);
+        color: var(--text-primary);
+        padding: 0.5rem 0.85rem;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        font-family: inherit;
+        outline: none;
+        transition: border-color 0.2s ease;
+    }
+    .fim-input:focus {
+        border-color: var(--neural-primary);
+        box-shadow: 0 0 8px rgba(0, 217, 255, 0.15);
+    }
+    .fim-input::placeholder { color: var(--text-muted); }
+    .fim-select {
+        background: rgba(0, 217, 255, 0.06);
+        border: 1px solid rgba(0, 217, 255, 0.2);
+        color: var(--text-primary);
+        padding: 0.5rem 0.85rem;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        font-family: inherit;
+        outline: none;
+        cursor: pointer;
+    }
+    .fim-select option { background: var(--bg-secondary); color: var(--text-primary); }
+
+    /* Pagination / Load More */
+    .fim-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 1rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid rgba(0, 217, 255, 0.1);
+    }
+    .fim-pagination-info {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+    .fim-load-more-btn {
+        background: rgba(0, 217, 255, 0.08);
+        border: 1px solid rgba(0, 217, 255, 0.25);
+        color: var(--neural-primary);
+        padding: 0.5rem 1.5rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.82rem;
+        font-family: inherit;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        display: none;
+    }
+    .fim-load-more-btn:hover {
+        background: rgba(0, 217, 255, 0.18);
+        box-shadow: 0 0 12px rgba(0, 217, 255, 0.15);
+        border-color: var(--neural-primary);
+    }
+
+    /* Skeleton rows for loading state */
+    .fim-skeleton-row {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid rgba(0, 217, 255, 0.06);
+    }
+    .fim-skeleton-bar {
+        height: 14px;
+        border-radius: 4px;
+    }
+
+    /* Empty state */
+    .fim-empty {
+        text-align: center;
+        padding: 2.5rem 1rem;
+        color: var(--text-muted);
+    }
+    .fim-empty-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+        .fim-stats-grid { grid-template-columns: repeat(3, 1fr); }
+        .fim-two-col { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+        .fim-stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
+
+<div class="fim-dashboard">
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Header
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h2 class="card-title">File Integrity Monitor</h2>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span class="neural-loading" id="fim-loading" style="display: none;"></span>
+                <div class="card-badge badge-success" id="fim-status-badge">Live</div>
+            </div>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+            Real-time file system change detection across monitored directories.
+            Tracks creates, modifications, and deletions with cryptographic hash verification and risk scoring.
+        </p>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+            <a href="/dashboard/cortex" class="neural-button">&larr; Back to Cortex</a>
+            <button class="neural-button" id="fim-refresh-btn">Refresh Data</button>
+            <label style="color: var(--text-muted); font-size: 0.82rem; margin-left: auto; display: flex; align-items: center; gap: 0.4rem;">
+                Time Range:
+                <select class="fim-select" id="fim-hours-select">
+                    <option value="1">Last 1 Hour</option>
+                    <option value="6">Last 6 Hours</option>
+                    <option value="24" selected>Last 24 Hours</option>
+                    <option value="72">Last 3 Days</option>
+                    <option value="168">Last 7 Days</option>
+                </select>
+            </label>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         1. Stats Bar (5 metric cards)
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="fim-stats-grid" id="stats-grid">
+        <div class="fim-stat-card">
+            <div class="fim-stat-icon">&#x1F4CA;</div>
+            <div class="fim-stat-value" id="stat-total"><div class="skeleton" style="height:28px;width:60px;margin:0 auto;"></div></div>
+            <div class="fim-stat-label">Total Changes</div>
+        </div>
+        <div class="fim-stat-card">
+            <div class="fim-stat-icon">&#x2795;</div>
+            <div class="fim-stat-value success" id="stat-created"><div class="skeleton" style="height:28px;width:50px;margin:0 auto;"></div></div>
+            <div class="fim-stat-label">Created</div>
+        </div>
+        <div class="fim-stat-card">
+            <div class="fim-stat-icon">&#x270F;&#xFE0F;</div>
+            <div class="fim-stat-value warning" id="stat-modified"><div class="skeleton" style="height:28px;width:50px;margin:0 auto;"></div></div>
+            <div class="fim-stat-label">Modified</div>
+        </div>
+        <div class="fim-stat-card">
+            <div class="fim-stat-icon">&#x1F5D1;&#xFE0F;</div>
+            <div class="fim-stat-value danger" id="stat-deleted"><div class="skeleton" style="height:28px;width:50px;margin:0 auto;"></div></div>
+            <div class="fim-stat-label">Deleted</div>
+        </div>
+        <div class="fim-stat-card">
+            <div class="fim-stat-icon">&#x26A0;&#xFE0F;</div>
+            <div class="fim-stat-value danger" id="stat-high-risk"><div class="skeleton" style="height:28px;width:50px;margin:0 auto;"></div></div>
+            <div class="fim-stat-label">High-Risk</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         2. Natural Language Summary
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="neural-card">
+        <div class="card-header">
+            <h3 class="card-title">Integrity Summary</h3>
+        </div>
+        <div class="fim-summary-text" id="fim-nl-summary">
+            <div class="skeleton" style="height:14px;width:90%;margin-bottom:8px;"></div>
+            <div class="skeleton" style="height:14px;width:70%;"></div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         3. Critical Changes Alert Panel
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="neural-card" id="critical-panel">
+        <div class="card-header">
+            <h3 class="card-title">Critical Changes</h3>
+            <div class="card-badge badge-danger" id="critical-count-badge">0</div>
+        </div>
+        <div id="critical-list">
+            <div class="fim-skeleton-row"><div class="skeleton fim-skeleton-bar" style="width:55%;"></div><div class="skeleton fim-skeleton-bar" style="width:20%;"></div></div>
+            <div class="fim-skeleton-row"><div class="skeleton fim-skeleton-bar" style="width:45%;"></div><div class="skeleton fim-skeleton-bar" style="width:25%;"></div></div>
+            <div class="fim-skeleton-row"><div class="skeleton fim-skeleton-bar" style="width:60%;"></div><div class="skeleton fim-skeleton-bar" style="width:15%;"></div></div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         4. Two-Column Middle: Directory Summary + Change Timeline
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="fim-two-col">
+        <!-- Left: Directory Summary -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">Directory Summary</h3>
+            </div>
+            <div id="dir-summary-list">
+                <div class="fim-skeleton-row"><div class="skeleton fim-skeleton-bar" style="width:65%;"></div><div class="skeleton fim-skeleton-bar" style="width:10%;"></div></div>
+                <div class="fim-skeleton-row"><div class="skeleton fim-skeleton-bar" style="width:50%;"></div><div class="skeleton fim-skeleton-bar" style="width:10%;"></div></div>
+                <div class="fim-skeleton-row"><div class="skeleton fim-skeleton-bar" style="width:55%;"></div><div class="skeleton fim-skeleton-bar" style="width:10%;"></div></div>
+                <div class="fim-skeleton-row"><div class="skeleton fim-skeleton-bar" style="width:40%;"></div><div class="skeleton fim-skeleton-bar" style="width:10%;"></div></div>
+            </div>
+        </div>
+
+        <!-- Right: Change Timeline -->
+        <div class="neural-card">
+            <div class="card-header">
+                <h3 class="card-title">Change Timeline</h3>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="timeline-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         5. Extension Distribution (full width) — lazy loaded
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="neural-card" id="extension-section">
+        <div class="card-header">
+            <h3 class="card-title">Extension Distribution</h3>
+        </div>
+        <div class="ext-chart-wrapper">
+            <canvas id="extension-chart"></canvas>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         6. Recent Changes Table (full width, load-more, searchable)
+             — lazy loaded
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="neural-card" id="recent-section">
+        <div class="card-header">
+            <h3 class="card-title">Recent Changes</h3>
+        </div>
+        <!-- Filters -->
+        <div class="fim-filters" style="margin-bottom: 1rem;">
+            <input type="text" class="fim-input" id="table-search" placeholder="Search path or pattern&hellip;" style="min-width: 220px;">
+            <select class="fim-select" id="table-type-filter">
+                <option value="">All Types</option>
+                <option value="created">Created</option>
+                <option value="modified">Modified</option>
+                <option value="deleted">Deleted</option>
+            </select>
+            <select class="fim-select" id="table-hours-filter">
+                <option value="1">1h</option>
+                <option value="6">6h</option>
+                <option value="24" selected>24h</option>
+                <option value="72">3d</option>
+                <option value="168">7d</option>
+            </select>
+            <button class="neural-button" id="table-apply-btn" style="padding: 0.5rem 1rem; font-size: 0.82rem;">Apply</button>
+        </div>
+        <!-- Table -->
+        <div class="fim-table-container">
+            <table class="fim-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Path</th>
+                        <th>Type</th>
+                        <th>Risk</th>
+                        <th>Hash Delta</th>
+                        <th>Patterns</th>
+                    </tr>
+                </thead>
+                <tbody id="recent-table-body">
+                    <tr>
+                        <td colspan="6" class="fim-empty">Loading recent changes&hellip;</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- Pagination / Load More -->
+        <div class="fim-pagination">
+            <div class="fim-pagination-info" id="pagination-info">--</div>
+            <button class="fim-load-more-btn" id="load-more-btn">Load More</button>
+        </div>
+    </div>
+
+</div><!-- /fim-dashboard -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     JavaScript — data fetching, charts, table logic
+     Uses DashboardCache, DashboardPoller, LazyLoader, formatNumber,
+     riskColor from dashboard-core.js (loaded via base.html).
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+    'use strict';
+
+    // ── State ──────────────────────────────────────────────────────────
+    let timelineChart  = null;
+    let extensionChart = null;
+    let allRecentRows  = [];
+    let filteredRows   = [];
+    const PAGE_SIZE    = 50;          // default 50 rows
+    let visibleCount   = PAGE_SIZE;   // how many rows currently shown
+    let poller         = null;        // DashboardPoller instance
+    let extensionLoaded = false;      // lazy-load guard
+    let recentLoaded    = false;      // lazy-load guard
+
+    // ── Helpers ────────────────────────────────────────────────────────
+    function getHours() {
+        return document.getElementById('fim-hours-select').value || '24';
+    }
+
+    function showLoading(show) {
+        document.getElementById('fim-loading').style.display = show ? 'inline-block' : 'none';
+    }
+
+    function truncHash(h) {
+        if (!h) return '&mdash;';
+        return h.length > 12 ? h.slice(0, 6) + '&hellip;' + h.slice(-6) : h;
+    }
+
+    /** Use shared riskColor from dashboard-core.js for risk bar fills */
+    function fimRiskColor(r) {
+        // Delegate to the global riskColor() from dashboard-core.js
+        if (typeof window.riskColor === 'function') return window.riskColor(r);
+        // Inline fallback (should never reach here)
+        if (r >= 0.7) return 'var(--neural-danger)';
+        if (r >= 0.3) return 'var(--neural-warning)';
+        return 'var(--neural-success)';
+    }
+
+    function riskLevel(r) {
+        if (r >= 0.7) return 'high';
+        if (r >= 0.3) return 'medium';
+        return 'low';
+    }
+
+    function badgeClass(type) {
+        const t = (type || '').toLowerCase();
+        if (t === 'created' || t === 'create') return 'created';
+        if (t === 'deleted' || t === 'delete') return 'deleted';
+        return 'modified';
+    }
+
+    /** Use shared formatTimestamp / timeAgo from dashboard-core.js when available */
+    function fmtTime(ts) {
+        if (!ts) return '--';
+        // dashboard-core.js formatTimestamp expects nanosecond timestamps,
+        // but FIM API sends ISO strings or epoch ms — use locale formatting
+        const d = new Date(ts);
+        return d.toLocaleString('en-US', {
+            month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+        });
+    }
+
+    function fmtTimeAgo(ts) {
+        if (!ts) return '';
+        const d = new Date(ts);
+        const diffMs = Date.now() - d.getTime();
+        if (diffMs < 60000)   return Math.floor(diffMs / 1000)    + 's ago';
+        if (diffMs < 3600000) return Math.floor(diffMs / 60000)   + 'm ago';
+        if (diffMs < 86400000) return Math.floor(diffMs / 3600000) + 'h ago';
+        return Math.floor(diffMs / 86400000) + 'd ago';
+    }
+
+    /** Use shared formatNumber from dashboard-core.js */
+    function fmtNum(n) {
+        if (typeof window.formatNumber === 'function') return window.formatNumber(n);
+        if (n == null) return '0';
+        return n.toLocaleString();
+    }
+
+    /** Build a cached API URL with query params */
+    function apiUrl(endpoint, params) {
+        const qs = new URLSearchParams(params).toString();
+        return '/dashboard/api/fim/' + endpoint + '?' + qs;
+    }
+
+    function escHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    // ── Stats (high-priority) ─────────────────────────────────────────
+    function renderStats(data) {
+        const s = data.stats || data;
+
+        const setVal = function (id, val) {
+            const el = document.getElementById(id);
+            el.textContent = fmtNum(val != null ? val : 0);
+            el.classList.add('updating');
+            setTimeout(function () { el.classList.remove('updating'); }, 600);
+        };
+
+        setVal('stat-total',     s.total ?? (s.created + s.modified + s.deleted));
+        setVal('stat-created',   s.created   ?? 0);
+        setVal('stat-modified',  s.modified  ?? 0);
+        setVal('stat-deleted',   s.deleted   ?? 0);
+        setVal('stat-high-risk', s.high_risk ?? 0);
+
+        buildNLSummary(s);
+    }
+
+    async function loadStats() {
+        try {
+            var url = apiUrl('stats', { hours: getHours() });
+            var data = await DashboardCache.fetch(url, 25);
+            renderStats(data);
+        } catch (e) {
+            console.error('FIM stats error:', e);
+        }
+    }
+
+    // ── Natural Language Summary (improved) ───────────────────────────
+    function buildNLSummary(s) {
+        var total    = s.total ?? (s.created + s.modified + s.deleted);
+        var highRisk = s.high_risk ?? 0;
+        var hours    = getHours();
+        var label    = hours == 1 ? '1 hour' : hours < 48 ? hours + ' hours' : Math.round(hours / 24) + ' days';
+
+        var msg = '';
+
+        if (total === 0) {
+            msg += 'Over the past <strong>' + label + '</strong>, no file integrity changes have been detected. ';
+            msg += 'All monitored directories remain stable &mdash; cryptographic hashes are unchanged and no anomalous activity has been observed.';
+        } else {
+            // Opening sentence
+            msg += 'In the last <strong>' + label + '</strong>, the File Integrity Monitor recorded ';
+            msg += '<strong>' + fmtNum(total) + '</strong> change' + (total !== 1 ? 's' : '') + ' across monitored directories. ';
+
+            // Breakdown
+            var parts = [];
+            if (s.created  > 0) parts.push('<strong>' + fmtNum(s.created)  + '</strong> file' + (s.created  !== 1 ? 's were' : ' was') + ' created');
+            if (s.modified > 0) parts.push('<strong>' + fmtNum(s.modified) + '</strong> ' + (s.modified !== 1 ? 'were' : 'was') + ' modified');
+            if (s.deleted  > 0) parts.push('<strong>' + fmtNum(s.deleted)  + '</strong> ' + (s.deleted  !== 1 ? 'were' : 'was') + ' deleted');
+            if (parts.length > 0) {
+                msg += parts.join(', ') + '. ';
+            }
+
+            // Dominant change type analysis
+            var dominant = 'modifications';
+            var dominantPct = 0;
+            if (total > 0) {
+                if ((s.created ?? 0) > (s.modified ?? 0) && (s.created ?? 0) > (s.deleted ?? 0)) {
+                    dominant = 'file creations';
+                    dominantPct = Math.round(((s.created ?? 0) / total) * 100);
+                } else if ((s.deleted ?? 0) > (s.modified ?? 0)) {
+                    dominant = 'deletions';
+                    dominantPct = Math.round(((s.deleted ?? 0) / total) * 100);
+                } else {
+                    dominant = 'modifications';
+                    dominantPct = Math.round(((s.modified ?? 0) / total) * 100);
+                }
+            }
+            if (dominantPct > 50) {
+                msg += 'The majority of activity (<strong>' + dominantPct + '%</strong>) consists of ' + dominant + '. ';
+            }
+
+            // Risk assessment
+            if (highRisk > 0) {
+                var riskPct = Math.round((highRisk / total) * 100);
+                msg += '<span style="color: var(--neural-danger);">&#x26A0; <strong>' + fmtNum(highRisk) + '</strong> change';
+                msg += (highRisk !== 1 ? 's' : '') + ' (' + riskPct + '% of total) flagged as high-risk</span>';
+                msg += ' (risk score &gt; 0.3). ';
+                if (highRisk >= 10) {
+                    msg += 'This elevated volume warrants immediate investigation. ';
+                }
+                msg += 'Review the Critical Changes panel below for file-level details.';
+            } else {
+                msg += 'No changes exceeded the high-risk threshold (risk &lt; 0.3). System integrity is <strong style="color: var(--neural-success);">nominal</strong>.';
+            }
+        }
+
+        document.getElementById('fim-nl-summary').innerHTML = msg;
+    }
+
+    // ── Critical Changes (high-priority) ──────────────────────────────
+    function renderCritical(data) {
+        var items = data.critical || data.changes || data || [];
+        var list  = document.getElementById('critical-list');
+        var badge = document.getElementById('critical-count-badge');
+
+        if (!Array.isArray(items) || items.length === 0) {
+            list.innerHTML = '<div class="fim-empty"><div class="fim-empty-icon">&#x2705;</div><p>No high-risk changes detected in this time window.</p></div>';
+            badge.textContent = '0';
+            return;
+        }
+
+        badge.textContent = items.length;
+        var top5 = items.slice(0, 5);
+        list.innerHTML = top5.map(function (c) {
+            var risk = c.risk ?? c.risk_score ?? 0;
+            var patterns = c.patterns || c.patterns_matched || [];
+            var pct = Math.min(risk * 100, 100);
+            var color = fimRiskColor(risk);
+            return '\
+                <div class="critical-item">\
+                    <div>\
+                        <div class="critical-path">' + escHtml(c.path || c.file_path || '--') + '</div>\
+                        <div class="critical-meta">\
+                            <span class="change-badge ' + badgeClass(c.change_type || c.type) + '">' + escHtml(c.change_type || c.type || 'unknown') + '</span>\
+                            <span class="hash-delta">' + truncHash(c.old_hash) + '<span class="arrow">&rarr;</span>' + truncHash(c.new_hash) + '</span>\
+                            ' + patterns.map(function(p) { return '<span class="pattern-pill">' + escHtml(p) + '</span>'; }).join('') + '\
+                        </div>\
+                    </div>\
+                    <div style="text-align: right; min-width: 150px;">\
+                        <div class="risk-bar-container">\
+                            <div class="risk-bar-fill" style="width:' + pct + '%; background:' + color + ';"></div>\
+                        </div>\
+                        <span class="risk-score-label" style="color:' + color + ';">' + risk.toFixed(2) + '</span>\
+                    </div>\
+                </div>';
+        }).join('');
+    }
+
+    async function loadCritical() {
+        try {
+            var url = apiUrl('critical', { hours: getHours() });
+            var data = await DashboardCache.fetch(url, 25);
+            renderCritical(data);
+        } catch (e) {
+            console.error('FIM critical error:', e);
+        }
+    }
+
+    // ── Directory Summary ──────────────────────────────────────────────
+    function renderDirectories(data) {
+        var dirs = data.directories || data || [];
+        var container = document.getElementById('dir-summary-list');
+
+        if (!Array.isArray(dirs) || dirs.length === 0) {
+            container.innerHTML = '<div class="fim-empty"><p>No directory data available.</p></div>';
+            return;
+        }
+
+        container.innerHTML = dirs.map(function (d) {
+            var risk = d.risk ?? d.avg_risk ?? 0;
+            return '\
+                <div class="dir-item">\
+                    <span class="dir-name" title="' + escHtml(d.directory || d.path || '') + '">' + escHtml(d.directory || d.path || '--') + '</span>\
+                    <div class="dir-stats">\
+                        <span class="dir-count">' + fmtNum(d.count ?? d.changes ?? 0) + '</span>\
+                        <span class="risk-dot ' + riskLevel(risk) + '" title="Risk: ' + risk.toFixed(2) + '"></span>\
+                    </div>\
+                </div>';
+        }).join('');
+    }
+
+    async function loadDirectories() {
+        try {
+            var url = apiUrl('directories', { hours: getHours() });
+            var data = await DashboardCache.fetch(url, 45);
+            renderDirectories(data);
+        } catch (e) {
+            console.error('FIM directories error:', e);
+        }
+    }
+
+    // ── Timeline Chart ─────────────────────────────────────────────────
+    function renderTimeline(data) {
+        var tl = data.timeline || data.buckets || data || [];
+
+        var labels   = tl.map(function (b) { return b.hour || b.time || b.label || ''; });
+        var created  = tl.map(function (b) { return b.created  ?? 0; });
+        var modified = tl.map(function (b) { return b.modified ?? 0; });
+        var deleted  = tl.map(function (b) { return b.deleted  ?? 0; });
+
+        var ctx = document.getElementById('timeline-chart').getContext('2d');
+
+        if (timelineChart) timelineChart.destroy();
+
+        timelineChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Created',
+                        data: created,
+                        borderColor: 'rgba(0, 255, 136, 0.9)',
+                        backgroundColor: 'rgba(0, 255, 136, 0.15)',
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 2,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Modified',
+                        data: modified,
+                        borderColor: 'rgba(240, 173, 78, 0.9)',
+                        backgroundColor: 'rgba(240, 173, 78, 0.15)',
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 2,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: 'Deleted',
+                        data: deleted,
+                        borderColor: 'rgba(255, 51, 102, 0.9)',
+                        backgroundColor: 'rgba(255, 51, 102, 0.15)',
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 2,
+                        pointHoverRadius: 5
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        labels: { color: '#b4bcd0', font: { family: 'Inter', size: 11 } }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(10, 14, 39, 0.95)',
+                        borderColor: 'rgba(0, 217, 255, 0.3)',
+                        borderWidth: 1,
+                        titleColor: '#00d9ff',
+                        bodyColor: '#b4bcd0'
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#b4bcd0', maxRotation: 45, font: { size: 10 } },
+                        grid:  { color: 'rgba(0, 217, 255, 0.08)' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        stacked: true,
+                        ticks: { color: '#b4bcd0', font: { size: 10 } },
+                        grid:  { color: 'rgba(0, 217, 255, 0.08)' }
+                    }
+                }
+            }
+        });
+    }
+
+    async function loadTimeline() {
+        try {
+            var url = apiUrl('timeline', { hours: getHours() });
+            var data = await DashboardCache.fetch(url, 45);
+            renderTimeline(data);
+        } catch (e) {
+            console.error('FIM timeline error:', e);
+        }
+    }
+
+    // ── Extension Distribution Chart ───────────────────────────────────
+    function buildExtensionChart(rows) {
+        var counts = {};
+        (rows || []).forEach(function (r) {
+            var path = r.path || r.file_path || '';
+            var parts = path.split('.');
+            var ext = parts.length > 1 ? '.' + parts.pop().toLowerCase() : '(no ext)';
+            counts[ext] = (counts[ext] || 0) + 1;
+        });
+
+        // Sort by count, top 15
+        var sorted = Object.entries(counts)
+            .sort(function (a, b) { return b[1] - a[1]; })
+            .slice(0, 15);
+
+        var labels = sorted.map(function (e) { return e[0]; });
+        var values = sorted.map(function (e) { return e[1]; });
+
+        var ctx = document.getElementById('extension-chart').getContext('2d');
+        if (extensionChart) extensionChart.destroy();
+
+        extensionChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Changes',
+                    data: values,
+                    backgroundColor: labels.map(function (_, i) {
+                        var hue = (i * 25 + 190) % 360;
+                        return 'hsla(' + hue + ', 70%, 55%, 0.7)';
+                    }),
+                    borderColor: labels.map(function (_, i) {
+                        var hue = (i * 25 + 190) % 360;
+                        return 'hsla(' + hue + ', 70%, 55%, 1)';
+                    }),
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(10, 14, 39, 0.95)',
+                        borderColor: 'rgba(0, 217, 255, 0.3)',
+                        borderWidth: 1,
+                        titleColor: '#00d9ff',
+                        bodyColor: '#b4bcd0'
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: { color: '#b4bcd0', font: { size: 10 } },
+                        grid:  { color: 'rgba(0, 217, 255, 0.08)' }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#b4bcd0',
+                            font: { family: "'SF Mono', 'Fira Code', 'Consolas', monospace", size: 11 }
+                        },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    // ── Recent Changes Table ───────────────────────────────────────────
+    async function loadRecent() {
+        try {
+            var hours = document.getElementById('table-hours-filter').value || '24';
+            var url = apiUrl('recent', { hours: hours, limit: 500 });
+            var data = await DashboardCache.fetch(url, 45);
+            allRecentRows = data.changes || data.events || data || [];
+            applyTableFilters();
+        } catch (e) {
+            console.error('FIM recent error:', e);
+        }
+    }
+
+    function applyTableFilters() {
+        var search = (document.getElementById('table-search').value || '').toLowerCase();
+        var typeFilter = document.getElementById('table-type-filter').value.toLowerCase();
+
+        filteredRows = allRecentRows.filter(function (r) {
+            var path = (r.path || r.file_path || '').toLowerCase();
+            var patterns = (r.patterns || r.patterns_matched || []).join(' ').toLowerCase();
+            var matchSearch = !search || path.indexOf(search) !== -1 || patterns.indexOf(search) !== -1;
+            var changeType = (r.change_type || r.type || '').toLowerCase();
+            var matchType = !typeFilter || changeType.indexOf(typeFilter) !== -1;
+            return matchSearch && matchType;
+        });
+
+        visibleCount = PAGE_SIZE;
+        renderTable();
+        buildExtensionChart(filteredRows);
+    }
+
+    function renderTable() {
+        var tbody = document.getElementById('recent-table-body');
+        var total = filteredRows.length;
+        var showing = Math.min(visibleCount, total);
+        var slice = filteredRows.slice(0, showing);
+
+        if (slice.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="fim-empty">No changes match the current filters.</td></tr>';
+        } else {
+            tbody.innerHTML = slice.map(function (r) {
+                var risk = r.risk ?? r.risk_score ?? 0;
+                var patterns = r.patterns || r.patterns_matched || [];
+                var color = fimRiskColor(risk);
+                return '<tr>' +
+                    '<td class="ts-cell">' + fmtTime(r.timestamp || r.ts) + '</td>' +
+                    '<td class="path-cell" title="' + escHtml(r.path || r.file_path || '') + '">' + escHtml(r.path || r.file_path || '--') + '</td>' +
+                    '<td><span class="change-badge ' + badgeClass(r.change_type || r.type) + '">' + escHtml(r.change_type || r.type || '--') + '</span></td>' +
+                    '<td>' +
+                        '<div class="risk-bar-container" style="width:60px;">' +
+                            '<div class="risk-bar-fill" style="width:' + Math.min(risk * 100, 100) + '%; background:' + color + ';"></div>' +
+                        '</div>' +
+                        '<span class="risk-score-label" style="color:' + color + ';">' + risk.toFixed(2) + '</span>' +
+                    '</td>' +
+                    '<td class="hash-delta">' + truncHash(r.old_hash) + '<span class="arrow">&rarr;</span>' + truncHash(r.new_hash) + '</td>' +
+                    '<td>' + patterns.map(function (p) { return '<span class="pattern-pill">' + escHtml(p) + '</span> '; }).join('') + '</td>' +
+                '</tr>';
+            }).join('');
+        }
+
+        // Pagination info
+        document.getElementById('pagination-info').textContent =
+            total > 0
+                ? 'Showing ' + showing + ' of ' + fmtNum(total) + ' changes'
+                : 'No results';
+
+        // Load More button visibility
+        var loadMoreBtn = document.getElementById('load-more-btn');
+        if (showing < total) {
+            loadMoreBtn.style.display = 'inline-block';
+            loadMoreBtn.textContent = 'Load More (' + fmtNum(total - showing) + ' remaining)';
+        } else {
+            loadMoreBtn.style.display = 'none';
+        }
+    }
+
+    // ── Load More click handler ─────────────────────────────────────
+    document.getElementById('load-more-btn').addEventListener('click', function () {
+        visibleCount += PAGE_SIZE;
+        renderTable();
+    });
+
+    // ── Load All Panels (initial load) ─────────────────────────────────
+    async function loadAll() {
+        showLoading(true);
+        // Invalidate cache for fresh data on manual refresh
+        DashboardCache.invalidate('/dashboard/api/fim/');
+        try {
+            // Load top sections eagerly (stats, critical, directories, timeline)
+            await Promise.all([
+                loadStats(),
+                loadCritical(),
+                loadDirectories(),
+                loadTimeline()
+            ]);
+            // If lazy sections are already visible, also load them
+            if (recentLoaded) await loadRecent();
+            if (extensionLoaded) buildExtensionChart(filteredRows);
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // ── Lazy Loading for bottom sections ───────────────────────────────
+    // Extension chart and recent changes table are deferred until scrolled into view.
+    LazyLoader.observe('#extension-section', function () {
+        extensionLoaded = true;
+        // Extension chart is built from recent data, so trigger recent load
+        if (allRecentRows.length > 0) {
+            buildExtensionChart(filteredRows);
+        }
+    });
+
+    LazyLoader.observe('#recent-section', function () {
+        recentLoaded = true;
+        loadRecent();
+    });
+
+    // ── DashboardPoller: 30s visibility-aware auto-refresh ────────────
+    function buildPollerEndpoints() {
+        var hours = getHours();
+        return [
+            {
+                url: apiUrl('stats', { hours: hours }),
+                callback: renderStats,
+                priority: 'high',
+                ttl: 25
+            },
+            {
+                url: apiUrl('critical', { hours: hours }),
+                callback: renderCritical,
+                priority: 'high',
+                ttl: 25
+            },
+            {
+                url: apiUrl('directories', { hours: hours }),
+                callback: renderDirectories,
+                priority: 'low',
+                ttl: 45
+            },
+            {
+                url: apiUrl('timeline', { hours: hours }),
+                callback: renderTimeline,
+                priority: 'low',
+                ttl: 45
+            }
+        ];
+    }
+
+    function startPoller() {
+        if (poller) poller.stop();
+        poller = new DashboardPoller(buildPollerEndpoints(), 30000);
+        poller.start();
+    }
+
+    // ── Bindings ───────────────────────────────────────────────────────
+    document.getElementById('fim-refresh-btn').addEventListener('click', function () {
+        loadAll();
+        // Restart poller with fresh endpoints
+        startPoller();
+    });
+
+    document.getElementById('fim-hours-select').addEventListener('change', function () {
+        // Sync table hours filter with main selector
+        document.getElementById('table-hours-filter').value = this.value;
+        loadAll();
+        // Restart poller with updated hours
+        startPoller();
+    });
+
+    document.getElementById('table-apply-btn').addEventListener('click', function () {
+        loadRecent();
+    });
+
+    // Debounced search
+    var searchTimer = null;
+    document.getElementById('table-search').addEventListener('input', function () {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(applyTableFilters, 300);
+    });
+
+    document.getElementById('table-type-filter').addEventListener('change', applyTableFilters);
+
+    // ── Init ───────────────────────────────────────────────────────────
+    loadAll();
+    startPoller();
+
+})();
+</script>
+{% endblock %}

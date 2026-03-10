@@ -1,0 +1,34 @@
+title: Shell Interpreter Spawned by Web Server
+id: amoskys-exec-002
+status: stable
+level: critical
+description: Detects shell interpreters (bash, sh, python, perl) spawned as child processes of web servers (httpd, nginx, apache2), indicating potential remote code execution or webshell activity
+author: AMOSKYS
+tags:
+    - attack.execution
+    - attack.t1059.004
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection:
+        event_type: suspicious_spawn
+    parent_filter:
+        parent_name:
+            - httpd
+            - nginx
+            - apache2
+    condition: selection and parent_filter
+fields:
+    - process_name
+    - command_line
+    - parent_name
+    - parent_command_line
+    - pid
+    - ppid
+    - user
+    - working_directory
+falsepositives:
+    - CGI scripts legitimately invoked by the web server
+    - Server-side includes executing shell commands
+confidence: 0.90

@@ -1,0 +1,853 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Auth & Access — AMOSKYS{% endblock %}
+
+{% block content %}
+<style>
+    /* ── Stats Grid ─────────────────────────────────────────────── */
+    .auth-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    .auth-stat-card {
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px;
+        padding: 1.25rem;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    .auth-stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--neural-primary), var(--neural-secondary));
+    }
+    .auth-stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,217,255,0.15);
+        border-color: var(--neural-primary);
+    }
+    .auth-stat-card-icon { font-size: 1.4rem; margin-bottom: 0.5rem; }
+    .auth-stat-card-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--neural-primary);
+        line-height: 1;
+    }
+    .auth-stat-card-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 0.35rem;
+    }
+
+    /* ── NLP Summary ────────────────────────────────────────────── */
+    .auth-nlp-summary {
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 2rem;
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        line-height: 1.7;
+    }
+    .auth-nlp-summary strong { color: var(--neural-primary); }
+    .auth-nlp-summary .hl-danger { color: var(--neural-danger); font-weight: 700; }
+    .auth-nlp-summary .hl-warning { color: var(--neural-warning); font-weight: 700; }
+    .auth-nlp-summary .hl-success { color: var(--neural-success); font-weight: 700; }
+
+    /* ── Section Title ──────────────────────────────────────────── */
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--neural-primary);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* ── Chart Container ────────────────────────────────────────── */
+    .chart-container {
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-bottom: 2rem;
+    }
+    .chart-wrapper {
+        position: relative;
+        height: 280px;
+    }
+
+    /* ── Two-Column Layout ──────────────────────────────────────── */
+    .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    /* ── Panel (shared card style) ──────────────────────────────── */
+    .auth-panel {
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px;
+        padding: 1.25rem;
+        overflow: hidden;
+    }
+    .auth-panel:hover {
+        border-color: rgba(0,217,255,0.35);
+    }
+
+    /* ── Tables ─────────────────────────────────────────────────── */
+    .auth-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+    }
+    .auth-table thead th {
+        text-align: left;
+        padding: 0.6rem 0.75rem;
+        color: var(--text-muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.7rem;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid rgba(0,217,255,0.15);
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .auth-table thead th:hover {
+        color: var(--neural-primary);
+    }
+    .auth-table thead th.sorted-asc::after { content: ' \u25B2'; font-size: 0.6rem; }
+    .auth-table thead th.sorted-desc::after { content: ' \u25BC'; font-size: 0.6rem; }
+    .auth-table tbody td {
+        padding: 0.55rem 0.75rem;
+        color: var(--text-secondary);
+        border-bottom: 1px solid rgba(0,217,255,0.06);
+    }
+    .auth-table tbody tr:hover {
+        background: rgba(0,217,255,0.04);
+    }
+    .auth-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    .auth-table tbody tr.row-danger td {
+        color: var(--neural-danger) !important;
+    }
+    .auth-table tbody tr.row-warning td {
+        color: var(--neural-warning) !important;
+    }
+
+    /* ── Badges ─────────────────────────────────────────────────── */
+    .auth-badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 8px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .badge-ssh { background: rgba(0,217,255,0.15); color: var(--neural-primary); }
+    .badge-sudo { background: rgba(240,173,78,0.2); color: var(--neural-warning); }
+    .badge-pam { background: rgba(168,85,247,0.2); color: #a855f7; }
+    .badge-login { background: rgba(0,255,136,0.15); color: var(--neural-success); }
+    .badge-session { background: rgba(6,182,212,0.2); color: #06b6d4; }
+    .badge-su { background: rgba(249,115,22,0.2); color: #f97316; }
+    .badge-other { background: rgba(107,122,153,0.15); color: var(--text-muted); }
+
+    /* ── Risk Bar ───────────────────────────────────────────────── */
+    .risk-bar-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .risk-bar-track {
+        flex: 1;
+        height: 8px;
+        background: rgba(255,255,255,0.06);
+        border-radius: 4px;
+        overflow: hidden;
+        min-width: 60px;
+    }
+    .risk-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.6s ease;
+    }
+    .risk-bar-value {
+        font-size: 0.75rem;
+        font-weight: 600;
+        min-width: 32px;
+        text-align: right;
+        font-family: monospace;
+    }
+
+    /* ── Failure Rate Bar (user summary) ────────────────────────── */
+    .rate-bar-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .rate-bar-track {
+        flex: 1;
+        height: 6px;
+        background: rgba(255,255,255,0.06);
+        border-radius: 3px;
+        overflow: hidden;
+        min-width: 50px;
+    }
+    .rate-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.6s ease;
+    }
+    .rate-bar-value {
+        font-size: 0.75rem;
+        font-weight: 600;
+        min-width: 38px;
+        text-align: right;
+        font-family: monospace;
+    }
+
+    /* ── Scrollable inner ───────────────────────────────────────── */
+    .scroll-inner {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .scroll-inner::-webkit-scrollbar { width: 4px; }
+    .scroll-inner::-webkit-scrollbar-track { background: transparent; }
+    .scroll-inner::-webkit-scrollbar-thumb { background: rgba(0,217,255,0.2); border-radius: 2px; }
+
+    /* ── Monospace cells ────────────────────────────────────────── */
+    .mono { font-family: 'Courier New', monospace; font-size: 0.8rem; }
+    .truncate {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* ── Responsive ─────────────────────────────────────────────── */
+    @media (max-width: 1100px) {
+        .auth-stats-grid { grid-template-columns: repeat(2, 1fr); }
+        .two-col { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+        .auth-stats-grid { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="dashboard-main">
+
+    <!-- ── Stats Bar ───────────────────────────────────────────────── -->
+    <div class="auth-stats-grid">
+        <div class="auth-stat-card">
+            <div class="auth-stat-card-icon">&#x1f510;</div>
+            <div class="auth-stat-card-value" id="statTotalAuth">--</div>
+            <div class="auth-stat-card-label">Total Auth Events</div>
+        </div>
+        <div class="auth-stat-card">
+            <div class="auth-stat-card-value" id="statSuccesses" style="color: var(--neural-success);">--</div>
+            <div class="auth-stat-card-label">Successes</div>
+        </div>
+        <div class="auth-stat-card">
+            <div class="auth-stat-card-value" id="statFailures" style="color: var(--neural-danger);">--</div>
+            <div class="auth-stat-card-label">Failures</div>
+        </div>
+        <div class="auth-stat-card">
+            <div class="auth-stat-card-value" id="statPrivileged" style="color: var(--neural-warning);">--</div>
+            <div class="auth-stat-card-label">Privileged Operations</div>
+        </div>
+    </div>
+
+    <!-- ── Natural Language Summary ────────────────────────────────── -->
+    <div class="auth-nlp-summary" id="authSummary">
+        Analyzing authentication telemetry across all monitored accounts...
+    </div>
+
+    <!-- ── Auth Timeline (full width) ──────────────────────────────── -->
+    <div class="chart-container">
+        <div class="section-title">Authentication Timeline (24h)</div>
+        <div class="chart-wrapper">
+            <canvas id="authTimelineChart"></canvas>
+        </div>
+    </div>
+
+    <!-- ── Two-Column: Failed Attempts + Privilege Escalation ──────── -->
+    <div class="two-col">
+        <!-- Failed Auth Attempts -->
+        <div class="auth-panel">
+            <div class="section-title">Failed Auth Attempts</div>
+            <div class="scroll-inner">
+                <table class="auth-table" id="failedTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>User</th>
+                            <th>Mechanism</th>
+                            <th>Source</th>
+                        </tr>
+                    </thead>
+                    <tbody id="failedBody">
+                        <tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Privilege Escalation Events -->
+        <div class="auth-panel">
+            <div class="section-title">Privilege Escalation Events</div>
+            <div class="scroll-inner">
+                <table class="auth-table" id="privescTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>User</th>
+                            <th>Command</th>
+                            <th>Risk Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="privescBody">
+                        <tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── User Activity Summary (full width) ──────────────────────── -->
+    <div class="auth-panel" style="margin-bottom: 2rem;">
+        <div class="section-title">User Activity Summary</div>
+        <div class="scroll-inner">
+            <table class="auth-table" id="userSummaryTable">
+                <thead>
+                    <tr>
+                        <th data-sort="username">Username</th>
+                        <th data-sort="total">Total Events</th>
+                        <th data-sort="success">Success</th>
+                        <th data-sort="failure">Failure</th>
+                        <th data-sort="failureRate">Failure Rate</th>
+                        <th data-sort="lastActivity">Last Activity</th>
+                    </tr>
+                </thead>
+                <tbody id="userSummaryBody">
+                    <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<script>
+/* ────────────────────────────────────────────────────────────────
+   Auth & Access — data fetch, filtering, and rendering
+   ──────────────────────────────────────────────────────────────── */
+
+const HOURS = 24;
+
+/* ── Helpers ──────────────────────────────────────────────────── */
+function fmt(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+    return n.toString();
+}
+
+function riskColor(r) {
+    if (r > 0.7) return 'var(--neural-danger)';
+    if (r > 0.3) return 'var(--neural-warning)';
+    if (r > 0) return 'var(--neural-success)';
+    return 'var(--text-muted)';
+}
+
+function shortTs(ts) {
+    if (!ts) return '';
+    return ts.replace('T', ' ').substring(0, 19);
+}
+
+function truncate(s, max) {
+    max = max || 40;
+    return s && s.length > max ? s.substring(0, max) + '\u2026' : (s || '');
+}
+
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+}
+
+/* ── Auth event classification ────────────────────────────────── */
+var AUTH_PATTERNS = /auth|login|ssh|sudo|su\b|pam|session/i;
+var FAIL_PATTERNS = /fail|denied|reject|invalid|error|bad\s*password|unauthorized/i;
+var PRIVESC_PATTERNS = /sudo|su\b|elevation|privilege|setuid|runas|pkexec|doas/i;
+
+function eventStr(ev) {
+    var et = (ev.event_type || '').toLowerCase();
+    var details = typeof ev.details === 'string' ? ev.details.toLowerCase() : JSON.stringify(ev.details || '').toLowerCase();
+    return et + ' ' + details;
+}
+
+function isAuthEvent(ev) {
+    return AUTH_PATTERNS.test(eventStr(ev));
+}
+
+function isFailedAuth(ev) {
+    return FAIL_PATTERNS.test(eventStr(ev));
+}
+
+function isPrivescEvent(ev) {
+    return PRIVESC_PATTERNS.test(eventStr(ev));
+}
+
+function extractUser(ev) {
+    if (ev.user) return ev.user;
+    if (ev.username) return ev.username;
+    var d = typeof ev.details === 'string' ? ev.details : JSON.stringify(ev.details || '');
+    var m = d.match(/user[=:\s]+["']?(\w[\w.\-]*)/i);
+    if (m) return m[1];
+    var m2 = d.match(/account[=:\s]+["']?(\w[\w.\-]*)/i);
+    if (m2) return m2[1];
+    return 'unknown';
+}
+
+function extractCommand(ev) {
+    var d = typeof ev.details === 'string' ? ev.details : JSON.stringify(ev.details || '');
+    var m = d.match(/command[=:\s]+["']?([^\n"';]+)/i);
+    if (m) return m[1].trim();
+    var m2 = d.match(/COMMAND=([^\n;]+)/i);
+    if (m2) return m2[1].trim();
+    return ev.event_type || '';
+}
+
+function extractSource(ev) {
+    if (ev.source) return ev.source;
+    if (ev.source_ip) return ev.source_ip;
+    var d = typeof ev.details === 'string' ? ev.details : JSON.stringify(ev.details || '');
+    var m = d.match(/(?:source|src|from|rhost)[=:\s]+["']?([\w.\-:]+)/i);
+    if (m) return m[1];
+    return '';
+}
+
+function classifyMechanism(ev) {
+    var s = eventStr(ev);
+    if (/ssh/i.test(s)) return 'ssh';
+    if (/sudo/i.test(s)) return 'sudo';
+    if (/\bsu\b/i.test(s)) return 'su';
+    if (/pam/i.test(s)) return 'pam';
+    if (/login/i.test(s)) return 'login';
+    if (/session/i.test(s)) return 'session';
+    return 'other';
+}
+
+function mechanismBadge(mech) {
+    var cls = {
+        ssh: 'badge-ssh', sudo: 'badge-sudo', su: 'badge-su',
+        pam: 'badge-pam', login: 'badge-login', session: 'badge-session',
+    }[mech] || 'badge-other';
+    return '<span class="auth-badge ' + cls + '">' + mech.toUpperCase() + '</span>';
+}
+
+/* ── State ────────────────────────────────────────────────────── */
+var allAuthEvents = [];
+var failedAuthEvents = [];
+var privescEvents = [];
+var userSummaryData = [];
+var userSortKey = 'failureRate';
+var userSortAsc = false;
+
+var timelineChartInstance = null;
+
+/* ── Data fetching ────────────────────────────────────────────── */
+async function loadAuthData() {
+    try {
+        var [stats, highRisk, recentData] = await Promise.all([
+            DashboardCache.fetch('/dashboard/api/audit/stats?hours=' + HOURS, 25),
+            DashboardCache.fetch('/dashboard/api/audit/high-risk?hours=' + HOURS + '&limit=100', 30),
+            DashboardCache.fetch('/dashboard/api/audit/recent?hours=' + HOURS + '&limit=500&search=', 30),
+        ]);
+        var recentEvents = recentData.results || recentData || [];
+
+        /* Combine and deduplicate events */
+        var eventMap = new Map();
+        var allEvents = [].concat(recentEvents, Array.isArray(highRisk) ? highRisk : []);
+        allEvents.forEach(function(ev) {
+            var key = (ev.timestamp || ev.timestamp_dt || '') + ':' + (ev.event_type || '') + ':' + extractUser(ev);
+            if (!eventMap.has(key)) eventMap.set(key, ev);
+        });
+        var combinedEvents = Array.from(eventMap.values());
+
+        /* Filter for auth events */
+        allAuthEvents = combinedEvents.filter(isAuthEvent);
+        failedAuthEvents = allAuthEvents.filter(isFailedAuth);
+        privescEvents = allAuthEvents.filter(isPrivescEvent);
+
+        /* Calculate stats */
+        var totalAuth = allAuthEvents.length;
+        var totalFailed = failedAuthEvents.length;
+        var totalSuccess = totalAuth - totalFailed;
+        var totalPrivesc = privescEvents.length;
+
+        /* Use API stats if our filtered set is smaller */
+        var apiTotal = stats.total || 0;
+        var displayTotal = Math.max(totalAuth, apiTotal);
+        var displayFailed = totalFailed;
+        var displaySuccess = displayTotal - displayFailed;
+
+        /* ── Render Stats Bar ──────────────────────────────────── */
+        document.getElementById('statTotalAuth').textContent = fmt(displayTotal);
+        document.getElementById('statSuccesses').textContent = fmt(displaySuccess);
+        document.getElementById('statFailures').textContent = fmt(displayFailed);
+        document.getElementById('statPrivileged').textContent = fmt(totalPrivesc);
+
+        /* ── Render NLP Summary ────────────────────────────────── */
+        renderNLPSummary(displayTotal, displaySuccess, displayFailed, totalPrivesc);
+
+        /* ── Render Timeline Chart ─────────────────────────────── */
+        renderTimelineChart(allAuthEvents);
+
+        /* ── Render Failed Auth Table ──────────────────────────── */
+        renderFailedTable(failedAuthEvents);
+
+        /* ── Render Privesc Table ──────────────────────────────── */
+        renderPrivescTable(privescEvents);
+
+        /* ── Build and render User Summary ─────────────────────── */
+        buildUserSummary(allAuthEvents, failedAuthEvents);
+        renderUserSummary();
+
+    } catch (err) {
+        console.error('Auth data load failed:', err);
+        document.getElementById('authSummary').textContent = 'Failed to load authentication data.';
+    }
+}
+
+/* ── NLP Summary ──────────────────────────────────────────────── */
+function renderNLPSummary(total, success, failed, privesc) {
+    var parts = [];
+
+    parts.push('<strong>' + fmt(total) + '</strong> authentication events in the last 24 hours.');
+
+    if (failed > 0) {
+        var failedUsers = new Set(failedAuthEvents.map(extractUser)).size;
+        parts.push('<span class="hl-danger">' + fmt(failed) + '</span> failed attempt' + (failed !== 1 ? 's' : '') + ' detected across <strong>' + failedUsers + '</strong> user account' + (failedUsers !== 1 ? 's' : '') + '.');
+
+        /* Brute force detection: >10 failures from same user */
+        var userFailCounts = {};
+        failedAuthEvents.forEach(function(ev) {
+            var u = extractUser(ev);
+            userFailCounts[u] = (userFailCounts[u] || 0) + 1;
+        });
+        var bruteForceUsers = Object.entries(userFailCounts).filter(function(pair) { return pair[1] >= 10; });
+        if (bruteForceUsers.length > 0) {
+            parts.push('<span class="hl-danger">Potential brute force pattern</span> detected for ' +
+                bruteForceUsers.map(function(pair) { return '<strong>' + escapeHtml(pair[0]) + '</strong>'; }).join(', ') +
+                ' (' + bruteForceUsers.map(function(pair) { return pair[1] + ' failures'; }).join(', ') + ').');
+        } else {
+            parts.push('No brute force patterns detected.');
+        }
+    } else {
+        parts.push('<span class="hl-success">No failed authentication attempts detected.</span>');
+    }
+
+    if (privesc > 0) {
+        parts.push('<span class="hl-warning">' + fmt(privesc) + '</span> privilege escalation event' + (privesc !== 1 ? 's' : '') + ' recorded.');
+    } else {
+        parts.push('No privilege escalation events recorded.');
+    }
+
+    var failRate = total > 0 ? (failed / total * 100) : 0;
+    if (failRate > 20) {
+        parts.push('Overall failure rate is <span class="hl-danger">' + failRate.toFixed(1) + '%</span> \u2014 significantly above baseline.');
+    } else if (failRate > 5) {
+        parts.push('Overall failure rate is <span class="hl-warning">' + failRate.toFixed(1) + '%</span>.');
+    }
+
+    document.getElementById('authSummary').innerHTML = parts.join(' ');
+}
+
+/* ── Timeline Chart ───────────────────────────────────────────── */
+function renderTimelineChart(authEvents) {
+    /* Bucket events into hourly groups */
+    var now = new Date();
+    var buckets = {};
+    var labels = [];
+    var bucketKeys = [];
+
+    for (var i = 23; i >= 0; i--) {
+        var d = new Date(now.getTime() - i * 3600000);
+        var key = d.toISOString().substring(0, 13);
+        var label = d.getHours().toString().padStart(2, '0') + ':00';
+        buckets[key] = { success: 0, failure: 0 };
+        labels.push(label);
+        bucketKeys.push(key);
+    }
+
+    authEvents.forEach(function(ev) {
+        var ts = ev.timestamp || ev.timestamp_dt || '';
+        var key = ts.substring(0, 13);
+        if (buckets[key] !== undefined) {
+            if (isFailedAuth(ev)) {
+                buckets[key].failure++;
+            } else {
+                buckets[key].success++;
+            }
+        }
+    });
+
+    var successData = bucketKeys.map(function(k) { return buckets[k].success; });
+    var failureData = bucketKeys.map(function(k) { return buckets[k].failure; });
+
+    var ctx = document.getElementById('authTimelineChart').getContext('2d');
+    if (timelineChartInstance) timelineChartInstance.destroy();
+
+    timelineChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Successes',
+                    data: successData,
+                    backgroundColor: 'rgba(0,255,136,0.6)',
+                    borderColor: 'rgba(0,255,136,0.9)',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                },
+                {
+                    label: 'Failures',
+                    data: failureData,
+                    backgroundColor: 'rgba(255,51,102,0.6)',
+                    borderColor: 'rgba(255,51,102,0.9)',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    labels: { color: '#b4bcd0', font: { family: 'Inter', size: 12 } }
+                },
+                tooltip: {
+                    backgroundColor: '#1a1f3a',
+                    titleColor: '#00d9ff',
+                    bodyColor: '#b4bcd0',
+                    borderColor: 'rgba(0,217,255,0.3)',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    padding: 10,
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    ticks: { color: '#b4bcd0', font: { size: 11 }, maxRotation: 45 },
+                    grid: { color: 'rgba(0,217,255,0.08)' },
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    ticks: { color: '#b4bcd0', font: { size: 11 } },
+                    grid: { color: 'rgba(0,217,255,0.08)' },
+                }
+            }
+        }
+    });
+}
+
+/* ── Failed Auth Table ────────────────────────────────────────── */
+function renderFailedTable(events) {
+    var body = document.getElementById('failedBody');
+
+    if (!events.length) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">No failed authentication attempts detected</td></tr>';
+        return;
+    }
+
+    /* Sort by timestamp descending */
+    var sorted = events.slice().sort(function(a, b) {
+        var ta = a.timestamp || a.timestamp_dt || '';
+        var tb = b.timestamp || b.timestamp_dt || '';
+        return tb.localeCompare(ta);
+    });
+
+    body.innerHTML = '';
+    sorted.forEach(function(ev) {
+        var risk = ev.risk_score || 0;
+        var tr = document.createElement('tr');
+        if (risk > 0.5) tr.className = 'row-danger';
+        var mech = classifyMechanism(ev);
+        var user = extractUser(ev);
+        var source = extractSource(ev);
+        var ts = shortTs(ev.timestamp || ev.timestamp_dt || '');
+
+        tr.innerHTML =
+            '<td class="mono" style="white-space:nowrap;">' + escapeHtml(ts) + '</td>' +
+            '<td style="font-weight:600;">' + escapeHtml(user) + '</td>' +
+            '<td>' + mechanismBadge(mech) + '</td>' +
+            '<td class="mono" style="font-size:0.8rem;color:var(--text-muted);">' + (escapeHtml(source) || '\u2014') + '</td>';
+        body.appendChild(tr);
+    });
+}
+
+/* ── Privilege Escalation Table ───────────────────────────────── */
+function renderPrivescTable(events) {
+    var body = document.getElementById('privescBody');
+
+    if (!events.length) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">No privilege escalation events detected</td></tr>';
+        return;
+    }
+
+    /* Sort by timestamp descending */
+    var sorted = events.slice().sort(function(a, b) {
+        var ta = a.timestamp || a.timestamp_dt || '';
+        var tb = b.timestamp || b.timestamp_dt || '';
+        return tb.localeCompare(ta);
+    });
+
+    body.innerHTML = '';
+    sorted.forEach(function(ev) {
+        var risk = ev.risk_score || 0;
+        var tr = document.createElement('tr');
+        var user = extractUser(ev);
+        var cmd = extractCommand(ev);
+        var ts = shortTs(ev.timestamp || ev.timestamp_dt || '');
+        var color = riskColor(risk);
+
+        tr.innerHTML =
+            '<td class="mono" style="white-space:nowrap;">' + escapeHtml(ts) + '</td>' +
+            '<td style="font-weight:600;">' + escapeHtml(user) + '</td>' +
+            '<td class="mono truncate" title="' + escapeHtml(cmd) + '">' + escapeHtml(truncate(cmd, 35)) + '</td>' +
+            '<td>' +
+                '<div class="risk-bar-wrapper">' +
+                    '<div class="risk-bar-track">' +
+                        '<div class="risk-bar-fill" style="width:' + (risk * 100).toFixed(0) + '%;background:' + color + ';"></div>' +
+                    '</div>' +
+                    '<span class="risk-bar-value" style="color:' + color + ';">' + risk.toFixed(2) + '</span>' +
+                '</div>' +
+            '</td>';
+        body.appendChild(tr);
+    });
+}
+
+/* ── User Summary ─────────────────────────────────────────────── */
+function buildUserSummary(authEvents, failedEvents) {
+    var userMap = {};
+
+    authEvents.forEach(function(ev) {
+        var user = extractUser(ev);
+        if (!userMap[user]) {
+            userMap[user] = { username: user, total: 0, success: 0, failure: 0, lastActivity: '' };
+        }
+        userMap[user].total++;
+        var ts = ev.timestamp || ev.timestamp_dt || '';
+        if (ts > userMap[user].lastActivity) userMap[user].lastActivity = ts;
+    });
+
+    failedEvents.forEach(function(ev) {
+        var user = extractUser(ev);
+        if (userMap[user]) {
+            userMap[user].failure++;
+        }
+    });
+
+    /* Calculate success = total - failure, failureRate */
+    Object.values(userMap).forEach(function(u) {
+        u.success = u.total - u.failure;
+        u.failureRate = u.total > 0 ? (u.failure / u.total) * 100 : 0;
+    });
+
+    userSummaryData = Object.values(userMap);
+}
+
+function renderUserSummary() {
+    var body = document.getElementById('userSummaryBody');
+
+    if (!userSummaryData.length) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No user activity data available</td></tr>';
+        return;
+    }
+
+    /* Sort */
+    var sorted = userSummaryData.slice().sort(function(a, b) {
+        var va = a[userSortKey], vb = b[userSortKey];
+        if (typeof va === 'string') {
+            return userSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        }
+        return userSortAsc ? va - vb : vb - va;
+    });
+
+    /* Update sort indicators */
+    document.querySelectorAll('#userSummaryTable thead th').forEach(function(th) {
+        th.classList.remove('sorted-asc', 'sorted-desc');
+        if (th.getAttribute('data-sort') === userSortKey) {
+            th.classList.add(userSortAsc ? 'sorted-asc' : 'sorted-desc');
+        }
+    });
+
+    body.innerHTML = '';
+    sorted.forEach(function(u) {
+        var tr = document.createElement('tr');
+        var rate = u.failureRate;
+        var rateColor = rate > 50 ? 'var(--neural-danger)' : rate > 20 ? 'var(--neural-warning)' : rate > 0 ? 'var(--neural-primary)' : 'var(--text-muted)';
+        if (rate > 50) tr.className = 'row-warning';
+
+        tr.innerHTML =
+            '<td style="font-weight:600;">' + escapeHtml(u.username) + '</td>' +
+            '<td style="font-weight:600;color:var(--neural-primary);">' + fmt(u.total) + '</td>' +
+            '<td style="color:var(--neural-success);">' + fmt(u.success) + '</td>' +
+            '<td style="color:' + (u.failure > 0 ? 'var(--neural-danger)' : 'var(--text-muted)') + ';">' + fmt(u.failure) + '</td>' +
+            '<td>' +
+                '<div class="rate-bar-wrapper">' +
+                    '<div class="rate-bar-track">' +
+                        '<div class="rate-bar-fill" style="width:' + Math.min(rate, 100).toFixed(0) + '%;background:' + rateColor + ';"></div>' +
+                    '</div>' +
+                    '<span class="rate-bar-value" style="color:' + rateColor + ';">' + rate.toFixed(1) + '%</span>' +
+                '</div>' +
+            '</td>' +
+            '<td class="mono" style="font-size:0.75rem;white-space:nowrap;color:var(--text-muted);">' + shortTs(u.lastActivity) + '</td>';
+        body.appendChild(tr);
+    });
+}
+
+/* ── Sort click handler for user summary ──────────────────────── */
+document.querySelectorAll('#userSummaryTable thead th[data-sort]').forEach(function(th) {
+    th.addEventListener('click', function() {
+        var key = this.getAttribute('data-sort');
+        if (userSortKey === key) {
+            userSortAsc = !userSortAsc;
+        } else {
+            userSortKey = key;
+            userSortAsc = (key === 'username');
+        }
+        renderUserSummary();
+    });
+});
+
+/* ── Boot — visibility-aware refresh ─────────────────────────── */
+loadAuthData();
+setInterval(function() { if (!document.hidden) loadAuthData(); }, 30000);
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) { DashboardCache.invalidate('/dashboard/api/audit/'); loadAuthData(); }
+});
+</script>
+{% endblock %}

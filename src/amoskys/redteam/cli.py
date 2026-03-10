@@ -79,9 +79,7 @@ def _print_scenario_result(result: ScenarioResult) -> None:
         f"  Probe:  {_c(_CYAN, scenario.probe_id)}"
         f"  Agent:  {_c(_CYAN, scenario.agent)}"
     )
-    print(
-        f"  MITRE:  {_c(_DIM, ', '.join(scenario.mitre_techniques))}"
-    )
+    print(f"  MITRE:  {_c(_DIM, ', '.join(scenario.mitre_techniques))}")
     if result.incident_key:
         print(f"  Incident Key: {_c(_DIM, result.incident_key)}")
     print(_c(_DIM, "─" * 50))
@@ -139,10 +137,7 @@ def _print_scenario_result(result: ScenarioResult) -> None:
     else:
         verdict_str = _c(_RED, f"{failed} ASSERTION(S) FAILED")
 
-    print(
-        f"  {verdict_str}  "
-        f"{passed}/{total} cases · {events} events fired"
-    )
+    print(f"  {verdict_str}  " f"{passed}/{total} cases · {events} events fired")
     print()
 
 
@@ -182,8 +177,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if scenario_name not in SCENARIO_REGISTRY:
         available = ", ".join(sorted(SCENARIO_REGISTRY.keys())) or "(none registered)"
         print(
-            f"Error: scenario '{scenario_name}' not found. "
-            f"Available: {available}",
+            f"Error: scenario '{scenario_name}' not found. " f"Available: {available}",
             file=sys.stderr,
         )
         return 1
@@ -223,9 +217,7 @@ def cmd_list(args: argparse.Namespace) -> int:
         for case in scenario.cases:
             case_counts[case.category] = case_counts.get(case.category, 0) + 1
 
-        counts_str = "  ".join(
-            f"{v} {k}" for k, v in sorted(case_counts.items())
-        )
+        counts_str = "  ".join(f"{v} {k}" for k, v in sorted(case_counts.items()))
         print(
             f"  {_c(_CYAN, name):<30} "
             f"{_c(_DIM, scenario.probe_id + ' / ' + scenario.agent):<35} "
@@ -286,7 +278,10 @@ def cmd_timeline(args: argparse.Namespace) -> int:
         names = sorted(n for n in SCENARIO_REGISTRY if n.startswith("spine_"))
 
     if not names:
-        print("No spine scenarios found. Register spine_* scenarios first.", file=sys.stderr)
+        print(
+            "No spine scenarios found. Register spine_* scenarios first.",
+            file=sys.stderr,
+        )
         return 1
 
     missing = [n for n in names if n not in SCENARIO_REGISTRY]
@@ -303,6 +298,7 @@ def cmd_timeline(args: argparse.Namespace) -> int:
     fmt = getattr(args, "format", "text")
     if fmt == "json":
         import json
+
         output = json.dumps(tl.render_json(), indent=2)
     else:
         output = tl.render_text()
@@ -311,6 +307,7 @@ def cmd_timeline(args: argparse.Namespace) -> int:
 
     if args.save:
         import json as _json
+
         save_dir = Path(args.save)
         save_dir.mkdir(parents=True, exist_ok=True)
         (save_dir / "timeline.txt").write_text(tl.render_text(), encoding="utf-8")
@@ -348,11 +345,8 @@ def cmd_score(args: argparse.Namespace) -> int:
         print(_c(_DIM, "─" * 50))
 
         for cs in scores:
-            lvl_color = (_GREEN if cs.level == 3 else _YELLOW if cs.level >= 2 else _RED)
-            print(
-                f"  {_c(lvl_color, f'L{cs.level}')}"
-                f"  {cs.case_id}"
-            )
+            lvl_color = _GREEN if cs.level == 3 else _YELLOW if cs.level >= 2 else _RED
+            print(f"  {_c(lvl_color, f'L{cs.level}')}" f"  {cs.case_id}")
             for note in cs.notes:
                 print(f"      {_c(_DIM, note)}")
 
@@ -362,6 +356,7 @@ def cmd_score(args: argparse.Namespace) -> int:
 def cmd_replay(args: argparse.Namespace) -> int:
     """Execute: amoskys-redteam replay <scenario_name> <capture_file>."""
     from pathlib import Path as _Path
+
     from amoskys.redteam.capture import ReplayHarness, TelemetryCapture
 
     _load_all()
@@ -385,7 +380,12 @@ def cmd_replay(args: argparse.Namespace) -> int:
         return 1
 
     record = records[0]
-    print(_c(_DIM, f"Captured at {record.captured_at} on {record.hostname} ({record.os_name})"))
+    print(
+        _c(
+            _DIM,
+            f"Captured at {record.captured_at} on {record.hostname} ({record.os_name})",
+        )
+    )
     if record.notes:
         print(_c(_DIM, f"Notes: {record.notes}"))
     print()

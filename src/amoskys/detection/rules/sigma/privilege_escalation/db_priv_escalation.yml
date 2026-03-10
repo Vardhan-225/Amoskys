@@ -1,0 +1,26 @@
+title: Database Privilege Escalation
+id: amoskys-pe-003
+status: stable
+level: critical
+description: Detects database privilege escalation attempts via GRANT or ALTER USER statements indicating unauthorized privilege modification
+author: AMOSKYS
+tags:
+    - attack.privilege_escalation
+    - attack.t1078
+logsource:
+    category: database
+    product: amoskys
+detection:
+    selection:
+        event_type: db_privilege_escalation
+    condition: selection
+fields:
+    - db_user
+    - target_user
+    - statement
+    - database_name
+    - source_ip
+falsepositives:
+    - Routine DBA privilege management
+    - Automated provisioning scripts during onboarding
+confidence: 0.85

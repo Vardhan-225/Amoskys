@@ -28,18 +28,25 @@
         <div id="es-timeline-tip" class="es-tip" style="display:none;"></div>
     </div>
 
+    <!-- ===== DOMAIN FILTER PILLS ===== -->
+    <div class="es-domain-pills" id="es-domain-pills">
+        <button class="es-domain-pill active" data-domain="">All</button>
+        <button class="es-domain-pill" data-domain="process">Proc</button>
+        <button class="es-domain-pill" data-domain="flow">Net</button>
+        <button class="es-domain-pill" data-domain="dns">DNS</button>
+        <button class="es-domain-pill" data-domain="audit">Auth</button>
+        <button class="es-domain-pill" data-domain="fim">FIM</button>
+        <button class="es-domain-pill" data-domain="persistence">Persist</button>
+        <button class="es-domain-pill" data-domain="peripheral">Periph</button>
+        <button class="es-domain-pill" data-domain="observation">Obs</button>
+        <button class="es-domain-pill" data-domain="security">Security</button>
+    </div>
+
     <!-- ===== FILTER BAR ===== -->
     <div class="es-filters">
         <select id="es-agent-filter" class="es-select">
             <option value="">All Agents</option>
-            <option value="ProcAgent">ProcAgent</option>
-            <option value="FIM">FIM</option>
-            <option value="DNS">DNS</option>
-            <option value="AuthGuard">AuthGuard</option>
-            <option value="KernelAudit">KernelAudit</option>
-            <option value="Peripheral">Peripheral</option>
-            <option value="FlowAgent">FlowAgent</option>
-            <option value="PersistenceGuard">PersistenceGuard</option>
+            <!-- Populated dynamically from deep-overview API -->
         </select>
         <select id="es-severity-filter" class="es-select">
             <option value="">All Severities</option>
@@ -80,6 +87,25 @@
 @keyframes es-pulse { 0%,100% { opacity: 1; box-shadow: 0 0 4px var(--neural-success); } 50% { opacity: 0.5; box-shadow: 0 0 12px var(--neural-success); } }
 .es-count { font-size: 1.3rem; font-weight: 700; color: var(--neural-primary); }
 .es-count-label { font-size: 0.8rem; color: var(--text-muted); }
+
+/* Domain pills */
+.es-domain-pills {
+    display: flex; gap: 0.4rem; flex-wrap: wrap;
+    background: var(--bg-secondary); border-radius: 10px; padding: 0.6rem 1rem;
+    border: 1px solid rgba(255,255,255,0.04);
+}
+.es-domain-pill {
+    padding: 0.3rem 0.7rem; border-radius: 14px; font-size: 0.72rem;
+    font-weight: 600; cursor: pointer; border: 1px solid rgba(0,217,255,0.2);
+    background: transparent; color: var(--text-muted); transition: all 0.15s;
+    font-family: inherit;
+}
+.es-domain-pill:hover { border-color: var(--neural-primary); color: var(--neural-primary); }
+.es-domain-pill.active {
+    background: rgba(0,217,255,0.15); border-color: var(--neural-primary);
+    color: var(--neural-primary);
+}
+.es-rate { font-size: 0.78rem; color: var(--neural-primary); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* Cards */
 .es-card { background: var(--bg-secondary); border-radius: 12px; padding: 1rem 1.25rem; border: 1px solid rgba(255,255,255,0.04); }
@@ -139,6 +165,10 @@
 
 .es-event-top { display: flex; align-items: center; gap: 0.75rem; }
 .es-event-time { font-size: 0.72rem; color: var(--text-muted); min-width: 70px; font-family: monospace; }
+.es-event-src {
+    font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.35rem; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
+}
 .es-event-agent {
     font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 4px;
     background: rgba(0,217,255,0.1); color: var(--neural-primary); white-space: nowrap;
@@ -199,15 +229,38 @@ const esApp = {
     clusterCache: {},
     _debounce: null,
 
+    _domainFilter: '',
+
     init() {
         // Parse URL params for deep-linking
         const params = new URLSearchParams(window.location.search);
+        const preAgent = params.get('agent') || '';
         if (params.get('severity')) document.getElementById('es-severity-filter').value = params.get('severity');
-        if (params.get('agent')) document.getElementById('es-agent-filter').value = params.get('agent');
         if (params.get('search')) document.getElementById('es-search').value = params.get('search');
         if (params.get('hours')) document.getElementById('es-hours-filter').value = params.get('hours');
+        if (params.get('domain')) this._domainFilter = params.get('domain');
         // Hour filter from Cortex timeline click
         this._hourFilter = params.get('hour') || '';
+
+        // Populate agent filter dynamically from deep-overview
+        this.loadAgentFilter(preAgent);
+
+        // Domain pill click handlers
+        document.getElementById('es-domain-pills').addEventListener('click', (e) => {
+            const pill = e.target.closest('.es-domain-pill');
+            if (!pill) return;
+            document.querySelectorAll('.es-domain-pill').forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            this._domainFilter = pill.dataset.domain || '';
+            this.offset = 0;
+            this.load();
+        });
+        // Activate pre-selected domain pill
+        if (this._domainFilter) {
+            document.querySelectorAll('.es-domain-pill').forEach(p => {
+                p.classList.toggle('active', p.dataset.domain === this._domainFilter);
+            });
+        }
 
         // Filter change listeners
         ['es-agent-filter', 'es-severity-filter', 'es-hours-filter'].forEach(id => {
@@ -224,6 +277,21 @@ const esApp = {
         setInterval(() => this.load(), 30000);
     },
 
+    async loadAgentFilter(preSelect) {
+        try {
+            const d = await DashboardCache.fetch('/dashboard/api/agents/deep-overview', 60);
+            if (d.status !== 'success' || !d.agents) return;
+            const sel = document.getElementById('es-agent-filter');
+            d.agents.forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a.id;
+                opt.textContent = a.name;
+                sel.appendChild(opt);
+            });
+            if (preSelect) sel.value = preSelect;
+        } catch (e) { /* silent — hardcoded fallback already in HTML */ }
+    },
+
     async load() {
         const agent = document.getElementById('es-agent-filter').value;
         const severity = document.getElementById('es-severity-filter').value;
@@ -237,11 +305,11 @@ const esApp = {
         if (severity) url += '&severity=' + encodeURIComponent(severity);
         if (search) url += '&search=' + encodeURIComponent(search);
         if (this._hourFilter) url += '&hour=' + encodeURIComponent(this._hourFilter);
+        if (this._domainFilter) url += '&domain=' + encodeURIComponent(this._domainFilter);
 
         container.innerHTML = '<div class="es-loading">Loading events...</div>';
         try {
-            const r = await fetch(url);
-            const d = await r.json();
+            const d = await DashboardCache.fetch(url, 10);
             this.events = d.events || [];
             this.total = d.total || 0;
             document.getElementById('es-total').textContent = this.fmtNum(this.total);
@@ -255,8 +323,7 @@ const esApp = {
     async loadTimeline() {
         const hours = document.getElementById('es-hours-filter').value;
         try {
-            const r = await fetch('/dashboard/api/live/event-clustering?hours=' + hours);
-            const d = await r.json();
+            const d = await DashboardCache.fetch('/dashboard/api/live/event-clustering?hours=' + hours, 20);
             if (d.status === 'success' && d.clusters) {
                 this.clusterCache = d.clusters;
                 this.renderTimeline();
@@ -345,6 +412,17 @@ const esApp = {
         const sevColors = { critical: 'es-sev-critical', high: 'es-sev-high', medium: 'es-sev-medium', low: 'es-sev-low' };
         const riskColor = r => r >= 0.75 ? '#ff3366' : r >= 0.5 ? '#ff6600' : r >= 0.25 ? '#ffaa00' : '#0088ff';
 
+        const srcColors = {
+            security: '#ff6b9d', process: '#4ECDC4', flow: '#F38181',
+            dns: '#AA96DA', persistence: '#FCBAD3', fim: '#00ff88',
+            audit: '#ffaa00', peripheral: '#06b6d4', observation: '#a855f7'
+        };
+        const srcLabels = {
+            security: 'SEC', process: 'PROC', flow: 'FLOW',
+            dns: 'DNS', persistence: 'PERS', fim: 'FIM',
+            audit: 'AUDIT', peripheral: 'PERIPH', observation: 'OBS'
+        };
+
         container.innerHTML = this.events.map((ev, i) => {
             const ts = ev.timestamp_dt || '--';
             const time = ts.length >= 19 ? ts.substring(11, 19) : ts;
@@ -355,13 +433,17 @@ const esApp = {
             const desc = ev.description || '';
             const indicators = typeof ev.indicators === 'object' ? JSON.stringify(ev.indicators, null, 2) : (ev.indicators || '');
             const mitre = ev.mitre_technique || '';
+            const src = ev.source_table || 'security';
+            const srcColor = srcColors[src] || '#666';
+            const srcLabel = srcLabels[src] || src.toUpperCase();
 
             return '<div class="es-event" data-idx="' + i + '" onclick="esApp.toggleEvent(this)">' +
                 '<div class="es-event-top">' +
                     '<span class="es-event-time">' + time + '</span>' +
+                    '<span class="es-event-src" style="background:' + srcColor + '22;color:' + srcColor + ';">' + srcLabel + '</span>' +
                     '<span class="es-event-agent">' + agent + '</span>' +
                     '<span class="es-event-sev ' + (sevColors[sev] || 'es-sev-low') + '">' + sev + '</span>' +
-                    '<span class="es-event-type">' + cat.replace(/_/g, ' ') + '</span>' +
+                    '<span class="es-event-type">' + this.fmtCategory(cat) + '</span>' +
                     '<span class="es-event-risk" style="color:' + riskColor(risk) + ';">' + (risk * 100).toFixed(0) + '%</span>' +
                 '</div>' +
                 (desc ? '<div class="es-event-desc">' + desc + '</div>' : '') +
@@ -373,6 +455,7 @@ const esApp = {
                         (mitre ? '<div class="es-detail-item"><div class="es-detail-label">MITRE ATT&CK</div><div class="es-detail-value" style="color:var(--neural-primary);">' + mitre + '</div></div>' : '') +
                         '<div class="es-detail-item"><div class="es-detail-label">Timestamp</div><div class="es-detail-value">' + ts + '</div></div>' +
                         '<div class="es-detail-item"><div class="es-detail-label">Agent</div><div class="es-detail-value">' + agent + '</div></div>' +
+                        '<div class="es-detail-item"><div class="es-detail-label">Source</div><div class="es-detail-value" style="color:' + srcColor + ';">' + src + '_events</div></div>' +
                     '</div>' +
                     (indicators ? '<div class="es-detail-json">' + this.escHtml(indicators) + '</div>' : '') +
                 '</div>' +
@@ -405,6 +488,20 @@ const esApp = {
         if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
         if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
         return String(n);
+    },
+
+    fmtCategory(cat) {
+        const map = {
+            'process_event': 'Process Event', 'network_flow_tcp': 'TCP Flow',
+            'network_flow_udp': 'UDP Flow', 'dns_query': 'DNS Query',
+            'file_modification': 'File Change', 'persistence_event': 'Persistence',
+            'process_spawned': 'New Process', 'lolbin_execution': 'LOLBin',
+            'dga_domain': 'DGA Domain', 'dns_beaconing': 'DNS Beaconing',
+            'ssh_bruteforce': 'SSH Brute Force', 'persistence_launchd': 'LaunchAgent',
+            'persistence_cron': 'Cron Job', 'persistence_ssh_key': 'SSH Key',
+            'file_integrity_change': 'File Integrity',
+        };
+        return map[cat] || cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     },
 
     escHtml(s) {

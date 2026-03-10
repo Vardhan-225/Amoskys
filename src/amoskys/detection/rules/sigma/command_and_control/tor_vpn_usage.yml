@@ -1,0 +1,29 @@
+title: TOR Exit Node or VPN Connection Detected
+id: amoskys-c2-005
+status: stable
+level: high
+description: Detects connections to known TOR exit nodes or VPN endpoints indicating potential anonymization of C2 traffic or data exfiltration
+author: AMOSKYS
+tags:
+    - attack.command_and_control
+    - attack.t1090.003
+logsource:
+    category: network_connection
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - tor_connection_detected
+            - vpn_connection_detected
+    condition: selection
+fields:
+    - destination_ip
+    - destination_port
+    - process_name
+    - pid
+    - connection_type
+falsepositives:
+    - Authorized VPN usage for remote work
+    - Security researchers using TOR for investigations
+    - Privacy-focused browser configurations
+confidence: 0.82

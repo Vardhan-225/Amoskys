@@ -26,11 +26,14 @@ def register(scenario: Scenario) -> Scenario:
 
 def _load_all() -> None:
     """Eagerly import all scenario modules to populate the registry."""
+    from amoskys.redteam.scenarios import attacker_touched_the_box  # noqa: F401
+    from amoskys.redteam.scenarios import auth_probes  # noqa: F401
     from amoskys.redteam.scenarios import credential_dump  # noqa: F401
     from amoskys.redteam.scenarios import kernel_audit_probes  # noqa: F401
-    from amoskys.redteam.scenarios import auth_probes  # noqa: F401
+    from amoskys.redteam.scenarios import macos_correlation  # noqa: F401
+    from amoskys.redteam.scenarios import macos_observatory  # noqa: F401
+    from amoskys.redteam.scenarios import macos_temporal_correlation  # noqa: F401
     from amoskys.redteam.scenarios import proc_probes  # noqa: F401
-    from amoskys.redteam.scenarios import attacker_touched_the_box  # noqa: F401
 
 
 __all__ = ["SCENARIO_REGISTRY", "register"]

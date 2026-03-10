@@ -1,0 +1,864 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Agent Marketplace - AMOSKYS Cortex{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <div>
+        <h2 style="margin: 0; display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 1.8rem;">🏪</span>
+            Agent Marketplace
+        </h2>
+        <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);">
+            Select perspectives to deploy on your infrastructure
+        </p>
+    </div>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <div class="selection-badge" id="selection-badge">
+            <span id="selection-count">0</span> selected
+        </div>
+        <button class="deploy-button" id="deploy-button" disabled>
+            <span>🚀</span> Deploy Configuration
+        </button>
+    </div>
+</div>
+
+<!-- Quick Start Bundles -->
+<div class="neural-card" style="margin-bottom: 1.5rem;">
+    <h3 style="margin: 0 0 1rem 0; color: #00d9ff; font-size: 1.1rem;">⚡ Quick Start Bundles</h3>
+    <div class="bundles-grid">
+        <div class="bundle-card" data-action="apply-bundle" data-bundle="essential">
+            <div class="bundle-badge recommended">RECOMMENDED</div>
+            <div class="bundle-icon">&#127919;</div>
+            <h4 class="bundle-name">Essential Security</h4>
+            <p class="bundle-desc">Core monitoring for comprehensive endpoint protection</p>
+            <div class="bundle-count">5 perspectives</div>
+            <div class="bundle-tags">
+                <span class="tag">Process</span>
+                <span class="tag">Network</span>
+                <span class="tag">Files</span>
+                <span class="tag">Auth</span>
+                <span class="tag">+1</span>
+            </div>
+            <div style="display:flex;gap:0.3rem;margin-top:0.5rem;justify-content:center;">
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,255,136,0.1);color:#00ff88;border-radius:3px;font-weight:600;">macOS</span>
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,255,136,0.1);color:#00ff88;border-radius:3px;font-weight:600;">Linux</span>
+            </div>
+        </div>
+
+        <div class="bundle-card" data-action="apply-bundle" data-bundle="advanced">
+            <div class="bundle-icon">&#128640;</div>
+            <h4 class="bundle-name">Advanced Defense</h4>
+            <p class="bundle-desc">Extended coverage with kernel and memory analysis</p>
+            <div class="bundle-count">8 perspectives</div>
+            <div class="bundle-tags">
+                <span class="tag">Essential</span>
+                <span class="tag">Kernel</span>
+                <span class="tag">Memory</span>
+                <span class="tag">+5</span>
+            </div>
+            <div style="display:flex;gap:0.3rem;margin-top:0.5rem;justify-content:center;">
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,255,136,0.1);color:#00ff88;border-radius:3px;font-weight:600;">macOS</span>
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,255,136,0.1);color:#00ff88;border-radius:3px;font-weight:600;">Linux</span>
+            </div>
+        </div>
+
+        <div class="bundle-card" data-action="apply-bundle" data-bundle="cloud">
+            <div class="bundle-icon">&#9729;&#65039;</div>
+            <h4 class="bundle-name">Cloud Native</h4>
+            <p class="bundle-desc">Container and cloud infrastructure monitoring</p>
+            <div class="bundle-count">4 perspectives</div>
+            <div class="bundle-tags">
+                <span class="tag">Containers</span>
+                <span class="tag">Cloud</span>
+                <span class="tag">Network</span>
+                <span class="tag">+1</span>
+            </div>
+            <div style="display:flex;gap:0.3rem;margin-top:0.5rem;justify-content:center;">
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,255,136,0.1);color:#00ff88;border-radius:3px;font-weight:600;">Linux</span>
+                <span style="font-size:0.6rem;padding:0.1rem 0.35rem;background:rgba(0,170,255,0.1);color:#00aaff;border-radius:3px;font-weight:600;">Docker</span>
+            </div>
+        </div>
+
+        <div class="bundle-card custom" data-action="scroll-to-catalog">
+            <div class="bundle-icon">⚙️</div>
+            <h4 class="bundle-name">Custom Selection</h4>
+            <p class="bundle-desc">Build your own configuration from catalog</p>
+            <div class="bundle-count">Your choice</div>
+            <div style="text-align: center; margin-top: 1rem; color: #00d9ff; font-weight: 600;">
+                Browse Catalog ↓
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Catalog Controls -->
+<div class="neural-card" style="margin-bottom: 1rem; padding: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <label style="color: var(--text-secondary); font-weight: 600;">Filter:</label>
+            <select id="category-filter" class="filter-select">
+                <option value="all">All Categories</option>
+                <option value="endpoint">Endpoint Security</option>
+                <option value="network">Network Monitoring</option>
+                <option value="cloud">Cloud & Container</option>
+                <option value="advanced">Advanced Analysis</option>
+            </select>
+        </div>
+        <div style="display: flex; gap: 0.75rem;">
+            <button class="control-btn" id="select-all-btn">Select All</button>
+            <button class="control-btn" id="clear-all-btn">Clear All</button>
+        </div>
+    </div>
+</div>
+
+<!-- Perspective Catalog (dynamically loaded from AGENT_REGISTRY) -->
+<div id="perspective-catalog" class="perspectives-grid">
+    <div style="text-align: center; padding: 3rem; color: var(--text-muted); grid-column: 1/-1;">
+        Loading agent catalog...
+    </div>
+</div>
+
+<!-- Deployment Modal -->
+<div id="deploy-modal" class="deploy-modal" style="display: none;">
+    <div class="deploy-modal-content">
+        <div class="deploy-modal-header">
+            <h3>🚀 Deploy Agent Configuration</h3>
+            <button class="close-btn" id="deploy-modal-close-btn">✕</button>
+        </div>
+        <div class="deploy-modal-body">
+            <div class="deploy-summary">
+                <div class="summary-stat">
+                    <div class="stat-label">Selected Perspectives</div>
+                    <div class="stat-value" id="modal-count">0</div>
+                </div>
+                <div class="summary-stat">
+                    <div class="stat-label">Estimated Coverage</div>
+                    <div class="stat-value" id="modal-coverage">0%</div>
+                </div>
+            </div>
+            <div class="deploy-list" id="deploy-list">
+                <!-- Selected perspectives will be listed here -->
+            </div>
+            <div class="deploy-actions">
+                <button class="modal-deploy-btn" id="confirm-deploy-btn">
+                    <span>⬇️</span> Download Configured Agent
+                </button>
+            </div>
+            <div class="deploy-note">
+                <strong>Note:</strong> You can modify your perspective selection anytime from the Agent Network dashboard.
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.selection-badge {
+    background: linear-gradient(135deg, rgba(0, 217, 255, 0.1) 0%, rgba(0, 184, 212, 0.1) 100%);
+    border: 2px solid #00d9ff;
+    color: #00d9ff;
+    padding: 0.5rem 1.25rem;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.deploy-button {
+    background: linear-gradient(135deg, #00d9ff 0%, #00b8d4 100%);
+    border: none;
+    color: #0a0f1e;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.deploy-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 217, 255, 0.4);
+}
+
+.deploy-button:disabled {
+    background: rgba(100, 100, 100, 0.3);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* Bundles Grid */
+.bundles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.25rem;
+}
+
+.bundle-card {
+    background: linear-gradient(135deg, rgba(10, 14, 39, 0.9) 0%, rgba(26, 31, 58, 0.9) 100%);
+    border: 2px solid rgba(0, 217, 255, 0.2);
+    border-radius: 12px;
+    padding: 1.75rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.bundle-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #00d9ff 0%, #00ff88 100%);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.bundle-card:hover {
+    border-color: #00d9ff;
+    transform: translateY(-6px);
+    box-shadow: 0 12px 35px rgba(0, 217, 255, 0.25);
+}
+
+.bundle-card:hover::before {
+    transform: scaleX(1);
+}
+
+.bundle-card.custom {
+    border-style: dashed;
+}
+
+.bundle-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: #00ff88;
+    color: #0a0f1e;
+    padding: 0.35rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.bundle-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    filter: drop-shadow(0 0 15px rgba(0, 217, 255, 0.5));
+}
+
+.bundle-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #00d9ff;
+    margin-bottom: 0.75rem;
+}
+
+.bundle-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+.bundle-count {
+    color: #00ff88;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+}
+
+.bundle-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.bundle-tags .tag {
+    background: rgba(0, 136, 255, 0.15);
+    border: 1px solid rgba(0, 136, 255, 0.3);
+    color: #0088ff;
+    padding: 0.25rem 0.6rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Filter and Controls */
+.filter-select {
+    background: rgba(26, 31, 58, 0.8);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.control-btn {
+    background: rgba(0, 217, 255, 0.1);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    color: #00d9ff;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.control-btn:hover {
+    background: rgba(0, 217, 255, 0.2);
+    border-color: #00d9ff;
+}
+
+/* Perspectives Grid */
+.perspectives-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
+}
+
+.perspective-card {
+    background: rgba(26, 31, 58, 0.6);
+    border: 2px solid rgba(0, 217, 255, 0.2);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.perspective-card:hover {
+    border-color: rgba(0, 217, 255, 0.5);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 217, 255, 0.2);
+}
+
+.perspective-card.selected {
+    border-color: #00ff88;
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.08) 0%, rgba(0, 217, 255, 0.05) 100%);
+    box-shadow: 0 0 25px rgba(0, 255, 136, 0.2);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+}
+
+.card-icon {
+    font-size: 2.5rem;
+    filter: drop-shadow(0 0 8px rgba(0, 217, 255, 0.4));
+}
+
+/* Custom Checkbox */
+.checkbox-wrapper {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.checkmark {
+    display: block;
+    width: 28px;
+    height: 28px;
+    background: rgba(26, 31, 58, 0.8);
+    border: 2px solid rgba(0, 217, 255, 0.4);
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.checkbox-wrapper:hover .checkmark {
+    border-color: #00d9ff;
+}
+
+.checkbox-wrapper input:checked ~ .checkmark {
+    background: linear-gradient(135deg, #00ff88 0%, #00d9ff 100%);
+    border-color: #00ff88;
+}
+
+.checkbox-wrapper input:checked ~ .checkmark::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #0a0f1e;
+    font-weight: 900;
+    font-size: 1.1rem;
+}
+
+.card-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #00d9ff;
+    margin-bottom: 0.75rem;
+}
+
+.card-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+.card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+}
+
+.meta-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+}
+
+.meta-label {
+    color: var(--text-muted);
+}
+
+.meta-value {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.card-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.tag-badge {
+    background: rgba(0, 255, 136, 0.12);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    color: #00ff88;
+    padding: 0.3rem 0.7rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Deploy Modal */
+.deploy-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.deploy-modal-content {
+    background: linear-gradient(135deg, rgba(10, 14, 39, 0.98) 0%, rgba(26, 31, 58, 0.98) 100%);
+    border: 2px solid #00d9ff;
+    border-radius: 16px;
+    max-width: 700px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 217, 255, 0.3);
+    animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.deploy-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem;
+    border-bottom: 1px solid rgba(0, 217, 255, 0.2);
+}
+
+.deploy-modal-header h3 {
+    font-size: 1.5rem;
+    color: #00d9ff;
+    margin: 0;
+}
+
+.close-btn {
+    background: rgba(255, 99, 102, 0.1);
+    border: 1px solid rgba(255, 99, 102, 0.3);
+    color: #ff6366;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.close-btn:hover {
+    background: rgba(255, 99, 102, 0.2);
+    transform: rotate(90deg);
+}
+
+.deploy-modal-body {
+    padding: 2rem;
+}
+
+.deploy-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.summary-stat {
+    background: rgba(0, 217, 255, 0.08);
+    border: 1px solid rgba(0, 217, 255, 0.25);
+    border-radius: 10px;
+    padding: 1.25rem;
+    text-align: center;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    color: #00d9ff;
+    font-size: 2rem;
+    font-weight: 900;
+    font-family: 'Courier New', monospace;
+}
+
+.deploy-list {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.deploy-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(0, 217, 255, 0.05);
+    border-radius: 8px;
+}
+
+.deploy-item-icon {
+    font-size: 1.5rem;
+}
+
+.deploy-item-name {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.deploy-actions {
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.modal-deploy-btn {
+    background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%);
+    border: none;
+    color: #0a0f1e;
+    padding: 1.25rem 2.5rem;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.3s ease;
+}
+
+.modal-deploy-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 35px rgba(0, 217, 255, 0.5);
+}
+
+.deploy-note {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .perspectives-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .bundles-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .deploy-summary {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+class Marketplace {
+    constructor() {
+        this.selectedPerspectives = new Set();
+        this.catalogData = [];
+        this.bundleData = {};
+        this.totalAgents = 0;
+        this.init();
+    }
+
+    async init() {
+        // Load catalog from API (single source of truth: AGENT_REGISTRY)
+        await this.loadCatalog();
+
+        // Deploy button
+        document.getElementById('deploy-button').addEventListener('click', () => this.deployAgent());
+
+        // Bundle cards
+        document.querySelector('.bundles-grid').addEventListener('click', (e) => {
+            const card = e.target.closest('[data-action]');
+            if (!card) return;
+            const action = card.dataset.action;
+            if (action === 'apply-bundle') this.applyBundle(card.dataset.bundle);
+            else if (action === 'scroll-to-catalog') this.scrollToCatalog();
+        });
+
+        // Category filter
+        document.getElementById('category-filter').addEventListener('change', () => this.filterPerspectives());
+
+        // Select All / Clear All
+        document.getElementById('select-all-btn').addEventListener('click', () => this.selectAll());
+        document.getElementById('clear-all-btn').addEventListener('click', () => this.clearAll());
+
+        // Checkbox changes via delegation
+        document.getElementById('perspective-catalog').addEventListener('change', (e) => {
+            if (e.target.matches('input[type="checkbox"]')) this.updateSelection();
+        });
+
+        // Deploy modal buttons
+        document.getElementById('deploy-modal-close-btn').addEventListener('click', () => this.closeDeployModal());
+        document.getElementById('confirm-deploy-btn').addEventListener('click', () => this.confirmDeploy());
+    }
+
+    async loadCatalog() {
+        try {
+            // Auto-detect platform from server
+            const preResp = await fetch('/api/onboarding/preflight');
+            const preData = await preResp.json();
+            const platform = preData.status === 'success' ? preData.detected_os : 'macos';
+
+            const resp = await fetch('/api/onboarding/catalog?platform=' + platform);
+            const data = await resp.json();
+            if (data.status === 'success') {
+                this.catalogData = data.catalog;
+                this.bundleData = data.bundles;
+                this.totalAgents = data.total_agents;
+                this.renderCatalog();
+                // Update category filter options from actual categories
+                const categories = [...new Set(data.catalog.map(a => a.category))];
+                const filterEl = document.getElementById('category-filter');
+                filterEl.innerHTML = '<option value="all">All Categories</option>' +
+                    categories.map(c => `<option value="${c}">${c.charAt(0).toUpperCase() + c.slice(1)}</option>`).join('');
+            }
+        } catch (e) {
+            document.getElementById('perspective-catalog').innerHTML =
+                '<div style="text-align:center;padding:3rem;color:#ff3366;grid-column:1/-1;">Failed to load catalog</div>';
+        }
+    }
+
+    renderCatalog(filter) {
+        const catalog = document.getElementById('perspective-catalog');
+        const agents = filter && filter !== 'all'
+            ? this.catalogData.filter(a => a.category === filter)
+            : this.catalogData;
+
+        catalog.innerHTML = agents.map(agent => {
+            const checked = this.selectedPerspectives.has(agent.id) ? 'checked' : '';
+            const selectedCls = checked ? ' selected' : '';
+            const platforms = agent.platforms.map(p =>
+                p === 'darwin' ? 'macOS' : p.charAt(0).toUpperCase() + p.slice(1)
+            ).join('/');
+            return `
+                <div class="perspective-card${selectedCls}" data-category="${agent.category}" data-id="${agent.id}">
+                    <div class="card-header">
+                        <div class="card-icon" style="font-size:2rem;">${agent.name.charAt(0)}</div>
+                        <label class="checkbox-wrapper">
+                            <input type="checkbox" id="perspective-${agent.id}" ${checked}>
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    <h4 class="card-title">${agent.name}</h4>
+                    <p class="card-desc">${agent.description}</p>
+                    <div class="card-meta">
+                        <span class="meta-item">
+                            <span class="meta-label">Category:</span>
+                            <span class="meta-value">${agent.category.charAt(0).toUpperCase() + agent.category.slice(1)}</span>
+                        </span>
+                        <span class="meta-item">
+                            <span class="meta-label">Probes:</span>
+                            <span class="meta-value">${agent.probes}</span>
+                        </span>
+                        <span class="meta-item">
+                            <span class="meta-label">Platform:</span>
+                            <span class="meta-value">${platforms}</span>
+                        </span>
+                    </div>
+                    <div class="card-tags">
+                        <span class="tag-badge">${agent.probes} probes</span>
+                        <span class="tag-badge">${agent.category}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    scrollToCatalog() {
+        document.getElementById('perspective-catalog').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    applyBundle(bundleName) {
+        const bundle = this.bundleData[bundleName];
+        if (!bundle) return;
+        this.clearAll();
+        bundle.agents.forEach((id, index) => {
+            setTimeout(() => {
+                const checkbox = document.getElementById(`perspective-${id}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    this.selectedPerspectives.add(id);
+                    this.updateUI();
+                }
+            }, index * 80);
+        });
+        setTimeout(() => this.scrollToCatalog(), bundle.agents.length * 80);
+    }
+
+    selectAll() {
+        document.querySelectorAll('.perspective-card input[type="checkbox"]').forEach((checkbox, index) => {
+            setTimeout(() => {
+                checkbox.checked = true;
+                const card = checkbox.closest('.perspective-card');
+                this.selectedPerspectives.add(card.dataset.id);
+                this.updateUI();
+            }, index * 40);
+        });
+    }
+
+    clearAll() {
+        document.querySelectorAll('.perspective-card input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+        this.selectedPerspectives.clear();
+        this.updateUI();
+    }
+
+    updateSelection() {
+        this.selectedPerspectives.clear();
+        document.querySelectorAll('.perspective-card input[type="checkbox"]:checked').forEach(cb => {
+            this.selectedPerspectives.add(cb.closest('.perspective-card').dataset.id);
+        });
+        this.updateUI();
+    }
+
+    updateUI() {
+        const count = this.selectedPerspectives.size;
+        const coverage = this.totalAgents > 0 ? Math.round((count / this.totalAgents) * 100) : 0;
+
+        document.getElementById('selection-count').textContent = count;
+        document.getElementById('deploy-button').disabled = count === 0;
+
+        document.querySelectorAll('.perspective-card').forEach(card => {
+            const cb = card.querySelector('input[type="checkbox"]');
+            card.classList.toggle('selected', cb && cb.checked);
+        });
+
+        document.getElementById('modal-count').textContent = count;
+        document.getElementById('modal-coverage').textContent = coverage + '%';
+    }
+
+    filterPerspectives() {
+        const filter = document.getElementById('category-filter').value;
+        this.renderCatalog(filter);
+    }
+
+    deployAgent() {
+        if (this.selectedPerspectives.size === 0) return;
+        const deployList = document.getElementById('deploy-list');
+        deployList.innerHTML = Array.from(this.selectedPerspectives).map(id => {
+            const agent = this.catalogData.find(a => a.id === id);
+            return `
+                <div class="deploy-item">
+                    <div class="deploy-item-icon">${agent ? agent.name.charAt(0) : '?'}</div>
+                    <div class="deploy-item-name">${agent ? agent.name : id}</div>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('deploy-modal').style.display = 'flex';
+    }
+
+    closeDeployModal() { document.getElementById('deploy-modal').style.display = 'none'; }
+
+    confirmDeploy() {
+        this.closeDeployModal();
+        window.location.href = '/dashboard/deploy';
+    }
+}
+
+let marketplace;
+document.addEventListener('DOMContentLoaded', () => { marketplace = new Marketplace(); });
+</script>
+{% endblock %}

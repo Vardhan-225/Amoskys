@@ -25,9 +25,14 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from amoskys.agents.auth.probes import AuthEvent
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-from amoskys.redteam.harness import AdversarialCase, CaseResult, Scenario, ScenarioResult
+from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.shared.auth.probes import AuthEvent
+from amoskys.redteam.harness import (
+    AdversarialCase,
+    CaseResult,
+    Scenario,
+    ScenarioResult,
+)
 
 # Earliest plausible timestamp (2023-01-01T00:00:00Z in nanoseconds)
 _T0_NS: int = int(1_672_531_200 * 1e9)
@@ -91,9 +96,7 @@ def _check_schema_auth(ae: AuthEvent) -> List[str]:
 def _check_schema_psutil_mock(patch_targets: Dict[str, Any]) -> List[str]:
     """Return schema gap notes for psutil patch_targets."""
     gaps: List[str] = []
-    proc_iter_key = next(
-        (k for k in patch_targets if "process_iter" in k), None
-    )
+    proc_iter_key = next((k for k in patch_targets if "process_iter" in k), None)
     if proc_iter_key is None:
         return gaps  # Not a psutil case
 
@@ -183,7 +186,9 @@ def _noise_present(scenario: Scenario) -> tuple[bool, List[str]]:
 # ─── L3: Story coherence ──────────────────────────────────────────────────────
 
 
-def _story_coherent(case: AdversarialCase, result: CaseResult) -> tuple[bool, List[str]]:
+def _story_coherent(
+    case: AdversarialCase, result: CaseResult
+) -> tuple[bool, List[str]]:
     """L3 — fired events carry at least one correlation_group:* tag.
 
     Evasion/benign cases with 0 events pass automatically.

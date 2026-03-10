@@ -38,6 +38,7 @@
                     <option value="audit_events">Kernel Audit Events</option>
                     <option value="persistence_events">Persistence Events</option>
                     <option value="fim_events">FIM Events</option>
+                    <option value="observation_events">Observation Events</option>
                 </select>
             </div>
             <div style="min-width: 100px;">
@@ -378,6 +379,8 @@ function renderResults(rows, table) {
         cols = ['id', 'timestamp_dt', 'mechanism_type', 'path', 'risk_score', 'is_suspicious', 'description'];
     } else if (table === 'fim_events') {
         cols = ['id', 'timestamp_dt', 'file_path', 'change_type', 'risk_score', 'is_suspicious', 'description'];
+    } else if (table === 'observation_events') {
+        cols = ['id', 'timestamp_dt', 'domain', 'event_type', 'risk_score', 'is_suspicious', 'attributes'];
     } else {
         cols = rows.length > 0 ? Object.keys(rows[0]).slice(0, 7) : ['id', 'timestamp_dt', 'event_type', 'risk_score'];
     }
@@ -418,8 +421,8 @@ function renderResults(rows, table) {
         }
         var eid = row.id || '';
         html += '<td style="white-space:nowrap;">'
-            + '<a href="/dashboard/timeline-replay?event_id=' + eid + '" style="color:var(--neural-primary);font-size:0.72rem;margin-right:0.5rem;text-decoration:none;" title="View in Timeline">Timeline</a>'
-            + '<a href="/dashboard/evidence-chain?event_id=' + eid + '" style="color:#00ff88;font-size:0.72rem;text-decoration:none;" title="Evidence Chain">Evidence</a>'
+            + '<a href="/dashboard/correlation?event_id=' + eid + '" style="color:var(--neural-primary);font-size:0.72rem;margin-right:0.5rem;text-decoration:none;" title="Correlate">Correlate</a>'
+            + '<a href="/dashboard/threat-feed?event_id=' + eid + '" style="color:#00ff88;font-size:0.72rem;text-decoration:none;" title="Threat Feed">Analyze</a>'
             + '</td>';
         html += '</tr>';
     }

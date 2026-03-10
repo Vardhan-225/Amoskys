@@ -1,0 +1,29 @@
+title: Application Error Rate Spike (DoS Indicator)
+id: amoskys-impact-002
+status: experimental
+level: medium
+description: Detects sudden spikes in application error rates (HTTP 5xx, exceptions, timeouts) that may indicate a denial-of-service attack or application-layer resource exhaustion
+author: AMOSKYS
+tags:
+    - attack.impact
+    - attack.t1499
+logsource:
+    category: application
+    product: amoskys
+detection:
+    selection:
+        event_type: error_spike_detected
+    condition: selection
+fields:
+    - service_name
+    - error_rate
+    - baseline_error_rate
+    - spike_factor
+    - http_status_code
+    - endpoint
+    - time_window
+falsepositives:
+    - Application deployments causing transient error spikes
+    - Upstream dependency failures cascading errors
+    - Scheduled load testing exercises
+confidence: 0.60

@@ -1,0 +1,27 @@
+title: Authentication Bypass Pattern Detected
+id: amoskys-cred-006
+status: stable
+level: critical
+description: Detects authentication bypass patterns such as token manipulation, session hijacking, or authentication flow circumvention indicating credential access via authentication mechanism modification
+author: AMOSKYS
+tags:
+    - attack.credential_access
+    - attack.t1556
+logsource:
+    category: authentication
+    product: amoskys
+detection:
+    selection:
+        event_type: auth_bypass_detected
+    condition: selection
+fields:
+    - username
+    - source_ip
+    - bypass_method
+    - auth_mechanism
+    - session_id
+falsepositives:
+    - Misconfigured SSO federation trust relationships
+    - Emergency break-glass account usage
+    - Authentication service failover to backup providers
+confidence: 0.85

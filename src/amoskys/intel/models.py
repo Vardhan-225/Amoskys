@@ -234,6 +234,7 @@ class TelemetryEventView:
     severity: str
     timestamp: datetime
     attributes: Dict[str, str] = field(default_factory=dict)
+    event_timestamp_ns: int = 0  # Raw probe-local detection time (nanoseconds)
 
     # Typed event bodies
     security_event: Optional[Dict] = None  # auth_type, result, user, source_ip, etc.
@@ -318,6 +319,7 @@ class TelemetryEventView:
             severity=pb_event.severity,
             timestamp=timestamp,
             attributes=attributes,
+            event_timestamp_ns=pb_event.event_timestamp_ns,
             security_event=security_event,
             audit_event=audit_event,
             process_event=process_event,

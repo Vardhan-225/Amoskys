@@ -1,0 +1,295 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Observation Domains — AMOSKYS{% endblock %}
+
+{% block content %}
+<style>
+    .obs-header { margin-bottom: 1.5rem; }
+    .obs-header h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .obs-header p { color: var(--text-secondary); font-size: 0.9rem; }
+    .domain-tabs {
+        display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+    }
+    .domain-tab {
+        padding: 0.5rem 1rem; border-radius: 20px; cursor: pointer;
+        border: 1px solid rgba(0,217,255,0.3); background: transparent;
+        color: var(--text-secondary); font-size: 0.85rem; transition: all 0.2s ease;
+        font-family: inherit;
+    }
+    .domain-tab:hover { border-color: var(--neural-primary); color: var(--neural-primary); }
+    .domain-tab.active {
+        background: rgba(0,217,255,0.15); border-color: var(--neural-primary);
+        color: var(--neural-primary); font-weight: 600;
+    }
+    .domain-tab .tab-count {
+        font-size: 0.7rem; color: var(--text-muted); margin-left: 0.25rem;
+    }
+    .domain-tab.active .tab-count { color: var(--neural-primary); }
+    .obs-stats {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem; margin-bottom: 1.5rem;
+    }
+    .obs-stat-card {
+        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px; padding: 1rem; text-align: center;
+    }
+    .obs-stat-value { font-size: 1.8rem; font-weight: 700; color: var(--neural-primary); }
+    .obs-stat-label { font-size: 0.8rem; color: var(--text-muted); }
+    .search-bar {
+        display: flex; gap: 0.75rem; margin-bottom: 1.5rem; align-items: center;
+    }
+    .search-input {
+        flex: 1; padding: 0.6rem 1rem; border-radius: 8px;
+        border: 1px solid rgba(0,217,255,0.3); background: var(--bg-tertiary);
+        color: var(--text-primary); font-size: 0.9rem; font-family: inherit;
+    }
+    .search-input:focus { outline: none; border-color: var(--neural-primary); box-shadow: 0 0 0 3px rgba(0,217,255,0.1); }
+    .search-btn {
+        padding: 0.6rem 1.25rem; border-radius: 8px; border: none;
+        background: var(--neural-primary); color: var(--bg-primary);
+        font-weight: 600; cursor: pointer; font-family: inherit;
+    }
+    .obs-table-container {
+        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px; overflow: hidden;
+    }
+    .obs-table { width: 100%; border-collapse: collapse; }
+    .obs-table th {
+        padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem;
+        color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;
+        border-bottom: 1px solid rgba(0,217,255,0.15);
+        background: var(--bg-tertiary);
+    }
+    .obs-table td {
+        padding: 0.6rem 1rem; font-size: 0.85rem; color: var(--text-secondary);
+        border-bottom: 1px solid rgba(0,217,255,0.05);
+    }
+    .obs-table tr:hover td { background: rgba(0,217,255,0.03); }
+    .obs-table .ts { font-family: monospace; font-size: 0.75rem; color: var(--neural-primary); white-space: nowrap; }
+    .attr-pill {
+        display: inline-block; padding: 0.1rem 0.4rem; border-radius: 6px;
+        font-size: 0.7rem; margin: 0.1rem; background: rgba(0,217,255,0.1);
+        color: var(--neural-primary); font-family: monospace;
+    }
+    .domain-badge {
+        display: inline-block; padding: 0.15rem 0.5rem; border-radius: 8px;
+        font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    }
+    .expand-btn {
+        cursor: pointer; color: var(--neural-primary); font-size: 0.8rem;
+        background: none; border: none; font-family: monospace;
+    }
+    .attr-expanded {
+        padding: 0.75rem; background: var(--bg-primary); border-radius: 6px;
+        font-family: monospace; font-size: 0.75rem; white-space: pre-wrap;
+        color: var(--text-secondary); max-height: 200px; overflow-y: auto;
+        margin-top: 0.5rem;
+    }
+    .pagination {
+        display: flex; justify-content: center; gap: 0.5rem;
+        padding: 1rem; align-items: center;
+    }
+    .page-btn {
+        padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid rgba(0,217,255,0.3);
+        background: transparent; color: var(--text-secondary); cursor: pointer; font-family: inherit;
+    }
+    .page-btn:hover { border-color: var(--neural-primary); color: var(--neural-primary); }
+    .page-btn:disabled { opacity: 0.3; cursor: default; }
+    .page-info { color: var(--text-muted); font-size: 0.85rem; }
+    .chart-container {
+        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;
+    }
+    .chart-title { font-size: 0.9rem; font-weight: 600; color: var(--neural-primary); margin-bottom: 0.75rem; }
+</style>
+
+<div class="dashboard-main">
+    <div class="obs-header">
+        <h1>Observation Domains</h1>
+        <p>Explore raw observations across all P3 agent domains</p>
+    </div>
+
+    <!-- Domain Tabs -->
+    <div class="domain-tabs" id="domainTabs"></div>
+
+    <!-- Stats -->
+    <div class="obs-stats" id="obsStats"></div>
+
+    <!-- Activity Chart -->
+    <div class="chart-container">
+        <div class="chart-title">Domain Activity</div>
+        <canvas id="activityChart" height="80"></canvas>
+    </div>
+
+    <!-- Search -->
+    <div class="search-bar">
+        <input type="text" class="search-input" id="searchInput" placeholder="Search observation attributes...">
+        <button class="search-btn" onclick="doSearch()">Search</button>
+    </div>
+
+    <!-- Table -->
+    <div class="obs-table-container">
+        <table class="obs-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Domain</th>
+                    <th>Type</th>
+                    <th>Key Attributes</th>
+                    <th>Risk</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="obsTableBody">
+                <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading observations...</td></tr>
+            </tbody>
+        </table>
+        <div class="pagination" id="pagination"></div>
+    </div>
+</div>
+
+<script>
+const DOMAIN_COLORS = {
+    unified_log: '#a855f7', discovery: '#06b6d4', internet_activity: '#f97316',
+    db_activity: '#00ff88', security_monitor: '#ff3366', http: '#ffaa00',
+};
+
+let currentDomain = null;
+let currentOffset = 0;
+const PAGE_SIZE = 50;
+let domainStats = {};
+let activityChart = null;
+
+async function loadStats() {
+    try {
+        const data = await DashboardCache.fetch('/dashboard/api/observations/stats?hours=24', 25);
+        domainStats = data.by_domain || {};
+        renderTabs(data);
+        renderStatsCards(data);
+    } catch (e) { console.error('Stats load failed:', e); }
+}
+
+function renderTabs(data) {
+    const tabs = document.getElementById('domainTabs');
+    const domains = Object.entries(data.by_domain || {}).sort((a, b) => b[1] - a[1]);
+    let html = `<button class="domain-tab ${!currentDomain ? 'active' : ''}" onclick="selectDomain(null)">All <span class="tab-count">${formatCount(data.total || 0)}</span></button>`;
+    domains.forEach(([d, count]) => {
+        const label = d.replace(/_/g, ' ');
+        html += `<button class="domain-tab ${currentDomain === d ? 'active' : ''}" onclick="selectDomain('${d}')">${label} <span class="tab-count">${formatCount(count)}</span></button>`;
+    });
+    tabs.innerHTML = html;
+}
+
+function renderStatsCards(data) {
+    const stats = document.getElementById('obsStats');
+    const domains = Object.entries(data.by_domain || {}).sort((a, b) => b[1] - a[1]);
+    let html = `<div class="obs-stat-card"><div class="obs-stat-value">${formatCount(data.total || 0)}</div><div class="obs-stat-label">Total Observations</div></div>`;
+    html += `<div class="obs-stat-card"><div class="obs-stat-value">${domains.length}</div><div class="obs-stat-label">Active Domains</div></div>`;
+    const topDomain = domains[0];
+    if (topDomain) {
+        html += `<div class="obs-stat-card"><div class="obs-stat-value">${formatCount(topDomain[1])}</div><div class="obs-stat-label">${topDomain[0].replace(/_/g, ' ')}</div></div>`;
+    }
+    stats.innerHTML = html;
+}
+
+function formatCount(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+    return n.toString();
+}
+
+function selectDomain(domain) {
+    currentDomain = domain;
+    currentOffset = 0;
+    loadStats();
+    loadObservations();
+}
+
+async function loadObservations() {
+    const body = document.getElementById('obsTableBody');
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading...</td></tr>';
+    const search = document.getElementById('searchInput').value;
+    try {
+        let url;
+        if (search) {
+            url = `/dashboard/api/observations/search?query=${encodeURIComponent(search)}&hours=24&limit=${PAGE_SIZE}`;
+            if (currentDomain) url += `&domain=${currentDomain}`;
+        } else if (currentDomain) {
+            url = `/dashboard/api/observations/${currentDomain}?hours=24&limit=${PAGE_SIZE}&offset=${currentOffset}`;
+        } else {
+            url = `/dashboard/api/observations/search?hours=24&limit=${PAGE_SIZE}`;
+        }
+        const data = await DashboardCache.fetch(url, 15);
+        renderTable(data);
+    } catch (e) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--neural-danger);">Failed to load</td></tr>';
+    }
+}
+
+function renderTable(data) {
+    const body = document.getElementById('obsTableBody');
+    const results = data.results || [];
+    if (results.length === 0) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No observations found</td></tr>';
+        document.getElementById('pagination').innerHTML = '';
+        return;
+    }
+    body.innerHTML = '';
+    results.forEach((obs, idx) => {
+        const ts = (obs.timestamp || '').replace('T', ' ').substring(0, 19);
+        const domain = obs.domain || '';
+        const color = DOMAIN_COLORS[domain] || '#6b7a99';
+        const attrs = obs.attributes || {};
+        const keys = Object.keys(attrs).slice(0, 4);
+        const pills = keys.map(k => `<span class="attr-pill">${k}: ${String(attrs[k]).substring(0, 30)}</span>`).join('');
+        const risk = obs.risk_score || 0;
+        const riskColor = risk > 0.7 ? 'var(--neural-danger)' : risk > 0.3 ? 'var(--neural-warning)' : risk > 0 ? 'var(--neural-success)' : 'var(--text-muted)';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="ts">${ts}</td>
+            <td><span class="domain-badge" style="background:${color}22;color:${color};border:1px solid ${color}44;">${domain.replace(/_/g, ' ')}</span></td>
+            <td style="color:var(--text-secondary)">${obs.event_type || ''}</td>
+            <td>${pills}${Object.keys(attrs).length > 4 ? '<span class="attr-pill">+' + (Object.keys(attrs).length - 4) + '</span>' : ''}</td>
+            <td style="color:${riskColor};font-weight:600">${risk > 0 ? risk.toFixed(2) : '-'}</td>
+            <td><button class="expand-btn" onclick="toggleExpand(this, ${idx})">[+]</button></td>
+        `;
+        tr.dataset.attrs = JSON.stringify(attrs, null, 2);
+        body.appendChild(tr);
+    });
+
+    // Pagination
+    const pag = document.getElementById('pagination');
+    const total = data.total_count || results.length;
+    pag.innerHTML = `
+        <button class="page-btn" onclick="prevPage()" ${currentOffset === 0 ? 'disabled' : ''}>Previous</button>
+        <span class="page-info">${currentOffset + 1}–${Math.min(currentOffset + PAGE_SIZE, total)} of ${formatCount(total)}</span>
+        <button class="page-btn" onclick="nextPage()" ${!data.has_more ? 'disabled' : ''}>Next</button>
+    `;
+}
+
+function toggleExpand(btn, idx) {
+    const tr = btn.closest('tr');
+    const next = tr.nextElementSibling;
+    if (next && next.classList.contains('expanded-row')) {
+        next.remove();
+        btn.textContent = '[+]';
+        return;
+    }
+    const expandTr = document.createElement('tr');
+    expandTr.className = 'expanded-row';
+    expandTr.innerHTML = `<td colspan="6"><div class="attr-expanded">${tr.dataset.attrs}</div></td>`;
+    tr.after(expandTr);
+    btn.textContent = '[-]';
+}
+
+function prevPage() { currentOffset = Math.max(0, currentOffset - PAGE_SIZE); loadObservations(); }
+function nextPage() { currentOffset += PAGE_SIZE; loadObservations(); }
+function doSearch() { currentOffset = 0; loadObservations(); }
+
+document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+loadStats();
+loadObservations();
+setInterval(function() { if (!document.hidden) { DashboardCache.invalidate('/dashboard/api/observations/'); loadStats(); } }, 30000);
+</script>
+{% endblock %}

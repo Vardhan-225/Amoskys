@@ -1,0 +1,29 @@
+title: Cloud Storage Exfiltration
+id: amoskys-exfil-001
+status: stable
+level: high
+description: Detects connections to cloud storage endpoints (S3, GCS, Azure Blob, Dropbox, OneDrive) that may indicate data exfiltration via cloud services
+author: AMOSKYS
+tags:
+    - attack.exfiltration
+    - attack.t1567
+logsource:
+    category: network
+    product: amoskys
+detection:
+    selection:
+        event_type: cloud_storage_connection
+    condition: selection
+fields:
+    - source_ip
+    - destination_ip
+    - destination_host
+    - cloud_provider
+    - bytes_sent
+    - pid
+    - process_name
+falsepositives:
+    - Legitimate cloud backup services
+    - Application deployments to cloud storage
+    - Developer uploads to artifact repositories
+confidence: 0.75

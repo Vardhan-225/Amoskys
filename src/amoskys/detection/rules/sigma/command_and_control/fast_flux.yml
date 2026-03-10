@@ -1,0 +1,27 @@
+title: Fast-Flux DNS Detected
+id: amoskys-c2-006
+status: stable
+level: high
+description: Detects fast-flux DNS behavior where domain resolutions rapidly rotate through multiple IP addresses indicating potential C2 infrastructure evasion
+author: AMOSKYS
+tags:
+    - attack.command_and_control
+    - attack.t1568.001
+logsource:
+    category: dns
+    product: amoskys
+detection:
+    selection:
+        event_type: fast_flux_detected
+    condition: selection
+fields:
+    - query_name
+    - resolved_ips
+    - flux_rate
+    - ttl_value
+    - source_ip
+falsepositives:
+    - CDN providers with round-robin DNS
+    - Load-balanced services with short TTL values
+    - GeoDNS configurations
+confidence: 0.75

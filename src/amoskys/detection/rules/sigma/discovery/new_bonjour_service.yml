@@ -1,0 +1,29 @@
+title: New Bonjour/mDNS Service Discovered
+id: amoskys-disc-004
+status: experimental
+level: medium
+description: Detects new or suspicious Bonjour/mDNS service advertisements on the local network indicating potential network discovery or rogue service deployment
+author: AMOSKYS
+tags:
+    - attack.discovery
+    - attack.t1046
+logsource:
+    category: network_connection
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - bonjour_new_service
+            - bonjour_suspicious_service
+    condition: selection
+fields:
+    - service_name
+    - service_type
+    - hostname
+    - port
+    - source_ip
+falsepositives:
+    - Legitimate new devices joining the network
+    - AirPlay and AirDrop service advertisements
+    - Printer and file sharing service discovery
+confidence: 0.50

@@ -1,0 +1,28 @@
+title: DNS Cache Poisoning Indicators
+id: amoskys-cred-005
+status: stable
+level: critical
+description: Detects DNS cache poisoning indicators via TTL anomalies such as suspiciously low TTL values that may indicate DNS spoofing or man-in-the-middle attacks
+author: AMOSKYS
+tags:
+    - attack.credential_access
+    - attack.t1557.002
+logsource:
+    category: dns
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - dns_ttl_anomaly
+            - dns_suspicious_low_ttl
+    condition: selection
+fields:
+    - query_name
+    - resolved_ip
+    - ttl_value
+    - dns_server
+    - source_ip
+falsepositives:
+    - CDN providers with legitimately low TTL values
+    - Dynamic DNS services
+confidence: 0.80

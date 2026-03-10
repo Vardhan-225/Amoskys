@@ -21,9 +21,14 @@ def create_app():
     app.config["DEBUG"] = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
     app.config["TESTING"] = os.environ.get("TESTING", "False").lower() == "true"
 
+    # Bypass @require_login — opt-in via LOGIN_DISABLED=true env var
+    # (Not auto-enabled in debug to allow testing real auth flows)
+    is_dev = app.config["DEBUG"] or app.config["TESTING"]
+    if os.environ.get("LOGIN_DISABLED", "").lower() == "true":
+        app.config["LOGIN_DISABLED"] = True
+
     # Configure SECRET_KEY — required in all environments
     secret_key = os.environ.get("SECRET_KEY")
-    is_dev = app.config["DEBUG"] or app.config["TESTING"]
 
     if not secret_key:
         if is_dev:

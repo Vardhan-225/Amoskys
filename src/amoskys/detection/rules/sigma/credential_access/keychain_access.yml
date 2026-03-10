@@ -1,0 +1,31 @@
+title: macOS Keychain Access Attempt
+id: amoskys-cred-002
+status: stable
+level: high
+description: Detects unauthorized keychain access via security CLI dump-keychain or sqlite3 on keychain databases
+author: AMOSKYS
+tags:
+    - attack.credential_access
+    - attack.t1555.001
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - keychain_access
+            - credential_dump
+        process_name:
+            - security
+            - sqlite3
+    condition: selection
+fields:
+    - process_name
+    - cmdline
+    - pid
+    - uid
+    - target_keychain
+falsepositives:
+    - Legitimate keychain management by system administrators
+    - Backup software accessing keychains
+confidence: 0.90

@@ -1,0 +1,26 @@
+title: SUID Binary Execution from Non-Standard Path
+id: amoskys-pe-002
+status: stable
+level: high
+description: Detects execution of SUID binaries from non-standard paths indicating potential privilege escalation via setuid/setgid binary exploitation
+author: AMOSKYS
+tags:
+    - attack.privilege_escalation
+    - attack.t1548.001
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection:
+        event_type: suid_execution
+    condition: selection
+fields:
+    - binary_path
+    - username
+    - pid
+    - parent_process
+    - file_permissions
+falsepositives:
+    - Custom-installed administrative tools with SUID bit
+    - Vendor-provided utilities in non-standard paths
+confidence: 0.75

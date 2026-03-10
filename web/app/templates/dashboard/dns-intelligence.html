@@ -1,0 +1,972 @@
+{% extends "dashboard/base.html" %}
+{% block title %}DNS Intelligence — AMOSKYS{% endblock %}
+
+{% block content %}
+<style>
+    /* ── Metrics Grid ────────────────────────────────────────── */
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    .metric-card {
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px;
+        padding: 1.25rem;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--neural-primary), var(--neural-secondary));
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,217,255,0.15);
+        border-color: var(--neural-primary);
+    }
+    .metric-card-icon { font-size: 1.4rem; margin-bottom: 0.5rem; }
+    .metric-card-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--neural-primary);
+        line-height: 1;
+    }
+    .metric-card-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 0.35rem;
+    }
+    .metric-card-delta {
+        position: absolute;
+        top: 1rem; right: 1rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.15rem 0.5rem;
+        border-radius: 8px;
+    }
+    .delta-up   { background: rgba(255,51,102,0.15); color: var(--neural-danger); }
+    .delta-down { background: rgba(0,255,136,0.15);  color: var(--neural-success); }
+    .delta-flat { background: rgba(107,122,153,0.15); color: var(--text-muted); }
+
+    /* ── NLP Summary ─────────────────────────────────────────── */
+    .dns-nlp-summary {
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 2rem;
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        line-height: 1.7;
+    }
+    .dns-nlp-summary strong { color: var(--neural-primary); }
+
+    /* ── Section Title ───────────────────────────────────────── */
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--neural-primary);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* ── Two-Column Layout ───────────────────────────────────── */
+    .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    /* ── Panel (shared card style) ───────────────────────────── */
+    .dns-panel {
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px;
+        padding: 1.25rem;
+        overflow: hidden;
+    }
+    .dns-panel:hover {
+        border-color: rgba(0,217,255,0.35);
+    }
+
+    /* ── Tables ──────────────────────────────────────────────── */
+    .dns-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+    }
+    .dns-table thead th {
+        text-align: left;
+        padding: 0.6rem 0.75rem;
+        color: var(--text-muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.7rem;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid rgba(0,217,255,0.15);
+    }
+    .dns-table tbody td {
+        padding: 0.55rem 0.75rem;
+        color: var(--text-secondary);
+        border-bottom: 1px solid rgba(0,217,255,0.06);
+        font-family: 'Inter', monospace;
+    }
+    .dns-table tbody tr:hover {
+        background: rgba(0,217,255,0.04);
+    }
+    .dns-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    /* ── DGA Score Bar ───────────────────────────────────────── */
+    .dga-bar-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .dga-bar-track {
+        flex: 1;
+        height: 8px;
+        background: rgba(255,255,255,0.06);
+        border-radius: 4px;
+        overflow: hidden;
+        min-width: 60px;
+    }
+    .dga-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.6s ease;
+    }
+    .dga-bar-value {
+        font-size: 0.75rem;
+        font-weight: 600;
+        min-width: 32px;
+        text-align: right;
+        font-family: monospace;
+    }
+
+    /* ── Beaconing list ──────────────────────────────────────── */
+    .beacon-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        max-height: 380px;
+        overflow-y: auto;
+    }
+    .beacon-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.65rem 0;
+        border-bottom: 1px solid rgba(0,217,255,0.06);
+        font-size: 0.85rem;
+    }
+    .beacon-item:last-child { border-bottom: none; }
+    .beacon-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: var(--neural-warning);
+        box-shadow: 0 0 6px rgba(240,173,78,0.5);
+        flex-shrink: 0;
+        animation: beacon-pulse 2s ease-in-out infinite;
+    }
+    @keyframes beacon-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+    .beacon-domain {
+        flex: 1;
+        color: var(--text-primary);
+        font-family: monospace;
+        font-size: 0.82rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .beacon-meta {
+        display: flex;
+        gap: 1rem;
+        flex-shrink: 0;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+    .beacon-meta span { white-space: nowrap; }
+    .beacon-meta .label { color: var(--text-muted); }
+    .beacon-meta .value { color: var(--neural-warning); font-weight: 600; }
+
+    /* ── Chart Container ─────────────────────────────────────── */
+    .chart-container {
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-bottom: 2rem;
+    }
+    .chart-wrapper {
+        position: relative;
+        height: 280px;
+    }
+
+    /* ── Search / Pagination ─────────────────────────────────── */
+    .table-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.75rem;
+    }
+    .table-search {
+        background: var(--bg-tertiary);
+        border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 8px;
+        padding: 0.4rem 0.75rem;
+        color: var(--text-primary);
+        font-size: 0.82rem;
+        outline: none;
+        width: 220px;
+        transition: border-color 0.2s ease;
+    }
+    .table-search:focus {
+        border-color: var(--neural-primary);
+        box-shadow: 0 0 0 2px rgba(0,217,255,0.1);
+    }
+    .table-search::placeholder { color: var(--text-muted); }
+    .pagination {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .pagination button {
+        background: var(--bg-tertiary);
+        border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 6px;
+        color: var(--neural-primary);
+        padding: 0.3rem 0.65rem;
+        font-size: 0.78rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .pagination button:hover:not(:disabled) {
+        background: rgba(0,217,255,0.1);
+        border-color: var(--neural-primary);
+    }
+    .pagination button:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+    .pagination .page-info {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Beaconing flag ──────────────────────────────────────── */
+    .flag-beacon {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 8px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .flag-yes { background: rgba(240,173,78,0.2); color: var(--neural-warning); }
+    .flag-no  { background: rgba(107,122,153,0.12); color: var(--text-muted); }
+
+    /* ── Doughnut legend ─────────────────────────────────────── */
+    .doughnut-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+        height: 280px;
+    }
+    .doughnut-canvas-wrap {
+        width: 220px;
+        height: 220px;
+        flex-shrink: 0;
+    }
+    .doughnut-legend {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .doughnut-legend li {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+    }
+    .legend-swatch {
+        width: 12px; height: 12px;
+        border-radius: 3px;
+        flex-shrink: 0;
+    }
+    .legend-count {
+        margin-left: auto;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-family: monospace;
+        padding-left: 1rem;
+    }
+
+    /* ── Scrollbar styling ───────────────────────────────────── */
+    .dns-panel::-webkit-scrollbar,
+    .beacon-list::-webkit-scrollbar {
+        width: 4px;
+    }
+    .dns-panel::-webkit-scrollbar-track,
+    .beacon-list::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .dns-panel::-webkit-scrollbar-thumb,
+    .beacon-list::-webkit-scrollbar-thumb {
+        background: rgba(0,217,255,0.2);
+        border-radius: 2px;
+    }
+
+    /* ── High-risk row highlight ─────────────────────────────── */
+    .row-danger td { color: var(--neural-danger) !important; }
+
+    /* ── Responsive ──────────────────────────────────────────── */
+    @media (max-width: 1100px) {
+        .metrics-grid { grid-template-columns: repeat(3, 1fr); }
+        .two-col { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+        .metrics-grid { grid-template-columns: 1fr 1fr; }
+        .doughnut-wrapper { flex-direction: column; }
+    }
+</style>
+
+<div class="dashboard-main">
+
+    <!-- ── Stats Bar ──────────────────────────────────────────── -->
+    <div class="metrics-grid" id="metricsGrid">
+        <div class="metric-card">
+            <div class="metric-card-icon">🔍</div>
+            <div class="metric-card-value" id="statTotalQueries"><span class="skeleton" style="display:inline-block;width:60px;height:1.8rem;"></span></div>
+            <div class="metric-card-label">Total Queries</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-card-icon">🌐</div>
+            <div class="metric-card-value" id="statUniqueDomains"><span class="skeleton" style="display:inline-block;width:50px;height:1.8rem;"></span></div>
+            <div class="metric-card-label">Unique Domains</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-card-icon">🧬</div>
+            <div class="metric-card-value" id="statDgaSuspects" style="color: var(--neural-danger);"><span class="skeleton" style="display:inline-block;width:40px;height:1.8rem;"></span></div>
+            <div class="metric-card-label">DGA Suspects</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-card-icon">📡</div>
+            <div class="metric-card-value" id="statBeaconing" style="color: var(--neural-warning);"><span class="skeleton" style="display:inline-block;width:40px;height:1.8rem;"></span></div>
+            <div class="metric-card-label">Beaconing Domains</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-card-icon">🚫</div>
+            <div class="metric-card-value" id="statNxdomain"><span class="skeleton" style="display:inline-block;width:50px;height:1.8rem;"></span></div>
+            <div class="metric-card-label">NXDOMAIN Count</div>
+        </div>
+    </div>
+
+    <!-- ── Natural Language Summary ───────────────────────────── -->
+    <div class="dns-nlp-summary" id="dnsSummary">
+        <span class="skeleton" style="display:inline-block;width:100%;height:0.9rem;margin-bottom:0.4rem;"></span>
+        <span class="skeleton" style="display:inline-block;width:85%;height:0.9rem;margin-bottom:0.4rem;"></span>
+        <span class="skeleton" style="display:inline-block;width:60%;height:0.9rem;"></span>
+    </div>
+
+    <!-- ── Top Section: DGA Detection + Beaconing ─────────────── -->
+    <div class="two-col">
+        <!-- DGA Detection Table -->
+        <div class="dns-panel">
+            <div class="section-title">DGA Detection</div>
+            <div style="max-height: 400px; overflow-y: auto;">
+                <table class="dns-table" id="dgaTable">
+                    <thead>
+                        <tr>
+                            <th>Domain</th>
+                            <th>DGA Score</th>
+                            <th>Process</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dgaBody">
+                        <tr><td colspan="4" style="padding:0.6rem 0.75rem;"><span class="skeleton" style="display:block;width:100%;height:0.85rem;"></span></td></tr>
+                        <tr><td colspan="4" style="padding:0.6rem 0.75rem;"><span class="skeleton" style="display:block;width:90%;height:0.85rem;"></span></td></tr>
+                        <tr><td colspan="4" style="padding:0.6rem 0.75rem;"><span class="skeleton" style="display:block;width:95%;height:0.85rem;"></span></td></tr>
+                        <tr><td colspan="4" style="padding:0.6rem 0.75rem;"><span class="skeleton" style="display:block;width:80%;height:0.85rem;"></span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Beaconing Panel -->
+        <div class="dns-panel">
+            <div class="section-title">Beaconing Detection</div>
+            <ul class="beacon-list" id="beaconList">
+                <li style="padding:0.65rem 0;"><span class="skeleton" style="display:block;width:100%;height:0.85rem;"></span></li>
+                <li style="padding:0.65rem 0;"><span class="skeleton" style="display:block;width:90%;height:0.85rem;"></span></li>
+                <li style="padding:0.65rem 0;"><span class="skeleton" style="display:block;width:95%;height:0.85rem;"></span></li>
+                <li style="padding:0.65rem 0;"><span class="skeleton" style="display:block;width:85%;height:0.85rem;"></span></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- ── Query Timeline (full width) ───────────────────────── -->
+    <div class="chart-container">
+        <div class="section-title">DNS Query Timeline (24h)</div>
+        <div class="chart-wrapper" id="timelineWrapper">
+            <div id="timelineSkeleton" style="display:flex;align-items:flex-end;gap:4px;height:100%;padding:1rem 0;">
+                <span class="skeleton" style="flex:1;height:40%;"></span>
+                <span class="skeleton" style="flex:1;height:65%;"></span>
+                <span class="skeleton" style="flex:1;height:50%;"></span>
+                <span class="skeleton" style="flex:1;height:80%;"></span>
+                <span class="skeleton" style="flex:1;height:35%;"></span>
+                <span class="skeleton" style="flex:1;height:70%;"></span>
+                <span class="skeleton" style="flex:1;height:55%;"></span>
+                <span class="skeleton" style="flex:1;height:90%;"></span>
+                <span class="skeleton" style="flex:1;height:45%;"></span>
+                <span class="skeleton" style="flex:1;height:60%;"></span>
+                <span class="skeleton" style="flex:1;height:75%;"></span>
+                <span class="skeleton" style="flex:1;height:30%;"></span>
+            </div>
+            <canvas id="timelineChart" style="display:none;"></canvas>
+        </div>
+    </div>
+
+    <!-- ── Bottom Section: Top Domains + Response Codes ───────── -->
+    <div class="two-col" id="bottomSection">
+        <!-- Top Domains Table -->
+        <div class="dns-panel" id="topDomainsPanel">
+            <div class="section-title">Top Domains</div>
+            <div class="table-controls">
+                <input type="text" class="table-search" id="domainSearch" placeholder="Search domains...">
+                <div class="pagination" id="domainPagination">
+                    <button id="btnPrev" disabled>&larr; Prev</button>
+                    <span class="page-info" id="pageInfo">1 / 1</span>
+                    <button id="btnNext" disabled>Next &rarr;</button>
+                </div>
+            </div>
+            <table class="dns-table" id="topDomainsTable">
+                <thead>
+                    <tr>
+                        <th>Domain</th>
+                        <th>Count</th>
+                        <th>Process</th>
+                        <th>DGA</th>
+                        <th>Beacon</th>
+                    </tr>
+                </thead>
+                <tbody id="topDomainsBody">
+                    <tr><td colspan="5" style="padding:0.55rem 0.75rem;"><span class="skeleton" style="display:block;width:100%;height:0.85rem;"></span></td></tr>
+                    <tr><td colspan="5" style="padding:0.55rem 0.75rem;"><span class="skeleton" style="display:block;width:92%;height:0.85rem;"></span></td></tr>
+                    <tr><td colspan="5" style="padding:0.55rem 0.75rem;"><span class="skeleton" style="display:block;width:88%;height:0.85rem;"></span></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Response Code Distribution -->
+        <div class="dns-panel" id="rcodePanel">
+            <div class="section-title">Response Code Distribution</div>
+            <div class="doughnut-wrapper">
+                <div class="doughnut-canvas-wrap">
+                    <canvas id="rcodeChart"></canvas>
+                </div>
+                <ul class="doughnut-legend" id="rcodeLegend"></ul>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<script>
+/* ────────────────────────────────────────────────────────────────
+   DNS Intelligence — optimized with DashboardCache, DashboardPoller,
+   LazyLoader, shared formatters, and loading skeletons.
+   ──────────────────────────────────────────────────────────────── */
+
+const HOURS = 24;
+const PAGE_SIZE = 15;
+let allDomains = [];
+let filteredDomains = [];
+let currentPage = 0;
+
+/* ── API URLs ────────────────────────────────────────────────── */
+const API = {
+    stats:      `/dashboard/api/dns/stats?hours=${HOURS}`,
+    dga:        `/dashboard/api/dns/dga?hours=${HOURS}&min_score=0.5&limit=50`,
+    beaconing:  `/dashboard/api/dns/beaconing?hours=${HOURS}&limit=50`,
+    timeline:   `/dashboard/api/dns/timeline?hours=${HOURS}`,
+    topDomains: `/dashboard/api/dns/top-domains?hours=${HOURS}&limit=20`,
+};
+
+/* ── helpers — delegating to dashboard-core.js shared utilities ─ */
+function truncDomain(d, max) {
+    max = max || 32;
+    return d && d.length > max ? d.substring(0, max) + '...' : (d || '');
+}
+
+function dgaColor(score) {
+    // Use riskColor for scores >=0.7 (critical/high), else map to CSS vars
+    if (score >= 0.7) return riskColor(score);
+    if (score >= 0.4) return 'var(--neural-warning)';
+    return 'var(--neural-success)';
+}
+
+function shortTs(ts) {
+    if (!ts) return '';
+    // If it's an ISO string, display a compact form
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return ts.replace('T', ' ').substring(0, 19);
+    return d.toLocaleString(undefined, {
+        month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+    });
+}
+
+/* ── Stats + NLP Summary ─────────────────────────────────────── */
+function renderStats(s) {
+    document.getElementById('statTotalQueries').textContent = formatNumber(s.total_queries || 0);
+    document.getElementById('statUniqueDomains').textContent = formatNumber(s.unique_domains || 0);
+    document.getElementById('statDgaSuspects').textContent = formatNumber(s.dga_suspects || 0);
+    document.getElementById('statBeaconing').textContent = formatNumber(s.beaconing_domains || 0);
+    document.getElementById('statNxdomain').textContent = formatNumber(s.nxdomain_count || 0);
+
+    renderNlpSummary(s);
+}
+
+function renderNlpSummary(s) {
+    const total  = s.total_queries || 0;
+    const unique = s.unique_domains || 0;
+    const dga    = s.dga_suspects || 0;
+    const beacon = s.beaconing_domains || 0;
+    const nxd    = s.nxdomain_count || 0;
+
+    const parts = [];
+
+    // Opening sentence with query volume assessment
+    const qpsApprox = total > 0 ? (total / 24).toFixed(0) : 0;
+    parts.push(
+        `Over the last <strong>24 hours</strong>, AMOSKYS observed <strong>${formatNumber(total)}</strong> DNS queries ` +
+        `(~${formatNumber(qpsApprox)}/hr) resolving <strong>${formatNumber(unique)}</strong> unique domains.`
+    );
+
+    // Threat assessment
+    const threatLevel = (dga >= 5 || beacon >= 3) ? 'elevated'
+                      : (dga > 0 || beacon > 0)   ? 'low-grade'
+                      : 'nominal';
+
+    if (threatLevel === 'elevated') {
+        parts.push(
+            `<strong style="color:var(--neural-danger);">Threat level: Elevated.</strong> ` +
+            `Multiple indicators suggest active adversary infrastructure.`
+        );
+    } else if (threatLevel === 'low-grade') {
+        parts.push(`Threat level is <strong>low-grade</strong> with isolated anomalies requiring analyst review.`);
+    }
+
+    // DGA detail
+    if (dga > 0) {
+        parts.push(
+            `<strong>${dga}</strong> domain${dga > 1 ? 's exhibit' : ' exhibits'} DGA characteristics ` +
+            `(high entropy, algorithmically generated patterns) — consistent with malware C2 domain rotation.`
+        );
+    } else {
+        parts.push('No algorithmically generated domains (DGA) were detected.');
+    }
+
+    // Beaconing detail
+    if (beacon > 0) {
+        parts.push(
+            `<strong>${beacon}</strong> domain${beacon > 1 ? 's show' : ' shows'} ` +
+            `periodic beaconing behavior at fixed intervals, a hallmark of command-and-control callbacks.`
+        );
+    }
+
+    // NXDOMAIN analysis
+    if (nxd > 0 && total > 0) {
+        const nxdPct = ((nxd / total) * 100).toFixed(1);
+        if (nxd / total > 0.15) {
+            parts.push(
+                `NXDOMAIN responses are <strong style="color:var(--neural-danger);">significantly elevated</strong> at ` +
+                `<strong>${formatNumber(nxd)}</strong> (${nxdPct}% of all queries), strongly suggesting DGA probing or DNS-based reconnaissance.`
+            );
+        } else if (nxd / total > 0.05) {
+            parts.push(
+                `NXDOMAIN rate is moderately elevated at <strong>${formatNumber(nxd)}</strong> (${nxdPct}%), ` +
+                `worth monitoring for sustained increases.`
+            );
+        }
+    }
+
+    // Clean bill if nothing suspicious
+    if (dga === 0 && beacon === 0 && (nxd === 0 || nxd / total <= 0.05)) {
+        parts.push('DNS resolution patterns appear <strong style="color:var(--neural-success);">healthy</strong> with no anomalous activity detected.');
+    }
+
+    document.getElementById('dnsSummary').innerHTML = parts.join(' ');
+}
+
+/* ── DGA Table ────────────────────────────────────────────────── */
+function renderDGA(data) {
+    const body = document.getElementById('dgaBody');
+
+    if (!data || !data.length) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">No DGA suspects detected</td></tr>';
+        return;
+    }
+
+    body.innerHTML = '';
+    data.forEach(row => {
+        const score = row.dga_score || 0;
+        const color = dgaColor(score);
+        const tr = document.createElement('tr');
+        if (score > 0.7) tr.className = 'row-danger';
+        tr.innerHTML = `
+            <td title="${row.domain || ''}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.8rem;">${truncDomain(row.domain, 28)}</td>
+            <td>
+                <div class="dga-bar-wrapper">
+                    <div class="dga-bar-track">
+                        <div class="dga-bar-fill" style="width:${(score * 100).toFixed(0)}%;background:${color};"></div>
+                    </div>
+                    <span class="dga-bar-value" style="color:${color};">${score.toFixed(2)}</span>
+                </div>
+            </td>
+            <td style="font-size:0.8rem;">${row.process || '—'}</td>
+            <td style="font-family:monospace;font-size:0.75rem;white-space:nowrap;">${shortTs(row.timestamp)}</td>
+        `;
+        body.appendChild(tr);
+    });
+}
+
+/* ── Beaconing Panel ──────────────────────────────────────────── */
+function renderBeaconing(data) {
+    const list = document.getElementById('beaconList');
+
+    if (!data || !data.length) {
+        list.innerHTML = '<li style="text-align:center;padding:2rem;color:var(--text-muted);">No beaconing domains detected</li>';
+        return;
+    }
+
+    list.innerHTML = '';
+    data.forEach(b => {
+        const li = document.createElement('li');
+        li.className = 'beacon-item';
+        li.innerHTML = `
+            <span class="beacon-dot"></span>
+            <span class="beacon-domain" title="${b.domain || ''}">${truncDomain(b.domain, 36)}</span>
+            <div class="beacon-meta">
+                <span><span class="label">Interval: </span><span class="value">${b.interval_seconds || b.interval || '—'}s</span></span>
+                <span><span class="label">Queries: </span><span class="value">${formatNumber(b.query_count || 0)}</span></span>
+            </div>
+        `;
+        list.appendChild(li);
+    });
+}
+
+/* ── Timeline Chart ───────────────────────────────────────────── */
+let timelineChartInstance = null;
+
+function renderTimeline(data) {
+    let labels = (data.labels || data.map(d => d.hour || d.label || '')).slice();
+    let values = (data.values || data.counts || data.map(d => d.count || 0)).slice();
+    let suspicious = (data.suspicious || data.map(d => d.suspicious_count || 0)).slice();
+
+    // Cap at 48 data points (hourly buckets) for readability
+    const MAX_POINTS = 48;
+    if (labels.length > MAX_POINTS) {
+        const step = Math.ceil(labels.length / MAX_POINTS);
+        const bucketedLabels = [], bucketedValues = [], bucketedSuspicious = [];
+        for (let i = 0; i < labels.length; i += step) {
+            bucketedLabels.push(labels[i]);
+            let vSum = 0, sSum = 0;
+            for (let j = i; j < Math.min(i + step, labels.length); j++) {
+                vSum += (values[j] || 0);
+                sSum += (suspicious[j] || 0);
+            }
+            bucketedValues.push(vSum);
+            bucketedSuspicious.push(sSum);
+        }
+        labels = bucketedLabels;
+        values = bucketedValues;
+        suspicious = bucketedSuspicious;
+    }
+
+    // Hide skeleton, show canvas
+    const skeleton = document.getElementById('timelineSkeleton');
+    const canvas = document.getElementById('timelineChart');
+    if (skeleton) skeleton.style.display = 'none';
+    canvas.style.display = 'block';
+
+    const ctx = canvas.getContext('2d');
+    if (timelineChartInstance) timelineChartInstance.destroy();
+
+    timelineChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Total Queries',
+                    data: values,
+                    borderColor: 'rgba(0,217,255,0.9)',
+                    backgroundColor: 'rgba(0,217,255,0.08)',
+                    fill: true,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                },
+                {
+                    label: 'Suspicious',
+                    data: suspicious,
+                    borderColor: 'rgba(255,51,102,0.9)',
+                    backgroundColor: 'rgba(255,51,102,0.08)',
+                    fill: true,
+                    borderWidth: 2,
+                    borderDash: [4, 3],
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                }
+            ]
+        },
+        options: {
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: {
+                    ticks: { maxRotation: 45 },
+                },
+                y: {
+                    beginAtZero: true,
+                }
+            }
+        }
+    });
+}
+
+/* ── Top Domains (paginated + searchable) ─────────────────────── */
+function renderTopDomainsData(data) {
+    allDomains = Array.isArray(data) ? data : (data.domains || []);
+    filteredDomains = allDomains.slice();
+    currentPage = 0;
+    renderDomainPage();
+}
+
+function renderDomainPage() {
+    const body = document.getElementById('topDomainsBody');
+    const totalPages = Math.max(1, Math.ceil(filteredDomains.length / PAGE_SIZE));
+    if (currentPage >= totalPages) currentPage = totalPages - 1;
+    if (currentPage < 0) currentPage = 0;
+
+    const start = currentPage * PAGE_SIZE;
+    const slice = filteredDomains.slice(start, start + PAGE_SIZE);
+
+    if (!slice.length) {
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted);">No matching domains</td></tr>';
+    } else {
+        body.innerHTML = '';
+        slice.forEach(row => {
+            const score = row.dga_score || 0;
+            const color = dgaColor(score);
+            const isBeacon = row.beaconing || row.is_beaconing || false;
+            const tr = document.createElement('tr');
+            if (score > 0.7) tr.className = 'row-danger';
+            tr.innerHTML = `
+                <td title="${row.domain || ''}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.8rem;">${truncDomain(row.domain, 30)}</td>
+                <td style="font-weight:600;color:var(--neural-primary);">${formatNumber(row.count || 0)}</td>
+                <td style="font-size:0.8rem;">${row.process || '—'}</td>
+                <td>
+                    <div class="dga-bar-wrapper">
+                        <div class="dga-bar-track" style="min-width:40px;">
+                            <div class="dga-bar-fill" style="width:${(score * 100).toFixed(0)}%;background:${color};"></div>
+                        </div>
+                        <span class="dga-bar-value" style="color:${color};font-size:0.7rem;">${score.toFixed(2)}</span>
+                    </div>
+                </td>
+                <td><span class="flag-beacon ${isBeacon ? 'flag-yes' : 'flag-no'}">${isBeacon ? 'Yes' : 'No'}</span></td>
+            `;
+            body.appendChild(tr);
+        });
+    }
+
+    // Update pagination controls
+    document.getElementById('pageInfo').textContent = `${currentPage + 1} / ${totalPages}`;
+    document.getElementById('btnPrev').disabled = currentPage <= 0;
+    document.getElementById('btnNext').disabled = currentPage >= totalPages - 1;
+}
+
+/* ── Response Code Doughnut ───────────────────────────────────── */
+let rcodeChartInstance = null;
+
+function renderRcodeChart(stats) {
+    const rcodes = stats.response_codes || stats.rcodes || {};
+    const labels = Object.keys(rcodes);
+    const values = Object.values(rcodes);
+    const palette = ['#00d9ff', '#ff3366', '#00ff88', '#f0ad4e', '#a855f7', '#06b6d4', '#8b5cf6', '#f97316'];
+
+    const ctx = document.getElementById('rcodeChart').getContext('2d');
+    if (rcodeChartInstance) rcodeChartInstance.destroy();
+
+    rcodeChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: labels.map((_, i) => palette[i % palette.length]),
+                borderColor: '#0a0e27',
+                borderWidth: 2,
+                hoverBorderColor: '#ffffff',
+                hoverBorderWidth: 2,
+            }]
+        },
+        options: {
+            cutout: '65%',
+            plugins: {
+                legend: { display: false },
+            }
+        }
+    });
+
+    // Custom legend
+    const legend = document.getElementById('rcodeLegend');
+    legend.innerHTML = '';
+    labels.forEach((label, i) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <span class="legend-swatch" style="background:${palette[i % palette.length]};"></span>
+            <span>${label}</span>
+            <span class="legend-count">${formatNumber(values[i])}</span>
+        `;
+        legend.appendChild(li);
+    });
+}
+
+/* ── Search handler ───────────────────────────────────────────── */
+document.getElementById('domainSearch').addEventListener('input', function() {
+    const q = this.value.toLowerCase().trim();
+    filteredDomains = q
+        ? allDomains.filter(d => (d.domain || '').toLowerCase().includes(q) || (d.process || '').toLowerCase().includes(q))
+        : allDomains.slice();
+    currentPage = 0;
+    renderDomainPage();
+});
+
+/* ── Pagination handlers ──────────────────────────────────────── */
+document.getElementById('btnPrev').addEventListener('click', function() {
+    if (currentPage > 0) { currentPage--; renderDomainPage(); }
+});
+document.getElementById('btnNext').addEventListener('click', function() {
+    const totalPages = Math.ceil(filteredDomains.length / PAGE_SIZE);
+    if (currentPage < totalPages - 1) { currentPage++; renderDomainPage(); }
+});
+
+/* ── Lazy Loading for Bottom Section ──────────────────────────── */
+let bottomSectionLoaded = false;
+
+function loadBottomSection() {
+    if (bottomSectionLoaded) return;
+    bottomSectionLoaded = true;
+
+    DashboardCache.fetch(API.topDomains, 55).then(renderTopDomainsData).catch(err => {
+        console.error('Top domains load failed:', err);
+        document.getElementById('topDomainsBody').innerHTML =
+            '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--neural-danger);">Failed to load domain data</td></tr>';
+    });
+
+    DashboardCache.fetch(API.stats, 25).then(renderRcodeChart).catch(err => {
+        console.error('Rcode chart failed:', err);
+    });
+}
+
+LazyLoader.observe('#bottomSection', loadBottomSection);
+
+/* ── Boot — high-priority loads (stats, DGA, beaconing) ───────── */
+async function initialLoad() {
+    // High priority: stats (drives KPIs + NLP summary)
+    DashboardCache.fetch(API.stats, 25).then(renderStats).catch(err => {
+        console.error('DNS stats load failed:', err);
+        document.getElementById('dnsSummary').textContent = 'Failed to load DNS statistics.';
+    });
+
+    // Mid priority: DGA + Beaconing (above the fold)
+    DashboardCache.fetch(API.dga, 45).then(renderDGA).catch(err => {
+        console.error('DGA load failed:', err);
+        document.getElementById('dgaBody').innerHTML =
+            '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--neural-danger);">Failed to load DGA data</td></tr>';
+    });
+
+    DashboardCache.fetch(API.beaconing, 45).then(renderBeaconing).catch(err => {
+        console.error('Beaconing load failed:', err);
+        document.getElementById('beaconList').innerHTML =
+            '<li style="text-align:center;padding:2rem;color:var(--neural-danger);">Failed to load beaconing data</li>';
+    });
+
+    // Timeline chart
+    DashboardCache.fetch(API.timeline, 55).then(renderTimeline).catch(err => {
+        console.error('Timeline load failed:', err);
+    });
+}
+
+initialLoad();
+
+/* ── DashboardPoller — 30s visibility-aware auto-refresh ──────── */
+const poller = new DashboardPoller([
+    // High priority: KPI stats refresh first
+    {
+        url: API.stats,
+        priority: 'high',
+        ttl: 25,
+        callback: (data) => {
+            renderStats(data);
+            // Also update rcode chart if bottom section is visible
+            if (bottomSectionLoaded) renderRcodeChart(data);
+        },
+    },
+    // Low priority: detection tables and charts
+    {
+        url: API.dga,
+        priority: 'low',
+        ttl: 45,
+        callback: renderDGA,
+    },
+    {
+        url: API.beaconing,
+        priority: 'low',
+        ttl: 45,
+        callback: renderBeaconing,
+    },
+    {
+        url: API.timeline,
+        priority: 'low',
+        ttl: 55,
+        callback: renderTimeline,
+    },
+    {
+        url: API.topDomains,
+        priority: 'low',
+        ttl: 55,
+        callback: (data) => {
+            if (bottomSectionLoaded) renderTopDomainsData(data);
+        },
+    },
+], 30000).start();
+</script>
+{% endblock %}

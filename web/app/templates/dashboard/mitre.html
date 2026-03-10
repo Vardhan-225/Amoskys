@@ -28,15 +28,14 @@
             <div id="coverage-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#00ff88,#00d9ff);border-radius:6px;transition:width 0.8s ease;"></div>
         </div>
         <div style="display:flex;gap:1.5rem;margin-top:0.75rem;font-size:0.8rem;color:var(--text-muted);">
-            <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#00ff88;margin-right:0.3rem;vertical-align:middle;"></span>Covered (&ge;3 hits)</span>
-            <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ffaa00;margin-right:0.3rem;vertical-align:middle;"></span>Partial (1-2 hits)</span>
-            <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(255,255,255,0.08);margin-right:0.3rem;vertical-align:middle;"></span>Not Covered</span>
+            <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#00ff88;margin-right:0.3rem;vertical-align:middle;"></span>Detected (events found)</span>
+            <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(0,217,255,0.3);margin-right:0.3rem;vertical-align:middle;"></span>Declared (probe capable)</span>
         </div>
     </div>
 
     <!-- Summary Metrics -->
     <div class="metrics-grid" style="margin: 1.5rem 0;">
-        <div class="metric-card"><div class="metric-value" id="total-techniques">--</div><div class="metric-label">Techniques Detected</div></div>
+        <div class="metric-card"><div class="metric-value" id="total-techniques">--</div><div class="metric-label">Techniques Declared</div></div>
         <div class="metric-card"><div class="metric-value" id="total-hits">--</div><div class="metric-label">Total Detections</div></div>
         <div class="metric-card"><div class="metric-value" id="tactic-coverage">--</div><div class="metric-label">Tactics Covered</div></div>
         <div class="metric-card"><div class="metric-value" id="top-technique">--</div><div class="metric-label">Most Active Technique</div></div>
@@ -48,8 +47,8 @@
             <label style="font-size:0.8rem;color:var(--text-muted);">Filter:</label>
             <select id="filter-status" style="background:var(--bg-primary);color:var(--text-primary);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.8rem;">
                 <option value="all">All Techniques</option>
-                <option value="covered">Covered Only</option>
-                <option value="uncovered">Gaps Only</option>
+                <option value="covered">Detected Only</option>
+                <option value="uncovered">Awaiting Detection</option>
             </select>
             <input id="filter-search" type="text" placeholder="Search T-ID or name..." style="background:var(--bg-primary);color:var(--text-primary);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.8rem;min-width:200px;">
         </div>
@@ -102,6 +101,7 @@
 .tech-cell:hover { transform:scale(1.05); z-index:10; box-shadow:0 2px 8px rgba(0,0,0,0.5); }
 .tech-cell.covered { background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.35); color:#00ff88; }
 .tech-cell.partial { background:rgba(255,170,0,0.12); border:1px solid rgba(255,170,0,0.3); color:#ffaa00; }
+.tech-cell.declared { background:rgba(0,217,255,0.08); border:1px solid rgba(0,217,255,0.2); color:rgba(0,217,255,0.6); }
 .tech-cell.uncovered { background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); color:var(--text-muted); opacity:0.5; }
 .tech-cell:hover .mitre-tip { display:block; }
 .tech-id { font-family:'Courier New',monospace; font-weight:700; font-size:0.65rem; }
@@ -410,17 +410,81 @@ function getTechTip(tid) {
         + '</div>';
 }
 
+// Tactic key → display name mapping
+var tacticDisplayNames = {
+    'reconnaissance': 'Reconnaissance', 'resource_development': 'Resource Dev',
+    'initial_access': 'Initial Access', 'execution': 'Execution',
+    'persistence': 'Persistence', 'privilege_escalation': 'Priv Escalation',
+    'defense_evasion': 'Defense Evasion', 'credential_access': 'Credential Access',
+    'discovery': 'Discovery', 'lateral_movement': 'Lateral Movement',
+    'collection': 'Collection', 'command_and_control': 'C2',
+    'exfiltration': 'Exfiltration', 'impact': 'Impact'
+};
+
 async function loadMITREData() {
     try {
-        var resp = await fetch('/dashboard/api/mitre/coverage');
-        var data = await resp.json();
+        // Fetch coverage data AND platform capabilities in parallel
+        var [coverageResp, capsResp] = await Promise.all([
+            fetch('/dashboard/api/mitre/coverage'),
+            fetch('/dashboard/api/platform-capabilities'),
+        ]);
+        var data = await coverageResp.json();
         if (data.status !== 'success') return;
 
-        coverageData = data.coverage || {};
-        document.getElementById('total-techniques').textContent = data.total_techniques;
-        document.getElementById('total-hits').textContent = data.total_hits;
-        document.getElementById('mitre-status').textContent = data.total_techniques + ' Techniques';
+        // Detected coverage from events
+        coverageData = data.coverage || data.detected || {};
 
+        // Build TACTIC_MAP dynamically from declared by_tactic data
+        var declaredByTactic = data.by_tactic || {};
+        if (Object.keys(declaredByTactic).length > 0) {
+            TACTIC_MAP = {};
+            for (var key in declaredByTactic) {
+                var displayName = tacticDisplayNames[key] || key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+                TACTIC_MAP[displayName] = declaredByTactic[key];
+            }
+        }
+        // else: keep hardcoded TACTIC_MAP as fallback
+
+        // Build AGENT_TECHNIQUE_MAP dynamically from platform capabilities
+        try {
+            var capsData = await capsResp.json();
+            var agentsList = capsData.agents || [];
+            if (agentsList.length > 0) {
+                AGENT_TECHNIQUE_MAP = {};
+                agentColors = {};
+                var defaultColors = {
+                    'proc':'#4ECDC4','flow':'#F38181','dns':'#AA96DA','auth':'#FF6B35',
+                    'fim':'#00ff88','persistence':'#FCBAD3','peripheral':'#FF6B9D',
+                    'kernel_audit':'#FFD93D','device_discovery':'#6BCB77',
+                    'protocol_collectors':'#00B4D8','applog':'#E8A87C','db_activity':'#20B2AA',
+                    'http_inspector':'#7B68EE','internet_activity':'#DA70D6',
+                    'net_scanner':'#FF7F50','macos_security_monitor':'#FFD93D',
+                    'macos_unified_log':'#87CEEB','macos_dns':'#DDA0DD',
+                    'macos_applog':'#F0E68C','macos_discovery':'#98FB98',
+                    'macos_internet_activity':'#FFB6C1','macos_db_activity':'#B0E0E6',
+                    'macos_http_inspector':'#DEB887',
+                };
+                for (var i = 0; i < agentsList.length; i++) {
+                    var info = agentsList[i];
+                    var agentId = info.agent_id || info.id || '';
+                    if (info.mitre_techniques && info.mitre_techniques.length > 0) {
+                        AGENT_TECHNIQUE_MAP[info.name] = info.mitre_techniques;
+                        agentColors[info.name] = defaultColors[agentId] || '#00d9ff';
+                    }
+                }
+            }
+        } catch (e) { /* keep hardcoded AGENT_TECHNIQUE_MAP as fallback */ }
+
+        // Summary metrics — declared vs detected
+        var declaredCount = data.declared ? data.declared.technique_count : Object.keys(TACTIC_MAP).reduce(function(s, t) { return s + TACTIC_MAP[t].length; }, 0);
+        var detectedCount = Object.keys(coverageData).length;
+        var totalHits = data.total_hits || 0;
+
+        document.getElementById('total-techniques').textContent = declaredCount;
+        document.getElementById('total-hits').textContent = totalHits || detectedCount;
+        document.getElementById('mitre-status').textContent = declaredCount + ' Techniques';
+
+        // Top technique
         var topTech = '--', topCount = 0;
         for (var tid in coverageData) {
             if (coverageData[tid].count > topCount) { topCount = coverageData[tid].count; topTech = tid; }
@@ -428,6 +492,7 @@ async function loadMITREData() {
         var topInfo = TECH_DB[topTech];
         document.getElementById('top-technique').textContent = topTech + (topInfo ? ' (' + topInfo.n + ')' : '');
 
+        // Coverage: detected / declared
         var totalTechniques = 0, coveredTechniques = 0, tacticsCovered = 0;
         for (var tactic in TACTIC_MAP) {
             var techs = TACTIC_MAP[tactic];
@@ -446,6 +511,7 @@ async function loadMITREData() {
         renderGapAnalysis();
         renderDetailTable();
     } catch (err) {
+        console.error('MITRE load error:', err);
         document.getElementById('mitre-status').textContent = 'Error';
     }
 }
@@ -462,23 +528,24 @@ function renderMatrix() {
             var tid = techs[i];
             var info = coverageData[tid];
             var techInfo = TECH_DB[tid];
-            var isCovered = info && info.count >= 3;
-            var isPartial = info && info.count > 0 && info.count < 3;
+            var isCovered = info && info.count >= 1;
 
-            // Apply filters
-            if (filter === 'covered' && !info) continue;
-            if (filter === 'uncovered' && info) continue;
+            // Apply filters: "covered" = detected, "uncovered" = declared but not detected
+            if (filter === 'covered' && !isCovered) continue;
+            if (filter === 'uncovered' && isCovered) continue;
             if (search) {
                 var matchesSearch = tid.toLowerCase().indexOf(search) !== -1;
                 if (techInfo) matchesSearch = matchesSearch || techInfo.n.toLowerCase().indexOf(search) !== -1;
                 if (!matchesSearch) continue;
             }
 
-            var cls = isCovered ? 'covered' : isPartial ? 'partial' : 'uncovered';
+            // Three states: covered (green), declared-only (dim cyan), uncovered shouldn't appear
+            // Since TACTIC_MAP now comes from declared probes, all techniques here are declared
+            var cls = isCovered ? 'covered' : 'declared';
             var cnt = info ? info.count : 0;
             html += '<div class="tech-cell ' + cls + '" data-tech-id="' + tid + '">'
                 + '<span class="tech-id">' + tid + '</span>'
-                + '<span class="tech-cnt">' + cnt + '</span>'
+                + '<span class="tech-cnt">' + (cnt > 0 ? cnt : '') + '</span>'
                 + getTechTip(tid)
                 + '</div>';
         }
@@ -516,27 +583,27 @@ function renderGapAnalysis() {
         for (var i = 0; i < techs.length; i++) {
             if (!coverageData[techs[i]]) {
                 var info = TECH_DB[techs[i]];
-                gaps.push({technique: techs[i], tactic: tactic, name: info ? info.n : '', sev: info ? info.sev : 'unknown'});
+                gaps.push({technique: techs[i], tactic: tactic, name: info ? info.n : techs[i], sev: info ? info.sev : 'medium'});
             }
         }
     }
     if (gaps.length === 0) {
-        document.getElementById('gap-analysis').innerHTML = '<div style="text-align:center;padding:2rem;color:#00ff88;font-weight:600;">Full coverage! All techniques detected.</div>';
+        document.getElementById('gap-analysis').innerHTML = '<div style="text-align:center;padding:2rem;color:#00ff88;font-weight:600;">Full coverage! All declared techniques detected.</div>';
         return;
     }
     // Sort by severity (critical first)
     var sevOrder = {critical:0,high:1,medium:2,low:3,unknown:4};
     gaps.sort(function(a,b) { return (sevOrder[a.sev]||4) - (sevOrder[b.sev]||4); });
 
-    var html = '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">' + gaps.length + ' techniques not yet detected</div>';
+    var html = '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">' + gaps.length + ' declared techniques awaiting detection</div>';
     for (var i = 0; i < gaps.length; i++) {
         var g = gaps[i];
         var sevColors = {low:'#0088ff',medium:'#ffaa00',high:'#ff6600',critical:'#ff3366'};
         var sc = sevColors[g.sev] || '#999';
         html += '<div class="gap-item" data-tech-id="' + g.technique + '">'
             + '<div style="display:flex;justify-content:space-between;align-items:center;">'
-            + '<span class="tech-id" style="color:#ff3366;">' + g.technique + '</span>'
-            + '<span style="font-size:0.6rem;font-weight:700;padding:0.1rem 0.35rem;border-radius:3px;background:' + sc + '22;color:' + sc + ';">' + g.sev.toUpperCase() + '</span>'
+            + '<span class="tech-id" style="color:rgba(0,217,255,0.7);">' + g.technique + '</span>'
+            + '<span style="font-size:0.6rem;font-weight:700;padding:0.1rem 0.35rem;border-radius:3px;background:' + sc + '22;color:' + sc + ';">' + (g.sev || 'medium').toUpperCase() + '</span>'
             + '</div>'
             + (g.name ? '<div class="gap-name">' + esc(g.name) + '</div>' : '')
             + '<div class="gap-tactic">' + g.tactic + '</div>'
@@ -551,7 +618,9 @@ function renderDetailTable() {
     entries.sort(function(a,b) { return b[1].count - a[1].count; });
 
     if (entries.length === 0) {
-        document.getElementById('mitre-table').innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No detections yet. Deploy agents to start collecting.</div>';
+        var declCount = 0;
+        for (var t in TACTIC_MAP) declCount += TACTIC_MAP[t].length;
+        document.getElementById('mitre-table').innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No detections yet. ' + declCount + ' techniques declared across probes — deploy and run agents to start detecting.</div>';
         return;
     }
 
@@ -632,7 +701,7 @@ function exportMITRE() {
                 techInfo ? techInfo.n : '',
                 techInfo ? techInfo.sev : '',
                 tactic,
-                info ? (info.count >= 3 ? 'Covered' : 'Partial') : 'Gap',
+                info ? 'Detected' : 'Declared',
                 info ? info.count : 0,
                 agents.join('; ')
             ]);

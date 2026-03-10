@@ -9,70 +9,129 @@ Used by:
 from __future__ import annotations
 
 import importlib
+import platform
 from typing import Any, Dict, List
 
 # Agent → probe factory mapping
 AGENT_PROBE_MAP: Dict[str, Dict[str, str]] = {
     "proc": {
-        "module": "amoskys.agents.proc.probes",
+        "module": "amoskys.agents.shared.process.probes",
         "factory": "create_proc_probes",
     },
     "fim": {
-        "module": "amoskys.agents.fim.probes",
+        "module": "amoskys.agents.shared.filesystem.probes",
         "factory": "create_fim_probes",
     },
     "flow": {
-        "module": "amoskys.agents.flow.probes",
+        "module": "amoskys.agents.shared.network.probes",
         "factory": "create_flow_probes",
     },
     "dns": {
-        "module": "amoskys.agents.dns.probes",
+        "module": "amoskys.agents.shared.dns.probes",
         "factory": "create_dns_probes",
     },
     "peripheral": {
-        "module": "amoskys.agents.peripheral.probes",
+        "module": "amoskys.agents.shared.peripheral.probes",
         "factory": "create_peripheral_probes",
     },
     "auth": {
-        "module": "amoskys.agents.auth.probes",
+        "module": "amoskys.agents.shared.auth.probes",
         "factory": "create_auth_probes",
     },
     "persistence": {
-        "module": "amoskys.agents.persistence.probes",
+        "module": "amoskys.agents.shared.persistence.probes",
         "factory": "create_persistence_probes",
     },
     "kernel_audit": {
-        "module": "amoskys.agents.kernel_audit.probes",
+        "module": "amoskys.agents.os.linux.kernel_audit.probes",
         "factory": "create_kernel_audit_probes",
     },
     "device_discovery": {
-        "module": "amoskys.agents.device_discovery.probes",
+        "module": "amoskys.agents.shared.device_discovery.probes",
         "factory": "create_device_discovery_probes",
     },
     "protocol_collectors": {
-        "module": "amoskys.agents.protocol_collectors.probes",
+        "module": "amoskys.agents.shared.protocol_collectors.probes",
         "factory": "create_protocol_collector_probes",
     },
     # L7 Gap-Closure Agents
     "applog": {
-        "module": "amoskys.agents.applog.probes",
+        "module": "amoskys.agents.shared.applog.probes",
         "factory": "create_applog_probes",
     },
     "db_activity": {
-        "module": "amoskys.agents.db_activity.probes",
+        "module": "amoskys.agents.shared.db_activity.probes",
         "factory": "create_db_activity_probes",
     },
     "http_inspector": {
-        "module": "amoskys.agents.http_inspector.probes",
+        "module": "amoskys.agents.shared.http_inspector.probes",
         "factory": "create_http_inspector_probes",
     },
     "internet_activity": {
-        "module": "amoskys.agents.internet_activity.probes",
+        "module": "amoskys.agents.shared.internet_activity.probes",
         "factory": "create_internet_activity_probes",
     },
     "net_scanner": {
-        "module": "amoskys.agents.net_scanner.probes",
+        "module": "amoskys.agents.shared.net_scanner.probes",
         "factory": "create_net_scanner_probes",
+    },
+    # ── macOS Observatory Agents (ground-truth verified) ──
+    "macos_process": {
+        "module": "amoskys.agents.os.macos.process.probes",
+        "factory": "create_process_probes",
+    },
+    "macos_persistence": {
+        "module": "amoskys.agents.os.macos.persistence.probes",
+        "factory": "create_persistence_probes",
+    },
+    "macos_network": {
+        "module": "amoskys.agents.os.macos.network.probes",
+        "factory": "create_network_probes",
+    },
+    "macos_filesystem": {
+        "module": "amoskys.agents.os.macos.filesystem.probes",
+        "factory": "create_filesystem_probes",
+    },
+    "macos_auth": {
+        "module": "amoskys.agents.os.macos.auth.probes",
+        "factory": "create_auth_probes",
+    },
+    "macos_unified_log": {
+        "module": "amoskys.agents.os.macos.unified_log.probes",
+        "factory": "create_unified_log_probes",
+    },
+    "macos_peripheral": {
+        "module": "amoskys.agents.os.macos.peripheral.probes",
+        "factory": "create_peripheral_probes",
+    },
+    "macos_correlation": {
+        "module": "amoskys.agents.os.macos.correlation.probes",
+        "factory": "create_correlation_probes",
+    },
+    # ── Wave 2 macOS Observatory Agents ──
+    "macos_dns": {
+        "module": "amoskys.agents.os.macos.dns.probes",
+        "factory": "create_dns_probes",
+    },
+    "macos_applog": {
+        "module": "amoskys.agents.os.macos.applog.probes",
+        "factory": "create_applog_probes",
+    },
+    "macos_discovery": {
+        "module": "amoskys.agents.os.macos.discovery.probes",
+        "factory": "create_discovery_probes",
+    },
+    "macos_internet_activity": {
+        "module": "amoskys.agents.os.macos.internet_activity.probes",
+        "factory": "create_internet_activity_probes",
+    },
+    "macos_db_activity": {
+        "module": "amoskys.agents.os.macos.db_activity.probes",
+        "factory": "create_db_activity_probes",
+    },
+    "macos_http_inspector": {
+        "module": "amoskys.agents.os.macos.http_inspector.probes",
+        "factory": "create_http_inspector_probes",
     },
 }
 
@@ -152,11 +211,31 @@ def audit_probe(probe: object, agent_name: str, target_platform: str) -> Dict[st
     return result
 
 
+# Agents restricted to specific platforms (key = agent name, value = allowed platforms)
+_PLATFORM_AGENTS: Dict[str, List[str]] = {
+    "kernel_audit": ["linux"],
+}
+
+
 def run_audit(target_platform: str = "") -> List[Dict[str, Any]]:
     """Run the full attribute audit across all agents."""
+    current_platform = target_platform or platform.system().lower()
     results = []
 
     for agent_name, info in AGENT_PROBE_MAP.items():
+        # Skip agents not available on this platform
+        allowed = _PLATFORM_AGENTS.get(agent_name)
+        if allowed and current_platform not in allowed:
+            results.append(
+                {
+                    "probe": "PLATFORM_SKIP",
+                    "agent": agent_name,
+                    "verdict": "SKIPPED",
+                    "issues": [f"Not available on {current_platform}"],
+                }
+            )
+            continue
+
         try:
             mod = importlib.import_module(info["module"])
             factory = getattr(mod, info["factory"])

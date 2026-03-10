@@ -1,0 +1,27 @@
+title: SSRF Attempt Detected
+id: amoskys-ia-004
+status: stable
+level: high
+description: Detects server-side request forgery attempts where internal IP addresses appear in request parameters indicating potential initial access via SSRF exploitation
+author: AMOSKYS
+tags:
+    - attack.initial_access
+    - attack.t1090
+logsource:
+    category: web_application
+    product: amoskys
+detection:
+    selection:
+        event_type: ssrf_detected
+    condition: selection
+fields:
+    - request_url
+    - target_ip
+    - parameter_name
+    - source_ip
+    - http_method
+falsepositives:
+    - Internal API gateway health checks referencing private IPs
+    - Webhook configurations pointing to internal services
+    - Development environments with localhost callbacks
+confidence: 0.80

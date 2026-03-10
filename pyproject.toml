@@ -129,23 +129,23 @@ all = [
 
 [project.scripts]
 # ─── Agent console entrypoints ───
-amoskys-proc = "amoskys.agents.proc.proc_agent:main"
-amoskys-auth = "amoskys.agents.auth.auth_guard_agent:main"
-amoskys-persist = "amoskys.agents.persistence.persistence_agent:main"
-amoskys-dns = "amoskys.agents.dns.dns_agent:main"
-amoskys-fim = "amoskys.agents.fim.fim_agent:main"
-amoskys-flow = "amoskys.agents.flow.flow_agent:main"
-amoskys-peripheral = "amoskys.agents.peripheral.peripheral_agent:main"
+amoskys-proc = "amoskys.agents.shared.process.agent:main"
+amoskys-auth = "amoskys.agents.shared.auth.agent:main"
+amoskys-persist = "amoskys.agents.shared.persistence.agent:main"
+amoskys-dns = "amoskys.agents.shared.dns.agent:main"
+amoskys-fim = "amoskys.agents.shared.filesystem.agent:main"
+amoskys-flow = "amoskys.agents.shared.network.agent:main"
+amoskys-peripheral = "amoskys.agents.shared.peripheral.agent:main"
 
-# Legacy flow agent (WAL integration — retained for pipeline compatibility)
-amoskys-flowagent = "amoskys.agents.flowagent.main:main"
+# WAL drain publisher (EventBus pipeline)
+amoskys-flowagent = "amoskys.eventbus.flow_publisher:main"
 
 # ─── L7 Gap-Closure Agents ───
-amoskys-applog = "amoskys.agents.applog.applog_agent:main"
-amoskys-db-activity = "amoskys.agents.db_activity.db_activity_agent:main"
-amoskys-http-inspector = "amoskys.agents.http_inspector.http_inspector_agent:main"
-amoskys-internet-activity = "amoskys.agents.internet_activity.internet_activity_agent:main"
-amoskys-net-scanner = "amoskys.agents.net_scanner.net_scanner_agent:main"
+amoskys-applog = "amoskys.agents.shared.applog.agent:main"
+amoskys-db-activity = "amoskys.agents.shared.db_activity.agent:main"
+amoskys-http-inspector = "amoskys.agents.shared.http_inspector.agent:main"
+amoskys-internet-activity = "amoskys.agents.shared.internet_activity.agent:main"
+amoskys-net-scanner = "amoskys.agents.shared.net_scanner.agent:main"
 
 # ─── EventBus & Intelligence ───
 amoskys-eventbus = "amoskys.eventbus.server:serve"

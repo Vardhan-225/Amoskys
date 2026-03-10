@@ -1,0 +1,27 @@
+title: DNS Beaconing Detection
+id: amoskys-c2-002
+status: stable
+level: high
+description: Detects periodic DNS beaconing behavior characterized by low jitter coefficient of variation indicating automated C2 callback patterns
+author: AMOSKYS
+tags:
+    - attack.command_and_control
+    - attack.t1071.004
+logsource:
+    category: dns
+    product: amoskys
+detection:
+    selection:
+        event_type: dns_beaconing_detected
+    condition: selection
+fields:
+    - query_name
+    - beacon_interval
+    - jitter_cv
+    - source_ip
+    - query_count
+falsepositives:
+    - NTP synchronization queries
+    - Heartbeat checks from monitoring agents
+    - Scheduled DNS-based health checks
+confidence: 0.85

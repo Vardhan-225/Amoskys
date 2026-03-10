@@ -1,0 +1,31 @@
+title: SQL Injection Attempt Detected
+id: amoskys-ia-001
+status: stable
+level: critical
+description: Detects SQL injection attempts identified through pattern matching of malicious SQL syntax in HTTP parameters, or error-based SQLi indicators in application responses
+author: AMOSKYS
+tags:
+    - attack.initial_access
+    - attack.t1190
+logsource:
+    category: webserver
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - sql_injection_detected
+            - sqli_error_pattern
+    condition: selection
+fields:
+    - source_ip
+    - url_path
+    - query_string
+    - payload
+    - http_method
+    - user_agent
+    - response_code
+    - injection_type
+falsepositives:
+    - Automated security scanners performing authorized penetration testing
+    - Application queries containing SQL-like syntax in legitimate parameters
+confidence: 0.85

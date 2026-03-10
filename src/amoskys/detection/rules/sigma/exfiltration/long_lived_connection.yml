@@ -1,0 +1,30 @@
+title: Long-Lived Non-CDN Connection
+id: amoskys-exfil-005
+status: stable
+level: medium
+description: Detects long-lived network connections to non-CDN destinations indicating potential C2 communication channels or slow data exfiltration over persistent connections
+author: AMOSKYS
+tags:
+    - attack.exfiltration
+    - attack.t1571
+logsource:
+    category: network_connection
+    product: amoskys
+detection:
+    selection:
+        event_type: long_lived_connection
+    condition: selection
+fields:
+    - destination_ip
+    - destination_domain
+    - connection_duration
+    - bytes_sent
+    - bytes_received
+    - process_name
+    - source_ip
+falsepositives:
+    - WebSocket connections for real-time applications
+    - VPN tunnels and persistent SSH sessions
+    - Streaming media services
+    - Database connection pools
+confidence: 0.65

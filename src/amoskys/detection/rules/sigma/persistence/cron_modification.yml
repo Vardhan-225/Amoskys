@@ -1,0 +1,29 @@
+title: Cron Job Modification Detected
+id: amoskys-persist-002
+status: stable
+level: medium
+description: Detects modifications to cron job configurations including changes to crontab files or additions to cron directories, which attackers use for scheduled task persistence
+author: AMOSKYS
+tags:
+    - attack.persistence
+    - attack.t1053.003
+logsource:
+    category: file_event
+    product: amoskys
+detection:
+    selection:
+        event_type: cron_modification
+    condition: selection
+fields:
+    - file_path
+    - cron_user
+    - cron_schedule
+    - cron_command
+    - process_name
+    - pid
+    - user
+falsepositives:
+    - System administrators updating scheduled maintenance tasks
+    - Application installers registering periodic cleanup jobs
+    - Configuration management tools (Ansible, Puppet) managing cron entries
+confidence: 0.70

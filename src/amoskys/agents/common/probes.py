@@ -65,7 +65,10 @@ from typing import (
     Type,
 )
 
+from amoskys.observability.probe_registry import get_probe_contract_registry
+
 if TYPE_CHECKING:
+    from amoskys.agents.common.agent_bus import AgentBus
     from amoskys.agents.common.base import HardenedAgentBase
     from amoskys.agents.common.metrics import AgentMetrics
 
@@ -297,6 +300,36 @@ class MicroProbe(abc.ABC):
     """Fields that cause DEGRADED status if missing, but don't block the probe.
     The probe can still fire with reduced detection quality."""
 
+    # --- v2: Detection-as-Code & Lifecycle (override in subclasses) ---
+
+    maturity: str = "experimental"
+    """Probe lifecycle state: "experimental" | "stable" | "deprecated".
+    Experimental probes may have higher FP rates. Deprecated probes
+    are scheduled for removal and should not be used in new agents."""
+
+    sigma_rules: List[str] = []
+    """Paths to Sigma YAML rules this probe implements.
+    When populated, the probe's detection logic mirrors the referenced rules."""
+
+    yara_rules: List[str] = []
+    """Paths to YARA rules this probe uses for file/memory scanning."""
+
+    false_positive_notes: List[str] = []
+    """Known conditions that cause false positives. Used by analysts to triage
+    and by the FP feedback loop to auto-suppress known benign patterns."""
+
+    evasion_notes: List[str] = []
+    """Known evasion techniques against this probe. Documents detection gaps
+    for red-team validation and future improvement."""
+
+    supports_baseline: bool = False
+    """Whether this probe can learn 'normal' behavior for anomaly detection.
+    Baseline probes compare current state against a learned normal."""
+
+    baseline_window_hours: int = 168
+    """Baseline learning window in hours (default: 7 days).
+    Only used when supports_baseline=True."""
+
     # --- Instance State ---
 
     def __init__(self) -> None:
@@ -410,6 +443,28 @@ class MicroProbe(abc.ABC):
 
     # --- Optional Hooks ---
 
+    def scan_with_context(
+        self,
+        context: ProbeContext,
+        bus: "AgentBus",
+    ) -> List[TelemetryEvent]:
+        """Scan with access to cross-agent shared context via AgentBus.
+
+        Override this in probes that need inter-agent data (e.g., a network
+        probe checking if a PID was flagged suspicious by the process agent).
+
+        Default implementation delegates to scan() — AgentBus is ignored
+        unless the probe explicitly overrides this method.
+
+        Args:
+            context: ProbeContext with shared data from this agent's collector.
+            bus: AgentBus for reading other agents' ThreatContext and PeerAlerts.
+
+        Returns:
+            List of TelemetryEvents (empty if nothing to report).
+        """
+        return self.scan(context)
+
     def setup(self) -> bool:
         """One-time probe initialization.
 
@@ -424,14 +479,15 @@ class MicroProbe(abc.ABC):
         return True
 
     def get_health(self) -> Dict[str, Any]:
-        """Return probe health status including contract readiness.
+        """Return probe health status including contract readiness and v2 metadata.
 
         Returns:
-            Dict with health metrics and contract status
+            Dict with health metrics, contract status, and lifecycle info.
         """
         health: Dict[str, Any] = {
             "name": self.name,
             "enabled": self.enabled,
+            "maturity": self.maturity,
             "last_scan": self.last_scan.isoformat() if self.last_scan else None,
             "scan_count": self.scan_count,
             "error_count": self.error_count,
@@ -444,6 +500,13 @@ class MicroProbe(abc.ABC):
             health["requires_fields"] = self.requires_fields
         if self.requires_event_types:
             health["requires_event_types"] = self.requires_event_types
+        if self.sigma_rules:
+            health["sigma_rules"] = self.sigma_rules
+        if self.yara_rules:
+            health["yara_rules"] = self.yara_rules
+        if self.supports_baseline:
+            health["supports_baseline"] = True
+            health["baseline_window_hours"] = self.baseline_window_hours
         return health
 
     # --- Utility Methods ---
@@ -628,6 +691,7 @@ class MicroProbeAgentMixin:
         super().__init__(*args, **kwargs)
         self._probes: List[MicroProbe] = []
         self._probe_state: Dict[str, Dict[str, Any]] = {}  # Persistent state per probe
+        self._probe_contract_registry = get_probe_contract_registry()
 
         # Register probes if provided
         if probes:
@@ -639,8 +703,17 @@ class MicroProbeAgentMixin:
         Args:
             probe: MicroProbe instance to register
         """
+        # Backward-compatible guard for tests/legacy agents that bypass mixin __init__.
+        if not hasattr(self, "_probes"):
+            self._probes = []
+        if not hasattr(self, "_probe_state"):
+            self._probe_state = {}
+        if not hasattr(self, "_probe_contract_registry"):
+            self._probe_contract_registry = get_probe_contract_registry()
+
         self._probes.append(probe)
         self._probe_state[probe.name] = {}
+        self._probe_contract_registry.register_probe(probe)
         logger.info(f"Registered probe: {probe.name}")
 
     def register_probes(self, probes: Sequence[MicroProbe]) -> None:
@@ -943,6 +1016,22 @@ class MicroProbeAgentMixin:
                 continue
 
             try:
+                if not self._probe_contract_registry.is_registered(probe.name):
+                    all_events.append(
+                        TelemetryEvent(
+                            event_type="probe_contract_unregistered",
+                            severity=Severity.HIGH,
+                            probe_name=probe.name,
+                            data={
+                                "probe": probe.name,
+                                "message": "Probe emission blocked until contract is registered",
+                            },
+                            tags=["observability_contract", "quality_invalid", "training_exclude"],
+                        )
+                    )
+                    continue
+                self._probe_contract_registry.refresh_probe(probe.name)
+
                 # Runtime contract validation
                 if probe.requires_fields or probe.requires_event_types:
                     readiness = probe.validate_contract(context)
@@ -961,7 +1050,12 @@ class MicroProbeAgentMixin:
                                     "missing_fields": readiness.missing_fields,
                                     "message": readiness.message,
                                 },
-                                tags=["observability_contract", "self_audit"],
+                                tags=[
+                                    "observability_contract",
+                                    "self_audit",
+                                    "quality_invalid",
+                                    "training_exclude",
+                                ],
                             )
                         )
                         continue  # Skip scan — contract unsatisfied
@@ -969,17 +1063,26 @@ class MicroProbeAgentMixin:
                 # Update context with probe-specific state
                 context.previous_state = self._probe_state.get(probe.name, {})
 
-                # Run probe scan
+                # Run probe scan — use scan_with_context() if AgentBus available
                 start_time = time.time()
-                events = probe.scan(context)
+                agent_bus = getattr(self, "agent_bus", None)
+                if agent_bus is not None:
+                    events = probe.scan_with_context(context, agent_bus)
+                else:
+                    events = probe.scan(context)
                 scan_duration = time.time() - start_time
 
                 # P0-7: Tag DEGRADED probe events + emit companion event
                 if probe.readiness and probe.readiness.status == "DEGRADED":
                     for event in events:
                         event.tags.append("degraded_probe")
+                        event.tags.append("quality_degraded")
+                        event.tags.append("training_exclude")
+                        event.data["quality_state"] = "degraded"
                         for df in probe.readiness.degraded_fields:
                             event.tags.append(f"missing_{df}")
+                            if df not in event.data.get("missing_fields", []):
+                                event.data.setdefault("missing_fields", []).append(df)
 
                     if events:
                         all_events.append(
@@ -995,6 +1098,10 @@ class MicroProbeAgentMixin:
                                 tags=["aoc1", "probe_quality"],
                             )
                         )
+                else:
+                    for event in events:
+                        event.tags.append("quality_valid")
+                        event.data["quality_state"] = "valid"
 
                 # Update probe metrics
                 probe.last_scan = datetime.now(timezone.utc)

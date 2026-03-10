@@ -2,11 +2,13 @@
 
 {% block title %}Setup{% endblock %}
 {% block header_title %}Welcome to AMOSKYS{% endblock %}
-{% block header_subtitle %}Let's set up your security command center{% endblock %}
+{% block header_subtitle %}Let's configure your security command center{% endblock %}
 
 {% block extra_css %}
 <style>
-    .auth-container { max-width: 600px; }
+    .auth-container { max-width: 780px; }
+
+    /* ── Step Progress Bar ── */
     .setup-steps { display: flex; gap: 0.5rem; margin-bottom: 2rem; }
     .step-dot {
         flex: 1; height: 4px; border-radius: 2px;
@@ -14,8 +16,14 @@
     }
     .step-dot.active { background: var(--cyan-bright); }
     .step-dot.done { background: var(--green-secure); }
+
+    /* ── Step Panels ── */
     .step-panel { display: none; animation: fade-in 0.4s ease; }
     .step-panel.active { display: block; }
+    .step-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .step-subtitle { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.25rem; line-height: 1.5; }
+
+    /* ── Choice Cards (Account Type) ── */
     .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.5rem 0; }
     .choice-card {
         padding: 1.5rem; border-radius: 12px; cursor: pointer;
@@ -27,6 +35,8 @@
     .choice-icon { font-size: 2.5rem; margin-bottom: 0.75rem; display: block; }
     .choice-title { font-weight: 700; font-size: 1rem; margin-bottom: 0.3rem; }
     .choice-desc { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; }
+
+    /* ── Platform Cards ── */
     .platform-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1.5rem 0; }
     .platform-card { padding: 1.25rem 0.75rem; }
     .detected-badge {
@@ -34,6 +44,14 @@
         font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
         background: rgba(0,255,136,0.2); color: var(--green-secure); margin-top: 0.3rem;
     }
+    .platform-details {
+        margin-top: 1rem; padding: 0.75rem; border-radius: 8px;
+        background: rgba(0,217,255,0.06); border: 1px solid rgba(0,217,255,0.15);
+        font-size: 0.8rem; color: var(--text-secondary);
+    }
+    .platform-details code { color: var(--cyan-bright); font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; }
+
+    /* ── Buttons ── */
     .btn-row { display: flex; gap: 1rem; margin-top: 2rem; }
     .btn-row .btn { flex: 1; }
     .btn-secondary {
@@ -41,28 +59,163 @@
         border: 1px solid rgba(0,217,255,0.3);
     }
     .btn-secondary:hover { background: rgba(0,217,255,0.2); }
-    .step-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
-    .step-subtitle { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+
+    /* ── Welcome Tags ── */
+    .tag-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 1.25rem 0; }
+    .tag-pill {
+        padding: 0.3rem 0.7rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600;
+    }
+    .tag-green { background: rgba(0,255,136,0.1); color: var(--green-secure); }
+    .tag-cyan { background: rgba(0,217,255,0.1); color: var(--cyan-bright); }
+    .tag-pink { background: rgba(255,107,157,0.1); color: #ff6b9d; }
+    .tag-orange { background: rgba(255,170,0,0.1); color: var(--orange-warning); }
+
+    /* ── Bundle Cards (Marketplace Step) ── */
+    .bundles-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .bundle-card {
+        background: rgba(10,14,39,0.8); border: 2px solid rgba(0,217,255,0.2);
+        border-radius: 12px; padding: 1.25rem; cursor: pointer;
+        transition: all 0.3s; position: relative; text-align: center;
+    }
+    .bundle-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, #00d9ff, #00ff88); transform: scaleX(0); transition: transform 0.3s;
+    }
+    .bundle-card:hover { border-color: #00d9ff; transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,217,255,0.2); }
+    .bundle-card:hover::before { transform: scaleX(1); }
+    .bundle-card.active { border-color: var(--green-secure); background: rgba(0,255,136,0.06); }
+    .bundle-badge {
+        position: absolute; top: 0.75rem; right: 0.75rem; background: var(--green-secure);
+        color: var(--navy-dark); padding: 0.2rem 0.5rem; border-radius: 8px;
+        font-size: 0.6rem; font-weight: 800; letter-spacing: 0.5px;
+    }
+    .bundle-icon { font-size: 2rem; margin-bottom: 0.5rem; filter: drop-shadow(0 0 10px rgba(0,217,255,0.4)); }
+    .bundle-name { font-size: 0.95rem; font-weight: 700; color: var(--cyan-bright); margin-bottom: 0.3rem; }
+    .bundle-desc-text { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4; }
+    .bundle-count { font-size: 0.75rem; color: var(--green-secure); font-weight: 600; margin-top: 0.5rem; }
+
+    /* ── Agent Catalog Grid ── */
+    .catalog-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem; }
+    .catalog-header h4 { margin: 0; color: var(--cyan-bright); font-size: 1rem; }
+    .catalog-controls { display: flex; gap: 0.5rem; align-items: center; }
+    .filter-select {
+        background: rgba(10,14,39,0.8); border: 1px solid rgba(0,217,255,0.3);
+        color: var(--cyan-bright); padding: 0.4rem 0.75rem; border-radius: 6px; font-size: 0.8rem;
+    }
+    .ctrl-btn {
+        background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.25);
+        color: var(--cyan-bright); padding: 0.35rem 0.75rem; border-radius: 6px;
+        font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .ctrl-btn:hover { background: rgba(0,217,255,0.2); }
+
+    .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; max-height: 340px; overflow-y: auto; padding-right: 0.25rem; }
+    .agent-card {
+        background: rgba(26,31,58,0.6); border: 2px solid rgba(0,217,255,0.15);
+        border-radius: 10px; padding: 1rem; transition: all 0.25s; cursor: pointer;
+    }
+    .agent-card:hover { border-color: rgba(0,217,255,0.4); transform: translateY(-2px); }
+    .agent-card.selected { border-color: var(--green-secure); background: rgba(0,255,136,0.06); }
+    .agent-card-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
+    .agent-card-icon { font-size: 1.5rem; filter: drop-shadow(0 0 6px rgba(0,217,255,0.3)); }
+    .agent-check {
+        width: 22px; height: 22px; border-radius: 5px;
+        border: 2px solid rgba(0,217,255,0.3); background: rgba(10,14,39,0.6);
+        display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        font-size: 0.8rem; color: var(--navy-dark); font-weight: 900;
+    }
+    .agent-card.selected .agent-check {
+        background: linear-gradient(135deg, #00ff88, #00d9ff); border-color: var(--green-secure);
+    }
+    .agent-card-name { font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.3rem; }
+    .agent-card-desc { font-size: 0.7rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 0.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .agent-card-meta { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .meta-tag {
+        font-size: 0.6rem; padding: 0.15rem 0.4rem; border-radius: 4px; font-weight: 600;
+    }
+    .meta-tag.probes { background: rgba(0,255,136,0.12); color: var(--green-secure); }
+    .meta-tag.category { background: rgba(0,217,255,0.12); color: var(--cyan-bright); }
+
+    /* ── Selection Summary Bar ── */
+    .selection-bar {
+        margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 10px;
+        background: rgba(0,217,255,0.08); border: 1px solid rgba(0,217,255,0.2);
+        display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+    }
+    .selection-stats { display: flex; gap: 1.25rem; font-size: 0.85rem; }
+    .selection-stats span { color: var(--text-secondary); }
+    .selection-stats strong { color: var(--cyan-bright); }
+    .coverage-bar { width: 120px; height: 6px; background: rgba(0,217,255,0.15); border-radius: 3px; overflow: hidden; }
+    .coverage-fill { height: 100%; background: linear-gradient(90deg, #00d9ff, #00ff88); transition: width 0.3s; border-radius: 3px; }
+
+    /* ── Terms Step ── */
+    .terms-box {
+        max-height: 220px; overflow-y: auto; padding: 1.25rem; border-radius: 10px;
+        background: rgba(10,14,39,0.6); border: 1px solid rgba(0,217,255,0.15);
+        font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1.25rem;
+    }
+    .terms-box h4 { color: var(--cyan-bright); font-size: 0.9rem; margin: 1rem 0 0.5rem 0; }
+    .terms-box h4:first-child { margin-top: 0; }
+    .terms-box ul { padding-left: 1.25rem; margin: 0.5rem 0; }
+    .terms-accept {
+        display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem;
+        background: rgba(0,217,255,0.06); border-radius: 10px; cursor: pointer;
+    }
+    .terms-accept input[type="checkbox"] { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--green-secure); cursor: pointer; }
+    .terms-accept label { font-size: 0.85rem; color: var(--text-secondary); cursor: pointer; line-height: 1.5; }
+    .terms-accept label a { color: var(--cyan-bright); text-decoration: none; }
+
+    /* ── Deploy Step ── */
     .deploy-info {
         background: rgba(0,217,255,0.06); border: 1px solid rgba(0,217,255,0.15);
-        border-radius: 10px; padding: 1.25rem; margin: 1rem 0;
+        border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem;
     }
-    .deploy-info code {
-        display: block; padding: 0.75rem; margin-top: 0.5rem;
-        background: rgba(10,14,39,0.8); border-radius: 6px;
-        font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+    .deploy-info-title { font-weight: 600; margin-bottom: 0.25rem; }
+    .deploy-info-sub { font-size: 0.8rem; color: var(--text-secondary); }
+    .deploy-code {
+        display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem;
+        padding: 0.75rem; background: rgba(10,14,39,0.8); border-radius: 8px;
+    }
+    .deploy-code code {
+        flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
         color: var(--green-secure); word-break: break-all;
     }
-    .complete-icon { font-size: 4rem; text-align: center; margin: 1rem 0; }
-    .complete-stats {
-        display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin: 1.5rem 0;
+    .copy-btn {
+        background: rgba(0,217,255,0.15); border: 1px solid rgba(0,217,255,0.3);
+        color: var(--cyan-bright); padding: 0.35rem 0.65rem; border-radius: 6px;
+        font-size: 0.7rem; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap;
     }
+    .copy-btn:hover { background: rgba(0,217,255,0.25); }
+    .copy-btn.copied { background: rgba(0,255,136,0.2); border-color: var(--green-secure); color: var(--green-secure); }
+    .config-preview {
+        margin-top: 0.75rem; padding: 0.75rem; background: rgba(10,14,39,0.8);
+        border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+        color: var(--text-secondary); line-height: 1.5; white-space: pre; overflow-x: auto;
+    }
+    .config-preview .comment { color: var(--text-muted); }
+    .config-preview .key { color: var(--cyan-bright); }
+    .config-preview .value { color: var(--green-secure); }
+
+    /* ── Complete Step ── */
+    .complete-icon { font-size: 4rem; text-align: center; margin: 1rem 0; }
+    .complete-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin: 1.5rem 0; }
     .stat-item {
         text-align: center; padding: 0.75rem;
         background: rgba(0,217,255,0.06); border-radius: 8px;
     }
     .stat-value { font-size: 1.3rem; font-weight: 700; color: var(--cyan-bright); }
     .stat-label { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+        .auth-container { max-width: 100%; }
+        .bundles-grid { grid-template-columns: 1fr 1fr; }
+        .agent-grid { grid-template-columns: 1fr; }
+        .choice-grid { grid-template-columns: 1fr; }
+        .platform-grid { grid-template-columns: 1fr; }
+        .complete-stats { grid-template-columns: 1fr; }
+    }
 </style>
 {% endblock %}
 
@@ -74,121 +227,311 @@
     <div class="step-dot" data-step="2"></div>
     <div class="step-dot" data-step="3"></div>
     <div class="step-dot" data-step="4"></div>
+    <div class="step-dot" data-step="5"></div>
+    <div class="step-dot" data-step="6"></div>
 </div>
 
-<!-- Step 0: Welcome -->
+<!-- ═══════════════════════════════════════════════════════════════════
+     STEP 0: Welcome
+     ═══════════════════════════════════════════════════════════════════ -->
 <div class="step-panel active" id="step-0">
     <div class="step-title">Welcome to AMOSKYS</div>
     <div class="step-subtitle">
-        Your Neural Security Command Platform. AMOSKYS monitors every layer of your
-        system — processes, network flows, file integrity, authentication, persistence
-        mechanisms, and more — with 85+ micro-probes and Ed25519 cryptographic integrity.
+        Your Neural Security Command Platform. AMOSKYS provides deep observability
+        and detection across your entire system — you choose the coverage you need.
     </div>
-    <div style="margin: 1.5rem 0;">
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <span style="padding: 0.3rem 0.6rem; background: rgba(0,255,136,0.1); color: var(--green-secure); border-radius: 6px; font-size: 0.8rem;">10 Security Agents</span>
-            <span style="padding: 0.3rem 0.6rem; background: rgba(0,217,255,0.1); color: var(--cyan-bright); border-radius: 6px; font-size: 0.8rem;">85+ Micro-Probes</span>
-            <span style="padding: 0.3rem 0.6rem; background: rgba(255,107,157,0.1); color: #ff6b9d; border-radius: 6px; font-size: 0.8rem;">90 MITRE Techniques</span>
-            <span style="padding: 0.3rem 0.6rem; background: rgba(255,170,0,0.1); color: var(--orange-warning); border-radius: 6px; font-size: 0.8rem;">Ed25519 Signed</span>
-        </div>
+    <div class="tag-row">
+        <span class="tag-pill tag-green">14 Security Agents</span>
+        <span class="tag-pill tag-cyan">177 Micro-Probes</span>
+        <span class="tag-pill tag-pink">88+ MITRE Techniques</span>
+        <span class="tag-pill tag-orange">Ed25519 Signed</span>
+    </div>
+    <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin-top: 0.5rem;">
+        Process behavior, file integrity, network flows, authentication, persistence,
+        DNS, application logs, HTTP inspection — all with cryptographic integrity.
     </div>
     <div class="btn-row">
         <button class="btn btn-primary" id="btn-get-started">Get Started</button>
     </div>
 </div>
 
-<!-- Step 1: Account Type -->
+<!-- ═══════════════════════════════════════════════════════════════════
+     STEP 1: Account Type
+     ═══════════════════════════════════════════════════════════════════ -->
 <div class="step-panel" id="step-1">
     <div class="step-title">How will you use AMOSKYS?</div>
     <div class="step-subtitle">This helps us tailor your experience.</div>
     <div class="choice-grid">
         <div class="choice-card" data-account-type="individual" id="choice-individual">
-            <span class="choice-icon">🖥</span>
+            <span class="choice-icon">&#128187;</span>
             <div class="choice-title">Individual</div>
             <div class="choice-desc">Monitor a single device. Perfect for personal security awareness and threat detection.</div>
         </div>
         <div class="choice-card" data-account-type="enterprise" id="choice-enterprise">
-            <span class="choice-icon">🏢</span>
+            <span class="choice-icon">&#127970;</span>
             <div class="choice-title">Enterprise</div>
             <div class="choice-desc">Multi-device fleet management. Deploy agents across your infrastructure with centralized control.</div>
         </div>
     </div>
     <div class="btn-row">
-        <button class="btn btn-secondary" data-nav-step="0" id="btn-step1-back">Back</button>
+        <button class="btn btn-secondary" id="btn-step1-back">Back</button>
         <button class="btn btn-primary" id="btn-step1-next" disabled>Continue</button>
     </div>
 </div>
 
-<!-- Step 2: Platform Detection -->
+<!-- ═══════════════════════════════════════════════════════════════════
+     STEP 2: Platform Detection
+     ═══════════════════════════════════════════════════════════════════ -->
 <div class="step-panel" id="step-2">
     <div class="step-title">Select Your Platform</div>
     <div class="step-subtitle">We detected your system automatically. Confirm or select the correct platform.</div>
     <div class="platform-grid">
         <div class="choice-card platform-card" data-platform="macos" id="plat-macos">
-            <span class="choice-icon">🍎</span>
+            <span class="choice-icon">&#127822;</span>
             <div class="choice-title">macOS</div>
             <div id="detect-macos"></div>
         </div>
         <div class="choice-card platform-card" data-platform="linux" id="plat-linux">
-            <span class="choice-icon">🐧</span>
+            <span class="choice-icon">&#128039;</span>
             <div class="choice-title">Linux</div>
             <div id="detect-linux"></div>
         </div>
         <div class="choice-card platform-card" data-platform="windows" id="plat-windows">
-            <span class="choice-icon">🪟</span>
+            <span class="choice-icon">&#129695;</span>
             <div class="choice-title">Windows</div>
             <div id="detect-windows"></div>
         </div>
     </div>
+    <div class="platform-details" id="platform-details" style="display:none;">
+        <strong>Detected:</strong> <code id="platform-info"></code>
+    </div>
     <div class="btn-row">
-        <button class="btn btn-secondary" data-nav-step="1" id="btn-step2-back">Back</button>
+        <button class="btn btn-secondary" id="btn-step2-back">Back</button>
         <button class="btn btn-primary" id="btn-step2-next" disabled>Continue</button>
     </div>
 </div>
 
-<!-- Step 3: Deploy Agent -->
+<!-- ═══════════════════════════════════════════════════════════════════
+     STEP 3: Coverage Marketplace
+     ═══════════════════════════════════════════════════════════════════ -->
 <div class="step-panel" id="step-3">
-    <div class="step-title">Deploy Your First Agent</div>
-    <div class="step-subtitle">Install the AMOSKYS agent on your device to start monitoring.</div>
-    <div class="deploy-info">
-        <div style="font-weight: 600; margin-bottom: 0.25rem;">Quick Install</div>
-        <div style="font-size: 0.8rem; color: var(--text-secondary);">Run this command in your terminal:</div>
-        <code id="install-cmd">pip install amoskys && amoskys-install</code>
+    <div class="step-title">Choose Your Coverage</div>
+    <div class="step-subtitle">
+        Select the observability and detection modules you want. Pick a bundle for quick setup, or build a custom configuration.
     </div>
-    <div class="deploy-info">
-        <div style="font-weight: 600; margin-bottom: 0.25rem;">Or use the Marketplace</div>
-        <div style="font-size: 0.8rem; color: var(--text-secondary);">
-            Browse agent bundles with pre-configured probe sets for different security use cases.
+
+    <!-- Quick Start Bundles -->
+    <div class="bundles-grid" id="bundles-grid">
+        <div class="bundle-card" data-bundle="essential" id="bundle-essential">
+            <div class="bundle-badge">RECOMMENDED</div>
+            <div class="bundle-icon">&#128737;</div>
+            <div class="bundle-name">Essential</div>
+            <div class="bundle-desc-text">Core endpoint monitoring</div>
+            <div class="bundle-count" id="bundle-essential-count">5 agents</div>
         </div>
-        <a href="/dashboard/marketplace" style="display: inline-block; margin-top: 0.5rem; color: var(--cyan-bright); text-decoration: none; font-weight: 600; font-size: 0.85rem;">
-            Open Marketplace →
-        </a>
+        <div class="bundle-card" data-bundle="advanced" id="bundle-advanced">
+            <div class="bundle-icon">&#9889;</div>
+            <div class="bundle-name">Advanced</div>
+            <div class="bundle-desc-text">Extended threat coverage</div>
+            <div class="bundle-count" id="bundle-advanced-count">9 agents</div>
+        </div>
+        <div class="bundle-card" data-bundle="full" id="bundle-full">
+            <div class="bundle-icon">&#128640;</div>
+            <div class="bundle-name">Full Coverage</div>
+            <div class="bundle-desc-text">Every available agent</div>
+            <div class="bundle-count" id="bundle-full-count">All agents</div>
+        </div>
+        <div class="bundle-card" data-bundle="custom" id="bundle-custom" style="border-style: dashed;">
+            <div class="bundle-icon">&#9881;&#65039;</div>
+            <div class="bundle-name">Custom</div>
+            <div class="bundle-desc-text">Pick individual agents</div>
+            <div class="bundle-count">Your choice</div>
+        </div>
     </div>
+
+    <!-- Agent Catalog -->
+    <div class="catalog-header">
+        <h4>Agent Catalog</h4>
+        <div class="catalog-controls">
+            <select id="category-filter" class="filter-select">
+                <option value="all">All</option>
+                <option value="endpoint">Endpoint</option>
+                <option value="network">Network</option>
+                <option value="application">Application</option>
+                <option value="platform">Platform</option>
+            </select>
+            <button class="ctrl-btn" id="select-all-btn">All</button>
+            <button class="ctrl-btn" id="clear-all-btn">Clear</button>
+        </div>
+    </div>
+    <div class="agent-grid" id="agent-grid">
+        <!-- Populated dynamically from /api/onboarding/catalog -->
+        <div style="text-align: center; padding: 2rem; color: var(--text-muted); grid-column: 1/-1;">
+            Loading agents...
+        </div>
+    </div>
+
+    <!-- Selection Summary -->
+    <div class="selection-bar" id="selection-bar">
+        <div class="selection-stats">
+            <span><strong id="sel-agents">0</strong> agents</span>
+            <span><strong id="sel-probes">0</strong> probes</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Coverage</span>
+            <div class="coverage-bar"><div class="coverage-fill" id="coverage-fill" style="width: 0%;"></div></div>
+            <span style="font-size: 0.75rem; color: var(--cyan-bright); font-weight: 700;" id="coverage-pct">0%</span>
+        </div>
+    </div>
+
     <div class="btn-row">
-        <button class="btn btn-secondary" data-nav-step="2" id="btn-step3-back">Back</button>
-        <button class="btn btn-primary" data-nav-step="4" id="btn-step3-next">Continue</button>
+        <button class="btn btn-secondary" id="btn-step3-back">Back</button>
+        <button class="btn btn-primary" id="btn-step3-next" disabled>Continue</button>
     </div>
 </div>
 
-<!-- Step 4: Complete -->
+<!-- ═══════════════════════════════════════════════════════════════════
+     STEP 4: Terms & Conditions
+     ═══════════════════════════════════════════════════════════════════ -->
 <div class="step-panel" id="step-4">
-    <div class="complete-icon">🛡</div>
+    <div class="step-title">Terms & Privacy</div>
+    <div class="step-subtitle">Please review and accept our terms before proceeding.</div>
+    <div class="terms-box">
+        <h4>What AMOSKYS Monitors</h4>
+        <p>Based on your selected coverage, AMOSKYS will collect and analyze:</p>
+        <ul id="terms-coverage-list">
+            <li>System process execution and behavior patterns</li>
+            <li>Network connection metadata (IPs, ports, protocols)</li>
+            <li>File integrity checksums for critical paths</li>
+            <li>Authentication events (login, sudo, SSH)</li>
+        </ul>
+
+        <h4>Data Handling</h4>
+        <ul>
+            <li>All telemetry is stored locally on your device by default</li>
+            <li>Cryptographic integrity via Ed25519 signatures and BLAKE2b hash chains</li>
+            <li>No data is transmitted externally without explicit configuration</li>
+            <li>You retain full ownership and control of all collected data</li>
+        </ul>
+
+        <h4>Security Commitment</h4>
+        <ul>
+            <li>AMOSKYS agents run with minimal required privileges</li>
+            <li>All agent communications are authenticated and encrypted</li>
+            <li>Circuit breaker patterns prevent resource exhaustion</li>
+            <li>You can disable or remove any agent at any time</li>
+        </ul>
+    </div>
+    <div class="terms-accept">
+        <input type="checkbox" id="accept-terms">
+        <label for="accept-terms">
+            I accept the <a href="/terms" target="_blank">Terms of Service</a> and
+            <a href="/privacy" target="_blank">Privacy Policy</a>, and understand
+            what data AMOSKYS will collect based on my selected coverage.
+        </label>
+    </div>
+    <div class="btn-row">
+        <button class="btn btn-secondary" id="btn-step4-back">Back</button>
+        <button class="btn btn-primary" id="btn-step4-next" disabled>Continue</button>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     STEP 5: Deployment
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="step-panel" id="step-5">
+    <div class="step-title">Deploy Your Agent</div>
+    <div class="step-subtitle">Choose how you'd like to deploy. One command or one click — your choice.</div>
+
+    <!-- Option A: One-Line Install (primary) -->
+    <div class="deploy-info" style="border-color: rgba(0,255,136,0.25); background: rgba(0,255,136,0.04);">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span style="font-size: 1.1rem; color: var(--green-secure);">&#9889;</span>
+            <div class="deploy-info-title" style="color: var(--green-secure);">Fastest: One-Line Install</div>
+        </div>
+        <div class="deploy-info-sub">This downloads and runs your personalized bootstrap script with pre-configured agents:</div>
+        <div class="deploy-code">
+            <code id="install-cmd">curl -sL http://localhost:5000/api/onboarding/bootstrap.sh | bash</code>
+            <button class="copy-btn" id="copy-install-btn">Copy</button>
+        </div>
+    </div>
+
+    <!-- Option B: Download buttons -->
+    <div class="deploy-info">
+        <div class="deploy-info-title">Or download manually</div>
+        <div class="deploy-info-sub" style="margin-bottom: 0.75rem;">Get the files, review them, and run at your own pace.</div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <a href="/api/onboarding/bootstrap.sh" download class="copy-btn" style="text-decoration: none; padding: 0.5rem 1rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.4rem;">
+                &#11015; Install Script
+            </a>
+            <a href="/api/onboarding/config.yml" download class="copy-btn" style="text-decoration: none; padding: 0.5rem 1rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.4rem;">
+                &#11015; Config File
+            </a>
+        </div>
+    </div>
+
+    <!-- Option C: Manual steps -->
+    <div class="deploy-info" style="border-color: rgba(0,217,255,0.12);">
+        <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" id="manual-toggle">
+            <div class="deploy-info-title">Step-by-step manual install</div>
+            <span style="color: var(--cyan-bright); font-size: 0.8rem; font-weight: 600;" id="manual-arrow">&#9660;</span>
+        </div>
+        <div id="manual-steps" style="display: none; margin-top: 0.75rem;">
+            <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.6;">
+                <p style="margin-bottom: 0.5rem;"><strong style="color: var(--cyan-bright);">1.</strong> Install AMOSKYS:</p>
+                <div class="deploy-code" style="margin-bottom: 0.75rem;">
+                    <code>pip install amoskys</code>
+                    <button class="copy-btn" id="copy-pip-btn">Copy</button>
+                </div>
+                <p style="margin-bottom: 0.5rem;"><strong style="color: var(--cyan-bright);">2.</strong> Save your configuration (<span id="deploy-agent-count">0</span> agents):</p>
+                <div class="config-preview" id="config-preview">
+<span class="comment"># Loading...</span>
+                </div>
+                <div style="margin-top: 0.4rem; text-align: right;">
+                    <button class="copy-btn" id="copy-config-btn">Copy Config</button>
+                </div>
+                <p style="margin: 0.75rem 0 0.5rem 0;"><strong style="color: var(--cyan-bright);">3.</strong> Start the agent:</p>
+                <div class="deploy-code">
+                    <code id="start-cmd">amoskys-agent start --config ~/.amoskys/config.yml</code>
+                    <button class="copy-btn" id="copy-start-btn">Copy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- What happens next -->
+    <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; margin-top: 0.75rem; padding: 0.75rem; background: rgba(0,217,255,0.04); border-radius: 8px;">
+        The agent will start collecting telemetry with your selected coverage modules.
+        You can change coverage anytime from the <strong style="color: var(--text-secondary);">Dashboard Marketplace</strong>.
+    </div>
+
+    <div class="btn-row">
+        <button class="btn btn-secondary" id="btn-step5-back">Back</button>
+        <button class="btn btn-primary" id="btn-step5-next">Complete Setup</button>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     STEP 6: Complete
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="step-panel" id="step-6">
+    <div class="complete-icon">&#128737;</div>
     <div class="step-title" style="text-align: center;">You're All Set!</div>
     <div class="step-subtitle" style="text-align: center;">
-        Your AMOSKYS security command center is ready. Start monitoring your system.
+        Your AMOSKYS security command center is configured and ready.
     </div>
     <div class="complete-stats">
         <div class="stat-item">
-            <div class="stat-value">10</div>
-            <div class="stat-label">Security Agents</div>
+            <div class="stat-value" id="complete-agents">0</div>
+            <div class="stat-label">Agents Selected</div>
         </div>
         <div class="stat-item">
-            <div class="stat-value">85+</div>
-            <div class="stat-label">Micro-Probes</div>
+            <div class="stat-value" id="complete-probes">0</div>
+            <div class="stat-label">Active Probes</div>
         </div>
         <div class="stat-item">
-            <div class="stat-value">90</div>
-            <div class="stat-label">MITRE Techniques</div>
+            <div class="stat-value" id="complete-coverage">0%</div>
+            <div class="stat-label">Coverage</div>
         </div>
     </div>
     <button class="btn btn-primary" id="btn-complete">Enter Command Center</button>
@@ -199,23 +542,48 @@
 
 {% block extra_js %}
 <script nonce="{{ csp_nonce() }}">
+// ── State ────────────────────────────────────────────────────────────
 let currentStep = 0;
 let selectedAccountType = null;
 let selectedPlatform = null;
 let detectedOS = null;
+let platformDetails = null;
+let catalogData = [];
+let bundleData = {};
+let totalCatalogAgents = 0;
+let totalCatalogProbes = 0;
+const selectedAgents = new Set();
 
-// Auto-detect platform on load
-(async function() {
+// Icon map for agent cards
+const ICONS = {
+    cpu: '&#9881;', lock: '&#128274;', anchor: '&#9875;', 'file-shield': '&#128196;',
+    network: '&#127760;', usb: '&#128268;', terminal: '&#128187;', 'shield-check': '&#128737;',
+    scroll: '&#128220;', globe: '&#127758;', radar: '&#128225;', layers: '&#128203;',
+    'file-text': '&#128196;', database: '&#128451;', search: '&#128269;', activity: '&#128200;',
+    scan: '&#128161;', zap: '&#9889;', shield: '&#128737;', maximize: '&#128640;',
+};
+
+// ── Init ─────────────────────────────────────────────────────────────
+(async function init() {
+    // Auto-detect platform
     try {
         const resp = await fetch('/api/onboarding/preflight');
         const data = await resp.json();
         if (data.status === 'success') {
             detectedOS = data.detected_os;
+            platformDetails = data.platform_details;
             const el = document.getElementById('detect-' + detectedOS);
             if (el) el.innerHTML = '<span class="detected-badge">Detected</span>';
             selectPlatform(detectedOS);
+            // Show platform details
+            const detailsEl = document.getElementById('platform-details');
+            const infoEl = document.getElementById('platform-info');
+            if (detailsEl && infoEl) {
+                infoEl.textContent = `${data.platform_details.system} ${data.platform_details.release} (${data.platform_details.machine})`;
+                detailsEl.style.display = 'block';
+            }
         }
-    } catch(e) {
+    } catch (e) {
         // Fallback to JS detection
         const ua = navigator.platform.toLowerCase();
         if (ua.includes('mac')) selectPlatform('macos');
@@ -224,36 +592,7 @@ let detectedOS = null;
     }
 })();
 
-// --- Event listeners (CSP-safe, no inline handlers) ---
-
-// Step 0: "Get Started" button
-document.getElementById('btn-get-started').addEventListener('click', () => goToStep(1));
-
-// Step 1: Account type selection cards
-document.querySelectorAll('[data-account-type]').forEach(card => {
-    card.addEventListener('click', () => selectAccountType(card.dataset.accountType));
-});
-
-// Step 1: Back and Continue buttons
-document.getElementById('btn-step1-back').addEventListener('click', () => goToStep(0));
-document.getElementById('btn-step1-next').addEventListener('click', () => saveProfileAndNext());
-
-// Step 2: Platform selection cards
-document.querySelectorAll('[data-platform]').forEach(card => {
-    card.addEventListener('click', () => selectPlatform(card.dataset.platform));
-});
-
-// Step 2: Back and Continue buttons
-document.getElementById('btn-step2-back').addEventListener('click', () => goToStep(1));
-document.getElementById('btn-step2-next').addEventListener('click', () => savePlatformAndNext());
-
-// Step 3: Back and Continue buttons
-document.getElementById('btn-step3-back').addEventListener('click', () => goToStep(2));
-document.getElementById('btn-step3-next').addEventListener('click', () => goToStep(4));
-
-// Step 4: Complete button
-document.getElementById('btn-complete').addEventListener('click', () => completeSetup());
-
+// ── Navigation ───────────────────────────────────────────────────────
 function goToStep(step) {
     document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('step-' + step).classList.add('active');
@@ -263,28 +602,29 @@ function goToStep(step) {
         else if (i === step) d.classList.add('active');
     });
     currentStep = step;
+    // Trigger step-specific actions
+    if (step === 3) loadCatalog();
+    if (step === 5) renderDeployStep();
+    if (step === 6) renderCompleteStep();
+    // Scroll to top of card
+    document.querySelector('.auth-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+// ── Step 0: Welcome ──────────────────────────────────────────────────
+document.getElementById('btn-get-started').addEventListener('click', () => goToStep(1));
+
+// ── Step 1: Account Type ─────────────────────────────────────────────
+document.querySelectorAll('[data-account-type]').forEach(card => {
+    card.addEventListener('click', () => selectAccountType(card.dataset.accountType));
+});
+document.getElementById('btn-step1-back').addEventListener('click', () => goToStep(0));
+document.getElementById('btn-step1-next').addEventListener('click', () => saveProfileAndNext());
 
 function selectAccountType(type) {
     selectedAccountType = type;
-    document.querySelectorAll('.choice-grid .choice-card').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('[data-account-type]').forEach(c => c.classList.remove('selected'));
     document.getElementById('choice-' + type).classList.add('selected');
     document.getElementById('btn-step1-next').disabled = false;
-}
-
-function selectPlatform(plat) {
-    selectedPlatform = plat;
-    document.querySelectorAll('.platform-grid .choice-card').forEach(c => c.classList.remove('selected'));
-    document.getElementById('plat-' + plat).classList.add('selected');
-    const btn = document.getElementById('btn-step2-next');
-    if (btn) btn.disabled = false;
-    // Update install command
-    const cmd = document.getElementById('install-cmd');
-    if (cmd) {
-        if (plat === 'macos') cmd.textContent = 'pip install amoskys && amoskys-install';
-        else if (plat === 'linux') cmd.textContent = 'pip install amoskys && sudo amoskys-install';
-        else cmd.textContent = 'pip install amoskys && amoskys-install';
-    }
 }
 
 async function saveProfileAndNext() {
@@ -292,11 +632,26 @@ async function saveProfileAndNext() {
     try {
         await fetch('/api/onboarding/profile', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({account_type: selectedAccountType}),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account_type: selectedAccountType }),
         });
-    } catch(e) {}
+    } catch (e) { /* best effort */ }
     goToStep(2);
+}
+
+// ── Step 2: Platform Detection ───────────────────────────────────────
+document.querySelectorAll('[data-platform]').forEach(card => {
+    card.addEventListener('click', () => selectPlatform(card.dataset.platform));
+});
+document.getElementById('btn-step2-back').addEventListener('click', () => goToStep(1));
+document.getElementById('btn-step2-next').addEventListener('click', () => savePlatformAndNext());
+
+function selectPlatform(plat) {
+    selectedPlatform = plat;
+    document.querySelectorAll('.platform-grid .choice-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('plat-' + plat).classList.add('selected');
+    const btn = document.getElementById('btn-step2-next');
+    if (btn) btn.disabled = false;
 }
 
 async function savePlatformAndNext() {
@@ -304,20 +659,267 @@ async function savePlatformAndNext() {
     try {
         await fetch('/api/onboarding/profile', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({device_os: selectedPlatform}),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_os: selectedPlatform }),
         });
-    } catch(e) {}
+    } catch (e) { /* best effort */ }
     goToStep(3);
 }
+
+// ── Step 3: Coverage Marketplace ─────────────────────────────────────
+let catalogLoaded = false;
+
+async function loadCatalog() {
+    if (catalogLoaded) return;
+    const plat = selectedPlatform || 'macos';
+    try {
+        const resp = await fetch('/api/onboarding/catalog?platform=' + plat);
+        const data = await resp.json();
+        if (data.status === 'success') {
+            catalogData = data.catalog;
+            bundleData = data.bundles;
+            totalCatalogAgents = data.total_agents;
+            totalCatalogProbes = data.total_probes;
+            renderCatalog();
+            updateBundleCounts();
+            catalogLoaded = true;
+        }
+    } catch (e) {
+        document.getElementById('agent-grid').innerHTML =
+            '<div style="text-align:center;padding:2rem;color:var(--red-alert);grid-column:1/-1;">Failed to load catalog</div>';
+    }
+}
+
+function renderCatalog(filter) {
+    const grid = document.getElementById('agent-grid');
+    const filtered = filter && filter !== 'all'
+        ? catalogData.filter(a => a.category === filter)
+        : catalogData;
+
+    grid.innerHTML = filtered.map(agent => {
+        const icon = ICONS[agent.icon] || ICONS.cpu;
+        const isSelected = selectedAgents.has(agent.id);
+        return `
+            <div class="agent-card ${isSelected ? 'selected' : ''}" data-agent-id="${agent.id}" data-category="${agent.category}">
+                <div class="agent-card-head">
+                    <div class="agent-card-icon">${icon}</div>
+                    <div class="agent-check">${isSelected ? '&#10003;' : ''}</div>
+                </div>
+                <div class="agent-card-name">${agent.name}</div>
+                <div class="agent-card-desc">${agent.description}</div>
+                <div class="agent-card-meta">
+                    <span class="meta-tag probes">${agent.probes} probes</span>
+                    <span class="meta-tag category">${agent.category}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Bind click events
+    grid.querySelectorAll('.agent-card').forEach(card => {
+        card.addEventListener('click', () => toggleAgent(card.dataset.agentId));
+    });
+}
+
+function toggleAgent(agentId) {
+    if (selectedAgents.has(agentId)) {
+        selectedAgents.delete(agentId);
+    } else {
+        selectedAgents.add(agentId);
+    }
+    updateSelectionUI();
+    // Update card visuals inline (no full re-render)
+    document.querySelectorAll(`[data-agent-id="${agentId}"]`).forEach(card => {
+        const isSelected = selectedAgents.has(agentId);
+        card.classList.toggle('selected', isSelected);
+        card.querySelector('.agent-check').innerHTML = isSelected ? '&#10003;' : '';
+    });
+    // Clear active bundle highlight
+    document.querySelectorAll('.bundle-card').forEach(b => b.classList.remove('active'));
+}
+
+function applyBundle(bundleName) {
+    if (bundleName === 'custom') {
+        // Just scroll to catalog
+        document.getElementById('agent-grid').scrollIntoView({ behavior: 'smooth' });
+        return;
+    }
+    const bundle = bundleData[bundleName];
+    if (!bundle) return;
+    selectedAgents.clear();
+    bundle.agents.forEach(id => {
+        if (catalogData.find(a => a.id === id)) {
+            selectedAgents.add(id);
+        }
+    });
+    updateSelectionUI();
+    renderCatalog(document.getElementById('category-filter').value);
+    // Highlight active bundle
+    document.querySelectorAll('.bundle-card').forEach(b => b.classList.remove('active'));
+    const el = document.getElementById('bundle-' + bundleName);
+    if (el) el.classList.add('active');
+}
+
+function updateBundleCounts() {
+    for (const [name, bundle] of Object.entries(bundleData)) {
+        const el = document.getElementById('bundle-' + name + '-count');
+        if (el) el.textContent = bundle.agents.length + ' agents';
+    }
+}
+
+function updateSelectionUI() {
+    const count = selectedAgents.size;
+    const probes = catalogData.filter(a => selectedAgents.has(a.id)).reduce((s, a) => s + a.probes, 0);
+    const pct = totalCatalogAgents > 0 ? Math.round((count / totalCatalogAgents) * 100) : 0;
+
+    document.getElementById('sel-agents').textContent = count;
+    document.getElementById('sel-probes').textContent = probes;
+    document.getElementById('coverage-pct').textContent = pct + '%';
+    document.getElementById('coverage-fill').style.width = pct + '%';
+    document.getElementById('btn-step3-next').disabled = count === 0;
+}
+
+// Bundle card clicks
+document.getElementById('bundles-grid').addEventListener('click', (e) => {
+    const card = e.target.closest('[data-bundle]');
+    if (card) applyBundle(card.dataset.bundle);
+});
+
+// Filter
+document.getElementById('category-filter').addEventListener('change', (e) => {
+    renderCatalog(e.target.value);
+});
+
+// Select All / Clear
+document.getElementById('select-all-btn').addEventListener('click', () => {
+    const filter = document.getElementById('category-filter').value;
+    const visible = filter === 'all' ? catalogData : catalogData.filter(a => a.category === filter);
+    visible.forEach(a => selectedAgents.add(a.id));
+    updateSelectionUI();
+    renderCatalog(filter);
+});
+document.getElementById('clear-all-btn').addEventListener('click', () => {
+    selectedAgents.clear();
+    updateSelectionUI();
+    renderCatalog(document.getElementById('category-filter').value);
+    document.querySelectorAll('.bundle-card').forEach(b => b.classList.remove('active'));
+});
+
+// Step 3 navigation
+document.getElementById('btn-step3-back').addEventListener('click', () => goToStep(2));
+document.getElementById('btn-step3-next').addEventListener('click', () => saveCoverageAndNext());
+
+async function saveCoverageAndNext() {
+    if (selectedAgents.size === 0) return;
+    try {
+        await fetch('/api/onboarding/coverage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selected_agents: Array.from(selectedAgents) }),
+        });
+    } catch (e) { /* best effort */ }
+    goToStep(4);
+}
+
+// ── Step 4: Terms ────────────────────────────────────────────────────
+document.getElementById('accept-terms').addEventListener('change', (e) => {
+    document.getElementById('btn-step4-next').disabled = !e.target.checked;
+});
+document.getElementById('btn-step4-back').addEventListener('click', () => goToStep(3));
+document.getElementById('btn-step4-next').addEventListener('click', () => goToStep(5));
+
+// ── Step 5: Deployment ───────────────────────────────────────────────
+function renderDeployStep() {
+    const plat = selectedPlatform || 'macos';
+    // Primary: one-line curl bootstrap (always the same URL)
+    const cmd = document.getElementById('install-cmd');
+    cmd.textContent = 'curl -sL ' + window.location.origin + '/api/onboarding/bootstrap.sh | bash';
+
+    // Manual start command varies by platform
+    const startCmd = document.getElementById('start-cmd');
+    if (plat === 'linux') startCmd.textContent = 'sudo amoskys-agent start --config ~/.amoskys/config.yml';
+    else startCmd.textContent = 'amoskys-agent start --config ~/.amoskys/config.yml';
+
+    document.getElementById('deploy-agent-count').textContent = selectedAgents.size;
+
+    // Render config preview
+    const agentList = Array.from(selectedAgents).sort();
+    const lines = [
+        '<span class="comment"># amoskys.yml — generated by setup wizard</span>',
+        '<span class="key">platform</span>: <span class="value">' + plat + '</span>',
+        '<span class="key">signing</span>: <span class="value">ed25519</span>',
+        '<span class="key">agents</span>:',
+    ];
+    agentList.forEach(id => {
+        const agent = catalogData.find(a => a.id === id);
+        const name = agent ? agent.name : id;
+        lines.push('  - <span class="value">' + id + '</span>  <span class="comment"># ' + name + '</span>');
+    });
+    document.getElementById('config-preview').innerHTML = lines.join('\n');
+}
+
+// Copy buttons
+document.getElementById('copy-install-btn').addEventListener('click', function() {
+    copyToClipboard(document.getElementById('install-cmd').textContent, this);
+});
+document.getElementById('copy-config-btn').addEventListener('click', function() {
+    const raw = document.getElementById('config-preview').textContent;
+    copyToClipboard(raw, this);
+});
+document.getElementById('copy-pip-btn').addEventListener('click', function() {
+    copyToClipboard('pip install amoskys', this);
+});
+document.getElementById('copy-start-btn').addEventListener('click', function() {
+    copyToClipboard(document.getElementById('start-cmd').textContent, this);
+});
+
+// Manual steps toggle
+document.getElementById('manual-toggle').addEventListener('click', () => {
+    const steps = document.getElementById('manual-steps');
+    const arrow = document.getElementById('manual-arrow');
+    const open = steps.style.display !== 'none';
+    steps.style.display = open ? 'none' : 'block';
+    arrow.innerHTML = open ? '&#9660;' : '&#9650;';
+});
+
+function copyToClipboard(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    }).catch(() => {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+}
+
+document.getElementById('btn-step5-back').addEventListener('click', () => goToStep(4));
+document.getElementById('btn-step5-next').addEventListener('click', () => goToStep(6));
+
+// ── Step 6: Complete ─────────────────────────────────────────────────
+function renderCompleteStep() {
+    const count = selectedAgents.size;
+    const probes = catalogData.filter(a => selectedAgents.has(a.id)).reduce((s, a) => s + a.probes, 0);
+    const pct = totalCatalogAgents > 0 ? Math.round((count / totalCatalogAgents) * 100) : 0;
+    document.getElementById('complete-agents').textContent = count;
+    document.getElementById('complete-probes').textContent = probes;
+    document.getElementById('complete-coverage').textContent = pct + '%';
+}
+
+document.getElementById('btn-complete').addEventListener('click', completeSetup);
 
 async function completeSetup() {
     const btn = document.getElementById('btn-complete');
     btn.classList.add('btn-loading');
     btn.textContent = '';
     try {
-        await fetch('/api/onboarding/complete', {method: 'POST'});
-    } catch(e) {}
+        await fetch('/api/onboarding/complete', { method: 'POST' });
+    } catch (e) { /* best effort */ }
     window.location.href = '/dashboard/cortex';
 }
 </script>

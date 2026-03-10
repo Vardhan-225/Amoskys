@@ -1,33 +1,27 @@
 """
 AMOSKYS Peripheral Telemetry API
-Fetches and displays USB/Bluetooth/peripheral device events
+Canonical peripheral telemetry endpoints backed by DashboardQueryService.
 """
 
+from __future__ import annotations
+
 import logging
-import os
-import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
-from . import escape_like
+from ..dashboard.query_service import get_dashboard_query_service
+from .rate_limiter import require_rate_limit
 
 logger = logging.getLogger(__name__)
-
-from .rate_limiter import require_rate_limit
 
 peripheral_bp = Blueprint(
     "peripheral_telemetry", __name__, url_prefix="/peripheral-telemetry"
 )
 
-# Path to permanent telemetry database
-TELEMETRY_DB_PATH = os.path.join(
-    os.path.dirname(__file__), "../../../data/telemetry.db"
-)
-
 
 def safe_int(value, default=0, min_val=None, max_val=None):
-    """Safely parse integer from request parameter"""
+    """Safely parse integer from request parameter."""
     try:
         result = int(value)
         if min_val is not None and result < min_val:
@@ -39,40 +33,17 @@ def safe_int(value, default=0, min_val=None, max_val=None):
         return default
 
 
-def get_db_connection():
-    """Create connection to telemetry database"""
-    if not os.path.exists(TELEMETRY_DB_PATH):
-        return None
-    conn = sqlite3.connect(TELEMETRY_DB_PATH, timeout=5.0)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 @peripheral_bp.route("/recent", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_recent_events():
-    """Get recent peripheral events"""
-    limit = safe_int(
-        request.args.get("limit", 100), default=100, min_val=1, max_val=500
-    )
-
-    conn = get_db_connection()
-    if not conn:
+    """Get recent peripheral events."""
+    limit = safe_int(request.args.get("limit", 100), default=100, min_val=1, max_val=500)
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"events": [], "message": "No data available yet"}), 200
 
     try:
-        cursor = conn.execute(
-            """
-            SELECT *
-            FROM peripheral_events
-            ORDER BY timestamp_ns DESC
-            LIMIT ?
-        """,
-            (limit,),
-        )
-
-        events = [dict(row) for row in cursor.fetchall()]
-
+        events = service.recent_peripheral_events(limit=limit)
         return jsonify(
             {
                 "events": events,
@@ -80,54 +51,21 @@ def get_recent_events():
                 "timestamp": datetime.now().isoformat(),
             }
         )
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to fetch recent peripheral events")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @peripheral_bp.route("/connected", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_connected_devices():
-    """Get currently connected peripheral devices"""
-    conn = get_db_connection()
-    if not conn:
+    """Get currently connected peripheral devices."""
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"devices": [], "message": "No data available"}), 200
 
     try:
-        # Get latest event for each peripheral device
-        cursor = conn.execute(
-            """
-            SELECT
-                peripheral_device_id,
-                device_name,
-                device_type,
-                vendor_id,
-                product_id,
-                manufacturer,
-                connection_status,
-                is_authorized,
-                risk_score,
-                MAX(timestamp_ns) as last_seen_ns,
-                timestamp_dt as last_seen_dt
-            FROM peripheral_events
-            GROUP BY peripheral_device_id
-            HAVING connection_status = 'CONNECTED'
-            ORDER BY last_seen_ns DESC
-        """
-        )
-
-        devices = []
-        for row in cursor.fetchall():
-            device = dict(row)
-            # Calculate how long ago device was seen
-            last_seen = datetime.fromisoformat(device["last_seen_dt"])
-            device["seconds_since_seen"] = int(
-                (datetime.now() - last_seen).total_seconds()
-            )
-            devices.append(device)
-
+        devices = service.connected_peripherals()
         return jsonify(
             {
                 "devices": devices,
@@ -135,161 +73,39 @@ def get_connected_devices():
                 "timestamp": datetime.now().isoformat(),
             }
         )
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to fetch connected peripheral devices")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @peripheral_bp.route("/stats", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_peripheral_stats():
-    """Get aggregated peripheral statistics"""
-    conn = get_db_connection()
-    if not conn:
+    """Get aggregated peripheral statistics."""
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"error": "Database not available"}), 500
 
     try:
-        # Total events
-        cursor = conn.execute("SELECT COUNT(*) as count FROM peripheral_events")
-        total_events = cursor.fetchone()["count"]
-
-        # Unique devices
-        cursor = conn.execute(
-            "SELECT COUNT(DISTINCT peripheral_device_id) as count FROM peripheral_events"
-        )
-        unique_devices = cursor.fetchone()["count"]
-
-        # Device type distribution
-        cursor = conn.execute(
-            """
-            SELECT device_type, COUNT(*) as count
-            FROM peripheral_events
-            WHERE device_type IS NOT NULL
-            GROUP BY device_type
-        """
-        )
-        type_dist = {row["device_type"]: row["count"] for row in cursor.fetchall()}
-
-        # Connection status distribution
-        cursor = conn.execute(
-            """
-            SELECT connection_status, COUNT(*) as count
-            FROM peripheral_events
-            WHERE connection_status IS NOT NULL
-            GROUP BY connection_status
-        """
-        )
-        status_dist = {
-            row["connection_status"]: row["count"] for row in cursor.fetchall()
-        }
-
-        # Unauthorized devices count
-        cursor = conn.execute(
-            """
-            SELECT COUNT(DISTINCT peripheral_device_id) as count
-            FROM peripheral_events
-            WHERE is_authorized = 0
-        """
-        )
-        unauthorized_count = cursor.fetchone()["count"]
-
-        # High risk devices (risk_score > 0.7)
-        cursor = conn.execute(
-            """
-            SELECT COUNT(DISTINCT peripheral_device_id) as count
-            FROM peripheral_events
-            WHERE risk_score > 0.7
-        """
-        )
-        high_risk_count = cursor.fetchone()["count"]
-
-        # Recent connections (last hour)
-        one_hour_ago = int((datetime.now() - timedelta(hours=1)).timestamp() * 1e9)
-        cursor = conn.execute(
-            """
-            SELECT COUNT(*) as count
-            FROM peripheral_events
-            WHERE timestamp_ns > ? AND connection_status = 'CONNECTED'
-        """,
-            (one_hour_ago,),
-        )
-        recent_connections = cursor.fetchone()["count"]
-
-        # Time range
-        cursor = conn.execute(
-            """
-            SELECT MIN(timestamp_dt) as start, MAX(timestamp_dt) as end
-            FROM peripheral_events
-        """
-        )
-        time_range = cursor.fetchone()
-
-        return jsonify(
-            {
-                "total_events": total_events,
-                "unique_devices": unique_devices,
-                "unauthorized_devices": unauthorized_count,
-                "high_risk_devices": high_risk_count,
-                "recent_connections_1h": recent_connections,
-                "device_type_distribution": type_dist,
-                "connection_status_distribution": status_dist,
-                "collection_period": {
-                    "start": time_range["start"],
-                    "end": time_range["end"],
-                },
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
-    except Exception as e:
+        payload = service.peripheral_stats()
+        payload["timestamp"] = datetime.now().isoformat()
+        return jsonify(payload)
+    except Exception as exc:
         logger.exception("Failed to aggregate peripheral statistics")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @peripheral_bp.route("/timeline", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_connection_timeline():
-    """Get timeline of device connections/disconnections"""
+    """Get timeline of device connections/disconnections."""
     hours = safe_int(request.args.get("hours", 24), default=24, min_val=1, max_val=168)
-
-    conn = get_db_connection()
-    if not conn:
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"events": [], "message": "No data available"}), 200
 
     try:
-        cutoff_time = int((datetime.now() - timedelta(hours=hours)).timestamp() * 1e9)
-
-        cursor = conn.execute(
-            """
-            SELECT
-                timestamp_ns,
-                timestamp_dt,
-                device_name,
-                device_type,
-                connection_status,
-                previous_status,
-                is_authorized,
-                risk_score
-            FROM peripheral_events
-            WHERE timestamp_ns > ?
-            ORDER BY timestamp_ns DESC
-        """,
-            (cutoff_time,),
-        )
-
-        events = []
-        for row in cursor.fetchall():
-            event = dict(row)
-            # Add human-readable time
-            event_time = datetime.fromisoformat(event["timestamp_dt"])
-            event["hours_ago"] = round(
-                (datetime.now() - event_time).total_seconds() / 3600, 1
-            )
-            events.append(event)
-
+        events = service.peripheral_timeline(hours=hours)
         return jsonify(
             {
                 "events": events,
@@ -298,48 +114,22 @@ def get_connection_timeline():
                 "timestamp": datetime.now().isoformat(),
             }
         )
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to fetch peripheral connection timeline")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @peripheral_bp.route("/high-risk", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_high_risk_devices():
-    """Get high-risk peripheral devices (risk_score > 0.5)"""
+    """Get high-risk peripheral devices (risk_score > 0.5)."""
     limit = safe_int(request.args.get("limit", 50), default=50, min_val=1, max_val=200)
-
-    conn = get_db_connection()
-    if not conn:
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"devices": [], "message": "No data available"}), 200
 
     try:
-        cursor = conn.execute(
-            """
-            SELECT
-                peripheral_device_id,
-                device_name,
-                device_type,
-                vendor_id,
-                product_id,
-                manufacturer,
-                MAX(risk_score) as max_risk_score,
-                is_authorized,
-                COUNT(*) as event_count,
-                MAX(timestamp_dt) as last_seen
-            FROM peripheral_events
-            WHERE risk_score > 0.5
-            GROUP BY peripheral_device_id
-            ORDER BY max_risk_score DESC
-            LIMIT ?
-        """,
-            (limit,),
-        )
-
-        devices = [dict(row) for row in cursor.fetchall()]
-
+        devices = service.high_risk_peripherals(limit=limit)
         return jsonify(
             {
                 "devices": devices,
@@ -347,47 +137,22 @@ def get_high_risk_devices():
                 "timestamp": datetime.now().isoformat(),
             }
         )
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to fetch high-risk peripheral devices")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @peripheral_bp.route("/unauthorized", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_unauthorized_devices():
-    """Get unauthorized peripheral devices"""
+    """Get unauthorized peripheral devices."""
     limit = safe_int(request.args.get("limit", 50), default=50, min_val=1, max_val=200)
-
-    conn = get_db_connection()
-    if not conn:
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"devices": [], "message": "No data available"}), 200
 
     try:
-        cursor = conn.execute(
-            """
-            SELECT
-                peripheral_device_id,
-                device_name,
-                device_type,
-                vendor_id,
-                product_id,
-                manufacturer,
-                MAX(risk_score) as max_risk_score,
-                COUNT(*) as event_count,
-                MAX(timestamp_dt) as last_seen
-            FROM peripheral_events
-            WHERE is_authorized = 0
-            GROUP BY peripheral_device_id
-            ORDER BY max_risk_score DESC
-            LIMIT ?
-        """,
-            (limit,),
-        )
-
-        devices = [dict(row) for row in cursor.fetchall()]
-
+        devices = service.unauthorized_peripherals(limit=limit)
         return jsonify(
             {
                 "devices": devices,
@@ -395,34 +160,21 @@ def get_unauthorized_devices():
                 "timestamp": datetime.now().isoformat(),
             }
         )
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to fetch unauthorized peripheral devices")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @peripheral_bp.route("/device/<device_id>", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_device_history(device_id):
-    """Get event history for a specific device"""
-    conn = get_db_connection()
-    if not conn:
+    """Get event history for a specific device."""
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"events": [], "message": "No data available"}), 200
 
     try:
-        cursor = conn.execute(
-            """
-            SELECT *
-            FROM peripheral_events
-            WHERE peripheral_device_id = ?
-            ORDER BY timestamp_ns DESC
-        """,
-            (device_id,),
-        )
-
-        events = [dict(row) for row in cursor.fetchall()]
-
+        events = service.peripheral_device_history(device_id=device_id)
         return jsonify(
             {
                 "device_id": device_id,
@@ -431,50 +183,31 @@ def get_device_history(device_id):
                 "timestamp": datetime.now().isoformat(),
             }
         )
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to fetch peripheral device history for %s", device_id)
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @peripheral_bp.route("/search", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def search_devices():
-    """Search peripheral devices by name, type, or manufacturer"""
+    """Search peripheral devices by name, type, or manufacturer."""
     device_name = request.args.get("name", "")
     device_type = request.args.get("type", "")
     manufacturer = request.args.get("manufacturer", "")
-    limit = safe_int(
-        request.args.get("limit", 100), default=100, min_val=1, max_val=500
-    )
+    limit = safe_int(request.args.get("limit", 100), default=100, min_val=1, max_val=500)
 
-    conn = get_db_connection()
-    if not conn:
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"events": [], "message": "No data available"}), 200
 
     try:
-        query = "SELECT * FROM peripheral_events WHERE 1=1"
-        params = []
-
-        if device_name:
-            query += " AND device_name LIKE ? ESCAPE '\\'"
-            params.append(f"%{escape_like(device_name)}%")
-
-        if device_type:
-            query += " AND device_type = ?"
-            params.append(device_type)
-
-        if manufacturer:
-            query += " AND manufacturer LIKE ? ESCAPE '\\'"
-            params.append(f"%{escape_like(manufacturer)}%")
-
-        query += " ORDER BY timestamp_ns DESC LIMIT ?"
-        params.append(limit)
-
-        cursor = conn.execute(query, params)
-        events = [dict(row) for row in cursor.fetchall()]
-
+        events = service.search_peripherals(
+            name=device_name,
+            device_type=device_type,
+            manufacturer=manufacturer,
+            limit=limit,
+        )
         return jsonify(
             {
                 "events": events,
@@ -487,8 +220,6 @@ def search_devices():
                 "timestamp": datetime.now().isoformat(),
             }
         )
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to search peripheral devices")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500

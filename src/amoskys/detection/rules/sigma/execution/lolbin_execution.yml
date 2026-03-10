@@ -1,0 +1,29 @@
+title: LOLBin Execution Detected
+id: amoskys-exec-001
+status: stable
+level: high
+description: Detects execution of living-off-the-land binaries (LOLBins) such as curl, wget, osascript, and nc that attackers commonly abuse for download, execution, or exfiltration
+author: AMOSKYS
+tags:
+    - attack.execution
+    - attack.t1059
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection:
+        event_type: lolbin_execution
+    condition: selection
+fields:
+    - process_name
+    - command_line
+    - parent_name
+    - parent_command_line
+    - pid
+    - ppid
+    - user
+falsepositives:
+    - System administrators using curl or wget for legitimate downloads
+    - Package managers invoking curl during updates
+    - Automation scripts using netcat for health checks
+confidence: 0.80

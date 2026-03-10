@@ -1,0 +1,28 @@
+title: Database Schema Enumeration
+id: amoskys-disc-003
+status: stable
+level: high
+description: Detects database schema enumeration activity where an adversary is querying information_schema or system catalogs to discover database structure, tables, and columns for further exploitation
+author: AMOSKYS
+tags:
+    - attack.discovery
+    - attack.t1087
+logsource:
+    category: application
+    product: amoskys
+detection:
+    selection:
+        event_type: schema_enumeration
+    condition: selection
+fields:
+    - database_name
+    - query_text
+    - source_ip
+    - username
+    - tables_accessed
+    - process_name
+falsepositives:
+    - Database administrators performing schema audits
+    - ORM frameworks introspecting table structures
+    - Database migration tools
+confidence: 0.78

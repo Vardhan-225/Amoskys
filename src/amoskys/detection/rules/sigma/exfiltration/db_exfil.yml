@@ -1,0 +1,27 @@
+title: Database Exfiltration via COPY TO or INTO OUTFILE
+id: amoskys-exfil-003
+status: stable
+level: critical
+description: Detects database exfiltration attempts using COPY TO (PostgreSQL) or SELECT INTO OUTFILE (MySQL) commands that write query results to the filesystem
+author: AMOSKYS
+tags:
+    - attack.exfiltration
+    - attack.t1048
+logsource:
+    category: database
+    product: amoskys
+detection:
+    selection:
+        event_type: db_exfiltration
+    condition: selection
+fields:
+    - db_user
+    - db_name
+    - query
+    - destination_path
+    - source_ip
+    - row_count
+falsepositives:
+    - Authorized database export jobs
+    - Scheduled ETL pipelines writing to approved paths
+confidence: 0.85

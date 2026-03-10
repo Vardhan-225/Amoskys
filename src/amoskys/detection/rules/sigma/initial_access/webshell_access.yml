@@ -1,0 +1,31 @@
+title: Webshell Access Pattern Detected
+id: amoskys-ia-002
+status: stable
+level: critical
+description: Detects webshell access or upload patterns in web server logs, including requests to known webshell filenames, suspicious file uploads to web-accessible directories, and command execution via web parameters
+author: AMOSKYS
+tags:
+    - attack.initial_access
+    - attack.t1505.003
+logsource:
+    category: webserver
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - webshell_access
+            - webshell_upload
+    condition: selection
+fields:
+    - source_ip
+    - url_path
+    - file_name
+    - upload_directory
+    - http_method
+    - user_agent
+    - response_code
+    - command_parameter
+falsepositives:
+    - Authorized file upload functionality with names resembling webshells
+    - Web-based file management tools accessed by administrators
+confidence: 0.90

@@ -50,6 +50,7 @@ from amoskys.intel.reliability import (
     ReliabilityTracker,
 )
 from amoskys.intel.rules import evaluate_rules
+from amoskys.intel.scoring import SequenceScorer
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +204,10 @@ class FusionEngine:
             ("agent_weights", "TEXT NOT NULL DEFAULT '{}'"),
             ("weighted_confidence", "REAL NOT NULL DEFAULT 1.0"),
             ("contributing_agents", "TEXT NOT NULL DEFAULT '[]'"),
+            ("start_ts_ns", "INTEGER DEFAULT NULL"),
+            ("end_ts_ns", "INTEGER DEFAULT NULL"),
+            ("duration_seconds", "REAL DEFAULT NULL"),
+            ("mitre_sequence", "TEXT DEFAULT NULL"),
         ]
 
         for col_name, col_def in migrations:
@@ -295,12 +300,22 @@ class FusionEngine:
         # Pull AMRDR fusion weights
         weights = self.reliability_tracker.get_fusion_weights()
 
-        # Run correlation rules with AMRDR weights
-        incidents = evaluate_rules(events, device_id, weights=weights)
+        # Sort events by probe detection timestamp for correct causal ordering
+        # (batch delivery from sleeping endpoints can invert arrival order)
+        sorted_events = sorted(events, key=lambda e: e.timestamp)
+
+        # Run correlation rules with AMRDR weights (using sorted events)
+        incidents = evaluate_rules(sorted_events, device_id, weights=weights)
 
         # Run advanced correlation rules with AMRDR weights
-        advanced_incidents = evaluate_advanced_rules(events, device_id, weights=weights)
+        advanced_incidents = evaluate_advanced_rules(
+            sorted_events, device_id, weights=weights
+        )
         incidents.extend(advanced_incidents)
+
+        # Detect kill chain sequences and promote to incidents (Step 4)
+        sequence_incidents = self._detect_sequence_incidents(device_id, sorted_events)
+        incidents.extend(sequence_incidents)
 
         # Emit AMRDR drift alerts if any agent is drifting
         drift_incidents = self._emit_drift_alerts(device_id)
@@ -448,6 +463,43 @@ class FusionEngine:
             score += suspicious_sudo_count * 30
             reason_tags.append(f"suspicious_sudo_{suspicious_sudo_count}")
 
+        # Temporal velocity scoring: detect bursts and acceleration from probe timestamps
+        sorted_events = sorted(events, key=lambda e: e.timestamp)
+        if len(sorted_events) >= 5:
+            # Burst detection: >5 events in any 10-second window
+            timestamps = [e.timestamp.timestamp() for e in sorted_events]
+            max_burst = 0
+            left = 0
+            for right in range(len(timestamps)):
+                while timestamps[right] - timestamps[left] > 10.0:
+                    left += 1
+                max_burst = max(max_burst, right - left + 1)
+            if max_burst > 5:
+                score += 15
+                reason_tags.append(f"temporal_burst_{max_burst}_in_10s")
+
+            # Acceleration: compare event rate in first half vs second half of window
+            mid = len(timestamps) // 2
+            first_half_span = timestamps[mid] - timestamps[0] if mid > 0 else 1.0
+            second_half_span = (
+                timestamps[-1] - timestamps[mid] if mid < len(timestamps) - 1 else 1.0
+            )
+            first_rate = mid / max(first_half_span, 0.1)
+            second_rate = (len(timestamps) - mid) / max(second_half_span, 0.1)
+            if second_rate > first_rate * 2.0 and second_rate > 0.5:
+                score += 10
+                reason_tags.append("temporal_acceleration")
+
+        # First-time IP detection using known_ips history
+        for event in events:
+            if event.security_event:
+                source_ip = event.security_event.get("source_ip")
+                if source_ip and source_ip not in ["127.0.0.1", "localhost"]:
+                    if source_ip not in state["known_ips"]:
+                        score += 10
+                        reason_tags.append(f"first_seen_ip_{source_ip}")
+                        break  # Only count once per evaluation
+
         # Add incident contributions (scaled by AMRDR agent weights)
         for incident in new_incidents:
             # Compute average weight of contributing agents
@@ -460,16 +512,24 @@ class FusionEngine:
             elif incident.weighted_confidence < 1.0:
                 avg_weight = incident.weighted_confidence
 
+            # Speed multiplier: kill chains completing in < 60s = automated tooling
+            speed_mult = 1.0
+            if incident.start_ts and incident.end_ts:
+                duration = (incident.end_ts - incident.start_ts).total_seconds()
+                if 0 < duration < 60:
+                    speed_mult = 1.5
+                    reason_tags.append(f"rapid_incident_{duration:.0f}s")
+
             if incident.severity == Severity.CRITICAL:
                 base_points = 40
-                scaled_points = int(base_points * avg_weight)
+                scaled_points = int(base_points * avg_weight * speed_mult)
                 score += scaled_points
                 reason_tags.append(
                     f"incident_critical_{incident.rule_name}" f"(w={avg_weight:.2f})"
                 )
             elif incident.severity == Severity.HIGH:
                 base_points = 20
-                scaled_points = int(base_points * avg_weight)
+                scaled_points = int(base_points * avg_weight * speed_mult)
                 score += scaled_points
                 reason_tags.append(
                     f"incident_high_{incident.rule_name}" f"(w={avg_weight:.2f})"
@@ -530,19 +590,36 @@ class FusionEngine:
         )
 
     def persist_incident(self, incident: Incident):
-        """Save incident to database (includes AMRDR columns)
+        """Save incident to database (includes AMRDR + temporal columns)
 
         Args:
             incident: Incident to persist
         """
+        # Compute temporal fields from incident timestamps
+        start_ts_ns = (
+            int(incident.start_ts.timestamp() * 1e9) if incident.start_ts else None
+        )
+        end_ts_ns = int(incident.end_ts.timestamp() * 1e9) if incident.end_ts else None
+        duration_seconds = None
+        if incident.start_ts and incident.end_ts:
+            duration_seconds = (incident.end_ts - incident.start_ts).total_seconds()
+
+        # Build ordered MITRE sequence from techniques + timestamps
+        mitre_sequence = None
+        if incident.techniques and incident.start_ts:
+            mitre_sequence = json.dumps(
+                [{"technique": t, "ts": start_ts_ns} for t in incident.techniques]
+            )
+
         try:
             self.db.execute(
                 """
                 INSERT OR REPLACE INTO incidents
                 (incident_id, device_id, severity, tactics, techniques, rule_name,
                  summary, start_ts, end_ts, event_ids, metadata, created_at,
-                 agent_weights, weighted_confidence, contributing_agents)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 agent_weights, weighted_confidence, contributing_agents,
+                 start_ts_ns, end_ts_ns, duration_seconds, mitre_sequence)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     incident.incident_id,
@@ -560,11 +637,18 @@ class FusionEngine:
                     json.dumps(incident.agent_weights),
                     incident.weighted_confidence,
                     json.dumps(incident.contributing_agents),
+                    start_ts_ns,
+                    end_ts_ns,
+                    duration_seconds,
+                    mitre_sequence,
                 ),
+            )
+            duration_str = (
+                f", duration={duration_seconds:.1f}s" if duration_seconds else ""
             )
             logger.info(
                 f"Persisted incident: {incident.incident_id} "
-                f"(confidence={incident.weighted_confidence:.2f})"
+                f"(confidence={incident.weighted_confidence:.2f}{duration_str})"
             )
         except Exception as e:
             logger.error(f"Failed to persist incident {incident.incident_id}: {e}")
@@ -599,6 +683,68 @@ class FusionEngine:
             logger.error(
                 f"Failed to persist risk snapshot for {snapshot.device_id}: {e}"
             )
+
+    def _detect_sequence_incidents(
+        self, device_id: str, sorted_events: List[TelemetryEventView]
+    ) -> List[Incident]:
+        """Detect kill chain sequences and promote them to full incidents.
+
+        Uses a per-device SequenceScorer with the FusionEngine's correlation
+        window (30 min by default, vs the ScoringEngine's 10-min window).
+        When >= 2/3 of a chain matches, creates an Incident.
+
+        Args:
+            device_id: Device being evaluated
+            sorted_events: Events sorted by probe timestamp
+
+        Returns:
+            List of sequence-based incidents (may be empty)
+        """
+        state = self.device_state[device_id]
+
+        # Lazily create per-device SequenceScorer with the fusion window
+        if "sequence_scorer" not in state:
+            state["sequence_scorer"] = SequenceScorer(
+                window_seconds=self.window_minutes * 60
+            )
+
+        scorer: SequenceScorer = state["sequence_scorer"]
+        incidents: List[Incident] = []
+
+        for event in sorted_events:
+            category = ""
+            if event.security_event:
+                category = event.security_event.get("event_category", "")
+            elif event.audit_event:
+                category = event.audit_event.get("audit_category", "")
+            if not category:
+                category = event.event_type
+
+            ts = event.timestamp.timestamp()
+            score, matched_name = scorer.record_and_score(device_id, category, ts)
+
+            # 0.66 = at least 2/3 of a chain matched
+            if score >= 0.66 and matched_name:
+                cooldown_key = ("SEQUENCE_KILL_CHAIN", device_id)
+                now = time.time()
+                last_fire = self._incident_cooldowns.get(cooldown_key, 0)
+                if (now - last_fire) >= self._cooldown_seconds:
+                    severity = Severity.CRITICAL if score >= 1.0 else Severity.HIGH
+                    incident = Incident(
+                        incident_id=f"SEQ-{device_id}-{uuid.uuid4().hex[:8]}",
+                        device_id=device_id,
+                        severity=severity,
+                        tactics=[],
+                        techniques=[],
+                        rule_name="SEQUENCE_KILL_CHAIN",
+                        summary=f"Kill chain sequence detected ({score * 100:.0f}%): {matched_name}",
+                        start_ts=sorted_events[0].timestamp,
+                        end_ts=event.timestamp,
+                    )
+                    incidents.append(incident)
+                    self._incident_cooldowns[cooldown_key] = now
+
+        return incidents
 
     def _emit_drift_alerts(self, device_id: str) -> List[Incident]:
         """Emit AMRDR_DRIFT incidents when agents show reliability drift.
@@ -859,6 +1005,12 @@ class FusionEngine:
                 inc["agent_weights"] = {}
                 inc["weighted_confidence"] = 1.0
                 inc["contributing_agents"] = []
+            # Temporal fields (Step 5)
+            if len(row) > 15:
+                inc["start_ts_ns"] = row[15]
+                inc["end_ts_ns"] = row[16]
+                inc["duration_seconds"] = row[17]
+                inc["mitre_sequence"] = json.loads(row[18]) if row[18] else None
             incidents.append(inc)
 
         return incidents

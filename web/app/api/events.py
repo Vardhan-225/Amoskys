@@ -1,27 +1,38 @@
 """
 AMOSKYS API Events Module
-Security event ingestion and management
+Security event ingestion and management — wired to TelemetryStore.
 """
 
 import hashlib
 import json
+import time
 from datetime import datetime, timezone
 
 from flask import Blueprint, g, jsonify, request
 
 from .agent_auth import require_auth
 from .rate_limiter import require_rate_limit
+from ..dashboard.query_service import get_dashboard_query_service
 
 events_bp = Blueprint("events", __name__, url_prefix="/events")
+_MSG_DB_UNAVAILABLE = "Database unavailable"
 
-# In-memory event store (replace with database in production)
+# Backward-compatible in-memory mirrors used by /api/system/status.
 EVENT_STORE = []
 EVENT_STATS = {
     "total_events": 0,
-    "events_last_hour": 0,
-    "events_by_type": {},
-    "events_by_severity": {"low": 0, "medium": 0, "high": 0, "critical": 0},
+    "by_severity": {"low": 0, "medium": 0, "high": 0, "critical": 0},
 }
+
+
+def _get_store():
+    """Get TelemetryStore instance (lazy import)."""
+    try:
+        from ..dashboard.telemetry_bridge import get_telemetry_store
+
+        return get_telemetry_store()
+    except Exception:
+        return None
 
 
 def validate_event_schema(event_data):
@@ -40,11 +51,14 @@ def validate_event_schema(event_data):
     return True, None
 
 
+_SEVERITY_TO_RISK = {"low": 0.1, "medium": 0.35, "high": 0.6, "critical": 0.85}
+
+
 @events_bp.route("/submit", methods=["POST"])
 @require_auth(permissions=["event.submit"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def submit_event():
-    """Submit a security event to AMOSKYS"""
+    """Submit a security event to AMOSKYS — persisted to TelemetryStore."""
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON payload"}), 400
@@ -55,42 +69,62 @@ def submit_event():
         return jsonify({"error": error_msg}), 400
 
     agent_id = g.current_user["agent_id"]
+    now_ns = int(time.time() * 1e9)
+    now_dt = datetime.now(timezone.utc).isoformat()
+    event_id = hashlib.sha256(
+        f"{agent_id}-{now_dt}-{json.dumps(data, sort_keys=True)}".encode()
+    ).hexdigest()[:16]
 
-    # Create event record
-    event_record = {
-        "event_id": hashlib.sha256(
-            f"{agent_id}-{datetime.now().isoformat()}-{json.dumps(data, sort_keys=True)}".encode()
-        ).hexdigest()[:16],
-        "agent_id": agent_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "event_type": data["event_type"],
-        "severity": data["severity"],
+    store = _get_store()
+    if store is None:
+        return jsonify({"error": _MSG_DB_UNAVAILABLE}), 503
+
+    risk_score = _SEVERITY_TO_RISK.get(data["severity"], 0.25)
+    indicators = {
         "source_ip": data["source_ip"],
-        "destination_ip": data.get("destination_ip"),
-        "source_port": data.get("source_port"),
-        "destination_port": data.get("destination_port"),
-        "protocol": data.get("protocol"),
-        "description": data["description"],
-        "metadata": data.get("metadata", {}),
-        "status": "new",
+        "agent": agent_id,
     }
+    if data.get("destination_ip"):
+        indicators["dst_ip"] = data["destination_ip"]
+    if data.get("metadata"):
+        indicators.update(data["metadata"])
 
-    # Store event
-    EVENT_STORE.append(event_record)
-
-    # Update statistics
-    EVENT_STATS["total_events"] += 1
-    EVENT_STATS["events_by_type"][data["event_type"]] = (
-        EVENT_STATS["events_by_type"].get(data["event_type"], 0) + 1
+    store.insert_security_event(
+        {
+            "timestamp_ns": now_ns,
+            "timestamp_dt": now_dt,
+            "device_id": agent_id,
+            "event_category": data["event_type"],
+            "event_action": "external_submit",
+            "risk_score": risk_score,
+            "confidence": 0.5,
+            "description": data["description"],
+            "indicators": json.dumps(indicators),
+            "collection_agent": agent_id,
+            "event_id": event_id,
+        }
     )
-    EVENT_STATS["events_by_severity"][data["severity"]] += 1
+
+    EVENT_STORE.append(
+        {
+            "event_id": event_id,
+            "timestamp": now_dt,
+            "event_type": data["event_type"],
+            "severity": data["severity"],
+            "agent_id": agent_id,
+        }
+    )
+    EVENT_STATS["total_events"] += 1
+    EVENT_STATS["by_severity"][data["severity"]] = (
+        EVENT_STATS["by_severity"].get(data["severity"], 0) + 1
+    )
 
     return jsonify(
         {
             "status": "success",
             "message": "Event submitted successfully",
-            "event_id": event_record["event_id"],
-            "timestamp": event_record["timestamp"],
+            "event_id": event_id,
+            "timestamp": now_dt,
         }
     )
 
@@ -98,35 +132,23 @@ def submit_event():
 @events_bp.route("/list", methods=["GET"])
 @require_auth()
 def list_events():
-    """List recent security events"""
-    # Query parameters
-    limit = min(int(request.args.get("limit", 100)), 1000)  # Max 1000
+    """List recent security events from TelemetryStore."""
+    limit = min(int(request.args.get("limit", 100)), 1000)
     severity = request.args.get("severity")
-    event_type = request.args.get("event_type")
-    agent_id = request.args.get("agent_id")
 
-    # Filter events
-    filtered_events = EVENT_STORE.copy()
+    store = _get_store()
+    if store is None:
+        return jsonify({"status": "success", "event_count": 0, "events": []})
 
-    if severity:
-        filtered_events = [e for e in filtered_events if e["severity"] == severity]
-
-    if event_type:
-        filtered_events = [e for e in filtered_events if e["event_type"] == event_type]
-
-    if agent_id:
-        filtered_events = [e for e in filtered_events if e["agent_id"] == agent_id]
-
-    # Sort by timestamp (newest first) and limit
-    filtered_events.sort(key=lambda x: x["timestamp"], reverse=True)
-    filtered_events = filtered_events[:limit]
+    rows = store.get_recent_security_events(
+        limit=limit, hours=8760, severity=severity
+    )
 
     return jsonify(
         {
             "status": "success",
-            "event_count": len(filtered_events),
-            "total_events": len(EVENT_STORE),
-            "events": filtered_events,
+            "event_count": len(rows),
+            "events": rows,
         }
     )
 
@@ -134,13 +156,18 @@ def list_events():
 @events_bp.route("/<event_id>", methods=["GET"])
 @require_auth()
 def get_event(event_id):
-    """Get details of a specific event"""
-    event = next((e for e in EVENT_STORE if e["event_id"] == event_id), None)
+    """Get details of a specific event by event_id."""
+    service = get_dashboard_query_service()
+    if not service.available:
+        return jsonify({"error": _MSG_DB_UNAVAILABLE}), 503
 
-    if not event:
-        return jsonify({"error": "Event not found"}), 404
-
-    return jsonify({"status": "success", "event": event})
+    try:
+        event = service.security_event_by_id(event_id)
+        if not event:
+            return jsonify({"error": "Event not found"}), 404
+        return jsonify({"status": "success", "event": event})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @events_bp.route("/<event_id>/status", methods=["PUT"])
@@ -158,66 +185,46 @@ def update_event_status(event_id):
             400,
         )
 
-    # Find and update event
-    event = next((e for e in EVENT_STORE if e["event_id"] == event_id), None)
-    if not event:
-        return jsonify({"error": "Event not found"}), 404
+    service = get_dashboard_query_service()
+    if not service.available:
+        return jsonify({"error": _MSG_DB_UNAVAILABLE}), 503
 
-    event["status"] = data["status"]
-    event["updated_at"] = datetime.now(timezone.utc).isoformat()
-    event["updated_by"] = g.current_user["agent_id"]
+    try:
+        if not service.security_event_by_id(event_id):
+            return jsonify({"error": "Event not found"}), 404
 
-    if "notes" in data:
-        event["notes"] = data["notes"]
+        updated = service.update_security_event_status(event_id, data["status"])
+        if not updated:
+            return jsonify({"error": "Event not found"}), 404
 
-    return jsonify(
-        {
-            "status": "success",
-            "message": f'Event {event_id} status updated to {data["status"]}',
-            "event": event,
-        }
-    )
+        return jsonify(
+            {
+                "status": "success",
+                "message": f'Event {event_id} status updated to {data["status"]}',
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @events_bp.route("/stats", methods=["GET"])
 @require_auth()
 def event_statistics():
-    """Get event statistics and trends"""
-    # Calculate events in last hour
-    current_time = datetime.now(timezone.utc)
-    one_hour_ago = (
-        current_time.replace(hour=current_time.hour - 1)
-        if current_time.hour > 0
-        else current_time.replace(day=current_time.day - 1, hour=23)
-    )
+    """Get event statistics from TelemetryStore."""
+    store = _get_store()
+    if store is None:
+        return jsonify({"status": "success", "stats": {"total_events": 0}})
 
-    events_last_hour = len(
-        [
-            e
-            for e in EVENT_STORE
-            if datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00"))
-            > one_hour_ago
-        ]
-    )
-
-    # Recent event types
-    recent_types = {}
-    for event in EVENT_STORE[-100:]:  # Last 100 events
-        event_type = event["event_type"]
-        recent_types[event_type] = recent_types.get(event_type, 0) + 1
+    counts = store.get_unified_event_counts(hours=24)
 
     return jsonify(
         {
             "status": "success",
-            "timestamp": current_time.isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "stats": {
-                "total_events": len(EVENT_STORE),
-                "events_last_hour": events_last_hour,
-                "events_by_severity": EVENT_STATS["events_by_severity"],
-                "recent_event_types": recent_types,
-                "average_events_per_hour": round(
-                    len(EVENT_STORE) / max(1, (current_time.hour + 1)), 2
-                ),
+                "total_events": counts.get("total", 0),
+                "by_source": counts.get("by_source", {}),
+                "by_category": counts.get("by_category", {}),
             },
         }
     )

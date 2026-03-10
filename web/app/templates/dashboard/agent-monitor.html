@@ -243,33 +243,36 @@
 {% block extra_scripts %}
 <script nonce="{{ csp_nonce() }}">
 (function() {
+    // Agent list — matches AGENT_REGISTRY, updated from deep-overview API
     var AGENTS = [
-        { id: 'proc',    name: 'Process Monitor',   color: '#4ECDC4' },
-        { id: 'dns',     name: 'DNS Detector',      color: '#AA96DA' },
-        { id: 'auth',    name: 'Auth Guard',         color: '#FF6B35' },
-        { id: 'fim',     name: 'File Integrity',     color: '#00ff88' },
-        { id: 'flow',    name: 'Flow Analyzer',      color: '#F38181' },
-        { id: 'persistence', name: 'Persistence Guard', color: '#FCBAD3' },
-        { id: 'peripheral',  name: 'Peripheral Watch',  color: '#FF6B9D' },
-        { id: 'kernel_audit', name: 'Kernel Audit',     color: '#FFD93D' },
-        { id: 'device_discovery', name: 'Device Discovery', color: '#6BCB77' },
-        { id: 'protocol_collectors', name: 'Protocol Collectors', color: '#00B4D8' },
-        { id: 'applog',  name: 'AppLog Analyzer',    color: '#E8A87C' },
-        { id: 'db_activity', name: 'DB Activity',    color: '#20B2AA' },
-        { id: 'http_inspector', name: 'HTTP Inspector', color: '#7B68EE' },
-        { id: 'internet_activity', name: 'Internet Activity', color: '#DA70D6' },
-        { id: 'net_scanner', name: 'Network Scanner', color: '#FF7F50' },
+        // Endpoint agents (platform-routed: Observatory on macOS)
+        { id: 'proc',         name: 'Process Agent',        color: '#4ECDC4', cat: 'Endpoint' },
+        { id: 'auth',         name: 'AuthGuard Agent',      color: '#FF6B35', cat: 'Endpoint' },
+        { id: 'persistence',  name: 'Persistence Guard',    color: '#FCBAD3', cat: 'Endpoint' },
+        { id: 'fim',          name: 'File Integrity',       color: '#00ff88', cat: 'Endpoint' },
+        { id: 'peripheral',   name: 'Peripheral Agent',     color: '#FF6B9D', cat: 'Endpoint' },
+        // Network agents
+        { id: 'flow',         name: 'Flow Agent',           color: '#F38181', cat: 'Network' },
+        { id: 'dns',          name: 'DNS Agent',            color: '#AA96DA', cat: 'Network' },
+        { id: 'device_discovery', name: 'Device Discovery', color: '#6BCB77', cat: 'Network' },
+        { id: 'net_scanner',  name: 'Network Scanner',      color: '#FF7F50', cat: 'Network' },
+        { id: 'protocol_collectors', name: 'Protocol Collectors', color: '#00B4D8', cat: 'Network' },
+        // Application agents
+        { id: 'applog',       name: 'AppLog Agent',         color: '#E8A87C', cat: 'Application' },
+        { id: 'db_activity',  name: 'DB Activity Agent',    color: '#20B2AA', cat: 'Application' },
+        { id: 'http_inspector', name: 'HTTP Inspector',     color: '#7B68EE', cat: 'Application' },
+        { id: 'internet_activity', name: 'Internet Activity', color: '#DA70D6', cat: 'Application' },
+        // Platform-specific agents
+        { id: 'kernel_audit',           name: 'Kernel Audit',           color: '#FFD93D', cat: 'Platform' },
+        { id: 'macos_security_monitor', name: 'macOS Security Monitor', color: '#00d9ff', cat: 'Platform' },
+        { id: 'macos_unified_log',      name: 'macOS Unified Log',      color: '#00b4d8', cat: 'Platform' },
+        { id: 'macos_dns',              name: 'macOS DNS Observatory',   color: '#9b59b6', cat: 'Platform' },
+        { id: 'macos_applog',           name: 'macOS AppLog Observatory', color: '#e67e22', cat: 'Platform' },
+        { id: 'macos_discovery',        name: 'macOS Discovery',         color: '#27ae60', cat: 'Platform' },
+        { id: 'macos_internet_activity', name: 'macOS Internet Activity', color: '#8e44ad', cat: 'Platform' },
+        { id: 'macos_db_activity',      name: 'macOS DB Activity',       color: '#16a085', cat: 'Platform' },
+        { id: 'macos_http_inspector',   name: 'macOS HTTP Inspector',    color: '#2980b9', cat: 'Platform' },
     ];
-
-    var ID_MAP = {
-        'proc':'proc_agent','dns':'dns_agent','auth':'auth_agent',
-        'fim':'fim_agent','flow':'flow_agent','persistence':'persistence_agent',
-        'peripheral':'peripheral_agent','kernel_audit':'kernel_audit_agent',
-        'device_discovery':'device_discovery_agent','protocol_collectors':'protocol_collectors_agent',
-        'applog':'applog_agent','db_activity':'db_activity_agent',
-        'http_inspector':'http_inspector_agent','internet_activity':'internet_activity_agent',
-        'net_scanner':'net_scanner_agent',
-    };
 
     // Domain data columns per agent
     var DOMAIN_COLS = {
@@ -283,7 +286,7 @@
     };
 
     var agentId = new URLSearchParams(location.search).get('agent') || 'proc';
-    var catalogId = ID_MAP[agentId] || agentId;
+    var catalogId = agentId;
     var agentMeta = AGENTS.find(function(a) { return a.id === agentId; }) || AGENTS[0];
     var streamBuffer = [];
     var cpuHistory = [];
@@ -324,7 +327,7 @@
 
     function switchAgent(newId) {
         agentId = newId;
-        catalogId = ID_MAP[agentId] || agentId;
+        catalogId = agentId;
         agentMeta = AGENTS.find(function(a) { return a.id === agentId; }) || AGENTS[0];
         streamBuffer = [];
         cpuHistory = [];
@@ -413,10 +416,21 @@
             }
             updateProcessPanel(liveData, agentStatus);
 
-            // Deep overview (probes)
+            // Deep overview (probes) — also sync AGENTS list from registry
             if (deepData.status === 'success' && deepData.agents) {
                 overviewData = deepData.agents.find(function(a) { return a.id === agentId; });
                 updateProbePanel();
+                // Sync agent list from registry (single source of truth)
+                if (deepData.agents.length > AGENTS.length) {
+                    var existingIds = {};
+                    AGENTS.forEach(function(a) { existingIds[a.id] = true; });
+                    deepData.agents.forEach(function(a) {
+                        if (!existingIds[a.id]) {
+                            AGENTS.push({ id: a.id, name: a.name, color: a.color || '#00d9ff', cat: a.category || 'Platform' });
+                        }
+                    });
+                    renderAgentTabs();
+                }
             }
 
             // Activity stats
@@ -627,8 +641,16 @@
                     return '<span style="font-size:0.6rem;padding:0.1rem 0.25rem;background:rgba(255,107,157,0.12);color:#ff6b9d;border-radius:3px;">' + escapeHtml(t) + '</span>';
                 }).join(' ');
             }
+            var srcBadge = '';
+            var st = e.source_table || '';
+            if (st && st !== 'security_events') {
+                var srcLabels = {process_events:'PROC',flow_events:'FLOW',dns_events:'DNS',fim_events:'FIM',persistence_events:'PERS',peripheral_events:'PERI',audit_events:'KERN'};
+                var srcColors = {process_events:'#4ECDC4',flow_events:'#F38181',dns_events:'#AA96DA',fim_events:'#00ff88',persistence_events:'#FCBAD3',peripheral_events:'#FF6B9D',audit_events:'#FFD93D'};
+                srcBadge = '<span style="font-size:0.55rem;padding:0.1rem 0.3rem;border-radius:3px;background:' + (srcColors[st]||'#555') + '22;color:' + (srcColors[st]||'#999') + ';font-weight:700;margin-right:0.3rem;">' + (srcLabels[st]||st) + '</span>';
+            }
             return '<div class="am-event-row ' + riskClass + '">' +
                 '<span class="am-event-ts">' + ts + '</span>' +
+                srcBadge +
                 '<span class="am-event-cat">' + escapeHtml(e.event_category || 'unknown') + '</span>' +
                 '<span class="am-event-desc">' + escapeHtml((e.description || '').substring(0, 120)) + '</span>' +
                 '<span class="am-event-mitre">' + mitre + '</span>' +

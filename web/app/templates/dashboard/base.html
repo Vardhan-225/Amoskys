@@ -33,6 +33,18 @@
             --text-secondary: #b4bcd0;
             --text-muted: #6b7a99;
 
+            /* Severity colors (industry standard) */
+            --severity-critical: #dc2626;
+            --severity-high: #ea580c;
+            --severity-medium: #ca8a04;
+            --severity-low: #2563eb;
+            --severity-info: #6b7280;
+
+            /* Status colors */
+            --status-healthy: #16a34a;
+            --status-degraded: #ca8a04;
+            --status-down: #dc2626;
+
             /* Gradients */
             --gradient-neural: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
             --gradient-threat: linear-gradient(135deg, #330011 0%, #660022 50%, #440011 100%);
@@ -426,6 +438,32 @@
         .badge-success { background: var(--neural-primary); color: var(--bg-primary); }
         .badge-warning { background: var(--neural-warning); color: var(--bg-primary); }
         .badge-danger { background: var(--neural-danger); color: white; }
+
+        /* Severity badges */
+        .badge-critical { background: var(--severity-critical); color: white; }
+        .badge-high { background: var(--severity-high); color: white; }
+        .badge-medium { background: var(--severity-medium); color: var(--bg-primary); }
+        .badge-low { background: var(--severity-low); color: white; }
+        .badge-info { background: var(--severity-info); color: white; }
+
+        /* Risk indicators */
+        .risk-critical { color: var(--severity-critical); }
+        .risk-high { color: var(--severity-high); }
+        .risk-medium { color: var(--severity-medium); }
+        .risk-low { color: var(--severity-low); }
+        .risk-healthy { color: var(--status-healthy); }
+
+        /* Animated loading skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-pulse 1.5s infinite;
+            border-radius: 4px;
+        }
+        @keyframes skeleton-pulse {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
         
         /* Metrics */
         .metrics-grid {
@@ -955,13 +993,16 @@
     
     <!-- Chart.js for Visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <!-- Socket.IO for Real-time Updates -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-    
+
+    <!-- Dashboard Core — shared cache, polling, formatters, Chart.js theme -->
+    <script src="{{ url_for('static', filename='js/dashboard-core.js') }}"></script>
+
     <!-- Mobile Responsive Enhancements -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-responsive.css') }}">
-    
+
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -996,10 +1037,6 @@
                 <a href="/dashboard/cortex" class="sidebar-link">
                     <span class="sidebar-link-icon">🧠</span>
                     <span>Cortex</span>
-                </a>
-                <a href="/dashboard/soc" class="sidebar-link">
-                    <span class="sidebar-link-icon">🛡️</span>
-                    <span>SOC Operations</span>
                 </a>
                 <a href="/dashboard/agents" class="sidebar-link">
                     <span class="sidebar-link-icon">🤖</span>
@@ -1039,9 +1076,43 @@
                     <span class="sidebar-link-icon">🔮</span>
                     <span>SOMA Intelligence</span>
                 </a>
+
+                <div class="sidebar-section-label">Observatory</div>
+                <a href="/dashboard/posture" class="sidebar-link">
+                    <span class="sidebar-link-icon">🛡️</span>
+                    <span>Device Posture</span>
+                </a>
+                <a href="/dashboard/processes" class="sidebar-link">
+                    <span class="sidebar-link-icon">⚙️</span>
+                    <span>Process Telemetry</span>
+                </a>
                 <a href="/dashboard/network" class="sidebar-link">
                     <span class="sidebar-link-icon">🌐</span>
-                    <span>Network Map</span>
+                    <span>Network Intelligence</span>
+                </a>
+                <a href="/dashboard/dns" class="sidebar-link">
+                    <span class="sidebar-link-icon">🔍</span>
+                    <span>DNS Intelligence</span>
+                </a>
+                <a href="/dashboard/file-integrity" class="sidebar-link">
+                    <span class="sidebar-link-icon">📁</span>
+                    <span>File Integrity</span>
+                </a>
+                <a href="/dashboard/persistence" class="sidebar-link">
+                    <span class="sidebar-link-icon">🔗</span>
+                    <span>Persistence</span>
+                </a>
+                <a href="/dashboard/auth" class="sidebar-link">
+                    <span class="sidebar-link-icon">🔑</span>
+                    <span>Auth &amp; Access</span>
+                </a>
+                <a href="/dashboard/peripherals" class="sidebar-link">
+                    <span class="sidebar-link-icon">🔌</span>
+                    <span>Peripherals</span>
+                </a>
+                <a href="/dashboard/observations" class="sidebar-link">
+                    <span class="sidebar-link-icon">📋</span>
+                    <span>Observation Domains</span>
                 </a>
 
                 <div class="sidebar-section-label">Monitoring</div>
@@ -1057,14 +1128,6 @@
                     <span class="sidebar-link-icon">🔬</span>
                     <span>Probe Explorer</span>
                 </a>
-                <a href="/dashboard/processes" class="sidebar-link">
-                    <span class="sidebar-link-icon">⚙️</span>
-                    <span>Process Telemetry</span>
-                </a>
-                <a href="/dashboard/peripherals" class="sidebar-link">
-                    <span class="sidebar-link-icon">🔌</span>
-                    <span>Peripherals</span>
-                </a>
                 <a href="/dashboard/system" class="sidebar-link">
                     <span class="sidebar-link-icon">📊</span>
                     <span>System Health</span>
@@ -1079,29 +1142,11 @@
                     <span class="sidebar-link-icon">💻</span>
                     <span>My Agents</span>
                 </a>
-                <a href="/dashboard/marketplace" class="sidebar-link">
-                    <span class="sidebar-link-icon">🏪</span>
-                    <span>Marketplace</span>
-                </a>
 
-                <div class="sidebar-section-label">Proof &amp; Trust</div>
+                <div class="sidebar-section-label">Trust &amp; Data</div>
                 <a href="/dashboard/reliability" class="sidebar-link">
                     <span class="sidebar-link-icon">⚖️</span>
                     <span>Agent Reliability</span>
-                </a>
-                <a href="/dashboard/proof-spine" class="sidebar-link">
-                    <span class="sidebar-link-icon">🔒</span>
-                    <span>Proof Spine</span>
-                </a>
-
-                <div class="sidebar-section-label">Tools</div>
-                <a href="/dashboard/evidence-chain" class="sidebar-link">
-                    <span class="sidebar-link-icon">⛓️</span>
-                    <span>Evidence Chain</span>
-                </a>
-                <a href="/dashboard/query-builder" class="sidebar-link">
-                    <span class="sidebar-link-icon">📝</span>
-                    <span>Query Builder</span>
                 </a>
                 <a href="/dashboard/database" class="sidebar-link">
                     <span class="sidebar-link-icon">🗄️</span>
@@ -1144,6 +1189,10 @@
                 <span class="global-search-shortcut">⌘K</span>
             </div>
             <div class="neural-status">
+                <div class="status-indicator" id="header-device-info" style="gap:0.4rem;padding-right:0.8rem;border-right:1px solid rgba(255,255,255,0.08);" title="Monitored device">
+                    <span style="font-size:0.7rem;color:var(--neural-primary);font-weight:700;" id="header-hostname">--</span>
+                    <span style="font-size:0.6rem;color:var(--text-muted);font-family:monospace;" id="header-os-info">--</span>
+                </div>
                 <div class="status-indicator">
                     <span style="color: var(--text-secondary); font-size: 0.85rem; margin-right: 0.5rem;">System</span>
                     <div class="status-dot status-online" id="system-status"></div>
@@ -1151,10 +1200,6 @@
                 <div class="status-indicator">
                     <span style="color: var(--text-secondary); font-size: 0.85rem; margin-right: 0.5rem;">Threat</span>
                     <div class="status-dot status-online" id="threat-status"></div>
-                </div>
-                <div class="status-indicator">
-                    <span style="color: var(--text-secondary); font-size: 0.85rem; margin-right: 0.5rem;">Connection</span>
-                    <div class="status-dot status-online" id="connection-status"></div>
                 </div>
                 <div class="status-indicator" style="font-size:0.72rem;color:var(--text-muted);gap:0.3rem;" id="header-clock" title="Last dashboard refresh">
                     <span id="header-time">--:--:--</span>
@@ -1190,9 +1235,29 @@
             init() {
                 this.updateActiveNav();
                 this.buildBreadcrumb();
+                this.loadDeviceInfo();
                 this.startRealTimeUpdates();
                 this.updateTime();
                 setInterval(() => this.updateTime(), 1000);
+            }
+
+            async loadDeviceInfo() {
+                try {
+                    const r = await fetch('/dashboard/api/device-info');
+                    const d = await r.json();
+                    if (d.status === 'success' && d.system) {
+                        const el = document.getElementById('header-hostname');
+                        const osEl = document.getElementById('header-os-info');
+                        if (el) el.textContent = d.system.hostname || '--';
+                        if (osEl) {
+                            const sys = d.system.system || '';
+                            const osName = sys === 'Darwin' ? 'macOS' : sys;
+                            const rel = d.system.release || '';
+                            const arch = (d.system.architecture || [])[0] || '';
+                            osEl.textContent = osName + (rel ? ' ' + rel : '') + (arch ? ' · ' + arch : '');
+                        }
+                    }
+                } catch (e) { /* device info unavailable */ }
             }
 
             buildBreadcrumb() {
@@ -1200,22 +1265,27 @@
                 if (!el) return;
                 const PAGE_NAMES = {
                     '/dashboard': 'Cortex', '/dashboard/': 'Cortex', '/dashboard/cortex': 'Cortex',
-                    '/dashboard/soc': 'SOC Operations', '/dashboard/agents': 'Agent Network',
+                    '/dashboard/agents': 'Agent Network',
                     '/dashboard/mitre': 'MITRE ATT&CK', '/dashboard/hunt': 'Threat Hunting',
-                    '/dashboard/incidents': 'Incidents', '/dashboard/network': 'Network Map',
+                    '/dashboard/incidents': 'Incidents', '/dashboard/network': 'Network Intelligence',
                     '/dashboard/probe-explorer': 'Probe Explorer', '/dashboard/processes': 'Process Telemetry',
                     '/dashboard/peripherals': 'Peripherals', '/dashboard/system': 'System Health',
-                    '/dashboard/marketplace': 'Marketplace', '/dashboard/deploy': 'Deploy Agent',
+                    '/dashboard/deploy': 'Deploy Agent',
                     '/dashboard/my-agents': 'My Agents', '/dashboard/database': 'Database',
-                    '/dashboard/evidence-chain': 'Evidence Chain', '/dashboard/query-builder': 'Query Builder',
-                    '/dashboard/threat-feed': 'Live Threat Feed', '/dashboard/timeline-replay': 'Timeline Replay',
-                    '/dashboard/reliability': 'Agent Reliability', '/dashboard/proof-spine': 'Proof Spine',
+                    '/dashboard/threat-feed': 'Live Threat Feed',
+                    '/dashboard/reliability': 'Agent Reliability',
                     '/dashboard/agent-monitor': 'Agent Monitor',
                     '/dashboard/igris': 'IGRIS Supervisor',
                     '/dashboard/guardian': 'Guardian C2',
                     '/dashboard/event-stream': 'Event Stream',
                     '/dashboard/correlation': 'Correlation',
-                    '/dashboard/soma': 'SOMA Brain',
+                    '/dashboard/soma': 'SOMA Intelligence',
+                    '/dashboard/posture': 'Device Posture',
+                    '/dashboard/dns': 'DNS Intelligence',
+                    '/dashboard/file-integrity': 'File Integrity',
+                    '/dashboard/persistence': 'Persistence Landscape',
+                    '/dashboard/auth': 'Auth & Access',
+                    '/dashboard/observations': 'Observation Domains',
                 };
                 const path = window.location.pathname.replace(/\/$/, '') || '/dashboard';
                 const pageName = PAGE_NAMES[path] || path.split('/').pop().replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -1573,19 +1643,18 @@
                 
                 this.commands = [
                     // Navigation commands
-                    { type: 'navigation', icon: '🧠', title: 'Cortex Command', description: 'Main dashboard overview', url: '/dashboard/cortex', keywords: ['home', 'main', 'overview'] },
-                    { type: 'navigation', icon: '🛡️', title: 'SOC Operations', description: 'Security operations center', url: '/dashboard/soc', keywords: ['security', 'operations', 'alerts'] },
+                    { type: 'navigation', icon: '🧠', title: 'Cortex Command Center', description: 'Central security command center', url: '/dashboard/cortex', keywords: ['cortex', 'command', 'center', 'home', 'overview'] },
                     { type: 'navigation', icon: '🤖', title: 'Agent Network', description: 'Manage deployed agents', url: '/dashboard/agents', keywords: ['agents', 'network', 'deploy'] },
                     { type: 'navigation', icon: '🔬', title: 'Process Telemetry', description: 'Monitor process activity', url: '/dashboard/processes', keywords: ['process', 'telemetry', 'monitor'] },
                     { type: 'navigation', icon: '📊', title: 'System Health', description: 'System metrics and health', url: '/dashboard/system', keywords: ['system', 'health', 'metrics'] },
-                    { type: 'navigation', icon: '🧠', title: 'Cortex Command Center', description: 'Central security command center', url: '/dashboard/cortex', keywords: ['cortex', 'command', 'center', 'overview'] },
-                    { type: 'navigation', icon: '🏪', title: 'Agent Marketplace', description: 'Browse and deploy agents', url: '/dashboard/marketplace', keywords: ['marketplace', 'shop', 'agents', 'buy'] },
-                    { type: 'navigation', icon: '🔗', title: 'Evidence Chain', description: 'View attack evidence chains', url: '/dashboard/evidence-chain', keywords: ['evidence', 'chain', 'forensics'] },
-                    { type: 'navigation', icon: '⏱️', title: 'Timeline Replay', description: 'Replay threat timelines', url: '/dashboard/timeline-replay', keywords: ['timeline', 'replay', 'history'] },
-                    { type: 'navigation', icon: '🔍', title: 'Query Builder', description: 'Build custom queries', url: '/dashboard/query-builder', keywords: ['query', 'search', 'filter', 'sql'] },
-                    { type: 'navigation', icon: '👁️', title: 'Perspective Selector', description: 'Configure agent perspectives', url: '/dashboard/perspective-selector', keywords: ['perspective', 'view', 'agent'] },
+                    { type: 'navigation', icon: '🛡️', title: 'Device Posture', description: 'Cross-domain device health overview', url: '/dashboard/posture', keywords: ['posture', 'health', 'device', 'overview'] },
+                    { type: 'navigation', icon: '🌐', title: 'Network Intelligence', description: 'GeoIP network flow analysis', url: '/dashboard/network', keywords: ['network', 'geo', 'flow', 'traffic', 'ip'] },
+                    { type: 'navigation', icon: '🔍', title: 'DNS Intelligence', description: 'DGA detection and beaconing analysis', url: '/dashboard/dns', keywords: ['dns', 'dga', 'beaconing', 'domain', 'query'] },
+                    { type: 'navigation', icon: '📁', title: 'File Integrity', description: 'File change monitoring with risk scoring', url: '/dashboard/file-integrity', keywords: ['file', 'integrity', 'fim', 'change', 'hash'] },
+                    { type: 'navigation', icon: '🔗', title: 'Persistence Landscape', description: 'Autostart mechanism monitoring', url: '/dashboard/persistence', keywords: ['persistence', 'autostart', 'daemon', 'cron', 'launch'] },
+                    { type: 'navigation', icon: '🔑', title: 'Auth & Access', description: 'Login patterns and privilege escalation', url: '/dashboard/auth', keywords: ['auth', 'login', 'access', 'privilege', 'sudo'] },
+                    { type: 'navigation', icon: '📋', title: 'Observation Domains', description: 'Explore raw observation data across domains', url: '/dashboard/observations', keywords: ['observation', 'domain', 'unified', 'log', 'raw'] },
                     { type: 'navigation', icon: '⚖', title: 'Agent Reliability', description: 'AMRDR drift detection and trust weights', url: '/dashboard/reliability', keywords: ['reliability', 'amrdr', 'drift', 'trust', 'weight', 'bayesian'] },
-                    { type: 'navigation', icon: '🔐', title: 'Proof Spine', description: 'Cryptographic chain status and verification', url: '/dashboard/proof-spine', keywords: ['proof', 'spine', 'chain', 'merkle', 'checkpoint', 'verify', 'tamper'] },
                     { type: 'navigation', icon: '📡', title: 'Agent Monitor', description: 'Deep single-agent telemetry viewer', url: '/dashboard/agent-monitor', keywords: ['agent', 'monitor', 'telemetry', 'stream', 'live', 'events'] },
 
                     // Actions

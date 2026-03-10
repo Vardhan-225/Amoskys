@@ -1,0 +1,29 @@
+title: Cryptocurrency Mining Connection Detected
+id: amoskys-impact-001
+status: stable
+level: high
+description: Detects network connections to known cryptocurrency mining pools or Stratum protocol endpoints, indicating unauthorized resource hijacking for cryptomining
+author: AMOSKYS
+tags:
+    - attack.impact
+    - attack.t1496
+logsource:
+    category: network
+    product: amoskys
+detection:
+    selection:
+        event_type: crypto_mining_detected
+    condition: selection
+fields:
+    - source_ip
+    - destination_ip
+    - destination_host
+    - destination_port
+    - protocol
+    - process_name
+    - pid
+    - cpu_usage
+falsepositives:
+    - Authorized blockchain nodes or validators
+    - Research environments studying cryptocurrency protocols
+confidence: 0.85

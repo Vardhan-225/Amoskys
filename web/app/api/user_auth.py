@@ -143,6 +143,7 @@ def signup():
         client_info = get_client_info()
 
         # Create user via AuthService
+        auto_verified = False
         with get_web_session_context() as db:
             auth_service = AuthService(db)
             result = auth_service.signup(
@@ -152,6 +153,17 @@ def signup():
                 ip_address=client_info["ip_address"],
                 user_agent=client_info["user_agent"],
             )
+
+            # Dev mode: auto-verify user immediately (skip email)
+            if EMAIL_DEV_MODE and result.success and result.user:
+                result.user.is_verified = True
+                db.commit()
+                auto_verified = True
+                logger.info(
+                    "dev_auto_verified",
+                    user_id=str(result.user.id),
+                    email=email,
+                )
 
             # Extract user data while session is still active (avoid lazy loading issues)
             if result.user:
@@ -176,8 +188,8 @@ def signup():
             }
             return jsonify(response_data), status_code
 
-        # Send verification email if token was generated
-        if result.verification_token:
+        # Send verification email if token was generated (skip in dev mode)
+        if result.verification_token and not auto_verified:
             # Build verification URL
             verify_url = (
                 f"{request.host_url}auth/verify-email?token={result.verification_token}"
@@ -205,20 +217,8 @@ def signup():
             "error": None,
             "error_code": None,
             "user": user_data,
+            "auto_verified": auto_verified,
         }
-
-        # In dev mode, include verification token
-        if EMAIL_DEV_MODE and result.verification_token:
-            logger.info(
-                "signup_verification_token",
-                user_id=user_id,
-                token=result.verification_token,
-                verify_url=f"/auth/verify-email?token={result.verification_token}",
-            )
-            response_data["dev_verification_token"] = result.verification_token
-            response_data["dev_verify_url"] = (
-                f"/auth/verify-email?token={result.verification_token}"
-            )
 
         return jsonify(response_data), 201
 

@@ -1,0 +1,26 @@
+title: DGA Domain Detected
+id: amoskys-c2-003
+status: stable
+level: critical
+description: Detects domain generation algorithm (DGA) domains identified through entropy analysis indicating potential malware C2 infrastructure
+author: AMOSKYS
+tags:
+    - attack.command_and_control
+    - attack.t1568.002
+logsource:
+    category: dns
+    product: amoskys
+detection:
+    selection:
+        event_type: dga_domain_detected
+    condition: selection
+fields:
+    - query_name
+    - entropy_score
+    - resolved_ip
+    - source_ip
+    - dga_family
+falsepositives:
+    - Randomly generated CDN subdomains
+    - Hash-based URL shorteners
+confidence: 0.88

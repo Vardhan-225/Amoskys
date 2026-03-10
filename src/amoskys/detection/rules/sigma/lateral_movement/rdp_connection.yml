@@ -1,0 +1,29 @@
+title: RDP Connection Attempt
+id: amoskys-lat-002
+status: stable
+level: medium
+description: Detects RDP connection attempts on port 3389 indicating potential lateral movement via Remote Desktop Protocol
+author: AMOSKYS
+tags:
+    - attack.lateral_movement
+    - attack.t1021.001
+logsource:
+    category: network_connection
+    product: amoskys
+detection:
+    selection:
+        event_type: rdp_connection
+        remote_port: 3389
+    condition: selection
+fields:
+    - source_ip
+    - destination_ip
+    - remote_port
+    - username
+    - pid
+    - process_name
+falsepositives:
+    - Authorized remote administration sessions
+    - Help desk remote support tools
+    - Scheduled RDP sessions for maintenance windows
+confidence: 0.60

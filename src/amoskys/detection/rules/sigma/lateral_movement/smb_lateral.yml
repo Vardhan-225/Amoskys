@@ -1,0 +1,31 @@
+title: SMB Lateral Movement
+id: amoskys-lat-003
+status: stable
+level: medium
+description: Detects SMB connections on ports 445 or 139 indicating potential lateral movement via Server Message Block protocol
+author: AMOSKYS
+tags:
+    - attack.lateral_movement
+    - attack.t1021.002
+logsource:
+    category: network_connection
+    product: amoskys
+detection:
+    selection:
+        event_type: smb_connection
+        remote_port:
+            - 445
+            - 139
+    condition: selection
+fields:
+    - source_ip
+    - destination_ip
+    - remote_port
+    - username
+    - pid
+    - process_name
+falsepositives:
+    - Legitimate file sharing across network drives
+    - Printer access via SMB
+    - Domain controller authentication traffic
+confidence: 0.60

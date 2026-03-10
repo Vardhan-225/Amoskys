@@ -52,8 +52,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from amoskys.agents.auth.probes import AuthEvent
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.shared.auth.probes import AuthEvent
 from amoskys.redteam.harness import (
     AdversarialCase,
     RedTeamHarness,
@@ -191,9 +191,7 @@ class TelemetryCapture:
                 try:
                     d = json.loads(raw)
                 except json.JSONDecodeError as exc:
-                    raise ValueError(
-                        f"{path}:{lineno} — invalid JSON: {exc}"
-                    ) from exc
+                    raise ValueError(f"{path}:{lineno} — invalid JSON: {exc}") from exc
 
                 records.append(
                     CaptureRecord(
@@ -231,9 +229,7 @@ class TelemetryCapture:
         harness = RedTeamHarness()
         written: List[Path] = []
 
-        spine_names = sorted(
-            n for n in SCENARIO_REGISTRY if n.startswith("spine_")
-        )
+        spine_names = sorted(n for n in SCENARIO_REGISTRY if n.startswith("spine_"))
 
         for name in spine_names:
             scenario = SCENARIO_REGISTRY[name]
@@ -332,8 +328,10 @@ class ReplayHarness(RedTeamHarness):
         sim_by_id = {cr.case.id: cr for cr in sim.case_results}
         replay_by_id = {cr.case.id: cr for cr in replay.case_results}
 
-        all_ids = list({cr.case.id for cr in sim.case_results} |
-                       {cr.case.id for cr in replay.case_results})
+        all_ids = list(
+            {cr.case.id for cr in sim.case_results}
+            | {cr.case.id for cr in replay.case_results}
+        )
 
         discrepancies = 0
         for cid in sorted(all_ids):

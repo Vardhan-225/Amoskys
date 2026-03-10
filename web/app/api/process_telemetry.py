@@ -1,31 +1,25 @@
 """
 AMOSKYS Process Telemetry API
-Fetches and displays process telemetry from permanent storage
+Canonical process telemetry endpoints backed by DashboardQueryService.
 """
 
+from __future__ import annotations
+
 import logging
-import os
-import sqlite3
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
-from . import escape_like
+from ..dashboard.query_service import get_dashboard_query_service
+from .rate_limiter import require_rate_limit
 
 logger = logging.getLogger(__name__)
 
-from .rate_limiter import require_rate_limit
-
 process_bp = Blueprint("process_telemetry", __name__, url_prefix="/process-telemetry")
-
-# Path to permanent telemetry database
-TELEMETRY_DB_PATH = os.path.join(
-    os.path.dirname(__file__), "../../../data/telemetry.db"
-)
 
 
 def safe_int(value, default=0, min_val=None, max_val=None):
-    """Safely parse integer from request parameter"""
+    """Safely parse integer from request parameter."""
     try:
         result = int(value)
         if min_val is not None and result < min_val:
@@ -37,50 +31,17 @@ def safe_int(value, default=0, min_val=None, max_val=None):
         return default
 
 
-def get_db_connection():
-    """Create connection to telemetry database"""
-    if not os.path.exists(TELEMETRY_DB_PATH):
-        return None
-    conn = sqlite3.connect(TELEMETRY_DB_PATH, timeout=5.0)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 @process_bp.route("/recent", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_recent_processes():
-    """Get recent process events from permanent storage"""
-    limit = safe_int(
-        request.args.get("limit", 100), default=100, min_val=1, max_val=500
-    )
-
-    conn = get_db_connection()
-    if not conn:
+    """Get recent process events from canonical store."""
+    limit = safe_int(request.args.get("limit", 100), default=100, min_val=1, max_val=500)
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"processes": [], "message": "No data available yet"}), 200
 
     try:
-        cursor = conn.execute(
-            """
-            SELECT *,
-                   CAST((julianday('now') - julianday(timestamp_dt)) * 86400 AS INTEGER) as age_seconds,
-                   process_category as process_class
-            FROM process_events
-            ORDER BY timestamp_ns DESC
-            LIMIT ?
-        """,
-            (limit,),
-        )
-
-        processes = []
-        for row in cursor.fetchall():
-            proc = dict(row)
-            # Add exe_basename for display
-            if proc.get("exe"):
-                proc["exe_basename"] = proc["exe"].split("/")[-1]
-            else:
-                proc["exe_basename"] = "unknown"
-            processes.append(proc)
-
+        processes = service.recent_processes(limit=limit)
         return jsonify(
             {
                 "processes": processes,
@@ -88,197 +49,73 @@ def get_recent_processes():
                 "timestamp": datetime.now().isoformat(),
             }
         )
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to fetch recent processes")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @process_bp.route("/stats", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_process_stats():
-    """Get aggregated process statistics"""
-    conn = get_db_connection()
-    if not conn:
+    """Get aggregated process statistics."""
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"error": "Database not available"}), 500
 
     try:
-        # Total events
-        cursor = conn.execute("SELECT COUNT(*) as count FROM process_events")
-        total_events = cursor.fetchone()["count"]
-
-        # Unique PIDs
-        cursor = conn.execute("SELECT COUNT(DISTINCT pid) as count FROM process_events")
-        unique_pids = cursor.fetchone()["count"]
-
-        # Unique executables
-        cursor = conn.execute(
-            "SELECT COUNT(DISTINCT exe) as count FROM process_events WHERE exe IS NOT NULL"
-        )
-        unique_exes = cursor.fetchone()["count"]
-
-        # User type distribution
-        cursor = conn.execute(
-            """
-            SELECT user_type, COUNT(*) as count
-            FROM process_events
-            WHERE user_type IS NOT NULL
-            GROUP BY user_type
-        """
-        )
-        user_dist = {row["user_type"]: row["count"] for row in cursor.fetchall()}
-
-        # Process class distribution
-        cursor = conn.execute(
-            """
-            SELECT process_category, COUNT(*) as count
-            FROM process_events
-            WHERE process_category IS NOT NULL
-            GROUP BY process_category
-        """
-        )
-        class_dist = {
-            row["process_category"]: row["count"] for row in cursor.fetchall()
-        }
-
-        # Top executables
-        cursor = conn.execute(
-            """
-            SELECT exe, COUNT(*) as count
-            FROM process_events
-            WHERE exe IS NOT NULL
-            GROUP BY exe
-            ORDER BY count DESC
-            LIMIT 10
-        """
-        )
-        top_exes = [
-            {"name": os.path.basename(row["exe"]), "count": row["count"]}
-            for row in cursor.fetchall()
-        ]
-
-        # Time range
-        cursor = conn.execute(
-            """
-            SELECT MIN(timestamp_dt) as start, MAX(timestamp_dt) as end
-            FROM process_events
-        """
-        )
-        time_range = cursor.fetchone()
-
-        return jsonify(
-            {
-                "total_process_events": total_events,
-                "unique_pids": unique_pids,
-                "unique_executables": unique_exes,
-                "user_type_distribution": user_dist,
-                "process_class_distribution": class_dist,
-                "top_executables": top_exes,
-                "collection_period": {
-                    "start": time_range["start"],
-                    "end": time_range["end"],
-                },
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
-    except Exception as e:
+        payload = service.process_stats()
+        payload["timestamp"] = datetime.now().isoformat()
+        return jsonify(payload)
+    except Exception as exc:
         logger.exception("Failed to aggregate process statistics")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @process_bp.route("/top-executables", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_top_executables():
-    """Get most frequently seen executables"""
+    """Get most frequently seen executables."""
     limit = safe_int(request.args.get("limit", 20), default=20, min_val=1, max_val=100)
-
-    conn = get_db_connection()
-    if not conn:
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"executables": [], "message": "No data available"}), 200
 
     try:
-        cursor = conn.execute(
-            """
-            SELECT exe, COUNT(*) as count
-            FROM process_events
-            WHERE exe IS NOT NULL
-            GROUP BY exe
-            ORDER BY count DESC
-            LIMIT ?
-        """,
-            (limit,),
-        )
-
-        total_cursor = conn.execute(
-            "SELECT COUNT(*) as total FROM process_events WHERE exe IS NOT NULL"
-        )
-        total = total_cursor.fetchone()["total"]
-
-        executables = [
-            {
-                "name": os.path.basename(row["exe"]),
-                "full_path": row["exe"],
-                "count": row["count"],
-                "percentage": round(row["count"] / total * 100, 2) if total > 0 else 0,
-            }
-            for row in cursor.fetchall()
-        ]
-
+        result = service.process_top_executables(limit=limit)
+        executables = result.get("executables", [])
         return jsonify(
             {
                 "executables": executables,
                 "count": len(executables),
-                "total_events": total,
+                "total_events": result.get("total_events", 0),
                 "timestamp": datetime.now().isoformat(),
             }
         )
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to fetch top executables")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @process_bp.route("/search", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def search_processes():
-    """Search processes by executable, user type, or process category"""
+    """Search processes by executable, user type, or process category."""
     exe_filter = request.args.get("exe", "")
     user_type = request.args.get("user_type", "")
     category = request.args.get("category", "")
-    limit = safe_int(
-        request.args.get("limit", 100), default=100, min_val=1, max_val=500
-    )
+    limit = safe_int(request.args.get("limit", 100), default=100, min_val=1, max_val=500)
 
-    conn = get_db_connection()
-    if not conn:
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"processes": [], "message": "No data available"}), 200
 
     try:
-        query = "SELECT * FROM process_events WHERE 1=1"
-        params = []
-
-        if exe_filter:
-            query += " AND exe LIKE ? ESCAPE '\\'"
-            params.append(f"%{escape_like(exe_filter)}%")
-
-        if user_type:
-            query += " AND user_type = ?"
-            params.append(user_type)
-
-        if category:
-            query += " AND process_category = ?"
-            params.append(category)
-
-        query += " ORDER BY timestamp_ns DESC LIMIT ?"
-        params.append(limit)
-
-        cursor = conn.execute(query, params)
-        processes = [dict(row) for row in cursor.fetchall()]
-
+        processes = service.process_search(
+            exe_filter=exe_filter,
+            user_type=user_type,
+            category=category,
+            limit=limit,
+        )
         return jsonify(
             {
                 "processes": processes,
@@ -291,38 +128,22 @@ def search_processes():
                 "timestamp": datetime.now().isoformat(),
             }
         )
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to search processes")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @process_bp.route("/device-telemetry", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_device_telemetry():
-    """Get device-level aggregated telemetry"""
-    limit = safe_int(
-        request.args.get("limit", 100), default=100, min_val=1, max_val=500
-    )
-
-    conn = get_db_connection()
-    if not conn:
+    """Get device-level aggregated telemetry snapshots."""
+    limit = safe_int(request.args.get("limit", 100), default=100, min_val=1, max_val=500)
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"telemetry": [], "message": "No data available"}), 200
 
     try:
-        cursor = conn.execute(
-            """
-            SELECT *
-            FROM device_telemetry
-            ORDER BY timestamp_ns DESC
-            LIMIT ?
-        """,
-            (limit,),
-        )
-
-        telemetry = [dict(row) for row in cursor.fetchall()]
-
+        telemetry = service.device_telemetry_snapshots(limit=limit)
         return jsonify(
             {
                 "telemetry": telemetry,
@@ -330,119 +151,57 @@ def get_device_telemetry():
                 "timestamp": datetime.now().isoformat(),
             }
         )
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to fetch device telemetry")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @process_bp.route("/database-stats", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_database_stats():
-    """Get overall database statistics"""
-    conn = get_db_connection()
-    if not conn:
+    """Get overall database statistics."""
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify({"error": "Database not available"}), 500
 
     try:
-        stats = {}
-
-        # Get counts for all tables
-        for table in [
-            "process_events",
-            "device_telemetry",
-            "flow_events",
-            "security_events",
-        ]:
-            cursor = conn.execute(f"SELECT COUNT(*) as count FROM {table}")
-            stats[f"{table}_count"] = cursor.fetchone()["count"]
-
-        # Get database size
-        cursor = conn.execute(
-            "SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()"
-        )
-        stats["database_size_bytes"] = cursor.fetchone()["size"]
-        stats["database_size_mb"] = round(
-            stats["database_size_bytes"] / (1024 * 1024), 2
-        )
-
+        stats = service.database_stats()
         return jsonify({"statistics": stats, "timestamp": datetime.now().isoformat()})
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Failed to fetch database statistics")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"error": str(exc)}), 500
 
 
 @process_bp.route("/canonical-summary", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_canonical_summary():
-    """Get summary of canonical process table (ML pipeline stage 1)"""
-    conn = get_db_connection()
-    if not conn:
+    """Get summary of canonical process table (ML pipeline stage 1)."""
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify(
-            {"total_rows": 0, "status": "no_data", "message": "Database not available"}
+            {
+                "total_rows": 0,
+                "status": "no_data",
+                "message": "Database not available",
+            }
         )
 
     try:
-        # Check if canonical table exists
-        cursor = conn.execute(
-            """
-            SELECT name FROM sqlite_master
-            WHERE type='table' AND name='canonical_processes'
-        """
-        )
-
-        if not cursor.fetchone():
-            return jsonify(
-                {
-                    "total_rows": 0,
-                    "status": "not_generated",
-                    "message": "Canonical table not yet generated",
-                }
-            )
-
-        # Get row count
-        cursor = conn.execute("SELECT COUNT(*) as count FROM canonical_processes")
-        total_rows = cursor.fetchone()["count"]
-
-        # Get time range if available
-        time_range = {"start": None, "end": None}
-        try:
-            cursor = conn.execute(
-                """
-                SELECT MIN(timestamp) as start, MAX(timestamp) as end
-                FROM canonical_processes
-            """
-            )
-            row = cursor.fetchone()
-            if row:
-                time_range = {"start": row["start"], "end": row["end"]}
-        except sqlite3.OperationalError:
-            pass  # Column may not exist
-
-        return jsonify(
-            {
-                "total_rows": total_rows,
-                "status": "ready" if total_rows > 0 else "empty",
-                "time_range": time_range,
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
-    except Exception as e:
+        summary = service.canonical_summary()
+        summary.setdefault("time_range", {"start": None, "end": None})
+        summary["timestamp"] = datetime.now().isoformat()
+        return jsonify(summary)
+    except Exception as exc:
         logger.exception("Canonical summary query failed")
-        return jsonify({"total_rows": 0, "status": "error", "error": str(e)}), 500
-    finally:
-        conn.close()
+        return jsonify({"total_rows": 0, "status": "error", "error": str(exc)}), 500
 
 
 @process_bp.route("/features-summary", methods=["GET"])
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_features_summary():
-    """Get summary of ML features table (ML pipeline stage 2)"""
-    conn = get_db_connection()
-    if not conn:
+    """Get summary of ML features table (ML pipeline stage 2)."""
+    service = get_dashboard_query_service()
+    if not service.available:
         return jsonify(
             {
                 "total_windows": 0,
@@ -453,44 +212,10 @@ def get_features_summary():
         )
 
     try:
-        # Check if features table exists
-        cursor = conn.execute(
-            """
-            SELECT name FROM sqlite_master
-            WHERE type='table' AND name='ml_features'
-        """
-        )
-
-        if not cursor.fetchone():
-            return jsonify(
-                {
-                    "total_windows": 0,
-                    "total_features": 0,
-                    "status": "not_generated",
-                    "message": "ML features table not yet generated",
-                }
-            )
-
-        # Get window count (rows in features table)
-        cursor = conn.execute("SELECT COUNT(*) as count FROM ml_features")
-        total_windows = cursor.fetchone()["count"]
-
-        # Get feature count (columns minus metadata columns)
-        cursor = conn.execute("PRAGMA table_info(ml_features)")
-        columns = cursor.fetchall()
-        # Assume metadata columns are: id, timestamp, window_start, window_end
-        metadata_cols = {"id", "timestamp", "window_start", "window_end", "created_at"}
-        total_features = len([c for c in columns if c["name"] not in metadata_cols])
-
-        return jsonify(
-            {
-                "total_windows": total_windows,
-                "total_features": total_features,
-                "status": "ready" if total_windows > 0 else "empty",
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
-    except Exception as e:
+        summary = service.features_summary()
+        summary["timestamp"] = datetime.now().isoformat()
+        return jsonify(summary)
+    except Exception as exc:
         logger.exception("ML features summary query failed")
         return (
             jsonify(
@@ -498,10 +223,8 @@ def get_features_summary():
                     "total_windows": 0,
                     "total_features": 0,
                     "status": "error",
-                    "error": str(e),
+                    "error": str(exc),
                 }
             ),
             500,
         )
-    finally:
-        conn.close()

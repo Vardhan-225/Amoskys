@@ -1,0 +1,28 @@
+title: Screen Capture Utility Invocation
+id: amoskys-coll-002
+status: stable
+level: low
+description: Detects invocation of screen capture utilities such as screencapture on macOS indicating potential screen capture collection activity
+author: AMOSKYS
+tags:
+    - attack.collection
+    - attack.t1113
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection:
+        event_type: suspicious_spawn
+        process_name: screencapture
+    condition: selection
+fields:
+    - process_name
+    - command_line
+    - username
+    - pid
+    - parent_process
+falsepositives:
+    - Legitimate screenshot tools and productivity apps
+    - User-initiated screenshots via keyboard shortcuts
+    - Automated UI testing frameworks
+confidence: 0.40

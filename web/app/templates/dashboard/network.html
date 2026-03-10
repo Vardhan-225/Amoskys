@@ -1,489 +1,919 @@
 {% extends "dashboard/base.html" %}
-
-{% block title %}Network Topology - AMOSKYS{% endblock %}
+{% block title %}Network Intelligence — AMOSKYS{% endblock %}
 
 {% block content %}
-<div style="padding: 2rem;">
-    <div class="neural-card">
-        <div class="card-header">
-            <h2 class="card-title">Network Topology</h2>
-            <div style="display:flex;gap:0.5rem;align-items:center;">
-                <div class="card-badge badge-success" id="net-status">Loading...</div>
-                <button id="export-network-btn" class="neural-button" style="padding:0.3rem 0.8rem;font-size:0.75rem;cursor:pointer;">Export CSV</button>
-                <button id="refresh-topology-btn" class="neural-button" style="padding:0.3rem 0.8rem;font-size:0.75rem;cursor:pointer;">Refresh</button>
-            </div>
+<style>
+    .net-page { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+    .net-stats-grid {
+        display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem;
+    }
+    .net-stat-card {
+        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px; padding: 1.25rem; text-align: center;
+        position: relative; overflow: hidden; transition: all 0.3s ease;
+    }
+    .net-stat-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, var(--neural-primary), var(--neural-secondary));
+    }
+    .net-stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,217,255,0.15); }
+    .net-stat-icon { font-size: 1.3rem; margin-bottom: 0.5rem; }
+    .net-stat-val { font-size: 1.8rem; font-weight: 700; color: var(--neural-primary); }
+    .net-stat-lbl { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .net-stat-val.danger { color: var(--neural-danger); }
+    .net-stat-val.warning { color: var(--neural-warning); }
+
+    .net-nlp {
+        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px; padding: 1.25rem;
+    }
+    .net-nlp p { color: var(--text-secondary); font-size: 0.95rem; line-height: 1.6; margin: 0; }
+    .net-nlp strong { color: var(--neural-primary); }
+    .net-nlp .warn-text { color: var(--neural-danger); }
+
+    .section-title {
+        font-size: 1.1rem; font-weight: 600; color: var(--neural-primary);
+        margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+
+    /* World Map — Leaflet */
+    .map-card {
+        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px; padding: 1.25rem; position: relative; overflow: hidden;
+    }
+    .map-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, var(--neural-primary), var(--neural-secondary));
+    }
+    #threat-map { width: 100%; height: 480px; border-radius: 8px; background: #0a0e27; z-index: 1; }
+    .leaflet-container { background: #0a0e27 !important; font-family: inherit; }
+    .leaflet-control-zoom a { background: rgba(10,14,39,0.9) !important; color: #00d9ff !important; border-color: rgba(0,217,255,0.3) !important; }
+    .leaflet-control-zoom a:hover { background: rgba(0,217,255,0.15) !important; }
+    .leaflet-control-attribution { background: rgba(10,14,39,0.7) !important; color: #6b7a99 !important; font-size: 0.6rem !important; }
+    .leaflet-control-attribution a { color: #00d9ff !important; }
+
+    /* Pulsing destination dots */
+    .pulse-dot {
+        border-radius: 50%; position: relative;
+    }
+    .pulse-dot::before, .pulse-dot::after {
+        content: ''; position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%); border-radius: 50%;
+        animation: dot-pulse 2.5s ease-out infinite;
+    }
+    .pulse-dot::after { animation-delay: 1.25s; }
+    .pulse-dot.clean { background: #00ff88; box-shadow: 0 0 8px rgba(0,255,136,0.6); }
+    .pulse-dot.clean::before, .pulse-dot.clean::after { border: 2px solid rgba(0,255,136,0.6); }
+    .pulse-dot.threat { background: #ff3366; box-shadow: 0 0 12px rgba(255,51,102,0.8); }
+    .pulse-dot.threat::before, .pulse-dot.threat::after { border: 2px solid rgba(255,51,102,0.7); }
+    @keyframes dot-pulse {
+        0% { width: 100%; height: 100%; opacity: 0.8; }
+        100% { width: 350%; height: 350%; opacity: 0; }
+    }
+
+    /* Device origin marker */
+    .device-marker {
+        background: #00d9ff; border-radius: 50%; box-shadow: 0 0 16px rgba(0,217,255,0.8), 0 0 40px rgba(0,217,255,0.3);
+        position: relative;
+    }
+    .device-marker::before {
+        content: ''; position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%); border-radius: 50%;
+        border: 2px solid rgba(0,217,255,0.5);
+        animation: device-pulse 3s ease-out infinite;
+    }
+    @keyframes device-pulse {
+        0% { width: 100%; height: 100%; opacity: 0.6; }
+        100% { width: 500%; height: 500%; opacity: 0; }
+    }
+
+    /* Leaflet tooltip override */
+    .threat-map-tooltip {
+        background: rgba(10,14,39,0.97) !important; border: 1px solid rgba(0,217,255,0.3) !important;
+        border-radius: 8px !important; padding: 0.6rem 0.8rem !important;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.5) !important; color: var(--text-primary) !important;
+        font-size: 0.78rem !important; max-width: 240px !important;
+    }
+    .threat-map-tooltip::before { border-top-color: rgba(0,217,255,0.3) !important; }
+    .tip-title { font-weight: 700; color: #00d9ff; margin-bottom: 0.3rem; font-size: 0.85rem; }
+    .tip-row { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.72rem; padding: 0.1rem 0; }
+    .tip-lbl { color: #6b7a99; }
+    .tip-val { color: #e2e8f0; font-weight: 600; }
+
+    /* Map stats overlay */
+    .map-overlay-stats {
+        position: absolute; top: 12px; right: 12px; z-index: 1000;
+        background: rgba(10,14,39,0.85); border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 8px; padding: 0.6rem 0.8rem; font-size: 0.72rem;
+        backdrop-filter: blur(8px);
+    }
+    .map-overlay-stats .mos-row { display: flex; gap: 0.5rem; align-items: center; padding: 0.15rem 0; }
+    .map-overlay-stats .mos-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .map-overlay-stats .mos-label { color: #6b7a99; }
+    .map-overlay-stats .mos-val { color: #e2e8f0; font-weight: 600; margin-left: auto; }
+
+    /* Arc canvas overlay */
+    .arc-canvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 450; }
+
+    /* Two-column layout */
+    .net-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .net-card {
+        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+        border-radius: 10px; padding: 1.25rem; position: relative; overflow: hidden;
+    }
+    .net-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, var(--neural-primary), var(--neural-secondary));
+    }
+    .net-card-title { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1rem; }
+
+    /* Horizontal bars */
+    .hbar-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+    .hbar-label {
+        width: 120px; font-size: 0.78rem; color: var(--text-secondary);
+        text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;
+    }
+    .hbar-track { flex: 1; height: 18px; background: rgba(255,255,255,0.04); border-radius: 9px; overflow: hidden; }
+    .hbar-fill { height: 100%; border-radius: 9px; transition: width 0.4s ease; min-width: 4px; }
+    .hbar-val { width: 45px; font-size: 0.72rem; color: var(--text-muted); text-align: right; flex-shrink: 0; }
+    .hbar-row.threat .hbar-label { color: var(--neural-danger); font-weight: 600; }
+
+    /* ASN type badges */
+    .asn-type {
+        display: inline-block; padding: 0.1rem 0.4rem; border-radius: 6px;
+        font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    }
+    .asn-residential { background: rgba(0,255,136,0.15); color: #00ff88; }
+    .asn-hosting { background: rgba(255,170,0,0.15); color: #ffaa00; }
+    .asn-business { background: rgba(0,136,255,0.15); color: #0088ff; }
+    .asn-tor, .asn-vpn, .asn-proxy { background: rgba(255,51,102,0.15); color: #ff3366; }
+    .asn-isp { background: rgba(0,217,255,0.15); color: #00d9ff; }
+    .asn-unknown { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+
+    /* Destinations table */
+    .dst-table-wrap {
+        max-height: 400px; overflow-y: auto;
+    }
+    .dst-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .dst-table th {
+        position: sticky; top: 0; background: var(--bg-secondary);
+        color: var(--text-muted); font-weight: 600; font-size: 0.72rem;
+        text-transform: uppercase; padding: 0.5rem; text-align: left;
+        border-bottom: 2px solid rgba(0,217,255,0.2);
+    }
+    .dst-table td {
+        padding: 0.4rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .dst-table tr:hover { background: rgba(0,217,255,0.05); }
+    .threat-flag {
+        display: inline-block; padding: 0.1rem 0.4rem; border-radius: 6px;
+        font-size: 0.65rem; font-weight: 700;
+    }
+    .threat-flag.flagged { background: rgba(255,51,102,0.15); color: #ff3366; }
+    .threat-flag.clean { background: rgba(0,255,136,0.1); color: #00ff88; }
+
+    /* Suspicious connections */
+    .susp-card {
+        background: rgba(255,51,102,0.03); border: 1px solid rgba(255,51,102,0.2);
+        border-radius: 10px; padding: 1.25rem;
+    }
+    .susp-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, #ff3366, #ff6600); position: absolute;
+    }
+    .susp-empty { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.9rem; }
+
+    /* Search */
+    .net-search-bar {
+        display: flex; gap: 0.75rem; margin-bottom: 1rem; align-items: center;
+    }
+    .net-search-input {
+        flex: 1; padding: 0.5rem 0.8rem; border-radius: 8px;
+        border: 1px solid rgba(0,217,255,0.3); background: var(--bg-tertiary);
+        color: var(--text-primary); font-size: 0.85rem;
+    }
+    .net-search-input:focus { outline: none; border-color: var(--neural-primary); box-shadow: 0 0 0 3px rgba(0,217,255,0.1); }
+    .net-search-btn {
+        padding: 0.5rem 1rem; border-radius: 8px; border: none;
+        background: var(--neural-primary); color: var(--bg-primary);
+        font-weight: 600; cursor: pointer;
+    }
+
+    /* Skeleton overrides for stat cards */
+    .net-stat-card .skeleton { height: 2rem; width: 60%; margin: 0 auto 0.3rem auto; }
+
+    @media (max-width: 1024px) {
+        .net-stats-grid { grid-template-columns: repeat(3, 1fr); }
+        .net-two-col { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+        .net-stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
+
+<div class="net-page">
+    <!-- Stats Bar -->
+    <div class="net-stats-grid">
+        <div class="net-stat-card">
+            <div class="net-stat-icon">&#127760;</div>
+            <div class="net-stat-val" id="stat-flows"><div class="skeleton" style="height:1.8rem;width:60%;margin:0 auto;">&nbsp;</div></div>
+            <div class="net-stat-lbl">Total Flows</div>
         </div>
-        <p style="color: var(--text-secondary);">
-            Discovered devices, network flows, and endpoint connections from agent telemetry. Click nodes for details.
-        </p>
+        <div class="net-stat-card">
+            <div class="net-stat-icon">&#128187;</div>
+            <div class="net-stat-val" id="stat-dsts"><div class="skeleton" style="height:1.8rem;width:60%;margin:0 auto;">&nbsp;</div></div>
+            <div class="net-stat-lbl">Unique Destinations</div>
+        </div>
+        <div class="net-stat-card">
+            <div class="net-stat-icon">&#127758;</div>
+            <div class="net-stat-val" id="stat-countries"><div class="skeleton" style="height:1.8rem;width:60%;margin:0 auto;">&nbsp;</div></div>
+            <div class="net-stat-lbl">Countries Reached</div>
+        </div>
+        <div class="net-stat-card">
+            <div class="net-stat-icon">&#128230;</div>
+            <div class="net-stat-val" id="stat-bytes"><div class="skeleton" style="height:1.8rem;width:60%;margin:0 auto;">&nbsp;</div></div>
+            <div class="net-stat-lbl">Bytes Transferred</div>
+        </div>
+        <div class="net-stat-card">
+            <div class="net-stat-icon">&#9888;</div>
+            <div class="net-stat-val danger" id="stat-threats"><div class="skeleton" style="height:1.8rem;width:60%;margin:0 auto;">&nbsp;</div></div>
+            <div class="net-stat-lbl">Threat Intel Hits</div>
+        </div>
     </div>
 
-    <!-- Network Summary -->
-    <div class="metrics-grid" style="margin: 1.5rem 0;">
-        <div class="metric-card">
-            <div class="metric-value" id="node-count">--</div>
-            <div class="metric-label">Endpoints</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-value" id="edge-count">--</div>
-            <div class="metric-label">Connections</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-value" id="protocol-count">--</div>
-            <div class="metric-label">Protocols</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-value" id="total-bytes">--</div>
-            <div class="metric-label">Total Traffic</div>
-        </div>
+    <!-- Natural Language Summary -->
+    <div class="net-nlp" id="net-nlp">
+        <p><span class="skeleton" style="display:inline-block;height:1rem;width:80%;">&nbsp;</span></p>
     </div>
 
-    <!-- Network Visualization -->
-    <div class="neural-card" style="margin-top: 1.5rem;">
-        <div class="card-header">
-            <h3 class="card-title">Topology View</h3>
-            <div style="display:flex;gap:0.5rem;align-items:center;">
-                <span style="font-size:0.7rem;color:var(--text-muted);">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#00aaff;margin-right:0.2rem;vertical-align:middle;"></span>Host
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#00ff88;margin-left:0.5rem;margin-right:0.2rem;vertical-align:middle;"></span>Endpoint
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff3366;margin-left:0.5rem;margin-right:0.2rem;vertical-align:middle;"></span>Suspicious
-                </span>
-            </div>
-        </div>
-        <div id="network-canvas" style="min-height:450px;position:relative;background:rgba(0,0,0,0.2);border-radius:8px;overflow:hidden;">
-            <svg id="network-svg" width="100%" height="450" style="display:block;"></svg>
-        </div>
-    </div>
-
-    <!-- Node Detail Panel -->
-    <div id="node-detail" class="neural-card" style="display:none;margin-top:1.5rem;">
-        <div class="card-header">
-            <h3 class="card-title" id="node-detail-title">Node Details</h3>
-            <span id="close-node-detail-btn" style="cursor:pointer;color:var(--text-muted);font-size:1.2rem;">&times;</span>
-        </div>
-        <div id="node-detail-content"></div>
-    </div>
-
-    <!-- Traffic Heatmap + Tables -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1.5rem;">
-        <!-- Traffic Heatmap -->
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">Traffic Heatmap</h3>
-            </div>
-            <div id="traffic-heatmap" style="max-height:400px;overflow:auto;">
-                <div style="color:var(--text-muted);text-align:center;padding:2rem;">Loading...</div>
-            </div>
-        </div>
-
-        <!-- Endpoints -->
-        <div class="neural-card">
-            <div class="card-header">
-                <h3 class="card-title">Endpoints</h3>
-            </div>
-            <div id="nodes-list" style="max-height:400px;overflow-y:auto;">
-                <div style="color:var(--text-muted);text-align:center;padding:2rem;">Loading...</div>
+    <!-- GeoIP Threat Map -->
+    <div class="map-card">
+        <div class="section-title">Live Connection Map</div>
+        <div style="position:relative;">
+            <div id="threat-map"></div>
+            <div class="map-overlay-stats" id="map-stats-overlay">
+                <div class="mos-row"><div class="mos-dot" style="background:#00ff88;"></div><span class="mos-label">Clean</span><span class="mos-val" id="map-clean-count">--</span></div>
+                <div class="mos-row"><div class="mos-dot" style="background:#ff3366;"></div><span class="mos-label">Flagged</span><span class="mos-val" id="map-threat-count">--</span></div>
+                <div class="mos-row"><div class="mos-dot" style="background:#00d9ff;"></div><span class="mos-label">Device</span><span class="mos-val" id="map-total-flows">--</span></div>
             </div>
         </div>
     </div>
 
-    <!-- Connection Table -->
-    <div class="neural-card" style="margin-top:1.5rem;">
-        <div class="card-header">
-            <h3 class="card-title">All Connections</h3>
-            <span style="font-size:0.75rem;color:var(--text-muted);" id="conn-count">0 connections</span>
+    <!-- Country + ASN Breakdown -->
+    <div class="net-two-col">
+        <div class="net-card">
+            <div class="net-card-title">Top Countries by Connections</div>
+            <div id="country-bars" style="max-height:350px;overflow-y:auto;">
+                <div class="skeleton" style="height:18px;width:90%;margin:0.5rem auto;">&nbsp;</div>
+                <div class="skeleton" style="height:18px;width:75%;margin:0.5rem auto;">&nbsp;</div>
+                <div class="skeleton" style="height:18px;width:60%;margin:0.5rem auto;">&nbsp;</div>
+                <div class="skeleton" style="height:18px;width:45%;margin:0.5rem auto;">&nbsp;</div>
+            </div>
         </div>
-        <div id="edges-table" style="max-height:400px;overflow-y:auto;">
-            <div style="color:var(--text-muted);text-align:center;padding:2rem;">Loading...</div>
+        <div class="net-card">
+            <div class="net-card-title">ASN Organization Breakdown</div>
+            <div id="asn-bars" style="max-height:350px;overflow-y:auto;">
+                <div class="skeleton" style="height:18px;width:90%;margin:0.5rem auto;">&nbsp;</div>
+                <div class="skeleton" style="height:18px;width:75%;margin:0.5rem auto;">&nbsp;</div>
+                <div class="skeleton" style="height:18px;width:60%;margin:0.5rem auto;">&nbsp;</div>
+                <div class="skeleton" style="height:18px;width:45%;margin:0.5rem auto;">&nbsp;</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Process Network Usage (lazy-loaded) -->
+    <div class="net-card" id="process-section">
+        <div class="net-card-title">Process Network Usage (by bytes)</div>
+        <div id="process-bars" style="max-height:300px;overflow-y:auto;">
+            <div class="skeleton" style="height:18px;width:85%;margin:0.5rem auto;">&nbsp;</div>
+            <div class="skeleton" style="height:18px;width:70%;margin:0.5rem auto;">&nbsp;</div>
+            <div class="skeleton" style="height:18px;width:55%;margin:0.5rem auto;">&nbsp;</div>
+        </div>
+    </div>
+
+    <!-- Top Destinations Table (lazy-loaded) -->
+    <div class="net-card" id="destinations-section">
+        <div class="net-card-title">Top Destinations</div>
+        <div class="net-search-bar">
+            <input type="text" class="net-search-input" id="dst-search" placeholder="Search by IP, country, ASN...">
+            <button class="net-search-btn" onclick="filterDestinations()">Filter</button>
+        </div>
+        <div class="dst-table-wrap">
+            <table class="dst-table">
+                <thead>
+                    <tr>
+                        <th>Destination IP</th>
+                        <th>Port</th>
+                        <th>Protocol</th>
+                        <th>Country</th>
+                        <th>City</th>
+                        <th>ASN / Org</th>
+                        <th>Type</th>
+                        <th>Bytes</th>
+                        <th>Flows</th>
+                        <th>Threat</th>
+                    </tr>
+                </thead>
+                <tbody id="dst-table-body">
+                    <tr>
+                        <td colspan="10" style="padding:0.6rem;"><div class="skeleton" style="height:1rem;width:100%;">&nbsp;</div></td>
+                    </tr>
+                    <tr>
+                        <td colspan="10" style="padding:0.6rem;"><div class="skeleton" style="height:1rem;width:100%;">&nbsp;</div></td>
+                    </tr>
+                    <tr>
+                        <td colspan="10" style="padding:0.6rem;"><div class="skeleton" style="height:1rem;width:100%;">&nbsp;</div></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Suspicious Connections -->
+    <div class="net-card susp-card" style="position:relative;">
+        <div class="net-card-title" style="color:var(--neural-danger);">Suspicious Connections</div>
+        <div id="susp-panel">
+            <div class="susp-empty">
+                <span class="skeleton" style="display:inline-block;height:1rem;width:50%;">&nbsp;</span>
+            </div>
         </div>
     </div>
 </div>
 
-<style>
-.net-node {
-    padding: 0.6rem 0.75rem;
-    margin-bottom: 0.5rem;
-    background: rgba(255,255,255,0.03);
-    border-radius: 6px;
-    border-left: 3px solid #00aaff;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    transition: background 0.15s;
-}
-.net-node:hover {
-    background: rgba(0,217,255,0.06);
-}
-.net-node-name {
-    font-weight: 600;
-    color: #00aaff;
-    font-size: 0.85rem;
-}
-.net-node-meta {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-.conn-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.82rem;
-}
-.conn-table th {
-    position: sticky;
-    top: 0;
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
-    font-weight: 600;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    padding: 0.5rem;
-    text-align: left;
-    border-bottom: 2px solid rgba(0,217,255,0.2);
-}
-.conn-table td {
-    padding: 0.4rem 0.5rem;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-}
-.conn-table tr:hover {
-    background: rgba(0,217,255,0.05);
-}
-.proto-badge {
-    padding: 0.15rem 0.4rem;
-    background: rgba(0,255,136,0.15);
-    color: #00ff88;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-}
-.heatmap-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.7rem;
-}
-.heatmap-table th {
-    padding: 0.3rem;
-    color: var(--text-muted);
-    font-weight: 600;
-    writing-mode: vertical-lr;
-    text-orientation: mixed;
-    max-width: 30px;
-}
-.heatmap-table td {
-    padding: 0.2rem;
-    text-align: center;
-    min-width: 28px;
-    min-height: 28px;
-}
-.hm-cell {
-    width: 100%;
-    height: 24px;
-    border-radius: 3px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.6rem;
-    font-weight: 700;
-    cursor: default;
-}
-</style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+/* ── Network Intelligence — Leaflet threat map + DashboardCache + DashboardPoller ── */
+(function() {
+    'use strict';
 
-{% endblock %}
+    let allDestinations = [];
+    let geoPointsCache = [];
+    let processLoaded = false;
+    let destinationsLoaded = false;
+    let threatMap = null;
+    let markerLayer = null;
+    let arcAnimationId = null;
+    let arcCanvas = null;
+    let arcCtx = null;
+    let activeArcs = [];
+    let deviceLatLng = null;
 
-{% block extra_scripts %}
-<script nonce="{{ csp_nonce() }}">
-var allNodes = [];
-var allEdges = [];
-var selectedNode = null;
+    /* ── Helpers (delegate to dashboard-core.js shared utilities) ── */
 
-function exportNetwork() {
-    if (allNodes.length === 0 && allEdges.length === 0) { alert('No network data to export'); return; }
-    var lines = ['type,id,label,ip,os,status,protocol,bytes,packets'];
-    for (var n = 0; n < allNodes.length; n++) {
-        var nd = allNodes[n];
-        lines.push(['node', nd.id||'', '"'+(nd.label||'').replace(/"/g,'""')+'"', nd.ip||'', nd.os||'', nd.status||'', '', '', ''].join(','));
-    }
-    for (var e = 0; e < allEdges.length; e++) {
-        var ed = allEdges[e];
-        lines.push(['edge', ed.source+'->'+ed.target, '', '', '', '', ed.protocol||'', ed.bytes||0, ed.packets||0].join(','));
-    }
-    var blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url; a.download = 'amoskys_network_' + new Date().toISOString().slice(0,10) + '.csv';
-    a.style.display = 'none'; document.body.appendChild(a); a.click();
-    document.body.removeChild(a); URL.revokeObjectURL(url);
-}
-
-async function loadTopology() {
-    try {
-        var resp = await fetch('/dashboard/api/network/topology');
-        var data = await resp.json();
-        if (data.status !== 'success') return;
-
-        allNodes = data.nodes || [];
-        allEdges = data.edges || [];
-
-        document.getElementById('node-count').textContent = allNodes.length;
-        document.getElementById('edge-count').textContent = allEdges.length;
-        document.getElementById('net-status').textContent = allNodes.length + ' nodes';
-        document.getElementById('conn-count').textContent = allEdges.length + ' connections';
-
-        var protocols = {};
-        var totalBytes = 0;
-        for (var i = 0; i < allEdges.length; i++) {
-            protocols[allEdges[i].protocol] = true;
-            totalBytes += allEdges[i].bytes || 0;
-        }
-        document.getElementById('protocol-count').textContent = Object.keys(protocols).length;
-        document.getElementById('total-bytes').textContent = formatBytes(totalBytes);
-
-        renderTopology(allNodes, allEdges);
-        renderNodesList(allNodes);
-        renderEdgesTable(allEdges);
-        renderHeatmap(allNodes, allEdges);
-    } catch (err) {
-        document.getElementById('net-status').textContent = 'Error';
-    }
-}
-
-function formatBytes(bytes) {
-    if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
-    if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
-    if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return bytes + ' B';
-}
-
-function renderTopology(nodes, edges) {
-    var svg = document.getElementById('network-svg');
-    var width = svg.clientWidth || 800;
-    var height = 450;
-
-    if (nodes.length === 0) {
-        svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#6b7a99" font-size="14">No network data. Deploy Flow Agent and Device Discovery to populate.</text>';
-        return;
+    function escHtml(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
     }
 
-    var nodeMap = {};
-    var angleStep = (2 * Math.PI) / Math.max(nodes.length, 1);
-    var cx = width / 2;
-    var cy = height / 2;
-    var radius = Math.min(width, height) * 0.35;
-
-    // Count connections per node for sizing
-    var connCounts = {};
-    for (var i = 0; i < edges.length; i++) {
-        connCounts[edges[i].source] = (connCounts[edges[i].source] || 0) + 1;
-        connCounts[edges[i].target] = (connCounts[edges[i].target] || 0) + 1;
+    function asnTypeClass(t) {
+        if (!t) return 'asn-unknown';
+        const lt = t.toLowerCase();
+        if (lt.includes('tor') || lt.includes('vpn') || lt.includes('proxy')) return 'asn-tor';
+        if (lt.includes('hosting') || lt.includes('datacenter') || lt.includes('cloud')) return 'asn-hosting';
+        if (lt.includes('residential')) return 'asn-residential';
+        if (lt.includes('business') || lt.includes('enterprise')) return 'asn-business';
+        if (lt.includes('isp')) return 'asn-isp';
+        return 'asn-unknown';
     }
 
-    for (var ni = 0; ni < nodes.length; ni++) {
-        var node = nodes[ni];
-        var angle = ni * angleStep;
-        node.x = cx + radius * Math.cos(angle);
-        node.y = cy + radius * Math.sin(angle);
-        nodeMap[node.id] = node;
-        if (node.ip) nodeMap[node.ip] = node;
-    }
-
-    var svgContent = '<defs><filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
-
-    // Draw edges
-    for (var ei = 0; ei < edges.length; ei++) {
-        var edge = edges[ei];
-        var src = nodeMap[edge.source];
-        var tgt = nodeMap[edge.target];
-        if (src && tgt) {
-            var opacity = Math.min(0.8, 0.15 + (edge.count || 1) * 0.08);
-            var strokeW = Math.min(3, 1 + (edge.count || 1) * 0.2);
-            var edgeColor = edge.suspicious ? '#ff3366' : '#00ff88';
-            svgContent += '<line x1="' + src.x + '" y1="' + src.y + '" x2="' + tgt.x + '" y2="' + tgt.y + '" stroke="' + edgeColor + '" stroke-opacity="' + opacity + '" stroke-width="' + strokeW + '"/>';
+    function asnBarColor(cls) {
+        switch (cls) {
+            case 'asn-tor':         return '#ff3366';
+            case 'asn-hosting':     return '#ffaa00';
+            case 'asn-residential': return '#00ff88';
+            case 'asn-business':    return '#0088ff';
+            case 'asn-isp':         return '#00d9ff';
+            default:                return '#6b7a99';
         }
     }
 
-    // Draw nodes
-    for (var dni = 0; dni < nodes.length; dni++) {
-        var dn = nodes[dni];
-        var color = dn.suspicious ? '#ff3366' : (dn.type === 'host' ? '#00aaff' : '#00ff88');
-        var r = Math.min(14, 6 + (connCounts[dn.id] || 0) * 1.5);
-        svgContent += '<circle cx="' + dn.x + '" cy="' + dn.y + '" r="' + r + '" fill="' + color + '" stroke="' + color + '" stroke-opacity="0.3" stroke-width="4" style="cursor:pointer;" filter="url(#glow)" data-node-id="' + dn.id.replace(/"/g, '') + '"/>';
-        var label = dn.label.length > 18 ? dn.label.substring(0, 16) + '..' : dn.label;
-        svgContent += '<text x="' + dn.x + '" y="' + (dn.y + r + 14) + '" text-anchor="middle" fill="#b4bcd0" font-size="10" font-family="Inter, sans-serif">' + escapeHtml(label) + '</text>';
+    /* ── Stats (high priority) ── */
+
+    function onStats(d) {
+        document.getElementById('stat-flows').textContent = formatNumber(d.total_flows || 0);
+        document.getElementById('stat-dsts').textContent = formatNumber(d.unique_destinations || 0);
+        document.getElementById('stat-countries').textContent = d.countries_reached || 0;
+        document.getElementById('stat-bytes').textContent = formatBytes((d.bytes_sent || 0) + (d.bytes_received || 0));
+        const threats = d.threat_intel_hits || 0;
+        document.getElementById('stat-threats').textContent = formatNumber(threats);
+
+        buildNlpSummary(d);
     }
 
-    svg.innerHTML = svgContent;
-}
+    /* ── NLP Summary (enhanced) ── */
 
-function selectNode(nodeId) {
-    var node = null;
-    for (var i = 0; i < allNodes.length; i++) {
-        if (allNodes[i].id === nodeId) { node = allNodes[i]; break; }
-    }
-    if (!node) return;
+    function buildNlpSummary(d) {
+        const nlp = document.getElementById('net-nlp');
+        const flows = d.total_flows || 0;
+        const dsts = d.unique_destinations || 0;
+        const countries = d.countries_reached || 0;
+        const bytes = (d.bytes_sent || 0) + (d.bytes_received || 0);
+        const threats = d.threat_intel_hits || 0;
 
-    selectedNode = node;
-    var panel = document.getElementById('node-detail');
-    panel.style.display = 'block';
-    panel.style.marginTop = '1.5rem';
-    document.getElementById('node-detail-title').textContent = node.label;
+        const parts = [];
 
-    // Find connections for this node
-    var nodeConns = [];
-    for (var i = 0; i < allEdges.length; i++) {
-        var e = allEdges[i];
-        if (e.source === nodeId || e.target === nodeId || e.source === node.ip || e.target === node.ip) {
-            nodeConns.push(e);
-        }
-    }
-
-    var html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;font-size:0.85rem;margin-bottom:1rem;">'
-        + '<div><span style="color:var(--text-muted);">ID</span><div style="font-weight:600;">' + escapeHtml(node.id) + '</div></div>'
-        + '<div><span style="color:var(--text-muted);">IP</span><div>' + (node.ip || 'N/A') + '</div></div>'
-        + '<div><span style="color:var(--text-muted);">Type</span><div>' + (node.type || 'unknown') + '</div></div>'
-        + '<div><span style="color:var(--text-muted);">Manufacturer</span><div>' + (node.manufacturer || 'Unknown') + '</div></div>'
-        + '<div><span style="color:var(--text-muted);">Connections</span><div style="font-weight:700;color:#00aaff;">' + nodeConns.length + '</div></div>'
-        + '</div>';
-
-    if (nodeConns.length > 0) {
-        html += '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;">Connected to:</div>';
-        html += '<div style="max-height:200px;overflow-y:auto;">';
-        for (var ci = 0; ci < nodeConns.length; ci++) {
-            var c = nodeConns[ci];
-            var peer = c.source === nodeId || c.source === node.ip ? c.target : c.source;
-            html += '<div style="display:flex;justify-content:space-between;padding:0.3rem 0.5rem;margin-bottom:0.2rem;background:rgba(255,255,255,0.03);border-radius:4px;font-size:0.8rem;">'
-                + '<span style="color:var(--text-secondary);">' + escapeHtml(peer) + '</span>'
-                + '<span><span class="proto-badge">' + (c.protocol || 'TCP') + '</span> <span style="color:var(--text-muted);">' + formatBytes(c.bytes || 0) + '</span></span>'
-                + '</div>';
-        }
-        html += '</div>';
-    }
-
-    document.getElementById('node-detail-content').innerHTML = html;
-}
-
-function renderNodesList(nodes) {
-    var container = document.getElementById('nodes-list');
-    if (nodes.length === 0) {
-        container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No endpoints discovered</div>';
-        return;
-    }
-    var html = '';
-    for (var i = 0; i < nodes.length; i++) {
-        var n = nodes[i];
-        html += '<div class="net-node" data-node-id="' + n.id.replace(/"/g, '') + '">'
-            + '<div><div class="net-node-name">' + escapeHtml(n.label) + '</div>'
-            + '<div class="net-node-meta">' + (n.ip || 'No IP') + ' &middot; ' + n.type + (n.manufacturer ? ' &middot; ' + escapeHtml(n.manufacturer) : '') + '</div></div>'
-            + '<span style="font-size:0.7rem;padding:0.15rem 0.5rem;background:rgba(0,170,255,0.15);color:#00aaff;border-radius:4px;">' + n.type + '</span></div>';
-    }
-    container.innerHTML = html;
-}
-
-function renderEdgesTable(edges) {
-    var container = document.getElementById('edges-table');
-    if (edges.length === 0) {
-        container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No connections recorded</div>';
-        return;
-    }
-
-    var html = '<table class="conn-table"><thead><tr>'
-        + '<th>Source</th><th>Target</th><th>Protocol</th><th>Traffic</th><th>Count</th></tr></thead><tbody>';
-    for (var i = 0; i < edges.length; i++) {
-        var e = edges[i];
-        var rowColor = e.suspicious ? 'color:#ff3366;' : '';
-        html += '<tr style="' + rowColor + '">'
-            + '<td>' + escapeHtml(e.source) + '</td>'
-            + '<td>' + escapeHtml(e.target) + '</td>'
-            + '<td><span class="proto-badge">' + (e.protocol || 'TCP') + '</span></td>'
-            + '<td>' + formatBytes(e.bytes || 0) + '</td>'
-            + '<td style="font-weight:600;">' + (e.count || 1) + '</td></tr>';
-    }
-    html += '</tbody></table>';
-    container.innerHTML = html;
-}
-
-function renderHeatmap(nodes, edges) {
-    var container = document.getElementById('traffic-heatmap');
-    if (nodes.length === 0 || edges.length === 0) {
-        container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No traffic data for heatmap</div>';
-        return;
-    }
-
-    // Get unique IPs/IDs (limit to top 12 for readability)
-    var ips = {};
-    for (var i = 0; i < edges.length; i++) {
-        ips[edges[i].source] = true;
-        ips[edges[i].target] = true;
-    }
-    var ipList = Object.keys(ips).slice(0, 12);
-
-    // Build traffic matrix
-    var matrix = {};
-    var maxTraffic = 1;
-    for (var ei = 0; ei < edges.length; ei++) {
-        var e = edges[ei];
-        var key = e.source + '|' + e.target;
-        matrix[key] = (matrix[key] || 0) + (e.bytes || 0);
-        if (matrix[key] > maxTraffic) maxTraffic = matrix[key];
-    }
-
-    var html = '<table class="heatmap-table"><thead><tr><th></th>';
-    for (var hi = 0; hi < ipList.length; hi++) {
-        var shortLabel = ipList[hi].length > 10 ? ipList[hi].substring(0, 8) + '..' : ipList[hi];
-        html += '<th title="' + escapeHtml(ipList[hi]) + '">' + escapeHtml(shortLabel) + '</th>';
-    }
-    html += '</tr></thead><tbody>';
-
-    for (var ri = 0; ri < ipList.length; ri++) {
-        var shortRow = ipList[ri].length > 10 ? ipList[ri].substring(0, 8) + '..' : ipList[ri];
-        html += '<tr><td style="color:var(--text-muted);font-weight:600;padding-right:0.5rem;white-space:nowrap;" title="' + escapeHtml(ipList[ri]) + '">' + escapeHtml(shortRow) + '</td>';
-        for (var ci = 0; ci < ipList.length; ci++) {
-            var key = ipList[ri] + '|' + ipList[ci];
-            var val = matrix[key] || 0;
-            if (ri === ci) {
-                html += '<td><div class="hm-cell" style="background:rgba(255,255,255,0.02);">-</div></td>';
-            } else if (val > 0) {
-                var intensity = Math.min(1, val / (maxTraffic || 1));
-                var r = Math.round(intensity * 50);
-                var g = Math.round(255 * intensity);
-                var b = Math.round(136 * intensity);
-                html += '<td><div class="hm-cell" style="background:rgba(' + r + ',' + g + ',' + b + ',0.3);color:#00ff88;" title="' + formatBytes(val) + '">' + formatBytes(val) + '</div></td>';
-            } else {
-                html += '<td><div class="hm-cell" style="background:rgba(255,255,255,0.02);color:var(--text-muted);opacity:0.3;">0</div></td>';
+        // Opening: traffic volume context
+        if (flows > 0) {
+            parts.push('Over the past 24 hours, this endpoint generated <strong>' +
+                formatNumber(flows) + ' network flows</strong> reaching <strong>' +
+                formatNumber(dsts) + ' unique destinations</strong>');
+            if (countries > 0) {
+                parts.push(' across <strong>' + countries + ' ' +
+                    (countries === 1 ? 'country' : 'countries') + '</strong>');
             }
+            parts.push('.');
+        } else {
+            parts.push('No network flows recorded in the past 24 hours.');
+            nlp.innerHTML = '<p>' + parts.join('') + '</p>';
+            return;
         }
-        html += '</tr>';
+
+        // Transfer volume with context
+        if (bytes > 0) {
+            parts.push(' Total data transferred: <strong>' + formatBytes(bytes) + '</strong>.');
+        }
+
+        // Threat assessment
+        if (threats > 0) {
+            parts.push(' <strong class="warn-text">' + threats +
+                ' connection' + (threats > 1 ? 's' : '') +
+                ' flagged by threat intelligence</strong> — review the Suspicious Connections panel below for details.');
+        } else {
+            parts.push(' No connections were flagged by threat intelligence — traffic appears clean.');
+        }
+
+        nlp.innerHTML = '<p>' + parts.join('') + '</p>';
     }
-    html += '</tbody></table>';
-    container.innerHTML = html;
-}
 
-function escapeHtml(str) {
-    if (!str) return '';
-    var div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
+    /* ── Geo / Country bars (low priority) ── */
 
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('export-network-btn').addEventListener('click', exportNetwork);
-    document.getElementById('refresh-topology-btn').addEventListener('click', loadTopology);
-    document.getElementById('close-node-detail-btn').addEventListener('click', function() {
-        document.getElementById('node-detail').style.display = 'none';
+    function onGeo(d) {
+        const countries = d.countries || d.top_countries || [];
+        const container = document.getElementById('country-bars');
+        if (countries.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No GeoIP data available</div>';
+            return;
+        }
+        const max = countries[0].count || 1;
+        const colors = ['#00d9ff', '#00ff88', '#ffaa00', '#a855f7', '#f97316',
+                         '#06b6d4', '#ff3366', '#0088ff', '#cc44ff', '#00ffcc'];
+        container.innerHTML = countries.slice(0, 15).map((c, i) => {
+            const pct = Math.round((c.count / max) * 100);
+            const color = colors[i % colors.length];
+            return '<div class="hbar-row">' +
+                '<div class="hbar-label" title="' + escHtml(c.country) + '">' + escHtml(c.country || 'Unknown') + '</div>' +
+                '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%;background:' + color + ';opacity:0.7;"></div></div>' +
+                '<div class="hbar-val">' + formatNumber(c.count) + '</div></div>';
+        }).join('');
+    }
+
+    /* ── ASN bars (low priority) ── */
+
+    function onAsn(d) {
+        const asns = Array.isArray(d) ? d : (d.asn_breakdown || []);
+        const container = document.getElementById('asn-bars');
+        if (asns.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No ASN data available</div>';
+            return;
+        }
+        const max = asns[0].count || 1;
+        container.innerHTML = asns.slice(0, 15).map(a => {
+            const pct = Math.round((a.count / max) * 100);
+            const netType = a.network_type || 'unknown';
+            const cls = asnTypeClass(netType);
+            const color = asnBarColor(cls);
+            return '<div class="hbar-row' + (cls === 'asn-tor' ? ' threat' : '') + '">' +
+                '<div class="hbar-label" title="' + escHtml(a.org || a.asn_org || '') + '">' + escHtml(((a.org || a.asn_org || 'Unknown')).substring(0, 20)) + '</div>' +
+                '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%;background:' + color + ';opacity:0.7;"></div></div>' +
+                '<div class="hbar-val">' + formatNumber(a.count) + ' <span class="asn-type ' + cls + '">' + escHtml(netType) + '</span></div></div>';
+        }).join('');
+    }
+
+    /* ── Leaflet Threat Map ── */
+
+    // Resolve device location once on page load
+    (function resolveDeviceLocation() {
+        fetch('/dashboard/api/network/device-location')
+            .then(r => r.json())
+            .then(d => {
+                if (d.lat && d.lon) {
+                    deviceLatLng = L.latLng(d.lat, d.lon);
+                    window._deviceCity = [d.city, d.region, d.country].filter(Boolean).join(', ');
+                    window._deviceOrg = d.org || '';
+                    if (geoPointsCache && geoPointsCache.length > 0) renderThreatMap(geoPointsCache);
+                }
+            })
+            .catch(() => {});
+    })();
+
+    function initThreatMap() {
+        threatMap = L.map('threat-map', {
+            center: [25, 0],
+            zoom: 2,
+            minZoom: 2,
+            maxZoom: 12,
+            zoomControl: true,
+            attributionControl: true,
+            preferCanvas: true,
+            worldCopyJump: true
+        });
+
+        // CARTO Dark Matter tiles — free, no API key
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            subdomains: 'abcd',
+            maxZoom: 20,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
+        }).addTo(threatMap);
+
+        // Layer group for destination markers
+        markerLayer = L.layerGroup().addTo(threatMap);
+
+        // Canvas overlay for animated arcs
+        setupArcCanvas();
+        threatMap.on('moveend zoomend resize', repositionArcCanvas);
+    }
+
+    function setupArcCanvas() {
+        const container = threatMap.getContainer();
+        arcCanvas = document.createElement('canvas');
+        arcCanvas.className = 'arc-canvas';
+        arcCanvas.style.width = '100%';
+        arcCanvas.style.height = '100%';
+        container.querySelector('.leaflet-pane.leaflet-overlay-pane').appendChild(arcCanvas);
+        arcCtx = arcCanvas.getContext('2d');
+        repositionArcCanvas();
+    }
+
+    function repositionArcCanvas() {
+        if (!arcCanvas || !threatMap) return;
+        const size = threatMap.getSize();
+        arcCanvas.width = size.x * (window.devicePixelRatio || 1);
+        arcCanvas.height = size.y * (window.devicePixelRatio || 1);
+        arcCanvas.style.width = size.x + 'px';
+        arcCanvas.style.height = size.y + 'px';
+        arcCtx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+        // Align canvas with map pane offset
+        const pane = threatMap.getPane('overlayPane');
+        const transform = pane.style.transform;
+        arcCanvas.style.transform = transform;
+    }
+
+    /* ── Arc animation engine ── */
+
+    function fireArc(fromLL, toLL, color, duration) {
+        activeArcs.push({
+            from: fromLL,
+            to: toLL,
+            color: color,
+            startTime: performance.now(),
+            duration: duration || 2500
+        });
+        if (!arcAnimationId) animateArcs();
+    }
+
+    function animateArcs() {
+        if (!arcCtx || !threatMap) return;
+        const now = performance.now();
+        const size = threatMap.getSize();
+        arcCtx.clearRect(0, 0, size.x, size.y);
+
+        // Align to map pane transform
+        const origin = threatMap.getPixelOrigin();
+        const panePos = threatMap.getPane('overlayPane')._leaflet_pos || {x: 0, y: 0};
+
+        activeArcs = activeArcs.filter(arc => {
+            const elapsed = now - arc.startTime;
+            const progress = Math.min(elapsed / arc.duration, 1);
+            if (progress >= 1) return false;
+
+            const from = threatMap.latLngToContainerPoint(arc.from);
+            const to = threatMap.latLngToContainerPoint(arc.to);
+
+            // Quadratic Bezier control point — arc upward proportional to distance
+            const midX = (from.x + to.x) / 2;
+            const midY = (from.y + to.y) / 2;
+            const dist = Math.sqrt(Math.pow(to.x - from.x, 2) + Math.pow(to.y - from.y, 2));
+            const cpY = midY - dist * 0.35;
+
+            // Draw partial arc up to progress
+            arcCtx.beginPath();
+            const steps = Math.ceil(progress * 40);
+            for (let i = 0; i <= steps; i++) {
+                const t = (i / 40);
+                const x = (1-t)*(1-t)*from.x + 2*(1-t)*t*midX + t*t*to.x;
+                const y = (1-t)*(1-t)*from.y + 2*(1-t)*t*cpY + t*t*to.y;
+                if (i === 0) arcCtx.moveTo(x, y);
+                else arcCtx.lineTo(x, y);
+            }
+
+            // Fade out in the last 30%
+            const alpha = progress > 0.7 ? 1 - ((progress - 0.7) / 0.3) : 0.8;
+
+            arcCtx.strokeStyle = arc.color;
+            arcCtx.globalAlpha = alpha;
+            arcCtx.lineWidth = 1.5;
+            arcCtx.shadowColor = arc.color;
+            arcCtx.shadowBlur = 6;
+            arcCtx.stroke();
+            arcCtx.globalAlpha = 1;
+            arcCtx.shadowBlur = 0;
+
+            // Bright head dot
+            if (steps > 0) {
+                const ht = steps / 40;
+                const hx = (1-ht)*(1-ht)*from.x + 2*(1-ht)*ht*midX + ht*ht*to.x;
+                const hy = (1-ht)*(1-ht)*from.y + 2*(1-ht)*ht*cpY + ht*ht*to.y;
+                arcCtx.beginPath();
+                arcCtx.arc(hx, hy, 3, 0, Math.PI * 2);
+                arcCtx.fillStyle = arc.color;
+                arcCtx.globalAlpha = alpha;
+                arcCtx.shadowColor = arc.color;
+                arcCtx.shadowBlur = 10;
+                arcCtx.fill();
+                arcCtx.globalAlpha = 1;
+                arcCtx.shadowBlur = 0;
+            }
+
+            return true;
+        });
+
+        if (activeArcs.length > 0) {
+            arcAnimationId = requestAnimationFrame(animateArcs);
+        } else {
+            arcAnimationId = null;
+        }
+    }
+
+    /* ── Staggered arc firing for threat-map effect ── */
+
+    function fireStaggeredArcs(points, deviceLL) {
+        let delay = 0;
+        const sorted = points.slice().sort((a, b) => (b.count || 1) - (a.count || 1));
+        sorted.forEach((pt, i) => {
+            const isThreat = pt.threat_intel_match || pt.threat || false;
+            const color = isThreat ? 'rgba(255,51,102,0.8)' : 'rgba(0,255,136,0.5)';
+            const toLL = L.latLng(pt.lat, pt.lon);
+            const duration = 2000 + Math.random() * 1500;
+            setTimeout(() => fireArc(deviceLL, toLL, color, duration), delay);
+            delay += 80 + Math.random() * 120;  // stagger 80-200ms apart
+        });
+    }
+
+    /* ── Render geo points on Leaflet map ── */
+
+    function onGeoPoints(d) {
+        geoPointsCache = Array.isArray(d) ? d : (d.points || []);
+        renderThreatMap(geoPointsCache);
+    }
+
+    function renderThreatMap(points) {
+        if (!threatMap) initThreatMap();
+        markerLayer.clearLayers();
+
+        const valid = points.filter(p => (p.lat !== 0 || p.lon !== 0) && p.lat != null && p.lon != null);
+
+        if (valid.length === 0) {
+            document.getElementById('map-clean-count').textContent = '0';
+            document.getElementById('map-threat-count').textContent = '0';
+            document.getElementById('map-total-flows').textContent = '0';
+            return;
+        }
+
+        const maxCount = Math.max(1, Math.max(...valid.map(p => p.count || 1)));
+        let cleanCount = 0, threatCount = 0, totalFlows = 0;
+
+        // Device location: resolved via /api/network/device-location or cached
+        if (!deviceLatLng) {
+            // Fallback until async resolution completes
+            deviceLatLng = L.latLng(38.2542, -85.7594);
+        }
+
+        // Add device marker
+        const deviceIcon = L.divIcon({
+            className: 'device-marker',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+        });
+        L.marker(deviceLatLng, { icon: deviceIcon, zIndexOffset: 1000 })
+            .bindTooltip('<div class="tip-title">YOUR DEVICE</div>' +
+                '<div class="tip-row"><span class="tip-lbl">Origin</span><span class="tip-val">' + (window._deviceCity || 'Local Endpoint') + '</span></div>' +
+                '<div class="tip-row"><span class="tip-lbl">Network</span><span class="tip-val">' + (window._deviceOrg || '') + '</span></div>',
+                { className: 'threat-map-tooltip', direction: 'top', offset: [0, -12] })
+            .addTo(markerLayer);
+
+        // Add destination markers
+        valid.forEach(pt => {
+            const isThreat = pt.threat_intel_match || pt.threat || false;
+            const count = pt.count || 1;
+            totalFlows += count;
+            if (isThreat) threatCount++; else cleanCount++;
+
+            const size = Math.max(6, Math.min(22, 6 + Math.log2(count + 1) * 3));
+            const cls = isThreat ? 'threat' : 'clean';
+
+            const icon = L.divIcon({
+                className: 'pulse-dot ' + cls,
+                iconSize: [size, size],
+                iconAnchor: [size / 2, size / 2]
+            });
+
+            const tooltipHtml =
+                '<div class="tip-title">' + escHtml(pt.country || 'Unknown') + (pt.city ? ', ' + escHtml(pt.city) : '') + '</div>' +
+                '<div class="tip-row"><span class="tip-lbl">Connections</span><span class="tip-val">' + formatNumber(count) + '</span></div>' +
+                '<div class="tip-row"><span class="tip-lbl">Bytes</span><span class="tip-val">' + formatBytes(pt.bytes || 0) + '</span></div>' +
+                (pt.asn_org ? '<div class="tip-row"><span class="tip-lbl">ASN</span><span class="tip-val">' + escHtml(pt.asn_org) + '</span></div>' : '') +
+                '<div class="tip-row"><span class="tip-lbl">Status</span><span class="tip-val" style="color:' + (isThreat ? '#ff3366' : '#00ff88') + ';">' + (isThreat ? 'THREAT FLAGGED' : 'Clean') + '</span></div>';
+
+            L.marker([pt.lat, pt.lon], { icon: icon })
+                .bindTooltip(tooltipHtml, { className: 'threat-map-tooltip', direction: 'top', offset: [0, -size / 2 - 4], sticky: false })
+                .addTo(markerLayer);
+        });
+
+        // Update overlay stats
+        document.getElementById('map-clean-count').textContent = cleanCount;
+        document.getElementById('map-threat-count').textContent = threatCount;
+        document.getElementById('map-total-flows').textContent = formatNumber(totalFlows);
+
+        // Fit map bounds to show all points with padding
+        const allLatLngs = valid.map(p => [p.lat, p.lon]);
+        allLatLngs.push([deviceLatLng.lat, deviceLatLng.lng]);
+        threatMap.fitBounds(L.latLngBounds(allLatLngs), { padding: [40, 40], maxZoom: 6 });
+
+        // Fire staggered animated arcs (threat-map effect)
+        fireStaggeredArcs(valid, deviceLatLng);
+
+        // Set up recurring arc animations every 8 seconds for live feel
+        if (window._arcInterval) clearInterval(window._arcInterval);
+        window._arcInterval = setInterval(() => {
+            if (document.hidden || valid.length === 0) return;
+            // Fire a random subset of arcs
+            const subset = valid.slice().sort(() => Math.random() - 0.5).slice(0, Math.min(8, valid.length));
+            subset.forEach((pt, i) => {
+                const isThreat = pt.threat_intel_match || pt.threat || false;
+                const color = isThreat ? 'rgba(255,51,102,0.7)' : 'rgba(0,255,136,0.4)';
+                setTimeout(() => fireArc(deviceLatLng, L.latLng(pt.lat, pt.lon), color, 2500 + Math.random() * 1500), i * 200);
+            });
+        }, 8000);
+    }
+
+    /* ── Top Destinations (lazy-loaded) ── */
+
+    async function loadTopDestinations() {
+        if (destinationsLoaded) return;
+        try {
+            const d = await DashboardCache.fetch('/dashboard/api/network/top-destinations?hours=24&limit=100', 55);
+            allDestinations = Array.isArray(d) ? d : (d.destinations || []);
+            renderDestinations(allDestinations);
+            renderSuspicious(allDestinations);
+            destinationsLoaded = true;
+        } catch (e) {
+            console.error('Destinations load failed:', e);
+        }
+    }
+
+    function renderDestinations(dsts) {
+        const body = document.getElementById('dst-table-body');
+        if (dsts.length === 0) {
+            body.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted);">No destination data</td></tr>';
+            return;
+        }
+        body.innerHTML = dsts.map(d => {
+            const isThreat = d.threat_intel_match || d.threat || false;
+            const netType = d.network_type || 'unknown';
+            const totalBytes = (d.bytes_tx || 0) + (d.bytes_rx || 0) + (d.bytes || 0);
+            const cls = asnTypeClass(netType);
+            return '<tr' + (isThreat ? ' style="background:rgba(255,51,102,0.03);"' : '') + '>' +
+                '<td style="font-family:monospace;font-size:0.78rem;color:var(--neural-primary);">' + escHtml(d.dst_ip || '') + '</td>' +
+                '<td>' + (d.dst_port || '-') + '</td>' +
+                '<td><span style="padding:0.1rem 0.4rem;background:rgba(0,255,136,0.15);color:#00ff88;border-radius:4px;font-size:0.7rem;font-weight:700;">' + escHtml(d.protocol || 'TCP') + '</span></td>' +
+                '<td>' + escHtml(d.country || '-') + '</td>' +
+                '<td>' + escHtml(d.city || '-') + '</td>' +
+                '<td style="font-size:0.78rem;" title="' + escHtml(d.asn_org || '') + '">' + escHtml((d.asn_org || '-').substring(0, 25)) + '</td>' +
+                '<td><span class="asn-type ' + cls + '">' + escHtml(netType) + '</span></td>' +
+                '<td>' + formatBytes(totalBytes) + '</td>' +
+                '<td>' + formatNumber(d.flows || 0) + '</td>' +
+                '<td><span class="threat-flag ' + (isThreat ? 'flagged' : 'clean') + '">' + (isThreat ? 'FLAGGED' : 'Clean') + '</span></td></tr>';
+        }).join('');
+    }
+
+    function renderSuspicious(dsts) {
+        const panel = document.getElementById('susp-panel');
+        const suspicious = dsts.filter(d =>
+            d.threat_intel_match || d.threat ||
+            (d.network_type && (d.network_type.toLowerCase().includes('tor') || d.network_type.toLowerCase().includes('vpn')))
+        );
+
+        if (suspicious.length === 0) {
+            panel.innerHTML = '<div class="susp-empty">No suspicious connections detected. All traffic appears clean.</div>';
+            return;
+        }
+
+        panel.innerHTML = '<table class="dst-table"><thead><tr><th>IP</th><th>Country</th><th>ASN</th><th>Type</th><th>Bytes</th><th>Reason</th></tr></thead><tbody>' +
+            suspicious.map(d => {
+                const reason = (d.threat_intel_match || d.threat) ? 'Threat Intel Match' : 'Suspicious Network Type';
+                const suspBytes = (d.bytes_tx || 0) + (d.bytes_rx || 0) + (d.bytes || 0);
+                return '<tr style="background:rgba(255,51,102,0.03);">' +
+                    '<td style="font-family:monospace;color:#ff3366;font-weight:600;">' + escHtml(d.dst_ip || '') + '</td>' +
+                    '<td>' + escHtml(d.country || '-') + '</td>' +
+                    '<td title="' + escHtml(d.asn_org || '') + '">' + escHtml((d.asn_org || '-').substring(0, 20)) + '</td>' +
+                    '<td><span class="asn-type ' + asnTypeClass(d.network_type) + '">' + escHtml(d.network_type || '-') + '</span></td>' +
+                    '<td>' + formatBytes(suspBytes) + '</td>' +
+                    '<td style="color:#ff3366;font-weight:600;font-size:0.78rem;">' + reason + '</td></tr>';
+            }).join('') + '</tbody></table>';
+    }
+
+    /* ── Process Network Usage (lazy-loaded) ── */
+
+    async function loadByProcess() {
+        if (processLoaded) return;
+        try {
+            const d = await DashboardCache.fetch('/dashboard/api/network/by-process?hours=24', 55);
+            const procs = Array.isArray(d) ? d : (d.processes || []);
+            const container = document.getElementById('process-bars');
+            if (procs.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:2rem;">No process network data</div>';
+                processLoaded = true;
+                return;
+            }
+            const maxBytes = (procs[0].bytes_tx || 0) + (procs[0].bytes_rx || 0) || 1;
+            container.innerHTML = procs.slice(0, 15).map((p, i) => {
+                const totalBytes = (p.bytes_tx || 0) + (p.bytes_rx || 0);
+                const pct = Math.round((totalBytes / maxBytes) * 100);
+                const hue = (i * 30) % 360;
+                return '<div class="hbar-row">' +
+                    '<div class="hbar-label" title="' + escHtml(p.process || p.process_name || '') + '">' + escHtml((p.process || p.process_name || 'unknown').substring(0, 20)) + '</div>' +
+                    '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%;background:hsl(' + hue + ',65%,55%);opacity:0.7;"></div></div>' +
+                    '<div class="hbar-val">' + formatBytes(totalBytes) + ' (' + formatNumber(p.flows || 0) + ')</div></div>';
+            }).join('');
+            processLoaded = true;
+        } catch (e) {
+            console.error('Process load failed:', e);
+        }
+    }
+
+    /* ── Search / filter (expose to global scope for onclick) ── */
+
+    window.filterDestinations = function() {
+        const q = document.getElementById('dst-search').value.toLowerCase();
+        if (!q) {
+            renderDestinations(allDestinations);
+            return;
+        }
+        const filtered = allDestinations.filter(d =>
+            (d.dst_ip || '').toLowerCase().includes(q) ||
+            (d.country || '').toLowerCase().includes(q) ||
+            (d.city || '').toLowerCase().includes(q) ||
+            (d.asn_org || '').toLowerCase().includes(q) ||
+            (d.network_type || '').toLowerCase().includes(q)
+        );
+        renderDestinations(filtered);
+    };
+
+    document.getElementById('dst-search').addEventListener('keydown', e => {
+        if (e.key === 'Enter') window.filterDestinations();
     });
 
-    // Event delegation for dynamically generated SVG nodes
-    document.getElementById('network-svg').addEventListener('click', function(e) {
-        var circle = e.target.closest('circle[data-node-id]');
-        if (circle) selectNode(circle.getAttribute('data-node-id'));
-    });
+    /* ── Lazy loading for bottom sections ── */
 
-    // Event delegation for dynamically generated node list items
-    document.getElementById('nodes-list').addEventListener('click', function(e) {
-        var node = e.target.closest('.net-node[data-node-id]');
-        if (node) selectNode(node.getAttribute('data-node-id'));
-    });
+    LazyLoader.observe('#process-section', loadByProcess);
+    LazyLoader.observe('#destinations-section', loadTopDestinations);
 
-    loadTopology();
-});
+    /* ── DashboardPoller with priority tiers ── */
+
+    const poller = new DashboardPoller([
+        // High priority: stats KPIs (fast, drives NLP summary)
+        {
+            url: '/dashboard/api/network/stats?hours=24',
+            callback: onStats,
+            priority: 'high',
+            ttl: 25
+        },
+        // Low priority: geo country bars
+        {
+            url: '/dashboard/api/network/geo?hours=24',
+            callback: onGeo,
+            priority: 'low',
+            ttl: 55
+        },
+        // Low priority: ASN breakdown
+        {
+            url: '/dashboard/api/network/asn?hours=24',
+            callback: onAsn,
+            priority: 'low',
+            ttl: 55
+        },
+        // Low priority: geo map dots
+        {
+            url: '/dashboard/api/network/geo-points?hours=24&limit=500',
+            callback: onGeoPoints,
+            priority: 'low',
+            ttl: 55
+        }
+    ], 30000).start();
+
+})();
 </script>
 {% endblock %}

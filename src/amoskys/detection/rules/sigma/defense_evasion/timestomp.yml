@@ -1,0 +1,28 @@
+title: File Timestamp Modification (Timestomping)
+id: amoskys-de-002
+status: stable
+level: high
+description: Detects file timestamp modification patterns such as touch -t usage indicating an adversary is altering file metadata to blend in with legitimate files
+author: AMOSKYS
+tags:
+    - attack.defense_evasion
+    - attack.t1070.006
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection:
+        event_type: timestomp_detected
+    condition: selection
+fields:
+    - file_path
+    - original_timestamp
+    - new_timestamp
+    - process_name
+    - cmdline
+    - pid
+    - uid
+falsepositives:
+    - Build systems restoring original timestamps
+    - Backup restoration tools preserving file dates
+confidence: 0.82

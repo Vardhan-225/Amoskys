@@ -1,0 +1,31 @@
+title: Suspicious AppleScript/osascript Execution
+id: amoskys-exec-004
+status: stable
+level: high
+description: Detects suspicious execution of osascript (AppleScript interpreter) which attackers use on macOS for privilege escalation, credential theft, or persistence via scripted system interactions
+author: AMOSKYS
+tags:
+    - attack.execution
+    - attack.t1059.002
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection:
+        event_type: lolbin_execution
+    process_filter:
+        process_name: osascript
+    condition: selection and process_filter
+fields:
+    - process_name
+    - command_line
+    - parent_name
+    - parent_command_line
+    - pid
+    - ppid
+    - user
+falsepositives:
+    - Legitimate macOS automation workflows using AppleScript
+    - System Preferences or Finder invoking osascript for UI scripting
+    - Homebrew or other package managers using osascript for notifications
+confidence: 0.75

@@ -1,0 +1,29 @@
+title: DNS Tunneling Detection
+id: amoskys-c2-001
+status: stable
+level: critical
+description: Detects DNS tunneling activity via long DNS labels, encoded label patterns, or TXT record query floods indicating covert data exfiltration channels
+author: AMOSKYS
+tags:
+    - attack.command_and_control
+    - attack.t1071.004
+logsource:
+    category: dns
+    product: amoskys
+detection:
+    selection:
+        event_type:
+            - dns_tunnel_long_label
+            - dns_tunnel_encoded_label
+            - dns_tunnel_txt_flood
+    condition: selection
+fields:
+    - query_name
+    - query_type
+    - label_length
+    - source_ip
+    - destination_ip
+falsepositives:
+    - Legitimate long DNS names from CDN providers
+    - DKIM and SPF TXT record lookups
+confidence: 0.90

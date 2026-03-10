@@ -1,0 +1,29 @@
+title: Unauthorized Cloud Service Usage (Shadow IT)
+id: amoskys-exfil-004
+status: experimental
+level: medium
+description: Detects connections to unauthorized or unsanctioned cloud services that fall outside organizational policy, indicating potential Shadow IT usage for data exfiltration
+author: AMOSKYS
+tags:
+    - attack.exfiltration
+    - attack.t1567.002
+logsource:
+    category: network
+    product: amoskys
+detection:
+    selection:
+        event_type: shadow_it_detected
+    condition: selection
+fields:
+    - source_ip
+    - destination_host
+    - service_name
+    - service_category
+    - user
+    - bytes_sent
+    - bytes_received
+falsepositives:
+    - Newly adopted but not yet catalogued SaaS tools
+    - Personal cloud storage used for non-sensitive work
+    - Trial accounts for evaluating new services
+confidence: 0.65

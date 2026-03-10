@@ -37,7 +37,7 @@ from .reliability import reliability_bp  # AMRDR Reliability API (Sprint 2)
 from .snmp_simple import snmp_simple_bp  # Simple SNMP telemetry API
 from .soma_brain import soma_brain_bp  # SOMA Brain ML intelligence API
 from .system import system_bp
-from .telemetry import telemetry_bp  # Real-time telemetry from EventBus WAL
+from .telemetry import telemetry_bp  # Canonical telemetry read API
 from .user_auth import user_auth_bp  # User authentication (Phase 3)
 
 # Register sub-blueprints

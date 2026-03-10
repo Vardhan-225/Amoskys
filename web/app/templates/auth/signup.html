@@ -250,11 +250,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
             
             if (response.ok && data.success) {
-                // Success - redirect to verification pending page
-                showSuccess('Account created! Redirecting...');
-                setTimeout(() => {
-                    window.location.href = '/auth/verify-pending?email=' + encodeURIComponent(emailInput.value);
-                }, 1000);
+                if (data.auto_verified) {
+                    // Dev mode: user auto-verified, go straight to login
+                    showSuccess('Account created! Redirecting to login...');
+                    setTimeout(() => {
+                        window.location.href = '/auth/login?verified=1';
+                    }, 800);
+                } else {
+                    showSuccess('Account created! Check your email to verify.');
+                    setTimeout(() => {
+                        window.location.href = '/auth/verify-pending?email=' + encodeURIComponent(emailInput.value);
+                    }, 1000);
+                }
             } else {
                 // Handle specific error codes
                 switch (data.error_code) {

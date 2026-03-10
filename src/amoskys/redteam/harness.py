@@ -8,8 +8,8 @@ For proc probes, set ``patch_targets`` on AdversarialCase:
     AdversarialCase(
         ...,
         patch_targets={
-            "amoskys.agents.proc.probes.psutil.process_iter": mock_iter,
-            "amoskys.agents.proc.probes.PSUTIL_AVAILABLE": True,
+            "amoskys.agents.shared.process.probes.psutil.process_iter": mock_iter,
+            "amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE": True,
         }
     )
 The harness applies each patch as a ``unittest.mock.patch`` context manager
@@ -42,7 +42,12 @@ import unittest.mock
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from amoskys.agents.common.probes import MicroProbe, ProbeContext, Severity, TelemetryEvent
+from amoskys.agents.common.probes import (
+    MicroProbe,
+    ProbeContext,
+    Severity,
+    TelemetryEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,8 +81,8 @@ class AdversarialCase:
             Example::
 
                 patch_targets={
-                    "amoskys.agents.proc.probes.psutil.process_iter": mock_iter,
-                    "amoskys.agents.proc.probes.PSUTIL_AVAILABLE": True,
+                    "amoskys.agents.shared.process.probes.psutil.process_iter": mock_iter,
+                    "amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE": True,
                 }
     """
 
@@ -199,7 +204,9 @@ class ScenarioResult:
     @property
     def caught_cases(self) -> List[CaseResult]:
         return [
-            r for r in self.case_results if r.case.category == "positive" and r.event_count > 0
+            r
+            for r in self.case_results
+            if r.case.category == "positive" and r.event_count > 0
         ]
 
     @property
@@ -256,12 +263,8 @@ def incident_key_for_events(
     if not events:
         return ""
 
-    techniques = sorted(
-        {t for e in events for t in e.mitre_techniques}
-    )
-    principals = sorted(
-        {str(e.data.get("uid", "unknown")) for e in events}
-    )
+    techniques = sorted({t for e in events for t in e.mitre_techniques})
+    principals = sorted({str(e.data.get("uid", "unknown")) for e in events})
     principal = principals[0] if principals else "unknown"
 
     # Use the first event's timestamp for the window bucket
@@ -391,9 +394,7 @@ class RedTeamHarness:
 
         # Assert count
         if case.expect_count is not None and len(events) != case.expect_count:
-            failures.append(
-                f"expected {case.expect_count} events, got {len(events)}"
-            )
+            failures.append(f"expected {case.expect_count} events, got {len(events)}")
 
         # Assert event_types (order-independent)
         if case.expect_event_types:

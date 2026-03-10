@@ -1,0 +1,28 @@
+title: Hidden File or Directory Creation
+id: amoskys-de-003
+status: stable
+level: medium
+description: Detects creation of hidden files or directories (dot-prefixed) which may indicate an adversary attempting to conceal malicious payloads or persistence mechanisms
+author: AMOSKYS
+tags:
+    - attack.defense_evasion
+    - attack.t1564.001
+logsource:
+    category: file_event
+    product: amoskys
+detection:
+    selection:
+        event_type: hidden_file_created
+    condition: selection
+fields:
+    - file_path
+    - file_name
+    - process_name
+    - pid
+    - uid
+    - parent_directory
+falsepositives:
+    - Developer tools creating dotfiles (.gitignore, .env)
+    - Application configuration directories (.config, .cache)
+    - Package managers creating hidden metadata
+confidence: 0.65

@@ -1,0 +1,29 @@
+title: XSS Script Injection Detected
+id: amoskys-exec-003
+status: stable
+level: high
+description: Detects cross-site scripting (XSS) injection attempts in HTTP requests, including reflected and stored XSS payloads containing script tags, event handlers, or JavaScript URIs
+author: AMOSKYS
+tags:
+    - attack.execution
+    - attack.t1059.007
+logsource:
+    category: webserver
+    product: amoskys
+detection:
+    selection:
+        event_type: xss_detected
+    condition: selection
+fields:
+    - source_ip
+    - url_path
+    - query_string
+    - payload
+    - http_method
+    - user_agent
+    - response_code
+falsepositives:
+    - Security scanners performing authorized XSS testing
+    - Web application firewalls logging benign encoded content
+    - Developer tools injecting debug scripts
+confidence: 0.80

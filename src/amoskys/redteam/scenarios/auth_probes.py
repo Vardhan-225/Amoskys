@@ -26,7 +26,8 @@ Run:
 
 from __future__ import annotations
 
-from amoskys.agents.auth.probes import (
+from amoskys.agents.common.probes import Severity
+from amoskys.agents.shared.auth.probes import (
     AccountLockoutStormProbe,
     AuthEvent,
     MFABypassOrAnomalyProbe,
@@ -36,7 +37,6 @@ from amoskys.agents.auth.probes import (
     SudoElevationProbe,
     SudoSuspiciousCommandProbe,
 )
-from amoskys.agents.common.probes import Severity
 from amoskys.redteam.harness import AdversarialCase, Scenario
 from amoskys.redteam.scenarios import register
 
@@ -52,7 +52,7 @@ _T0 = int(1_700_000_000 * 1e9)
 _T1 = _T0 + int(120 * 1e9)  # +2 min
 _T2 = _T0 + int(240 * 1e9)  # +4 min
 _T3 = _T0 + int(600 * 1e9)  # +10 min
-_T_NIGHT = int(1_700_038_800 * 1e9)    # 2023-11-15 08:00 UTC = midnight PST
+_T_NIGHT = int(1_700_038_800 * 1e9)  # 2023-11-15 08:00 UTC = midnight PST
 _T_WEEKEND = int(1_700_294_400 * 1e9)  # 2023-11-18 08:00 UTC = Saturday midnight PST
 
 
@@ -75,6 +75,7 @@ def _ae(**kwargs) -> AuthEvent:
 # =============================================================================
 # 1. SSHPasswordSprayProbe — 10+ distinct usernames from same IP
 # =============================================================================
+
 
 def _spray_events(source_ip: str, usernames: list, status: str = "FAILURE") -> list:
     """Generate one auth failure per username from the same source IP."""
@@ -1007,7 +1008,7 @@ _SUSP_POS3 = AdversarialCase(
 
 _SUSP_EVA1 = AdversarialCase(
     id="susp_evade_base64_obfuscation",
-    title="sudo bash -c \"$(echo payload | base64 -d)\" — partial evasion",
+    title='sudo bash -c "$(echo payload | base64 -d)" — partial evasion',
     category="evasion",
     description=(
         "Attacker base64-encodes their malicious command and decodes it inline. "
@@ -1623,7 +1624,12 @@ _MFA_EVA3 = AdversarialCase(
     ),
     shared_data_key="auth_events",
     events=[
-        _ae(timestamp_ns=_T0, event_type="MFA_CHALLENGE", status="PENDING", username="victim"),
+        _ae(
+            timestamp_ns=_T0,
+            event_type="MFA_CHALLENGE",
+            status="PENDING",
+            username="victim",
+        ),
         _ae(
             timestamp_ns=_T1,
             event_type="MFA_SUCCESS",
@@ -1656,9 +1662,21 @@ _MFA_BEN1 = AdversarialCase(
     ),
     shared_data_key="auth_events",
     events=[
-        _ae(timestamp_ns=_T0, event_type="MFA_CHALLENGE", status="PENDING", username="alice"),
-        _ae(timestamp_ns=_T1, event_type="MFA_SUCCESS", status="SUCCESS", username="alice"),
-        _ae(timestamp_ns=_T2, event_type="SSH_LOGIN", status="SUCCESS", username="alice"),
+        _ae(
+            timestamp_ns=_T0,
+            event_type="MFA_CHALLENGE",
+            status="PENDING",
+            username="alice",
+        ),
+        _ae(
+            timestamp_ns=_T1,
+            event_type="MFA_SUCCESS",
+            status="SUCCESS",
+            username="alice",
+        ),
+        _ae(
+            timestamp_ns=_T2, event_type="SSH_LOGIN", status="SUCCESS", username="alice"
+        ),
     ],
     expect_count=0,
     expect_evades=False,
@@ -1680,7 +1698,12 @@ _MFA_BEN2 = AdversarialCase(
     ),
     shared_data_key="auth_events",
     events=[
-        _ae(timestamp_ns=_T0, event_type="MFA_CHALLENGE", status="PENDING", username="bob"),
+        _ae(
+            timestamp_ns=_T0,
+            event_type="MFA_CHALLENGE",
+            status="PENDING",
+            username="bob",
+        ),
     ],
     expect_count=0,
     expect_evades=False,
@@ -1719,6 +1742,7 @@ MFA_BYPASS_ANOMALY_SCENARIO: Scenario = register(
 # =============================================================================
 # 7. AccountLockoutStormProbe — 5+ distinct accounts locked
 # =============================================================================
+
 
 def _lockout_events(usernames: list, source_ip: str = "10.0.0.1") -> list:
     """Generate one ACCOUNT_LOCKED event per username."""
