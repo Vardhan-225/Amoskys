@@ -1,0 +1,241 @@
+{
+  "name": "macos_critical_file",
+  "title": "macOS Critical File: System File Integrity Detection (T1565)",
+  "probe_id": "macos_critical_file",
+  "agent": "macos_filesystem",
+  "mitre_techniques": [
+    "T1565"
+  ],
+  "mitre_tactics": [
+    "impact"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "macos_cf_baseline",
+      "title": "Critical file baseline \u2014 learn existing hashes, 0 events",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 4,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_cf_hosts_modified",
+      "title": "/etc/hosts modified \u2014 HIGH severity",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 4,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "macos_critical_file_modified"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "macos_critical_file_modified",
+            "severity": "HIGH",
+            "probe_name": "macos_critical_file",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1565"
+            ],
+            "mitre_tactics": [
+              "impact"
+            ],
+            "tags": [],
+            "data_keys": [
+              "change_type",
+              "mode",
+              "mtime",
+              "name",
+              "path",
+              "sha256",
+              "size",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_cf_non_critical_file",
+      "title": "Modified /etc/motd \u2014 not in critical file list",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_cf_baseline2",
+      "title": "Baseline for sudoers test",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 4,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_cf_sudoers_modified",
+      "title": "/etc/sudoers modified \u2014 CRITICAL severity",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 4,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "macos_critical_file_modified"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "macos_critical_file_modified",
+            "severity": "CRITICAL",
+            "probe_name": "macos_critical_file",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1565"
+            ],
+            "mitre_tactics": [
+              "impact"
+            ],
+            "tags": [],
+            "data_keys": [
+              "change_type",
+              "mode",
+              "mtime",
+              "name",
+              "path",
+              "sha256",
+              "size",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_cf_empty_files",
+      "title": "Empty files list \u2014 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_cf_baseline3",
+      "title": "Baseline for removal test",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 4,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_cf_passwd_removed",
+      "title": "/etc/passwd missing \u2014 MEDIUM severity removal",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 3,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "macos_critical_file_removed"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "macos_critical_file_removed",
+            "severity": "MEDIUM",
+            "probe_name": "macos_critical_file",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1565"
+            ],
+            "mitre_tactics": [
+              "impact"
+            ],
+            "tags": [],
+            "data_keys": [
+              "change_type",
+              "path"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

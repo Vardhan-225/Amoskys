@@ -1,0 +1,258 @@
+{
+  "name": "off_hours_login",
+  "title": "Off-Hours SSH / Console Login (T1078)",
+  "probe_id": "off_hours_login",
+  "agent": "auth",
+  "mitre_techniques": [
+    "T1078"
+  ],
+  "mitre_tactics": [
+    "Initial Access",
+    "Persistence"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "offhours_midnight_pst",
+      "title": "SSH login at midnight PST (8am UTC) \u2192 MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "off_hours_login"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "off_hours_login",
+            "severity": "MEDIUM",
+            "probe_name": "off_hours_login",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "day_of_week",
+              "hour",
+              "is_weekend",
+              "source_ip",
+              "timestamp",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "offhours_weekend_night",
+      "title": "SSH login Saturday midnight PST \u2192 MEDIUM (weekend + night)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "off_hours_login"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "off_hours_login",
+            "severity": "MEDIUM",
+            "probe_name": "off_hours_login",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "day_of_week",
+              "hour",
+              "is_weekend",
+              "source_ip",
+              "timestamp",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "offhours_local_login_night",
+      "title": "LOCAL_LOGIN at off-hours \u2192 MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "off_hours_login"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "off_hours_login",
+            "severity": "MEDIUM",
+            "probe_name": "off_hours_login",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "day_of_week",
+              "hour",
+              "is_weekend",
+              "source_ip",
+              "timestamp",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "offhours_evade_failure",
+      "title": "Failed SSH login at off-hours \u2014 probe only watches SUCCESS",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "offhours_evade_business_hours",
+      "title": "Login during business hours (2pm PST / 5pm EST) \u2014 no fire",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "offhours_evade_on_call",
+      "title": "On-call engineer logs in at 2am \u2014 legitimate off-hours access",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "off_hours_login"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "off_hours_login",
+            "severity": "MEDIUM",
+            "probe_name": "off_hours_login",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "day_of_week",
+              "hour",
+              "is_weekend",
+              "source_ip",
+              "timestamp",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "offhours_benign_business",
+      "title": "Login at 2pm PST (business hours) \u2014 no fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "offhours_benign_vpn_login",
+      "title": "VPN_LOGIN event \u2014 probe watches SSH and LOCAL, not VPN",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

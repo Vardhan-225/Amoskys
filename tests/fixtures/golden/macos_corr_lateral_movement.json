@@ -1,0 +1,219 @@
+{
+  "name": "macos_corr_lateral_movement",
+  "title": "Outbound connection to internal host on service port",
+  "probe_id": "macos_corr_lateral_movement",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1021",
+    "T1570"
+  ],
+  "mitre_tactics": [
+    "lateral-movement"
+  ],
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "corr_lm_smb_internal",
+      "title": "SMB connection to internal host (port 445)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_lateral_movement"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_lateral_movement",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_lateral_movement",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1021",
+              "T1570"
+            ],
+            "mitre_tactics": [
+              "lateral-movement"
+            ],
+            "tags": [
+              "correlation",
+              "lateral-movement",
+              "smb"
+            ],
+            "data_keys": [
+              "correlation",
+              "pid",
+              "process_name",
+              "remote_ip",
+              "remote_port",
+              "service"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_lm_vnc_internal",
+      "title": "VNC connection to internal host (port 5900)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_lateral_movement"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_lateral_movement",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_lateral_movement",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1021",
+              "T1570"
+            ],
+            "mitre_tactics": [
+              "lateral-movement"
+            ],
+            "tags": [
+              "correlation",
+              "lateral-movement",
+              "vnc"
+            ],
+            "data_keys": [
+              "correlation",
+              "pid",
+              "process_name",
+              "remote_ip",
+              "remote_port",
+              "service"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_lm_rdp_internal",
+      "title": "RDP connection to internal host (port 3389)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_lateral_movement"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_lateral_movement",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_lateral_movement",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1021",
+              "T1570"
+            ],
+            "mitre_tactics": [
+              "lateral-movement"
+            ],
+            "tags": [
+              "correlation",
+              "lateral-movement",
+              "rdp"
+            ],
+            "data_keys": [
+              "correlation",
+              "pid",
+              "process_name",
+              "remote_ip",
+              "remote_port",
+              "service"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_lm_ssh_external",
+      "title": "SSH to external IP (not lateral movement)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_lm_http_internal",
+      "title": "HTTP to internal host (port 80, not a lateral port)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_lm_listen_state",
+      "title": "SMB LISTEN state (not outbound)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

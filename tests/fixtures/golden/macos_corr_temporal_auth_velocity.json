@@ -1,0 +1,190 @@
+{
+  "name": "macos_corr_temporal_auth_velocity",
+  "title": "Temporal: auth failure burst, acceleration, and velocity",
+  "probe_id": "macos_corr_temporal_auth_velocity",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1110"
+  ],
+  "mitre_tactics": [
+    "credential-access"
+  ],
+  "total": 5,
+  "passed": 5,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "tav_burst_hydra",
+      "title": "Hydra burst: 15 SSH failures in 5 seconds",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_auth_burst"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_auth_burst",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_temporal_auth_velocity",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1110"
+            ],
+            "mitre_tactics": [
+              "credential-access"
+            ],
+            "tags": [
+              "temporal",
+              "auth",
+              "burst"
+            ],
+            "data_keys": [
+              "burst_score",
+              "burst_threshold",
+              "correlation",
+              "source_ip"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tav_velocity_sustained",
+      "title": "Sustained SSH failures at 0.6/sec for 60 seconds",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_auth_velocity"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_auth_velocity",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_temporal_auth_velocity",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110"
+            ],
+            "mitre_tactics": [
+              "credential-access"
+            ],
+            "tags": [
+              "temporal",
+              "auth",
+              "velocity"
+            ],
+            "data_keys": [
+              "correlation",
+              "source_ip",
+              "velocity",
+              "velocity_threshold"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tav_acceleration_escalating",
+      "title": "Auth failures accelerating: 1/min \u2192 5/min \u2192 15/min",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_auth_acceleration"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_auth_acceleration",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_temporal_auth_velocity",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1110"
+            ],
+            "mitre_tactics": [
+              "credential-access"
+            ],
+            "tags": [
+              "temporal",
+              "auth",
+              "acceleration"
+            ],
+            "data_keys": [
+              "accel_threshold",
+              "acceleration",
+              "correlation",
+              "source_ip"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tav_low_rate_benign",
+      "title": "2 SSH failures in 5 minutes (normal mistype)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tav_slow_spray_evasion",
+      "title": "9 failures evenly spaced over 100s (below all thresholds)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

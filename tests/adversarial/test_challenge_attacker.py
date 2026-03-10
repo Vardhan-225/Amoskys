@@ -26,8 +26,8 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
-from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
+from amoskys.storage.wal_sqlite import SQLiteWAL
 
 # ── Helpers ──────────────────────────────────────────────────────────
 

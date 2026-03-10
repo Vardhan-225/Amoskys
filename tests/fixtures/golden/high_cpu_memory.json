@@ -1,0 +1,219 @@
+{
+  "name": "high_cpu_memory",
+  "title": "High CPU/Memory Resource Abuse \u2014 T1496",
+  "probe_id": "high_cpu_memory",
+  "agent": "proc",
+  "mitre_techniques": [
+    "T1496"
+  ],
+  "mitre_tactics": [
+    "impact"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "hicpu_pos1_setup",
+      "title": "Cryptominer at 92% CPU \u2014 first scan, tracking starts (0 events)",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "hicpu_pos1_fire",
+      "title": "Cryptominer sustained 65s \u2192 high_resource_process MEDIUM",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "high_resource_process"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "high_resource_process",
+            "severity": "MEDIUM",
+            "probe_name": "high_cpu_memory",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1496"
+            ],
+            "mitre_tactics": [
+              "impact"
+            ],
+            "tags": [],
+            "data_keys": [
+              "cpu_percent",
+              "duration_seconds",
+              "memory_percent",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "hicpu_eva_throttle",
+      "title": "Miner throttles to 75% CPU \u2014 stays below 80% threshold, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "hicpu_eva_brief_setup",
+      "title": "Brief CPU spike setup \u2014 miner at 90% at T0",
+      "category": "evasion",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "hicpu_eva_brief_drop",
+      "title": "Miner drops to 5% at T0+30 \u2014 removed from tracking, 0 events",
+      "category": "evasion",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "hicpu_eva_distributed",
+      "title": "10 mining processes at 15% each \u2014 per-process threshold evaded",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "hicpu_benign_compiler_setup",
+      "title": "C compiler at 85% CPU \u2014 first scan, tracking starts",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "hicpu_benign_compiler_fire",
+      "title": "Compiler still at 85% at T0+65 \u2014 fires MEDIUM (FP: can't distinguish from miner)",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "high_resource_process"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "high_resource_process",
+            "severity": "MEDIUM",
+            "probe_name": "high_cpu_memory",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1496"
+            ],
+            "mitre_tactics": [
+              "impact"
+            ],
+            "tags": [],
+            "data_keys": [
+              "cpu_percent",
+              "duration_seconds",
+              "memory_percent",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

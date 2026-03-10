@@ -1,0 +1,654 @@
+{
+  "generated_at": "2026-03-05T10:40:46.219081Z",
+  "total_scenarios": 60,
+  "total_cases": 449,
+  "total_passed": 449,
+  "scenarios": [
+    {
+      "name": "account_lockout_storm",
+      "file": "account_lockout_storm.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1110"
+      ]
+    },
+    {
+      "name": "audit_tamper",
+      "file": "audit_tamper.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1562",
+        "T1562.001"
+      ]
+    },
+    {
+      "name": "binary_from_temp",
+      "file": "binary_from_temp.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1059",
+        "T1204"
+      ]
+    },
+    {
+      "name": "code_signing",
+      "file": "code_signing.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1036",
+        "T1070.005"
+      ]
+    },
+    {
+      "name": "credential_dump",
+      "file": "credential_dump.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1003",
+        "T1555",
+        "T1555.001"
+      ]
+    },
+    {
+      "name": "dylib_injection",
+      "file": "dylib_injection.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1547",
+        "T1574.006"
+      ]
+    },
+    {
+      "name": "execve_high_risk",
+      "file": "execve_high_risk.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1059",
+        "T1204"
+      ]
+    },
+    {
+      "name": "file_permission_tamper",
+      "file": "file_permission_tamper.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1222"
+      ]
+    },
+    {
+      "name": "high_cpu_memory",
+      "file": "high_cpu_memory.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1496"
+      ]
+    },
+    {
+      "name": "kernel_module_load",
+      "file": "kernel_module_load.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1014",
+        "T1547"
+      ]
+    },
+    {
+      "name": "lolbin_execution",
+      "file": "lolbin_execution.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1218",
+        "T1218.010",
+        "T1218.011"
+      ]
+    },
+    {
+      "name": "long_lived_process",
+      "file": "long_lived_process.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1036"
+      ]
+    },
+    {
+      "name": "macos_c2_beacon",
+      "file": "macos_c2_beacon.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1071",
+        "T1071.001"
+      ]
+    },
+    {
+      "name": "macos_corr_auth_geo_anomaly",
+      "file": "macos_corr_auth_geo_anomaly.json",
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1078"
+      ]
+    },
+    {
+      "name": "macos_corr_binary_identity",
+      "file": "macos_corr_binary_identity.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1036"
+      ]
+    },
+    {
+      "name": "macos_corr_cumulative_auth",
+      "file": "macos_corr_cumulative_auth.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1078",
+        "T1110"
+      ]
+    },
+    {
+      "name": "macos_corr_cumulative_exfil",
+      "file": "macos_corr_cumulative_exfil.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1048"
+      ]
+    },
+    {
+      "name": "macos_corr_download_execute",
+      "file": "macos_corr_download_execute.json",
+      "total": 12,
+      "passed": 12,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1059",
+        "T1071",
+        "T1204"
+      ]
+    },
+    {
+      "name": "macos_corr_file_size_anomaly",
+      "file": "macos_corr_file_size_anomaly.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1564"
+      ]
+    },
+    {
+      "name": "macos_corr_kill_chain",
+      "file": "macos_corr_kill_chain.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1048",
+        "T1059",
+        "T1071",
+        "T1078",
+        "T1543"
+      ]
+    },
+    {
+      "name": "macos_corr_lateral_movement",
+      "file": "macos_corr_lateral_movement.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1021",
+        "T1570"
+      ]
+    },
+    {
+      "name": "macos_corr_persistence_execution",
+      "file": "macos_corr_persistence_execution.json",
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1543",
+        "T1547"
+      ]
+    },
+    {
+      "name": "macos_corr_process_network",
+      "file": "macos_corr_process_network.json",
+      "total": 7,
+      "passed": 7,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1059",
+        "T1071"
+      ]
+    },
+    {
+      "name": "macos_corr_scheduled_persistence",
+      "file": "macos_corr_scheduled_persistence.json",
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1053"
+      ]
+    },
+    {
+      "name": "macos_corr_temporal_auth_velocity",
+      "file": "macos_corr_temporal_auth_velocity.json",
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1110"
+      ]
+    },
+    {
+      "name": "macos_corr_temporal_beaconing",
+      "file": "macos_corr_temporal_beaconing.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1071"
+      ]
+    },
+    {
+      "name": "macos_corr_temporal_drop_execute",
+      "file": "macos_corr_temporal_drop_execute.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1059",
+        "T1204"
+      ]
+    },
+    {
+      "name": "macos_corr_temporal_exfil_acceleration",
+      "file": "macos_corr_temporal_exfil_acceleration.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1048"
+      ]
+    },
+    {
+      "name": "macos_corr_temporal_kill_chain",
+      "file": "macos_corr_temporal_kill_chain.json",
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1048",
+        "T1059",
+        "T1071",
+        "T1078",
+        "T1543"
+      ]
+    },
+    {
+      "name": "macos_corr_temporal_persistence_activation",
+      "file": "macos_corr_temporal_persistence_activation.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1543",
+        "T1547"
+      ]
+    },
+    {
+      "name": "macos_corr_unknown_listener",
+      "file": "macos_corr_unknown_listener.json",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1571"
+      ]
+    },
+    {
+      "name": "macos_credential_access",
+      "file": "macos_credential_access.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1555.001"
+      ]
+    },
+    {
+      "name": "macos_critical_file",
+      "file": "macos_critical_file.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1565"
+      ]
+    },
+    {
+      "name": "macos_downloads_monitor",
+      "file": "macos_downloads_monitor.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1204"
+      ]
+    },
+    {
+      "name": "macos_impossible_travel",
+      "file": "macos_impossible_travel.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1078"
+      ]
+    },
+    {
+      "name": "macos_launchagent_persistence",
+      "file": "macos_launchagent_persistence.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1543.001"
+      ]
+    },
+    {
+      "name": "macos_lolbin_execution",
+      "file": "macos_lolbin_execution.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1059.002",
+        "T1218"
+      ]
+    },
+    {
+      "name": "macos_non_standard_port",
+      "file": "macos_non_standard_port.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1571"
+      ]
+    },
+    {
+      "name": "macos_process_masquerade",
+      "file": "macos_process_masquerade.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1036",
+        "T1036.005"
+      ]
+    },
+    {
+      "name": "macos_removable_media",
+      "file": "macos_removable_media.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1091"
+      ]
+    },
+    {
+      "name": "macos_ssh_brute_force",
+      "file": "macos_ssh_brute_force.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1110"
+      ]
+    },
+    {
+      "name": "macos_sudo_escalation",
+      "file": "macos_sudo_escalation.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1548.003"
+      ]
+    },
+    {
+      "name": "mfa_bypass_anomaly",
+      "file": "mfa_bypass_anomaly.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1078",
+        "T1621"
+      ]
+    },
+    {
+      "name": "off_hours_login",
+      "file": "off_hours_login.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1078"
+      ]
+    },
+    {
+      "name": "privesc_syscall",
+      "file": "privesc_syscall.json",
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1068"
+      ]
+    },
+    {
+      "name": "process_spawn",
+      "file": "process_spawn.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1059",
+        "T1204"
+      ]
+    },
+    {
+      "name": "process_tree_anomaly",
+      "file": "process_tree_anomaly.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1055",
+        "T1059"
+      ]
+    },
+    {
+      "name": "ptrace_abuse",
+      "file": "ptrace_abuse.json",
+      "total": 9,
+      "passed": 9,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1055"
+      ]
+    },
+    {
+      "name": "script_interpreter",
+      "file": "script_interpreter.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1059",
+        "T1059.001",
+        "T1059.003",
+        "T1059.004",
+        "T1059.006"
+      ]
+    },
+    {
+      "name": "spine_dropper_execution",
+      "file": "spine_dropper_execution.json",
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1059",
+        "T1204"
+      ]
+    },
+    {
+      "name": "spine_initial_access",
+      "file": "spine_initial_access.json",
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1110.003"
+      ]
+    },
+    {
+      "name": "spine_privilege_escalation",
+      "file": "spine_privilege_escalation.json",
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1068"
+      ]
+    },
+    {
+      "name": "spine_process_implant",
+      "file": "spine_process_implant.json",
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1059",
+        "T1204"
+      ]
+    },
+    {
+      "name": "spine_ptrace_credential_harvest",
+      "file": "spine_ptrace_credential_harvest.json",
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1003",
+        "T1055"
+      ]
+    },
+    {
+      "name": "ssh_geo_impossible_travel",
+      "file": "ssh_geo_impossible_travel.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1078",
+        "T1134"
+      ]
+    },
+    {
+      "name": "ssh_password_spray",
+      "file": "ssh_password_spray.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1110",
+        "T1110.003"
+      ]
+    },
+    {
+      "name": "sudo_elevation",
+      "file": "sudo_elevation.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1548",
+        "T1548.003"
+      ]
+    },
+    {
+      "name": "sudo_suspicious_command",
+      "file": "sudo_suspicious_command.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1059",
+        "T1059.004",
+        "T1548",
+        "T1548.003"
+      ]
+    },
+    {
+      "name": "suspicious_user_process",
+      "file": "suspicious_user_process.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1078"
+      ]
+    },
+    {
+      "name": "syscall_flood",
+      "file": "syscall_flood.json",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "mitre_techniques": [
+        "T1057",
+        "T1499"
+      ]
+    }
+  ]
+}

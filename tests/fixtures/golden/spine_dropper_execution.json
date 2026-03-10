@@ -1,0 +1,179 @@
+{
+  "name": "spine_dropper_execution",
+  "title": "Kill-Chain Phase 2: Dropper Execution (Execution)",
+  "probe_id": "execve_high_risk",
+  "agent": "kernel_audit",
+  "mitre_techniques": [
+    "T1059",
+    "T1204"
+  ],
+  "mitre_tactics": [
+    "Execution"
+  ],
+  "total": 5,
+  "passed": 5,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "spine_tmp_dropper_stage1",
+      "title": "/tmp/stage1 executed by uid=1001 \u2192 kernel_execve_high_risk MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_execve_high_risk"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_execve_high_risk",
+            "severity": "MEDIUM",
+            "probe_name": "execve_high_risk",
+            "confidence": 0.75,
+            "mitre_techniques": [
+              "T1059",
+              "T1204.002"
+            ],
+            "mitre_tactics": [
+              "Execution",
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "comm",
+              "cwd",
+              "euid",
+              "exe",
+              "host",
+              "pid",
+              "ppid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "spine_tmp_dropper_setuid_root",
+      "title": "/tmp/stage2 with setuid bit (euid=0) \u2192 kernel_execve_high_risk HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_execve_high_risk"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_execve_high_risk",
+            "severity": "HIGH",
+            "probe_name": "execve_high_risk",
+            "confidence": 0.75,
+            "mitre_techniques": [
+              "T1059",
+              "T1204.002"
+            ],
+            "mitre_tactics": [
+              "Execution",
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "comm",
+              "cwd",
+              "euid",
+              "exe",
+              "host",
+              "pid",
+              "ppid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "spine_exec_dropper_moved_to_usr_bin",
+      "title": "Attacker moves dropper to /usr/bin/update \u2192 not HIGH_RISK_DIRS \u2192 EVADES",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spine_exec_legitimate_curl",
+      "title": "/usr/bin/curl executed by uid=1001 \u2192 not high-risk \u2192 no alert",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spine_degraded_exec_no_exe",
+      "title": "execve with exe=None \u2014 probe skips gracefully, no false positive",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

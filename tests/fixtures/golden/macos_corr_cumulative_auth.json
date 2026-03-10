@@ -1,0 +1,247 @@
+{
+  "name": "macos_corr_cumulative_auth",
+  "title": "Cumulative auth failures across collection windows",
+  "probe_id": "macos_corr_cumulative_auth",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1078",
+    "T1110"
+  ],
+  "mitre_tactics": [
+    "credential-access",
+    "initial-access"
+  ],
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "corr_ca_ssh_cumulative",
+      "title": "Cumulative 7 SSH failures from same IP across scans",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_cumulative_ssh_brute"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_cumulative_ssh_brute",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_cumulative_auth",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1110",
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "credential-access",
+              "initial-access"
+            ],
+            "tags": [
+              "correlation",
+              "brute-force",
+              "cumulative"
+            ],
+            "data_keys": [
+              "correlation",
+              "cumulative_failures",
+              "source_ip",
+              "threshold",
+              "window_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ca_lockout_cumulative",
+      "title": "Cumulative 12 auth failures for user across scans",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_cumulative_lockout"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_cumulative_lockout",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_cumulative_auth",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1110",
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "credential-access",
+              "initial-access"
+            ],
+            "tags": [
+              "correlation",
+              "lockout",
+              "cumulative"
+            ],
+            "data_keys": [
+              "correlation",
+              "cumulative_failures",
+              "threshold",
+              "username",
+              "window_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ca_combined_brute",
+      "title": "SSH brute force + account lockout simultaneously",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "corr_cumulative_lockout",
+          "corr_cumulative_ssh_brute"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "corr_cumulative_ssh_brute",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_cumulative_auth",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1110",
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "credential-access",
+              "initial-access"
+            ],
+            "tags": [
+              "correlation",
+              "brute-force",
+              "cumulative"
+            ],
+            "data_keys": [
+              "correlation",
+              "cumulative_failures",
+              "source_ip",
+              "threshold",
+              "window_seconds"
+            ]
+          },
+          {
+            "event_type": "corr_cumulative_lockout",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_cumulative_auth",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1110",
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "credential-access",
+              "initial-access"
+            ],
+            "tags": [
+              "correlation",
+              "lockout",
+              "cumulative"
+            ],
+            "data_keys": [
+              "correlation",
+              "cumulative_failures",
+              "threshold",
+              "username",
+              "window_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ca_under_threshold",
+      "title": "3 SSH failures (under threshold of 5)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ca_empty_rolling",
+      "title": "Empty rolling window (no failures)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ca_rotating_ips",
+      "title": "4 failures each from 3 different IPs (all under threshold)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

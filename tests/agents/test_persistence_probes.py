@@ -6,7 +6,7 @@ import time
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity
-from amoskys.agents.persistence.probes import (
+from amoskys.agents.shared.persistence.probes import (
     BrowserExtensionPersistenceProbe,
     CronJobPersistenceProbe,
     HiddenFilePersistenceProbe,

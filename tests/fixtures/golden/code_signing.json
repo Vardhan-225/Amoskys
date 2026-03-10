@@ -1,0 +1,236 @@
+{
+  "name": "code_signing",
+  "title": "Code Signature Verification \u2014 T1036 / T1070.005",
+  "probe_id": "code_signing",
+  "agent": "proc",
+  "mitre_techniques": [
+    "T1036",
+    "T1070.005"
+  ],
+  "mitre_tactics": [
+    "defense_evasion"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "cs_pos1_sudo_tampered",
+      "title": "Tampered /usr/bin/sudo \u2014 codesign fails, code_signature_invalid HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "code_signature_invalid"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "code_signature_invalid",
+            "severity": "HIGH",
+            "probe_name": "code_signing",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1036",
+              "T1070.005"
+            ],
+            "mitre_tactics": [
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "binary_path",
+              "codesign_error",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "cs_pos2_bash_replaced",
+      "title": "Replaced /bin/bash \u2014 codesign fails HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "code_signature_invalid"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "code_signature_invalid",
+            "severity": "HIGH",
+            "probe_name": "code_signing",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1036",
+              "T1070.005"
+            ],
+            "mitre_tactics": [
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "binary_path",
+              "codesign_error",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "cs_pos3_sshd_replaced",
+      "title": "Backdoored /usr/sbin/sshd \u2014 codesign fails HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "code_signature_invalid"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "code_signature_invalid",
+            "severity": "HIGH",
+            "probe_name": "code_signing",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1036",
+              "T1070.005"
+            ],
+            "mitre_tactics": [
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "binary_path",
+              "codesign_error",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "cs_eva1_linux",
+      "title": "Linux platform \u2014 probe skips (darwin-only), 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "cs_eva2_binary_deleted",
+      "title": "Binary absent from disk \u2014 os.path.exists=False, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "cs_eva3_codesign_not_found",
+      "title": "codesign not installed \u2014 FileNotFoundError, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "cs_benign1_all_valid",
+      "title": "All critical binaries pass codesign \u2014 0 events (healthy system)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "cs_benign2_resigned_by_attacker",
+      "title": "Attacker re-signed with own cert \u2014 codesign returns 0, 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

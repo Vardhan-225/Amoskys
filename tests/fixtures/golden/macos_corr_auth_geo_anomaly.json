@@ -1,0 +1,285 @@
+{
+  "name": "macos_corr_auth_geo_anomaly",
+  "title": "SSH login from previously unseen source IP",
+  "probe_id": "macos_corr_auth_geo_anomaly",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1078"
+  ],
+  "mitre_tactics": [
+    "initial-access"
+  ],
+  "total": 10,
+  "passed": 10,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "corr_ag_baseline",
+      "title": "Baseline: known SSH source IPs",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ag_new_external_ip",
+      "title": "SSH login from new external IP",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_auth_new_source"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_auth_new_source",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_auth_geo_anomaly",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "initial-access"
+            ],
+            "tags": [
+              "correlation",
+              "auth",
+              "new-source"
+            ],
+            "data_keys": [
+              "correlation",
+              "is_private",
+              "known_ips",
+              "source_ip"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ag_chain_break",
+      "title": "Chain break",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ag_baseline2",
+      "title": "Baseline: empty",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ag_new_private_ip",
+      "title": "SSH login from new private IP",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_auth_new_source"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_auth_new_source",
+            "severity": "MEDIUM",
+            "probe_name": "macos_corr_auth_geo_anomaly",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "initial-access"
+            ],
+            "tags": [
+              "correlation",
+              "auth",
+              "new-source"
+            ],
+            "data_keys": [
+              "correlation",
+              "is_private",
+              "known_ips",
+              "source_ip"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ag_chain_break2",
+      "title": "Chain break 2",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ag_baseline3",
+      "title": "Baseline: known office IPs",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ag_new_foreign_ip",
+      "title": "SSH from unknown foreign IP after stable baseline",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_auth_new_source"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_auth_new_source",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_auth_geo_anomaly",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "initial-access"
+            ],
+            "tags": [
+              "correlation",
+              "auth",
+              "new-source"
+            ],
+            "data_keys": [
+              "correlation",
+              "is_private",
+              "known_ips",
+              "source_ip"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ag_failed_login",
+      "title": "Failed SSH login (not successful auth)",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ag_vpn_known_ip",
+      "title": "Attacker VPNs through previously seen source IP",
+      "category": "evasion",
+      "stateful": true,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

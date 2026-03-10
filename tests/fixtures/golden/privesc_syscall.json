@@ -1,0 +1,399 @@
+{
+  "name": "privesc_syscall",
+  "title": "Privilege Escalation via Syscall (T1068)",
+  "probe_id": "privesc_syscall",
+  "agent": "kernel_audit",
+  "mitre_techniques": [
+    "T1068"
+  ],
+  "mitre_tactics": [
+    "Privilege Escalation"
+  ],
+  "total": 10,
+  "passed": 10,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "privesc_setuid_gains_root",
+      "title": "setuid(0) by uid=501, result=success \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_privesc_syscall"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_privesc_syscall",
+            "severity": "CRITICAL",
+            "probe_name": "privesc_syscall",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1068",
+              "T1548.001"
+            ],
+            "mitre_tactics": [
+              "Privilege Escalation"
+            ],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "comm",
+              "egid",
+              "euid",
+              "exe",
+              "gid",
+              "host",
+              "pid",
+              "ppid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "privesc_seteuid_mismatch",
+      "title": "seteuid \u2192 uid=501, euid=0 (non-root gains root euid) \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_privesc_syscall"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_privesc_syscall",
+            "severity": "CRITICAL",
+            "probe_name": "privesc_syscall",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1068",
+              "T1548.001"
+            ],
+            "mitre_tactics": [
+              "Privilege Escalation"
+            ],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "comm",
+              "egid",
+              "euid",
+              "exe",
+              "gid",
+              "host",
+              "pid",
+              "ppid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "privesc_capset_nonroot",
+      "title": "capset by uid=1000 \u2192 MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_privesc_syscall"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_privesc_syscall",
+            "severity": "MEDIUM",
+            "probe_name": "privesc_syscall",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1068",
+              "T1548.001"
+            ],
+            "mitre_tactics": [
+              "Privilege Escalation"
+            ],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "comm",
+              "egid",
+              "euid",
+              "exe",
+              "gid",
+              "host",
+              "pid",
+              "ppid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "privesc_evade_failed",
+      "title": "setuid(0) failed (EPERM) \u2014 probe skips failed syscalls",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "privesc_evade_kernel_exploit",
+      "title": "kernel memory write via /proc/kcore \u2014 no setuid syscall",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "privesc_evade_user_namespace",
+      "title": "uid=0 inside container user namespace \u2014 fires but FP risk",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_privesc_syscall"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_privesc_syscall",
+            "severity": "CRITICAL",
+            "probe_name": "privesc_syscall",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1068",
+              "T1548.001"
+            ],
+            "mitre_tactics": [
+              "Privilege Escalation"
+            ],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "comm",
+              "egid",
+              "euid",
+              "exe",
+              "gid",
+              "host",
+              "pid",
+              "ppid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "privesc_benign_openat",
+      "title": "openat syscall \u2014 not a privesc syscall, probe ignores",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "privesc_benign_empty",
+      "title": "No kernel events \u2014 probe runs cleanly, no output",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "privesc_nasty_sshd_privsep",
+      "title": "sshd drops privileges via seteuid(65534) \u2192 HIGH  [documented FP]",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_privesc_syscall"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_privesc_syscall",
+            "severity": "HIGH",
+            "probe_name": "privesc_syscall",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1068",
+              "T1548.001"
+            ],
+            "mitre_tactics": [
+              "Privilege Escalation"
+            ],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "comm",
+              "egid",
+              "euid",
+              "exe",
+              "gid",
+              "host",
+              "pid",
+              "ppid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "privesc_nasty_sudo_normal",
+      "title": "sudo (already root) calls setresuid(0,0,0) \u2192 MEDIUM  [documented FP]",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_privesc_syscall"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_privesc_syscall",
+            "severity": "MEDIUM",
+            "probe_name": "privesc_syscall",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1068",
+              "T1548.001"
+            ],
+            "mitre_tactics": [
+              "Privilege Escalation"
+            ],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "comm",
+              "egid",
+              "euid",
+              "exe",
+              "gid",
+              "host",
+              "pid",
+              "ppid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

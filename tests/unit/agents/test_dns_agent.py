@@ -25,8 +25,12 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
-from amoskys.agents.dns.dns_agent import DNSAgent, LinuxDNSCollector, MacOSDNSCollector
-from amoskys.agents.dns.probes import DNSQuery
+from amoskys.agents.shared.dns.agent import (
+    DNSAgent,
+    LinuxDNSCollector,
+    MacOSDNSCollector,
+)
+from amoskys.agents.shared.dns.probes import DNSQuery
 
 # =============================================================================
 # Fixtures
@@ -36,10 +40,10 @@ from amoskys.agents.dns.probes import DNSQuery
 @pytest.fixture
 def dns_agent():
     """Create DNSAgent with mocked dependencies."""
-    with patch("amoskys.agents.dns.dns_agent.EventBusPublisher"):
-        with patch("amoskys.agents.dns.dns_agent.LocalQueueAdapter"):
+    with patch("amoskys.agents.shared.dns.agent.EventBusPublisher"):
+        with patch("amoskys.agents.shared.dns.agent.LocalQueueAdapter"):
             with patch(
-                "amoskys.agents.dns.dns_agent.create_dns_probes",
+                "amoskys.agents.shared.dns.agent.create_dns_probes",
                 return_value=[],
             ):
                 agent = DNSAgent(collection_interval=10.0)

@@ -1,0 +1,291 @@
+{
+  "name": "sudo_elevation",
+  "title": "Sudo Privilege Escalation Patterns (T1548.003)",
+  "probe_id": "sudo_elevation",
+  "agent": "auth",
+  "mitre_techniques": [
+    "T1548",
+    "T1548.003"
+  ],
+  "mitre_tactics": [
+    "Defense Evasion",
+    "Privilege Escalation"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "sudo_first_time_user",
+      "title": "New user 'newstaff' executes sudo for first time \u2192 MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "first_time_sudo_user"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "first_time_sudo_user",
+            "severity": "MEDIUM",
+            "probe_name": "sudo_elevation",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1548.003"
+            ],
+            "mitre_tactics": [],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "sudo_count",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "sudo_denied_attempt",
+      "title": "sudo denied for 'guest' \u2192 2 events (first_time_sudo_user + sudo_denied_attempt)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "first_time_sudo_user",
+          "sudo_denied_attempt"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "first_time_sudo_user",
+            "severity": "MEDIUM",
+            "probe_name": "sudo_elevation",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1548.003"
+            ],
+            "mitre_tactics": [],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "sudo_count",
+              "username"
+            ]
+          },
+          {
+            "event_type": "sudo_denied_attempt",
+            "severity": "MEDIUM",
+            "probe_name": "sudo_elevation",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1548.003"
+            ],
+            "mitre_tactics": [],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "commands",
+              "denied_count",
+              "reasons",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "sudo_multiple_denied",
+      "title": "5 denied sudo attempts from 'attacker' \u2192 2 events (first_time + grouped denied)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 5,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "first_time_sudo_user",
+          "sudo_denied_attempt"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "first_time_sudo_user",
+            "severity": "MEDIUM",
+            "probe_name": "sudo_elevation",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1548.003"
+            ],
+            "mitre_tactics": [],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "sudo_count",
+              "username"
+            ]
+          },
+          {
+            "event_type": "sudo_denied_attempt",
+            "severity": "MEDIUM",
+            "probe_name": "sudo_elevation",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1548.003"
+            ],
+            "mitre_tactics": [],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "commands",
+              "denied_count",
+              "reasons",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "sudo_evade_already_in_baseline",
+      "title": "Regular sudo user 'admin' \u2014 baseline-poisoned, first_time not fired",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "first_time_sudo_user"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "first_time_sudo_user",
+            "severity": "MEDIUM",
+            "probe_name": "sudo_elevation",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1548.003"
+            ],
+            "mitre_tactics": [],
+            "tags": [
+              "correlation_group:privilege_escalation"
+            ],
+            "data_keys": [
+              "sudo_count",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "sudo_evade_su_not_sudo",
+      "title": "Attacker uses 'su -' instead of sudo \u2014 no SUDO_* event",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "sudo_evade_no_events",
+      "title": "Quiet window \u2014 no sudo events \u2192 probe fires nothing",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "sudo_benign_ssh_login",
+      "title": "SSH_LOGIN event \u2014 not a sudo event, probe ignores",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "sudo_benign_empty",
+      "title": "No auth events \u2014 probe runs cleanly",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

@@ -245,8 +245,11 @@ class TestCalculateDeviceRisk:
     def test_failed_ssh_capped_at_20(self, engine):
         """Failed SSH contribution capped at +20."""
         now = datetime.now()
+        # Spread events across 60s to avoid triggering temporal burst detection
         for i in range(10):
-            engine.add_event(_make_ssh_failure(f"fail-{i}", ts=now))
+            engine.add_event(
+                _make_ssh_failure(f"fail-{i}", ts=now - timedelta(seconds=60 - i * 6))
+            )
         with patch("amoskys.intel.fusion_engine.evaluate_rules", return_value=[]):
             with patch(
                 "amoskys.intel.fusion_engine.evaluate_advanced_rules", return_value=[]

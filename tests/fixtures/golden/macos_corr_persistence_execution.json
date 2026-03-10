@@ -1,0 +1,299 @@
+{
+  "name": "macos_corr_persistence_execution",
+  "title": "Persistence mechanism with active process execution",
+  "probe_id": "macos_corr_persistence_execution",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1543",
+    "T1547"
+  ],
+  "mitre_tactics": [
+    "execution",
+    "persistence"
+  ],
+  "total": 10,
+  "passed": 10,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "corr_pe_baseline",
+      "title": "Baseline: existing persistence entries",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_pe_new_running",
+      "title": "New LaunchAgent whose program is actively running",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "entries",
+      "input_event_count": 2,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_persistence_active"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_persistence_active",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_persistence_execution",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1543",
+              "T1547"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "execution"
+            ],
+            "tags": [
+              "correlation",
+              "persistence",
+              "execution"
+            ],
+            "data_keys": [
+              "correlation",
+              "persistence_category",
+              "persistence_label",
+              "persistence_path",
+              "program",
+              "run_at_load"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_pe_chain_break",
+      "title": "Chain break \u2014 reset probe state",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "entries",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_pe_baseline2",
+      "title": "Baseline: empty persistence",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "entries",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_pe_daemon_running",
+      "title": "New LaunchDaemon with active process",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_persistence_active"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_persistence_active",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_persistence_execution",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1543",
+              "T1547"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "execution"
+            ],
+            "tags": [
+              "correlation",
+              "persistence",
+              "execution"
+            ],
+            "data_keys": [
+              "correlation",
+              "persistence_category",
+              "persistence_label",
+              "persistence_path",
+              "program",
+              "run_at_load"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_pe_chain_break2",
+      "title": "Chain break 2",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "entries",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_pe_baseline3",
+      "title": "Baseline: existing system service",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_pe_reverse_shell_active",
+      "title": "Reverse shell LaunchAgent actively running",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "entries",
+      "input_event_count": 2,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_persistence_active"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_persistence_active",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_persistence_execution",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1543",
+              "T1547"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "execution"
+            ],
+            "tags": [
+              "correlation",
+              "persistence",
+              "execution"
+            ],
+            "data_keys": [
+              "correlation",
+              "persistence_category",
+              "persistence_label",
+              "persistence_path",
+              "program",
+              "run_at_load"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_pe_installed_not_running",
+      "title": "New LaunchAgent but program not running yet",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_pe_different_exe_path",
+      "title": "Persistence program=/tmp/evil but process exe=/var/tmp/evil (copied)",
+      "category": "evasion",
+      "stateful": true,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

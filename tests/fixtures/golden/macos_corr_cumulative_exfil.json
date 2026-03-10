@@ -1,0 +1,240 @@
+{
+  "name": "macos_corr_cumulative_exfil",
+  "title": "Cumulative data exfiltration across collection windows",
+  "probe_id": "macos_corr_cumulative_exfil",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1048"
+  ],
+  "mitre_tactics": [
+    "exfiltration"
+  ],
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "corr_ce_cumulative_15mb",
+      "title": "Cumulative 15MB exfil across scans",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_cumulative_exfil"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_cumulative_exfil",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_cumulative_exfil",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "exfiltration"
+            ],
+            "tags": [
+              "correlation",
+              "exfiltration",
+              "cumulative"
+            ],
+            "data_keys": [
+              "correlation",
+              "cumulative_bytes_out",
+              "process_name",
+              "threshold_bytes",
+              "threshold_mb",
+              "window_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ce_single_burst_20mb",
+      "title": "Single burst 20MB exfil from one process",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_cumulative_exfil"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_cumulative_exfil",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_cumulative_exfil",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "exfiltration"
+            ],
+            "tags": [
+              "correlation",
+              "exfiltration",
+              "cumulative"
+            ],
+            "data_keys": [
+              "correlation",
+              "cumulative_bytes_out",
+              "process_name",
+              "threshold_bytes",
+              "threshold_mb",
+              "window_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ce_multi_process",
+      "title": "Two processes each exfiling 6MB (12MB total per-process)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "corr_cumulative_exfil"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "corr_cumulative_exfil",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_cumulative_exfil",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "exfiltration"
+            ],
+            "tags": [
+              "correlation",
+              "exfiltration",
+              "cumulative"
+            ],
+            "data_keys": [
+              "correlation",
+              "cumulative_bytes_out",
+              "process_name",
+              "threshold_bytes",
+              "threshold_mb",
+              "window_seconds"
+            ]
+          },
+          {
+            "event_type": "corr_cumulative_exfil",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_cumulative_exfil",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "exfiltration"
+            ],
+            "tags": [
+              "correlation",
+              "exfiltration",
+              "cumulative"
+            ],
+            "data_keys": [
+              "correlation",
+              "cumulative_bytes_out",
+              "process_name",
+              "threshold_bytes",
+              "threshold_mb",
+              "window_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ce_under_threshold",
+      "title": "Cumulative 8MB (under 10MB threshold)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ce_empty",
+      "title": "No bandwidth data",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ce_split_processes",
+      "title": "9MB each across 3 processes (all under 10MB threshold)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

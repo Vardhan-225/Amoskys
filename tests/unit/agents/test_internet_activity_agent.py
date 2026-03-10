@@ -22,11 +22,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
-from amoskys.agents.internet_activity.agent_types import (
+from amoskys.agents.shared.internet_activity.agent_types import (
     BrowsingEntry,
     OutboundConnection,
 )
-from amoskys.agents.internet_activity.probes import (
+from amoskys.agents.shared.internet_activity.probes import (
     CloudExfilProbe,
     CryptoMiningProbe,
     DNSOverHTTPSProbe,

@@ -1083,6 +1083,70 @@ class TestProcessLocalQueuesExtended:
         total = proc.process_local_queues(queue_dir=str(queue_dir))
         assert total == 0
 
+    def test_drain_respects_max_entries_budget(self, tmp_path):
+        """Drain stops after max_entries and leaves remaining queue rows."""
+        queue_dir = tmp_path / "queue"
+        queue_dir.mkdir()
+
+        agent_db = str(queue_dir / "budgeted_v2.db")
+        conn = sqlite3.connect(agent_db)
+        conn.execute(
+            "CREATE TABLE queue (id INTEGER PRIMARY KEY AUTOINCREMENT, ts_ns INTEGER NOT NULL, bytes BLOB NOT NULL)"
+        )
+        for idx in range(3):
+            dt = telemetry_pb2.DeviceTelemetry()
+            dt.device_id = f"dev-{idx}"
+            dt.collection_agent = "budgeted-agent"
+            conn.execute(
+                "INSERT INTO queue (ts_ns, bytes) VALUES (?, ?)",
+                (1000 + idx, sqlite3.Binary(dt.SerializeToString())),
+            )
+        conn.commit()
+        conn.close()
+
+        proc = _make_proc(tmp_path)
+        total = proc.process_local_queues(queue_dir=str(queue_dir), max_entries=2)
+        assert total == 2
+
+        verify = sqlite3.connect(agent_db)
+        remaining = verify.execute("SELECT COUNT(*) FROM queue").fetchone()[0]
+        verify.close()
+        assert remaining == 1
+
+    def test_drain_respects_timeout_budget(self, tmp_path):
+        """Drain exits when max_seconds budget is exceeded mid-queue."""
+        queue_dir = tmp_path / "queue"
+        queue_dir.mkdir()
+
+        agent_db = str(queue_dir / "timeout_v2.db")
+        conn = sqlite3.connect(agent_db)
+        conn.execute(
+            "CREATE TABLE queue (id INTEGER PRIMARY KEY AUTOINCREMENT, ts_ns INTEGER NOT NULL, bytes BLOB NOT NULL)"
+        )
+        for idx in range(2):
+            dt = telemetry_pb2.DeviceTelemetry()
+            dt.device_id = f"timeout-{idx}"
+            dt.collection_agent = "timeout-agent"
+            conn.execute(
+                "INSERT INTO queue (ts_ns, bytes) VALUES (?, ?)",
+                (1000 + idx, sqlite3.Binary(dt.SerializeToString())),
+            )
+        conn.commit()
+        conn.close()
+
+        proc = _make_proc(tmp_path)
+        with patch(
+            "amoskys.storage.wal_processor.time.monotonic",
+            side_effect=[0.0, 0.0, 0.0, 2.0, 2.0, 2.0],
+        ):
+            total = proc.process_local_queues(queue_dir=str(queue_dir), max_seconds=1.0)
+        assert total == 1
+
+        verify = sqlite3.connect(agent_db)
+        remaining = verify.execute("SELECT COUNT(*) FROM queue").fetchone()[0]
+        verify.close()
+        assert remaining == 1
+
 
 # ===========================================================================
 # _extract_process_from_security

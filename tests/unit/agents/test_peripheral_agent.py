@@ -22,7 +22,7 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
-from amoskys.agents.peripheral.peripheral_agent import PeripheralAgent
+from amoskys.agents.shared.peripheral.agent import PeripheralAgent
 
 # ---------------------------------------------------------------------------
 # PeripheralAgent Tests
@@ -39,10 +39,10 @@ def peripheral_agent():
 def peripheral_agent_with_mocks(tmp_path):
     """Create PeripheralAgent with mocked EventBus and queue."""
     with patch(
-        "amoskys.agents.peripheral.peripheral_agent.EventBusPublisher"
+        "amoskys.agents.shared.peripheral.agent.EventBusPublisher"
     ) as mock_pub_class:
         with patch(
-            "amoskys.agents.peripheral.peripheral_agent.LocalQueueAdapter"
+            "amoskys.agents.shared.peripheral.agent.LocalQueueAdapter"
         ) as mock_queue_class:
             mock_pub = MagicMock()
             mock_pub_class.return_value = mock_pub
@@ -392,7 +392,7 @@ class TestPeripheralEventBusPublisher:
 
     def test_publisher_init(self):
         """Test EventBusPublisher initialization."""
-        from amoskys.agents.peripheral.peripheral_agent import EventBusPublisher
+        from amoskys.agents.shared.peripheral.agent import EventBusPublisher
 
         pub = EventBusPublisher("localhost:50051", "/tmp/certs")
         assert pub.address == "localhost:50051"
@@ -402,7 +402,7 @@ class TestPeripheralEventBusPublisher:
 
     def test_ensure_channel_missing_cert(self, tmp_path):
         """Test _ensure_channel raises RuntimeError when certs are missing."""
-        from amoskys.agents.peripheral.peripheral_agent import EventBusPublisher
+        from amoskys.agents.shared.peripheral.agent import EventBusPublisher
 
         pub = EventBusPublisher("localhost:50051", str(tmp_path / "no_certs"))
         with pytest.raises(RuntimeError, match="Certificate not found"):
@@ -410,7 +410,7 @@ class TestPeripheralEventBusPublisher:
 
     def test_ensure_channel_generic_error(self, tmp_path):
         """Test _ensure_channel raises RuntimeError on generic gRPC error."""
-        from amoskys.agents.peripheral.peripheral_agent import EventBusPublisher
+        from amoskys.agents.shared.peripheral.agent import EventBusPublisher
 
         cert_dir = tmp_path / "certs"
         cert_dir.mkdir()
@@ -420,7 +420,7 @@ class TestPeripheralEventBusPublisher:
 
         pub = EventBusPublisher("localhost:50051", str(cert_dir))
         with patch(
-            "amoskys.agents.peripheral.peripheral_agent.grpc.ssl_channel_credentials",
+            "amoskys.agents.shared.peripheral.agent.grpc.ssl_channel_credentials",
             side_effect=Exception("ssl fail"),
         ):
             with pytest.raises(RuntimeError, match="Failed to create gRPC channel"):
@@ -428,7 +428,7 @@ class TestPeripheralEventBusPublisher:
 
     def test_close_with_channel(self):
         """Test close() properly closes an existing channel."""
-        from amoskys.agents.peripheral.peripheral_agent import EventBusPublisher
+        from amoskys.agents.shared.peripheral.agent import EventBusPublisher
 
         pub = EventBusPublisher("localhost:50051", "/tmp/certs")
         pub._channel = MagicMock()
@@ -439,7 +439,7 @@ class TestPeripheralEventBusPublisher:
 
     def test_close_without_channel(self):
         """Test close() is a noop when no channel exists."""
-        from amoskys.agents.peripheral.peripheral_agent import EventBusPublisher
+        from amoskys.agents.shared.peripheral.agent import EventBusPublisher
 
         pub = EventBusPublisher("localhost:50051", "/tmp/certs")
         pub.close()
@@ -449,7 +449,7 @@ class TestPeripheralEventBusPublisher:
         """Test publish() sends events through the stub."""
         import time as _t
 
-        from amoskys.agents.peripheral.peripheral_agent import EventBusPublisher
+        from amoskys.agents.shared.peripheral.agent import EventBusPublisher
         from amoskys.proto import universal_telemetry_pb2 as tpb
 
         pub = EventBusPublisher("localhost:50051", "/tmp/certs")
@@ -469,7 +469,7 @@ class TestPeripheralEventBusPublisher:
 
     def test_publish_raises_on_bad_ack(self):
         """Test publish() raises when EventBus returns non-OK status."""
-        from amoskys.agents.peripheral.peripheral_agent import EventBusPublisher
+        from amoskys.agents.shared.peripheral.agent import EventBusPublisher
         from amoskys.proto import universal_telemetry_pb2 as tpb
 
         pub = EventBusPublisher("localhost:50051", "/tmp/certs")

@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-from amoskys.agents.kernel_audit.collector import (
+from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.os.linux.kernel_audit.collector import (
     BaseKernelAuditCollector,
     MacOSAuditCollector,
     MacOSUnifiedLogCollector,
@@ -387,7 +387,8 @@ class TestFactory:
     """Test create_kernel_audit_collector factory."""
 
     @patch(
-        "amoskys.agents.kernel_audit.collector.platform.system", return_value="Darwin"
+        "amoskys.agents.os.linux.kernel_audit.collector.platform.system",
+        return_value="Darwin",
     )
     def test_darwin_returns_macos_collector(self, mock_system):
         """On Darwin, factory returns MacOSUnifiedLogCollector by default."""
@@ -395,11 +396,12 @@ class TestFactory:
         assert isinstance(collector, MacOSUnifiedLogCollector)
 
     @patch(
-        "amoskys.agents.kernel_audit.collector.platform.system", return_value="Linux"
+        "amoskys.agents.os.linux.kernel_audit.collector.platform.system",
+        return_value="Linux",
     )
     def test_linux_returns_auditd_collector(self, mock_system):
         """On Linux, factory returns AuditdLogCollector."""
-        from amoskys.agents.kernel_audit.collector import AuditdLogCollector
+        from amoskys.agents.os.linux.kernel_audit.collector import AuditdLogCollector
 
         collector = create_kernel_audit_collector()
         assert isinstance(collector, AuditdLogCollector)
@@ -410,7 +412,8 @@ class TestFactory:
         assert isinstance(collector, StubKernelAuditCollector)
 
     @patch(
-        "amoskys.agents.kernel_audit.collector.platform.system", return_value="Darwin"
+        "amoskys.agents.os.linux.kernel_audit.collector.platform.system",
+        return_value="Darwin",
     )
     @patch.object(MacOSAuditCollector, "_resolve_trail")
     def test_custom_source_darwin_bsm_fallback(self, mock_resolve, mock_system):
@@ -432,7 +435,9 @@ class TestProbePlatforms:
 
     def test_all_probes_support_darwin(self):
         """Every kernel audit probe lists 'darwin' in platforms."""
-        from amoskys.agents.kernel_audit.probes import create_kernel_audit_probes
+        from amoskys.agents.os.linux.kernel_audit.probes import (
+            create_kernel_audit_probes,
+        )
 
         probes = create_kernel_audit_probes()
         assert len(probes) == 8
@@ -443,7 +448,9 @@ class TestProbePlatforms:
 
     def test_all_probes_still_support_linux(self):
         """Ensure linux wasn't removed."""
-        from amoskys.agents.kernel_audit.probes import create_kernel_audit_probes
+        from amoskys.agents.os.linux.kernel_audit.probes import (
+            create_kernel_audit_probes,
+        )
 
         probes = create_kernel_audit_probes()
         for probe in probes:
@@ -520,7 +527,7 @@ class TestProbeIntegration:
     def test_execve_high_risk_fires(self):
         """ExecveHighRiskProbe fires on /tmp execution from BSM data."""
         from amoskys.agents.common.probes import ProbeContext
-        from amoskys.agents.kernel_audit.probes import ExecveHighRiskProbe
+        from amoskys.agents.os.linux.kernel_audit.probes import ExecveHighRiskProbe
 
         events = self._collect_from_xml(SAMPLE_EXECVE_TEMP)
         assert len(events) == 1
@@ -540,7 +547,7 @@ class TestProbeIntegration:
     def test_privesc_fires_on_setuid(self):
         """PrivEscSyscallProbe fires on setuid from BSM data."""
         from amoskys.agents.common.probes import ProbeContext, Severity
-        from amoskys.agents.kernel_audit.probes import PrivEscSyscallProbe
+        from amoskys.agents.os.linux.kernel_audit.probes import PrivEscSyscallProbe
 
         events = self._collect_from_xml(SAMPLE_PRAUDIT_XML)
         # The setuid event has uid=501, euid=0

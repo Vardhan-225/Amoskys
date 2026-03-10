@@ -1,0 +1,242 @@
+{
+  "name": "long_lived_process",
+  "title": "Long-Lived Process Masquerading \u2014 T1036",
+  "probe_id": "long_lived_process",
+  "agent": "proc",
+  "mitre_techniques": [
+    "T1036"
+  ],
+  "mitre_tactics": [
+    "defense_evasion",
+    "persistence"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "ll_pos1_grep_4h",
+      "title": "grep running 4 hours \u2014 unexpectedly_long_process MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "unexpectedly_long_process"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "unexpectedly_long_process",
+            "severity": "MEDIUM",
+            "probe_name": "long_lived_process",
+            "confidence": 0.6,
+            "mitre_techniques": [
+              "T1036"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "name",
+              "pid",
+              "process_guid",
+              "runtime_seconds",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ll_pos2_awk_2h",
+      "title": "awk running 2 hours \u2014 unexpectedly_long_process MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "unexpectedly_long_process"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "unexpectedly_long_process",
+            "severity": "MEDIUM",
+            "probe_name": "long_lived_process",
+            "confidence": 0.6,
+            "mitre_techniques": [
+              "T1036"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "name",
+              "pid",
+              "process_guid",
+              "runtime_seconds",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ll_pos3_find_10k",
+      "title": "find running 10000 seconds \u2014 fires MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "unexpectedly_long_process"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "unexpectedly_long_process",
+            "severity": "MEDIUM",
+            "probe_name": "long_lived_process",
+            "confidence": 0.6,
+            "mitre_techniques": [
+              "T1036"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "name",
+              "pid",
+              "process_guid",
+              "runtime_seconds",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ll_eva1_restart_45min",
+      "title": "C2 restarts every 45 min \u2014 create_time shows only 45min elapsed",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "ll_eva2_kworker",
+      "title": "C2 named 'kworker' \u2014 not in EXPECTED_SHORT_LIVED, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "ll_eva3_python3",
+      "title": "C2 runs as python3 daemon \u2014 not in short-lived list, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "ll_benign1_grep_30min",
+      "title": "grep log search for 30 minutes \u2014 under threshold, 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "ll_benign2_cat_40min",
+      "title": "cat streaming logs for 40 minutes \u2014 under threshold, 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

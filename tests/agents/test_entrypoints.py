@@ -18,39 +18,39 @@ class TestAgentModuleImports:
     @pytest.mark.smoke
     def test_proc_agent_import(self):
         """Proc agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.proc")
+        mod = importlib.import_module("amoskys.agents.shared.process")
         assert hasattr(mod, "ProcAgent")
 
     @pytest.mark.smoke
     def test_auth_agent_import(self):
         """Auth agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.auth")
+        mod = importlib.import_module("amoskys.agents.shared.auth")
         assert hasattr(mod, "AuthGuardAgent")
 
     @pytest.mark.smoke
     def test_dns_agent_import(self):
         """DNS agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.dns")
+        mod = importlib.import_module("amoskys.agents.shared.dns")
         assert hasattr(mod, "DNSAgent")
 
     def test_fim_agent_import(self):
         """FIM agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.fim")
+        mod = importlib.import_module("amoskys.agents.shared.filesystem")
         assert hasattr(mod, "FIMAgent")
 
     def test_persistence_agent_import(self):
         """Persistence agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.persistence")
+        mod = importlib.import_module("amoskys.agents.shared.persistence")
         assert hasattr(mod, "PersistenceGuard")
 
     def test_kernel_audit_agent_import(self):
         """Kernel audit agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.kernel_audit")
+        mod = importlib.import_module("amoskys.agents.os.linux.kernel_audit")
         assert hasattr(mod, "KernelAuditAgent")
 
     def test_peripheral_agent_import(self):
         """Peripheral agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.peripheral")
+        mod = importlib.import_module("amoskys.agents.shared.peripheral")
         assert hasattr(mod, "PeripheralAgent")
 
 
@@ -60,57 +60,51 @@ class TestAgentMainFunctions:
     @pytest.mark.smoke
     def test_proc_agent_has_main(self):
         """Proc agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.proc.__main__")
+        mod = importlib.import_module("amoskys.agents.shared.process.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
     @pytest.mark.smoke
     def test_auth_agent_has_main(self):
         """Auth agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.auth.__main__")
+        mod = importlib.import_module("amoskys.agents.shared.auth.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
     @pytest.mark.smoke
     def test_dns_agent_has_main(self):
         """DNS agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.dns.__main__")
-        assert hasattr(mod, "main")
-        assert callable(mod.main)
-
-    def test_fim_agent_has_main(self):
-        """File integrity agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.file_integrity.__main__")
+        mod = importlib.import_module("amoskys.agents.shared.dns.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
     def test_persistence_agent_has_main(self):
         """Persistence agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.persistence.__main__")
+        mod = importlib.import_module("amoskys.agents.shared.persistence.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
     def test_kernel_audit_agent_has_main(self):
         """Kernel audit agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.kernel_audit.__main__")
+        mod = importlib.import_module("amoskys.agents.os.linux.kernel_audit.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
     def test_peripheral_agent_has_main(self):
         """Peripheral agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.peripheral.__main__")
+        mod = importlib.import_module("amoskys.agents.shared.peripheral.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
     def test_snmp_agent_has_main(self):
         """SNMP agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.snmp.__main__")
+        mod = importlib.import_module("amoskys.agents.shared.snmp.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
-    def test_flowagent_has_main(self):
-        """Flow agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.flowagent.__main__")
+    def test_flow_publisher_has_main(self):
+        """EventBus flow publisher has main() function."""
+        mod = importlib.import_module("amoskys.eventbus.flow_publisher")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 

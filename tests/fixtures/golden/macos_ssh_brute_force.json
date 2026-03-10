@@ -1,0 +1,279 @@
+{
+  "name": "macos_ssh_brute_force",
+  "title": "macOS SSH Brute Force: Repeated Login Failure Detection (T1110)",
+  "probe_id": "macos_ssh_brute_force",
+  "agent": "macos_auth",
+  "mitre_techniques": [
+    "T1110"
+  ],
+  "mitre_tactics": [
+    "credential_access"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "macos_bf_5_failures_one_ip",
+      "title": "5 SSH failures from one IP \u2014 brute force HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 5,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "ssh_brute_force"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "ssh_brute_force",
+            "severity": "HIGH",
+            "probe_name": "macos_ssh_brute_force",
+            "confidence": 0.75,
+            "mitre_techniques": [
+              "T1110"
+            ],
+            "mitre_tactics": [
+              "credential_access"
+            ],
+            "tags": [
+              "brute_force",
+              "ssh"
+            ],
+            "data_keys": [
+              "category",
+              "failure_count",
+              "first_attempt",
+              "last_attempt",
+              "source_ip",
+              "targeted_usernames",
+              "threshold"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_bf_8_failures_multi_user",
+      "title": "8 SSH failures targeting multiple users \u2014 brute force",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 8,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "ssh_brute_force"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "ssh_brute_force",
+            "severity": "HIGH",
+            "probe_name": "macos_ssh_brute_force",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1110"
+            ],
+            "mitre_tactics": [
+              "credential_access"
+            ],
+            "tags": [
+              "brute_force",
+              "ssh"
+            ],
+            "data_keys": [
+              "category",
+              "failure_count",
+              "first_attempt",
+              "last_attempt",
+              "source_ip",
+              "targeted_usernames",
+              "threshold"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_bf_two_ips_both_brute",
+      "title": "Two IPs each with 5+ failures \u2014 2 events",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 11,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "ssh_brute_force",
+          "ssh_brute_force"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "ssh_brute_force",
+            "severity": "HIGH",
+            "probe_name": "macos_ssh_brute_force",
+            "confidence": 0.75,
+            "mitre_techniques": [
+              "T1110"
+            ],
+            "mitre_tactics": [
+              "credential_access"
+            ],
+            "tags": [
+              "brute_force",
+              "ssh"
+            ],
+            "data_keys": [
+              "category",
+              "failure_count",
+              "first_attempt",
+              "last_attempt",
+              "source_ip",
+              "targeted_usernames",
+              "threshold"
+            ]
+          },
+          {
+            "event_type": "ssh_brute_force",
+            "severity": "HIGH",
+            "probe_name": "macos_ssh_brute_force",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110"
+            ],
+            "mitre_tactics": [
+              "credential_access"
+            ],
+            "tags": [
+              "brute_force",
+              "ssh"
+            ],
+            "data_keys": [
+              "category",
+              "failure_count",
+              "first_attempt",
+              "last_attempt",
+              "source_ip",
+              "targeted_usernames",
+              "threshold"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_bf_below_threshold",
+      "title": "4 failures \u2014 below threshold, no alert",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 4,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_bf_spread_across_ips",
+      "title": "5 failures from 5 different IPs \u2014 1 per IP, no brute force",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 5,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_bf_success_not_failure",
+      "title": "SSH success events \u2014 not failures, not counted",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 6,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_bf_no_ssh_events",
+      "title": "No SSH events \u2014 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_bf_sudo_not_ssh",
+      "title": "Sudo events only \u2014 wrong category for SSH probe",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 5,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

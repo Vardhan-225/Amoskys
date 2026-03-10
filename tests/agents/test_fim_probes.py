@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity
-from amoskys.agents.fim.probes import (
+from amoskys.agents.shared.filesystem.probes import (
     BootloaderTamperProbe,
     ChangeType,
     ConfigBackdoorProbe,
@@ -308,7 +308,7 @@ class TestFIMProbes:
 
             # Temporarily override the path check by using the real test file
             # Since the probe checks if path starts with web roots, we need to mock it
-            import amoskys.agents.fim.probes as probes_module
+            import amoskys.agents.shared.filesystem.probes as probes_module
 
             original_web_roots = probes_module.WEB_ROOTS
             probes_module.WEB_ROOTS = {"/tmp/test_var_www"}

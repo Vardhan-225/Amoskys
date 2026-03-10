@@ -1,0 +1,194 @@
+{
+  "name": "spine_initial_access",
+  "title": "Kill-Chain Phase 1: SSH Password Spray (Initial Access)",
+  "probe_id": "ssh_password_spray",
+  "agent": "auth",
+  "mitre_techniques": [
+    "T1110.003"
+  ],
+  "mitre_tactics": [
+    "Credential Access",
+    "Initial Access"
+  ],
+  "total": 5,
+  "passed": 5,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "spine_spray_tor_exit_10_users",
+      "title": "10 users sprayed from Tor exit 185.220.101.1 \u2192 ssh_password_spray HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 10,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "ssh_password_spray_detected"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "ssh_password_spray_detected",
+            "severity": "HIGH",
+            "probe_name": "ssh_password_spray",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110.003"
+            ],
+            "mitre_tactics": [],
+            "tags": [
+              "correlation_group:initial_access"
+            ],
+            "data_keys": [
+              "source_ip",
+              "user_count",
+              "usernames"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "spine_spray_two_concurrent_sources",
+      "title": "Attacker uses 2 IPs \u00d7 10 users \u2192 2 spray events",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 20,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "ssh_password_spray_detected"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "ssh_password_spray_detected",
+            "severity": "HIGH",
+            "probe_name": "ssh_password_spray",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110.003"
+            ],
+            "mitre_tactics": [],
+            "tags": [
+              "correlation_group:initial_access"
+            ],
+            "data_keys": [
+              "source_ip",
+              "user_count",
+              "usernames"
+            ]
+          },
+          {
+            "event_type": "ssh_password_spray_detected",
+            "severity": "HIGH",
+            "probe_name": "ssh_password_spray",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110.003"
+            ],
+            "mitre_tactics": [],
+            "tags": [
+              "correlation_group:initial_access"
+            ],
+            "data_keys": [
+              "source_ip",
+              "user_count",
+              "usernames"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "spine_spray_distributed_5_ips",
+      "title": "5 IPs \u00d7 2 users each \u2014 per-IP threshold not reached \u2192 EVADES",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 10,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spine_spray_single_user_brute",
+      "title": "15 failed logins for 'root' from same IP \u2014 brute force, not spray",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 15,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spine_degraded_spray_no_ip",
+      "title": "Spray events with source_ip='' \u2192 fires with empty attribution",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 10,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "ssh_password_spray_detected"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "ssh_password_spray_detected",
+            "severity": "HIGH",
+            "probe_name": "ssh_password_spray",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110.003"
+            ],
+            "mitre_tactics": [],
+            "tags": [
+              "correlation_group:initial_access"
+            ],
+            "data_keys": [
+              "source_ip",
+              "user_count",
+              "usernames"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

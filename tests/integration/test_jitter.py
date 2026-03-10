@@ -1,6 +1,6 @@
 import math
 
-from amoskys.agents.flowagent.main import sleep_with_jitter
+from amoskys.eventbus.flow_publisher import sleep_with_jitter
 
 
 def test_sleep_with_jitter_bounds(monkeypatch):

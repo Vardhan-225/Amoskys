@@ -32,7 +32,7 @@ from unittest.mock import MagicMock, PropertyMock, mock_open, patch
 
 import pytest
 
-flowagent_main = importlib.import_module("amoskys.agents.flowagent.main")
+flowagent_main = importlib.import_module("amoskys.eventbus.flow_publisher")
 from amoskys.proto import messaging_schema_pb2 as pb
 
 # ---------------------------------------------------------------------------
@@ -135,9 +135,9 @@ class TestIdemKey:
 class TestMakeEnvelope:
     """Test envelope construction (with mocked crypto)."""
 
-    @patch("amoskys.agents.flowagent.main.sign", return_value=b"\x00" * 64)
-    @patch("amoskys.agents.flowagent.main.load_private_key", return_value=MagicMock())
-    @patch("amoskys.agents.flowagent.main.canonical_bytes", return_value=b"canonical")
+    @patch("amoskys.eventbus.flow_publisher.sign", return_value=b"\x00" * 64)
+    @patch("amoskys.eventbus.flow_publisher.load_private_key", return_value=MagicMock())
+    @patch("amoskys.eventbus.flow_publisher.canonical_bytes", return_value=b"canonical")
     def test_returns_envelope(self, mock_canon, mock_load, mock_sign):
         flow = _make_flow()
         env = flowagent_main.make_envelope(flow)
@@ -147,9 +147,9 @@ class TestMakeEnvelope:
         assert len(env.idempotency_key) == 64
         assert env.sig == b"\x00" * 64
 
-    @patch("amoskys.agents.flowagent.main.sign", return_value=b"sig")
-    @patch("amoskys.agents.flowagent.main.load_private_key", return_value=MagicMock())
-    @patch("amoskys.agents.flowagent.main.canonical_bytes", return_value=b"canonical")
+    @patch("amoskys.eventbus.flow_publisher.sign", return_value=b"sig")
+    @patch("amoskys.eventbus.flow_publisher.load_private_key", return_value=MagicMock())
+    @patch("amoskys.eventbus.flow_publisher.canonical_bytes", return_value=b"canonical")
     def test_flow_attached(self, mock_canon, mock_load, mock_sign):
         flow = _make_flow(src_ip="192.168.1.1")
         env = flowagent_main.make_envelope(flow)
@@ -200,7 +200,7 @@ class TestRateLimit:
         """When SEND_RATE is positive, should enforce delay."""
         with patch.object(flowagent_main, "SEND_RATE", 10):
             flowagent_main._last_send_ts = time.time()  # just sent
-            with patch("amoskys.agents.flowagent.main.time") as mock_time:
+            with patch("amoskys.eventbus.flow_publisher.time") as mock_time:
                 mock_time.time.return_value = flowagent_main._last_send_ts + 0.001
                 flowagent_main._rate_limit()
                 # Should have called time.sleep
@@ -243,20 +243,20 @@ class TestBackoffDelay:
 class TestSleepWithJitter:
     """Test jittered sleep."""
 
-    @patch("amoskys.agents.flowagent.main.time")
+    @patch("amoskys.eventbus.flow_publisher.time")
     def test_minimum_50ms(self, mock_time):
         mock_time.sleep = MagicMock()
         # Force specific random value for reproducibility
-        with patch("amoskys.agents.flowagent.main.random") as mock_random:
+        with patch("amoskys.eventbus.flow_publisher.random") as mock_random:
             mock_random.uniform.return_value = 0.2
             flowagent_main.sleep_with_jitter(10)
             args = mock_time.sleep.call_args[0]
             assert args[0] >= 0.05  # At least 50ms base
 
-    @patch("amoskys.agents.flowagent.main.time")
+    @patch("amoskys.eventbus.flow_publisher.time")
     def test_jitter_adds_to_base(self, mock_time):
         mock_time.sleep = MagicMock()
-        with patch("amoskys.agents.flowagent.main.random") as mock_random:
+        with patch("amoskys.eventbus.flow_publisher.random") as mock_random:
             mock_random.uniform.return_value = 0.5
             flowagent_main.sleep_with_jitter(1000)
             args = mock_time.sleep.call_args[0]
@@ -302,7 +302,7 @@ class TestPublishWithSafety:
         with patch.object(flowagent_main, "MAX_ENV_BYTES", 1_000_000):
             with patch.object(flowagent_main, "SEND_RATE", 0):
                 with patch.object(flowagent_main, "RETRY_MAX", 2):
-                    with patch("amoskys.agents.flowagent.main.time") as mock_time:
+                    with patch("amoskys.eventbus.flow_publisher.time") as mock_time:
                         mock_time.time.return_value = 1.0
                         mock_time.sleep = MagicMock()
                         ok, reason = flowagent_main.publish_with_safety(stub, env)
@@ -337,7 +337,7 @@ class TestPublishWithWal:
             flowagent_main.publish_with_wal(env, wal)
         wal.append.assert_not_called()
 
-    @patch("amoskys.agents.flowagent.main.grpc_channel")
+    @patch("amoskys.eventbus.flow_publisher.grpc_channel")
     def test_ok_response_no_wal_write(self, mock_channel):
         wal = MagicMock()
         wal.backlog_bytes.return_value = 0
@@ -352,7 +352,7 @@ class TestPublishWithWal:
         mock_channel.return_value = mock_ch
 
         with patch(
-            "amoskys.agents.flowagent.main.pbrpc.EventBusStub",
+            "amoskys.eventbus.flow_publisher.pbrpc.EventBusStub",
             return_value=mock_stub_instance,
         ):
             with patch.object(flowagent_main, "MAX_ENV_BYTES", 1_000_000):
@@ -360,7 +360,7 @@ class TestPublishWithWal:
 
         wal.append.assert_not_called()
 
-    @patch("amoskys.agents.flowagent.main.grpc_channel")
+    @patch("amoskys.eventbus.flow_publisher.grpc_channel")
     def test_retry_response_appends_to_wal(self, mock_channel):
         wal = MagicMock()
         wal.backlog_bytes.return_value = 100
@@ -375,15 +375,15 @@ class TestPublishWithWal:
         mock_channel.return_value = mock_ch
 
         with patch(
-            "amoskys.agents.flowagent.main.pbrpc.EventBusStub", return_value=mock_stub
+            "amoskys.eventbus.flow_publisher.pbrpc.EventBusStub", return_value=mock_stub
         ):
             with patch.object(flowagent_main, "MAX_ENV_BYTES", 1_000_000):
-                with patch("amoskys.agents.flowagent.main.sleep_with_jitter"):
+                with patch("amoskys.eventbus.flow_publisher.sleep_with_jitter"):
                     flowagent_main.publish_with_wal(_make_envelope(), wal)
 
         wal.append.assert_called_once()
 
-    @patch("amoskys.agents.flowagent.main.grpc_channel")
+    @patch("amoskys.eventbus.flow_publisher.grpc_channel")
     def test_rpc_error_appends_to_wal(self, mock_channel):
         import grpc
 
@@ -402,15 +402,15 @@ class TestPublishWithWal:
         mock_stub.Publish.side_effect = rpc_error
 
         with patch(
-            "amoskys.agents.flowagent.main.pbrpc.EventBusStub", return_value=mock_stub
+            "amoskys.eventbus.flow_publisher.pbrpc.EventBusStub", return_value=mock_stub
         ):
             with patch.object(flowagent_main, "MAX_ENV_BYTES", 1_000_000):
-                with patch("amoskys.agents.flowagent.main.sleep_with_jitter"):
+                with patch("amoskys.eventbus.flow_publisher.sleep_with_jitter"):
                     flowagent_main.publish_with_wal(_make_envelope(), wal)
 
         wal.append.assert_called_once()
 
-    @patch("amoskys.agents.flowagent.main.grpc_channel")
+    @patch("amoskys.eventbus.flow_publisher.grpc_channel")
     def test_fail_response_increments_fail_counter(self, mock_channel):
         wal = MagicMock()
         wal.backlog_bytes.return_value = 0
@@ -425,7 +425,7 @@ class TestPublishWithWal:
         mock_channel.return_value = mock_ch
 
         with patch(
-            "amoskys.agents.flowagent.main.pbrpc.EventBusStub", return_value=mock_stub
+            "amoskys.eventbus.flow_publisher.pbrpc.EventBusStub", return_value=mock_stub
         ):
             with patch.object(flowagent_main, "MAX_ENV_BYTES", 1_000_000):
                 # Should not raise
@@ -443,7 +443,7 @@ class TestPublishWithWal:
 class TestDrainOnce:
     """Test WAL drain function."""
 
-    @patch("amoskys.agents.flowagent.main.grpc_channel")
+    @patch("amoskys.eventbus.flow_publisher.grpc_channel")
     def test_drain_calls_wal_drain(self, mock_channel):
         wal = MagicMock()
         wal.drain.return_value = 5
@@ -464,8 +464,8 @@ class TestDrainOnce:
 class TestGrpcChannel:
     """Test gRPC channel construction."""
 
-    @patch("amoskys.agents.flowagent.main.grpc.secure_channel")
-    @patch("amoskys.agents.flowagent.main.grpc.ssl_channel_credentials")
+    @patch("amoskys.eventbus.flow_publisher.grpc.secure_channel")
+    @patch("amoskys.eventbus.flow_publisher.grpc.ssl_channel_credentials")
     def test_mutual_tls_when_certs_exist(self, mock_creds, mock_channel):
         """When client.crt and client.key exist, use mutual TLS."""
         ca_data = b"CA_CERT"
@@ -503,8 +503,8 @@ class TestGrpcChannel:
             root_certificates=ca_data, private_key=key_data, certificate_chain=crt_data
         )
 
-    @patch("amoskys.agents.flowagent.main.grpc.secure_channel")
-    @patch("amoskys.agents.flowagent.main.grpc.ssl_channel_credentials")
+    @patch("amoskys.eventbus.flow_publisher.grpc.secure_channel")
+    @patch("amoskys.eventbus.flow_publisher.grpc.ssl_channel_credentials")
     def test_one_way_tls_when_certs_missing(self, mock_creds, mock_channel):
         """When client certs are missing, use one-way TLS."""
         ca_data = b"CA_CERT"
@@ -676,9 +676,9 @@ class TestStartHealth:
 class TestMainLifecycle:
     """Test main() loop with mocked dependencies."""
 
-    @patch("amoskys.agents.flowagent.main.drain_once", return_value=0)
-    @patch("amoskys.agents.flowagent.main.start_health")
-    @patch("amoskys.agents.flowagent.main.SQLiteWAL")
+    @patch("amoskys.eventbus.flow_publisher.drain_once", return_value=0)
+    @patch("amoskys.eventbus.flow_publisher.start_health")
+    @patch("amoskys.eventbus.flow_publisher.SQLiteWAL")
     def test_main_exits_on_stop(self, mock_wal_cls, mock_health, mock_drain):
         """main() exits when stop is set."""
         original_stop = flowagent_main.stop
@@ -700,7 +700,7 @@ class TestMainLifecycle:
             mock_drain.side_effect = drain_side_effect
 
             with patch.object(flowagent_main, "SEND_RATE", 0):
-                with patch("amoskys.agents.flowagent.main.time") as mock_time:
+                with patch("amoskys.eventbus.flow_publisher.time") as mock_time:
                     mock_time.sleep = MagicMock()
                     mock_time.time.return_value = 1.0
                     flowagent_main.main()
@@ -712,9 +712,9 @@ class TestMainLifecycle:
             flowagent_main.READY = original_ready
             flowagent_main._SHOULD_EXIT = original_exit
 
-    @patch("amoskys.agents.flowagent.main.drain_once", return_value=0)
-    @patch("amoskys.agents.flowagent.main.start_health")
-    @patch("amoskys.agents.flowagent.main.SQLiteWAL")
+    @patch("amoskys.eventbus.flow_publisher.drain_once", return_value=0)
+    @patch("amoskys.eventbus.flow_publisher.start_health")
+    @patch("amoskys.eventbus.flow_publisher.SQLiteWAL")
     def test_main_exits_on_sighup(self, mock_wal_cls, mock_health, mock_drain):
         """main() exits with sys.exit(0) on SIGHUP."""
         original_stop = flowagent_main.stop
@@ -731,9 +731,9 @@ class TestMainLifecycle:
             flowagent_main.stop = original_stop
             flowagent_main._SHOULD_EXIT = original_exit
 
-    @patch("amoskys.agents.flowagent.main.drain_once", return_value=5)
-    @patch("amoskys.agents.flowagent.main.start_health")
-    @patch("amoskys.agents.flowagent.main.SQLiteWAL")
+    @patch("amoskys.eventbus.flow_publisher.drain_once", return_value=5)
+    @patch("amoskys.eventbus.flow_publisher.start_health")
+    @patch("amoskys.eventbus.flow_publisher.SQLiteWAL")
     def test_main_with_send_rate(self, mock_wal_cls, mock_health, mock_drain):
         """main() applies rate limiting when SEND_RATE > 0."""
         original_stop = flowagent_main.stop
@@ -753,7 +753,7 @@ class TestMainLifecycle:
             mock_drain.side_effect = drain_effect
 
             with patch.object(flowagent_main, "SEND_RATE", 10):
-                with patch("amoskys.agents.flowagent.main.time") as mock_time:
+                with patch("amoskys.eventbus.flow_publisher.time") as mock_time:
                     mock_time.time.return_value = 1.0
                     mock_time.sleep = MagicMock()
                     flowagent_main.main()
@@ -764,9 +764,9 @@ class TestMainLifecycle:
             flowagent_main.stop = original_stop
             flowagent_main._SHOULD_EXIT = original_exit
 
-    @patch("amoskys.agents.flowagent.main.drain_once", return_value=0)
-    @patch("amoskys.agents.flowagent.main.start_health")
-    @patch("amoskys.agents.flowagent.main.SQLiteWAL")
+    @patch("amoskys.eventbus.flow_publisher.drain_once", return_value=0)
+    @patch("amoskys.eventbus.flow_publisher.start_health")
+    @patch("amoskys.eventbus.flow_publisher.SQLiteWAL")
     def test_main_sleeps_when_no_events(self, mock_wal_cls, mock_health, mock_drain):
         """main() sleeps 2s when no events drained and SEND_RATE=0."""
         original_stop = flowagent_main.stop
@@ -786,7 +786,7 @@ class TestMainLifecycle:
             mock_drain.side_effect = drain_effect
 
             with patch.object(flowagent_main, "SEND_RATE", 0):
-                with patch("amoskys.agents.flowagent.main.time") as mock_time:
+                with patch("amoskys.eventbus.flow_publisher.time") as mock_time:
                     mock_time.time.return_value = 1.0
                     mock_time.sleep = MagicMock()
                     flowagent_main.main()

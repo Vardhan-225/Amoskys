@@ -1,0 +1,233 @@
+{
+  "name": "macos_corr_temporal_kill_chain",
+  "title": "Temporal: ordered tactic progression over time",
+  "probe_id": "macos_corr_temporal_kill_chain",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1048",
+    "T1059",
+    "T1071",
+    "T1078",
+    "T1543"
+  ],
+  "mitre_tactics": [
+    "command-and-control",
+    "credential-access",
+    "execution",
+    "exfiltration",
+    "initial-access",
+    "lateral-movement",
+    "persistence"
+  ],
+  "total": 5,
+  "passed": 5,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "tkc_third_tactic_persistence",
+      "title": "Persistence added (3rd tactic after initial-access + execution)",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_kill_chain_sequence"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_kill_chain_sequence",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_temporal_kill_chain",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1059",
+              "T1071",
+              "T1543",
+              "T1078",
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution",
+              "persistence",
+              "credential-access",
+              "lateral-movement",
+              "exfiltration",
+              "command-and-control"
+            ],
+            "tags": [
+              "temporal",
+              "kill-chain",
+              "sequence"
+            ],
+            "data_keys": [
+              "correlation",
+              "sequence_window",
+              "tactic_count",
+              "tactics_in_order",
+              "time_span_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tkc_fourth_tactic_c2",
+      "title": "C2 activity (4th tactic) \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "entries",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_kill_chain_sequence"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_kill_chain_sequence",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_temporal_kill_chain",
+            "confidence": 0.8999999999999999,
+            "mitre_techniques": [
+              "T1059",
+              "T1071",
+              "T1543",
+              "T1078",
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution",
+              "persistence",
+              "credential-access",
+              "lateral-movement",
+              "exfiltration",
+              "command-and-control"
+            ],
+            "tags": [
+              "temporal",
+              "kill-chain",
+              "sequence"
+            ],
+            "data_keys": [
+              "correlation",
+              "sequence_window",
+              "tactic_count",
+              "tactics_in_order",
+              "time_span_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tkc_fifth_tactic_exfil",
+      "title": "Exfiltration (5th tactic) completes full kill chain",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "entries",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_kill_chain_sequence"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_kill_chain_sequence",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_temporal_kill_chain",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1059",
+              "T1071",
+              "T1543",
+              "T1078",
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution",
+              "persistence",
+              "credential-access",
+              "lateral-movement",
+              "exfiltration",
+              "command-and-control"
+            ],
+            "tags": [
+              "temporal",
+              "kill-chain",
+              "sequence"
+            ],
+            "data_keys": [
+              "correlation",
+              "sequence_window",
+              "tactic_count",
+              "tactics_in_order",
+              "time_span_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tkc_single_tactic_benign",
+      "title": "Only execution detected (1 tactic = no chain)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "entries",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tkc_out_of_order_evasion",
+      "title": "Tactics appear in reverse order (exfil before execution)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "entries",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

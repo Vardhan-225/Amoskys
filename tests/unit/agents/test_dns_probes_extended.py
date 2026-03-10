@@ -22,7 +22,7 @@ from typing import List
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
-from amoskys.agents.dns.probes import (
+from amoskys.agents.shared.dns.probes import (
     BeaconingPatternProbe,
     BlockedDomainHitProbe,
     DGAScoreProbe,

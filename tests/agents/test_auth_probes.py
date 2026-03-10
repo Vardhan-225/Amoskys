@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from amoskys.agents.auth.probes import (
+from amoskys.agents.common.probes import ProbeContext, Severity
+from amoskys.agents.shared.auth.probes import (
     AccountLockoutStormProbe,
     AuthEvent,
     MFABypassOrAnomalyProbe,
@@ -17,7 +18,6 @@ from amoskys.agents.auth.probes import (
     SudoSuspiciousCommandProbe,
     create_auth_probes,
 )
-from amoskys.agents.common.probes import ProbeContext, Severity
 
 
 class TestAuthProbes:

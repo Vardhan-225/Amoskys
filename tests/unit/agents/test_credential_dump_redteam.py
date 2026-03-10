@@ -24,8 +24,8 @@ from typing import List
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-from amoskys.agents.kernel_audit.probes import CredentialDumpProbe
+from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.os.linux.kernel_audit.probes import CredentialDumpProbe
 
 _NOW_NS = int(1_700_000_000 * 1e9)
 

@@ -22,8 +22,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
-from amoskys.agents.db_activity.agent_types import DatabaseQuery
-from amoskys.agents.db_activity.probes import (
+from amoskys.agents.shared.db_activity.agent_types import DatabaseQuery
+from amoskys.agents.shared.db_activity.probes import (
     BulkDataExtractionProbe,
     CredentialQueryProbe,
     DatabaseDDLChangeProbe,

@@ -31,7 +31,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amoskys.agents.auth.auth_guard_agent import (
+from amoskys.agents.common.probes import (
+    MicroProbe,
+    ProbeContext,
+    Severity,
+    TelemetryEvent,
+)
+from amoskys.agents.shared.auth.agent import (
     AuthGuardAgent,
     AuthLogCollector,
     EventBusPublisher,
@@ -39,13 +45,7 @@ from amoskys.agents.auth.auth_guard_agent import (
     MacOSAuthLogCollector,
     get_auth_collector,
 )
-from amoskys.agents.auth.probes import AuthEvent
-from amoskys.agents.common.probes import (
-    MicroProbe,
-    ProbeContext,
-    Severity,
-    TelemetryEvent,
-)
+from amoskys.agents.shared.auth.probes import AuthEvent
 
 # =============================================================================
 # Fixtures
@@ -55,10 +55,10 @@ from amoskys.agents.common.probes import (
 @pytest.fixture
 def auth_agent():
     """Create AuthGuardAgent with mocked dependencies."""
-    with patch("amoskys.agents.auth.auth_guard_agent.EventBusPublisher"):
-        with patch("amoskys.agents.auth.auth_guard_agent.LocalQueueAdapter"):
+    with patch("amoskys.agents.shared.auth.agent.EventBusPublisher"):
+        with patch("amoskys.agents.shared.auth.agent.LocalQueueAdapter"):
             with patch(
-                "amoskys.agents.auth.auth_guard_agent.create_auth_probes",
+                "amoskys.agents.shared.auth.agent.create_auth_probes",
                 return_value=[],
             ):
                 agent = AuthGuardAgent(collection_interval=5.0)
@@ -519,19 +519,19 @@ class TestAuthLogCollectorBase:
 class TestGetAuthCollector:
     """Test platform-specific collector factory."""
 
-    @patch("amoskys.agents.auth.auth_guard_agent.platform")
+    @patch("amoskys.agents.shared.auth.agent.platform")
     def test_linux_platform(self, mock_platform):
         mock_platform.system.return_value = "Linux"
         collector = get_auth_collector()
         assert isinstance(collector, LinuxAuthLogCollector)
 
-    @patch("amoskys.agents.auth.auth_guard_agent.platform")
+    @patch("amoskys.agents.shared.auth.agent.platform")
     def test_darwin_platform(self, mock_platform):
         mock_platform.system.return_value = "Darwin"
         collector = get_auth_collector()
         assert isinstance(collector, MacOSAuthLogCollector)
 
-    @patch("amoskys.agents.auth.auth_guard_agent.platform")
+    @patch("amoskys.agents.shared.auth.agent.platform")
     def test_unsupported_platform(self, mock_platform):
         mock_platform.system.return_value = "FreeBSD"
         collector = get_auth_collector()

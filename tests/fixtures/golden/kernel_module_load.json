@@ -1,0 +1,264 @@
+{
+  "name": "kernel_module_load",
+  "title": "Kernel Module / Rootkit Load (T1547 / T1014)",
+  "probe_id": "kernel_module_load",
+  "agent": "kernel_audit",
+  "mitre_techniques": [
+    "T1014",
+    "T1547"
+  ],
+  "mitre_tactics": [
+    "Defense Evasion",
+    "Persistence"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "kmod_suspicious_path",
+      "title": "init_module from /tmp/rootkit.ko (suspicious path) \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_module_loaded"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_module_loaded",
+            "severity": "CRITICAL",
+            "probe_name": "kernel_module_load",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1014",
+              "T1547.006"
+            ],
+            "mitre_tactics": [
+              "Persistence",
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:persistence"
+            ],
+            "data_keys": [
+              "comm",
+              "cwd",
+              "exe",
+              "host",
+              "path",
+              "pid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "kmod_nonroot_load",
+      "title": "init_module by uid=501 (non-root) \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_module_loaded"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_module_loaded",
+            "severity": "CRITICAL",
+            "probe_name": "kernel_module_load",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1014",
+              "T1547.006"
+            ],
+            "mitre_tactics": [
+              "Persistence",
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:persistence"
+            ],
+            "data_keys": [
+              "comm",
+              "cwd",
+              "exe",
+              "host",
+              "path",
+              "pid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "kmod_delete_module",
+      "title": "delete_module (rmmod rootkit) \u2192 MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_module_unloaded"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_module_unloaded",
+            "severity": "MEDIUM",
+            "probe_name": "kernel_module_load",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1014",
+              "T1547.006"
+            ],
+            "mitre_tactics": [
+              "Persistence",
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:persistence"
+            ],
+            "data_keys": [
+              "comm",
+              "cwd",
+              "exe",
+              "host",
+              "path",
+              "pid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "kmod_evade_ebpf",
+      "title": "eBPF program loaded via bpf() syscall \u2014 no init_module \u2192 evades",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "kmod_evade_kcore_patch",
+      "title": "Direct /proc/kcore kernel patch \u2014 no module syscall",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "kmod_evade_no_audit_event",
+      "title": "Module loaded during early boot \u2014 before auditd starts",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "kmod_benign_execve",
+      "title": "execve event \u2014 not a module load, probe ignores",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "kmod_benign_empty",
+      "title": "No kernel events \u2014 probe runs cleanly",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

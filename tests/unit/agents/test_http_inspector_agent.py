@@ -22,8 +22,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
-from amoskys.agents.http_inspector.agent_types import HTTPTransaction
-from amoskys.agents.http_inspector.probes import (
+from amoskys.agents.shared.http_inspector.agent_types import HTTPTransaction
+from amoskys.agents.shared.http_inspector.probes import (
     APIAbuseProbe,
     CSRFTokenMissingProbe,
     DataExfilHTTPProbe,

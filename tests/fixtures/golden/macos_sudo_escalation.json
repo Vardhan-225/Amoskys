@@ -1,0 +1,296 @@
+{
+  "name": "macos_sudo_escalation",
+  "title": "macOS Sudo Escalation: Privilege Escalation Detection (T1548.003)",
+  "probe_id": "macos_sudo_escalation",
+  "agent": "macos_auth",
+  "mitre_techniques": [
+    "T1548.003"
+  ],
+  "mitre_tactics": [
+    "defense_evasion",
+    "privilege_escalation"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "macos_sudo_success",
+      "title": "sudo ls / \u2014 successful privilege escalation MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "sudo_escalation"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "sudo_escalation",
+            "severity": "MEDIUM",
+            "probe_name": "macos_sudo_escalation",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1548.003"
+            ],
+            "mitre_tactics": [
+              "privilege_escalation",
+              "defense_evasion"
+            ],
+            "tags": [
+              "sudo",
+              "escalation"
+            ],
+            "data_keys": [
+              "category",
+              "message",
+              "timestamp",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_sudo_failure",
+      "title": "sudo with wrong password \u2014 escalation failure HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "sudo_escalation_failure"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "sudo_escalation_failure",
+            "severity": "HIGH",
+            "probe_name": "macos_sudo_escalation",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1548.003"
+            ],
+            "mitre_tactics": [
+              "privilege_escalation",
+              "defense_evasion"
+            ],
+            "tags": [
+              "sudo",
+              "escalation_failure"
+            ],
+            "data_keys": [
+              "category",
+              "message",
+              "timestamp",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_sudo_multiple",
+      "title": "Three sudo commands \u2014 three events",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 3,
+      "expect": {
+        "count": 3,
+        "event_types": [
+          "sudo_escalation",
+          "sudo_escalation",
+          "sudo_escalation_failure"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 3,
+        "events": [
+          {
+            "event_type": "sudo_escalation",
+            "severity": "MEDIUM",
+            "probe_name": "macos_sudo_escalation",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1548.003"
+            ],
+            "mitre_tactics": [
+              "privilege_escalation",
+              "defense_evasion"
+            ],
+            "tags": [
+              "sudo",
+              "escalation"
+            ],
+            "data_keys": [
+              "category",
+              "message",
+              "timestamp",
+              "username"
+            ]
+          },
+          {
+            "event_type": "sudo_escalation",
+            "severity": "MEDIUM",
+            "probe_name": "macos_sudo_escalation",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1548.003"
+            ],
+            "mitre_tactics": [
+              "privilege_escalation",
+              "defense_evasion"
+            ],
+            "tags": [
+              "sudo",
+              "escalation"
+            ],
+            "data_keys": [
+              "category",
+              "message",
+              "timestamp",
+              "username"
+            ]
+          },
+          {
+            "event_type": "sudo_escalation_failure",
+            "severity": "HIGH",
+            "probe_name": "macos_sudo_escalation",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1548.003"
+            ],
+            "mitre_tactics": [
+              "privilege_escalation",
+              "defense_evasion"
+            ],
+            "tags": [
+              "sudo",
+              "escalation_failure"
+            ],
+            "data_keys": [
+              "category",
+              "message",
+              "timestamp",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_sudo_ssh_not_sudo",
+      "title": "SSH login (not sudo) \u2014 different category, not caught",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_sudo_screensaver_not_sudo",
+      "title": "Screensaver unlock \u2014 not a sudo event",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_sudo_attempt_only",
+      "title": "sudo 'attempt' event \u2014 neither success nor failure",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_sudo_no_events",
+      "title": "No auth events \u2014 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_sudo_login_only",
+      "title": "loginwindow events only \u2014 no sudo",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

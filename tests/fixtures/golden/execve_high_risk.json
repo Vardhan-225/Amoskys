@@ -1,0 +1,269 @@
+{
+  "name": "execve_high_risk",
+  "title": "Process Exec from High-Risk Directory (T1059 / T1204)",
+  "probe_id": "execve_high_risk",
+  "agent": "kernel_audit",
+  "mitre_techniques": [
+    "T1059",
+    "T1204"
+  ],
+  "mitre_tactics": [
+    "Execution"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "execve_risk_tmp_user",
+      "title": "/tmp/exploit executed by unprivileged user \u2192 MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_execve_high_risk"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_execve_high_risk",
+            "severity": "MEDIUM",
+            "probe_name": "execve_high_risk",
+            "confidence": 0.75,
+            "mitre_techniques": [
+              "T1059",
+              "T1204.002"
+            ],
+            "mitre_tactics": [
+              "Execution",
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "comm",
+              "cwd",
+              "euid",
+              "exe",
+              "host",
+              "pid",
+              "ppid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "execve_risk_setuid_tmp",
+      "title": "/tmp/rootkit runs with euid=0 (setuid binary) \u2192 HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_execve_high_risk"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_execve_high_risk",
+            "severity": "HIGH",
+            "probe_name": "execve_high_risk",
+            "confidence": 0.75,
+            "mitre_techniques": [
+              "T1059",
+              "T1204.002"
+            ],
+            "mitre_tactics": [
+              "Execution",
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "comm",
+              "cwd",
+              "euid",
+              "exe",
+              "host",
+              "pid",
+              "ppid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "execve_risk_shm_root",
+      "title": "/dev/shm/c2_agent executed as root \u2192 HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_execve_high_risk"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_execve_high_risk",
+            "severity": "HIGH",
+            "probe_name": "execve_high_risk",
+            "confidence": 0.75,
+            "mitre_techniques": [
+              "T1059",
+              "T1204.002"
+            ],
+            "mitre_tactics": [
+              "Execution",
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "comm",
+              "cwd",
+              "euid",
+              "exe",
+              "host",
+              "pid",
+              "ppid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "execve_evade_private_tmp",
+      "title": "exe at /private/tmp/evil \u2014 macOS real path evades /tmp check",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "execve_evade_var_folders",
+      "title": "exec from /var/folders/\u2026 (macOS per-user tmp) \u2014 not in HIGH_RISK_DIRS",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "execve_evade_standard_path",
+      "title": "exec from /usr/local/share/data/malware \u2014 standard install path",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "execve_benign_python",
+      "title": "python3 running from /usr/bin/ \u2014 system binary, no fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "execve_benign_brew",
+      "title": "Homebrew binary at /opt/homebrew/bin/node \u2014 no fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

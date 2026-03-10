@@ -17,8 +17,8 @@ from typing import List
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-from amoskys.agents.kernel_audit.probes import (
+from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.os.linux.kernel_audit.probes import (
     AuditTamperProbe,
     ExecveHighRiskProbe,
     FilePermissionTamperProbe,
@@ -590,7 +590,7 @@ class TestKernelAuditAgentIntegration:
 
     def test_agent_setup_with_stub_collector(self):
         """Agent should initialize with stub collector."""
-        from amoskys.agents.kernel_audit import (
+        from amoskys.agents.os.linux.kernel_audit import (
             KernelAuditAgent,
             StubKernelAuditCollector,
         )
@@ -606,7 +606,7 @@ class TestKernelAuditAgentIntegration:
 
     def test_agent_collects_with_injected_events(self):
         """Agent should process injected events."""
-        from amoskys.agents.kernel_audit import (
+        from amoskys.agents.os.linux.kernel_audit import (
             KernelAuditAgent,
             StubKernelAuditCollector,
         )
@@ -636,7 +636,7 @@ class TestKernelAuditAgentIntegration:
 
     def test_agent_health(self):
         """Agent health should include probe stats."""
-        from amoskys.agents.kernel_audit import (
+        from amoskys.agents.os.linux.kernel_audit import (
             KernelAuditAgent,
             StubKernelAuditCollector,
         )

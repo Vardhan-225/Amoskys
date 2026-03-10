@@ -1,0 +1,252 @@
+{
+  "name": "process_tree_anomaly",
+  "title": "Process Tree Anomaly Detection \u2014 T1055 / T1059",
+  "probe_id": "process_tree_anomaly",
+  "agent": "proc",
+  "mitre_techniques": [
+    "T1055",
+    "T1059"
+  ],
+  "mitre_tactics": [
+    "defense_evasion",
+    "execution"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "tree_pos1_word_powershell",
+      "title": "word \u2192 powershell \u2014 Office macro execution HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "suspicious_process_tree"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "suspicious_process_tree",
+            "severity": "HIGH",
+            "probe_name": "process_tree_anomaly",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1055",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "execution",
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "child_cmdline",
+              "child_name",
+              "child_pid",
+              "parent_name",
+              "parent_pid",
+              "process_guid",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tree_pos2_firefox_bash",
+      "title": "firefox \u2192 bash \u2014 browser exploit HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "suspicious_process_tree"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "suspicious_process_tree",
+            "severity": "HIGH",
+            "probe_name": "process_tree_anomaly",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1055",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "execution",
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "child_cmdline",
+              "child_name",
+              "child_pid",
+              "parent_name",
+              "parent_pid",
+              "process_guid",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tree_pos3_preview_bash",
+      "title": "preview \u2192 bash \u2014 PDF exploit HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "suspicious_process_tree"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "suspicious_process_tree",
+            "severity": "HIGH",
+            "probe_name": "process_tree_anomaly",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1055",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "execution",
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "child_cmdline",
+              "child_name",
+              "child_pid",
+              "parent_name",
+              "parent_pid",
+              "process_guid",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tree_eva1_safari_powershell",
+      "title": "safari \u2192 powershell \u2014 not in SUSPICIOUS_TREES, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tree_eva2_chrome_python",
+      "title": "chrome \u2192 python3 \u2014 partial list evasion, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tree_eva3_nginx_bash",
+      "title": "nginx \u2192 bash \u2014 web server exploit not in parent list, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tree_benign1_bash_python",
+      "title": "bash \u2192 python3 \u2014 normal dev workflow, 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tree_benign2_launchd_bash",
+      "title": "launchd \u2192 bash \u2014 normal daemon spawn, 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

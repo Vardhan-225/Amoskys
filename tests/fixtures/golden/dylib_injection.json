@@ -1,0 +1,268 @@
+{
+  "name": "dylib_injection",
+  "title": "Dylib Injection via DYLD_INSERT_LIBRARIES \u2014 T1547 / T1574.006",
+  "probe_id": "dylib_injection",
+  "agent": "proc",
+  "mitre_techniques": [
+    "T1547",
+    "T1574.006"
+  ],
+  "mitre_tactics": [
+    "persistence",
+    "privilege_escalation"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "dylib_pos1_single",
+      "title": "bash with DYLD_INSERT_LIBRARIES in env \u2014 dylib_injection_detected CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "dylib_injection_detected"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "dylib_injection_detected",
+            "severity": "CRITICAL",
+            "probe_name": "dylib_injection",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1547",
+              "T1574.006"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "privilege_escalation"
+            ],
+            "tags": [],
+            "data_keys": [
+              "dyld_insert_libraries",
+              "pid",
+              "process_guid",
+              "process_name",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "dylib_pos2_two_processes",
+      "title": "bash + python3 both with DYLD_INSERT_LIBRARIES \u2014 fires 2\u00d7 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "dylib_injection_detected"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "dylib_injection_detected",
+            "severity": "CRITICAL",
+            "probe_name": "dylib_injection",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1547",
+              "T1574.006"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "privilege_escalation"
+            ],
+            "tags": [],
+            "data_keys": [
+              "dyld_insert_libraries",
+              "pid",
+              "process_guid",
+              "process_name",
+              "reason"
+            ]
+          },
+          {
+            "event_type": "dylib_injection_detected",
+            "severity": "CRITICAL",
+            "probe_name": "dylib_injection",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1547",
+              "T1574.006"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "privilege_escalation"
+            ],
+            "tags": [],
+            "data_keys": [
+              "dyld_insert_libraries",
+              "pid",
+              "process_guid",
+              "process_name",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "dylib_pos3_staged_payload",
+      "title": "curl with staged payload dylib path \u2014 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "dylib_injection_detected"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "dylib_injection_detected",
+            "severity": "CRITICAL",
+            "probe_name": "dylib_injection",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1547",
+              "T1574.006"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "privilege_escalation"
+            ],
+            "tags": [],
+            "data_keys": [
+              "dyld_insert_libraries",
+              "pid",
+              "process_guid",
+              "process_name",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "dylib_eva1_linux",
+      "title": "Linux platform \u2014 probe skips (darwin-only), 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "dylib_eva2_ps_error",
+      "title": "ps command fails (no permission) \u2014 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "dylib_eva3_lc_load_dylib",
+      "title": "Dylib injected via LC_LOAD_DYLIB \u2014 invisible to ps env check",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "dylib_benign1_dyld_library_path",
+      "title": "DYLD_LIBRARY_PATH (search path) \u2014 probe correctly ignores",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "dylib_benign2_dyld_framework_path",
+      "title": "DYLD_FRAMEWORK_PATH \u2014 not DYLD_INSERT_LIBRARIES, 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

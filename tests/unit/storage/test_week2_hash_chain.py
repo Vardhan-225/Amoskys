@@ -28,7 +28,7 @@ def _compute_chain_sig(env_bytes: bytes, prev_sig: bytes) -> bytes:
 @pytest.fixture
 def wal_db(tmp_path):
     """Create a fresh SQLiteWAL instance in a temp directory."""
-    from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
+    from amoskys.storage.wal_sqlite import SQLiteWAL
 
     db_path = str(tmp_path / "test.db")
     return SQLiteWAL(path=db_path)
@@ -484,7 +484,7 @@ class TestChainMigration:
 
     def test_migration_adds_columns(self, tmp_path):
         """Opening a legacy WAL should add sig/prev_sig columns."""
-        from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
+        from amoskys.storage.wal_sqlite import SQLiteWAL
 
         db_path = str(tmp_path / "legacy.db")
 
@@ -514,7 +514,7 @@ class TestChainMigration:
 
     def test_migration_is_idempotent(self, tmp_path):
         """Opening the same WAL twice should not fail."""
-        from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
+        from amoskys.storage.wal_sqlite import SQLiteWAL
 
         db_path = str(tmp_path / "idem.db")
         wal1 = SQLiteWAL(path=db_path)

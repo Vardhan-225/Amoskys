@@ -1,0 +1,251 @@
+{
+  "name": "macos_removable_media",
+  "title": "macOS Removable Media: USB/DMG Mount Detection (T1091)",
+  "probe_id": "macos_removable_media",
+  "agent": "macos_peripheral",
+  "mitre_techniques": [
+    "T1091"
+  ],
+  "mitre_tactics": [
+    "initial_access",
+    "lateral_movement"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "macos_rm_baseline",
+      "title": "Baseline scan \u2014 learn existing volumes, 0 events",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "volumes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_rm_mount_detected",
+      "title": "New volume AMOSKYS_VOL mounted \u2014 HIGH severity",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "volumes",
+      "input_event_count": 2,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "removable_media_mounted"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "removable_media_mounted",
+            "severity": "HIGH",
+            "probe_name": "macos_removable_media",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1091"
+            ],
+            "mitre_tactics": [
+              "initial_access",
+              "lateral_movement"
+            ],
+            "tags": [],
+            "data_keys": [
+              "mount_point",
+              "volume_name"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_rm_network_share_evades",
+      "title": "Network share mount \u2014 not detected as removable media",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "volumes",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_rm_baseline_with_usb",
+      "title": "Baseline with USB present",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "volumes",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_rm_unmount_detected",
+      "title": "Volume AMOSKYS_VOL unmounted \u2014 INFO severity",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "volumes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "removable_media_unmounted"
+        ],
+        "severity": "INFO",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "removable_media_unmounted",
+            "severity": "INFO",
+            "probe_name": "macos_removable_media",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1091"
+            ],
+            "mitre_tactics": [
+              "initial_access",
+              "lateral_movement"
+            ],
+            "tags": [],
+            "data_keys": [
+              "volume_name"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_rm_empty_volumes",
+      "title": "Empty volume list \u2014 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "volumes",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_rm_baseline2",
+      "title": "Baseline scan (for second mount test)",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "volumes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_rm_two_volumes",
+      "title": "Two new volumes \u2014 2 events",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "volumes",
+      "input_event_count": 3,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "removable_media_mounted",
+          "removable_media_mounted"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "removable_media_mounted",
+            "severity": "HIGH",
+            "probe_name": "macos_removable_media",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1091"
+            ],
+            "mitre_tactics": [
+              "initial_access",
+              "lateral_movement"
+            ],
+            "tags": [],
+            "data_keys": [
+              "mount_point",
+              "volume_name"
+            ]
+          },
+          {
+            "event_type": "removable_media_mounted",
+            "severity": "HIGH",
+            "probe_name": "macos_removable_media",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1091"
+            ],
+            "mitre_tactics": [
+              "initial_access",
+              "lateral_movement"
+            ],
+            "tags": [],
+            "data_keys": [
+              "mount_point",
+              "volume_name"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

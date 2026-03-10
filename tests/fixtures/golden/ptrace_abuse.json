@@ -1,0 +1,344 @@
+{
+  "name": "ptrace_abuse",
+  "title": "Ptrace Abuse / Process Injection (T1055)",
+  "probe_id": "ptrace_abuse",
+  "agent": "kernel_audit",
+  "mitre_techniques": [
+    "T1055"
+  ],
+  "mitre_tactics": [
+    "Defense Evasion",
+    "Privilege Escalation"
+  ],
+  "total": 9,
+  "passed": 9,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "ptrace_sshd_critical",
+      "title": "ptrace targeting sshd (protected process) \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_ptrace_abuse"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_ptrace_abuse",
+            "severity": "CRITICAL",
+            "probe_name": "ptrace_abuse",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1055",
+              "T1055.008"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion",
+              "Privilege Escalation"
+            ],
+            "tags": [
+              "correlation_group:credential_access"
+            ],
+            "data_keys": [
+              "attacker_comm",
+              "attacker_exe",
+              "attacker_pid",
+              "host",
+              "reason",
+              "syscall",
+              "target_comm",
+              "target_pid",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ptrace_nonroot_high",
+      "title": "ptrace by uid=501 (non-root) on regular process \u2192 HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_ptrace_abuse"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_ptrace_abuse",
+            "severity": "HIGH",
+            "probe_name": "ptrace_abuse",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1055",
+              "T1055.008"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion",
+              "Privilege Escalation"
+            ],
+            "tags": [
+              "correlation_group:credential_access"
+            ],
+            "data_keys": [
+              "attacker_comm",
+              "attacker_exe",
+              "attacker_pid",
+              "host",
+              "reason",
+              "syscall",
+              "target_comm",
+              "target_pid",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ptrace_init_critical",
+      "title": "process_vm_readv targeting pid=1 (init) \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_ptrace_abuse"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_ptrace_abuse",
+            "severity": "CRITICAL",
+            "probe_name": "ptrace_abuse",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1055",
+              "T1055.008"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion",
+              "Privilege Escalation"
+            ],
+            "tags": [
+              "correlation_group:credential_access"
+            ],
+            "data_keys": [
+              "attacker_comm",
+              "attacker_exe",
+              "attacker_pid",
+              "host",
+              "reason",
+              "syscall",
+              "target_comm",
+              "target_pid",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ptrace_evade_proc_mem",
+      "title": "/proc/PID/mem read \u2014 no ptrace syscall, evades",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "ptrace_evade_yama_blocked",
+      "title": "ptrace blocked by YAMA (result=failed) \u2014 but probe doesn't check result",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_ptrace_abuse"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_ptrace_abuse",
+            "severity": "HIGH",
+            "probe_name": "ptrace_abuse",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1055",
+              "T1055.008"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion",
+              "Privilege Escalation"
+            ],
+            "tags": [
+              "correlation_group:credential_access"
+            ],
+            "data_keys": [
+              "attacker_comm",
+              "attacker_exe",
+              "attacker_pid",
+              "host",
+              "reason",
+              "syscall",
+              "target_comm",
+              "target_pid",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ptrace_evade_kernel_module",
+      "title": "Kernel module directly reads process memory \u2014 no ptrace syscall",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "ptrace_benign_execve",
+      "title": "execve event \u2014 not a ptrace syscall, probe ignores",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "ptrace_benign_empty",
+      "title": "No kernel events \u2014 probe runs cleanly",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "ptrace_nasty_gdb_developer",
+      "title": "gdb attaches to user app (not protected) \u2192 HIGH  [documented FP]",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_ptrace_abuse"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_ptrace_abuse",
+            "severity": "HIGH",
+            "probe_name": "ptrace_abuse",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1055",
+              "T1055.008"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion",
+              "Privilege Escalation"
+            ],
+            "tags": [
+              "correlation_group:credential_access"
+            ],
+            "data_keys": [
+              "attacker_comm",
+              "attacker_exe",
+              "attacker_pid",
+              "host",
+              "reason",
+              "syscall",
+              "target_comm",
+              "target_pid",
+              "uid"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

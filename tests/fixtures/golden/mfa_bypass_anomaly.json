@@ -1,0 +1,244 @@
+{
+  "name": "mfa_bypass_anomaly",
+  "title": "MFA Bypass and Fatigue Attack (T1621 / T1078)",
+  "probe_id": "mfa_bypass_anomaly",
+  "agent": "auth",
+  "mitre_techniques": [
+    "T1078",
+    "T1621"
+  ],
+  "mitre_tactics": [
+    "Credential Access",
+    "Initial Access"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "mfa_bypass_ssh_no_mfa",
+      "title": "SSH_LOGIN success without MFA_SUCCESS \u2192 CRITICAL (mfa_bypass_suspected)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "mfa_bypass_suspected"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "mfa_bypass_suspected",
+            "severity": "CRITICAL",
+            "probe_name": "mfa_bypass_anomaly",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1621"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "reason",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "mfa_fatigue_10_challenges",
+      "title": "10 MFA challenges before success \u2014 fatigue attack \u2192 HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 11,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "mfa_fatigue_attack"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "mfa_fatigue_attack",
+            "severity": "HIGH",
+            "probe_name": "mfa_bypass_anomaly",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1621"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "challenge_count",
+              "reason",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "mfa_bypass_vpn_no_mfa",
+      "title": "VPN_LOGIN success without MFA_SUCCESS \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "mfa_bypass_suspected"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "mfa_bypass_suspected",
+            "severity": "CRITICAL",
+            "probe_name": "mfa_bypass_anomaly",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1621"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "reason",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "mfa_evade_no_mfa_events",
+      "title": "No MFA events in the system \u2014 probe can't detect bypass",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "mfa_bypass_suspected"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "mfa_bypass_suspected",
+            "severity": "CRITICAL",
+            "probe_name": "mfa_bypass_anomaly",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1621"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "reason",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "mfa_evade_session_hijack",
+      "title": "Session token theft \u2014 no new login, no MFA challenge",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "mfa_evade_approved_token",
+      "title": "Attacker reuses approved MFA token from phishing \u2014 logged as MFA_SUCCESS",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 3,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "mfa_benign_normal_login",
+      "title": "MFA challenge \u2192 MFA success \u2192 SSH login \u2014 normal auth flow",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 3,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "mfa_benign_no_login",
+      "title": "Only MFA_CHALLENGE events, no login \u2014 probe doesn't fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

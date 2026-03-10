@@ -1,0 +1,283 @@
+{
+  "name": "macos_impossible_travel",
+  "title": "macOS Impossible Travel: Multi-IP SSH Detection (T1078)",
+  "probe_id": "macos_impossible_travel",
+  "agent": "macos_auth",
+  "mitre_techniques": [
+    "T1078"
+  ],
+  "mitre_tactics": [
+    "initial_access"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "macos_it_two_ips_2min",
+      "title": "SSH from 2 IPs in 2 minutes \u2014 impossible travel HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "impossible_travel"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "impossible_travel",
+            "severity": "HIGH",
+            "probe_name": "macos_impossible_travel",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "initial_access"
+            ],
+            "tags": [
+              "impossible_travel",
+              "ssh"
+            ],
+            "data_keys": [
+              "category",
+              "delta_seconds",
+              "ip_1",
+              "ip_2",
+              "time_1",
+              "time_2",
+              "username",
+              "window_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_it_three_ips_rapid",
+      "title": "SSH from 3 IPs in 4 minutes \u2014 2 impossible travel events",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 3,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "impossible_travel",
+          "impossible_travel"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "impossible_travel",
+            "severity": "HIGH",
+            "probe_name": "macos_impossible_travel",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "initial_access"
+            ],
+            "tags": [
+              "impossible_travel",
+              "ssh"
+            ],
+            "data_keys": [
+              "category",
+              "delta_seconds",
+              "ip_1",
+              "ip_2",
+              "time_1",
+              "time_2",
+              "username",
+              "window_seconds"
+            ]
+          },
+          {
+            "event_type": "impossible_travel",
+            "severity": "HIGH",
+            "probe_name": "macos_impossible_travel",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "initial_access"
+            ],
+            "tags": [
+              "impossible_travel",
+              "ssh"
+            ],
+            "data_keys": [
+              "category",
+              "delta_seconds",
+              "ip_1",
+              "ip_2",
+              "time_1",
+              "time_2",
+              "username",
+              "window_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_it_attempt_event",
+      "title": "SSH attempts (not just success) from 2 IPs \u2014 fires",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "impossible_travel"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "impossible_travel",
+            "severity": "HIGH",
+            "probe_name": "macos_impossible_travel",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "initial_access"
+            ],
+            "tags": [
+              "impossible_travel",
+              "ssh"
+            ],
+            "data_keys": [
+              "category",
+              "delta_seconds",
+              "ip_1",
+              "ip_2",
+              "time_1",
+              "time_2",
+              "username",
+              "window_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_it_same_ip",
+      "title": "SSH from same IP twice \u2014 no travel",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_it_outside_window",
+      "title": "SSH from 2 IPs 6 hours apart \u2014 outside time window",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_it_different_users",
+      "title": "Two users from different IPs \u2014 not same account",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_it_no_ssh",
+      "title": "No SSH events \u2014 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_it_no_source_ip",
+      "title": "SSH without source IP \u2014 skipped",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

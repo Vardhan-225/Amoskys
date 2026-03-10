@@ -1,0 +1,257 @@
+{
+  "name": "script_interpreter",
+  "title": "Suspicious Script Interpreter Execution \u2014 T1059",
+  "probe_id": "script_interpreter",
+  "agent": "proc",
+  "mitre_techniques": [
+    "T1059",
+    "T1059.001",
+    "T1059.003",
+    "T1059.004",
+    "T1059.006"
+  ],
+  "mitre_tactics": [
+    "execution"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "si_pos1_python_socket",
+      "title": "python3 -c 'import socket;exec(...)' \u2014 suspicious_script_execution HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "suspicious_script_execution"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "suspicious_script_execution",
+            "severity": "HIGH",
+            "probe_name": "script_interpreter",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1059",
+              "T1059.001",
+              "T1059.003",
+              "T1059.004",
+              "T1059.006"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "cmdline",
+              "interpreter",
+              "matched_patterns",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "si_pos2_bash_curl_pipe",
+      "title": "bash 'curl | bash' \u2014 suspicious_script_execution HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "suspicious_script_execution"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "suspicious_script_execution",
+            "severity": "HIGH",
+            "probe_name": "script_interpreter",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1059",
+              "T1059.001",
+              "T1059.003",
+              "T1059.004",
+              "T1059.006"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "cmdline",
+              "interpreter",
+              "matched_patterns",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "si_pos3_python_eval",
+      "title": "python3 eval() dynamic execution \u2014 suspicious_script_execution HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "suspicious_script_execution"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "suspicious_script_execution",
+            "severity": "HIGH",
+            "probe_name": "script_interpreter",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1059",
+              "T1059.001",
+              "T1059.003",
+              "T1059.004",
+              "T1059.006"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "cmdline",
+              "interpreter",
+              "matched_patterns",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "si_eva1_custom_binary",
+      "title": "Custom binary 'analyzer' \u2014 not in INTERPRETERS, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "si_eva2_obfuscated_payload",
+      "title": "python3 XOR-encrypted payload \u2014 no pattern match, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "si_eva3_split_commands",
+      "title": "Malicious logic split across multiple bash processes \u2014 no single match",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "si_benign1_bash_build",
+      "title": "bash legitimate build script \u2014 no suspicious patterns, 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "si_benign2_osascript_notification",
+      "title": "osascript display notification \u2014 no suspicious patterns, 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

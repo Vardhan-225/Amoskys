@@ -6,7 +6,7 @@ import time
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity
-from amoskys.agents.flow.probes import (
+from amoskys.agents.shared.network.probes import (
     C2BeaconFlowProbe,
     CleartextCredentialLeakProbe,
     DataExfilVolumeSpikeProbe,

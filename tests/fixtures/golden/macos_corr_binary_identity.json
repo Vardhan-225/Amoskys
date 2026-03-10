@@ -1,0 +1,212 @@
+{
+  "name": "macos_corr_binary_identity",
+  "title": "Process name does not match expected binary location",
+  "probe_id": "macos_corr_binary_identity",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1036"
+  ],
+  "mitre_tactics": [
+    "defense-evasion"
+  ],
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "corr_bi_fake_claude",
+      "title": "Process named 'claude' running from /tmp/",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_binary_identity_mismatch"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_binary_identity_mismatch",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_binary_identity",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1036"
+            ],
+            "mitre_tactics": [
+              "defense-evasion"
+            ],
+            "tags": [
+              "correlation",
+              "masquerade",
+              "identity"
+            ],
+            "data_keys": [
+              "correlation",
+              "exe",
+              "expected_prefixes",
+              "pid",
+              "process_name"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_bi_fake_slack",
+      "title": "Process named 'slack helper' from /var/tmp",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_binary_identity_mismatch"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_binary_identity_mismatch",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_binary_identity",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1036"
+            ],
+            "mitre_tactics": [
+              "defense-evasion"
+            ],
+            "tags": [
+              "correlation",
+              "masquerade",
+              "identity"
+            ],
+            "data_keys": [
+              "correlation",
+              "exe",
+              "expected_prefixes",
+              "pid",
+              "process_name"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_bi_fake_chrome",
+      "title": "Process named 'google chrome' running from /var/tmp",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_binary_identity_mismatch"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_binary_identity_mismatch",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_binary_identity",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1036"
+            ],
+            "mitre_tactics": [
+              "defense-evasion"
+            ],
+            "tags": [
+              "correlation",
+              "masquerade",
+              "identity"
+            ],
+            "data_keys": [
+              "correlation",
+              "exe",
+              "expected_prefixes",
+              "pid",
+              "process_name"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_bi_real_claude",
+      "title": "Real Claude.app running from /Applications/",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_bi_unknown_name",
+      "title": "Process with unknown name (not in identity map)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_bi_empty_exe",
+      "title": "Process named 'claude' with empty exe (cross-user)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

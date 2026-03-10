@@ -1,0 +1,263 @@
+{
+  "name": "macos_downloads_monitor",
+  "title": "macOS Downloads Monitor: Initial Access File Detection (T1204)",
+  "probe_id": "macos_downloads_monitor",
+  "agent": "macos_filesystem",
+  "mitre_techniques": [
+    "T1204"
+  ],
+  "mitre_tactics": [
+    "execution"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "macos_dl_baseline",
+      "title": "Baseline scan \u2014 learn existing downloads, 0 events",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_dl_new_dmg",
+      "title": "New .dmg in Downloads \u2014 HIGH severity (high-risk extension)",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 3,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "macos_download_new"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "macos_download_new",
+            "severity": "HIGH",
+            "probe_name": "macos_downloads_monitor",
+            "confidence": 0.6,
+            "mitre_techniques": [
+              "T1204"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "extension",
+              "high_risk",
+              "name",
+              "path",
+              "sha256",
+              "size"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_dl_non_download_dir",
+      "title": "File in /tmp/ \u2014 not in ~/Downloads, not caught",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_dl_baseline2",
+      "title": "Baseline scan for .txt test",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_dl_new_txt",
+      "title": "New .txt in Downloads \u2014 LOW severity (not high-risk)",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 3,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "macos_download_new"
+        ],
+        "severity": "LOW",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "macos_download_new",
+            "severity": "LOW",
+            "probe_name": "macos_downloads_monitor",
+            "confidence": 0.6,
+            "mitre_techniques": [
+              "T1204"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "extension",
+              "high_risk",
+              "name",
+              "path",
+              "sha256",
+              "size"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_dl_empty_files",
+      "title": "Empty files list \u2014 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_dl_baseline3",
+      "title": "Baseline scan for multi-file test",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_dl_multi_files",
+      "title": "Two new files \u2014 .dmg and .pkg \u2014 2 events",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 4,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "macos_download_new",
+          "macos_download_new"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "macos_download_new",
+            "severity": "HIGH",
+            "probe_name": "macos_downloads_monitor",
+            "confidence": 0.6,
+            "mitre_techniques": [
+              "T1204"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "extension",
+              "high_risk",
+              "name",
+              "path",
+              "sha256",
+              "size"
+            ]
+          },
+          {
+            "event_type": "macos_download_new",
+            "severity": "HIGH",
+            "probe_name": "macos_downloads_monitor",
+            "confidence": 0.6,
+            "mitre_techniques": [
+              "T1204"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "extension",
+              "high_risk",
+              "name",
+              "path",
+              "sha256",
+              "size"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

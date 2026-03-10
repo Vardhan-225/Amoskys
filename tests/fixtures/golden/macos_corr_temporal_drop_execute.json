@@ -1,0 +1,232 @@
+{
+  "name": "macos_corr_temporal_drop_execute",
+  "title": "Temporal: file dropped, executed, and connected within seconds",
+  "probe_id": "macos_corr_temporal_drop_execute",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1059",
+    "T1204"
+  ],
+  "mitre_tactics": [
+    "execution",
+    "initial-access"
+  ],
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "tde_tight_chain_curl",
+      "title": "curl dropped to /tmp and executed within 3 seconds",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_drop_execute"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_drop_execute",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_temporal_drop_execute",
+            "confidence": 0.98,
+            "mitre_techniques": [
+              "T1204",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution"
+            ],
+            "tags": [
+              "temporal",
+              "drop-execute",
+              "timing"
+            ],
+            "data_keys": [
+              "correlation",
+              "create_time",
+              "delta_seconds",
+              "external_connections",
+              "file_mtime",
+              "file_path",
+              "has_outbound",
+              "pid",
+              "process_name"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tde_medium_chain_nc",
+      "title": "nc dropped to /var/tmp and executed within 20 seconds",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_drop_execute"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_drop_execute",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_temporal_drop_execute",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1204",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution"
+            ],
+            "tags": [
+              "temporal",
+              "drop-execute",
+              "timing"
+            ],
+            "data_keys": [
+              "correlation",
+              "create_time",
+              "delta_seconds",
+              "external_connections",
+              "file_mtime",
+              "file_path",
+              "has_outbound",
+              "pid",
+              "process_name"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tde_wide_chain_with_outbound",
+      "title": "Binary dropped 90s ago, running, and calling home",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_drop_execute"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_drop_execute",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_temporal_drop_execute",
+            "confidence": 0.75,
+            "mitre_techniques": [
+              "T1204",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution"
+            ],
+            "tags": [
+              "temporal",
+              "drop-execute",
+              "timing"
+            ],
+            "data_keys": [
+              "correlation",
+              "create_time",
+              "delta_seconds",
+              "external_connections",
+              "file_mtime",
+              "file_path",
+              "has_outbound",
+              "pid",
+              "process_name"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tde_old_file_benign",
+      "title": "Binary in /tmp but mtime was 5 minutes ago",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tde_safe_directory",
+      "title": "Binary in /usr/local/bin (not a drop directory)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tde_delayed_execution",
+      "title": "File dropped but executed 3 minutes later (outside window)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

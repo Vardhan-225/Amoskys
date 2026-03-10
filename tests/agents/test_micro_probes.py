@@ -190,13 +190,13 @@ class TestDNSProbes:
 
     def test_dns_probes_exist(self):
         """Verify all 9 DNS probes are available."""
-        from amoskys.agents.dns.probes import DNS_PROBES
+        from amoskys.agents.shared.dns.probes import DNS_PROBES
 
         assert len(DNS_PROBES) == 9
 
     def test_create_dns_probes(self):
         """Test creating DNS probe instances."""
-        from amoskys.agents.dns.probes import create_dns_probes
+        from amoskys.agents.shared.dns.probes import create_dns_probes
 
         probes = create_dns_probes()
         assert len(probes) == 9
@@ -215,7 +215,7 @@ class TestDNSProbes:
 
     def test_dga_probe_entropy(self):
         """Test DGA probe entropy calculation."""
-        from amoskys.agents.dns.probes import DGAScoreProbe
+        from amoskys.agents.shared.dns.probes import DGAScoreProbe
 
         probe = DGAScoreProbe()
 
@@ -232,13 +232,13 @@ class TestProcProbes:
 
     def test_proc_probes_exist(self):
         """Verify all 10 process probes are available."""
-        from amoskys.agents.proc.probes import PROC_PROBES
+        from amoskys.agents.shared.process.probes import PROC_PROBES
 
         assert len(PROC_PROBES) == 10
 
     def test_create_proc_probes(self):
         """Test creating process probe instances."""
-        from amoskys.agents.proc.probes import create_proc_probes
+        from amoskys.agents.shared.process.probes import create_proc_probes
 
         probes = create_proc_probes()
         assert len(probes) == 10
@@ -255,7 +255,7 @@ class TestProcessGuid:
 
     def test_make_process_guid_deterministic(self):
         """Same inputs always produce the same GUID."""
-        from amoskys.agents.proc.probes import _make_process_guid
+        from amoskys.agents.shared.process.probes import _make_process_guid
 
         g1 = _make_process_guid("host1", 1234, 1708123456.789)
         g2 = _make_process_guid("host1", 1234, 1708123456.789)
@@ -263,7 +263,7 @@ class TestProcessGuid:
 
     def test_make_process_guid_format(self):
         """GUID is 16-char lowercase hex."""
-        from amoskys.agents.proc.probes import _make_process_guid
+        from amoskys.agents.shared.process.probes import _make_process_guid
 
         guid = _make_process_guid("host1", 42, 1700000000.0)
         assert len(guid) == 16
@@ -271,7 +271,7 @@ class TestProcessGuid:
 
     def test_make_process_guid_different_pids(self):
         """Different PIDs with same create_time produce different GUIDs."""
-        from amoskys.agents.proc.probes import _make_process_guid
+        from amoskys.agents.shared.process.probes import _make_process_guid
 
         g1 = _make_process_guid("host1", 100, 1700000000.0)
         g2 = _make_process_guid("host1", 101, 1700000000.0)
@@ -279,7 +279,7 @@ class TestProcessGuid:
 
     def test_make_process_guid_different_create_times(self):
         """Same PID recycled at different times produces different GUIDs."""
-        from amoskys.agents.proc.probes import _make_process_guid
+        from amoskys.agents.shared.process.probes import _make_process_guid
 
         g1 = _make_process_guid("host1", 100, 1700000000.0)
         g2 = _make_process_guid("host1", 100, 1700000001.0)
@@ -287,7 +287,7 @@ class TestProcessGuid:
 
     def test_make_process_guid_different_hosts(self):
         """Same PID on different hosts produces different GUIDs."""
-        from amoskys.agents.proc.probes import _make_process_guid
+        from amoskys.agents.shared.process.probes import _make_process_guid
 
         g1 = _make_process_guid("host1", 100, 1700000000.0)
         g2 = _make_process_guid("host2", 100, 1700000000.0)
@@ -299,7 +299,7 @@ class TestProcessGuid:
 
         import psutil as real_psutil
 
-        from amoskys.agents.proc.probes import ProcessSpawnProbe
+        from amoskys.agents.shared.process.probes import ProcessSpawnProbe
 
         probe = ProcessSpawnProbe()
         probe.first_run = False
@@ -319,8 +319,8 @@ class TestProcessGuid:
         context = ProbeContext(device_id="test-host", agent_name="proc")
 
         with (
-            patch("amoskys.agents.proc.probes.psutil") as mock_psutil,
-            patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", True),
+            patch("amoskys.agents.shared.process.probes.psutil") as mock_psutil,
+            patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", True),
         ):
             mock_psutil.process_iter.return_value = [mock_proc]
             mock_psutil.NoSuchProcess = real_psutil.NoSuchProcess
@@ -337,7 +337,7 @@ class TestProcessGuid:
 
     def test_guid_consistent_across_probes(self):
         """Same process observed by different probes gets the same GUID."""
-        from amoskys.agents.proc.probes import _make_process_guid
+        from amoskys.agents.shared.process.probes import _make_process_guid
 
         # Simulate the same process seen by two different probes
         pid, create_time, device_id = 1234, 1700000000.5, "my-host"
@@ -350,7 +350,7 @@ class TestProcessGuid:
 
     def test_processinfo_has_guid_field(self):
         """ProcessInfo dataclass includes process_guid field."""
-        from amoskys.agents.proc.probes import ProcessInfo
+        from amoskys.agents.shared.process.probes import ProcessInfo
 
         info = ProcessInfo(
             pid=1,
@@ -374,13 +374,13 @@ class TestPeripheralProbes:
 
     def test_peripheral_probes_exist(self):
         """Verify all 7 peripheral probes are available."""
-        from amoskys.agents.peripheral.probes import PERIPHERAL_PROBES
+        from amoskys.agents.shared.peripheral.probes import PERIPHERAL_PROBES
 
         assert len(PERIPHERAL_PROBES) == 7
 
     def test_create_peripheral_probes(self):
         """Test creating peripheral probe instances."""
-        from amoskys.agents.peripheral.probes import create_peripheral_probes
+        from amoskys.agents.shared.peripheral.probes import create_peripheral_probes
 
         probes = create_peripheral_probes()
         assert len(probes) == 7

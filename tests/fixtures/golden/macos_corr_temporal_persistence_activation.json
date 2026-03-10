@@ -1,0 +1,232 @@
+{
+  "name": "macos_corr_temporal_persistence_activation",
+  "title": "Temporal: persistence mechanism activated since last scan",
+  "probe_id": "macos_corr_temporal_persistence_activation",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1543",
+    "T1547"
+  ],
+  "mitre_tactics": [
+    "execution",
+    "persistence"
+  ],
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "tpa_new_agent_just_started",
+      "title": "New LaunchAgent program started 5 seconds ago",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_persistence_activation"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_persistence_activation",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_temporal_persistence_activation",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1543",
+              "T1547"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "execution"
+            ],
+            "tags": [
+              "temporal",
+              "persistence",
+              "activation"
+            ],
+            "data_keys": [
+              "correlation",
+              "create_time",
+              "is_new_program",
+              "persistence_category",
+              "persistence_path",
+              "pid",
+              "program",
+              "scan_interval",
+              "time_since_creation"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tpa_known_program_restarted",
+      "title": "Known sshd restarted (create_time within scan interval)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_persistence_activation"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_persistence_activation",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_temporal_persistence_activation",
+            "confidence": 0.75,
+            "mitre_techniques": [
+              "T1543",
+              "T1547"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "execution"
+            ],
+            "tags": [
+              "temporal",
+              "persistence",
+              "activation"
+            ],
+            "data_keys": [
+              "correlation",
+              "create_time",
+              "is_new_program",
+              "persistence_category",
+              "persistence_path",
+              "pid",
+              "program",
+              "scan_interval",
+              "time_since_creation"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tpa_keepalive_daemon_activated",
+      "title": "LaunchDaemon with KeepAlive activated 10s ago",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_persistence_activation"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_persistence_activation",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_temporal_persistence_activation",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1543",
+              "T1547"
+            ],
+            "mitre_tactics": [
+              "persistence",
+              "execution"
+            ],
+            "tags": [
+              "temporal",
+              "persistence",
+              "activation"
+            ],
+            "data_keys": [
+              "correlation",
+              "create_time",
+              "is_new_program",
+              "persistence_category",
+              "persistence_path",
+              "pid",
+              "program",
+              "scan_interval",
+              "time_since_creation"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tpa_old_process_benign",
+      "title": "sshd running for hours (create_time far in past)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tpa_not_running",
+      "title": "Persistence entry exists but program is not running",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tpa_delayed_activation",
+      "title": "Persistence activated 5 minutes after install (outside window)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "entries",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

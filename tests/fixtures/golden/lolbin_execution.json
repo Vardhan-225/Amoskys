@@ -1,0 +1,312 @@
+{
+  "name": "lolbin_execution",
+  "title": "LOLBin Execution Detection \u2014 T1218",
+  "probe_id": "lolbin_execution",
+  "agent": "proc",
+  "mitre_techniques": [
+    "T1218",
+    "T1218.010",
+    "T1218.011"
+  ],
+  "mitre_tactics": [
+    "defense_evasion",
+    "execution"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "lolbin_pos1_curl_dl",
+      "title": "curl downloading .exe \u2014 HIGH (downloading_executable pattern)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "lolbin_execution"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "lolbin_execution",
+            "severity": "HIGH",
+            "probe_name": "lolbin_execution",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1218",
+              "T1218.010",
+              "T1218.011"
+            ],
+            "mitre_tactics": [
+              "defense_evasion",
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "binary",
+              "category",
+              "cmdline",
+              "pid",
+              "process_guid",
+              "suspicious_patterns",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "lolbin_pos2_python_socket",
+      "title": "python3 -c 'import socket; exec(...)' \u2014 HIGH (encoded_command)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "lolbin_execution"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "lolbin_execution",
+            "severity": "HIGH",
+            "probe_name": "lolbin_execution",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1218",
+              "T1218.010",
+              "T1218.011"
+            ],
+            "mitre_tactics": [
+              "defense_evasion",
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "binary",
+              "category",
+              "cmdline",
+              "pid",
+              "process_guid",
+              "suspicious_patterns",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "lolbin_pos3_bash_hidden",
+      "title": "bash with nohup redirected to /dev/null \u2014 HIGH (hidden_execution)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "lolbin_execution"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "lolbin_execution",
+            "severity": "HIGH",
+            "probe_name": "lolbin_execution",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1218",
+              "T1218.010",
+              "T1218.011"
+            ],
+            "mitre_tactics": [
+              "defense_evasion",
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "binary",
+              "category",
+              "cmdline",
+              "pid",
+              "process_guid",
+              "suspicious_patterns",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "lolbin_eva1_custom_binary",
+      "title": "Custom Go/C binary 'c2agent' \u2014 not in LOLBin list, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "lolbin_eva2_versioned_python",
+      "title": "python3.12 \u2014 exact-name mismatch evades list check",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "lolbin_eva3_swift_binary",
+      "title": "Swift-compiled C2 binary \u2014 interpreter not monitored, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "lolbin_benign1_curl_api",
+      "title": "curl legitimate API health-check \u2014 fires LOW (informational only)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "lolbin_execution"
+        ],
+        "severity": "LOW",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "lolbin_execution",
+            "severity": "LOW",
+            "probe_name": "lolbin_execution",
+            "confidence": 0.4,
+            "mitre_techniques": [
+              "T1218",
+              "T1218.010",
+              "T1218.011"
+            ],
+            "mitre_tactics": [
+              "defense_evasion",
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "binary",
+              "category",
+              "cmdline",
+              "pid",
+              "process_guid",
+              "suspicious_patterns",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "lolbin_benign2_python_analysis",
+      "title": "python3 log analysis script \u2014 fires LOW (informational only)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "lolbin_execution"
+        ],
+        "severity": "LOW",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "lolbin_execution",
+            "severity": "LOW",
+            "probe_name": "lolbin_execution",
+            "confidence": 0.4,
+            "mitre_techniques": [
+              "T1218",
+              "T1218.010",
+              "T1218.011"
+            ],
+            "mitre_tactics": [
+              "defense_evasion",
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "binary",
+              "category",
+              "cmdline",
+              "pid",
+              "process_guid",
+              "suspicious_patterns",
+              "username"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

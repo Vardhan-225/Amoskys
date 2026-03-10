@@ -1,0 +1,334 @@
+{
+  "name": "binary_from_temp",
+  "title": "Binary Execution from Temp Directory \u2014 T1204",
+  "probe_id": "binary_from_temp",
+  "agent": "proc",
+  "mitre_techniques": [
+    "T1059",
+    "T1204"
+  ],
+  "mitre_tactics": [
+    "execution"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "bft_pos1_tmp",
+      "title": "/tmp/revshell \u2014 execution_from_temp HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "execution_from_temp"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "execution_from_temp",
+            "severity": "HIGH",
+            "probe_name": "binary_from_temp",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1204",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "exe",
+              "matched_path",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "bft_pos2_macos_tmpdir",
+      "title": "/private/var/folders/... macOS tmpdir \u2014 execution_from_temp HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "execution_from_temp"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "execution_from_temp",
+            "severity": "HIGH",
+            "probe_name": "binary_from_temp",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1204",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "exe",
+              "matched_path",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "bft_pos3_dev_shm",
+      "title": "/dev/shm/shellcode \u2014 execution_from_temp HIGH (RAM-backed)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "execution_from_temp"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "execution_from_temp",
+            "severity": "HIGH",
+            "probe_name": "binary_from_temp",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1204",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "exe",
+              "matched_path",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "bft_eva1_usr_local",
+      "title": "Binary copied to /usr/local/bin \u2014 not a temp path, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "bft_eva2_script_in_tmp",
+      "title": "python3 runs /tmp/evil.py \u2014 cmdline check catches script path",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "execution_from_temp"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "execution_from_temp",
+            "severity": "HIGH",
+            "probe_name": "binary_from_temp",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1204",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "exe",
+              "matched_path",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "bft_eva3_var_run",
+      "title": "/var/run/malware \u2014 not in TEMP_PATTERNS, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "bft_benign1_npm_jest",
+      "title": "npm jest worker from /tmp \u2014 fires HIGH (FP: build tooling uses /tmp)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "execution_from_temp",
+            "severity": "HIGH",
+            "probe_name": "binary_from_temp",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1204",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "exe",
+              "matched_path",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "bft_benign2_macos_installer",
+      "title": "macOS Installer helper from /private/var/folders \u2014 fires HIGH (FP)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "execution_from_temp",
+            "severity": "HIGH",
+            "probe_name": "binary_from_temp",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1204",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "exe",
+              "matched_path",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -16,11 +16,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amoskys.agents.fim.fsevents_collector import (
+from amoskys.agents.shared.filesystem.fsevents_collector import (
     MacOSFSEventsCollector,
     _FSEventsHandler,
 )
-from amoskys.agents.fim.probes import ChangeType, FileChange, FileState
+from amoskys.agents.shared.filesystem.probes import ChangeType, FileChange, FileState
 
 # =============================================================================
 # Test: _FSEventsHandler
@@ -35,7 +35,7 @@ class TestFSEventsHandler:
         handler = _FSEventsHandler(buf)
         return handler, buf
 
-    @patch("amoskys.agents.fim.fsevents_collector.FileState.from_path")
+    @patch("amoskys.agents.shared.filesystem.fsevents_collector.FileState.from_path")
     def test_on_created_produces_file_change(self, mock_from_path):
         """File created → CREATED FileChange in buffer."""
         mock_from_path.return_value = FileState(
@@ -64,7 +64,7 @@ class TestFSEventsHandler:
         assert fc.new_state is not None
         assert fc.old_state is None
 
-    @patch("amoskys.agents.fim.fsevents_collector.FileState.from_path")
+    @patch("amoskys.agents.shared.filesystem.fsevents_collector.FileState.from_path")
     def test_on_modified_produces_modified_change(self, mock_from_path):
         """File modified → MODIFIED FileChange."""
         mock_from_path.return_value = FileState(
@@ -104,7 +104,7 @@ class TestFSEventsHandler:
         assert fc.new_state is None
         assert fc.old_state is None
 
-    @patch("amoskys.agents.fim.fsevents_collector.FileState.from_path")
+    @patch("amoskys.agents.shared.filesystem.fsevents_collector.FileState.from_path")
     def test_on_moved_produces_delete_and_create(self, mock_from_path):
         """File moved → DELETE of old + CREATE of new."""
         mock_from_path.return_value = FileState(
@@ -145,7 +145,7 @@ class TestFSEventsHandler:
 
         assert len(buf) == 0
 
-    @patch("amoskys.agents.fim.fsevents_collector.FileState.from_path")
+    @patch("amoskys.agents.shared.filesystem.fsevents_collector.FileState.from_path")
     def test_dedup_within_1_second(self, mock_from_path):
         """Same (path, change_type) within 1s → only one event."""
         mock_from_path.return_value = FileState(
@@ -171,7 +171,7 @@ class TestFSEventsHandler:
 
         assert len(buf) == 1  # Deduped to 1
 
-    @patch("amoskys.agents.fim.fsevents_collector.FileState.from_path")
+    @patch("amoskys.agents.shared.filesystem.fsevents_collector.FileState.from_path")
     def test_different_change_types_not_deduped(self, mock_from_path):
         """CREATED and MODIFIED on same path are separate events."""
         mock_from_path.return_value = FileState(
@@ -201,7 +201,7 @@ class TestFSEventsHandler:
 
         assert len(buf) == 2
 
-    @patch("amoskys.agents.fim.fsevents_collector.FileState.from_path")
+    @patch("amoskys.agents.shared.filesystem.fsevents_collector.FileState.from_path")
     def test_vanished_file_skipped(self, mock_from_path):
         """If file vanishes before stat, event is silently dropped."""
         mock_from_path.return_value = None
@@ -267,7 +267,7 @@ class TestMacOSFSEventsCollector:
         collector._observer = None
         assert not collector.is_running
 
-    @patch("amoskys.agents.fim.fsevents_collector.Observer")
+    @patch("amoskys.agents.shared.filesystem.fsevents_collector.Observer")
     def test_start_schedules_existing_paths(self, MockObserver):
         """start() schedules only paths that exist."""
         mock_obs = MagicMock()
@@ -284,7 +284,7 @@ class TestMacOSFSEventsCollector:
         assert mock_obs.schedule.call_count == 1
         mock_obs.start.assert_called_once()
 
-    @patch("amoskys.agents.fim.fsevents_collector.Observer")
+    @patch("amoskys.agents.shared.filesystem.fsevents_collector.Observer")
     def test_stop_joins_observer(self, MockObserver):
         """stop() stops and joins the observer thread."""
         mock_obs = MagicMock()

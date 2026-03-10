@@ -35,7 +35,12 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
-from amoskys.agents.proc.probes import (
+from amoskys.agents.shared.process.agent import (
+    EventBusPublisher,
+    ProcAgent,
+    SystemMetricsCollector,
+)
+from amoskys.agents.shared.process.probes import (
     PROC_PROBES,
     BinaryFromTempProbe,
     CodeSigningProbe,
@@ -50,11 +55,6 @@ from amoskys.agents.proc.probes import (
     SuspiciousUserProcessProbe,
     _make_process_guid,
     create_proc_probes,
-)
-from amoskys.agents.proc.proc_agent import (
-    EventBusPublisher,
-    ProcAgent,
-    SystemMetricsCollector,
 )
 from amoskys.proto import universal_telemetry_pb2 as tpb
 
@@ -109,15 +109,15 @@ def stub_probe():
 def proc_agent(mock_eventbus, mock_queue_adapter):
     """Create a ProcAgent with mocked dependencies."""
     with patch(
-        "amoskys.agents.proc.proc_agent.EventBusPublisher",
+        "amoskys.agents.shared.process.agent.EventBusPublisher",
         return_value=mock_eventbus,
     ):
         with patch(
-            "amoskys.agents.proc.proc_agent.LocalQueueAdapter",
+            "amoskys.agents.shared.process.agent.LocalQueueAdapter",
             return_value=mock_queue_adapter,
         ):
             with patch(
-                "amoskys.agents.proc.proc_agent.create_proc_probes",
+                "amoskys.agents.shared.process.agent.create_proc_probes",
                 return_value=[],
             ):
                 agent = ProcAgent(collection_interval=5.0)
@@ -144,15 +144,15 @@ class TestProcAgentInit:
     def test_agent_init_custom_interval(self, mock_eventbus, mock_queue_adapter):
         """Verify custom collection interval."""
         with patch(
-            "amoskys.agents.proc.proc_agent.EventBusPublisher",
+            "amoskys.agents.shared.process.agent.EventBusPublisher",
             return_value=mock_eventbus,
         ):
             with patch(
-                "amoskys.agents.proc.proc_agent.LocalQueueAdapter",
+                "amoskys.agents.shared.process.agent.LocalQueueAdapter",
                 return_value=mock_queue_adapter,
             ):
                 with patch(
-                    "amoskys.agents.proc.proc_agent.create_proc_probes",
+                    "amoskys.agents.shared.process.agent.create_proc_probes",
                     return_value=[],
                 ):
                     agent = ProcAgent(collection_interval=15.0)
@@ -1046,15 +1046,15 @@ class TestShutdownExtended:
     def test_shutdown_without_publisher(self, mock_queue_adapter):
         """Shutdown should not raise if publisher is None."""
         with patch(
-            "amoskys.agents.proc.proc_agent.EventBusPublisher",
+            "amoskys.agents.shared.process.agent.EventBusPublisher",
             return_value=MagicMock(),
         ):
             with patch(
-                "amoskys.agents.proc.proc_agent.LocalQueueAdapter",
+                "amoskys.agents.shared.process.agent.LocalQueueAdapter",
                 return_value=mock_queue_adapter,
             ):
                 with patch(
-                    "amoskys.agents.proc.proc_agent.create_proc_probes",
+                    "amoskys.agents.shared.process.agent.create_proc_probes",
                     return_value=[],
                 ):
                     agent = ProcAgent()
@@ -1140,14 +1140,14 @@ class TestProcessSpawnProbe:
         assert "T1059" in probe.mitre_techniques
         assert probe.scan_interval == 5.0
 
-    @patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", False)
+    @patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", False)
     def test_scan_returns_empty_when_psutil_unavailable(self):
         """Should return empty list when psutil is not available."""
         probe = ProcessSpawnProbe()
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_first_run_learns_baseline(self, mock_psutil):
         """First scan should learn PIDs, returning no events."""
         proc_mock = _mock_proc(
@@ -1172,7 +1172,7 @@ class TestProcessSpawnProbe:
         assert probe.first_run is False
         assert 100 in probe.known_pids
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_second_run_detects_new_process(self, mock_psutil):
         """Second scan should detect new PIDs."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1243,14 +1243,14 @@ class TestLOLBinExecutionProbe:
         elif system == "Linux":
             assert "systemctl" in probe.lolbins
 
-    @patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", False)
+    @patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", False)
     def test_scan_returns_empty_when_psutil_unavailable(self):
         """Should return empty list when psutil not available."""
         probe = LOLBinExecutionProbe()
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_detects_lolbin_execution(self, mock_psutil):
         """Should detect known LOLBin execution."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1278,7 +1278,7 @@ class TestLOLBinExecutionProbe:
         assert events[0].data["binary"] == "curl"
         assert events[0].data["category"] == "File download"
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_detects_suspicious_lolbin_pattern(self, mock_psutil):
         """Suspicious curl downloading .exe should be HIGH severity."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1356,14 +1356,14 @@ class TestProcessTreeAnomalyProbe:
         assert probe.name == "process_tree_anomaly"
         assert "T1055" in probe.mitre_techniques
 
-    @patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", False)
+    @patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", False)
     def test_scan_returns_empty_when_psutil_unavailable(self):
         """Should return empty list when psutil not available."""
         probe = ProcessTreeAnomalyProbe()
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_detects_suspicious_parent_child(self, mock_psutil):
         """Should detect Word spawning PowerShell."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1391,7 +1391,7 @@ class TestProcessTreeAnomalyProbe:
         assert events[0].severity == Severity.HIGH
         assert "Office macro" in events[0].data["reason"]
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_no_event_for_normal_tree(self, mock_psutil):
         """Should not fire for normal parent-child (bash -> ls)."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1415,7 +1415,7 @@ class TestProcessTreeAnomalyProbe:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_handles_parent_access_denied(self, mock_psutil):
         """Should skip process when parent lookup raises AccessDenied."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1451,14 +1451,14 @@ class TestHighCPUAndMemoryProbe:
         assert probe.name == "high_cpu_memory"
         assert "T1496" in probe.mitre_techniques
 
-    @patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", False)
+    @patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", False)
     def test_scan_returns_empty_when_psutil_unavailable(self):
         """Should return empty list when psutil not available."""
         probe = HighCPUAndMemoryProbe()
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_first_scan_records_high_pid_no_event(self, mock_psutil):
         """First scan for high-resource PID should record but not emit event."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1481,7 +1481,7 @@ class TestHighCPUAndMemoryProbe:
         assert events == []
         assert 500 in probe.high_resource_pids
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_sustained_high_usage_triggers_event(self, mock_psutil):
         """Event emitted after sustained high usage exceeds threshold."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1512,7 +1512,7 @@ class TestHighCPUAndMemoryProbe:
         assert events[0].data["name"] == "cryptominer"
         assert events[0].data["cpu_percent"] == 99.0
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_high_memory_triggers_tracking(self, mock_psutil):
         """High memory (above threshold) should also be tracked."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1534,7 +1534,7 @@ class TestHighCPUAndMemoryProbe:
         probe.scan(_make_context())
         assert 502 in probe.high_resource_pids
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_cleanup_removes_gone_pids(self, mock_psutil):
         """PIDs that drop below threshold should be cleaned up."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1564,14 +1564,14 @@ class TestLongLivedProcessProbe:
         assert "T1036" in probe.mitre_techniques
         assert probe.scan_interval == 300.0
 
-    @patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", False)
+    @patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", False)
     def test_scan_returns_empty_when_psutil_unavailable(self):
         """Should return empty list when psutil not available."""
         probe = LongLivedProcessProbe()
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_detects_long_lived_short_lived_process(self, mock_psutil):
         """Should detect 'grep' running for more than 1 hour."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1596,7 +1596,7 @@ class TestLongLivedProcessProbe:
         assert events[0].data["name"] == "grep"
         assert events[0].data["runtime_seconds"] > 3600
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_ignores_normal_long_processes(self, mock_psutil):
         """Should not fire for processes not in EXPECTED_SHORT_LIVED."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1616,7 +1616,7 @@ class TestLongLivedProcessProbe:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_ignores_recently_started_short_lived(self, mock_psutil):
         """Should not fire for 'cat' that just started."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1651,14 +1651,14 @@ class TestSuspiciousUserProcessProbe:
         assert probe.name == "suspicious_user_process"
         assert "T1078" in probe.mitre_techniques
 
-    @patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", False)
+    @patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", False)
     def test_scan_returns_empty_when_psutil_unavailable(self):
         """Should return empty list when psutil not available."""
         probe = SuspiciousUserProcessProbe()
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_detects_root_process_as_non_root(self, mock_psutil):
         """Should detect sshd running as non-root user."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1682,7 +1682,7 @@ class TestSuspiciousUserProcessProbe:
         assert events[0].data["username"] == "attacker"
         assert events[0].data["expected_user"] == "root/SYSTEM"
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_no_event_for_root_running_as_root(self, mock_psutil):
         """Should not fire when root-only process runs as root."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1702,7 +1702,7 @@ class TestSuspiciousUserProcessProbe:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_no_event_for_unknown_process(self, mock_psutil):
         """Should not fire for processes not in ROOT_ONLY_PROCESSES."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1722,7 +1722,7 @@ class TestSuspiciousUserProcessProbe:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_system_user_is_allowed(self, mock_psutil):
         """SYSTEM user should be treated as root-equivalent."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1757,14 +1757,14 @@ class TestBinaryFromTempProbe:
         assert probe.name == "binary_from_temp"
         assert "T1204" in probe.mitre_techniques
 
-    @patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", False)
+    @patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", False)
     def test_scan_returns_empty_when_psutil_unavailable(self):
         """Should return empty list when psutil not available."""
         probe = BinaryFromTempProbe()
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_detects_execution_from_tmp(self, mock_psutil):
         """Should detect binary execution from /tmp/."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1789,7 +1789,7 @@ class TestBinaryFromTempProbe:
         assert events[0].severity == Severity.HIGH
         assert events[0].data["exe"] == "/tmp/evil"
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_detects_execution_from_var_tmp(self, mock_psutil):
         """Should detect binary from /var/tmp/."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1811,7 +1811,7 @@ class TestBinaryFromTempProbe:
         events = probe.scan(_make_context())
         assert len(events) == 1
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_detects_execution_from_macos_temp(self, mock_psutil):
         """Should detect binary from /private/var/folders/ (macOS temp)."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1833,7 +1833,7 @@ class TestBinaryFromTempProbe:
         events = probe.scan(_make_context())
         assert len(events) == 1
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_does_not_report_same_pid_twice(self, mock_psutil):
         """Should not report the same PID more than once."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1857,7 +1857,7 @@ class TestBinaryFromTempProbe:
         assert len(events1) == 1
         assert len(events2) == 0
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_no_event_for_normal_path(self, mock_psutil):
         """Should not fire for binaries in standard locations."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1879,7 +1879,7 @@ class TestBinaryFromTempProbe:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_handles_none_exe(self, mock_psutil):
         """Should handle None exe gracefully."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1916,14 +1916,14 @@ class TestScriptInterpreterProbe:
         assert probe.name == "script_interpreter"
         assert "T1059" in probe.mitre_techniques
 
-    @patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", False)
+    @patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", False)
     def test_scan_returns_empty_when_psutil_unavailable(self):
         """Should return empty list when psutil not available."""
         probe = ScriptInterpreterProbe()
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_detects_python_importing_socket(self, mock_psutil):
         """Should detect Python importing socket module."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1947,7 +1947,7 @@ class TestScriptInterpreterProbe:
         assert events[0].severity == Severity.HIGH
         assert events[0].data["interpreter"] == "python3"
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_detects_powershell_iex(self, mock_psutil):
         """Should detect PowerShell Invoke-Expression."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1973,7 +1973,7 @@ class TestScriptInterpreterProbe:
         assert len(events) == 1
         assert any("Invoke-Expression" in p for p in events[0].data["matched_patterns"])
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_detects_bash_reverse_shell(self, mock_psutil):
         """Should detect bash /dev/tcp reverse shell."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -1995,7 +1995,7 @@ class TestScriptInterpreterProbe:
         assert len(events) == 1
         assert events[0].event_type == "suspicious_script_execution"
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_ignores_non_interpreter(self, mock_psutil):
         """Should not fire for non-interpreter processes."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -2016,7 +2016,7 @@ class TestScriptInterpreterProbe:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_ignores_interpreter_without_suspicious_pattern(self, mock_psutil):
         """Should not fire for benign Python usage."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -2037,7 +2037,7 @@ class TestScriptInterpreterProbe:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_curl_pipe_to_bash_detected(self, mock_psutil):
         """Should detect curl piping to bash."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -2058,7 +2058,7 @@ class TestScriptInterpreterProbe:
         events = probe.scan(_make_context())
         assert len(events) == 1
 
-    @patch("amoskys.agents.proc.probes.psutil")
+    @patch("amoskys.agents.shared.process.probes.psutil")
     def test_matched_patterns_limited_to_five(self, mock_psutil):
         """matched_patterns should be limited to 5 entries."""
         mock_psutil.NoSuchProcess = psutil.NoSuchProcess
@@ -2104,14 +2104,14 @@ class TestDylibInjectionProbeUnit:
         assert "T1547" in probe.mitre_techniques
         assert "T1574.006" in probe.mitre_techniques
 
-    @patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", False)
+    @patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", False)
     def test_scan_returns_empty_when_psutil_unavailable(self):
         """Should return empty list when psutil not available."""
         probe = DylibInjectionProbe()
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.platform")
+    @patch("amoskys.agents.shared.process.probes.platform")
     def test_scan_returns_empty_on_non_darwin(self, mock_platform):
         """Should return empty on non-macOS platforms."""
         mock_platform.system.return_value = "Linux"
@@ -2119,7 +2119,7 @@ class TestDylibInjectionProbeUnit:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.platform")
+    @patch("amoskys.agents.shared.process.probes.platform")
     @patch("subprocess.run")
     def test_detects_dyld_injection(self, mock_run, mock_platform):
         """Should detect DYLD_INSERT_LIBRARIES in process environment."""
@@ -2131,7 +2131,7 @@ class TestDylibInjectionProbeUnit:
         )
 
         probe = DylibInjectionProbe()
-        with patch("amoskys.agents.proc.probes.psutil") as mock_psutil:
+        with patch("amoskys.agents.shared.process.probes.psutil") as mock_psutil:
             mock_psutil.NoSuchProcess = psutil.NoSuchProcess
             mock_psutil.AccessDenied = psutil.AccessDenied
             proc_mock = MagicMock()
@@ -2145,7 +2145,7 @@ class TestDylibInjectionProbeUnit:
         assert events[0].severity == Severity.CRITICAL
         assert "/tmp/evil.dylib" in events[0].data["dyld_insert_libraries"]
 
-    @patch("amoskys.agents.proc.probes.platform")
+    @patch("amoskys.agents.shared.process.probes.platform")
     @patch("subprocess.run")
     def test_no_event_when_no_dyld(self, mock_run, mock_platform):
         """Should return empty when no processes have DYLD_INSERT_LIBRARIES."""
@@ -2160,7 +2160,7 @@ class TestDylibInjectionProbeUnit:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.platform")
+    @patch("amoskys.agents.shared.process.probes.platform")
     @patch("subprocess.run", side_effect=FileNotFoundError("ps not found"))
     def test_handles_ps_command_missing(self, mock_run, mock_platform):
         """Should handle missing ps command gracefully."""
@@ -2169,7 +2169,7 @@ class TestDylibInjectionProbeUnit:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.platform")
+    @patch("amoskys.agents.shared.process.probes.platform")
     @patch("subprocess.run")
     def test_does_not_report_same_pid_twice(self, mock_run, mock_platform):
         """Should not report the same injected PID twice."""
@@ -2181,7 +2181,7 @@ class TestDylibInjectionProbeUnit:
         )
 
         probe = DylibInjectionProbe()
-        with patch("amoskys.agents.proc.probes.psutil") as mock_psutil:
+        with patch("amoskys.agents.shared.process.probes.psutil") as mock_psutil:
             mock_psutil.NoSuchProcess = psutil.NoSuchProcess
             mock_psutil.AccessDenied = psutil.AccessDenied
             proc_mock = MagicMock()
@@ -2194,7 +2194,7 @@ class TestDylibInjectionProbeUnit:
         assert len(events1) == 1
         assert len(events2) == 0
 
-    @patch("amoskys.agents.proc.probes.platform")
+    @patch("amoskys.agents.shared.process.probes.platform")
     @patch("subprocess.run")
     def test_handles_ps_nonzero_return_code(self, mock_run, mock_platform):
         """Should return empty when ps command fails (non-zero return)."""
@@ -2225,14 +2225,14 @@ class TestCodeSigningProbeUnit:
         assert "T1036" in probe.mitre_techniques
         assert probe.scan_interval == 300.0
 
-    @patch("amoskys.agents.proc.probes.PSUTIL_AVAILABLE", False)
+    @patch("amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE", False)
     def test_scan_returns_empty_when_psutil_unavailable(self):
         """Should return empty list when psutil not available."""
         probe = CodeSigningProbe()
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.platform")
+    @patch("amoskys.agents.shared.process.probes.platform")
     def test_scan_returns_empty_on_non_darwin(self, mock_platform):
         """Should return empty on non-macOS platforms."""
         mock_platform.system.return_value = "Linux"
@@ -2240,7 +2240,7 @@ class TestCodeSigningProbeUnit:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.platform")
+    @patch("amoskys.agents.shared.process.probes.platform")
     @patch("os.path.exists", return_value=True)
     @patch("subprocess.run")
     def test_detects_invalid_code_signature(self, mock_run, mock_exists, mock_platform):
@@ -2259,7 +2259,7 @@ class TestCodeSigningProbeUnit:
         assert events[0].event_type == "code_signature_invalid"
         assert events[0].severity == Severity.HIGH
 
-    @patch("amoskys.agents.proc.probes.platform")
+    @patch("amoskys.agents.shared.process.probes.platform")
     @patch("os.path.exists", return_value=True)
     @patch("subprocess.run")
     def test_no_event_for_valid_signature(self, mock_run, mock_exists, mock_platform):
@@ -2275,7 +2275,7 @@ class TestCodeSigningProbeUnit:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.platform")
+    @patch("amoskys.agents.shared.process.probes.platform")
     @patch("os.path.exists", return_value=False)
     def test_skips_missing_binaries(self, mock_exists, mock_platform):
         """Should skip binaries that don't exist on disk."""
@@ -2284,7 +2284,7 @@ class TestCodeSigningProbeUnit:
         events = probe.scan(_make_context())
         assert events == []
 
-    @patch("amoskys.agents.proc.probes.platform")
+    @patch("amoskys.agents.shared.process.probes.platform")
     @patch("os.path.exists", return_value=True)
     @patch("subprocess.run", side_effect=FileNotFoundError("codesign not found"))
     def test_handles_codesign_missing(self, mock_run, mock_exists, mock_platform):

@@ -21,8 +21,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amoskys.agents.applog.agent_types import LogEntry
-from amoskys.agents.applog.probes import (
+from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
+from amoskys.agents.shared.applog.agent_types import LogEntry
+from amoskys.agents.shared.applog.probes import (
     ContainerBreakoutLogProbe,
     CredentialHarvestProbe,
     ErrorSpikeAnomalyProbe,
@@ -33,7 +34,6 @@ from amoskys.agents.applog.probes import (
     WebShellAccessProbe,
     create_applog_probes,
 )
-from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
 
 # ---------------------------------------------------------------------------
 # Helper: build a ProbeContext with log_entries in shared_data
@@ -77,16 +77,16 @@ def _make_log_entry(**overrides):
 # ---------------------------------------------------------------------------
 
 
-@patch("amoskys.agents.applog.applog_agent.get_config")
-@patch("amoskys.agents.applog.applog_agent.EventBusPublisher")
-@patch("amoskys.agents.applog.applog_agent.LocalQueueAdapter")
-@patch("amoskys.agents.applog.applog_agent.Path")
+@patch("amoskys.agents.shared.applog.agent.get_config")
+@patch("amoskys.agents.shared.applog.agent.EventBusPublisher")
+@patch("amoskys.agents.shared.applog.agent.LocalQueueAdapter")
+@patch("amoskys.agents.shared.applog.agent.Path")
 def test_applog_agent_instantiation(mock_path, mock_queue, mock_pub, mock_cfg):
     """AppLogAgent can be instantiated with mocked infra."""
     mock_cfg.return_value = MagicMock()
     mock_path.return_value.parent.mkdir = MagicMock()
 
-    from amoskys.agents.applog.applog_agent import AppLogAgent
+    from amoskys.agents.shared.applog.agent import AppLogAgent
 
     agent = AppLogAgent.__new__(AppLogAgent)
     # Manually set required attributes rather than running full __init__
@@ -113,13 +113,13 @@ def test_all_probes_have_unique_names():
 # ---------------------------------------------------------------------------
 
 
-@patch("amoskys.agents.applog.probes.os.stat")
+@patch("amoskys.agents.shared.applog.probes.os.stat")
 def test_log_tampering_truncation(mock_stat):
     """LogTamperingProbe detects file truncation (size decrease)."""
     probe = LogTamperingProbe()
 
     # Prime the state with a known file size
-    from amoskys.agents.applog.probes import LogFileState
+    from amoskys.agents.shared.applog.probes import LogFileState
 
     probe.file_states["/var/log/syslog"] = LogFileState(
         file_path="/var/log/syslog",

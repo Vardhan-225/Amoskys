@@ -1,0 +1,215 @@
+{
+  "name": "macos_corr_file_size_anomaly",
+  "title": "Benign filename with anomalous file size",
+  "probe_id": "macos_corr_file_size_anomaly",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1564"
+  ],
+  "mitre_tactics": [
+    "defense-evasion"
+  ],
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "corr_fsa_ds_store_large",
+      "title": ".DS_Store at 100KB (expected <32KB)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_file_size_anomaly"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_file_size_anomaly",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_file_size_anomaly",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1564"
+            ],
+            "mitre_tactics": [
+              "defense-evasion"
+            ],
+            "tags": [
+              "correlation",
+              "file-size",
+              "defense-evasion"
+            ],
+            "data_keys": [
+              "actual_size",
+              "correlation",
+              "expected_max_size",
+              "name",
+              "path",
+              "size_ratio"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_fsa_localized_large",
+      "title": ".localized at 5KB (expected 0-1 bytes)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_file_size_anomaly"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_file_size_anomaly",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_file_size_anomaly",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1564"
+            ],
+            "mitre_tactics": [
+              "defense-evasion"
+            ],
+            "tags": [
+              "correlation",
+              "file-size",
+              "defense-evasion"
+            ],
+            "data_keys": [
+              "actual_size",
+              "correlation",
+              "expected_max_size",
+              "name",
+              "path",
+              "size_ratio"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_fsa_timemachine_large",
+      "title": ".com.apple.timemachine.donotpresent at 50KB (expected 0-1 bytes)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_file_size_anomaly"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_file_size_anomaly",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_file_size_anomaly",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1564"
+            ],
+            "mitre_tactics": [
+              "defense-evasion"
+            ],
+            "tags": [
+              "correlation",
+              "file-size",
+              "defense-evasion"
+            ],
+            "data_keys": [
+              "actual_size",
+              "correlation",
+              "expected_max_size",
+              "name",
+              "path",
+              "size_ratio"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_fsa_ds_store_normal",
+      "title": "Normal .DS_Store at 8KB",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_fsa_unknown_name",
+      "title": "Unknown file name (not in benign list)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_fsa_untracked_benign_name",
+      "title": "Payload named .gitignore (not in benign size map)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

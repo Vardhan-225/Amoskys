@@ -31,8 +31,8 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
-from amoskys.agents.fim.fim_agent import BaselineEngine, FIMAgent
-from amoskys.agents.fim.probes import ChangeType, FileChange, FileState
+from amoskys.agents.shared.filesystem.agent import BaselineEngine, FIMAgent
+from amoskys.agents.shared.filesystem.probes import ChangeType, FileChange, FileState
 
 # ---------------------------------------------------------------------------
 # FileState Tests
@@ -342,9 +342,11 @@ def fim_agent():
 @pytest.fixture
 def fim_agent_with_mocks(tmp_path):
     """Create FIMAgent with mocked EventBus and queue."""
-    with patch("amoskys.agents.fim.fim_agent.EventBusPublisher") as mock_pub_class:
+    with patch(
+        "amoskys.agents.shared.filesystem.agent.EventBusPublisher"
+    ) as mock_pub_class:
         with patch(
-            "amoskys.agents.fim.fim_agent.LocalQueueAdapter"
+            "amoskys.agents.shared.filesystem.agent.LocalQueueAdapter"
         ) as mock_queue_class:
             mock_pub = MagicMock()
             mock_pub_class.return_value = mock_pub
@@ -586,7 +588,7 @@ class TestEventBusPublisher:
 
     def test_publisher_init(self):
         """Test EventBusPublisher initialization."""
-        from amoskys.agents.fim.fim_agent import EventBusPublisher
+        from amoskys.agents.shared.filesystem.agent import EventBusPublisher
 
         pub = EventBusPublisher("localhost:50051", "/tmp/certs")
         assert pub.address == "localhost:50051"
@@ -596,7 +598,7 @@ class TestEventBusPublisher:
 
     def test_ensure_channel_missing_cert(self, tmp_path):
         """Test _ensure_channel raises RuntimeError when certs are missing."""
-        from amoskys.agents.fim.fim_agent import EventBusPublisher
+        from amoskys.agents.shared.filesystem.agent import EventBusPublisher
 
         pub = EventBusPublisher("localhost:50051", str(tmp_path / "no_certs"))
         with pytest.raises(RuntimeError, match="Certificate not found"):
@@ -604,7 +606,7 @@ class TestEventBusPublisher:
 
     def test_ensure_channel_generic_error(self, tmp_path):
         """Test _ensure_channel raises RuntimeError on generic error."""
-        from amoskys.agents.fim.fim_agent import EventBusPublisher
+        from amoskys.agents.shared.filesystem.agent import EventBusPublisher
 
         # Create cert files but mock grpc to fail
         cert_dir = tmp_path / "certs"
@@ -615,7 +617,7 @@ class TestEventBusPublisher:
 
         pub = EventBusPublisher("localhost:50051", str(cert_dir))
         with patch(
-            "amoskys.agents.fim.fim_agent.grpc.ssl_channel_credentials",
+            "amoskys.agents.shared.filesystem.agent.grpc.ssl_channel_credentials",
             side_effect=Exception("ssl fail"),
         ):
             with pytest.raises(RuntimeError, match="Failed to create gRPC channel"):
@@ -623,7 +625,7 @@ class TestEventBusPublisher:
 
     def test_close_with_channel(self):
         """Test close() when channel exists."""
-        from amoskys.agents.fim.fim_agent import EventBusPublisher
+        from amoskys.agents.shared.filesystem.agent import EventBusPublisher
 
         pub = EventBusPublisher("localhost:50051", "/tmp/certs")
         pub._channel = MagicMock()
@@ -634,7 +636,7 @@ class TestEventBusPublisher:
 
     def test_close_without_channel(self):
         """Test close() when no channel exists (noop)."""
-        from amoskys.agents.fim.fim_agent import EventBusPublisher
+        from amoskys.agents.shared.filesystem.agent import EventBusPublisher
 
         pub = EventBusPublisher("localhost:50051", "/tmp/certs")
         pub.close()  # Should not raise
@@ -642,7 +644,7 @@ class TestEventBusPublisher:
 
     def test_publish_calls_ensure_channel(self):
         """Test publish() calls _ensure_channel and publishes events."""
-        from amoskys.agents.fim.fim_agent import EventBusPublisher
+        from amoskys.agents.shared.filesystem.agent import EventBusPublisher
         from amoskys.proto import universal_telemetry_pb2 as tpb
 
         pub = EventBusPublisher("localhost:50051", "/tmp/certs")
@@ -662,7 +664,7 @@ class TestEventBusPublisher:
 
     def test_publish_raises_on_bad_ack(self):
         """Test publish() raises when EventBus returns non-OK status."""
-        from amoskys.agents.fim.fim_agent import EventBusPublisher
+        from amoskys.agents.shared.filesystem.agent import EventBusPublisher
         from amoskys.proto import universal_telemetry_pb2 as tpb
 
         pub = EventBusPublisher("localhost:50051", "/tmp/certs")
@@ -919,16 +921,16 @@ class TestFIMAgentSetupExtended:
 
     def test_setup_create_mode(self, tmp_path):
         """Test setup in 'create' mode returns False (one-shot baseline creation)."""
-        with patch("amoskys.agents.fim.fim_agent.EventBusPublisher"):
-            with patch("amoskys.agents.fim.fim_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.filesystem.agent.EventBusPublisher"):
+            with patch("amoskys.agents.shared.filesystem.agent.LocalQueueAdapter"):
                 agent = FIMAgent(baseline_mode="create", monitor_paths=[str(tmp_path)])
                 result = agent.setup()
                 assert result is False  # create mode exits after baseline creation
 
     def test_setup_monitor_no_baseline(self, tmp_path):
         """Test setup in monitor mode with no baseline switches to auto_create."""
-        with patch("amoskys.agents.fim.fim_agent.EventBusPublisher"):
-            with patch("amoskys.agents.fim.fim_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.filesystem.agent.EventBusPublisher"):
+            with patch("amoskys.agents.shared.filesystem.agent.LocalQueueAdapter"):
                 agent = FIMAgent(baseline_mode="monitor", monitor_paths=[str(tmp_path)])
                 agent.baseline_engine = BaselineEngine(
                     str(tmp_path / "nonexistent.json")
@@ -939,8 +941,8 @@ class TestFIMAgentSetupExtended:
 
     def test_setup_exception_returns_false(self, tmp_path):
         """Test setup returns False when an exception occurs."""
-        with patch("amoskys.agents.fim.fim_agent.EventBusPublisher"):
-            with patch("amoskys.agents.fim.fim_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.filesystem.agent.EventBusPublisher"):
+            with patch("amoskys.agents.shared.filesystem.agent.LocalQueueAdapter"):
                 agent = FIMAgent(baseline_mode="monitor", monitor_paths=[str(tmp_path)])
                 with patch.object(
                     agent, "setup_probes", side_effect=RuntimeError("boom")
@@ -959,8 +961,8 @@ class TestFIMAgentCollectExtended:
 
     def test_collect_auto_create_baseline(self, tmp_path):
         """Test collect_data auto-creates baseline on first cycle."""
-        with patch("amoskys.agents.fim.fim_agent.EventBusPublisher"):
-            with patch("amoskys.agents.fim.fim_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.filesystem.agent.EventBusPublisher"):
+            with patch("amoskys.agents.shared.filesystem.agent.LocalQueueAdapter"):
                 agent = FIMAgent(baseline_mode="monitor", monitor_paths=[str(tmp_path)])
                 agent.baseline_mode = "auto_create"
                 # Create a test file so scan finds something
@@ -976,8 +978,8 @@ class TestFIMAgentCollectExtended:
 
     def test_collect_no_changes_emits_heartbeat(self, tmp_path):
         """Test collect_data emits heartbeat when no changes detected."""
-        with patch("amoskys.agents.fim.fim_agent.EventBusPublisher"):
-            with patch("amoskys.agents.fim.fim_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.filesystem.agent.EventBusPublisher"):
+            with patch("amoskys.agents.shared.filesystem.agent.LocalQueueAdapter"):
                 agent = FIMAgent(baseline_mode="monitor", monitor_paths=[str(tmp_path)])
                 # Set baseline = current state (no changes)
                 (tmp_path / "stable.txt").write_text("stable")
@@ -1002,8 +1004,8 @@ class TestFIMAgentCollectExtended:
 
     def test_collect_with_changes_runs_probes(self, tmp_path):
         """Test collect_data with file changes runs probes and emits telemetry."""
-        with patch("amoskys.agents.fim.fim_agent.EventBusPublisher"):
-            with patch("amoskys.agents.fim.fim_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.filesystem.agent.EventBusPublisher"):
+            with patch("amoskys.agents.shared.filesystem.agent.LocalQueueAdapter"):
                 agent = FIMAgent(baseline_mode="monitor", monitor_paths=[str(tmp_path)])
                 agent.setup()
 
@@ -1031,8 +1033,8 @@ class TestFIMAgentCollectExtended:
 
     def test_collect_probe_exception_handled(self, tmp_path):
         """Test collect_data handles probe scan exceptions gracefully."""
-        with patch("amoskys.agents.fim.fim_agent.EventBusPublisher"):
-            with patch("amoskys.agents.fim.fim_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.filesystem.agent.EventBusPublisher"):
+            with patch("amoskys.agents.shared.filesystem.agent.LocalQueueAdapter"):
                 agent = FIMAgent(baseline_mode="monitor", monitor_paths=[str(tmp_path)])
                 agent.setup()
 
@@ -1304,8 +1306,8 @@ class TestFIMPlatformPaths:
 
     def test_custom_monitor_paths(self, tmp_path):
         """Test FIMAgent with custom monitor paths."""
-        with patch("amoskys.agents.fim.fim_agent.EventBusPublisher"):
-            with patch("amoskys.agents.fim.fim_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.filesystem.agent.EventBusPublisher"):
+            with patch("amoskys.agents.shared.filesystem.agent.LocalQueueAdapter"):
                 custom = [str(tmp_path)]
                 agent = FIMAgent(monitor_paths=custom)
                 assert agent.monitor_paths == custom

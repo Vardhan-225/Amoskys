@@ -1,0 +1,308 @@
+{
+  "name": "syscall_flood",
+  "title": "Syscall Flood / Process Enumeration (T1057 / T1499)",
+  "probe_id": "syscall_flood",
+  "agent": "kernel_audit",
+  "mitre_techniques": [
+    "T1057",
+    "T1499"
+  ],
+  "mitre_tactics": [
+    "Discovery",
+    "Impact"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "syscall_flood_medium",
+      "title": "100 syscalls from PID 9001 \u2192 MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 100,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_syscall_flood"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_syscall_flood",
+            "severity": "MEDIUM",
+            "probe_name": "syscall_flood",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1592",
+              "T1083"
+            ],
+            "mitre_tactics": [
+              "Reconnaissance",
+              "Discovery"
+            ],
+            "tags": [],
+            "data_keys": [
+              "comm",
+              "exe",
+              "failure_count",
+              "host",
+              "pid",
+              "reason",
+              "syscall_count",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "syscall_flood_high",
+      "title": "100 syscalls + 50 failures from PID 9002 \u2192 HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 100,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_syscall_flood"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_syscall_flood",
+            "severity": "HIGH",
+            "probe_name": "syscall_flood",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1592",
+              "T1083"
+            ],
+            "mitre_tactics": [
+              "Reconnaissance",
+              "Discovery"
+            ],
+            "tags": [],
+            "data_keys": [
+              "comm",
+              "exe",
+              "failure_count",
+              "host",
+              "pid",
+              "reason",
+              "syscall_count",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "syscall_flood_two_pids",
+      "title": "Two PIDs each with 100+ floods \u2192 2 events",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 215,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "kernel_syscall_flood"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "kernel_syscall_flood",
+            "severity": "MEDIUM",
+            "probe_name": "syscall_flood",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1592",
+              "T1083"
+            ],
+            "mitre_tactics": [
+              "Reconnaissance",
+              "Discovery"
+            ],
+            "tags": [],
+            "data_keys": [
+              "comm",
+              "exe",
+              "failure_count",
+              "host",
+              "pid",
+              "reason",
+              "syscall_count",
+              "uid"
+            ]
+          },
+          {
+            "event_type": "kernel_syscall_flood",
+            "severity": "MEDIUM",
+            "probe_name": "syscall_flood",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1592",
+              "T1083"
+            ],
+            "mitre_tactics": [
+              "Reconnaissance",
+              "Discovery"
+            ],
+            "tags": [],
+            "data_keys": [
+              "comm",
+              "exe",
+              "failure_count",
+              "host",
+              "pid",
+              "reason",
+              "syscall_count",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "syscall_flood_evade_just_under",
+      "title": "99 syscalls from PID 9005 \u2014 just under threshold, evades",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 99,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "syscall_flood_evade_distributed",
+      "title": "10 PIDs \u00d7 50 syscalls each \u2014 distributed flood evades per-PID threshold",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 500,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "syscall_flood_evade_build_fp",
+      "title": "Legitimate build process (make -j16) \u2014 undistinguishable FP",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 120,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_syscall_flood"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_syscall_flood",
+            "severity": "MEDIUM",
+            "probe_name": "syscall_flood",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1592",
+              "T1083"
+            ],
+            "mitre_tactics": [
+              "Reconnaissance",
+              "Discovery"
+            ],
+            "tags": [],
+            "data_keys": [
+              "comm",
+              "exe",
+              "failure_count",
+              "host",
+              "pid",
+              "reason",
+              "syscall_count",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "syscall_flood_benign_under",
+      "title": "50 syscalls from PID 9030 \u2014 under threshold, no fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 50,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "syscall_flood_benign_empty",
+      "title": "No kernel events \u2014 probe runs cleanly",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

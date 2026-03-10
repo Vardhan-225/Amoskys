@@ -1,0 +1,235 @@
+{
+  "name": "macos_non_standard_port",
+  "title": "macOS Non-Standard Port: Service Port Mismatch Detection (T1571)",
+  "probe_id": "macos_non_standard_port",
+  "agent": "macos_network",
+  "mitre_techniques": [
+    "T1571"
+  ],
+  "mitre_tactics": [
+    "command_and_control"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "macos_nsp_sshd_high_port",
+      "title": "sshd listening on port 12345 \u2014 non-standard port MEDIUM",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "non_standard_port"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "non_standard_port",
+            "severity": "MEDIUM",
+            "probe_name": "macos_non_standard_port",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1571"
+            ],
+            "mitre_tactics": [
+              "command_and_control"
+            ],
+            "tags": [],
+            "data_keys": [
+              "actual_port",
+              "expected_ports",
+              "pid",
+              "process_name"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_nsp_mysqld_wrong_port",
+      "title": "mysqld listening on port 33060 \u2014 non-standard port",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "non_standard_port"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "non_standard_port",
+            "severity": "MEDIUM",
+            "probe_name": "macos_non_standard_port",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1571"
+            ],
+            "mitre_tactics": [
+              "command_and_control"
+            ],
+            "tags": [],
+            "data_keys": [
+              "actual_port",
+              "expected_ports",
+              "pid",
+              "process_name"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_nsp_nginx_strange_port",
+      "title": "nginx on port 4444 \u2014 classic reverse shell port",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "non_standard_port"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "non_standard_port",
+            "severity": "MEDIUM",
+            "probe_name": "macos_non_standard_port",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1571"
+            ],
+            "mitre_tactics": [
+              "command_and_control"
+            ],
+            "tags": [],
+            "data_keys": [
+              "actual_port",
+              "expected_ports",
+              "pid",
+              "process_name"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_nsp_unknown_service",
+      "title": "Unknown process 'implant' on port 4444 \u2014 not in service map",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_nsp_established_not_listen",
+      "title": "sshd ESTABLISHED on port 12345 \u2014 only LISTEN checked",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_nsp_renamed_sshd",
+      "title": "sshd renamed to 'httpd' on port 22 \u2014 wrong name, no mismatch",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_nsp_sshd_standard",
+      "title": "sshd on port 22 \u2014 standard port, no alert",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_nsp_node_custom_port",
+      "title": "node on port 3000 \u2014 not in service map, no alert",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

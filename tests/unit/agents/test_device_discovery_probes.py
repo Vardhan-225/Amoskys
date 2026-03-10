@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, Mock, mock_open, patch
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
-from amoskys.agents.device_discovery.probes import (
+from amoskys.agents.shared.device_discovery.probes import (
     DEVICE_DISCOVERY_PROBES,
     ActivePortScanFingerprintProbe,
     ARPDiscoveryProbe,

@@ -41,8 +41,8 @@ from unittest.mock import patch
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-from amoskys.agents.kernel_audit.probes import (
+from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.os.linux.kernel_audit.probes import (
     CredentialDumpProbe,
     create_kernel_audit_probes,
 )

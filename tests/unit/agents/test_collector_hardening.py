@@ -14,21 +14,21 @@ import time
 from typing import Dict
 from unittest.mock import patch
 
-from amoskys.agents.auth.auth_guard_agent import MacOSAuthLogCollector
-from amoskys.agents.auth.probes import (
+from amoskys.agents.common.probes import ProbeContext, Severity
+from amoskys.agents.shared.auth.agent import MacOSAuthLogCollector
+from amoskys.agents.shared.auth.probes import (
     AccountLockoutStormProbe,
     AuthEvent,
     MFABypassOrAnomalyProbe,
 )
-from amoskys.agents.common.probes import ProbeContext, Severity
-from amoskys.agents.dns.dns_agent import MacOSDNSCollector
-from amoskys.agents.fim.probes import (
+from amoskys.agents.shared.dns.agent import MacOSDNSCollector
+from amoskys.agents.shared.filesystem.probes import (
     BootloaderTamperProbe,
     ChangeType,
     FileChange,
     FileState,
 )
-from amoskys.agents.flow.probes import FlowEvent, SuspiciousTunnelProbe
+from amoskys.agents.shared.network.probes import FlowEvent, SuspiciousTunnelProbe
 
 # =============================================================================
 # Auth: MFA Event Mapping

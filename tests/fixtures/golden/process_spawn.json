@@ -1,0 +1,224 @@
+{
+  "name": "process_spawn",
+  "title": "Process Spawn Detection \u2014 T1059 / T1204",
+  "probe_id": "process_spawn",
+  "agent": "proc",
+  "mitre_techniques": [
+    "T1059",
+    "T1204"
+  ],
+  "mitre_tactics": [
+    "execution"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "spawn_pos1_setup",
+      "title": "Baseline scan \u2014 learning phase, 0 events",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spawn_pos1_fire",
+      "title": "Second scan \u2014 attacker's bash (PID 9999) fires process_spawned INFO",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "process_spawned"
+        ],
+        "severity": "INFO",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "process_spawned",
+            "severity": "INFO",
+            "probe_name": "process_spawn",
+            "confidence": 1.0,
+            "mitre_techniques": [
+              "T1059",
+              "T1204"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "cmdline",
+              "exe",
+              "name",
+              "parent_name",
+              "pid",
+              "ppid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "spawn_eva_hollow",
+      "title": "Process hollowing \u2014 injected PID already known, never fires",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spawn_eva_prerun_setup",
+      "title": "Pre-monitoring persistence chain \u2014 attacker in baseline (scan 1 of 2)",
+      "category": "evasion",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spawn_eva_prerun_persist",
+      "title": "Pre-monitoring persistence \u2014 same PID 9999 stays silent",
+      "category": "evasion",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spawn_eva_inject",
+      "title": "Thread injection \u2014 no new PID, probe permanently blind",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spawn_benign_setup",
+      "title": "Benign chain baseline \u2014 2 system daemons",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spawn_benign_cron",
+      "title": "Legitimate cron job fires process_spawned INFO \u2014 expected telemetry",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "process_spawned"
+        ],
+        "severity": "INFO",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "process_spawned",
+            "severity": "INFO",
+            "probe_name": "process_spawn",
+            "confidence": 1.0,
+            "mitre_techniques": [
+              "T1059",
+              "T1204"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "cmdline",
+              "exe",
+              "name",
+              "parent_name",
+              "pid",
+              "ppid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

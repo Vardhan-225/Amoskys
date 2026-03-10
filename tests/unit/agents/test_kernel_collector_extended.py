@@ -26,8 +26,8 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-from amoskys.agents.kernel_audit.collector import (
+from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.os.linux.kernel_audit.collector import (
     AuditdLogCollector,
     BaseKernelAuditCollector,
     MacOSAuditCollector,
@@ -1083,7 +1083,8 @@ class TestFactoryExtended:
         assert isinstance(c, StubKernelAuditCollector)
 
     @patch(
-        "amoskys.agents.kernel_audit.collector.platform.system", return_value="Linux"
+        "amoskys.agents.os.linux.kernel_audit.collector.platform.system",
+        return_value="Linux",
     )
     def test_linux_default_path(self, _):
         c = create_kernel_audit_collector()
@@ -1091,7 +1092,8 @@ class TestFactoryExtended:
         assert str(c.source) == "/var/log/audit/audit.log"
 
     @patch(
-        "amoskys.agents.kernel_audit.collector.platform.system", return_value="Linux"
+        "amoskys.agents.os.linux.kernel_audit.collector.platform.system",
+        return_value="Linux",
     )
     def test_linux_custom_path(self, _):
         c = create_kernel_audit_collector(source="/custom/audit.log")
@@ -1099,14 +1101,16 @@ class TestFactoryExtended:
         assert str(c.source) == "/custom/audit.log"
 
     @patch(
-        "amoskys.agents.kernel_audit.collector.platform.system", return_value="Darwin"
+        "amoskys.agents.os.linux.kernel_audit.collector.platform.system",
+        return_value="Darwin",
     )
     def test_darwin_default_unified(self, _):
         c = create_kernel_audit_collector()
         assert isinstance(c, MacOSUnifiedLogCollector)
 
     @patch(
-        "amoskys.agents.kernel_audit.collector.platform.system", return_value="Darwin"
+        "amoskys.agents.os.linux.kernel_audit.collector.platform.system",
+        return_value="Darwin",
     )
     @patch.object(MacOSAuditCollector, "_resolve_trail")
     def test_darwin_bsm_fallback(self, mock_resolve, _):
@@ -1114,7 +1118,8 @@ class TestFactoryExtended:
         assert isinstance(c, MacOSAuditCollector)
 
     @patch(
-        "amoskys.agents.kernel_audit.collector.platform.system", return_value="Darwin"
+        "amoskys.agents.os.linux.kernel_audit.collector.platform.system",
+        return_value="Darwin",
     )
     @patch.object(MacOSAuditCollector, "_resolve_trail")
     def test_darwin_bsm_custom_source(self, mock_resolve, _):
@@ -1123,7 +1128,8 @@ class TestFactoryExtended:
         assert str(c._trail_symlink) == "/my/trail"
 
     @patch(
-        "amoskys.agents.kernel_audit.collector.platform.system", return_value="FreeBSD"
+        "amoskys.agents.os.linux.kernel_audit.collector.platform.system",
+        return_value="FreeBSD",
     )
     def test_unknown_platform_falls_to_linux(self, _):
         """Unrecognized platform falls through to Linux auditd."""

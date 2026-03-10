@@ -1,0 +1,298 @@
+{
+  "name": "file_permission_tamper",
+  "title": "File Permission Tampering on Sensitive Files (T1222)",
+  "probe_id": "file_permission_tamper",
+  "agent": "kernel_audit",
+  "mitre_techniques": [
+    "T1222"
+  ],
+  "mitre_tactics": [
+    "Defense Evasion",
+    "Privilege Escalation"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "fperm_shadow_chmod",
+      "title": "chmod on /etc/shadow \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_file_permission_tamper"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_file_permission_tamper",
+            "severity": "CRITICAL",
+            "probe_name": "file_permission_tamper",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1222",
+              "T1222.002"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion",
+              "Credential Access"
+            ],
+            "tags": [
+              "correlation_group:defense_evasion"
+            ],
+            "data_keys": [
+              "comm",
+              "dest_uid",
+              "euid",
+              "exe",
+              "host",
+              "pid",
+              "reason",
+              "syscall",
+              "target_path",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "fperm_sudoers_nonroot",
+      "title": "chown on /etc/sudoers by uid=501 (non-root) \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_file_permission_tamper"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_file_permission_tamper",
+            "severity": "CRITICAL",
+            "probe_name": "file_permission_tamper",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1222",
+              "T1222.002"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion",
+              "Credential Access"
+            ],
+            "tags": [
+              "correlation_group:defense_evasion"
+            ],
+            "data_keys": [
+              "comm",
+              "dest_uid",
+              "euid",
+              "exe",
+              "host",
+              "pid",
+              "reason",
+              "syscall",
+              "target_path",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "fperm_sshd_config_chmod",
+      "title": "chmod on /etc/ssh/sshd_config by root \u2192 HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_file_permission_tamper"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_file_permission_tamper",
+            "severity": "HIGH",
+            "probe_name": "file_permission_tamper",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1222",
+              "T1222.002"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion",
+              "Credential Access"
+            ],
+            "tags": [
+              "correlation_group:defense_evasion"
+            ],
+            "data_keys": [
+              "comm",
+              "dest_uid",
+              "euid",
+              "exe",
+              "host",
+              "pid",
+              "reason",
+              "syscall",
+              "target_path",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "fperm_evade_rename",
+      "title": "rename /etc/shadow.evil \u2192 /etc/shadow \u2014 no chmod/chown syscall",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "fperm_evade_package_manager",
+      "title": "apt-get installs package, modifies /etc/group \u2014 legitimate FP",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_file_permission_tamper"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_file_permission_tamper",
+            "severity": "HIGH",
+            "probe_name": "file_permission_tamper",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1222",
+              "T1222.002"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion",
+              "Credential Access"
+            ],
+            "tags": [
+              "correlation_group:defense_evasion"
+            ],
+            "data_keys": [
+              "comm",
+              "dest_uid",
+              "euid",
+              "exe",
+              "host",
+              "pid",
+              "reason",
+              "syscall",
+              "target_path",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "fperm_evade_nonsensitive",
+      "title": "chmod on /etc/motd \u2014 not in SENSITIVE_FILES list \u2192 evades",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "fperm_benign_tmp",
+      "title": "chmod on /tmp/myfile.txt \u2014 not sensitive, no fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "fperm_benign_home",
+      "title": "chown on /home/user/project \u2014 not sensitive, no fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

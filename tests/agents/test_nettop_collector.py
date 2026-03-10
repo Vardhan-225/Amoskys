@@ -16,8 +16,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity
-from amoskys.agents.flow.nettop_collector import MacOSNettopCollector, NettopRecord
-from amoskys.agents.flow.probes import (
+from amoskys.agents.shared.network.nettop_collector import (
+    MacOSNettopCollector,
+    NettopRecord,
+)
+from amoskys.agents.shared.network.probes import (
     C2BeaconFlowProbe,
     DataExfilVolumeSpikeProbe,
     FlowEvent,
@@ -179,7 +182,7 @@ class TestNettopParsing:
 class TestNettopCollection:
     """Test subprocess execution and error handling."""
 
-    @patch("amoskys.agents.flow.nettop_collector.subprocess.run")
+    @patch("amoskys.agents.shared.network.nettop_collector.subprocess.run")
     def test_collect_success(self, mock_run):
         """Successful nettop run returns parsed records."""
         mock_run.return_value = MagicMock(
@@ -194,7 +197,7 @@ class TestNettopCollection:
         assert len(records) == 5
         mock_run.assert_called_once()
 
-    @patch("amoskys.agents.flow.nettop_collector.subprocess.run")
+    @patch("amoskys.agents.shared.network.nettop_collector.subprocess.run")
     def test_collect_timeout(self, mock_run):
         """Timeout returns empty dict and increments error count."""
         import subprocess
@@ -207,7 +210,7 @@ class TestNettopCollection:
         assert records == {}
         assert collector._collection_errors == 1
 
-    @patch("amoskys.agents.flow.nettop_collector.subprocess.run")
+    @patch("amoskys.agents.shared.network.nettop_collector.subprocess.run")
     def test_collect_not_found(self, mock_run):
         """FileNotFoundError returns empty dict."""
         mock_run.side_effect = FileNotFoundError("nettop")
@@ -218,7 +221,7 @@ class TestNettopCollection:
         assert records == {}
         assert collector._collection_errors == 1
 
-    @patch("amoskys.agents.flow.nettop_collector.subprocess.run")
+    @patch("amoskys.agents.shared.network.nettop_collector.subprocess.run")
     def test_collect_nonzero_exit_no_output(self, mock_run):
         """Non-zero exit with no stdout returns empty dict."""
         mock_run.return_value = MagicMock(
@@ -232,7 +235,7 @@ class TestNettopCollection:
 
         assert records == {}
 
-    @patch("amoskys.agents.flow.nettop_collector.subprocess.run")
+    @patch("amoskys.agents.shared.network.nettop_collector.subprocess.run")
     def test_collect_nonzero_exit_with_output(self, mock_run):
         """Non-zero exit but with stdout still parses output."""
         mock_run.return_value = MagicMock(

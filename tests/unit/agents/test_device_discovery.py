@@ -24,7 +24,7 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
-from amoskys.agents.device_discovery.device_discovery import DeviceDiscovery
+from amoskys.agents.shared.device_discovery.agent import DeviceDiscovery
 
 # ---------------------------------------------------------------------------
 # DeviceDiscovery Tests

@@ -1,0 +1,282 @@
+{
+  "name": "account_lockout_storm",
+  "title": "Account Lockout Storm \u2014 Mass Brute Force (T1110)",
+  "probe_id": "account_lockout_storm",
+  "agent": "auth",
+  "mitre_techniques": [
+    "T1110"
+  ],
+  "mitre_tactics": [
+    "Credential Access"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "lockout_storm_5_accounts",
+      "title": "5 accounts from same IP \u2192 2 events (lockout_storm + lockout_storm_source)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 5,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "account_lockout_storm",
+          "lockout_storm_source"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "account_lockout_storm",
+            "severity": "HIGH",
+            "probe_name": "account_lockout_storm",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110",
+              "T1499"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "locked_account_count",
+              "locked_accounts",
+              "reason"
+            ]
+          },
+          {
+            "event_type": "lockout_storm_source",
+            "severity": "HIGH",
+            "probe_name": "account_lockout_storm",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "accounts",
+              "lockout_count",
+              "source_ip"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "lockout_single_ip_3_accounts",
+      "title": "Single IP locks 3 accounts \u2192 HIGH (lockout_storm_source)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 3,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "lockout_storm_source"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "lockout_storm_source",
+            "severity": "HIGH",
+            "probe_name": "account_lockout_storm",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "accounts",
+              "lockout_count",
+              "source_ip"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "lockout_storm_and_source",
+      "title": "8 accounts locked + single-IP storm \u2192 2 events (storm + source)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 8,
+      "expect": {
+        "count": 2,
+        "event_types": [
+          "account_lockout_storm",
+          "lockout_storm_source"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 2,
+        "events": [
+          {
+            "event_type": "account_lockout_storm",
+            "severity": "HIGH",
+            "probe_name": "account_lockout_storm",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110",
+              "T1499"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "locked_account_count",
+              "locked_accounts",
+              "reason"
+            ]
+          },
+          {
+            "event_type": "lockout_storm_source",
+            "severity": "HIGH",
+            "probe_name": "account_lockout_storm",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "accounts",
+              "lockout_count",
+              "source_ip"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "lockout_evade_no_lockout_policy",
+      "title": "No account lockout policy configured \u2014 lockouts never occur",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 20,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "lockout_evade_4_accounts",
+      "title": "4 accounts locked from one IP \u2014 just under system threshold",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 4,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "lockout_evade_distributed_ips",
+      "title": "5 accounts locked from 5 different IPs (1 per IP) \u2014 per-IP threshold evades",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 5,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "account_lockout_storm"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "account_lockout_storm",
+            "severity": "HIGH",
+            "probe_name": "account_lockout_storm",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1110",
+              "T1499"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "locked_account_count",
+              "locked_accounts",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "lockout_benign_few",
+      "title": "2 accounts locked \u2014 below threshold, no fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "lockout_benign_ssh_failures",
+      "title": "SSH login failures (not ACCOUNT_LOCKED) \u2014 probe ignores",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 10,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

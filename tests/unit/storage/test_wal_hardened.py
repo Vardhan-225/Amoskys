@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
 from amoskys.proto import messaging_schema_pb2 as pb
+from amoskys.storage.wal_sqlite import SQLiteWAL
 
 # ---------------------------------------------------------------------------
 # Helpers

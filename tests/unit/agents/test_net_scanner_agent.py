@@ -22,14 +22,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
-from amoskys.agents.net_scanner.agent_types import (
+from amoskys.agents.shared.net_scanner.agent_types import (
     STANDARD_SERVICE_PORTS,
     HostScanResult,
     PortInfo,
     ScanDiff,
     ScanResult,
 )
-from amoskys.agents.net_scanner.probes import (
+from amoskys.agents.shared.net_scanner.probes import (
     NetworkTopologyChangeProbe,
     NewServiceDetectionProbe,
     OpenPortChangeProbe,

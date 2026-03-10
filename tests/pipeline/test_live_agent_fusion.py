@@ -66,7 +66,7 @@ def lab_env(tmp_path):
         [
             sys.executable,
             "-m",
-            "amoskys.agents.protocol_collectors",
+            "amoskys.agents.shared.protocol_collectors",
             "--interval",
             "5",
             "--once",

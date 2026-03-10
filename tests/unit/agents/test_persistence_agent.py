@@ -24,11 +24,11 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
-from amoskys.agents.persistence.persistence_agent import (
+from amoskys.agents.shared.persistence.agent import (
     PersistenceCollector,
     PersistenceGuard,
 )
-from amoskys.agents.persistence.probes import PersistenceEntry
+from amoskys.agents.shared.persistence.probes import PersistenceEntry
 
 # =============================================================================
 # Fixtures
@@ -38,9 +38,9 @@ from amoskys.agents.persistence.probes import PersistenceEntry
 @pytest.fixture
 def persistence_agent(tmp_path):
     """Create PersistenceGuard with mocked dependencies."""
-    with patch("amoskys.agents.persistence.persistence_agent.LocalQueueAdapter"):
+    with patch("amoskys.agents.shared.persistence.agent.LocalQueueAdapter"):
         with patch(
-            "amoskys.agents.persistence.persistence_agent.create_persistence_probes",
+            "amoskys.agents.shared.persistence.agent.create_persistence_probes",
             return_value=[],
         ):
             agent = PersistenceGuard(
@@ -501,7 +501,7 @@ __all__ = [
 # ===========================================================================
 
 
-from amoskys.agents.persistence.probes import (
+from amoskys.agents.shared.persistence.probes import (
     PersistenceBaselineEngine,
     PersistenceChange,
     PersistenceChangeType,
@@ -846,9 +846,9 @@ class TestPersistenceGuardCollectExtended:
 
     def test_collect_create_mode(self, tmp_path):
         """Test collect_data in create mode creates baseline and returns empty."""
-        with patch("amoskys.agents.persistence.persistence_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.persistence.agent.LocalQueueAdapter"):
             with patch(
-                "amoskys.agents.persistence.persistence_agent.create_persistence_probes",
+                "amoskys.agents.shared.persistence.agent.create_persistence_probes",
                 return_value=[],
             ):
                 agent = PersistenceGuard(
@@ -865,9 +865,9 @@ class TestPersistenceGuardCollectExtended:
 
     def test_collect_auto_create_mode(self, tmp_path):
         """Test collect_data in auto_create mode creates baseline then switches to monitor."""
-        with patch("amoskys.agents.persistence.persistence_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.persistence.agent.LocalQueueAdapter"):
             with patch(
-                "amoskys.agents.persistence.persistence_agent.create_persistence_probes",
+                "amoskys.agents.shared.persistence.agent.create_persistence_probes",
                 return_value=[],
             ):
                 agent = PersistenceGuard(
@@ -1093,9 +1093,9 @@ class TestPersistenceGuardInitModes:
 
     def test_monitor_mode_no_baseline_switches_to_auto_create(self, tmp_path):
         """Test monitor mode with no baseline file switches to auto_create."""
-        with patch("amoskys.agents.persistence.persistence_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.persistence.agent.LocalQueueAdapter"):
             with patch(
-                "amoskys.agents.persistence.persistence_agent.create_persistence_probes",
+                "amoskys.agents.shared.persistence.agent.create_persistence_probes",
                 return_value=[],
             ):
                 agent = PersistenceGuard(
@@ -1115,9 +1115,9 @@ class TestPersistenceGuardInitModes:
         with open(baseline_path, "w") as f:
             json.dump({}, f)
 
-        with patch("amoskys.agents.persistence.persistence_agent.LocalQueueAdapter"):
+        with patch("amoskys.agents.shared.persistence.agent.LocalQueueAdapter"):
             with patch(
-                "amoskys.agents.persistence.persistence_agent.create_persistence_probes",
+                "amoskys.agents.shared.persistence.agent.create_persistence_probes",
                 return_value=[],
             ):
                 agent = PersistenceGuard(

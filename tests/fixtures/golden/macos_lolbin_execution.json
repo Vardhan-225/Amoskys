@@ -1,0 +1,258 @@
+{
+  "name": "macos_lolbin_execution",
+  "title": "macOS LOLBin Execution: curl/osascript/security Abuse (T1218)",
+  "probe_id": "macos_lolbin",
+  "agent": "macos_process",
+  "mitre_techniques": [
+    "T1059.002",
+    "T1218"
+  ],
+  "mitre_tactics": [
+    "defense_evasion",
+    "execution"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "macos_lolbin_curl_download",
+      "title": "curl downloads a file \u2014 LOLBin file_download",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "lolbin_execution"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "lolbin_execution",
+            "severity": "MEDIUM",
+            "probe_name": "macos_lolbin",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1218",
+              "T1059.002"
+            ],
+            "mitre_tactics": [
+              "defense_evasion",
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "category",
+              "cmdline",
+              "exe",
+              "name",
+              "parent_name",
+              "pid",
+              "ppid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_lolbin_osascript",
+      "title": "osascript runs AppleScript \u2014 LOLBin applescript_execution",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "lolbin_execution"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "lolbin_execution",
+            "severity": "MEDIUM",
+            "probe_name": "macos_lolbin",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1218",
+              "T1059.002"
+            ],
+            "mitre_tactics": [
+              "defense_evasion",
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "category",
+              "cmdline",
+              "exe",
+              "name",
+              "parent_name",
+              "pid",
+              "ppid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_lolbin_security_keychain",
+      "title": "security CLI accesses Keychain \u2014 LOLBin keychain_access HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "lolbin_execution"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "lolbin_execution",
+            "severity": "HIGH",
+            "probe_name": "macos_lolbin",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1218",
+              "T1059.002"
+            ],
+            "mitre_tactics": [
+              "defense_evasion",
+              "execution"
+            ],
+            "tags": [],
+            "data_keys": [
+              "category",
+              "cmdline",
+              "exe",
+              "name",
+              "parent_name",
+              "pid",
+              "ppid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_lolbin_benign_parent_terminal",
+      "title": "curl from Terminal \u2014 benign parent, suppressed",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_lolbin_renamed_binary",
+      "title": "curl renamed to 'update' \u2014 name not in LOLBin list",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_lolbin_launchd_parent",
+      "title": "launchctl from launchd \u2014 benign parent, suppressed",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_lolbin_benign_tar_extract",
+      "title": "tar from bash \u2014 normal archive extraction, benign parent",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_lolbin_benign_ls",
+      "title": "ls -- not a LOLBin, no alert",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

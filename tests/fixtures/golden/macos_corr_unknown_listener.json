@@ -1,0 +1,212 @@
+{
+  "name": "macos_corr_unknown_listener",
+  "title": "Unknown process listening on suspicious port",
+  "probe_id": "macos_corr_unknown_listener",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1571"
+  ],
+  "mitre_tactics": [
+    "command-and-control"
+  ],
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "corr_ul_port_4444",
+      "title": "Unknown process listening on port 4444",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_unknown_listener"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_unknown_listener",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_unknown_listener",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1571"
+            ],
+            "mitre_tactics": [
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "listener",
+              "known_c2_port"
+            ],
+            "data_keys": [
+              "correlation",
+              "local_port",
+              "pid",
+              "process_name",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ul_port_9090",
+      "title": "Unknown process listening on port 9090",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_unknown_listener"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_unknown_listener",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_unknown_listener",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1571"
+            ],
+            "mitre_tactics": [
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "listener",
+              "known_c2_port"
+            ],
+            "data_keys": [
+              "correlation",
+              "local_port",
+              "pid",
+              "process_name",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ul_privileged_port",
+      "title": "Unknown process on privileged port 80",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_unknown_listener"
+        ],
+        "severity": "MEDIUM",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_unknown_listener",
+            "severity": "MEDIUM",
+            "probe_name": "macos_corr_unknown_listener",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1571"
+            ],
+            "mitre_tactics": [
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "listener",
+              "unknown_privileged_listener"
+            ],
+            "data_keys": [
+              "correlation",
+              "local_port",
+              "pid",
+              "process_name",
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_ul_nginx_80",
+      "title": "nginx listening on port 80 (known-good)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ul_established_state",
+      "title": "Connection on port 4444 but ESTABLISHED (not LISTEN)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_ul_high_port",
+      "title": "Unknown process on port 12345 (non-suspicious, non-privileged)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

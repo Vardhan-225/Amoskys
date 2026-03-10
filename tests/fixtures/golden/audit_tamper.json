@@ -1,0 +1,285 @@
+{
+  "name": "audit_tamper",
+  "title": "Audit Subsystem Tampering \u2014 Impair Defenses (T1562)",
+  "probe_id": "audit_tamper",
+  "agent": "kernel_audit",
+  "mitre_techniques": [
+    "T1562",
+    "T1562.001"
+  ],
+  "mitre_tactics": [
+    "Defense Evasion"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "audit_tamper_openat",
+      "title": "Non-audit process opens /var/log/audit/audit.log \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_audit_tamper"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_audit_tamper",
+            "severity": "CRITICAL",
+            "probe_name": "audit_tamper",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1562.001",
+              "T1070.002"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:defense_evasion"
+            ],
+            "data_keys": [
+              "comm",
+              "exe",
+              "host",
+              "pid",
+              "reason",
+              "syscall",
+              "target_path",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "audit_tamper_unlink",
+      "title": "unlink /etc/audit/audit.rules \u2014 deleting audit rules \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_audit_tamper"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_audit_tamper",
+            "severity": "CRITICAL",
+            "probe_name": "audit_tamper",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1562.001",
+              "T1070.002"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:defense_evasion"
+            ],
+            "data_keys": [
+              "comm",
+              "exe",
+              "host",
+              "pid",
+              "reason",
+              "syscall",
+              "target_path",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "audit_tamper_auditctl_nonroot",
+      "title": "Non-root executes auditctl \u2192 HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_audit_tool_exec"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_audit_tool_exec",
+            "severity": "HIGH",
+            "probe_name": "audit_tamper",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1562.001",
+              "T1070.002"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:defense_evasion"
+            ],
+            "data_keys": [
+              "comm",
+              "exe",
+              "host",
+              "pid",
+              "reason",
+              "syscall",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "audit_evade_systemctl",
+      "title": "systemctl stop auditd \u2014 disables audit via systemd, no audit file access",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "audit_evade_logrotate_fp",
+      "title": "logrotate rotating audit.log \u2014 legitimate FP",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "kernel_audit_tamper"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "kernel_audit_tamper",
+            "severity": "CRITICAL",
+            "probe_name": "audit_tamper",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1562.001",
+              "T1070.002"
+            ],
+            "mitre_tactics": [
+              "Defense Evasion"
+            ],
+            "tags": [
+              "correlation_group:defense_evasion"
+            ],
+            "data_keys": [
+              "comm",
+              "exe",
+              "host",
+              "pid",
+              "reason",
+              "syscall",
+              "target_path",
+              "uid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "audit_evade_redirect_null",
+      "title": "redirect audit output to /dev/null via auditd config \u2014 no file access",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "audit_benign_syslog",
+      "title": "openat on /var/log/syslog \u2014 not an audit file, no fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "audit_benign_execve_other",
+      "title": "execve of /usr/bin/ls \u2014 not an audit binary, no fire",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

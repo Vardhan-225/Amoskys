@@ -13,7 +13,9 @@ from unittest.mock import Mock, patch
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-from amoskys.agents.protocols.universal_collector import UniversalTelemetryCollector
+from amoskys.agents.shared.protocols.universal_collector import (
+    UniversalTelemetryCollector,
+)
 from amoskys.edge import EdgeOptimizer
 from amoskys.intelligence.fusion.threat_correlator import (
     DeviceType,

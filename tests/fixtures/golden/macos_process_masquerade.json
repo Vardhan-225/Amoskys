@@ -1,0 +1,254 @@
+{
+  "name": "macos_process_masquerade",
+  "title": "macOS Process Masquerade: Name vs Path Mismatch Detection (T1036)",
+  "probe_id": "macos_process_masquerade",
+  "agent": "macos_process",
+  "mitre_techniques": [
+    "T1036",
+    "T1036.005"
+  ],
+  "mitre_tactics": [
+    "defense_evasion"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "macos_masq_sshd_from_tmp",
+      "title": "sshd running from /tmp/sshd \u2014 CRITICAL masquerade",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "process_masquerade"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "process_masquerade",
+            "severity": "CRITICAL",
+            "probe_name": "macos_process_masquerade",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1036",
+              "T1036.005"
+            ],
+            "mitre_tactics": [
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "exe",
+              "expected_paths",
+              "from_cmdline",
+              "name",
+              "parent_name",
+              "pid",
+              "process_guid",
+              "resolved_path",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_masq_curl_from_downloads",
+      "title": "curl running from ~/Downloads \u2014 masquerade",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "process_masquerade"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "process_masquerade",
+            "severity": "CRITICAL",
+            "probe_name": "macos_process_masquerade",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1036",
+              "T1036.005"
+            ],
+            "mitre_tactics": [
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "exe",
+              "expected_paths",
+              "from_cmdline",
+              "name",
+              "parent_name",
+              "pid",
+              "process_guid",
+              "resolved_path",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_masq_exe_empty_cmdline_fallback",
+      "title": "sshd with empty exe, cmdline reveals /tmp path \u2014 from_cmdline",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "process_masquerade"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "process_masquerade",
+            "severity": "CRITICAL",
+            "probe_name": "macos_process_masquerade",
+            "confidence": 0.7,
+            "mitre_techniques": [
+              "T1036",
+              "T1036.005"
+            ],
+            "mitre_tactics": [
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "exe",
+              "expected_paths",
+              "from_cmdline",
+              "name",
+              "parent_name",
+              "pid",
+              "process_guid",
+              "resolved_path",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_masq_unknown_process",
+      "title": "Unknown process name \u2014 not in expected paths map",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_masq_no_exe_no_cmdline",
+      "title": "Empty exe and empty cmdline \u2014 can't verify",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_masq_renamed_not_in_map",
+      "title": "Renamed sshd to 'daemon' \u2014 name not in map",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_masq_legitimate_sshd",
+      "title": "sshd from /usr/sbin/sshd \u2014 legitimate, no alert",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_masq_python_framework",
+      "title": "python3 from framework path \u2014 legitimate",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

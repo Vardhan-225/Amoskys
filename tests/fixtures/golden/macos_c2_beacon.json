@@ -1,0 +1,195 @@
+{
+  "name": "macos_c2_beacon",
+  "title": "macOS C2 Beacon: Periodic Connection Detection (T1071)",
+  "probe_id": "macos_c2_beacon",
+  "agent": "macos_network",
+  "mitre_techniques": [
+    "T1071",
+    "T1071.001"
+  ],
+  "mitre_tactics": [
+    "command_and_control"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "macos_c2_scan1",
+      "title": "C2 beacon scan 1 \u2014 unknown process to external IP",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_c2_scan2",
+      "title": "C2 beacon scan 2 \u2014 same process, same IP",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_c2_scan3_fires",
+      "title": "C2 beacon scan 3 \u2014 threshold reached, HIGH severity",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "c2_beacon_suspect"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "c2_beacon_suspect",
+            "severity": "HIGH",
+            "probe_name": "macos_c2_beacon",
+            "confidence": 0.6,
+            "mitre_techniques": [
+              "T1071",
+              "T1071.001"
+            ],
+            "mitre_tactics": [
+              "command_and_control"
+            ],
+            "tags": [],
+            "data_keys": [
+              "first_seen",
+              "hit_count",
+              "pid",
+              "process_name",
+              "remote_ip",
+              "remote_port"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "macos_c2_whitelisted_process",
+      "title": "Slack connecting to external IP \u2014 whitelisted",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_c2_private_ip",
+      "title": "Connection to private IP \u2014 not external",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_c2_listen_not_established",
+      "title": "LISTEN state \u2014 not ESTABLISHED",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_c2_no_connections",
+      "title": "No connections \u2014 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "macos_c2_all_whitelisted",
+      "title": "All connections are whitelisted apps \u2014 0 events",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

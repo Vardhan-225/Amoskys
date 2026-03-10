@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
 from amoskys.proto import messaging_schema_pb2 as pb
+from amoskys.storage.wal_sqlite import SQLiteWAL
 
 
 @pytest.fixture
@@ -403,7 +403,7 @@ class TestWALDiskFullHandling:
             wal.append(env)
 
         # Mock os.path.getsize to simulate disk full
-        with patch("amoskys.agents.flowagent.wal_sqlite.os.path.getsize") as mock_size:
+        with patch("amoskys.storage.wal_sqlite.os.path.getsize") as mock_size:
             mock_size.side_effect = OSError("No space left on device")
 
             # Try to append - should handle gracefully

@@ -1,0 +1,248 @@
+{
+  "name": "macos_corr_process_network",
+  "title": "LOLBin process with outbound external connection",
+  "probe_id": "macos_corr_process_network",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1059",
+    "T1071"
+  ],
+  "mitre_tactics": [
+    "command-and-control",
+    "execution"
+  ],
+  "total": 7,
+  "passed": 7,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "corr_pn_curl_external",
+      "title": "curl with external connection",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_lolbin_network"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_lolbin_network",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_process_network",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1059",
+              "T1071"
+            ],
+            "mitre_tactics": [
+              "execution",
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "lolbin",
+              "network"
+            ],
+            "data_keys": [
+              "connection_count",
+              "correlation",
+              "exe",
+              "exe_basename",
+              "parent_name",
+              "pid",
+              "process_name",
+              "remote_ips"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_pn_nc_reverse_shell",
+      "title": "nc reverse shell to external IP",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_lolbin_network"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_lolbin_network",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_process_network",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1059",
+              "T1071"
+            ],
+            "mitre_tactics": [
+              "execution",
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "lolbin",
+              "network"
+            ],
+            "data_keys": [
+              "connection_count",
+              "correlation",
+              "exe",
+              "exe_basename",
+              "parent_name",
+              "pid",
+              "process_name",
+              "remote_ips"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_pn_renamed_lolbin",
+      "title": "Renamed LOLBin (exe /usr/bin/curl, name 'updater')",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_lolbin_network"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_lolbin_network",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_process_network",
+            "confidence": 0.9,
+            "mitre_techniques": [
+              "T1059",
+              "T1071"
+            ],
+            "mitre_tactics": [
+              "execution",
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "lolbin",
+              "network"
+            ],
+            "data_keys": [
+              "connection_count",
+              "correlation",
+              "exe",
+              "exe_basename",
+              "parent_name",
+              "pid",
+              "process_name",
+              "remote_ips"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_pn_curl_no_network",
+      "title": "curl running but no outbound connections",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_pn_curl_internal_only",
+      "title": "curl connecting to internal host only",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_pn_safari_external",
+      "title": "Safari with external connection (not a LOLBin)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_pn_lolbin_no_exe",
+      "title": "LOLBin process with empty exe path (cross-user)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "processes",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

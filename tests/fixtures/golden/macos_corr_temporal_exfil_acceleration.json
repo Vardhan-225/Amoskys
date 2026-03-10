@@ -1,0 +1,213 @@
+{
+  "name": "macos_corr_temporal_exfil_acceleration",
+  "title": "Temporal: exfiltration rate spike and acceleration",
+  "probe_id": "macos_corr_temporal_exfil_acceleration",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1048"
+  ],
+  "mitre_tactics": [
+    "exfiltration"
+  ],
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "tea_rate_spike_1mbps",
+      "title": "curl sustaining 1MB/sec outbound for 60 seconds",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_exfil_rate_spike"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_exfil_rate_spike",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_temporal_exfil_acceleration",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "exfiltration"
+            ],
+            "tags": [
+              "temporal",
+              "exfiltration",
+              "rate-spike"
+            ],
+            "data_keys": [
+              "correlation",
+              "process_name",
+              "rate_bytes_per_sec",
+              "rate_threshold",
+              "total_bytes"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tea_acceleration_doubling",
+      "title": "Exfil rate accelerating: 100KB/s \u2192 500KB/s \u2192 2MB/s",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_exfil_acceleration"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_exfil_acceleration",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_temporal_exfil_acceleration",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "exfiltration"
+            ],
+            "tags": [
+              "temporal",
+              "exfiltration",
+              "acceleration"
+            ],
+            "data_keys": [
+              "accel_threshold",
+              "acceleration",
+              "correlation",
+              "current_rate",
+              "process_name",
+              "total_bytes"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tea_nc_sustained_exfil",
+      "title": "nc piping data outbound at 600KB/sec",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_exfil_rate_spike"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_exfil_rate_spike",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_temporal_exfil_acceleration",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1048"
+            ],
+            "mitre_tactics": [
+              "exfiltration"
+            ],
+            "tags": [
+              "temporal",
+              "exfiltration",
+              "rate-spike"
+            ],
+            "data_keys": [
+              "correlation",
+              "process_name",
+              "rate_bytes_per_sec",
+              "rate_threshold",
+              "total_bytes"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tea_safari_browsing_benign",
+      "title": "Safari uploading at 2MB/sec (whitelisted browser)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tea_low_rate_benign",
+      "title": "curl at 10KB/sec (normal API calls)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tea_trickle_evasion",
+      "title": "Exfil at 400KB/sec (just below 500KB threshold)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "bandwidth",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

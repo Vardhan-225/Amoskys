@@ -17,9 +17,9 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
-from amoskys.agents.flowagent.wal_sqlite import SQLiteWAL
 from amoskys.proto import messaging_schema_pb2 as msg_pb
 from amoskys.proto import universal_telemetry_pb2 as pb
+from amoskys.storage.wal_sqlite import SQLiteWAL
 
 
 @pytest.fixture

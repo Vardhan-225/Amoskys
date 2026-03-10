@@ -1,0 +1,170 @@
+{
+  "name": "spine_process_implant",
+  "title": "Kill-Chain Phase 4: C2 Implant from /tmp (Execution / Persistence)",
+  "probe_id": "binary_from_temp",
+  "agent": "proc",
+  "mitre_techniques": [
+    "T1059",
+    "T1204"
+  ],
+  "mitre_tactics": [
+    "Execution",
+    "Persistence"
+  ],
+  "total": 5,
+  "passed": 5,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "spine_c2_implant_from_tmp",
+      "title": "/tmp/c2_beacon running as jsmith \u2192 execution_from_temp HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "execution_from_temp"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "execution_from_temp",
+            "severity": "HIGH",
+            "probe_name": "binary_from_temp",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1204",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "exe",
+              "matched_path",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "spine_implant_macos_tempdir",
+      "title": "/private/var/folders/.../T/malware (macOS temp) \u2192 execution_from_temp HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "execution_from_temp"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "execution_from_temp",
+            "severity": "HIGH",
+            "probe_name": "binary_from_temp",
+            "confidence": 0.85,
+            "mitre_techniques": [
+              "T1204",
+              "T1059"
+            ],
+            "mitre_tactics": [
+              "execution"
+            ],
+            "tags": [
+              "correlation_group:execution"
+            ],
+            "data_keys": [
+              "cmdline",
+              "exe",
+              "matched_path",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "spine_implant_moved_to_usr_local_bin",
+      "title": "Implant copied to /usr/local/bin/updater \u2014 not a temp dir \u2192 EVADES",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spine_implant_chrome_in_applications",
+      "title": "Chrome renderer in /Applications \u2014 not a temp dir \u2192 no alert",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "spine_degraded_implant_no_exe",
+      "title": "psutil process with exe=None \u2014 probe skips gracefully, no false positive",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

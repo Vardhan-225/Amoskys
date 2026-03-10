@@ -1,0 +1,348 @@
+{
+  "name": "macos_corr_download_execute",
+  "title": "Downloaded file executing with outbound connections",
+  "probe_id": "macos_corr_download_execute",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1059",
+    "T1071",
+    "T1204"
+  ],
+  "mitre_tactics": [
+    "command-and-control",
+    "execution",
+    "initial-access"
+  ],
+  "total": 12,
+  "passed": 12,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "corr_de_baseline",
+      "title": "Baseline: empty Downloads",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_de_tmp_execute_connect",
+      "title": "New file in /tmp executing with outbound connection",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_download_execute_chain"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_download_execute_chain",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_download_execute",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1204",
+              "T1059",
+              "T1071"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution",
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "kill-chain",
+              "download-execute"
+            ],
+            "data_keys": [
+              "chain_steps",
+              "correlation",
+              "external_connections",
+              "file_path",
+              "pid",
+              "process_name",
+              "remote_ips"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_de_chain_break",
+      "title": "Chain break",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_de_baseline2",
+      "title": "Baseline: empty",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_de_privatetmp_execute_connect",
+      "title": "New file in /private/tmp executing with outbound C2",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_download_execute_chain"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_download_execute_chain",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_download_execute",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1204",
+              "T1059",
+              "T1071"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution",
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "kill-chain",
+              "download-execute"
+            ],
+            "data_keys": [
+              "chain_steps",
+              "correlation",
+              "external_connections",
+              "file_path",
+              "pid",
+              "process_name",
+              "remote_ips"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_de_chain_break2",
+      "title": "Chain break 2",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_de_baseline3",
+      "title": "Baseline: empty",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_de_vartmp_dropper",
+      "title": "Dropper in /var/tmp with multi-C2 connections",
+      "category": "positive",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "corr_download_execute_chain"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "corr_download_execute_chain",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_download_execute",
+            "confidence": 0.95,
+            "mitre_techniques": [
+              "T1204",
+              "T1059",
+              "T1071"
+            ],
+            "mitre_tactics": [
+              "initial-access",
+              "execution",
+              "command-and-control"
+            ],
+            "tags": [
+              "correlation",
+              "kill-chain",
+              "download-execute"
+            ],
+            "data_keys": [
+              "chain_steps",
+              "correlation",
+              "external_connections",
+              "file_path",
+              "pid",
+              "process_name",
+              "remote_ips"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "corr_de_chain_break3",
+      "title": "Chain break 3",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "files",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_de_baseline4",
+      "title": "Baseline: empty",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_de_dropped_not_running",
+      "title": "New file in /tmp but not executing",
+      "category": "benign",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "corr_de_outside_watched_dir",
+      "title": "File in /opt/ \u2014 outside watched directories",
+      "category": "evasion",
+      "stateful": true,
+      "shared_data_key": "files",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

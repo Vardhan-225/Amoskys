@@ -1,0 +1,215 @@
+{
+  "name": "macos_corr_temporal_beaconing",
+  "title": "Temporal: periodic C2 beaconing via connection timing",
+  "probe_id": "macos_corr_temporal_beaconing",
+  "agent": "macos_correlation",
+  "mitre_techniques": [
+    "T1071"
+  ],
+  "mitre_tactics": [
+    "command-and-control"
+  ],
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "tb_fast_beacon_60s",
+      "title": "C2 beacon every 60 seconds (perfect periodicity)",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_beaconing"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_beaconing",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_temporal_beaconing",
+            "confidence": 0.8999999999999999,
+            "mitre_techniques": [
+              "T1071"
+            ],
+            "mitre_tactics": [
+              "command-and-control"
+            ],
+            "tags": [
+              "temporal",
+              "beaconing",
+              "fast_beacon"
+            ],
+            "data_keys": [
+              "beacon_type",
+              "correlation",
+              "destination",
+              "entry_count",
+              "jitter_score",
+              "period_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tb_slow_beacon_500s",
+      "title": "Slow C2 beacon every ~500 seconds",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_beaconing"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_beaconing",
+            "severity": "HIGH",
+            "probe_name": "macos_corr_temporal_beaconing",
+            "confidence": 0.8999999999999999,
+            "mitre_techniques": [
+              "T1071"
+            ],
+            "mitre_tactics": [
+              "command-and-control"
+            ],
+            "tags": [
+              "temporal",
+              "beaconing",
+              "slow_beacon"
+            ],
+            "data_keys": [
+              "beacon_type",
+              "correlation",
+              "destination",
+              "entry_count",
+              "jitter_score",
+              "period_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tb_jittered_beacon_60s",
+      "title": "Jittered C2 beacon: 60s \u00b1 5s intervals",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "temporal_beaconing"
+        ],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "temporal_beaconing",
+            "severity": "CRITICAL",
+            "probe_name": "macos_corr_temporal_beaconing",
+            "confidence": 0.8869881083062396,
+            "mitre_techniques": [
+              "T1071"
+            ],
+            "mitre_tactics": [
+              "command-and-control"
+            ],
+            "tags": [
+              "temporal",
+              "beaconing",
+              "fast_beacon"
+            ],
+            "data_keys": [
+              "beacon_type",
+              "correlation",
+              "destination",
+              "entry_count",
+              "jitter_score",
+              "period_seconds"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tb_cdn_apple_benign",
+      "title": "Periodic connections to Apple CDN (17.253.x.x)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tb_random_timing_benign",
+      "title": "Connections at random intervals (no periodicity)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "tb_high_jitter_evasion",
+      "title": "C2 with 50% jitter randomization",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "connections",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

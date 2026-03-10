@@ -26,7 +26,7 @@ from unittest.mock import mock_open, patch
 import pytest
 
 from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
-from amoskys.agents.persistence.probes import (
+from amoskys.agents.shared.persistence.probes import (
     AuthPluginProbe,
     BrowserExtensionPersistenceProbe,
     ConfigProfileProbe,

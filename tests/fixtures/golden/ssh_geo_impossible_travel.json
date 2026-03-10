@@ -1,0 +1,243 @@
+{
+  "name": "ssh_geo_impossible_travel",
+  "title": "SSH Geographically Impossible Travel (T1078 / T1134)",
+  "probe_id": "ssh_geo_impossible_travel",
+  "agent": "auth",
+  "mitre_techniques": [
+    "T1078",
+    "T1134"
+  ],
+  "mitre_tactics": [
+    "Credential Access",
+    "Defense Evasion"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "geo_nyc_to_london_30min",
+      "title": "NYC login then London login 30 min later \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "impossible_travel_detected"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "impossible_travel_detected",
+            "severity": "CRITICAL",
+            "probe_name": "ssh_geo_impossible_travel",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "distance_km",
+              "ip1",
+              "ip2",
+              "location1",
+              "location2",
+              "required_speed_kmh",
+              "time_diff_seconds",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "geo_tokyo_to_sydney_20min",
+      "title": "Tokyo login then Sydney login 20 min later \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "impossible_travel_detected"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "impossible_travel_detected",
+            "severity": "CRITICAL",
+            "probe_name": "ssh_geo_impossible_travel",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "distance_km",
+              "ip1",
+              "ip2",
+              "location1",
+              "location2",
+              "required_speed_kmh",
+              "time_diff_seconds",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "geo_paris_to_moscow_15min",
+      "title": "Paris login then Moscow login 15 min later \u2192 CRITICAL",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "impossible_travel_detected"
+        ],
+        "severity": "CRITICAL",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "impossible_travel_detected",
+            "severity": "CRITICAL",
+            "probe_name": "ssh_geo_impossible_travel",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [],
+            "tags": [],
+            "data_keys": [
+              "distance_km",
+              "ip1",
+              "ip2",
+              "location1",
+              "location2",
+              "required_speed_kmh",
+              "time_diff_seconds",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "geo_evade_no_geodata",
+      "title": "Login events without geo coordinates \u2014 probe skips",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "geo_evade_vpn_same_city",
+      "title": "Both logins from same VPN exit city \u2014 no impossible travel",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "geo_evade_slow_enough_travel",
+      "title": "NYC \u2192 London in 6 hours \u2014 below speed threshold",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "geo_benign_same_location",
+      "title": "User logs in from same location twice \u2014 no travel at all",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 2,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "geo_benign_only_one_login",
+      "title": "Only one login event \u2014 impossible travel requires two",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "auth_events",
+      "input_event_count": 1,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

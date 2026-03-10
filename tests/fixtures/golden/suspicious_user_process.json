@@ -1,0 +1,264 @@
+{
+  "name": "suspicious_user_process",
+  "title": "Suspicious User Process \u2014 T1078 (Valid Accounts)",
+  "probe_id": "suspicious_user_process",
+  "agent": "proc",
+  "mitre_techniques": [
+    "T1078"
+  ],
+  "mitre_tactics": [
+    "defense_evasion",
+    "privilege_escalation"
+  ],
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "susp_pos1_sshd_attacker",
+      "title": "sshd running as 'attacker' \u2014 process_wrong_user HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "process_wrong_user"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "process_wrong_user",
+            "severity": "HIGH",
+            "probe_name": "suspicious_user_process",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "privilege_escalation",
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "expected_user",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "susp_pos2_nginx_ubuntu",
+      "title": "nginx running as 'ubuntu' \u2014 process_wrong_user HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "process_wrong_user"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "process_wrong_user",
+            "severity": "HIGH",
+            "probe_name": "suspicious_user_process",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "privilege_escalation",
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "expected_user",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "susp_pos3_dockerd_john",
+      "title": "dockerd running as 'john' \u2014 process_wrong_user HIGH",
+      "category": "positive",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [
+          "process_wrong_user"
+        ],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "process_wrong_user",
+            "severity": "HIGH",
+            "probe_name": "suspicious_user_process",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "privilege_escalation",
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "expected_user",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "susp_eva1_root_masquerade",
+      "title": "Attacker runs sshd as root \u2014 probe skips (root is expected)",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "susp_eva2_bash_not_monitored",
+      "title": "C2 named 'bash' as root \u2014 not in ROOT_ONLY_PROCESSES, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "susp_eva3_kworker",
+      "title": "C2 named 'kworker' \u2014 not monitored, 0 events",
+      "category": "evasion",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": true
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    },
+    {
+      "id": "susp_benign1_nginx_service_account",
+      "title": "nginx as 'nginx' service account \u2014 fires HIGH (FP_RISK)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 1,
+        "event_types": [],
+        "severity": "HIGH",
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 1,
+        "events": [
+          {
+            "event_type": "process_wrong_user",
+            "severity": "HIGH",
+            "probe_name": "suspicious_user_process",
+            "confidence": 0.8,
+            "mitre_techniques": [
+              "T1078"
+            ],
+            "mitre_tactics": [
+              "privilege_escalation",
+              "defense_evasion"
+            ],
+            "tags": [],
+            "data_keys": [
+              "expected_user",
+              "name",
+              "pid",
+              "process_guid",
+              "username"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "susp_benign2_postgres_service",
+      "title": "postgres as 'postgres' service account \u2014 0 events (correctly excluded)",
+      "category": "benign",
+      "stateful": false,
+      "shared_data_key": "kernel_events",
+      "input_event_count": 0,
+      "expect": {
+        "count": 0,
+        "event_types": [],
+        "severity": null,
+        "evades": false
+      },
+      "golden": {
+        "passed": true,
+        "event_count": 0,
+        "events": []
+      }
+    }
+  ]
+}

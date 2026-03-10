@@ -26,8 +26,8 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
-from amoskys.agents.kernel_audit.agent_types import KernelAuditEvent
-from amoskys.agents.kernel_audit.kernel_audit_agent import KernelAuditAgent
+from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+from amoskys.agents.os.linux.kernel_audit.kernel_audit_agent import KernelAuditAgent
 
 # =============================================================================
 # Fixtures
@@ -308,7 +308,9 @@ class TestUnifiedLogCollector:
 
     def test_unified_log_collector_init(self):
         """Verify unified log collector initializes."""
-        from amoskys.agents.kernel_audit.collector import MacOSUnifiedLogCollector
+        from amoskys.agents.os.linux.kernel_audit.collector import (
+            MacOSUnifiedLogCollector,
+        )
 
         collector = MacOSUnifiedLogCollector()
         assert collector is not None
@@ -316,7 +318,9 @@ class TestUnifiedLogCollector:
     @patch("subprocess.run")
     def test_unified_log_collector_parse(self, mock_run):
         """Verify unified log JSON parsing."""
-        from amoskys.agents.kernel_audit.collector import MacOSUnifiedLogCollector
+        from amoskys.agents.os.linux.kernel_audit.collector import (
+            MacOSUnifiedLogCollector,
+        )
 
         # Mock log output
         log_data = [
@@ -348,7 +352,7 @@ class TestAuditdLogCollector:
 
     def test_auditd_collector_init(self, tmp_path):
         """Verify auditd collector initializes."""
-        from amoskys.agents.kernel_audit.collector import AuditdLogCollector
+        from amoskys.agents.os.linux.kernel_audit.collector import AuditdLogCollector
 
         log_file = tmp_path / "audit.log"
         log_file.write_text("")
@@ -357,7 +361,7 @@ class TestAuditdLogCollector:
 
     def test_auditd_collector_parse(self, tmp_path):
         """Verify auditd log parsing."""
-        from amoskys.agents.kernel_audit.collector import AuditdLogCollector
+        from amoskys.agents.os.linux.kernel_audit.collector import AuditdLogCollector
 
         log_file = tmp_path / "audit.log"
         audit_line = (
