@@ -129,7 +129,7 @@ pydantic==2.10.3
 pydantic_core==2.27.1
 Pygments==2.19.2
 PyJWT==2.10.1
-pyparsing==3.2.5
+pyparsing==3.3.2
 pysmi-lextudio==1.4.3
 pysnmp==7.1.21
 pysnmpcrypto==0.0.4
