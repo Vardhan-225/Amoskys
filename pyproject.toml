@@ -83,7 +83,7 @@ dev = [
 
     # Code quality - PIN EXACT VERSIONS for CI/local consistency
     "black==24.10.0",
-    "isort==5.13.2",
+    "isort==8.0.1",
     "flake8==7.1.1",
     "ruff>=0.8.0",
 
