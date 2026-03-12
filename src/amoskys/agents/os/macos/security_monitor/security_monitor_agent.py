@@ -320,9 +320,7 @@ class MacOSSecurityMonitorAgent(MicroProbeAgentMixin, HardenedAgentBase):
                     metric_data=telemetry_pb2.MetricData(
                         metric_name="security_monitor_collection",
                         metric_type="GAUGE",
-                        numeric_value=float(
-                            event.data.get("security_event_count", 0)
-                        ),
+                        numeric_value=float(event.data.get("security_event_count", 0)),
                         unit="events",
                     ),
                 )

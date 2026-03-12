@@ -25,11 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
 from amoskys.agents.common.base import HardenedAgentBase, ValidationResult
-from amoskys.agents.common.probes import (
-    MicroProbeAgentMixin,
-    Severity,
-    TelemetryEvent,
-)
+from amoskys.agents.common.probes import MicroProbeAgentMixin, Severity, TelemetryEvent
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
 from amoskys.agents.os.macos.filesystem.collector import MacOSFileCollector
 from amoskys.agents.os.macos.filesystem.probes import create_filesystem_probes

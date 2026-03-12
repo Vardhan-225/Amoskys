@@ -141,7 +141,7 @@ def main():
 
     # NetworkSentinel — HTTP access log analysis, scan detection
     try:
-        from amoskys.agents.shared.network_sentinel.agent import NetworkSentinelAgent
+        from amoskys.agents.os.macos.network_sentinel.agent import NetworkSentinelAgent
 
         agents.append(("NetworkSentinel", NetworkSentinelAgent, {}))
     except ImportError as e:
@@ -150,14 +150,18 @@ def main():
     # macOS Shield — InfostealerGuard, QuarantineGuard, ProvenanceEngine
     if sys.platform == "darwin":
         try:
-            from amoskys.agents.os.macos.infostealer_guard.agent import MacOSInfostealerGuardAgent
+            from amoskys.agents.os.macos.infostealer_guard.agent import (
+                MacOSInfostealerGuardAgent,
+            )
 
             agents.append(("InfostealerGuard", MacOSInfostealerGuardAgent, {}))
         except ImportError as e:
             logger.warning("Cannot import InfostealerGuard: %s", e)
 
         try:
-            from amoskys.agents.os.macos.quarantine_guard.agent import MacOSQuarantineGuardAgent
+            from amoskys.agents.os.macos.quarantine_guard.agent import (
+                MacOSQuarantineGuardAgent,
+            )
 
             agents.append(("QuarantineGuard", MacOSQuarantineGuardAgent, {}))
         except ImportError as e:
@@ -194,7 +198,10 @@ def main():
                 processor._fusion.persist_incident(inc)
                 logger.info(
                     "  INCIDENT [%s] %s: %s (%d events linked)",
-                    inc.severity.name, inc.rule_name, inc.summary[:80], len(inc.event_ids),
+                    inc.severity.name,
+                    inc.rule_name,
+                    inc.summary[:80],
+                    len(inc.event_ids),
                 )
         # Bridge fusion incidents to dashboard
         processor._bridge_fusion_incidents()

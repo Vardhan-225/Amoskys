@@ -1026,7 +1026,11 @@ class MicroProbeAgentMixin:
                                 "probe": probe.name,
                                 "message": "Probe emission blocked until contract is registered",
                             },
-                            tags=["observability_contract", "quality_invalid", "training_exclude"],
+                            tags=[
+                                "observability_contract",
+                                "quality_invalid",
+                                "training_exclude",
+                            ],
                         )
                     )
                     continue

@@ -146,7 +146,9 @@ class SigmaEngine:
     # Default rules directory relative to this file
     _DEFAULT_RULES_DIR = str(Path(__file__).parent / "rules" / "sigma")
 
-    def __init__(self, rules_dir: Optional[str] = None, *, auto_load: bool = True) -> None:
+    def __init__(
+        self, rules_dir: Optional[str] = None, *, auto_load: bool = True
+    ) -> None:
         self._rules: Dict[str, SigmaRule] = {}  # rule_id → SigmaRule
         self._rules_by_category: Dict[str, List[SigmaRule]] = {}
         self._match_count: Dict[str, int] = {}  # rule_id → match count

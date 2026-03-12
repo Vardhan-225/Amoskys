@@ -43,8 +43,8 @@ from amoskys.agents.os.linux.kernel_audit.probes import (
     PrivEscSyscallProbe,
     PtraceAbuseProbe,
 )
-from amoskys.agents.shared.auth.probes import AuthEvent, SSHPasswordSprayProbe
-from amoskys.agents.shared.process.probes import BinaryFromTempProbe
+from amoskys.agents.os.macos.auth.probes import AuthEvent, SSHPasswordSprayProbe
+from amoskys.agents.os.macos.process.probes import BinaryFromTempProbe
 from amoskys.redteam.harness import AdversarialCase, Scenario
 from amoskys.redteam.scenarios import register
 
@@ -99,8 +99,8 @@ def _ke(syscall: str, eid: str, ts: int = _T0, **kwargs) -> KernelAuditEvent:
 
 # ─── psutil mock helpers (proc probes) ───────────────────────────────────────
 
-_PA = "amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE"
-_PI = "amoskys.agents.shared.process.probes.psutil.process_iter"
+_PA = "amoskys.agents.os.macos.process.probes.PSUTIL_AVAILABLE"
+_PI = "amoskys.agents.os.macos.process.probes.psutil.process_iter"
 
 
 def _mk_proc(**fields) -> MagicMock:

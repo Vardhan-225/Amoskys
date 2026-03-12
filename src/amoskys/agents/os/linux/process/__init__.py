@@ -1,9 +1,9 @@
 """AMOSKYS Linux Process Observatory — Linux process monitoring.
 
 Status: SCAFFOLD — collector not yet implemented.
-Port from: amoskys.agents.os.macos.process
+Roadmap: Port from amoskys.agents.os.macos.process via Igris multi-platform engine.
 
-Data sources:
+Data sources (when implemented):
     - psutil (cross-platform, works immediately)
     - /proc/{pid}/ (Linux-specific: maps, fd, environ, cgroup)
     - auditd execve events (if auditd configured)

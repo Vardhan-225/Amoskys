@@ -243,9 +243,7 @@ class MacOSProvenanceAgent(MicroProbeAgentMixin, HardenedAgentBase):
                     metric_data=telemetry_pb2.MetricData(
                         metric_name="provenance_collection",
                         metric_type="GAUGE",
-                        numeric_value=float(
-                            event.data.get("timeline_events", 0)
-                        ),
+                        numeric_value=float(event.data.get("timeline_events", 0)),
                         unit="events",
                     ),
                 )
@@ -269,9 +267,7 @@ class MacOSProvenanceAgent(MicroProbeAgentMixin, HardenedAgentBase):
                     analyst_notes=str(event.data),
                 )
                 if event.mitre_techniques:
-                    security_event.mitre_techniques.extend(
-                        event.mitre_techniques
-                    )
+                    security_event.mitre_techniques.extend(event.mitre_techniques)
 
                 source_ip = event.data.get("source_ip")
                 if source_ip:
@@ -330,9 +326,7 @@ def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    parser = argparse.ArgumentParser(
-        description="AMOSKYS macOS Provenance Agent"
-    )
+    parser = argparse.ArgumentParser(description="AMOSKYS macOS Provenance Agent")
     parser.add_argument("--interval", type=float, default=10.0)
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()

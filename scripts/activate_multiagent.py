@@ -22,11 +22,13 @@ sys.path.insert(0, str(project_root / "src"))
 
 import grpc
 
-from amoskys.agents.shared.process.agent import ProcAgent
-from amoskys.agents.shared.snmp.enhanced_collector import (
-    EnhancedSNMPCollector,
-    SNMPMetricsConfig,
-)
+from amoskys.agents.os.macos.process.agent import ProcAgent
+
+# TODO: SNMP agent not yet ported to macOS Observatory — Igris multi-platform (future)
+# from amoskys.agents.os.macos.snmp.enhanced_collector import (
+#     EnhancedSNMPCollector,
+#     SNMPMetricsConfig,
+# )
 from amoskys.intelligence.score_junction import ScoreJunction
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
 
@@ -51,23 +53,21 @@ class MultiAgentOrchestrator:
         """Initialize all agents"""
         logger.info("Initializing multi-agent system...")
 
+        # TODO: SNMP agent not yet ported to macOS Observatory — Igris multi-platform (future)
         # 1. Load SNMP configuration
-        config_path = project_root / "config" / "snmp_metrics_config.yaml"
-        if not config_path.exists():
-            logger.error(f"SNMP config not found: {config_path}")
-            return False
-
-        self.snmp_config = SNMPMetricsConfig(str(config_path))
-
-        # Apply 'standard' profile (can be changed to 'full' for more metrics)
-        self.snmp_config.apply_profile("standard")
-
-        enabled, total = self.snmp_config.get_metric_count()
-        logger.info(f"SNMP: Enabled {enabled}/{total} metrics")
-        logger.info(f"SNMP Categories: {self.snmp_config.list_categories()}")
-
+        # config_path = project_root / "config" / "snmp_metrics_config.yaml"
+        # if not config_path.exists():
+        #     logger.error(f"SNMP config not found: {config_path}")
+        #     return False
+        # self.snmp_config = SNMPMetricsConfig(str(config_path))
+        # self.snmp_config.apply_profile("standard")
+        # enabled, total = self.snmp_config.get_metric_count()
+        # logger.info(f"SNMP: Enabled {enabled}/{total} metrics")
         # 2. Create SNMP collector
-        self.snmp_collector = EnhancedSNMPCollector(self.snmp_config)
+        # self.snmp_collector = EnhancedSNMPCollector(self.snmp_config)
+        self.snmp_config = None
+        self.snmp_collector = None
+        logger.warning("SNMP agent not yet ported — skipping SNMP initialization")
 
         # 3. Create ProcAgent
         self.proc_agent = ProcAgent(

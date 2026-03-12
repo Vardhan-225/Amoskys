@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
-from amoskys.agents.shared.auth.probes import AuthEvent
+from amoskys.agents.os.macos.auth.probes import AuthEvent
 from amoskys.redteam.harness import (
     AdversarialCase,
     CaseResult,

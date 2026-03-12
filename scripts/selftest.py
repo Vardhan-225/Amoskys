@@ -35,25 +35,27 @@ def test_agent(agent_name: str) -> bool:
                 KernelAuditAgent as AgentClass,
             )
         elif agent_name == "protocol_collectors":
-            from amoskys.agents.shared.protocol_collectors import (
+            from amoskys.agents.os.macos.protocol_collectors import (
                 ProtocolCollectors as AgentClass,
             )
         elif agent_name == "device_discovery":
-            from amoskys.agents.shared.device_discovery import DeviceDiscovery as AgentClass
+            from amoskys.agents.os.macos.discovery import DeviceDiscovery as AgentClass
         elif agent_name == "auth_guard":
-            from amoskys.agents.shared.auth import AuthGuardAgent as AgentClass
+            from amoskys.agents.os.macos.auth import AuthGuardAgent as AgentClass
         elif agent_name == "proc":
-            from amoskys.agents.shared.process import ProcAgent as AgentClass
+            from amoskys.agents.os.macos.process import ProcAgent as AgentClass
         elif agent_name == "dns":
-            from amoskys.agents.shared.dns import DNSAgent as AgentClass
+            from amoskys.agents.os.macos.dns import DNSAgent as AgentClass
         elif agent_name == "peripheral":
-            from amoskys.agents.shared.peripheral import PeripheralAgent as AgentClass
+            from amoskys.agents.os.macos.peripheral import PeripheralAgent as AgentClass
         elif agent_name == "persistence":
-            from amoskys.agents.shared.persistence import PersistenceGuard as AgentClass
+            from amoskys.agents.os.macos.persistence import (
+                PersistenceGuard as AgentClass,
+            )
         elif agent_name == "fim":
-            from amoskys.agents.shared.filesystem import FIMAgent as AgentClass
+            from amoskys.agents.os.macos.filesystem import FIMAgent as AgentClass
         elif agent_name == "flow":
-            from amoskys.agents.shared.network import FlowAgent as AgentClass
+            from amoskys.agents.os.macos.network import FlowAgent as AgentClass
         else:
             print(f"  Unknown agent: {agent_name}")
             return False

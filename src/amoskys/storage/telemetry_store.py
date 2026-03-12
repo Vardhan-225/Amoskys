@@ -103,6 +103,7 @@ class _TTLCache:
                     k: v for k, v in self._store.items() if not k.startswith(prefix)
                 }
 
+
 # Database schema for permanent storage
 SCHEMA = """
 -- Enable WAL mode for better concurrency
@@ -797,10 +798,7 @@ class TelemetryStore:
         ).fetchone()
         if not exists:
             return
-        cols = {
-            row["name"]
-            for row in self.db.execute(f"PRAGMA table_info({table})")
-        }
+        cols = {row["name"] for row in self.db.execute(f"PRAGMA table_info({table})")}
         if column not in cols:
             self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
@@ -814,12 +812,22 @@ class TelemetryStore:
             self._ensure_column("telemetry_events", "wal_prev_sig", "BLOB")
 
             # Security quality + MITRE provenance
-            self._ensure_column("security_events", "quality_state", "TEXT DEFAULT 'valid'")
-            self._ensure_column("security_events", "training_exclude", "BOOLEAN DEFAULT 0")
-            self._ensure_column("security_events", "contract_violation_code", "TEXT DEFAULT 'NONE'")
+            self._ensure_column(
+                "security_events", "quality_state", "TEXT DEFAULT 'valid'"
+            )
+            self._ensure_column(
+                "security_events", "training_exclude", "BOOLEAN DEFAULT 0"
+            )
+            self._ensure_column(
+                "security_events", "contract_violation_code", "TEXT DEFAULT 'NONE'"
+            )
             self._ensure_column("security_events", "missing_fields", "TEXT")
-            self._ensure_column("security_events", "mitre_source", "TEXT DEFAULT 'probe'")
-            self._ensure_column("security_events", "mitre_confidence", "REAL DEFAULT 0.0")
+            self._ensure_column(
+                "security_events", "mitre_source", "TEXT DEFAULT 'probe'"
+            )
+            self._ensure_column(
+                "security_events", "mitre_confidence", "REAL DEFAULT 0.0"
+            )
             self._ensure_column("security_events", "mitre_evidence", "TEXT")
             self._ensure_column("security_events", "raw_attributes_json", "TEXT")
 
@@ -837,7 +845,9 @@ class TelemetryStore:
             for table in domain_tables:
                 self._ensure_column(table, "quality_state", "TEXT DEFAULT 'valid'")
                 self._ensure_column(table, "training_exclude", "BOOLEAN DEFAULT 0")
-                self._ensure_column(table, "contract_violation_code", "TEXT DEFAULT 'NONE'")
+                self._ensure_column(
+                    table, "contract_violation_code", "TEXT DEFAULT 'NONE'"
+                )
                 self._ensure_column(table, "missing_fields", "TEXT")
                 self._ensure_column(table, "raw_attributes_json", "TEXT")
 
@@ -891,13 +901,22 @@ class TelemetryStore:
         time.sleep(2)
         _keys = [
             ("device_posture:24", lambda: self.get_device_posture(hours=24)),
-            ("observation_domain_stats:24", lambda: self.get_observation_domain_stats(hours=24)),
+            (
+                "observation_domain_stats:24",
+                lambda: self.get_observation_domain_stats(hours=24),
+            ),
             ("fim_stats:24", lambda: self.get_fim_stats(hours=24)),
             ("persistence_stats:24", lambda: self.get_persistence_stats(hours=24)),
             ("flow_stats:24", lambda: self.get_flow_stats(hours=24)),
-            ("unified_clustering:24", lambda: self.get_unified_event_clustering(hours=24)),
+            (
+                "unified_clustering:24",
+                lambda: self.get_unified_event_clustering(hours=24),
+            ),
             ("unified_counts:24", lambda: self.get_unified_event_counts(hours=24)),
-            ("threat_count:24:0.1", lambda: self.get_threat_count(hours=24, min_risk=0.1)),
+            (
+                "threat_count:24:0.1",
+                lambda: self.get_threat_count(hours=24, min_risk=0.1),
+            ),
         ]
         while True:
             try:
@@ -1188,7 +1207,9 @@ class TelemetryStore:
                     event_data.get("contract_violation_code", "NONE"),
                     event_data.get("missing_fields"),
                     event_data.get("mitre_source", "probe"),
-                    event_data.get("mitre_confidence", event_data.get("confidence", 0.0)),
+                    event_data.get(
+                        "mitre_confidence", event_data.get("confidence", 0.0)
+                    ),
                     json.dumps(event_data.get("mitre_evidence", [])),
                     event_data.get("raw_attributes_json"),
                 ),
@@ -1373,7 +1394,11 @@ class TelemetryStore:
                     json.dumps(event_data.get("mitre_techniques", [])),
                     event_data.get("collection_agent"),
                     event_data.get("agent_version"),
-                    json.dumps(event_data.get("response_ips", [])) if event_data.get("response_ips") else None,
+                    (
+                        json.dumps(event_data.get("response_ips", []))
+                        if event_data.get("response_ips")
+                        else None
+                    ),
                     event_data.get("ttl"),
                     event_data.get("response_size"),
                     event_data.get("is_reverse", False),
@@ -1769,12 +1794,8 @@ class TelemetryStore:
         """
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
         risk_clause = f"AND risk_score > {min_risk}" if min_risk > 0 else ""
-        risk_clause_anom = (
-            f"AND anomaly_score > {min_risk}" if min_risk > 0 else ""
-        )
-        risk_clause_threat = (
-            f"AND threat_score > {min_risk}" if min_risk > 0 else ""
-        )
+        risk_clause_anom = f"AND anomaly_score > {min_risk}" if min_risk > 0 else ""
+        risk_clause_threat = f"AND threat_score > {min_risk}" if min_risk > 0 else ""
         query = f"""
             SELECT id, 'security' as source, event_category as type,
                    description, risk_score, confidence,
@@ -1861,9 +1882,7 @@ class TelemetryStore:
         """
         with self._read_pool.connection() as rdb:
             try:
-                row = rdb.execute(
-                    query, (cutoff_ns, min_risk) * 7
-                ).fetchone()
+                row = rdb.execute(query, (cutoff_ns, min_risk) * 7).fetchone()
                 count = row[0] or 0 if row else 0
                 self._cache.put(cache_key, count, ttl=30)
                 return count
@@ -2327,9 +2346,7 @@ class TelemetryStore:
                 q = f"%{query}%"
                 params.extend([q, q, q])
             elif table == "observation_events":
-                where_clauses.append(
-                    "(attributes LIKE ? OR domain LIKE ?)"
-                )
+                where_clauses.append("(attributes LIKE ? OR domain LIKE ?)")
                 q = f"%{query}%"
                 params.extend([q, q])
 
@@ -2641,12 +2658,20 @@ class TelemetryStore:
             count = row[0] or 0
             domain_max = row[2] or 0.0
             return {
-                "count": count, "latest_ns": row[1] or 0,
-                "max_risk": round(domain_max, 3), "avg_risk": round(row[3] or 0, 3),
+                "count": count,
+                "latest_ns": row[1] or 0,
+                "max_risk": round(domain_max, 3),
+                "avg_risk": round(row[3] or 0, 3),
                 "status": self._risk_to_status(domain_max, count),
             }
         except sqlite3.Error:
-            return {"count": 0, "latest_ns": 0, "max_risk": 0, "avg_risk": 0, "status": "inactive"}
+            return {
+                "count": 0,
+                "latest_ns": 0,
+                "max_risk": 0,
+                "avg_risk": 0,
+                "status": "inactive",
+            }
 
     def get_device_posture(self, hours: int = 24) -> Dict[str, Any]:
         """Cross-domain device health summary.
@@ -2701,14 +2726,22 @@ class TelemetryStore:
             SELECT '_security_count', COUNT(*), 0, 0, 0
             FROM security_events WHERE timestamp_ns > ?1
         """
-        result: Dict[str, Any] = {"domains": {}, "total_events": 0, "threat_level": "clear"}
+        result: Dict[str, Any] = {
+            "domains": {},
+            "total_events": 0,
+            "threat_level": "clear",
+        }
         max_risk = 0.0
         with self._read_pool.connection() as rdb:
             try:
                 rows = rdb.execute(posture_query, (cutoff_ns,)).fetchall()
                 for r in rows:
                     label, count, latest, domain_max, avg_risk = (
-                        r[0], r[1] or 0, r[2] or 0, r[3] or 0.0, r[4] or 0.0,
+                        r[0],
+                        r[1] or 0,
+                        r[2] or 0,
+                        r[3] or 0.0,
+                        r[4] or 0.0,
                     )
                     if label == "_security_count":
                         result["security_detections"] = count
@@ -2730,7 +2763,9 @@ class TelemetryStore:
         self._cache.put(cache_key, result, ttl=30)  # summary view — 30s TTL
         return result
 
-    def get_cross_domain_timeline(self, hours: int = 24, limit: int = 200) -> List[Dict]:
+    def get_cross_domain_timeline(
+        self, hours: int = 24, limit: int = 200
+    ) -> List[Dict]:
         """Unified timeline across ALL domain tables."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
         query = """
@@ -2768,8 +2803,14 @@ class TelemetryStore:
             try:
                 rows = self.db.execute(query, (cutoff_ns, limit)).fetchall()
                 return [
-                    {"timestamp_ns": r[0], "timestamp_dt": r[1], "domain": r[2],
-                     "event_type": r[3], "summary": r[4], "risk_score": r[5]}
+                    {
+                        "timestamp_ns": r[0],
+                        "timestamp_dt": r[1],
+                        "domain": r[2],
+                        "event_type": r[3],
+                        "summary": r[4],
+                        "risk_score": r[5],
+                    }
                     for r in rows
                 ]
             except sqlite3.Error as e:
@@ -2812,7 +2853,12 @@ class TelemetryStore:
                 }
             except sqlite3.Error as e:
                 logger.error("DNS stats failed: %s", e)
-                return {"total_queries": 0, "unique_domains": 0, "dga_suspects": 0, "beaconing_domains": 0}
+                return {
+                    "total_queries": 0,
+                    "unique_domains": 0,
+                    "dga_suspects": 0,
+                    "beaconing_domains": 0,
+                }
 
     def get_dns_top_domains(self, hours: int = 24, limit: int = 20) -> List[Dict]:
         """Top queried domains."""
@@ -2826,13 +2872,24 @@ class TelemetryStore:
                     GROUP BY domain ORDER BY cnt DESC LIMIT ?""",
                     (cutoff_ns, limit),
                 ).fetchall()
-                return [{"domain": r[0], "count": r[1], "query_type": r[2], "process_name": r[3],
-                         "dga_score": r[4] or 0, "is_beaconing": bool(r[5])} for r in rows]
+                return [
+                    {
+                        "domain": r[0],
+                        "count": r[1],
+                        "query_type": r[2],
+                        "process_name": r[3],
+                        "dga_score": r[4] or 0,
+                        "is_beaconing": bool(r[5]),
+                    }
+                    for r in rows
+                ]
             except sqlite3.Error as e:
                 logger.error("DNS top domains failed: %s", e)
                 return []
 
-    def get_dns_dga_suspects(self, hours: int = 24, min_score: float = 0.5, limit: int = 50) -> List[Dict]:
+    def get_dns_dga_suspects(
+        self, hours: int = 24, min_score: float = 0.5, limit: int = 50
+    ) -> List[Dict]:
         """Domains with high DGA scores."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
         with self._lock:
@@ -2843,8 +2900,17 @@ class TelemetryStore:
                     ORDER BY dga_score DESC LIMIT ?""",
                     (cutoff_ns, min_score, limit),
                 ).fetchall()
-                return [{"domain": r[0], "dga_score": r[1], "process_name": r[2],
-                         "source_ip": r[3], "timestamp": r[4], "query_type": r[5]} for r in rows]
+                return [
+                    {
+                        "domain": r[0],
+                        "dga_score": r[1],
+                        "process_name": r[2],
+                        "source_ip": r[3],
+                        "timestamp": r[4],
+                        "query_type": r[5],
+                    }
+                    for r in rows
+                ]
             except sqlite3.Error as e:
                 logger.error("DNS DGA query failed: %s", e)
                 return []
@@ -2860,8 +2926,15 @@ class TelemetryStore:
                     GROUP BY domain ORDER BY cnt DESC LIMIT ?""",
                     (cutoff_ns, limit),
                 ).fetchall()
-                return [{"domain": r[0], "interval_seconds": r[1], "query_count": r[2],
-                         "process_name": r[3]} for r in rows]
+                return [
+                    {
+                        "domain": r[0],
+                        "interval_seconds": r[1],
+                        "query_count": r[2],
+                        "process_name": r[3],
+                    }
+                    for r in rows
+                ]
             except sqlite3.Error as e:
                 logger.error("DNS beaconing query failed: %s", e)
                 return []
@@ -2878,7 +2951,9 @@ class TelemetryStore:
                     GROUP BY hour ORDER BY hour""",
                     (cutoff_ns,),
                 ).fetchall()
-                return [{"hour": r[0], "count": r[1], "suspicious": r[2] or 0} for r in rows]
+                return [
+                    {"hour": r[0], "count": r[1], "suspicious": r[2] or 0} for r in rows
+                ]
             except sqlite3.Error as e:
                 logger.error("DNS timeline failed: %s", e)
                 return []
@@ -2954,8 +3029,13 @@ class TelemetryStore:
                     (cutoff_ns,),
                 ).fetchall()
                 result = {
-                    "countries": [{"country": r[0], "count": r[1], "bytes": r[2] or 0} for r in countries],
-                    "cities": [{"country": r[0], "city": r[1], "count": r[2]} for r in cities],
+                    "countries": [
+                        {"country": r[0], "count": r[1], "bytes": r[2] or 0}
+                        for r in countries
+                    ],
+                    "cities": [
+                        {"country": r[0], "city": r[1], "count": r[2]} for r in cities
+                    ],
                 }
                 self._cache.put(cache_key, result)
                 return result
@@ -2980,8 +3060,15 @@ class TelemetryStore:
                     "GROUP BY asn_dst_org ORDER BY cnt DESC LIMIT 20",
                     (cutoff_ns,),
                 ).fetchall()
-                result = [{"org": r[0], "network_type": r[1] or "unknown", "count": r[2],
-                           "bytes": r[3] or 0} for r in rows]
+                result = [
+                    {
+                        "org": r[0],
+                        "network_type": r[1] or "unknown",
+                        "count": r[2],
+                        "bytes": r[3] or 0,
+                    }
+                    for r in rows
+                ]
                 self._cache.put(cache_key, result)
                 return result
             except sqlite3.Error as e:
@@ -3008,9 +3095,19 @@ class TelemetryStore:
                     "ORDER BY cnt DESC LIMIT ?",
                     (cutoff_ns, limit),
                 ).fetchall()
-                result = [{"lat": r[0], "lon": r[1], "country": r[2], "city": r[3],
-                           "count": r[4], "bytes": r[5] or 0, "asn_org": r[6],
-                           "threat": bool(r[7])} for r in rows]
+                result = [
+                    {
+                        "lat": r[0],
+                        "lon": r[1],
+                        "country": r[2],
+                        "city": r[3],
+                        "count": r[4],
+                        "bytes": r[5] or 0,
+                        "asn_org": r[6],
+                        "threat": bool(r[7]),
+                    }
+                    for r in rows
+                ]
                 self._cache.put(cache_key, result)
                 return result
             except sqlite3.Error as e:
@@ -3036,11 +3133,22 @@ class TelemetryStore:
                     "GROUP BY dst_ip ORDER BY cnt DESC LIMIT ?",
                     (cutoff_ns, limit),
                 ).fetchall()
-                result = [{"dst_ip": r[0], "dst_port": r[1], "protocol": r[2],
-                           "country": r[3], "city": r[4], "asn_org": r[5],
-                           "network_type": r[6] or "unknown", "flows": r[7],
-                           "bytes_tx": r[8] or 0, "bytes_rx": r[9] or 0,
-                           "threat": bool(r[10])} for r in rows]
+                result = [
+                    {
+                        "dst_ip": r[0],
+                        "dst_port": r[1],
+                        "protocol": r[2],
+                        "country": r[3],
+                        "city": r[4],
+                        "asn_org": r[5],
+                        "network_type": r[6] or "unknown",
+                        "flows": r[7],
+                        "bytes_tx": r[8] or 0,
+                        "bytes_rx": r[9] or 0,
+                        "threat": bool(r[10]),
+                    }
+                    for r in rows
+                ]
                 self._cache.put(cache_key, result)
                 return result
             except sqlite3.Error as e:
@@ -3065,8 +3173,16 @@ class TelemetryStore:
                     "GROUP BY process_name ORDER BY cnt DESC LIMIT ?",
                     (cutoff_ns, limit),
                 ).fetchall()
-                result = [{"process": r[0], "flows": r[1], "bytes_tx": r[2] or 0,
-                           "bytes_rx": r[3] or 0, "unique_destinations": r[4]} for r in rows]
+                result = [
+                    {
+                        "process": r[0],
+                        "flows": r[1],
+                        "bytes_tx": r[2] or 0,
+                        "bytes_rx": r[3] or 0,
+                        "unique_destinations": r[4],
+                    }
+                    for r in rows
+                ]
                 self._cache.put(cache_key, result)
                 return result
             except sqlite3.Error as e:
@@ -3119,7 +3235,9 @@ class TelemetryStore:
                 logger.error("FIM stats failed: %s", e)
                 return {"total_changes": 0}
 
-    def get_fim_critical_changes(self, hours: int = 24, min_risk: float = 0.3, limit: int = 100) -> List[Dict]:
+    def get_fim_critical_changes(
+        self, hours: int = 24, min_risk: float = 0.3, limit: int = 100
+    ) -> List[Dict]:
         """High-risk file changes."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
         with self._lock:
@@ -3131,9 +3249,20 @@ class TelemetryStore:
                     ORDER BY risk_score DESC LIMIT ?""",
                     (cutoff_ns, min_risk, limit),
                 ).fetchall()
-                return [{"path": r[0], "change_type": r[1], "old_hash": r[2], "new_hash": r[3],
-                         "risk_score": r[4] or 0, "patterns_matched": r[5], "extension": r[6],
-                         "timestamp": r[7], "event_type": r[8]} for r in rows]
+                return [
+                    {
+                        "path": r[0],
+                        "change_type": r[1],
+                        "old_hash": r[2],
+                        "new_hash": r[3],
+                        "risk_score": r[4] or 0,
+                        "patterns_matched": r[5],
+                        "extension": r[6],
+                        "timestamp": r[7],
+                        "event_type": r[8],
+                    }
+                    for r in rows
+                ]
             except sqlite3.Error as e:
                 logger.error("FIM critical changes failed: %s", e)
                 return []
@@ -3155,8 +3284,15 @@ class TelemetryStore:
                     GROUP BY dir ORDER BY cnt DESC LIMIT ?""",
                     (cutoff_ns, limit),
                 ).fetchall()
-                return [{"directory": r[0], "count": r[1], "avg_risk": r[2],
-                         "high_risk_count": r[3] or 0} for r in rows]
+                return [
+                    {
+                        "directory": r[0],
+                        "count": r[1],
+                        "avg_risk": r[2],
+                        "high_risk_count": r[3] or 0,
+                    }
+                    for r in rows
+                ]
             except sqlite3.Error as e:
                 logger.error("FIM directory summary failed: %s", e)
                 return []
@@ -3176,8 +3312,16 @@ class TelemetryStore:
                     GROUP BY hour ORDER BY hour""",
                     (cutoff_ns,),
                 ).fetchall()
-                return [{"hour": r[0], "created": r[1], "modified": r[2],
-                         "deleted": r[3], "total": r[4]} for r in rows]
+                return [
+                    {
+                        "hour": r[0],
+                        "created": r[1],
+                        "modified": r[2],
+                        "deleted": r[3],
+                        "total": r[4],
+                    }
+                    for r in rows
+                ]
             except sqlite3.Error as e:
                 logger.error("FIM timeline failed: %s", e)
                 return []
@@ -3231,7 +3375,9 @@ class TelemetryStore:
                 logger.error("Persistence stats failed: %s", e)
                 return {"total_entries": 0}
 
-    def get_persistence_inventory(self, mechanism: Optional[str] = None, limit: int = 200) -> List[Dict]:
+    def get_persistence_inventory(
+        self, mechanism: Optional[str] = None, limit: int = 200
+    ) -> List[Dict]:
         """Persistence entries, optionally filtered by mechanism."""
         with self._lock:
             try:
@@ -3251,9 +3397,20 @@ class TelemetryStore:
                         ORDER BY timestamp_ns DESC LIMIT ?""",
                         (limit,),
                     ).fetchall()
-                return [{"mechanism": r[0], "entry_id": r[1], "path": r[2], "command": r[3],
-                         "user": r[4], "change_type": r[5], "risk_score": r[6] or 0,
-                         "timestamp": r[7], "event_type": r[8]} for r in rows]
+                return [
+                    {
+                        "mechanism": r[0],
+                        "entry_id": r[1],
+                        "path": r[2],
+                        "command": r[3],
+                        "user": r[4],
+                        "change_type": r[5],
+                        "risk_score": r[6] or 0,
+                        "timestamp": r[7],
+                        "event_type": r[8],
+                    }
+                    for r in rows
+                ]
             except sqlite3.Error as e:
                 logger.error("Persistence inventory failed: %s", e)
                 return []
@@ -3301,7 +3458,9 @@ class TelemetryStore:
                 logger.error("Audit stats failed: %s", e)
                 return {"total_events": 0}
 
-    def get_audit_high_risk(self, hours: int = 24, min_risk: float = 0.5, limit: int = 100) -> List[Dict]:
+    def get_audit_high_risk(
+        self, hours: int = 24, min_risk: float = 0.5, limit: int = 100
+    ) -> List[Dict]:
         """High-risk audit events."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
         with self._lock:
@@ -3313,9 +3472,21 @@ class TelemetryStore:
                     ORDER BY risk_score DESC LIMIT ?""",
                     (cutoff_ns, min_risk, limit),
                 ).fetchall()
-                return [{"event_type": r[0], "exe": r[1], "comm": r[2], "cmdline": r[3],
-                         "pid": r[4], "uid": r[5], "risk_score": r[6] or 0, "reason": r[7],
-                         "mitre_techniques": r[8], "timestamp": r[9]} for r in rows]
+                return [
+                    {
+                        "event_type": r[0],
+                        "exe": r[1],
+                        "comm": r[2],
+                        "cmdline": r[3],
+                        "pid": r[4],
+                        "uid": r[5],
+                        "risk_score": r[6] or 0,
+                        "reason": r[7],
+                        "mitre_techniques": r[8],
+                        "timestamp": r[9],
+                    }
+                    for r in rows
+                ]
             except sqlite3.Error as e:
                 logger.error("Audit high risk failed: %s", e)
                 return []
@@ -3355,8 +3526,9 @@ class TelemetryStore:
                 logger.error("Observation domain stats failed: %s", e)
                 return {"total": 0, "by_domain": {}}
 
-    def get_observations_by_domain(self, domain: str, hours: int = 24,
-                                    limit: int = 100, offset: int = 0) -> Dict[str, Any]:
+    def get_observations_by_domain(
+        self, domain: str, hours: int = 24, limit: int = 100, offset: int = 0
+    ) -> Dict[str, Any]:
         """Paginated observations for a specific domain."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
         with self._lock:
@@ -3379,21 +3551,33 @@ class TelemetryStore:
                         attrs = json.loads(r[3]) if r[3] else {}
                     except (json.JSONDecodeError, TypeError):
                         attrs = {"raw": r[3]}
-                    results.append({
-                        "timestamp": r[0], "domain": r[1], "event_type": r[2],
-                        "attributes": attrs, "risk_score": r[4] or 0,
-                        "collection_agent": r[5],
-                    })
+                    results.append(
+                        {
+                            "timestamp": r[0],
+                            "domain": r[1],
+                            "event_type": r[2],
+                            "attributes": attrs,
+                            "risk_score": r[4] or 0,
+                            "collection_agent": r[5],
+                        }
+                    )
                 return {
-                    "results": results, "total_count": total,
-                    "offset": offset, "has_more": (offset + limit) < total,
+                    "results": results,
+                    "total_count": total,
+                    "offset": offset,
+                    "has_more": (offset + limit) < total,
                 }
             except sqlite3.Error as e:
                 logger.error("Observations by domain failed: %s", e)
                 return {"results": [], "total_count": 0, "offset": 0, "has_more": False}
 
-    def search_observations(self, query: str = "", domain: Optional[str] = None,
-                             hours: int = 24, limit: int = 100) -> Dict[str, Any]:
+    def search_observations(
+        self,
+        query: str = "",
+        domain: Optional[str] = None,
+        hours: int = 24,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
         """Search across observation_events attributes."""
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
         where = ["timestamp_ns > ?"]
@@ -3422,12 +3606,21 @@ class TelemetryStore:
                         attrs = json.loads(r[3]) if r[3] else {}
                     except (json.JSONDecodeError, TypeError):
                         attrs = {"raw": r[3]}
-                    results.append({
-                        "timestamp": r[0], "domain": r[1], "event_type": r[2],
-                        "attributes": attrs, "risk_score": r[4] or 0,
-                        "collection_agent": r[5],
-                    })
-                return {"results": results, "total_count": total, "has_more": total > limit}
+                    results.append(
+                        {
+                            "timestamp": r[0],
+                            "domain": r[1],
+                            "event_type": r[2],
+                            "attributes": attrs,
+                            "risk_score": r[4] or 0,
+                            "collection_agent": r[5],
+                        }
+                    )
+                return {
+                    "results": results,
+                    "total_count": total,
+                    "has_more": total > limit,
+                }
             except sqlite3.Error as e:
                 logger.error("Observation search failed: %s", e)
                 return {"results": [], "total_count": 0, "has_more": False}

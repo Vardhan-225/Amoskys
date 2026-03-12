@@ -37,7 +37,9 @@ def safe_int(value, default=0, min_val=None, max_val=None):
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_recent_events():
     """Get recent peripheral events."""
-    limit = safe_int(request.args.get("limit", 100), default=100, min_val=1, max_val=500)
+    limit = safe_int(
+        request.args.get("limit", 100), default=100, min_val=1, max_val=500
+    )
     service = get_dashboard_query_service()
     if not service.available:
         return jsonify({"events": [], "message": "No data available yet"}), 200
@@ -195,7 +197,9 @@ def search_devices():
     device_name = request.args.get("name", "")
     device_type = request.args.get("type", "")
     manufacturer = request.args.get("manufacturer", "")
-    limit = safe_int(request.args.get("limit", 100), default=100, min_val=1, max_val=500)
+    limit = safe_int(
+        request.args.get("limit", 100), default=100, min_val=1, max_val=500
+    )
 
     service = get_dashboard_query_service()
     if not service.available:

@@ -73,7 +73,9 @@ class DashboardQueryService:
 
     # ── Telemetry API ───────────────────────────────────────────────────
 
-    def recent_telemetry(self, limit: int = 50, hours: int = 24) -> List[Dict[str, Any]]:
+    def recent_telemetry(
+        self, limit: int = 50, hours: int = 24
+    ) -> List[Dict[str, Any]]:
         if not self.available:
             return []
         rows = self.store.get_cross_domain_timeline(hours=hours, limit=limit)
@@ -339,8 +341,12 @@ class DashboardQueryService:
                         ).fetchall()
                         top_values = [
                             {
-                                "value": r["value"] if isinstance(r, sqlite3.Row) else r[0],
-                                "count": r["count"] if isinstance(r, sqlite3.Row) else r[1],
+                                "value": (
+                                    r["value"] if isinstance(r, sqlite3.Row) else r[0]
+                                ),
+                                "count": (
+                                    r["count"] if isinstance(r, sqlite3.Row) else r[1]
+                                ),
                             }
                             for r in top_rows
                         ]
@@ -360,7 +366,9 @@ class DashboardQueryService:
                 payload.append(
                     {
                         "table": table,
-                        "row_count": int(table_count_row["count"] if table_count_row else 0),
+                        "row_count": int(
+                            table_count_row["count"] if table_count_row else 0
+                        ),
                         "columns": column_meta,
                     }
                 )
@@ -467,9 +475,9 @@ class DashboardQueryService:
                     "name": (row["exe"] or "").split("/")[-1],
                     "full_path": row["exe"],
                     "count": row["count"],
-                    "percentage": round((row["count"] / total) * 100, 2)
-                    if total
-                    else 0,
+                    "percentage": (
+                        round((row["count"] / total) * 100, 2) if total else 0
+                    ),
                 }
                 for row in rows
             ],
@@ -537,7 +545,9 @@ class DashboardQueryService:
                 "SELECT page_count * page_size AS size FROM pragma_page_count(), pragma_page_size()"
             ).fetchone()
         stats["database_size_bytes"] = size_row["size"] if size_row else 0
-        stats["database_size_mb"] = round(stats["database_size_bytes"] / (1024 * 1024), 2)
+        stats["database_size_mb"] = round(
+            stats["database_size_bytes"] / (1024 * 1024), 2
+        )
         return stats
 
     def canonical_summary(self) -> Dict[str, Any]:
@@ -572,7 +582,11 @@ class DashboardQueryService:
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ml_features'"
             ).fetchone()
             if not exists:
-                return {"total_windows": 0, "total_features": 0, "status": "not_generated"}
+                return {
+                    "total_windows": 0,
+                    "total_features": 0,
+                    "status": "not_generated",
+                }
             total_windows = conn.execute(
                 "SELECT COUNT(*) AS count FROM ml_features"
             ).fetchone()["count"]
@@ -699,7 +713,9 @@ class DashboardQueryService:
             "unauthorized_devices": unauthorized_count,
             "high_risk_devices": high_risk_count,
             "recent_connections_1h": recent_connections,
-            "device_type_distribution": {r["device_type"]: r["count"] for r in type_rows},
+            "device_type_distribution": {
+                r["device_type"]: r["count"] for r in type_rows
+            },
             "connection_status_distribution": {
                 r["connection_status"]: r["count"] for r in status_rows
             },

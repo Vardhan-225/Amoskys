@@ -177,7 +177,9 @@ class MacOSPeripheralAgent(MicroProbeAgentMixin, HardenedAgentBase):
             "Peripheral collected in %.1fms: %d USB, %d BT, %d volumes, "
             "%d observations, %d probe events",
             snapshot["collection_time_ms"],
-            usb_count, bt_count, vol_count,
+            usb_count,
+            bt_count,
+            vol_count,
             len(obs_events),
             len(probe_events),
         )

@@ -29,7 +29,6 @@ import pytest
 from amoskys.agents.common.base import HardenedAgentBase
 from amoskys.agents.common.probes import MicroProbeAgentMixin
 
-
 # ---------------------------------------------------------------------------
 # Fixtures: mock heavy I/O dependencies so agents can be instantiated in CI
 # ---------------------------------------------------------------------------
@@ -75,20 +74,20 @@ class TestInfostealerGuardAgent:
     def test_probes_have_valid_mitre_techniques(self):
         """Every probe declares at least one valid MITRE technique ID."""
         for probe in self.agent._probes:
-            assert len(probe.mitre_techniques) >= 1, (
-                f"Probe {probe.name} has no MITRE techniques"
-            )
+            assert (
+                len(probe.mitre_techniques) >= 1
+            ), f"Probe {probe.name} has no MITRE techniques"
             for tid in probe.mitre_techniques:
-                assert _MITRE_RE.match(tid), (
-                    f"Probe {probe.name}: invalid MITRE ID {tid!r}"
-                )
+                assert _MITRE_RE.match(
+                    tid
+                ), f"Probe {probe.name}: invalid MITRE ID {tid!r}"
 
     def test_probes_target_darwin(self):
         """Every probe targets platform 'darwin'."""
         for probe in self.agent._probes:
-            assert "darwin" in probe.platforms, (
-                f"Probe {probe.name} does not target darwin: {probe.platforms}"
-            )
+            assert (
+                "darwin" in probe.platforms
+            ), f"Probe {probe.name} does not target darwin: {probe.platforms}"
 
     def test_inherits_mixin_and_base(self):
         """Agent inherits from both MicroProbeAgentMixin and HardenedAgentBase."""
@@ -133,20 +132,20 @@ class TestQuarantineGuardAgent:
     def test_probes_have_valid_mitre_techniques(self):
         """Every probe declares at least one valid MITRE technique ID."""
         for probe in self.agent._probes:
-            assert len(probe.mitre_techniques) >= 1, (
-                f"Probe {probe.name} has no MITRE techniques"
-            )
+            assert (
+                len(probe.mitre_techniques) >= 1
+            ), f"Probe {probe.name} has no MITRE techniques"
             for tid in probe.mitre_techniques:
-                assert _MITRE_RE.match(tid), (
-                    f"Probe {probe.name}: invalid MITRE ID {tid!r}"
-                )
+                assert _MITRE_RE.match(
+                    tid
+                ), f"Probe {probe.name}: invalid MITRE ID {tid!r}"
 
     def test_probes_target_darwin(self):
         """Every probe targets platform 'darwin'."""
         for probe in self.agent._probes:
-            assert "darwin" in probe.platforms, (
-                f"Probe {probe.name} does not target darwin: {probe.platforms}"
-            )
+            assert (
+                "darwin" in probe.platforms
+            ), f"Probe {probe.name} does not target darwin: {probe.platforms}"
 
     def test_inherits_mixin_and_base(self):
         """Agent inherits from both MicroProbeAgentMixin and HardenedAgentBase."""
@@ -173,9 +172,7 @@ class TestProvenanceAgent:
     @pytest.fixture(autouse=True)
     def _agent(self):
         with patch(_QUEUE_ADAPTER_PATH, return_value=_make_mock_queue_adapter()):
-            from amoskys.agents.os.macos.provenance.agent import (
-                MacOSProvenanceAgent,
-            )
+            from amoskys.agents.os.macos.provenance.agent import MacOSProvenanceAgent
 
             self.agent = MacOSProvenanceAgent(collection_interval=999)
 
@@ -191,20 +188,20 @@ class TestProvenanceAgent:
     def test_probes_have_valid_mitre_techniques(self):
         """Every probe declares at least one valid MITRE technique ID."""
         for probe in self.agent._probes:
-            assert len(probe.mitre_techniques) >= 1, (
-                f"Probe {probe.name} has no MITRE techniques"
-            )
+            assert (
+                len(probe.mitre_techniques) >= 1
+            ), f"Probe {probe.name} has no MITRE techniques"
             for tid in probe.mitre_techniques:
-                assert _MITRE_RE.match(tid), (
-                    f"Probe {probe.name}: invalid MITRE ID {tid!r}"
-                )
+                assert _MITRE_RE.match(
+                    tid
+                ), f"Probe {probe.name}: invalid MITRE ID {tid!r}"
 
     def test_probes_target_darwin(self):
         """Every probe targets platform 'darwin'."""
         for probe in self.agent._probes:
-            assert "darwin" in probe.platforms, (
-                f"Probe {probe.name} does not target darwin: {probe.platforms}"
-            )
+            assert (
+                "darwin" in probe.platforms
+            ), f"Probe {probe.name} does not target darwin: {probe.platforms}"
 
     def test_inherits_mixin_and_base(self):
         """Agent inherits from both MicroProbeAgentMixin and HardenedAgentBase."""

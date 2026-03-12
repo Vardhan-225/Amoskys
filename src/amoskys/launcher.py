@@ -78,10 +78,8 @@ PORT_PROMETHEUS = 9102
 ComponentDef = Tuple[str, str, List[str], str, str, Optional[int]]
 
 INFRASTRUCTURE: List[ComponentDef] = [
-    ("eventbus", "amoskys.eventbus.server", [],
-     "all", "infra", PORT_EVENTBUS),
-    ("wal-processor", "amoskys.storage.wal_processor", [],
-     "all", "infra", None),
+    ("eventbus", "amoskys.eventbus.server", [], "all", "infra", PORT_EVENTBUS),
+    ("wal-processor", "amoskys.storage.wal_processor", [], "all", "infra", None),
 ]
 
 # ── Agent Registry: Platform-specific routing ─────────────────────────────
@@ -92,83 +90,173 @@ if PLATFORM == "darwin":
     # macOS Observatory agents — purpose-built collectors with full raw
     # telemetry emission and platform-specific probes.
     CORE_AGENTS: List[ComponentDef] = [
-        ("proc-agent", "amoskys.agents.os.macos.process", [],
-         "darwin", "agent", None),
-        ("auth-agent", "amoskys.agents.os.macos.auth", [],
-         "darwin", "agent", None),
-        ("fim-agent", "amoskys.agents.os.macos.filesystem", [],
-         "darwin", "agent", None),
-        ("flow-agent", "amoskys.agents.os.macos.network", [],
-         "darwin", "agent", None),
-        ("dns-agent", "amoskys.agents.os.macos.dns", [],
-         "darwin", "agent", None),
-        ("peripheral-agent", "amoskys.agents.os.macos.peripheral", [],
-         "darwin", "agent", None),
-        ("persistence-agent", "amoskys.agents.os.macos.persistence", [],
-         "darwin", "agent", None),
+        ("proc-agent", "amoskys.agents.os.macos.process", [], "darwin", "agent", None),
+        ("auth-agent", "amoskys.agents.os.macos.auth", [], "darwin", "agent", None),
+        (
+            "fim-agent",
+            "amoskys.agents.os.macos.filesystem",
+            [],
+            "darwin",
+            "agent",
+            None,
+        ),
+        ("flow-agent", "amoskys.agents.os.macos.network", [], "darwin", "agent", None),
+        ("dns-agent", "amoskys.agents.os.macos.dns", [], "darwin", "agent", None),
+        (
+            "peripheral-agent",
+            "amoskys.agents.os.macos.peripheral",
+            [],
+            "darwin",
+            "agent",
+            None,
+        ),
+        (
+            "persistence-agent",
+            "amoskys.agents.os.macos.persistence",
+            [],
+            "darwin",
+            "agent",
+            None,
+        ),
     ]
 
     EXTENDED_AGENTS: List[ComponentDef] = [
-        ("applog-agent", "amoskys.agents.os.macos.applog", [],
-         "darwin", "agent", None),
-        ("db-activity-agent", "amoskys.agents.os.macos.db_activity", [],
-         "darwin", "agent", None),
-        ("http-inspector-agent", "amoskys.agents.os.macos.http_inspector", [],
-         "darwin", "agent", None),
-        ("internet-activity-agent", "amoskys.agents.os.macos.internet_activity", [],
-         "darwin", "agent", None),
-        ("discovery-agent", "amoskys.agents.os.macos.discovery", [],
-         "darwin", "agent", None),
-        ("security-monitor-agent", "amoskys.agents.os.macos.security_monitor", [],
-         "darwin", "agent", None),
-        ("unified-log-agent", "amoskys.agents.os.macos.unified_log", [],
-         "darwin", "agent", None),
+        ("applog-agent", "amoskys.agents.os.macos.applog", [], "darwin", "agent", None),
+        (
+            "db-activity-agent",
+            "amoskys.agents.os.macos.db_activity",
+            [],
+            "darwin",
+            "agent",
+            None,
+        ),
+        (
+            "http-inspector-agent",
+            "amoskys.agents.os.macos.http_inspector",
+            [],
+            "darwin",
+            "agent",
+            None,
+        ),
+        (
+            "internet-activity-agent",
+            "amoskys.agents.os.macos.internet_activity",
+            [],
+            "darwin",
+            "agent",
+            None,
+        ),
+        (
+            "discovery-agent",
+            "amoskys.agents.os.macos.discovery",
+            [],
+            "darwin",
+            "agent",
+            None,
+        ),
+        (
+            "security-monitor-agent",
+            "amoskys.agents.os.macos.security_monitor",
+            [],
+            "darwin",
+            "agent",
+            None,
+        ),
+        (
+            "unified-log-agent",
+            "amoskys.agents.os.macos.unified_log",
+            [],
+            "darwin",
+            "agent",
+            None,
+        ),
     ]
 else:
-    # Shared cross-platform agents (Linux/Windows — future enterprise)
+    # TODO: Linux/Windows support via Igris multi-platform engine (future)
+    # For now, fallback to macOS agents — they use psutil which works on Linux too.
+    # Full Linux-native agents will be built when Igris is implemented.
     CORE_AGENTS: List[ComponentDef] = [
-        ("proc-agent", "amoskys.agents.shared.process", [],
-         "all", "agent", None),
-        ("auth-agent", "amoskys.agents.shared.auth", [],
-         "all", "agent", None),
-        ("fim-agent", "amoskys.agents.shared.filesystem", [],
-         "all", "agent", None),
-        ("flow-agent", "amoskys.agents.shared.network", [],
-         "all", "agent", None),
-        ("dns-agent", "amoskys.agents.shared.dns", [],
-         "all", "agent", None),
-        ("peripheral-agent", "amoskys.agents.shared.peripheral", [],
-         "all", "agent", None),
-        ("persistence-agent", "amoskys.agents.shared.persistence", [],
-         "all", "agent", None),
+        ("proc-agent", "amoskys.agents.os.macos.process", [], "all", "agent", None),
+        ("auth-agent", "amoskys.agents.os.macos.auth", [], "all", "agent", None),
+        ("fim-agent", "amoskys.agents.os.macos.filesystem", [], "all", "agent", None),
+        ("flow-agent", "amoskys.agents.os.macos.network", [], "all", "agent", None),
+        ("dns-agent", "amoskys.agents.os.macos.dns", [], "all", "agent", None),
+        (
+            "peripheral-agent",
+            "amoskys.agents.os.macos.peripheral",
+            [],
+            "all",
+            "agent",
+            None,
+        ),
+        (
+            "persistence-agent",
+            "amoskys.agents.os.macos.persistence",
+            [],
+            "all",
+            "agent",
+            None,
+        ),
     ]
 
     EXTENDED_AGENTS: List[ComponentDef] = [
-        ("applog-agent", "amoskys.agents.shared.applog", [],
-         "all", "agent", None),
-        ("db-activity-agent", "amoskys.agents.shared.db_activity", [],
-         "all", "agent", None),
-        ("http-inspector-agent", "amoskys.agents.shared.http_inspector", [],
-         "all", "agent", None),
-        ("internet-activity-agent", "amoskys.agents.shared.internet_activity", [],
-         "all", "agent", None),
-        ("net-scanner-agent", "amoskys.agents.shared.net_scanner", [],
-         "all", "agent", None),
-        ("device-discovery", "amoskys.agents.shared.device_discovery", [],
-         "all", "agent", None),
-        ("protocol-collectors", "amoskys.agents.shared.protocol_collectors", [],
-         "all", "agent", None),
+        ("applog-agent", "amoskys.agents.os.macos.applog", [], "all", "agent", None),
+        (
+            "db-activity-agent",
+            "amoskys.agents.os.macos.db_activity",
+            [],
+            "all",
+            "agent",
+            None,
+        ),
+        (
+            "http-inspector-agent",
+            "amoskys.agents.os.macos.http_inspector",
+            [],
+            "all",
+            "agent",
+            None,
+        ),
+        (
+            "internet-activity-agent",
+            "amoskys.agents.os.macos.internet_activity",
+            [],
+            "all",
+            "agent",
+            None,
+        ),
+        (
+            "discovery-agent",
+            "amoskys.agents.os.macos.discovery",
+            [],
+            "all",
+            "agent",
+            None,
+        ),
+        (
+            "protocol-collectors",
+            "amoskys.agents.os.macos.protocol_collectors",
+            [],
+            "all",
+            "agent",
+            None,
+        ),
     ]
 
 PLATFORM_AGENTS: List[ComponentDef] = [
     # Linux-only
-    ("kernel-audit-agent", "amoskys.agents.os.linux.kernel_audit", [],
-     "linux", "agent", None),
+    (
+        "kernel-audit-agent",
+        "amoskys.agents.os.linux.kernel_audit",
+        [],
+        "linux",
+        "agent",
+        None,
+    ),
 ]
 
 DASHBOARD_COMPONENTS: List[ComponentDef] = [
-    ("dashboard", "web.app", [],
-     "all", "dashboard", PORT_DASHBOARD),
+    ("dashboard", "web.app", [], "all", "dashboard", PORT_DASHBOARD),
 ]
 
 
@@ -246,7 +334,8 @@ def _check_geoip() -> Tuple[bool, str]:
     if GEOIP_CITY.exists() and GEOIP_ASN.exists():
         return True, "GeoIP City + ASN databases found"
     missing = [
-        n for n, p in [(_GEOIP_CITY_NAME, GEOIP_CITY), (_GEOIP_ASN_NAME, GEOIP_ASN)]
+        n
+        for n, p in [(_GEOIP_CITY_NAME, GEOIP_CITY), (_GEOIP_ASN_NAME, GEOIP_ASN)]
         if not p.exists()
     ]
     return False, f"Missing: {', '.join(missing)} in data/geoip/"
@@ -306,8 +395,12 @@ def run_preflight() -> bool:
         ok, msg = check_fn()
         marker = "[OK]" if ok else "[!!]"
         print(f"  {marker} {label:<20} {msg}")
-        if not ok and label in ("Python version", "Python packages",
-                                "Port availability", "Stale processes"):
+        if not ok and label in (
+            "Python version",
+            "Python packages",
+            "Port availability",
+            "Stale processes",
+        ):
             all_ok = False  # Critical failures
 
     # Non-critical warnings don't block startup
@@ -364,7 +457,10 @@ def _pid_alive(pid: int) -> bool:
 
 
 def _start_component(
-    name: str, module: str, extra_args: list, env: dict,
+    name: str,
+    module: str,
+    extra_args: list,
+    env: dict,
 ) -> Optional[subprocess.Popen]:
     """Start a single component as a background subprocess."""
     log_out = LOG_DIR / f"{name}.log"
@@ -426,7 +522,9 @@ def _wait_pids_exit(pids: Dict[str, int], timeout: float = 10.0) -> List[str]:
 
 
 def _start_component_list(
-    components: List[ComponentDef], env: dict, pids: Dict[str, int],
+    components: List[ComponentDef],
+    env: dict,
+    pids: Dict[str, int],
 ) -> None:
     """Start a list of components, updating pids dict in place."""
     for name, module, extra, _plat, _cat, wait_port in components:
@@ -457,8 +555,10 @@ def do_start(args: argparse.Namespace) -> None:
     if not getattr(args, "skip_preflight", False):
         print()
         if not run_preflight():
-            print("\nCritical preflight check failed. Fix issues above or "
-                  "use --skip-preflight to override.")
+            print(
+                "\nCritical preflight check failed. Fix issues above or "
+                "use --skip-preflight to override."
+            )
             return
         print()
 
@@ -617,7 +717,11 @@ def _format_heartbeat(hb: Path, now: datetime, verbose: bool) -> str:
     line = f"  {marker} {agent:<20} cycle #{cycle}"
     if verbose:
         ts_str = data.get("timestamp", "")
-        age_str = _format_age((now - datetime.fromisoformat(ts_str)).total_seconds()) if ts_str else ""
+        age_str = (
+            _format_age((now - datetime.fromisoformat(ts_str)).total_seconds())
+            if ts_str
+            else ""
+        )
         line += f"  {age_str:>8}  {status}"
     return line
 
@@ -651,9 +755,15 @@ def _print_db_stats() -> None:
         conn = sqlite3.connect(str(DB_PATH))
         total = 0
         for table in [
-            "security_events", "process_events", "flow_events",
-            "persistence_events", "fim_events", "dns_events",
-            "peripheral_events", "device_telemetry", "incidents",
+            "security_events",
+            "process_events",
+            "flow_events",
+            "persistence_events",
+            "fim_events",
+            "dns_events",
+            "peripheral_events",
+            "device_telemetry",
+            "incidents",
         ]:
             try:
                 cnt = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
@@ -808,15 +918,20 @@ def do_install(_args: argparse.Namespace) -> None:
     src = str(PROJECT_ROOT / "src")
 
     services = [
-        ("com.amoskys.eventbus",
-         [python, "-m", "amoskys.eventbus.server"]),
-        ("com.amoskys.wal-processor",
-         [python, "-m", "amoskys.storage.wal_processor"]),
-        ("com.amoskys.agent-fleet",
-         [python, "-m", "amoskys.launcher", "start", "--agents-only",
-          "--skip-preflight"]),
-        ("com.amoskys.dashboard",
-         [python, "-m", "web.app"]),
+        ("com.amoskys.eventbus", [python, "-m", "amoskys.eventbus.server"]),
+        ("com.amoskys.wal-processor", [python, "-m", "amoskys.storage.wal_processor"]),
+        (
+            "com.amoskys.agent-fleet",
+            [
+                python,
+                "-m",
+                "amoskys.launcher",
+                "start",
+                "--agents-only",
+                "--skip-preflight",
+            ],
+        ),
+        ("com.amoskys.dashboard", [python, "-m", "web.app"]),
     ]
 
     for label, prog_args in services:
@@ -829,7 +944,11 @@ def do_install(_args: argparse.Namespace) -> None:
 
 
 def _write_launchd_plist(
-    path: Path, label: str, prog_args: list, cwd: str, src: str,
+    path: Path,
+    label: str,
+    prog_args: list,
+    cwd: str,
+    src: str,
 ) -> None:
     """Write a single launchd plist file."""
     args_xml = "\n        ".join(f"<string>{a}</string>" for a in prog_args)
@@ -914,33 +1033,47 @@ def main() -> None:
     parser.add_argument(
         "action",
         choices=[
-            "start", "stop", "restart", "status",
-            "health", "collect", "install", "uninstall",
+            "start",
+            "stop",
+            "restart",
+            "status",
+            "health",
+            "collect",
+            "install",
+            "uninstall",
         ],
     )
     parser.add_argument(
-        "--agents-only", action="store_true",
+        "--agents-only",
+        action="store_true",
         help="Skip infrastructure (EventBus, WAL Processor)",
     )
     parser.add_argument(
-        "--include-dashboard", action="store_true",
+        "--include-dashboard",
+        action="store_true",
         help="Also start the web dashboard",
     )
     parser.add_argument(
-        "--skip-preflight", action="store_true",
+        "--skip-preflight",
+        action="store_true",
         help="Skip environment validation checks",
     )
     parser.add_argument(
-        "--verbose", "-v", action="store_true",
+        "--verbose",
+        "-v",
+        action="store_true",
         help="Show detailed status information",
     )
     # Collect options
     parser.add_argument(
-        "--clear", action="store_true",
+        "--clear",
+        action="store_true",
         help="Clear database before collecting (collect only)",
     )
     parser.add_argument(
-        "--agents", type=int, default=0,
+        "--agents",
+        type=int,
+        default=0,
         help="Limit to first N agents (collect only)",
     )
 

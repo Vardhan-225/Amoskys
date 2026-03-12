@@ -44,16 +44,36 @@ logger = logging.getLogger(__name__)
 
 # Shared constants (mirror the collector's app sets for probe-side checks)
 _SENSITIVE_FILE_PATTERNS = (
-    ".ssh/", "id_rsa", "id_ed25519", "authorized_keys",
-    ".aws/credentials", ".kube/config", "Keychain",
-    ".gnupg/", ".netrc", "shadow", "passwd",
-    "login.keychain", "System.keychain",
+    ".ssh/",
+    "id_rsa",
+    "id_ed25519",
+    "authorized_keys",
+    ".aws/credentials",
+    ".kube/config",
+    "Keychain",
+    ".gnupg/",
+    ".netrc",
+    "shadow",
+    "passwd",
+    "login.keychain",
+    "System.keychain",
 )
 
-_SUSPICIOUS_COMMANDS = frozenset({
-    "curl", "wget", "nc", "ncat", "bash", "sh", "zsh",
-    "python3", "python", "osascript", "base64",
-})
+_SUSPICIOUS_COMMANDS = frozenset(
+    {
+        "curl",
+        "wget",
+        "nc",
+        "ncat",
+        "bash",
+        "sh",
+        "zsh",
+        "python3",
+        "python",
+        "osascript",
+        "base64",
+    }
+)
 
 
 # =============================================================================
@@ -162,9 +182,7 @@ class DownloadToExecuteProbe(MicroProbe):
         # Prune entries older than the window
         cutoff = now - self.WINDOW_SECONDS
         self._recent_downloads = {
-            fname: ts
-            for fname, ts in self._recent_downloads.items()
-            if ts > cutoff
+            fname: ts for fname, ts in self._recent_downloads.items() if ts > cutoff
         }
 
         if not self._recent_downloads or not new_processes:
@@ -361,7 +379,10 @@ class FullKillChainProbe(MicroProbe):
                 # Check for credential access patterns
                 detail_lower = event.detail.lower()
                 app_lower = event.app_name.lower()
-                if any(pat in detail_lower or pat in app_lower for pat in _SENSITIVE_FILE_PATTERNS):
+                if any(
+                    pat in detail_lower or pat in app_lower
+                    for pat in _SENSITIVE_FILE_PATTERNS
+                ):
                     stages_hit.setdefault("credential", []).append(event.app_name)
                 else:
                     stages_hit.setdefault("execute", []).append(
@@ -385,9 +406,7 @@ class FullKillChainProbe(MicroProbe):
             return events
 
         # Calculate weighted score
-        total_score = sum(
-            self._STAGE_WEIGHTS.get(stage, 0) for stage in stages_hit
-        )
+        total_score = sum(self._STAGE_WEIGHTS.get(stage, 0) for stage in stages_hit)
 
         severity = Severity.CRITICAL if stage_count >= 4 else Severity.HIGH
         confidence = min(0.95, 0.5 + (stage_count * 0.1))
@@ -444,12 +463,21 @@ class BrowserToTerminalProbe(MicroProbe):
     scan_interval = 10.0
     requires_fields = ["active_browsers", "active_terminals", "new_processes"]
 
-    _TERMINALS = frozenset({
-        "Terminal", "iTerm2", "Warp", "Alacritty", "kitty",
-        "Hyper", "WezTerm",
-        # Also match shell parents that terminals spawn
-        "login", "zsh", "bash",
-    })
+    _TERMINALS = frozenset(
+        {
+            "Terminal",
+            "iTerm2",
+            "Warp",
+            "Alacritty",
+            "kitty",
+            "Hyper",
+            "WezTerm",
+            # Also match shell parents that terminals spawn
+            "login",
+            "zsh",
+            "bash",
+        }
+    )
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         events: List[TelemetryEvent] = []
@@ -606,9 +634,7 @@ class PIDNetworkAnomalyProbe(MicroProbe):
             if not external:
                 continue
 
-            remote_endpoints = [
-                f"{c.remote_ip}:{c.remote_port}" for c in external
-            ]
+            remote_endpoints = [f"{c.remote_ip}:{c.remote_port}" for c in external]
 
             events.append(
                 self._create_event(
@@ -689,13 +715,15 @@ class ProvenanceChainProbe(MicroProbe):
         for event in timeline:
             stage = self._classify_stage(event, pid_connections)
             if stage:
-                staged_events.append({
-                    "stage": stage,
-                    "timestamp": event.timestamp,
-                    "app_name": event.app_name,
-                    "detail": event.detail,
-                    "pid": event.pid,
-                })
+                staged_events.append(
+                    {
+                        "stage": stage,
+                        "timestamp": event.timestamp,
+                        "app_name": event.app_name,
+                        "detail": event.detail,
+                        "pid": event.pid,
+                    }
+                )
 
         if not staged_events:
             return events
@@ -705,9 +733,7 @@ class ProvenanceChainProbe(MicroProbe):
 
         # Score and report chains above threshold
         for chain in chains:
-            score = sum(
-                self._STAGE_WEIGHTS.get(e["stage"], 0) for e in chain
-            )
+            score = sum(self._STAGE_WEIGHTS.get(e["stage"], 0) for e in chain)
             stages_in_chain = list({e["stage"] for e in chain})
 
             if score < self.SCORE_THRESHOLD:

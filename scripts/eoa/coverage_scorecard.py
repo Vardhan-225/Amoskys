@@ -41,31 +41,31 @@ sys.path.insert(0, str(_root / "src"))
 # (module_path, factory_function_or_probe_classes)
 AGENT_PROBE_MAP = {
     "proc": {
-        "module": "amoskys.agents.shared.process.probes",
+        "module": "amoskys.agents.os.macos.process.probes",
         "factory": "create_proc_probes",
     },
     "fim": {
-        "module": "amoskys.agents.shared.filesystem.probes",
+        "module": "amoskys.agents.os.macos.filesystem.probes",
         "factory": "create_fim_probes",
     },
     "flow": {
-        "module": "amoskys.agents.shared.network.probes",
+        "module": "amoskys.agents.os.macos.network.probes",
         "factory": "create_flow_probes",
     },
     "dns": {
-        "module": "amoskys.agents.shared.dns.probes",
+        "module": "amoskys.agents.os.macos.dns.probes",
         "factory": "create_dns_probes",
     },
     "peripheral": {
-        "module": "amoskys.agents.shared.peripheral.probes",
+        "module": "amoskys.agents.os.macos.peripheral.probes",
         "factory": "create_peripheral_probes",
     },
     "auth": {
-        "module": "amoskys.agents.shared.auth.probes",
+        "module": "amoskys.agents.os.macos.auth.probes",
         "factory": "create_auth_probes",
     },
     "persistence": {
-        "module": "amoskys.agents.shared.persistence.probes",
+        "module": "amoskys.agents.os.macos.persistence.probes",
         "factory": "create_persistence_probes",
     },
     "kernel_audit": {

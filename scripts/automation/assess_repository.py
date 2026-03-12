@@ -6,7 +6,7 @@ Professional Analysis Tool
 
 This script provides deep analysis of:
 - Architecture & Component Assessment
-- Performance Metrics & Bottlenecks  
+- Performance Metrics & Bottlenecks
 - Security Posture & Vulnerabilities
 - Code Quality & Technical Debt
 - Development Workflow & CI/CD
@@ -324,7 +324,7 @@ class RepositoryAssessor:
                             has_pytest_config = True
                             score += 15
                             break
-                except:
+                except Exception:
                     pass
 
         if not has_pytest_config:
@@ -351,7 +351,7 @@ class RepositoryAssessor:
                             has_coverage_config = True
                             score += 15
                             break
-                except:
+                except Exception:
                     pass
 
         if not has_coverage_config:
@@ -381,7 +381,7 @@ class RepositoryAssessor:
                             try:
                                 collected_tests = int(line.split()[0])
                                 break
-                            except:
+                            except Exception:
                                 pass
 
                     metrics["collected_tests"] = collected_tests
@@ -490,7 +490,7 @@ class RepositoryAssessor:
                                     f"✓ Code quality tools configured in {config_file}"
                                 )
                                 formatting_score += 20
-                    except:
+                    except Exception:
                         pass
                 else:
                     details.append(f"✓ {tool_name} configuration found")
@@ -605,7 +605,7 @@ class RepositoryAssessor:
                         content = f.read()
                         if "typing" in content or "->" in content or ": " in content:
                             type_hint_files += 1
-                except:
+                except Exception:
                     pass
 
         type_hint_percentage = (
@@ -711,7 +711,7 @@ class RepositoryAssessor:
                     details.append("✗ Poor gitignore security coverage")
                     recommendations.append("Add comprehensive gitignore rules")
 
-            except:
+            except Exception:
                 pass
 
         # Check for hardcoded secrets (basic scan)
@@ -734,7 +734,7 @@ class RepositoryAssessor:
                         if re.search(pattern, content, re.IGNORECASE):
                             potential_secrets += 1
                             break
-            except:
+            except Exception:
                 pass
 
         metrics["potential_hardcoded_secrets"] = potential_secrets
@@ -763,7 +763,7 @@ class RepositoryAssessor:
                     for dep in security_deps:
                         if dep in content:
                             found_security_deps.append(dep)
-            except:
+            except Exception:
                 pass
 
         found_security_deps = list(set(found_security_deps))
@@ -793,7 +793,7 @@ class RepositoryAssessor:
                     for tool in security_tools:
                         if tool in content:
                             found_tools.append(tool)
-            except:
+            except Exception:
                 pass
 
         found_tools = list(set(found_tools))
@@ -897,7 +897,7 @@ class RepositoryAssessor:
                         "Improve README with installation, usage, and features"
                     )
 
-            except:
+            except Exception:
                 pass
 
         # Check docs directory structure
@@ -961,7 +961,7 @@ class RepositoryAssessor:
                         content = f.read()
                         if '"""' in content or "'''" in content:
                             files_with_docstrings += 1
-                except:
+                except Exception:
                     pass
 
             docstring_percentage = (files_with_docstrings / len(sample_files)) * 100

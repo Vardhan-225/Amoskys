@@ -34,73 +34,30 @@ class ComponentTester:
         self.results = {}
 
     async def test_snmp_config(self):
-        """Test SNMP configuration loading"""
+        """Test SNMP configuration loading."""
         logger.info("\n" + "=" * 60)
         logger.info("TEST 1: SNMP Configuration")
         logger.info("=" * 60)
 
-        try:
-            from amoskys.agents.shared.snmp.enhanced_collector import SNMPMetricsConfig
-
-            config_path = project_root / "config" / "snmp_metrics_config.yaml"
-            config = SNMPMetricsConfig(str(config_path))
-
-            # Test profile application
-            for profile in ["minimal", "standard", "full"]:
-                config.apply_profile(profile)
-                enabled, total = config.get_metric_count()
-                logger.info(f"  Profile '{profile}': {enabled}/{total} metrics enabled")
-
-            # List categories
-            categories = config.list_categories()
-            logger.info(f"  Available categories: {categories}")
-
-            self.results["snmp_config"] = "PASS"
-            logger.info("✓ SNMP Configuration: PASS")
-            return True
-
-        except Exception as e:
-            logger.error(f"✗ SNMP Configuration: FAIL - {e}")
-            self.results["snmp_config"] = f"FAIL: {e}"
-            return False
+        # TODO: SNMP agent not yet ported to macOS Observatory — Igris multi-platform (future)
+        logger.warning(
+            "  SNMP tests skipped — agent not yet ported to macOS Observatory"
+        )
+        self.results["snmp_config"] = "SKIP (not ported)"
+        return False
 
     async def test_snmp_collection(self):
-        """Test SNMP data collection"""
+        """Test SNMP data collection."""
         logger.info("\n" + "=" * 60)
         logger.info("TEST 2: SNMP Collection")
         logger.info("=" * 60)
 
-        try:
-            from amoskys.agents.shared.snmp.enhanced_collector import (
-                EnhancedSNMPCollector,
-                SNMPMetricsConfig,
-            )
-
-            config_path = project_root / "config" / "snmp_metrics_config.yaml"
-            config = SNMPMetricsConfig(str(config_path))
-            config.apply_profile("minimal")  # Use minimal for testing
-
-            collector = EnhancedSNMPCollector(config)
-
-            logger.info("  Configuration loaded successfully")
-            logger.info("  Enhanced SNMP Collector created")
-            logger.info("  ⚠️  SNMP collection test skipped (requires snmpd)")
-            logger.info(
-                "  To enable: sudo launchctl load -w /System/Library/LaunchDaemons/org.net-snmp.snmpd.plist"
-            )
-
-            # Just verify the collector is properly configured
-            enabled, total = config.get_metric_count()
-            logger.info(f"  Collector configured for {enabled}/{total} metrics")
-
-            self.results["snmp_collection"] = "PASS (config only)"
-            logger.info("✓ SNMP Collection: PASS (configuration verified)")
-            return True
-
-        except Exception as e:
-            logger.error(f"✗ SNMP Collection: FAIL - {e}")
-            self.results["snmp_collection"] = f"FAIL: {e}"
-            return False
+        # TODO: SNMP agent not yet ported to macOS Observatory — Igris multi-platform (future)
+        logger.warning(
+            "  SNMP tests skipped — agent not yet ported to macOS Observatory"
+        )
+        self.results["snmp_collection"] = "SKIP (not ported)"
+        return False
 
     async def test_proc_agent(self):
         """Test process monitoring agent"""
@@ -110,7 +67,7 @@ class ComponentTester:
 
         try:
             # Use simplified version that doesn't need protobuf
-            from amoskys.agents.shared.process.agent_simple import ProcAgent
+            from amoskys.agents.os.macos.process.agent_simple import ProcAgent
 
             agent = ProcAgent(collection_interval=30)
 

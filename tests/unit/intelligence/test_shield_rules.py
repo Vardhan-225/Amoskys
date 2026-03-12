@@ -207,9 +207,15 @@ class TestRuleCoordinatedReconnaissance:
 
     def test_no_fire_different_ips(self):
         events = [
-            _network_sentinel_event("http_scan_storm", attacker_ip="1.1.1.1", offset_sec=0),
-            _network_sentinel_event("directory_brute_force", attacker_ip="2.2.2.2", offset_sec=30),
-            _network_sentinel_event("sqli_payload_detected", attacker_ip="3.3.3.3", offset_sec=60),
+            _network_sentinel_event(
+                "http_scan_storm", attacker_ip="1.1.1.1", offset_sec=0
+            ),
+            _network_sentinel_event(
+                "directory_brute_force", attacker_ip="2.2.2.2", offset_sec=30
+            ),
+            _network_sentinel_event(
+                "sqli_payload_detected", attacker_ip="3.3.3.3", offset_sec=60
+            ),
         ]
         assert rule_coordinated_reconnaissance(events, _DEVICE) is None
 
@@ -244,7 +250,8 @@ class TestRuleCoordinatedReconnaissance:
     def test_mitre_techniques_extracted(self):
         events = [
             _network_sentinel_event(
-                "http_scan_storm", offset_sec=0,
+                "http_scan_storm",
+                offset_sec=0,
                 mitre_techniques='["T1595.002"]',
             ),
             _network_sentinel_event("directory_brute_force", offset_sec=10),
@@ -301,8 +308,12 @@ class TestRuleWebAttackChain:
 
     def test_no_fire_different_ips(self):
         events = [
-            _network_sentinel_event("http_scan_storm", attacker_ip="1.1.1.1", offset_sec=0),
-            _network_sentinel_event("sqli_payload_detected", attacker_ip="2.2.2.2", offset_sec=30),
+            _network_sentinel_event(
+                "http_scan_storm", attacker_ip="1.1.1.1", offset_sec=0
+            ),
+            _network_sentinel_event(
+                "sqli_payload_detected", attacker_ip="2.2.2.2", offset_sec=30
+            ),
         ]
         assert rule_web_attack_chain(events, _DEVICE) is None
 
@@ -409,7 +420,8 @@ class TestRuleInfostealerKillChain:
     def test_mitre_techniques_from_events(self):
         events = [
             _stealer_event(
-                "fake_password_dialog", offset_sec=0,
+                "fake_password_dialog",
+                offset_sec=0,
                 mitre_techniques='["T1056.002"]',
             ),
             _stealer_event("keychain_access", offset_sec=30),
@@ -511,7 +523,8 @@ class TestRuleClickfixAttack:
     def test_mitre_techniques_extracted(self):
         events = [
             _clickfix_event(
-                "clickfix_detected", offset_sec=0,
+                "clickfix_detected",
+                offset_sec=0,
                 mitre_techniques='["T1204.001", "T1059"]',
             ),
         ]

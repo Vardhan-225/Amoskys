@@ -348,7 +348,9 @@ class SomaBrain:
 
             where_clauses = []
             if "quality_state" in existing_cols:
-                where_clauses.append("LOWER(COALESCE(quality_state, 'valid')) = 'valid'")
+                where_clauses.append(
+                    "LOWER(COALESCE(quality_state, 'valid')) = 'valid'"
+                )
             if "training_exclude" in existing_cols:
                 where_clauses.append(
                     "COALESCE(CAST(training_exclude AS TEXT), '0') IN ('0', 'false', 'FALSE', 'False')"
@@ -1702,7 +1704,8 @@ class AutoCalibrator:
             )
             conn.execute("PRAGMA query_only = ON")
             cols = {
-                row[1] for row in conn.execute("PRAGMA table_info(security_events)").fetchall()
+                row[1]
+                for row in conn.execute("PRAGMA table_info(security_events)").fetchall()
             }
             quality_where = ""
             if "quality_state" in cols:
@@ -1759,7 +1762,8 @@ class AutoCalibrator:
             )
             conn.execute("PRAGMA query_only = ON")
             cols = {
-                row[1] for row in conn.execute("PRAGMA table_info(security_events)").fetchall()
+                row[1]
+                for row in conn.execute("PRAGMA table_info(security_events)").fetchall()
             }
             quality_where = ""
             if "quality_state" in cols:

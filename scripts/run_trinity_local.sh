@@ -78,7 +78,7 @@ python3 -m amoskys.agents.os.linux.kernel_audit.run_agent_v2 \
 KA_PID=$!
 
 # Protocol collectors — use_stub=True is set in launcher for mac lab
-python3 -m amoskys.agents.shared.protocol_collectors.run_agent_v2 \
+python3 -m amoskys.agents.os.macos.protocol_collectors.run_agent_v2 \
   --device-id="$AMOSKYS_DEVICE_ID" \
   --queue-path="$AMOSKYS_QUEUE_ROOT/protocol_collectors" \
   --collection-interval=30 \
@@ -89,7 +89,7 @@ python3 -m amoskys.agents.shared.protocol_collectors.run_agent_v2 \
 PC_PID=$!
 
 # Device discovery — ARP probes fail gracefully on macOS (no ip neigh, no /proc)
-python3 -m amoskys.agents.shared.device_discovery.run_agent_v2 \
+python3 -m amoskys.agents.os.macos.discovery.run_agent_v2 \
   --device-id="$AMOSKYS_DEVICE_ID" \
   --queue-path="$AMOSKYS_QUEUE_ROOT/device_discovery" \
   --collection-interval=30 \

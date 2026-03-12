@@ -31,7 +31,11 @@ AGENT_CATALOG = {
         ],
         "monitors": ["FlowEvents", "ProcessEvents", "NetworkEvents"],
         "path": "src/amoskys/eventbus/server.py",
-        "process_patterns": ["amoskys.eventbus.server", "eventbus/server.py", "amoskys-eventbus"],
+        "process_patterns": [
+            "amoskys.eventbus.server",
+            "eventbus/server.py",
+            "amoskys-eventbus",
+        ],
         "protocol": "gRPC/mTLS",
         "neurons": ["Ingestion Layer", "Message Bus", "Event Router"],
         "guarded_resources": {
@@ -46,7 +50,7 @@ AGENT_CATALOG = {
         "name": "Process Monitor Agent",
         "description": "Native process monitoring with LOLBin detection, code signing verification, and behavioral anomaly detection",
         "type": "Collector",
-        "module": "amoskys.agents.shared.process",
+        "module": "amoskys.agents.os.macos.process",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -58,7 +62,11 @@ AGENT_CATALOG = {
         ],
         "monitors": ["Processes", "CPU/Memory", "Process Trees", "Suspicious Behavior"],
         "path": "src/amoskys/agents/shared/process/agent.py",
-        "process_patterns": ["amoskys.agents.shared.process", "amoskys.agents.os.macos.process", "ProcAgent"],
+        "process_patterns": [
+            "amoskys.agents.os.macos.process",
+            "amoskys.agents.os.macos.process",
+            "ProcAgent",
+        ],
         "protocol": "LocalQueue → EventBus",
         "neurons": ["Process Sensor", "Behavioral Analyzer", "Anomaly Detector"],
         "guarded_resources": {
@@ -73,7 +81,7 @@ AGENT_CATALOG = {
         "name": "DNS Threat Detector",
         "description": "DNS-based threat detection including DGA domains, tunneling, fast-flux, beaconing, and blocklist enforcement",
         "type": "Collector",
-        "module": "amoskys.agents.shared.dns",
+        "module": "amoskys.agents.os.macos.dns",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -85,7 +93,11 @@ AGENT_CATALOG = {
         ],
         "monitors": ["DNS Queries", "DGA Domains", "DNS Tunneling", "Beaconing"],
         "path": "src/amoskys/agents/shared/dns/agent.py",
-        "process_patterns": ["amoskys.agents.shared.dns", "amoskys.agents.os.macos.dns", "DNSAgent"],
+        "process_patterns": [
+            "amoskys.agents.os.macos.dns",
+            "amoskys.agents.os.macos.dns",
+            "DNSAgent",
+        ],
         "protocol": "LocalQueue → EventBus",
         "neurons": ["DNS Sensor", "DGA Analyzer", "Tunnel Detector"],
         "guarded_resources": {
@@ -100,7 +112,7 @@ AGENT_CATALOG = {
         "name": "Authentication Guard",
         "description": "Authentication monitoring with brute-force detection, impossible travel, sudo escalation, and MFA bypass detection",
         "type": "Collector",
-        "module": "amoskys.agents.shared.auth",
+        "module": "amoskys.agents.os.macos.auth",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -113,7 +125,7 @@ AGENT_CATALOG = {
         "monitors": ["Login Attempts", "SSH Sessions", "Sudo Usage", "MFA Events"],
         "path": "src/amoskys/agents/shared/auth/agent.py",
         "process_patterns": [
-            "amoskys.agents.shared.auth",
+            "amoskys.agents.os.macos.auth",
             "amoskys.agents.os.macos.auth",
             "AuthGuardAgent",
         ],
@@ -135,7 +147,7 @@ AGENT_CATALOG = {
         "name": "File Integrity Monitor",
         "description": "File integrity monitoring for SUID escalation, webshell drops, config backdoors, library hijacking, and bootloader tampering",
         "type": "Collector",
-        "module": "amoskys.agents.shared.filesystem",
+        "module": "amoskys.agents.os.macos.filesystem",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -147,7 +159,11 @@ AGENT_CATALOG = {
         ],
         "monitors": ["File Changes", "SUID/SGID", "Webshells", "Config Files"],
         "path": "src/amoskys/agents/shared/filesystem/agent.py",
-        "process_patterns": ["amoskys.agents.shared.filesystem", "amoskys.agents.os.macos.filesystem", "FIMAgent"],
+        "process_patterns": [
+            "amoskys.agents.os.macos.filesystem",
+            "amoskys.agents.os.macos.filesystem",
+            "FIMAgent",
+        ],
         "protocol": "LocalQueue → EventBus",
         "neurons": ["File Sensor", "Integrity Analyzer", "Baseline Engine"],
         "guarded_resources": {
@@ -162,7 +178,7 @@ AGENT_CATALOG = {
         "name": "Network Flow Analyzer",
         "description": "Network traffic analysis with C2 beaconing detection, lateral movement, data exfiltration, and tunnel detection",
         "type": "Collector",
-        "module": "amoskys.agents.shared.network",
+        "module": "amoskys.agents.os.macos.network",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -174,7 +190,11 @@ AGENT_CATALOG = {
         ],
         "monitors": ["Network Flows", "Connections", "Traffic Patterns", "Tunnels"],
         "path": "src/amoskys/agents/shared/network/agent.py",
-        "process_patterns": ["amoskys.agents.shared.network", "amoskys.agents.os.macos.network", "FlowAgent"],
+        "process_patterns": [
+            "amoskys.agents.os.macos.network",
+            "amoskys.agents.os.macos.network",
+            "FlowAgent",
+        ],
         "protocol": "LocalQueue → EventBus",
         "neurons": ["Flow Sensor", "C2 Detector", "Exfiltration Analyzer"],
         "guarded_resources": {
@@ -193,7 +213,7 @@ AGENT_CATALOG = {
         "name": "Persistence Guard",
         "description": "Persistence mechanism detection across LaunchAgents, systemd, cron, SSH keys, shell profiles, and browser extensions",
         "type": "Collector",
-        "module": "amoskys.agents.shared.persistence",
+        "module": "amoskys.agents.os.macos.persistence",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -212,7 +232,7 @@ AGENT_CATALOG = {
         ],
         "path": "src/amoskys/agents/shared/persistence/agent.py",
         "process_patterns": [
-            "amoskys.agents.shared.persistence",
+            "amoskys.agents.os.macos.persistence",
             "amoskys.agents.os.macos.persistence",
             "PersistenceGuard",
         ],
@@ -234,7 +254,7 @@ AGENT_CATALOG = {
         "name": "Peripheral Monitor",
         "description": "USB/Bluetooth device monitoring with BadUSB detection, unauthorized device tracking, and data exfiltration prevention",
         "type": "Collector",
-        "module": "amoskys.agents.shared.peripheral",
+        "module": "amoskys.agents.os.macos.peripheral",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -247,7 +267,7 @@ AGENT_CATALOG = {
         "monitors": ["USB Devices", "Bluetooth", "HID Devices", "Storage Devices"],
         "path": "src/amoskys/agents/shared/peripheral/agent.py",
         "process_patterns": [
-            "amoskys.agents.shared.peripheral",
+            "amoskys.agents.os.macos.peripheral",
             "amoskys.agents.os.macos.peripheral",
             "PeripheralAgent",
         ],
@@ -304,7 +324,7 @@ AGENT_CATALOG = {
         "name": "Device Discovery Scanner",
         "description": "Network asset discovery with ARP enumeration, port scanning, rogue DHCP/DNS detection, and vulnerability bannering",
         "type": "Discovery",
-        "module": "amoskys.agents.shared.device_discovery",
+        "module": "amoskys.agents.os.macos.discovery",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -322,7 +342,7 @@ AGENT_CATALOG = {
         ],
         "path": "src/amoskys/agents/shared/device_discovery/agent.py",
         "process_patterns": [
-            "amoskys.agents.shared.device_discovery",
+            "amoskys.agents.os.macos.discovery",
             "device_discovery",
             "device_scanner",
         ],
@@ -340,7 +360,7 @@ AGENT_CATALOG = {
         "name": "Protocol Threat Collector",
         "description": "Protocol-level threat detection for HTTP anomalies, TLS issues, SSH brute-force, DNS tunneling, and SQL injection",
         "type": "Collector",
-        "module": "amoskys.agents.shared.protocol_collectors",
+        "module": "amoskys.agents.os.macos.protocol_collectors",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -353,7 +373,7 @@ AGENT_CATALOG = {
         "monitors": ["HTTP Traffic", "TLS Sessions", "SSH Sessions", "SQL Queries"],
         "path": "src/amoskys/agents/shared/protocol_collectors/protocol_collectors.py",
         "process_patterns": [
-            "amoskys.agents.shared.protocol_collectors",
+            "amoskys.agents.os.macos.protocol_collectors",
             "protocol_collectors",
             "ProtocolCollectors",
         ],
@@ -372,7 +392,7 @@ AGENT_CATALOG = {
         "name": "Application Log Analyzer",
         "description": "Application log aggregation with webshell detection, log tampering, credential harvesting, and error spike analysis",
         "type": "Collector",
-        "module": "amoskys.agents.shared.applog",
+        "module": "amoskys.agents.os.macos.applog",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -391,7 +411,7 @@ AGENT_CATALOG = {
         ],
         "path": "src/amoskys/agents/shared/applog/agent.py",
         "process_patterns": [
-            "amoskys.agents.shared.applog",
+            "amoskys.agents.os.macos.applog",
             "amoskys.agents.os.macos.applog",
             "AppLogAgent",
         ],
@@ -413,7 +433,7 @@ AGENT_CATALOG = {
         "name": "Database Activity Monitor",
         "description": "Database query monitoring with SQL injection detection, privilege escalation, bulk extraction, and schema enumeration",
         "type": "Collector",
-        "module": "amoskys.agents.shared.db_activity",
+        "module": "amoskys.agents.os.macos.db_activity",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -432,7 +452,7 @@ AGENT_CATALOG = {
         ],
         "path": "src/amoskys/agents/shared/db_activity/agent.py",
         "process_patterns": [
-            "amoskys.agents.shared.db_activity",
+            "amoskys.agents.os.macos.db_activity",
             "amoskys.agents.os.macos.db_activity",
             "DBActivityAgent",
         ],
@@ -454,7 +474,7 @@ AGENT_CATALOG = {
         "name": "HTTP Inspector",
         "description": "Deep HTTP payload analysis with XSS, SSRF, path traversal, API abuse, and suspicious upload detection",
         "type": "Collector",
-        "module": "amoskys.agents.shared.http_inspector",
+        "module": "amoskys.agents.os.macos.http_inspector",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -473,7 +493,7 @@ AGENT_CATALOG = {
         ],
         "path": "src/amoskys/agents/shared/http_inspector/agent.py",
         "process_patterns": [
-            "amoskys.agents.shared.http_inspector",
+            "amoskys.agents.os.macos.http_inspector",
             "amoskys.agents.os.macos.http_inspector",
             "HTTPInspectorAgent",
         ],
@@ -491,7 +511,7 @@ AGENT_CATALOG = {
         "name": "Internet Activity Monitor",
         "description": "Outbound connection monitoring with cloud exfil, TOR/VPN usage, crypto mining, and unusual geo-connection detection",
         "type": "Collector",
-        "module": "amoskys.agents.shared.internet_activity",
+        "module": "amoskys.agents.os.macos.internet_activity",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -510,7 +530,7 @@ AGENT_CATALOG = {
         ],
         "path": "src/amoskys/agents/shared/internet_activity/agent.py",
         "process_patterns": [
-            "amoskys.agents.shared.internet_activity",
+            "amoskys.agents.os.macos.internet_activity",
             "amoskys.agents.os.macos.internet_activity",
             "InternetActivityAgent",
         ],
@@ -536,7 +556,7 @@ AGENT_CATALOG = {
         "name": "Network Scanner",
         "description": "Active network probing with new service detection, port changes, rogue services, SSL cert issues, and topology changes",
         "type": "Discovery",
-        "module": "amoskys.agents.shared.net_scanner",
+        "module": "amoskys.agents.os.macos.discovery",
         "port": None,
         "platform": ["darwin", "linux"],
         "capabilities": [
@@ -555,7 +575,7 @@ AGENT_CATALOG = {
         ],
         "path": "src/amoskys/agents/shared/net_scanner/agent.py",
         "process_patterns": [
-            "amoskys.agents.shared.net_scanner",
+            "amoskys.agents.os.macos.discovery",
             "net_scanner_agent",
             "NetScannerAgent",
         ],

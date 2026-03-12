@@ -3,6 +3,8 @@
 
 Tests cover:
     - CSV output parsing (header, data lines, edge cases)
+    NOTE: Skipped — nettop_collector module was removed in Observatory v2 (bandwidth
+    collection is now integrated into MacOSNetworkCollector via ProcessBandwidth).
     - PID extraction from ProcessName.PID format
     - Multi-entry PID aggregation
     - Subprocess error handling (timeout, missing binary)
@@ -10,17 +12,22 @@ Tests cover:
     - Probes fire with real byte values
 """
 
+import pytest
+
+pytest.skip(
+    "macOS Observatory v2 removed nettop_collector module; bandwidth collection is now integrated into MacOSNetworkCollector via ProcessBandwidth",
+    allow_module_level=True,
+)
+
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from amoskys.agents.common.probes import ProbeContext, Severity
-from amoskys.agents.shared.network.nettop_collector import (
+from amoskys.agents.os.macos.network.nettop_collector import (
     MacOSNettopCollector,
     NettopRecord,
 )
-from amoskys.agents.shared.network.probes import (
+from amoskys.agents.os.macos.network.probes import (
     C2BeaconFlowProbe,
     DataExfilVolumeSpikeProbe,
     FlowEvent,
@@ -182,7 +189,7 @@ class TestNettopParsing:
 class TestNettopCollection:
     """Test subprocess execution and error handling."""
 
-    @patch("amoskys.agents.shared.network.nettop_collector.subprocess.run")
+    @patch("amoskys.agents.os.macos.network.nettop_collector.subprocess.run")
     def test_collect_success(self, mock_run):
         """Successful nettop run returns parsed records."""
         mock_run.return_value = MagicMock(
@@ -197,7 +204,7 @@ class TestNettopCollection:
         assert len(records) == 5
         mock_run.assert_called_once()
 
-    @patch("amoskys.agents.shared.network.nettop_collector.subprocess.run")
+    @patch("amoskys.agents.os.macos.network.nettop_collector.subprocess.run")
     def test_collect_timeout(self, mock_run):
         """Timeout returns empty dict and increments error count."""
         import subprocess
@@ -210,7 +217,7 @@ class TestNettopCollection:
         assert records == {}
         assert collector._collection_errors == 1
 
-    @patch("amoskys.agents.shared.network.nettop_collector.subprocess.run")
+    @patch("amoskys.agents.os.macos.network.nettop_collector.subprocess.run")
     def test_collect_not_found(self, mock_run):
         """FileNotFoundError returns empty dict."""
         mock_run.side_effect = FileNotFoundError("nettop")
@@ -221,7 +228,7 @@ class TestNettopCollection:
         assert records == {}
         assert collector._collection_errors == 1
 
-    @patch("amoskys.agents.shared.network.nettop_collector.subprocess.run")
+    @patch("amoskys.agents.os.macos.network.nettop_collector.subprocess.run")
     def test_collect_nonzero_exit_no_output(self, mock_run):
         """Non-zero exit with no stdout returns empty dict."""
         mock_run.return_value = MagicMock(
@@ -235,7 +242,7 @@ class TestNettopCollection:
 
         assert records == {}
 
-    @patch("amoskys.agents.shared.network.nettop_collector.subprocess.run")
+    @patch("amoskys.agents.os.macos.network.nettop_collector.subprocess.run")
     def test_collect_nonzero_exit_with_output(self, mock_run):
         """Non-zero exit but with stdout still parses output."""
         mock_run.return_value = MagicMock(

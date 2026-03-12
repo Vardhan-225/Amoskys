@@ -133,7 +133,7 @@ def trigger_nxdomain_burst(dry_run: bool = False) -> None:
         return
 
     for i in range(12):
-        domain = f"eoa-nx-burst-{i}-{random.randint(1000,9999)}.invalid"
+        domain = f"eoa-nx-burst-{i}-{random.randint(1000, 9999)}.invalid"
         _resolve(domain)
     log("  Sent 12 NXDOMAIN queries")
 
@@ -185,7 +185,7 @@ def trigger_new_domains(dry_run: bool = False) -> None:
     """Resolve many unique domains (first-time domain pattern)."""
     log("Trigger: NewDomainForProcessProbe")
 
-    domains = [f"eoa-new-{i}-{random.randint(10000,99999)}.invalid" for i in range(15)]
+    domains = [f"eoa-new-{i}-{random.randint(10000, 99999)}.invalid" for i in range(15)]
 
     for domain in domains:
         if dry_run:

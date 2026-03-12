@@ -45,7 +45,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from amoskys.agents.common.probes import Severity
-from amoskys.agents.shared.process.probes import (
+from amoskys.agents.os.macos.process.probes import (
     BinaryFromTempProbe,
     CodeSigningProbe,
     DylibInjectionProbe,
@@ -228,11 +228,11 @@ def _codesign_missing():
 
 # ─── Patch-target key constants ───────────────────────────────────────────────
 
-_PA = "amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE"
-_PI = "amoskys.agents.shared.process.probes.psutil.process_iter"
-_PP = "amoskys.agents.shared.process.probes.psutil.Process"
-_PF = "amoskys.agents.shared.process.probes.platform.system"
-_OE = "amoskys.agents.shared.process.probes.os.path.exists"
+_PA = "amoskys.agents.os.macos.process.probes.PSUTIL_AVAILABLE"
+_PI = "amoskys.agents.os.macos.process.probes.psutil.process_iter"
+_PP = "amoskys.agents.os.macos.process.probes.psutil.Process"
+_PF = "amoskys.agents.os.macos.process.probes.platform.system"
+_OE = "amoskys.agents.os.macos.process.probes.os.path.exists"
 _TT = "time.time"
 _SR = "subprocess.run"
 
@@ -2204,9 +2204,15 @@ def _cs_patches(
     target_path: str | None = None,
 ) -> dict:
     if target_path is not None:
-        exists_fn = lambda p: p == target_path
+
+        def exists_fn(p):
+            return p == target_path
+
     else:
-        exists_fn = lambda p: exists
+
+        def exists_fn(p):
+            return exists
+
     return {
         _PA: True,
         _PF: lambda: platform_os,

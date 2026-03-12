@@ -46,21 +46,48 @@ except ImportError:
 _CORE_DATA_EPOCH_OFFSET = 978307200
 
 # Terminal emulator process names
-_TERMINAL_EMULATORS = frozenset({
-    "Terminal", "iTerm2", "Warp", "Alacritty", "kitty", "Hyper",
-})
+_TERMINAL_EMULATORS = frozenset(
+    {
+        "Terminal",
+        "iTerm2",
+        "Warp",
+        "Alacritty",
+        "kitty",
+        "Hyper",
+    }
+)
 
 # Messaging app process names for ClickFix detection
-_MESSAGING_APPS = frozenset({
-    "Messages", "Slack", "Microsoft Teams", "Teams", "Discord",
-    "WhatsApp", "Telegram", "Signal", "Zoom",
-})
+_MESSAGING_APPS = frozenset(
+    {
+        "Messages",
+        "Slack",
+        "Microsoft Teams",
+        "Teams",
+        "Discord",
+        "WhatsApp",
+        "Telegram",
+        "Signal",
+        "Zoom",
+    }
+)
 
 # Suspicious commands that indicate ClickFix or paste-and-run attacks
-_SUSPICIOUS_TERMINAL_COMMANDS = frozenset({
-    "curl", "wget", "bash", "sh", "python3", "python", "base64",
-    "nc", "ncat", "osascript", "openssl",
-})
+_SUSPICIOUS_TERMINAL_COMMANDS = frozenset(
+    {
+        "curl",
+        "wget",
+        "bash",
+        "sh",
+        "python3",
+        "python",
+        "base64",
+        "nc",
+        "ncat",
+        "osascript",
+        "openssl",
+    }
+)
 
 
 # =============================================================================
@@ -226,7 +253,8 @@ class MacOSQuarantineGuardCollector:
                     entries.append(
                         QuarantineEntry(
                             timestamp=unix_ts,
-                            agent_bundle_id=row["LSQuarantineAgentBundleIdentifier"] or "",
+                            agent_bundle_id=row["LSQuarantineAgentBundleIdentifier"]
+                            or "",
                             data_url=row["LSQuarantineDataURLString"] or "",
                             origin_url=row["LSQuarantineOriginURLString"] or "",
                             sender_name=row["LSQuarantineSenderName"] or "",
@@ -332,12 +360,14 @@ class MacOSQuarantineGuardCollector:
                 and self._previous_xattr_state[f.path]
                 and not f.has_quarantine_xattr
             ):
-                removals.append({
-                    "path": f.path,
-                    "filename": f.filename,
-                    "modify_time": f.modify_time,
-                    "size": f.size,
-                })
+                removals.append(
+                    {
+                        "path": f.path,
+                        "filename": f.filename,
+                        "modify_time": f.modify_time,
+                        "size": f.size,
+                    }
+                )
 
         self._previous_xattr_state = current_state
         return removals
@@ -485,7 +515,9 @@ class MacOSQuarantineGuardCollector:
 
         procs: List[Dict[str, Any]] = []
 
-        for proc in psutil.process_iter(["pid", "name", "cmdline", "ppid", "create_time"]):
+        for proc in psutil.process_iter(
+            ["pid", "name", "cmdline", "ppid", "create_time"]
+        ):
             try:
                 info = proc.info
                 if info["name"] != "xattr":
@@ -502,14 +534,16 @@ class MacOSQuarantineGuardCollector:
                 ) or ("-c" in cmdline)
 
                 if is_removal:
-                    procs.append({
-                        "pid": info["pid"],
-                        "name": info["name"],
-                        "cmdline": cmdline,
-                        "ppid": info.get("ppid", 0),
-                        "create_time": info.get("create_time", 0),
-                        "target_file": self._extract_xattr_target(cmdline),
-                    })
+                    procs.append(
+                        {
+                            "pid": info["pid"],
+                            "name": info["name"],
+                            "cmdline": cmdline,
+                            "ppid": info.get("ppid", 0),
+                            "create_time": info.get("create_time", 0),
+                            "target_file": self._extract_xattr_target(cmdline),
+                        }
+                    )
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
 
@@ -558,7 +592,9 @@ class MacOSQuarantineGuardCollector:
         procs: List[Dict[str, Any]] = []
         _INSTALLER_NAMES = frozenset({"installer", "pkgutil", "Installer"})
 
-        for proc in psutil.process_iter(["pid", "name", "cmdline", "ppid", "create_time"]):
+        for proc in psutil.process_iter(
+            ["pid", "name", "cmdline", "ppid", "create_time"]
+        ):
             try:
                 info = proc.info
                 if info["name"] not in _INSTALLER_NAMES:
@@ -578,11 +614,13 @@ class MacOSQuarantineGuardCollector:
                 try:
                     for child in psutil.Process(info["pid"]).children(recursive=True):
                         try:
-                            entry["children"].append({
-                                "pid": child.pid,
-                                "name": child.name(),
-                                "cmdline": child.cmdline(),
-                            })
+                            entry["children"].append(
+                                {
+                                    "pid": child.pid,
+                                    "name": child.name(),
+                                    "cmdline": child.cmdline(),
+                                }
+                            )
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
                             continue
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -614,15 +652,17 @@ class MacOSQuarantineGuardCollector:
         ):
             try:
                 info = proc.info
-                snapshot.append({
-                    "pid": info["pid"],
-                    "name": info.get("name") or "",
-                    "exe": info.get("exe") or "",
-                    "cmdline": info.get("cmdline") or [],
-                    "ppid": info.get("ppid", 0),
-                    "username": info.get("username") or "",
-                    "create_time": info.get("create_time", 0),
-                })
+                snapshot.append(
+                    {
+                        "pid": info["pid"],
+                        "name": info.get("name") or "",
+                        "exe": info.get("exe") or "",
+                        "cmdline": info.get("cmdline") or [],
+                        "ppid": info.get("ppid", 0),
+                        "username": info.get("username") or "",
+                        "create_time": info.get("create_time", 0),
+                    }
+                )
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
 

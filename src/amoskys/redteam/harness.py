@@ -8,8 +8,8 @@ For proc probes, set ``patch_targets`` on AdversarialCase:
     AdversarialCase(
         ...,
         patch_targets={
-            "amoskys.agents.shared.process.probes.psutil.process_iter": mock_iter,
-            "amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE": True,
+            "amoskys.agents.os.macos.process.probes.psutil.process_iter": mock_iter,
+            "amoskys.agents.os.macos.process.probes.PSUTIL_AVAILABLE": True,
         }
     )
 The harness applies each patch as a ``unittest.mock.patch`` context manager
@@ -81,8 +81,8 @@ class AdversarialCase:
             Example::
 
                 patch_targets={
-                    "amoskys.agents.shared.process.probes.psutil.process_iter": mock_iter,
-                    "amoskys.agents.shared.process.probes.PSUTIL_AVAILABLE": True,
+                    "amoskys.agents.os.macos.process.probes.psutil.process_iter": mock_iter,
+                    "amoskys.agents.os.macos.process.probes.PSUTIL_AVAILABLE": True,
                 }
     """
 

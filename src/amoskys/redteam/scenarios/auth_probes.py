@@ -27,7 +27,7 @@ Run:
 from __future__ import annotations
 
 from amoskys.agents.common.probes import Severity
-from amoskys.agents.shared.auth.probes import (
+from amoskys.agents.os.macos.auth.probes import (
     AccountLockoutStormProbe,
     AuthEvent,
     MFABypassOrAnomalyProbe,

@@ -35,7 +35,9 @@ def safe_int(value, default=0, min_val=None, max_val=None):
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_recent_processes():
     """Get recent process events from canonical store."""
-    limit = safe_int(request.args.get("limit", 100), default=100, min_val=1, max_val=500)
+    limit = safe_int(
+        request.args.get("limit", 100), default=100, min_val=1, max_val=500
+    )
     service = get_dashboard_query_service()
     if not service.available:
         return jsonify({"processes": [], "message": "No data available yet"}), 200
@@ -103,7 +105,9 @@ def search_processes():
     exe_filter = request.args.get("exe", "")
     user_type = request.args.get("user_type", "")
     category = request.args.get("category", "")
-    limit = safe_int(request.args.get("limit", 100), default=100, min_val=1, max_val=500)
+    limit = safe_int(
+        request.args.get("limit", 100), default=100, min_val=1, max_val=500
+    )
 
     service = get_dashboard_query_service()
     if not service.available:
@@ -137,7 +141,9 @@ def search_processes():
 @require_rate_limit(max_requests=100, window_seconds=60)
 def get_device_telemetry():
     """Get device-level aggregated telemetry snapshots."""
-    limit = safe_int(request.args.get("limit", 100), default=100, min_val=1, max_val=500)
+    limit = safe_int(
+        request.args.get("limit", 100), default=100, min_val=1, max_val=500
+    )
     service = get_dashboard_query_service()
     if not service.available:
         return jsonify({"telemetry": [], "message": "No data available"}), 200

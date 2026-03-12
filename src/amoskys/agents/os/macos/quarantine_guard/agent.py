@@ -256,9 +256,7 @@ class MacOSQuarantineGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
                     metric_data=telemetry_pb2.MetricData(
                         metric_name="quarantine_guard_collection",
                         metric_type="GAUGE",
-                        numeric_value=float(
-                            event.data.get("quarantine_entries", 0)
-                        ),
+                        numeric_value=float(event.data.get("quarantine_entries", 0)),
                         unit="entries",
                     ),
                 )
@@ -341,9 +339,7 @@ def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    parser = argparse.ArgumentParser(
-        description="AMOSKYS macOS Quarantine Guard Agent"
-    )
+    parser = argparse.ArgumentParser(description="AMOSKYS macOS Quarantine Guard Agent")
     parser.add_argument("--interval", type=float, default=30.0)
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()

@@ -433,8 +433,8 @@ class TestFactory:
 class TestProbePlatforms:
     """Verify all 7 kernel audit probes support darwin."""
 
-    def test_all_probes_support_darwin(self):
-        """Every kernel audit probe lists 'darwin' in platforms."""
+    def test_all_probes_support_linux(self):
+        """Every kernel audit probe lists 'linux' in platforms (Linux-only agent)."""
         from amoskys.agents.os.linux.kernel_audit.probes import (
             create_kernel_audit_probes,
         )
@@ -443,8 +443,8 @@ class TestProbePlatforms:
         assert len(probes) == 8
         for probe in probes:
             assert (
-                "darwin" in probe.platforms
-            ), f"{probe.name} missing 'darwin' in platforms: {probe.platforms}"
+                "linux" in probe.platforms
+            ), f"{probe.name} missing 'linux' in platforms: {probe.platforms}"
 
     def test_all_probes_still_support_linux(self):
         """Ensure linux wasn't removed."""

@@ -206,7 +206,9 @@ class MacOSDNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
             "domain": query.domain,
             "query_type": query.record_type,
             "response_code": query.response_code,
-            "response_ips": json.dumps(query.response_ips) if query.response_ips else "[]",
+            "response_ips": (
+                json.dumps(query.response_ips) if query.response_ips else "[]"
+            ),
             "ttl": str(query.ttl),
             "source_process": query.source_process,
             "source_pid": str(query.source_pid),

@@ -7,7 +7,10 @@ Linux-specific detection modules. Primary advantages over macOS:
     - systemd journal for structured logging
     - Full ptrace visibility for injection detection
 
-Status: Capability registry not yet built. Requires Linux device for ground truth.
+Status: Scaffold only — requires Linux device for ground-truth validation.
+Roadmap: Igris multi-platform engine will unify Linux + macOS + Windows
+         agent implementations behind a common collector interface.
+         See docs/Engineering/v2_architecture/BLUEPRINT.md for the Igris plan.
 """
 
 

@@ -90,12 +90,14 @@ def get_platform_capabilities(platform: str) -> Dict[str, Any]:
                     tacts = list(getattr(p, "mitre_tactics", []))
                     agent_techniques.update(techs)
                     agent_tactics.update(tacts)
-                    agent_data["probes"].append({
-                        "name": getattr(p, "name", "unknown"),
-                        "description": getattr(p, "description", ""),
-                        "mitre_techniques": techs,
-                        "mitre_tactics": tacts,
-                    })
+                    agent_data["probes"].append(
+                        {
+                            "name": getattr(p, "name", "unknown"),
+                            "description": getattr(p, "description", ""),
+                            "mitre_techniques": techs,
+                            "mitre_tactics": tacts,
+                        }
+                    )
 
                 agent_data["mitre_techniques"] = sorted(agent_techniques)
                 agent_data["mitre_tactics"] = sorted(agent_tactics)
@@ -148,7 +150,9 @@ def get_declared_mitre_coverage(platform: str) -> Dict[str, Any]:
 
     result = {
         "by_tactic": by_tactic,
-        "by_technique": {t: [(a, p) for a, p in sources] for t, sources in by_technique.items()},
+        "by_technique": {
+            t: [(a, p) for a, p in sources] for t, sources in by_technique.items()
+        },
         "technique_count": len(by_technique),
         "tactic_count": len(by_tactic),
     }
@@ -168,17 +172,19 @@ def get_agent_capabilities_summary(platform: str) -> List[Dict[str, Any]]:
     summary = []
 
     for agent_id, data in caps.items():
-        summary.append({
-            "agent_id": agent_id,
-            "name": data["name"],
-            "description": data["description"],
-            "category": data["category"],
-            "icon": data["icon"],
-            "platforms": data["platforms"],
-            "probe_count": len(data["probes"]) or data.get("declared_probes", 0),
-            "mitre_technique_count": len(data["mitre_techniques"]),
-            "mitre_techniques": data["mitre_techniques"],
-            "mitre_tactics": data["mitre_tactics"],
-        })
+        summary.append(
+            {
+                "agent_id": agent_id,
+                "name": data["name"],
+                "description": data["description"],
+                "category": data["category"],
+                "icon": data["icon"],
+                "platforms": data["platforms"],
+                "probe_count": len(data["probes"]) or data.get("declared_probes", 0),
+                "mitre_technique_count": len(data["mitre_techniques"]),
+                "mitre_techniques": data["mitre_techniques"],
+                "mitre_tactics": data["mitre_tactics"],
+            }
+        )
 
     return summary

@@ -13,8 +13,8 @@ import sys
 # Add src to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from amoskys.eventbus.flow_publisher import main
 from amoskys.config import AmoskysConfig, get_config, init_config
+from amoskys.eventbus.flow_publisher import main
 
 
 def run_agent():

@@ -21,9 +21,9 @@ import logging
 import socket
 import sys
 import time
-from datetime import datetime, timezone
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -31,18 +31,28 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from amoskys.agents.common.probes import ProbeContext, TelemetryEvent, Severity
 from amoskys.agents.common.agent_bus import (
-    AgentBus, ThreatContext, PeerAlert, get_agent_bus, reset_agent_bus,
+    AgentBus,
+    PeerAlert,
+    ThreatContext,
+    get_agent_bus,
+    reset_agent_bus,
 )
 from amoskys.agents.common.kill_chain import (
-    KillChainTracker, TACTIC_TO_STAGE, KILL_CHAIN_STAGES,
+    KILL_CHAIN_STAGES,
+    TACTIC_TO_STAGE,
+    KillChainTracker,
 )
+from amoskys.agents.common.probes import ProbeContext, Severity, TelemetryEvent
 
 # Suppress noisy loggers
 logging.basicConfig(level=logging.WARNING, format="%(message)s")
 for name in [
-    "amoskys", "urllib3", "google", "grpc", "protobuf",
+    "amoskys",
+    "urllib3",
+    "google",
+    "grpc",
+    "protobuf",
     "amoskys.agents.common.queue_adapter",
     "amoskys.agents.common.base",
 ]:
@@ -51,17 +61,17 @@ for name in [
 
 # ── ANSI Colors ─────────────────────────────────────────────────────────────
 class C:
-    RESET   = "\033[0m"
-    BOLD    = "\033[1m"
-    DIM     = "\033[2m"
-    RED     = "\033[31m"
-    GREEN   = "\033[32m"
-    YELLOW  = "\033[33m"
-    BLUE    = "\033[34m"
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
     MAGENTA = "\033[35m"
-    CYAN    = "\033[36m"
-    WHITE   = "\033[37m"
-    BG_RED  = "\033[41m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+    BG_RED = "\033[41m"
     BG_GREEN = "\033[42m"
     BG_BLUE = "\033[44m"
 
@@ -226,6 +236,7 @@ AGENTS = [
 
 # ── Runner ───────────────────────────────────────────────────────────────────
 
+
 def run_agent(
     agent_def: dict,
     device_id: str,
@@ -259,6 +270,7 @@ def run_agent(
     # Collect — handle different constructor signatures
     try:
         import inspect
+
         sig = inspect.signature(CollectorClass.__init__)
         params = list(sig.parameters.keys())
         if "device_id" in params:
@@ -303,8 +315,7 @@ def run_agent(
 
     result.events = all_events
     result.detections = [
-        e for e in all_events
-        if e.severity not in (Severity.DEBUG, Severity.INFO)
+        e for e in all_events if e.severity not in (Severity.DEBUG, Severity.INFO)
     ]
 
     # Collect MITRE coverage
@@ -338,25 +349,30 @@ def run_agent(
                 risk_indicators.get(event.event_type, 0), event.confidence
             )
 
-    bus.post_context(f"macos_{name}", ThreatContext(
-        agent_name=f"macos_{name}",
-        timestamp_ns=int(time.time() * 1e9),
-        active_pids=active_pids,
-        suspicious_ips=suspicious_ips,
-        persistence_paths=persistence_paths,
-        active_techniques=active_techniques,
-        risk_indicators=risk_indicators,
-    ))
+    bus.post_context(
+        f"macos_{name}",
+        ThreatContext(
+            agent_name=f"macos_{name}",
+            timestamp_ns=int(time.time() * 1e9),
+            active_pids=active_pids,
+            suspicious_ips=suspicious_ips,
+            persistence_paths=persistence_paths,
+            active_techniques=active_techniques,
+            risk_indicators=risk_indicators,
+        ),
+    )
 
     # Post high-severity alerts
     for event in result.detections:
         if event.severity in (Severity.HIGH, Severity.CRITICAL):
-            bus.post_alert(PeerAlert(
-                source_agent=f"macos_{name}",
-                alert_type=event.event_type,
-                timestamp_ns=int(time.time() * 1e9),
-                data=event.data,
-            ))
+            bus.post_alert(
+                PeerAlert(
+                    source_agent=f"macos_{name}",
+                    alert_type=event.event_type,
+                    timestamp_ns=int(time.time() * 1e9),
+                    data=event.data,
+                )
+            )
 
     return result
 
@@ -365,8 +381,11 @@ def run_sigma_evaluation(all_events: List[TelemetryEvent]) -> Tuple[int, List[di
     """Run Sigma rules against all collected events."""
     try:
         from amoskys.detection.sigma_engine import SigmaEngine
+
         engine = SigmaEngine()
-        rules_dir = str(PROJECT_ROOT / "src" / "amoskys" / "detection" / "rules" / "sigma")
+        rules_dir = str(
+            PROJECT_ROOT / "src" / "amoskys" / "detection" / "rules" / "sigma"
+        )
         loaded = engine.load_rules(rules_dir)
 
         matches = []
@@ -380,15 +399,17 @@ def run_sigma_evaluation(all_events: List[TelemetryEvent]) -> Tuple[int, List[di
 
             sigma_matches = engine.evaluate(event_dict)
             for m in sigma_matches:
-                matches.append({
-                    "rule_id": m.rule_id,
-                    "rule_title": m.rule_title,
-                    "level": m.level,
-                    "confidence": m.confidence,
-                    "techniques": list(m.mitre_techniques),
-                    "event_type": event.event_type,
-                    "probe": event.probe_name,
-                })
+                matches.append(
+                    {
+                        "rule_id": m.rule_id,
+                        "rule_title": m.rule_title,
+                        "level": m.level,
+                        "confidence": m.confidence,
+                        "techniques": list(m.mitre_techniques),
+                        "event_type": event.event_type,
+                        "probe": event.probe_name,
+                    }
+                )
 
         return loaded, matches
     except Exception as e:
@@ -398,22 +419,30 @@ def run_sigma_evaluation(all_events: List[TelemetryEvent]) -> Tuple[int, List[di
 
 # ── Display ──────────────────────────────────────────────────────────────────
 
+
 def print_banner():
     hostname = socket.gethostname()
     import platform
+
     mac_ver = platform.mac_ver()[0]
     print()
     print(f"{C.BOLD}{C.CYAN}{'=' * 72}{C.RESET}")
-    print(f"{C.BOLD}{C.CYAN}   AMOSKYS Neural Observatory — Live Multi-Agent Demo{C.RESET}")
+    print(
+        f"{C.BOLD}{C.CYAN}   AMOSKYS Neural Observatory — Live Multi-Agent Demo{C.RESET}"
+    )
     print(f"{C.BOLD}{C.CYAN}{'=' * 72}{C.RESET}")
-    print(f"  {C.DIM}Host: {hostname}  |  macOS {mac_ver}  |  {time.strftime('%Y-%m-%d %H:%M:%S')}{C.RESET}")
+    print(
+        f"  {C.DIM}Host: {hostname}  |  macOS {mac_ver}  |  {time.strftime('%Y-%m-%d %H:%M:%S')}{C.RESET}"
+    )
     print(f"{C.CYAN}{'─' * 72}{C.RESET}")
     print()
 
 
 def print_agent_result(result: AgentResult, idx: int, verbose: bool = False):
     if result.error:
-        print(f"  {C.RED}[{idx:2d}] {result.display_name:30s}  ERROR: {result.error}{C.RESET}")
+        print(
+            f"  {C.RED}[{idx:2d}] {result.display_name:30s}  ERROR: {result.error}{C.RESET}"
+        )
         return
 
     det_count = len(result.detections)
@@ -422,7 +451,9 @@ def print_agent_result(result: AgentResult, idx: int, verbose: bool = False):
     # Status color
     if det_count == 0:
         status = f"{C.GREEN}CLEAN{C.RESET}"
-    elif any(e.severity in (Severity.HIGH, Severity.CRITICAL) for e in result.detections):
+    elif any(
+        e.severity in (Severity.HIGH, Severity.CRITICAL) for e in result.detections
+    ):
         status = f"{C.RED}{C.BOLD}{det_count} DETECTIONS{C.RESET}"
     else:
         status = f"{C.YELLOW}{det_count} detections{C.RESET}"
@@ -440,7 +471,11 @@ def print_agent_result(result: AgentResult, idx: int, verbose: bool = False):
 
     # Show detections
     for event in result.detections:
-        sev = event.severity.value if isinstance(event.severity, Severity) else str(event.severity)
+        sev = (
+            event.severity.value
+            if isinstance(event.severity, Severity)
+            else str(event.severity)
+        )
         color = SEVERITY_COLORS.get(sev, "")
         icon = SEVERITY_ICONS.get(sev, "?")
         tech_str = ""
@@ -494,12 +529,18 @@ def print_bus_summary(bus: AgentBus, results: List[AgentResult]):
     print(f"  Suspicious IPs:       {C.BOLD}{len(all_ips)}{C.RESET}", end="")
     if all_ips:
         shown = sorted(all_ips)[:5]
-        print(f"  {C.DIM}({', '.join(shown)}{'...' if len(all_ips) > 5 else ''}){C.RESET}", end="")
+        print(
+            f"  {C.DIM}({', '.join(shown)}{'...' if len(all_ips) > 5 else ''}){C.RESET}",
+            end="",
+        )
     print()
     print(f"  Active techniques:    {C.BOLD}{len(all_techs)}{C.RESET}", end="")
     if all_techs:
         shown = sorted(all_techs)[:8]
-        print(f"  {C.DIM}({', '.join(shown)}{'...' if len(all_techs) > 8 else ''}){C.RESET}", end="")
+        print(
+            f"  {C.DIM}({', '.join(shown)}{'...' if len(all_techs) > 8 else ''}){C.RESET}",
+            end="",
+        )
     print()
     print(f"  Peer alerts:          {C.BOLD}{len(alerts)}{C.RESET}", end="")
     if alerts:
@@ -584,7 +625,11 @@ def print_sigma_results(loaded: int, matches: List[dict]):
 
         for m in unique[:10]:
             level = m["level"]
-            color = C.RED if level in ("high", "critical") else C.YELLOW if level == "medium" else C.CYAN
+            color = (
+                C.RED
+                if level in ("high", "critical")
+                else C.YELLOW if level == "medium" else C.CYAN
+            )
             tech_str = f" [{', '.join(m['techniques'][:3])}]" if m["techniques"] else ""
             print(
                 f"    {color}[{level:>8s}]{C.RESET} "
@@ -612,6 +657,7 @@ def print_mitre_coverage(results: List[AgentResult]):
     # Also count available techniques (from probe declarations)
     declared_techniques: Set[str] = set()
     import importlib
+
     for agent_def in AGENTS:
         try:
             probe_mod = importlib.import_module(agent_def["probe_module"])
@@ -624,7 +670,9 @@ def print_mitre_coverage(results: List[AgentResult]):
             pass
 
     print(f"  Techniques detected (live):     {C.BOLD}{len(all_techniques)}{C.RESET}")
-    print(f"  Techniques declared (probes):   {C.BOLD}{len(declared_techniques)}{C.RESET}")
+    print(
+        f"  Techniques declared (probes):   {C.BOLD}{len(declared_techniques)}{C.RESET}"
+    )
 
     # Show per-agent technique count
     if by_agent:
@@ -652,53 +700,71 @@ def print_raw_snapshot(results: List[AgentResult]):
             continue
 
         sd = r.shared_data
-        print(f"\n  {C.BOLD}{r.display_name}{C.RESET} {C.DIM}({r.raw_item_count} items, {r.collect_time_ms:.0f}ms){C.RESET}")
+        print(
+            f"\n  {C.BOLD}{r.display_name}{C.RESET} {C.DIM}({r.raw_item_count} items, {r.collect_time_ms:.0f}ms){C.RESET}"
+        )
 
         if r.name == "process":
             procs = sd.get("processes", [])
             if procs:
                 # Show top 5 by CPU
-                by_cpu = sorted(procs, key=lambda p: getattr(p, 'cpu_percent', 0) or 0, reverse=True)[:5]
+                by_cpu = sorted(
+                    procs, key=lambda p: getattr(p, "cpu_percent", 0) or 0, reverse=True
+                )[:5]
                 for p in by_cpu:
-                    name = getattr(p, 'name', '?')
-                    pid = getattr(p, 'pid', 0)
-                    cpu = getattr(p, 'cpu_percent', 0) or 0
-                    mem = getattr(p, 'memory_percent', 0) or 0
-                    user = getattr(p, 'username', '?')
-                    print(f"    {C.DIM}PID {pid:<6d} {name:25s} CPU:{cpu:5.1f}%  MEM:{mem:5.1f}%  user:{user}{C.RESET}")
+                    name = getattr(p, "name", "?")
+                    pid = getattr(p, "pid", 0)
+                    cpu = getattr(p, "cpu_percent", 0) or 0
+                    mem = getattr(p, "memory_percent", 0) or 0
+                    user = getattr(p, "username", "?")
+                    print(
+                        f"    {C.DIM}PID {pid:<6d} {name:25s} CPU:{cpu:5.1f}%  MEM:{mem:5.1f}%  user:{user}{C.RESET}"
+                    )
 
         elif r.name == "network":
             conns = sd.get("connections", [])
             if conns:
                 shown = conns[:5] if isinstance(conns, list) else list(conns)[:5]
                 for conn in shown:
-                    if hasattr(conn, 'process_name'):
-                        rip = getattr(conn, 'remote_ip', '?')
-                        rport = getattr(conn, 'remote_port', '?')
-                        pname = getattr(conn, 'process_name', '?')
-                        state = getattr(conn, 'state', '?')
-                        print(f"    {C.DIM}{pname:20s} -> {rip}:{rport}  ({state}){C.RESET}")
+                    if hasattr(conn, "process_name"):
+                        rip = getattr(conn, "remote_ip", "?")
+                        rport = getattr(conn, "remote_port", "?")
+                        pname = getattr(conn, "process_name", "?")
+                        state = getattr(conn, "state", "?")
+                        print(
+                            f"    {C.DIM}{pname:20s} -> {rip}:{rport}  ({state}){C.RESET}"
+                        )
                     elif isinstance(conn, dict):
-                        print(f"    {C.DIM}{conn.get('process_name','?'):20s} -> {conn.get('remote_ip','?')}:{conn.get('remote_port','?')}{C.RESET}")
+                        print(
+                            f"    {C.DIM}{conn.get('process_name', '?'):20s} -> {conn.get('remote_ip', '?')}:{conn.get('remote_port', '?')}{C.RESET}"
+                        )
 
         elif r.name == "persistence":
             entries = sd.get("entries", [])
             if entries:
                 for e in entries[:5]:
-                    etype = getattr(e, 'entry_type', None) or (e.get('entry_type') if isinstance(e, dict) else '?')
-                    path = getattr(e, 'path', None) or (e.get('path') if isinstance(e, dict) else '?')
+                    etype = getattr(e, "entry_type", None) or (
+                        e.get("entry_type") if isinstance(e, dict) else "?"
+                    )
+                    path = getattr(e, "path", None) or (
+                        e.get("path") if isinstance(e, dict) else "?"
+                    )
                     if path and len(str(path)) > 60:
                         path = str(path)[:57] + "..."
                     print(f"    {C.DIM}{str(etype):25s} {path}{C.RESET}")
                 if len(entries) > 5:
-                    print(f"    {C.DIM}... and {len(entries) - 5} more entries{C.RESET}")
+                    print(
+                        f"    {C.DIM}... and {len(entries) - 5} more entries{C.RESET}"
+                    )
 
         elif r.name == "filesystem":
             files = sd.get("files", [])
             count = sd.get("total_files", len(files) if isinstance(files, list) else 0)
             dirs_watched = sd.get("directories_watched", sd.get("watched_paths", []))
             if dirs_watched and isinstance(dirs_watched, list):
-                print(f"    {C.DIM}Watching {len(dirs_watched)} directories, {count} files tracked{C.RESET}")
+                print(
+                    f"    {C.DIM}Watching {len(dirs_watched)} directories, {count} files tracked{C.RESET}"
+                )
                 for d in dirs_watched[:3]:
                     print(f"    {C.DIM}  {d}{C.RESET}")
             elif count:
@@ -708,10 +774,14 @@ def print_raw_snapshot(results: List[AgentResult]):
             events = sd.get("auth_events", [])
             if events:
                 for e in events[:5]:
-                    if hasattr(e, 'event_type'):
-                        print(f"    {C.DIM}{getattr(e, 'event_type', '?'):25s} user:{getattr(e, 'username', '?')}{C.RESET}")
+                    if hasattr(e, "event_type"):
+                        print(
+                            f"    {C.DIM}{getattr(e, 'event_type', '?'):25s} user:{getattr(e, 'username', '?')}{C.RESET}"
+                        )
                     elif isinstance(e, dict):
-                        print(f"    {C.DIM}{e.get('event_type','?'):25s} user:{e.get('username','?')}{C.RESET}")
+                        print(
+                            f"    {C.DIM}{e.get('event_type', '?'):25s} user:{e.get('username', '?')}{C.RESET}"
+                        )
             else:
                 print(f"    {C.DIM}No auth events in last collection window{C.RESET}")
 
@@ -720,23 +790,29 @@ def print_raw_snapshot(results: List[AgentResult]):
             if arp:
                 print(f"    {C.DIM}ARP table ({len(arp)} hosts):{C.RESET}")
                 for entry in arp[:5]:
-                    if hasattr(entry, 'ip'):
-                        print(f"      {C.DIM}{getattr(entry, 'ip', '?'):16s} {getattr(entry, 'mac', '?'):18s} {getattr(entry, 'interface', '?')}{C.RESET}")
+                    if hasattr(entry, "ip"):
+                        print(
+                            f"      {C.DIM}{getattr(entry, 'ip', '?'):16s} {getattr(entry, 'mac', '?'):18s} {getattr(entry, 'interface', '?')}{C.RESET}"
+                        )
                     elif isinstance(entry, dict):
-                        print(f"      {C.DIM}{entry.get('ip', '?'):16s} {entry.get('mac', '?'):18s} {entry.get('interface', '?')}{C.RESET}")
+                        print(
+                            f"      {C.DIM}{entry.get('ip', '?'):16s} {entry.get('mac', '?'):18s} {entry.get('interface', '?')}{C.RESET}"
+                        )
 
         elif r.name == "internet_activity":
             conns = sd.get("connections", [])
             if conns:
                 print(f"    {C.DIM}Outbound connections ({len(conns)}):{C.RESET}")
                 for conn in conns[:5]:
-                    if hasattr(conn, 'remote_ip'):
-                        pname = getattr(conn, 'process_name', '?')
-                        rip = getattr(conn, 'remote_ip', '?')
-                        rport = getattr(conn, 'remote_port', '?')
+                    if hasattr(conn, "remote_ip"):
+                        pname = getattr(conn, "process_name", "?")
+                        rip = getattr(conn, "remote_ip", "?")
+                        rport = getattr(conn, "remote_port", "?")
                         print(f"      {C.DIM}{pname:20s} -> {rip}:{rport}{C.RESET}")
                     elif isinstance(conn, dict):
-                        print(f"      {C.DIM}{conn.get('process_name', '?'):20s} -> {conn.get('remote_ip', '?')}:{conn.get('remote_port', '?')}{C.RESET}")
+                        print(
+                            f"      {C.DIM}{conn.get('process_name', '?'):20s} -> {conn.get('remote_ip', '?')}:{conn.get('remote_port', '?')}{C.RESET}"
+                        )
 
         elif r.name == "dns":
             queries = sd.get("dns_queries", [])
@@ -745,7 +821,7 @@ def print_raw_snapshot(results: List[AgentResult]):
                 print(f"    {C.DIM}{len(queries)} DNS queries captured{C.RESET}")
             if servers:
                 for s in servers[:3]:
-                    addr = getattr(s, 'address', s) if not isinstance(s, str) else s
+                    addr = getattr(s, "address", s) if not isinstance(s, str) else s
                     print(f"    {C.DIM}DNS server: {addr}{C.RESET}")
             unique = sd.get("unique_domains", 0)
             if unique:
@@ -754,13 +830,19 @@ def print_raw_snapshot(results: List[AgentResult]):
         elif r.name == "unified_log":
             entries = sd.get("log_entries", [])
             if entries:
-                print(f"    {C.DIM}{len(entries)} log entries from macOS Unified Logging{C.RESET}")
+                print(
+                    f"    {C.DIM}{len(entries)} log entries from macOS Unified Logging{C.RESET}"
+                )
                 # Show category breakdown
                 categories: Dict[str, int] = defaultdict(int)
                 for e in entries:
-                    cat = getattr(e, 'category', None) or (e.get('category') if isinstance(e, dict) else 'unknown')
+                    cat = getattr(e, "category", None) or (
+                        e.get("category") if isinstance(e, dict) else "unknown"
+                    )
                     categories[str(cat)] += 1
-                for cat, count in sorted(categories.items(), key=lambda x: x[1], reverse=True)[:5]:
+                for cat, count in sorted(
+                    categories.items(), key=lambda x: x[1], reverse=True
+                )[:5]:
                     print(f"      {C.DIM}{cat:30s} {count:5d} entries{C.RESET}")
 
         else:
@@ -799,24 +881,37 @@ def print_summary(results: List[AgentResult], total_time: float):
     print(f"  Probe events:      {total_events}")
     print(f"  Detections:        {total_detections}")
     print(f"  MITRE techniques:  {len(all_techniques)} (live)")
-    print(f"  Collection time:   {total_collect_ms:.0f}ms (sum) / {total_time:.1f}s (wall)")
+    print(
+        f"  Collection time:   {total_collect_ms:.0f}ms (sum) / {total_time:.1f}s (wall)"
+    )
     print(f"{C.CYAN}{'=' * 72}{C.RESET}")
     print()
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="AMOSKYS Live Multi-Agent Demo")
-    parser.add_argument("--agents", type=int, default=len(AGENTS),
-                        help="Number of agents to run (default: all)")
-    parser.add_argument("--verbose", action="store_true",
-                        help="Show info/debug events too")
-    parser.add_argument("--no-sigma", action="store_true",
-                        help="Skip Sigma rule evaluation")
-    parser.add_argument("--persist", action="store_true",
-                        help="Write collected events to data/telemetry.db for dashboard")
+    parser.add_argument(
+        "--agents",
+        type=int,
+        default=len(AGENTS),
+        help="Number of agents to run (default: all)",
+    )
+    parser.add_argument(
+        "--verbose", action="store_true", help="Show info/debug events too"
+    )
+    parser.add_argument(
+        "--no-sigma", action="store_true", help="Skip Sigma rule evaluation"
+    )
+    parser.add_argument(
+        "--persist",
+        action="store_true",
+        help="Write collected events to data/telemetry.db for dashboard",
+    )
     args = parser.parse_args()
 
     print_banner()
@@ -825,11 +920,13 @@ def main():
     reset_agent_bus()
     bus = get_agent_bus()
     tracker = KillChainTracker(ttl_seconds=300.0)
-    agents_to_run = AGENTS[:args.agents]
+    agents_to_run = AGENTS[: args.agents]
 
     # ── Phase 1: Run All Agents ──
     print(f"  {C.BOLD}Phase 1: Live Collection & Detection{C.RESET}")
-    print(f"  Running {len(agents_to_run)} agents with {C.BOLD}live macOS data{C.RESET}...")
+    print(
+        f"  Running {len(agents_to_run)} agents with {C.BOLD}live macOS data{C.RESET}..."
+    )
     print()
 
     results: List[AgentResult] = []
@@ -862,7 +959,11 @@ def main():
                         device_id=device_id,
                         mitre_tactic=tactic_key,
                         agent_name=event.probe_name,
-                        mitre_technique=list(event.mitre_techniques)[0] if event.mitre_techniques else None,
+                        mitre_technique=(
+                            list(event.mitre_techniques)[0]
+                            if event.mitre_techniques
+                            else None
+                        ),
                         confidence=event.confidence or 0.5,
                     )
         # Also try mapping from techniques directly
@@ -909,9 +1010,8 @@ def main():
 
 # ── Persistence ──────────────────────────────────────────────────────────────
 
-def persist_to_telemetry_store(
-    results: List[AgentResult], device_id: str
-) -> int:
+
+def persist_to_telemetry_store(results: List[AgentResult], device_id: str) -> int:
     """Write all collected events to data/telemetry.db for dashboard consumption."""
     from amoskys.storage.telemetry_store import TelemetryStore
 
@@ -928,145 +1028,186 @@ def persist_to_telemetry_store(
 
         # 1. All probe events → security_events table
         for event in result.events:
-            sev = event.severity.value if isinstance(event.severity, Severity) else str(event.severity)
-            store.insert_security_event({
-                "timestamp_ns": now_ns,
-                "timestamp_dt": now_dt,
-                "device_id": device_id,
-                "event_category": event.event_type,
-                "event_action": event.probe_name,
-                "event_outcome": sev,
-                "risk_score": event.confidence or 0.0,
-                "confidence": event.confidence or 0.0,
-                "mitre_techniques": list(event.mitre_techniques) if event.mitre_techniques else [],
-                "final_classification": (
-                    "malicious" if sev in ("HIGH", "CRITICAL")
-                    else "suspicious" if sev == "MEDIUM"
-                    else "legitimate"
-                ),
-                "description": event.description if hasattr(event, "description") else event.event_type,
-                "indicators": event.data,
-                "requires_investigation": sev in ("HIGH", "CRITICAL"),
-                "collection_agent": agent_name,
-                "agent_version": "0.9.0",
-                "event_timestamp_ns": now_ns,
-                "event_id": f"{agent_name}:{event.event_type}:{persisted}",
-            })
+            sev = (
+                event.severity.value
+                if isinstance(event.severity, Severity)
+                else str(event.severity)
+            )
+            store.insert_security_event(
+                {
+                    "timestamp_ns": now_ns,
+                    "timestamp_dt": now_dt,
+                    "device_id": device_id,
+                    "event_category": event.event_type,
+                    "event_action": event.probe_name,
+                    "event_outcome": sev,
+                    "risk_score": event.confidence or 0.0,
+                    "confidence": event.confidence or 0.0,
+                    "mitre_techniques": (
+                        list(event.mitre_techniques) if event.mitre_techniques else []
+                    ),
+                    "final_classification": (
+                        "malicious"
+                        if sev in ("HIGH", "CRITICAL")
+                        else "suspicious" if sev == "MEDIUM" else "legitimate"
+                    ),
+                    "description": (
+                        event.description
+                        if hasattr(event, "description")
+                        else event.event_type
+                    ),
+                    "indicators": event.data,
+                    "requires_investigation": sev in ("HIGH", "CRITICAL"),
+                    "collection_agent": agent_name,
+                    "agent_version": "0.9.0",
+                    "event_timestamp_ns": now_ns,
+                    "event_id": f"{agent_name}:{event.event_type}:{persisted}",
+                }
+            )
             persisted += 1
 
         # 2. Domain-specific raw data → domain tables
         sd = result.shared_data
         if result.name == "process":
             for proc in sd.get("processes", [])[:200]:
-                store.insert_process_event({
-                    "timestamp_ns": now_ns,
-                    "timestamp_dt": now_dt,
-                    "device_id": device_id,
-                    "pid": getattr(proc, "pid", 0),
-                    "ppid": getattr(proc, "ppid", None),
-                    "exe": getattr(proc, "exe", None),
-                    "cmdline": " ".join(getattr(proc, "cmdline", []) or []) or None,
-                    "username": getattr(proc, "username", None),
-                    "cpu_percent": getattr(proc, "cpu_percent", None),
-                    "memory_percent": getattr(proc, "memory_percent", None),
-                    "num_threads": getattr(proc, "num_threads", None),
-                    "num_fds": getattr(proc, "num_fds", None),
-                    "is_suspicious": False,
-                    "collection_agent": agent_name,
-                    "agent_version": "0.9.0",
-                })
+                store.insert_process_event(
+                    {
+                        "timestamp_ns": now_ns,
+                        "timestamp_dt": now_dt,
+                        "device_id": device_id,
+                        "pid": getattr(proc, "pid", 0),
+                        "ppid": getattr(proc, "ppid", None),
+                        "exe": getattr(proc, "exe", None),
+                        "cmdline": " ".join(getattr(proc, "cmdline", []) or []) or None,
+                        "username": getattr(proc, "username", None),
+                        "cpu_percent": getattr(proc, "cpu_percent", None),
+                        "memory_percent": getattr(proc, "memory_percent", None),
+                        "num_threads": getattr(proc, "num_threads", None),
+                        "num_fds": getattr(proc, "num_fds", None),
+                        "is_suspicious": False,
+                        "collection_agent": agent_name,
+                        "agent_version": "0.9.0",
+                    }
+                )
                 persisted += 1
 
         elif result.name == "network":
             for conn in sd.get("connections", [])[:200]:
-                store.insert_flow_event({
-                    "timestamp_ns": now_ns,
-                    "timestamp_dt": now_dt,
-                    "device_id": device_id,
-                    "src_ip": getattr(conn, "local_ip", None),
-                    "dst_ip": getattr(conn, "remote_ip", None),
-                    "src_port": getattr(conn, "local_port", None),
-                    "dst_port": getattr(conn, "remote_port", None),
-                    "protocol": getattr(conn, "protocol", None),
-                    "is_suspicious": False,
-                })
+                store.insert_flow_event(
+                    {
+                        "timestamp_ns": now_ns,
+                        "timestamp_dt": now_dt,
+                        "device_id": device_id,
+                        "src_ip": getattr(conn, "local_ip", None),
+                        "dst_ip": getattr(conn, "remote_ip", None),
+                        "src_port": getattr(conn, "local_port", None),
+                        "dst_port": getattr(conn, "remote_port", None),
+                        "protocol": getattr(conn, "protocol", None),
+                        "is_suspicious": False,
+                    }
+                )
                 persisted += 1
 
         elif result.name == "dns":
             for q in sd.get("dns_queries", [])[:200]:
-                domain = getattr(q, "domain", None) or (q.get("domain") if isinstance(q, dict) else "")
-                store.insert_dns_event({
-                    "timestamp_ns": now_ns,
-                    "timestamp_dt": now_dt,
-                    "device_id": device_id,
-                    "domain": domain,
-                    "query_type": getattr(q, "query_type", None),
-                    "response_code": getattr(q, "response_code", None),
-                    "event_type": "dns_query",
-                    "collection_agent": agent_name,
-                    "agent_version": "0.9.0",
-                })
+                domain = getattr(q, "domain", None) or (
+                    q.get("domain") if isinstance(q, dict) else ""
+                )
+                store.insert_dns_event(
+                    {
+                        "timestamp_ns": now_ns,
+                        "timestamp_dt": now_dt,
+                        "device_id": device_id,
+                        "domain": domain,
+                        "query_type": getattr(q, "query_type", None),
+                        "response_code": getattr(q, "response_code", None),
+                        "event_type": "dns_query",
+                        "collection_agent": agent_name,
+                        "agent_version": "0.9.0",
+                    }
+                )
                 persisted += 1
 
         elif result.name == "peripheral":
             for dev in sd.get("devices", []):
-                store.insert_peripheral_event({
-                    "timestamp_ns": now_ns,
-                    "timestamp_dt": now_dt,
-                    "device_id": device_id,
-                    "peripheral_device_id": getattr(dev, "device_id", "unknown"),
-                    "event_type": "CONNECTED",
-                    "device_name": getattr(dev, "name", None),
-                    "device_type": getattr(dev, "device_type", None),
-                    "vendor_id": getattr(dev, "vendor_id", None),
-                    "product_id": getattr(dev, "product_id", None),
-                    "collection_agent": agent_name,
-                    "agent_version": "0.9.0",
-                })
+                store.insert_peripheral_event(
+                    {
+                        "timestamp_ns": now_ns,
+                        "timestamp_dt": now_dt,
+                        "device_id": device_id,
+                        "peripheral_device_id": getattr(dev, "device_id", "unknown"),
+                        "event_type": "CONNECTED",
+                        "device_name": getattr(dev, "name", None),
+                        "device_type": getattr(dev, "device_type", None),
+                        "vendor_id": getattr(dev, "vendor_id", None),
+                        "product_id": getattr(dev, "product_id", None),
+                        "collection_agent": agent_name,
+                        "agent_version": "0.9.0",
+                    }
+                )
                 persisted += 1
 
         elif result.name == "persistence":
             for entry in sd.get("entries", []):
-                store.insert_persistence_event({
-                    "timestamp_ns": now_ns,
-                    "timestamp_dt": now_dt,
-                    "device_id": device_id,
-                    "event_type": getattr(entry, "entry_type", "") or (entry.get("entry_type", "") if isinstance(entry, dict) else ""),
-                    "mechanism": getattr(entry, "entry_type", None),
-                    "path": str(getattr(entry, "path", "") or (entry.get("path", "") if isinstance(entry, dict) else "")),
-                    "collection_agent": agent_name,
-                    "agent_version": "0.9.0",
-                })
+                store.insert_persistence_event(
+                    {
+                        "timestamp_ns": now_ns,
+                        "timestamp_dt": now_dt,
+                        "device_id": device_id,
+                        "event_type": getattr(entry, "entry_type", "")
+                        or (
+                            entry.get("entry_type", "")
+                            if isinstance(entry, dict)
+                            else ""
+                        ),
+                        "mechanism": getattr(entry, "entry_type", None),
+                        "path": str(
+                            getattr(entry, "path", "")
+                            or (
+                                entry.get("path", "") if isinstance(entry, dict) else ""
+                            )
+                        ),
+                        "collection_agent": agent_name,
+                        "agent_version": "0.9.0",
+                    }
+                )
                 persisted += 1
 
         elif result.name == "filesystem":
             for f in sd.get("files", [])[:200]:
-                store.insert_fim_event({
-                    "timestamp_ns": now_ns,
-                    "timestamp_dt": now_dt,
-                    "device_id": device_id,
-                    "event_type": "baseline_scan",
-                    "path": str(getattr(f, "path", "") or (f.get("path", "") if isinstance(f, dict) else "")),
-                    "collection_agent": agent_name,
-                    "agent_version": "0.9.0",
-                })
+                store.insert_fim_event(
+                    {
+                        "timestamp_ns": now_ns,
+                        "timestamp_dt": now_dt,
+                        "device_id": device_id,
+                        "event_type": "baseline_scan",
+                        "path": str(
+                            getattr(f, "path", "")
+                            or (f.get("path", "") if isinstance(f, dict) else "")
+                        ),
+                        "collection_agent": agent_name,
+                        "agent_version": "0.9.0",
+                    }
+                )
                 persisted += 1
 
         # 3. Device telemetry summary
-        store.insert_device_telemetry({
-            "timestamp_ns": now_ns,
-            "timestamp_dt": now_dt,
-            "device_id": device_id,
-            "device_type": "workstation",
-            "protocol": "local",
-            "ip_address": "127.0.0.1",
-            "total_processes": result.raw_item_count,
-            "total_cpu_percent": 0.0,
-            "total_memory_percent": 0.0,
-            "metric_events": len(result.events),
-            "collection_agent": agent_name,
-            "agent_version": "0.9.0",
-        })
+        store.insert_device_telemetry(
+            {
+                "timestamp_ns": now_ns,
+                "timestamp_dt": now_dt,
+                "device_id": device_id,
+                "device_type": "workstation",
+                "protocol": "local",
+                "ip_address": "127.0.0.1",
+                "total_processes": result.raw_item_count,
+                "total_cpu_percent": 0.0,
+                "total_memory_percent": 0.0,
+                "metric_events": len(result.events),
+                "collection_agent": agent_name,
+                "agent_version": "0.9.0",
+            }
+        )
         persisted += 1
 
     return persisted
@@ -1076,23 +1217,42 @@ def persist_to_telemetry_store(
 
 # Rough technique-to-stage heuristic (when tactic isn't available)
 _TECHNIQUE_STAGE_MAP = {
-    "T1018": "reconnaissance", "T1046": "reconnaissance", "T1016": "reconnaissance",
-    "T1082": "reconnaissance", "T1083": "reconnaissance", "T1057": "reconnaissance",
+    "T1018": "reconnaissance",
+    "T1046": "reconnaissance",
+    "T1016": "reconnaissance",
+    "T1082": "reconnaissance",
+    "T1083": "reconnaissance",
+    "T1057": "reconnaissance",
     "T1087": "reconnaissance",
-    "T1566": "delivery", "T1190": "delivery", "T1195": "delivery",
-    "T1059": "exploitation", "T1106": "exploitation", "T1204": "exploitation",
-    "T1110": "exploitation", "T1003": "exploitation",
-    "T1543": "installation", "T1547": "installation", "T1053": "installation",
+    "T1566": "delivery",
+    "T1190": "delivery",
+    "T1195": "delivery",
+    "T1059": "exploitation",
+    "T1106": "exploitation",
+    "T1204": "exploitation",
+    "T1110": "exploitation",
+    "T1003": "exploitation",
+    "T1543": "installation",
+    "T1547": "installation",
+    "T1053": "installation",
     "T1136": "installation",
-    "T1071": "command_and_control", "T1090": "command_and_control",
-    "T1095": "command_and_control", "T1105": "command_and_control",
-    "T1568": "command_and_control", "T1571": "command_and_control",
+    "T1071": "command_and_control",
+    "T1090": "command_and_control",
+    "T1095": "command_and_control",
+    "T1105": "command_and_control",
+    "T1568": "command_and_control",
+    "T1571": "command_and_control",
     "T1572": "command_and_control",
-    "T1041": "actions_on_objectives", "T1048": "actions_on_objectives",
-    "T1567": "actions_on_objectives", "T1485": "actions_on_objectives",
-    "T1486": "actions_on_objectives", "T1496": "actions_on_objectives",
-    "T1005": "actions_on_objectives", "T1113": "actions_on_objectives",
+    "T1041": "actions_on_objectives",
+    "T1048": "actions_on_objectives",
+    "T1567": "actions_on_objectives",
+    "T1485": "actions_on_objectives",
+    "T1486": "actions_on_objectives",
+    "T1496": "actions_on_objectives",
+    "T1005": "actions_on_objectives",
+    "T1113": "actions_on_objectives",
 }
+
 
 def _technique_to_stage(technique: str) -> str:
     """Map a MITRE technique to a kill-chain stage (best effort)."""

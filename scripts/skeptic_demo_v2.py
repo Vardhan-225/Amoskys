@@ -126,7 +126,8 @@ def seed_multi_agent_wal(wal_path: str, sk, num_events: int = 30):
     """
     os.makedirs(os.path.dirname(wal_path) or ".", exist_ok=True)
     conn = sqlite3.connect(wal_path)
-    conn.executescript("""
+    conn.executescript(
+        """
         PRAGMA journal_mode=WAL;
         PRAGMA synchronous=FULL;
         CREATE TABLE IF NOT EXISTS wal (
@@ -140,7 +141,8 @@ def seed_multi_agent_wal(wal_path: str, sk, num_events: int = 30):
         );
         CREATE UNIQUE INDEX IF NOT EXISTS wal_idem ON wal(idem);
         CREATE INDEX IF NOT EXISTS wal_ts ON wal(ts_ns);
-    """)
+    """
+    )
 
     prev_sig = GENESIS_SIG
     base_ts = int(time.time() * 1e9)

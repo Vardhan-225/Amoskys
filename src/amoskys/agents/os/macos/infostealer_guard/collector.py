@@ -97,14 +97,10 @@ class PIDConnection:
 _SENSITIVE_DIRS: Dict[str, List[str]] = {
     "keychain": [os.path.expanduser("~/Library/Keychains/")],
     "chrome_creds": [
-        os.path.expanduser(
-            "~/Library/Application Support/Google/Chrome/Default/"
-        )
+        os.path.expanduser("~/Library/Application Support/Google/Chrome/Default/")
     ],
     "chrome_cookies": [
-        os.path.expanduser(
-            "~/Library/Application Support/Google/Chrome/Default/"
-        )
+        os.path.expanduser("~/Library/Application Support/Google/Chrome/Default/")
     ],
     "firefox_creds": [],  # use glob for profiles
     "safari": [os.path.expanduser("~/Library/Safari/")],
@@ -114,30 +110,14 @@ _SENSITIVE_DIRS: Dict[str, List[str]] = {
         )
     ],
     "edge_creds": [
-        os.path.expanduser(
-            "~/Library/Application Support/Microsoft Edge/Default/"
-        )
+        os.path.expanduser("~/Library/Application Support/Microsoft Edge/Default/")
     ],
-    "crypto_exodus": [
-        os.path.expanduser("~/Library/Application Support/Exodus/")
-    ],
-    "crypto_electrum": [
-        os.path.expanduser("~/Library/Application Support/Electrum/")
-    ],
-    "crypto_atomic": [
-        os.path.expanduser("~/Library/Application Support/atomic/")
-    ],
-    "notes": [
-        os.path.expanduser(
-            "~/Library/Group Containers/group.com.apple.notes/"
-        )
-    ],
-    "telegram": [
-        os.path.expanduser("~/Library/Application Support/Telegram Desktop/")
-    ],
-    "discord": [
-        os.path.expanduser("~/Library/Application Support/discord/")
-    ],
+    "crypto_exodus": [os.path.expanduser("~/Library/Application Support/Exodus/")],
+    "crypto_electrum": [os.path.expanduser("~/Library/Application Support/Electrum/")],
+    "crypto_atomic": [os.path.expanduser("~/Library/Application Support/atomic/")],
+    "notes": [os.path.expanduser("~/Library/Group Containers/group.com.apple.notes/")],
+    "telegram": [os.path.expanduser("~/Library/Application Support/Telegram Desktop/")],
+    "discord": [os.path.expanduser("~/Library/Application Support/discord/")],
 }
 
 # Sensitive file basenames — for matching lsof output lines
@@ -202,9 +182,7 @@ def _get_hostname() -> str:
 
 def _get_firefox_profile_dirs() -> List[str]:
     """Discover Firefox profile directories via glob."""
-    pattern = os.path.expanduser(
-        "~/Library/Application Support/Firefox/Profiles/*/"
-    )
+    pattern = os.path.expanduser("~/Library/Application Support/Firefox/Profiles/*/")
     return _glob.glob(pattern)
 
 
@@ -274,9 +252,7 @@ def _parse_lsof_lines(
             continue
 
         # Build a basic GUID (no create_time from lsof — use PID hash)
-        guid = hashlib.sha256(
-            f"lsof:{pid}:{process_name}".encode()
-        ).hexdigest()[:16]
+        guid = hashlib.sha256(f"lsof:{pid}:{process_name}".encode()).hexdigest()[:16]
 
         accesses.append(
             SensitiveFileAccess(
@@ -329,9 +305,7 @@ def _parse_lsof_network(output: str) -> Dict[int, List[PIDConnection]]:
             state = state_match.group(1)
 
         # Parse TCP connections with ->
-        arrow_match = re.search(
-            r"->(\[?[\da-fA-F.:]+\]?):(\d+)", name_field
-        )
+        arrow_match = re.search(r"->(\[?[\da-fA-F.:]+\]?):(\d+)", name_field)
         if arrow_match:
             remote_ip = arrow_match.group(1).strip("[]")
             try:
@@ -462,9 +436,7 @@ class MacOSInfostealerGuardCollector:
             for d in dirs:
                 sensitive_path_prefixes.add(d)
 
-        for proc in psutil.process_iter(
-            ["pid", "name", "exe", "cmdline", "ppid"]
-        ):
+        for proc in psutil.process_iter(["pid", "name", "exe", "cmdline", "ppid"]):
             try:
                 info = proc.info
                 pid = info["pid"]
@@ -523,7 +495,10 @@ class MacOSInfostealerGuardCollector:
 
                 # --- Detection 2: Keychain CLI extraction ---
                 if name_lower == "security":
-                    if "find-generic-password" in cmdline_str or "find-internet-password" in cmdline_str:
+                    if (
+                        "find-generic-password" in cmdline_str
+                        or "find-internet-password" in cmdline_str
+                    ):
                         suspicious.append(
                             SuspiciousProcess(
                                 pid=pid,
@@ -616,9 +591,21 @@ class MacOSInfostealerGuardCollector:
 
         # Sensitive path fragments indicating credential data inside archive
         cred_indicators = (
-            "keychain", "Keychains", "Login Data", "Cookies", "logins.json",
-            "key4.db", "wallet", "Exodus", "Electrum", "atomic",
-            ".ssh", "id_rsa", "id_ed25519", "credentials", "shadow",
+            "keychain",
+            "Keychains",
+            "Login Data",
+            "Cookies",
+            "logins.json",
+            "key4.db",
+            "wallet",
+            "Exodus",
+            "Electrum",
+            "atomic",
+            ".ssh",
+            "id_rsa",
+            "id_ed25519",
+            "credentials",
+            "shadow",
         )
 
         for staging_dir in staging_dirs:
@@ -647,7 +634,10 @@ class MacOSInfostealerGuardCollector:
                         if entry_lower.endswith(".zip"):
                             with zipfile.ZipFile(filepath, "r") as zf:
                                 archive_files = zf.namelist()[:100]
-                        elif any(entry_lower.endswith(e) for e in (".tar", ".tar.gz", ".tgz", ".tar.bz2")):
+                        elif any(
+                            entry_lower.endswith(e)
+                            for e in (".tar", ".tar.gz", ".tgz", ".tar.bz2")
+                        ):
                             with tarfile.open(filepath, "r:*") as tf:
                                 archive_files = [m.name for m in tf.getmembers()[:100]]
                     except Exception:
@@ -666,14 +656,16 @@ class MacOSInfostealerGuardCollector:
                                 break
 
                     if contains_creds:
-                        archives.append({
-                            "path": filepath,
-                            "filename": entry,
-                            "size": st.st_size,
-                            "modify_time": st.st_mtime,
-                            "staging_dir": staging_dir,
-                            "archive_contents_sample": archive_files[:10],
-                        })
+                        archives.append(
+                            {
+                                "path": filepath,
+                                "filename": entry,
+                                "size": st.st_size,
+                                "modify_time": st.st_mtime,
+                                "staging_dir": staging_dir,
+                                "archive_contents_sample": archive_files[:10],
+                            }
+                        )
             except OSError:
                 continue
 

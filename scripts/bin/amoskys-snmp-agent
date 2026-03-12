@@ -10,8 +10,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-# Import and run the main function from snmp_agent module
-from amoskys.agents.shared.snmp.agent import main
-
-if __name__ == "__main__":
-    main()
+# No macOS Observatory equivalent for SNMP agent
+# from amoskys.agents.shared.snmp.agent import main
+print("SNMP Agent: no macOS Observatory equivalent available", file=sys.stderr)
+sys.exit(1)

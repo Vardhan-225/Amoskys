@@ -305,9 +305,7 @@ def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    parser = argparse.ArgumentParser(
-        description="AMOSKYS macOS InfostealerGuard Agent"
-    )
+    parser = argparse.ArgumentParser(description="AMOSKYS macOS InfostealerGuard Agent")
     parser.add_argument("--interval", type=float, default=15.0)
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()

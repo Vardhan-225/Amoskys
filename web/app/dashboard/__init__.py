@@ -287,44 +287,75 @@ _AGENT_NAME_MAP = {
 # Comprehensive agent ID normalization: all known aliases → canonical short ID
 _AGENT_ID_MAP = {
     # Canonical short IDs
-    "proc": "proc", "proc_agent": "proc", "ProcAgent": "proc", "process": "proc",
-    "dns": "dns", "dns_agent": "dns", "DNS": "dns", "DNSAgent": "dns",
-    "auth": "auth", "auth_agent": "auth", "AuthGuard": "auth",
-    "fim": "fim", "fim_agent": "fim", "FIM": "fim",
-    "flow": "flow", "flow_agent": "flow", "FlowAgent": "flow", "network": "flow",
-    "persistence": "persistence", "persistence_agent": "persistence",
+    "proc": "proc",
+    "proc_agent": "proc",
+    "ProcAgent": "proc",
+    "process": "proc",
+    "dns": "dns",
+    "dns_agent": "dns",
+    "DNS": "dns",
+    "DNSAgent": "dns",
+    "auth": "auth",
+    "auth_agent": "auth",
+    "AuthGuard": "auth",
+    "fim": "fim",
+    "fim_agent": "fim",
+    "FIM": "fim",
+    "flow": "flow",
+    "flow_agent": "flow",
+    "FlowAgent": "flow",
+    "network": "flow",
+    "persistence": "persistence",
+    "persistence_agent": "persistence",
     "PersistenceGuard": "persistence",
-    "peripheral": "peripheral", "peripheral_agent": "peripheral",
+    "peripheral": "peripheral",
+    "peripheral_agent": "peripheral",
     "Peripheral": "peripheral",
-    "kernel_audit": "kernel_audit", "kernel_audit_agent": "kernel_audit",
+    "kernel_audit": "kernel_audit",
+    "kernel_audit_agent": "kernel_audit",
     "KernelAudit": "kernel_audit",
-    "device_discovery": "device_discovery", "device_discovery_agent": "device_discovery",
+    "device_discovery": "device_discovery",
+    "device_discovery_agent": "device_discovery",
     "Discovery": "device_discovery",
     "protocol_collectors": "protocol_collectors",
     "protocol_collectors_agent": "protocol_collectors",
     "ProtocolCollector": "protocol_collectors",
-    "applog": "applog", "applog_agent": "applog", "AppLog": "applog",
-    "db_activity": "db_activity", "db_activity_agent": "db_activity",
+    "applog": "applog",
+    "applog_agent": "applog",
+    "AppLog": "applog",
+    "db_activity": "db_activity",
+    "db_activity_agent": "db_activity",
     "DBActivity": "db_activity",
-    "http_inspector": "http_inspector", "http_inspector_agent": "http_inspector",
+    "http_inspector": "http_inspector",
+    "http_inspector_agent": "http_inspector",
     "HTTPInspector": "http_inspector",
     "internet_activity": "internet_activity",
     "internet_activity_agent": "internet_activity",
     "InternetActivity": "internet_activity",
-    "net_scanner": "net_scanner", "net_scanner_agent": "net_scanner",
+    "net_scanner": "net_scanner",
+    "net_scanner_agent": "net_scanner",
     "NetScanner": "net_scanner",
     # Hyphenated forms from WAL processor
-    "proc-agent": "proc", "dns-agent": "dns", "auth-agent": "auth",
-    "fim-agent": "fim", "flow-agent": "flow", "persistence-agent": "persistence",
-    "peripheral-agent": "peripheral", "kernel-audit-agent": "kernel_audit",
+    "proc-agent": "proc",
+    "dns-agent": "dns",
+    "auth-agent": "auth",
+    "fim-agent": "fim",
+    "flow-agent": "flow",
+    "persistence-agent": "persistence",
+    "peripheral-agent": "peripheral",
+    "kernel-audit-agent": "kernel_audit",
     # macOS Observatory aliases → canonical short IDs
-    "macos_process": "proc", "macos_auth": "auth", "macos_filesystem": "fim",
-    "macos_network": "flow", "macos_peripheral": "peripheral",
+    "macos_process": "proc",
+    "macos_auth": "auth",
+    "macos_filesystem": "fim",
+    "macos_network": "flow",
+    "macos_peripheral": "peripheral",
     "macos_persistence": "persistence",
     # macOS-only agents (map to themselves)
     "macos_security_monitor": "macos_security_monitor",
     "macos_unified_log": "macos_unified_log",
-    "macos_dns": "macos_dns", "macos_applog": "macos_applog",
+    "macos_dns": "macos_dns",
+    "macos_applog": "macos_applog",
     "macos_discovery": "macos_discovery",
     "macos_internet_activity": "macos_internet_activity",
     "macos_db_activity": "macos_db_activity",
@@ -337,7 +368,9 @@ def _normalize_agent_id(raw: str) -> str:
     """Map any known agent alias to its canonical short ID."""
     if not raw:
         return ""
-    return _AGENT_ID_MAP.get(raw, raw.lower().replace("_agent", "").replace("agent", ""))
+    return _AGENT_ID_MAP.get(
+        raw, raw.lower().replace("_agent", "").replace("agent", "")
+    )
 
 
 # ── Dashboard-authenticated health summary (avoids health API auth issues) ──
@@ -416,9 +449,15 @@ def health_summary():
             conn = sqlite3.connect(str(telemetry_db))
             cutoff_ns = int((now - timedelta(hours=24)).timestamp() * 1_000_000_000)
             for table in [
-                "security_events", "process_events", "flow_events",
-                "dns_events", "persistence_events", "fim_events",
-                "peripheral_events", "audit_events", "observation_events",
+                "security_events",
+                "process_events",
+                "flow_events",
+                "dns_events",
+                "persistence_events",
+                "fim_events",
+                "peripheral_events",
+                "audit_events",
+                "observation_events",
             ]:
                 try:
                     row = conn.execute(
@@ -558,11 +597,7 @@ def live_threats():
 
         source_ip = ""
         if isinstance(indicators, dict):
-            source_ip = (
-                indicators.get("source_ip")
-                or indicators.get("src_ip")
-                or ""
-            )
+            source_ip = indicators.get("source_ip") or indicators.get("src_ip") or ""
         source_ip = source_ip or row.get("device_id", "")
 
         # Parse MITRE techniques
@@ -742,8 +777,14 @@ def unified_events():
             # ── 1. security_events ──
             all_events.extend(
                 _query_table_security(
-                    store, cutoff_ns, norm_agent, sev_lo, sev_hi,
-                    search_filter, hour_start_ns, hour_end_ns,
+                    store,
+                    cutoff_ns,
+                    norm_agent,
+                    sev_lo,
+                    sev_hi,
+                    search_filter,
+                    hour_start_ns,
+                    hour_end_ns,
                 )
             )
 
@@ -751,8 +792,13 @@ def unified_events():
             if not norm_agent or norm_agent == "proc":
                 all_events.extend(
                     _query_table_process(
-                        store, cutoff_ns, sev_lo, sev_hi,
-                        search_filter, hour_start_ns, hour_end_ns,
+                        store,
+                        cutoff_ns,
+                        sev_lo,
+                        sev_hi,
+                        search_filter,
+                        hour_start_ns,
+                        hour_end_ns,
                     )
                 )
 
@@ -760,8 +806,13 @@ def unified_events():
             if not norm_agent or norm_agent == "flow":
                 all_events.extend(
                     _query_table_flow(
-                        store, cutoff_ns, sev_lo, sev_hi,
-                        search_filter, hour_start_ns, hour_end_ns,
+                        store,
+                        cutoff_ns,
+                        sev_lo,
+                        sev_hi,
+                        search_filter,
+                        hour_start_ns,
+                        hour_end_ns,
                     )
                 )
 
@@ -769,8 +820,13 @@ def unified_events():
             if not norm_agent or norm_agent == "dns":
                 all_events.extend(
                     _query_table_dns(
-                        store, cutoff_ns, sev_lo, sev_hi,
-                        search_filter, hour_start_ns, hour_end_ns,
+                        store,
+                        cutoff_ns,
+                        sev_lo,
+                        sev_hi,
+                        search_filter,
+                        hour_start_ns,
+                        hour_end_ns,
                     )
                 )
 
@@ -778,8 +834,13 @@ def unified_events():
             if not norm_agent or norm_agent == "persistence":
                 all_events.extend(
                     _query_table_persistence(
-                        store, cutoff_ns, sev_lo, sev_hi,
-                        search_filter, hour_start_ns, hour_end_ns,
+                        store,
+                        cutoff_ns,
+                        sev_lo,
+                        sev_hi,
+                        search_filter,
+                        hour_start_ns,
+                        hour_end_ns,
                     )
                 )
 
@@ -787,8 +848,13 @@ def unified_events():
             if not norm_agent or norm_agent == "fim":
                 all_events.extend(
                     _query_table_fim(
-                        store, cutoff_ns, sev_lo, sev_hi,
-                        search_filter, hour_start_ns, hour_end_ns,
+                        store,
+                        cutoff_ns,
+                        sev_lo,
+                        sev_hi,
+                        search_filter,
+                        hour_start_ns,
+                        hour_end_ns,
                     )
                 )
 
@@ -827,8 +893,16 @@ def _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns):
     return conds, params
 
 
-def _query_table_security(store, cutoff_ns, norm_agent, sev_lo, sev_hi,
-                          search_filter, hour_start_ns, hour_end_ns):
+def _query_table_security(
+    store,
+    cutoff_ns,
+    norm_agent,
+    sev_lo,
+    sev_hi,
+    search_filter,
+    hour_start_ns,
+    hour_end_ns,
+):
     """Query security_events table."""
     conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
 
@@ -848,7 +922,12 @@ def _query_table_security(store, cutoff_ns, norm_agent, sev_lo, sev_hi,
             f"SELECT * FROM security_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
             params,
         ).fetchall()
-        columns = [d[0] for d in store.db.execute("SELECT * FROM security_events LIMIT 0").description]
+        columns = [
+            d[0]
+            for d in store.db.execute(
+                "SELECT * FROM security_events LIMIT 0"
+            ).description
+        ]
     except Exception:
         return []
 
@@ -866,29 +945,34 @@ def _query_table_security(store, cutoff_ns, norm_agent, sev_lo, sev_hi,
         agent_name = _normalize_agent_id(agent_name) if agent_name else ""
         risk_score = round(ev.get("risk_score", 0) or 0, 3)
 
-        events.append({
-            "id": ev.get("id"),
-            "timestamp_dt": ev.get("timestamp_dt", ""),
-            "event_category": ev.get("event_category", "unknown"),
-            "severity": _risk_to_severity(risk_score),
-            "risk_score": risk_score,
-            "confidence": round(ev.get("confidence", 0) or 0, 3),
-            "source_ip": indicators.get("source_ip") or indicators.get("src_ip") or ev.get("device_id", ""),
-            "description": ev.get("description", ""),
-            "agent": agent_name,
-            "device_id": ev.get("device_id", ""),
-            "final_classification": ev.get("final_classification", ""),
-            "mitre_techniques": mitre_list,
-            "mitre_technique": ", ".join(mitre_list),
-            "indicators": indicators,
-            "source_table": "security",
-            "_sort_ts": ev.get("timestamp_ns", 0),
-        })
+        events.append(
+            {
+                "id": ev.get("id"),
+                "timestamp_dt": ev.get("timestamp_dt", ""),
+                "event_category": ev.get("event_category", "unknown"),
+                "severity": _risk_to_severity(risk_score),
+                "risk_score": risk_score,
+                "confidence": round(ev.get("confidence", 0) or 0, 3),
+                "source_ip": indicators.get("source_ip")
+                or indicators.get("src_ip")
+                or ev.get("device_id", ""),
+                "description": ev.get("description", ""),
+                "agent": agent_name,
+                "device_id": ev.get("device_id", ""),
+                "final_classification": ev.get("final_classification", ""),
+                "mitre_techniques": mitre_list,
+                "mitre_technique": ", ".join(mitre_list),
+                "indicators": indicators,
+                "source_table": "security",
+                "_sort_ts": ev.get("timestamp_ns", 0),
+            }
+        )
     return events
 
 
-def _query_table_process(store, cutoff_ns, sev_lo, sev_hi,
-                         search_filter, hour_start_ns, hour_end_ns):
+def _query_table_process(
+    store, cutoff_ns, sev_lo, sev_hi, search_filter, hour_start_ns, hour_end_ns
+):
     """Query process_events table."""
     conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
 
@@ -898,7 +982,9 @@ def _query_table_process(store, cutoff_ns, sev_lo, sev_hi,
         params.extend([sev_lo, sev_hi])
     if search_filter:
         conds.append("(exe LIKE ? OR cmdline LIKE ? OR username LIKE ?)")
-        params.extend([f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"])
+        params.extend(
+            [f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"]
+        )
 
     where = " AND ".join(conds)
     try:
@@ -906,7 +992,12 @@ def _query_table_process(store, cutoff_ns, sev_lo, sev_hi,
             f"SELECT * FROM process_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
             params,
         ).fetchall()
-        columns = [d[0] for d in store.db.execute("SELECT * FROM process_events LIMIT 0").description]
+        columns = [
+            d[0]
+            for d in store.db.execute(
+                "SELECT * FROM process_events LIMIT 0"
+            ).description
+        ]
     except Exception:
         return []
 
@@ -919,33 +1010,40 @@ def _query_table_process(store, cutoff_ns, sev_lo, sev_hi,
         desc = f"{exe}" + (f" — {cmdline[:120]}" if cmdline and cmdline != exe else "")
         agent = _normalize_agent_id(ev.get("collection_agent") or "proc")
 
-        events.append({
-            "id": ev.get("id"),
-            "timestamp_dt": ev.get("timestamp_dt", ""),
-            "event_category": "process_event",
-            "severity": _risk_to_severity(risk),
-            "risk_score": risk,
-            "confidence": round(ev.get("confidence_score", 0) or 0, 3),
-            "source_ip": ev.get("device_id", ""),
-            "description": desc,
-            "agent": agent,
-            "device_id": ev.get("device_id", ""),
-            "final_classification": "suspicious" if ev.get("is_suspicious") else "benign",
-            "mitre_techniques": [],
-            "mitre_technique": "",
-            "indicators": {
-                "pid": ev.get("pid"), "ppid": ev.get("ppid"),
-                "exe": exe, "username": ev.get("username", ""),
-                "cpu_percent": ev.get("cpu_percent"),
-            },
-            "source_table": "process",
-            "_sort_ts": ev.get("timestamp_ns", 0),
-        })
+        events.append(
+            {
+                "id": ev.get("id"),
+                "timestamp_dt": ev.get("timestamp_dt", ""),
+                "event_category": "process_event",
+                "severity": _risk_to_severity(risk),
+                "risk_score": risk,
+                "confidence": round(ev.get("confidence_score", 0) or 0, 3),
+                "source_ip": ev.get("device_id", ""),
+                "description": desc,
+                "agent": agent,
+                "device_id": ev.get("device_id", ""),
+                "final_classification": (
+                    "suspicious" if ev.get("is_suspicious") else "benign"
+                ),
+                "mitre_techniques": [],
+                "mitre_technique": "",
+                "indicators": {
+                    "pid": ev.get("pid"),
+                    "ppid": ev.get("ppid"),
+                    "exe": exe,
+                    "username": ev.get("username", ""),
+                    "cpu_percent": ev.get("cpu_percent"),
+                },
+                "source_table": "process",
+                "_sort_ts": ev.get("timestamp_ns", 0),
+            }
+        )
     return events
 
 
-def _query_table_flow(store, cutoff_ns, sev_lo, sev_hi,
-                      search_filter, hour_start_ns, hour_end_ns):
+def _query_table_flow(
+    store, cutoff_ns, sev_lo, sev_hi, search_filter, hour_start_ns, hour_end_ns
+):
     """Query flow_events table."""
     conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
 
@@ -955,7 +1053,9 @@ def _query_table_flow(store, cutoff_ns, sev_lo, sev_hi,
         params.extend([sev_lo, sev_hi])
     if search_filter:
         conds.append("(src_ip LIKE ? OR dst_ip LIKE ? OR protocol LIKE ?)")
-        params.extend([f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"])
+        params.extend(
+            [f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"]
+        )
 
     where = " AND ".join(conds)
     try:
@@ -963,7 +1063,10 @@ def _query_table_flow(store, cutoff_ns, sev_lo, sev_hi,
             f"SELECT * FROM flow_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
             params,
         ).fetchall()
-        columns = [d[0] for d in store.db.execute("SELECT * FROM flow_events LIMIT 0").description]
+        columns = [
+            d[0]
+            for d in store.db.execute("SELECT * FROM flow_events LIMIT 0").description
+        ]
     except Exception:
         return []
 
@@ -976,34 +1079,42 @@ def _query_table_flow(store, cutoff_ns, sev_lo, sev_hi,
         port = ev.get("dst_port", "") or ""
         desc = f"{protocol} → {dst}:{port}"
 
-        events.append({
-            "id": ev.get("id"),
-            "timestamp_dt": ev.get("timestamp_dt", ""),
-            "event_category": f"network_flow_{protocol.lower()}",
-            "severity": _risk_to_severity(risk),
-            "risk_score": risk,
-            "confidence": 0.5,
-            "source_ip": ev.get("src_ip", ""),
-            "description": desc,
-            "agent": "flow",
-            "device_id": ev.get("device_id", ""),
-            "final_classification": "suspicious" if ev.get("is_suspicious") else "benign",
-            "mitre_techniques": [],
-            "mitre_technique": "",
-            "indicators": {
-                "src_ip": ev.get("src_ip"), "dst_ip": dst,
-                "src_port": ev.get("src_port"), "dst_port": port,
-                "protocol": protocol,
-                "bytes_tx": ev.get("bytes_tx"), "bytes_rx": ev.get("bytes_rx"),
-            },
-            "source_table": "flow",
-            "_sort_ts": ev.get("timestamp_ns", 0),
-        })
+        events.append(
+            {
+                "id": ev.get("id"),
+                "timestamp_dt": ev.get("timestamp_dt", ""),
+                "event_category": f"network_flow_{protocol.lower()}",
+                "severity": _risk_to_severity(risk),
+                "risk_score": risk,
+                "confidence": 0.5,
+                "source_ip": ev.get("src_ip", ""),
+                "description": desc,
+                "agent": "flow",
+                "device_id": ev.get("device_id", ""),
+                "final_classification": (
+                    "suspicious" if ev.get("is_suspicious") else "benign"
+                ),
+                "mitre_techniques": [],
+                "mitre_technique": "",
+                "indicators": {
+                    "src_ip": ev.get("src_ip"),
+                    "dst_ip": dst,
+                    "src_port": ev.get("src_port"),
+                    "dst_port": port,
+                    "protocol": protocol,
+                    "bytes_tx": ev.get("bytes_tx"),
+                    "bytes_rx": ev.get("bytes_rx"),
+                },
+                "source_table": "flow",
+                "_sort_ts": ev.get("timestamp_ns", 0),
+            }
+        )
     return events
 
 
-def _query_table_dns(store, cutoff_ns, sev_lo, sev_hi,
-                     search_filter, hour_start_ns, hour_end_ns):
+def _query_table_dns(
+    store, cutoff_ns, sev_lo, sev_hi, search_filter, hour_start_ns, hour_end_ns
+):
     """Query dns_events table."""
     conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
 
@@ -1012,7 +1123,9 @@ def _query_table_dns(store, cutoff_ns, sev_lo, sev_hi,
         params.extend([sev_lo, sev_hi])
     if search_filter:
         conds.append("(domain LIKE ? OR query_type LIKE ? OR event_type LIKE ?)")
-        params.extend([f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"])
+        params.extend(
+            [f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"]
+        )
 
     where = " AND ".join(conds)
     try:
@@ -1020,7 +1133,10 @@ def _query_table_dns(store, cutoff_ns, sev_lo, sev_hi,
             f"SELECT * FROM dns_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
             params,
         ).fetchall()
-        columns = [d[0] for d in store.db.execute("SELECT * FROM dns_events LIMIT 0").description]
+        columns = [
+            d[0]
+            for d in store.db.execute("SELECT * FROM dns_events LIMIT 0").description
+        ]
     except Exception:
         return []
 
@@ -1034,34 +1150,42 @@ def _query_table_dns(store, cutoff_ns, sev_lo, sev_hi,
         mitre_list = _parse_mitre(ev.get("mitre_techniques"))
         agent = _normalize_agent_id(ev.get("collection_agent") or "dns")
 
-        events.append({
-            "id": ev.get("id"),
-            "timestamp_dt": ev.get("timestamp_dt", ""),
-            "event_category": ev.get("event_type", "dns_query") or "dns_query",
-            "severity": _risk_to_severity(risk),
-            "risk_score": risk,
-            "confidence": round(ev.get("confidence", 0) or 0, 3),
-            "source_ip": ev.get("source_ip", ""),
-            "description": desc,
-            "agent": agent,
-            "device_id": ev.get("device_id", ""),
-            "final_classification": "suspicious" if ev.get("is_beaconing") or ev.get("is_tunneling") else "benign",
-            "mitre_techniques": mitre_list,
-            "mitre_technique": ", ".join(mitre_list),
-            "indicators": {
-                "domain": domain, "query_type": qtype,
-                "dga_score": ev.get("dga_score"),
-                "is_beaconing": ev.get("is_beaconing"),
-                "response_code": ev.get("response_code"),
-            },
-            "source_table": "dns",
-            "_sort_ts": ev.get("timestamp_ns", 0),
-        })
+        events.append(
+            {
+                "id": ev.get("id"),
+                "timestamp_dt": ev.get("timestamp_dt", ""),
+                "event_category": ev.get("event_type", "dns_query") or "dns_query",
+                "severity": _risk_to_severity(risk),
+                "risk_score": risk,
+                "confidence": round(ev.get("confidence", 0) or 0, 3),
+                "source_ip": ev.get("source_ip", ""),
+                "description": desc,
+                "agent": agent,
+                "device_id": ev.get("device_id", ""),
+                "final_classification": (
+                    "suspicious"
+                    if ev.get("is_beaconing") or ev.get("is_tunneling")
+                    else "benign"
+                ),
+                "mitre_techniques": mitre_list,
+                "mitre_technique": ", ".join(mitre_list),
+                "indicators": {
+                    "domain": domain,
+                    "query_type": qtype,
+                    "dga_score": ev.get("dga_score"),
+                    "is_beaconing": ev.get("is_beaconing"),
+                    "response_code": ev.get("response_code"),
+                },
+                "source_table": "dns",
+                "_sort_ts": ev.get("timestamp_ns", 0),
+            }
+        )
     return events
 
 
-def _query_table_persistence(store, cutoff_ns, sev_lo, sev_hi,
-                             search_filter, hour_start_ns, hour_end_ns):
+def _query_table_persistence(
+    store, cutoff_ns, sev_lo, sev_hi, search_filter, hour_start_ns, hour_end_ns
+):
     """Query persistence_events table."""
     conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
 
@@ -1070,7 +1194,9 @@ def _query_table_persistence(store, cutoff_ns, sev_lo, sev_hi,
         params.extend([sev_lo, sev_hi])
     if search_filter:
         conds.append("(mechanism LIKE ? OR path LIKE ? OR command LIKE ?)")
-        params.extend([f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"])
+        params.extend(
+            [f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"]
+        )
 
     where = " AND ".join(conds)
     try:
@@ -1078,7 +1204,12 @@ def _query_table_persistence(store, cutoff_ns, sev_lo, sev_hi,
             f"SELECT * FROM persistence_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
             params,
         ).fetchall()
-        columns = [d[0] for d in store.db.execute("SELECT * FROM persistence_events LIMIT 0").description]
+        columns = [
+            d[0]
+            for d in store.db.execute(
+                "SELECT * FROM persistence_events LIMIT 0"
+            ).description
+        ]
     except Exception:
         return []
 
@@ -1092,34 +1223,38 @@ def _query_table_persistence(store, cutoff_ns, sev_lo, sev_hi,
         mitre_list = _parse_mitre(ev.get("mitre_techniques"))
         agent = _normalize_agent_id(ev.get("collection_agent") or "persistence")
 
-        events.append({
-            "id": ev.get("id"),
-            "timestamp_dt": ev.get("timestamp_dt", ""),
-            "event_category": mechanism or "persistence_event",
-            "severity": _risk_to_severity(risk),
-            "risk_score": risk,
-            "confidence": round(ev.get("confidence", 0) or 0, 3),
-            "source_ip": ev.get("device_id", ""),
-            "description": desc,
-            "agent": agent,
-            "device_id": ev.get("device_id", ""),
-            "final_classification": "suspicious" if risk >= 0.5 else "benign",
-            "mitre_techniques": mitre_list,
-            "mitre_technique": ", ".join(mitre_list),
-            "indicators": {
-                "mechanism": mechanism, "path": path,
-                "command": ev.get("command", ""),
-                "change_type": ev.get("change_type", ""),
-                "user": ev.get("user", ""),
-            },
-            "source_table": "persistence",
-            "_sort_ts": ev.get("timestamp_ns", 0),
-        })
+        events.append(
+            {
+                "id": ev.get("id"),
+                "timestamp_dt": ev.get("timestamp_dt", ""),
+                "event_category": mechanism or "persistence_event",
+                "severity": _risk_to_severity(risk),
+                "risk_score": risk,
+                "confidence": round(ev.get("confidence", 0) or 0, 3),
+                "source_ip": ev.get("device_id", ""),
+                "description": desc,
+                "agent": agent,
+                "device_id": ev.get("device_id", ""),
+                "final_classification": "suspicious" if risk >= 0.5 else "benign",
+                "mitre_techniques": mitre_list,
+                "mitre_technique": ", ".join(mitre_list),
+                "indicators": {
+                    "mechanism": mechanism,
+                    "path": path,
+                    "command": ev.get("command", ""),
+                    "change_type": ev.get("change_type", ""),
+                    "user": ev.get("user", ""),
+                },
+                "source_table": "persistence",
+                "_sort_ts": ev.get("timestamp_ns", 0),
+            }
+        )
     return events
 
 
-def _query_table_fim(store, cutoff_ns, sev_lo, sev_hi,
-                     search_filter, hour_start_ns, hour_end_ns):
+def _query_table_fim(
+    store, cutoff_ns, sev_lo, sev_hi, search_filter, hour_start_ns, hour_end_ns
+):
     """Query fim_events table."""
     conds, params = _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns)
 
@@ -1128,7 +1263,9 @@ def _query_table_fim(store, cutoff_ns, sev_lo, sev_hi,
         params.extend([sev_lo, sev_hi])
     if search_filter:
         conds.append("(path LIKE ? OR change_type LIKE ? OR reason LIKE ?)")
-        params.extend([f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"])
+        params.extend(
+            [f"%{search_filter}%", f"%{search_filter}%", f"%{search_filter}%"]
+        )
 
     where = " AND ".join(conds)
     try:
@@ -1136,7 +1273,10 @@ def _query_table_fim(store, cutoff_ns, sev_lo, sev_hi,
             f"SELECT * FROM fim_events WHERE {where} ORDER BY timestamp_ns DESC LIMIT 2000",
             params,
         ).fetchall()
-        columns = [d[0] for d in store.db.execute("SELECT * FROM fim_events LIMIT 0").description]
+        columns = [
+            d[0]
+            for d in store.db.execute("SELECT * FROM fim_events LIMIT 0").description
+        ]
     except Exception:
         return []
 
@@ -1149,29 +1289,32 @@ def _query_table_fim(store, cutoff_ns, sev_lo, sev_hi,
         desc = f"{change}: {path}" if change else path
         mitre_list = _parse_mitre(ev.get("mitre_techniques"))
 
-        events.append({
-            "id": ev.get("id"),
-            "timestamp_dt": ev.get("timestamp_dt", ""),
-            "event_category": "file_modification",
-            "severity": _risk_to_severity(risk),
-            "risk_score": risk,
-            "confidence": round(ev.get("confidence", 0) or 0, 3),
-            "source_ip": ev.get("device_id", ""),
-            "description": desc,
-            "agent": "fim",
-            "device_id": ev.get("device_id", ""),
-            "final_classification": "suspicious" if risk >= 0.5 else "benign",
-            "mitre_techniques": mitre_list,
-            "mitre_technique": ", ".join(mitre_list),
-            "indicators": {
-                "path": path, "change_type": change,
-                "old_hash": ev.get("old_hash", ""),
-                "new_hash": ev.get("new_hash", ""),
-                "reason": ev.get("reason", ""),
-            },
-            "source_table": "fim",
-            "_sort_ts": ev.get("timestamp_ns", 0),
-        })
+        events.append(
+            {
+                "id": ev.get("id"),
+                "timestamp_dt": ev.get("timestamp_dt", ""),
+                "event_category": "file_modification",
+                "severity": _risk_to_severity(risk),
+                "risk_score": risk,
+                "confidence": round(ev.get("confidence", 0) or 0, 3),
+                "source_ip": ev.get("device_id", ""),
+                "description": desc,
+                "agent": "fim",
+                "device_id": ev.get("device_id", ""),
+                "final_classification": "suspicious" if risk >= 0.5 else "benign",
+                "mitre_techniques": mitre_list,
+                "mitre_technique": ", ".join(mitre_list),
+                "indicators": {
+                    "path": path,
+                    "change_type": change,
+                    "old_hash": ev.get("old_hash", ""),
+                    "new_hash": ev.get("new_hash", ""),
+                    "reason": ev.get("reason", ""),
+                },
+                "source_table": "fim",
+                "_sort_ts": ev.get("timestamp_ns", 0),
+            }
+        )
     return events
 
 
@@ -1254,17 +1397,19 @@ def device_info():
     import socket as _socket
 
     try:
-        return jsonify({
-            "status": "success",
-            "system": {
-                "hostname": _socket.gethostname(),
-                "platform": _platform.platform(),
-                "system": _platform.system(),
-                "release": _platform.release(),
-                "architecture": list(_platform.architecture()),
-                "processor": _platform.processor(),
-            },
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "system": {
+                    "hostname": _socket.gethostname(),
+                    "platform": _platform.platform(),
+                    "system": _platform.system(),
+                    "release": _platform.release(),
+                    "architecture": list(_platform.architecture()),
+                    "processor": _platform.processor(),
+                },
+            }
+        )
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -2330,21 +2475,38 @@ def metrics_history_api():
 
 # Static agent metadata for the 10 v2 security agents
 _AGENT_COLORS = {
-    "proc": "#4ECDC4", "flow": "#F38181", "dns": "#AA96DA",
-    "auth": "#FF6B35", "fim": "#00ff88", "persistence": "#FCBAD3",
-    "peripheral": "#FF6B9D", "kernel_audit": "#FFD93D",
-    "device_discovery": "#6BCB77", "protocol_collectors": "#00B4D8",
-    "applog": "#E8A87C", "db_activity": "#20B2AA", "http_inspector": "#7B68EE",
-    "internet_activity": "#DA70D6", "net_scanner": "#FF7F50",
-    "macos_security_monitor": "#FFD700", "macos_unified_log": "#87CEEB",
-    "macos_dns": "#AA96DA", "macos_applog": "#E8A87C",
-    "macos_discovery": "#6BCB77", "macos_internet_activity": "#DA70D6",
-    "macos_db_activity": "#20B2AA", "macos_http_inspector": "#7B68EE",
+    "proc": "#4ECDC4",
+    "flow": "#F38181",
+    "dns": "#AA96DA",
+    "auth": "#FF6B35",
+    "fim": "#00ff88",
+    "persistence": "#FCBAD3",
+    "peripheral": "#FF6B9D",
+    "kernel_audit": "#FFD93D",
+    "device_discovery": "#6BCB77",
+    "protocol_collectors": "#00B4D8",
+    "applog": "#E8A87C",
+    "db_activity": "#20B2AA",
+    "http_inspector": "#7B68EE",
+    "internet_activity": "#DA70D6",
+    "net_scanner": "#FF7F50",
+    "macos_security_monitor": "#FFD700",
+    "macos_unified_log": "#87CEEB",
+    "macos_dns": "#AA96DA",
+    "macos_applog": "#E8A87C",
+    "macos_discovery": "#6BCB77",
+    "macos_internet_activity": "#DA70D6",
+    "macos_db_activity": "#20B2AA",
+    "macos_http_inspector": "#7B68EE",
 }
 
 _AGENT_CATEGORY_DISPLAY = {
-    "endpoint": "Endpoint", "network": "Network", "application": "Application",
-    "platform": "Platform", "physical": "Physical", "kernel": "Kernel",
+    "endpoint": "Endpoint",
+    "network": "Network",
+    "application": "Application",
+    "platform": "Platform",
+    "physical": "Physical",
+    "kernel": "Kernel",
     "identity": "Identity",
 }
 
@@ -2401,6 +2563,7 @@ def _get_agent_deep_meta():
 
     _AGENT_DEEP_META_CACHE = meta
     return meta
+
 
 # Map agent short names to event category prefixes for counting
 _AGENT_EVENT_CATEGORIES = {
@@ -2889,6 +3052,7 @@ def agent_live_data(agent_id):
                 if isinstance(mt, str) and mt.startswith("["):
                     try:
                         import json as _json
+
                         evt["mitre_techniques"] = _json.loads(mt)
                     except Exception:
                         evt["mitre_techniques"] = []
@@ -2958,32 +3122,47 @@ def agent_live_data(agent_id):
                 # Build a description for display
                 if agent_id == "proc":
                     evt["event_category"] = "process_event"
-                    evt["description"] = f"{evt.get('exe', '?')} (PID {evt.get('pid', '?')}) — {evt.get('username', '?')}"
+                    evt["description"] = (
+                        f"{evt.get('exe', '?')} (PID {evt.get('pid', '?')}) — {evt.get('username', '?')}"
+                    )
                     recent_processes.append(dict(evt))
                 elif agent_id == "dns":
                     evt["event_category"] = "dns_query"
-                    evt["description"] = f"{evt.get('domain', '?')} ({evt.get('query_type', '?')})"
+                    evt["description"] = (
+                        f"{evt.get('domain', '?')} ({evt.get('query_type', '?')})"
+                    )
                 elif agent_id == "flow":
                     evt["event_category"] = "network_flow"
-                    evt["description"] = f"{evt.get('protocol', '?')} → {evt.get('dst_ip', '?')}:{evt.get('dst_port', '?')}"
+                    evt["description"] = (
+                        f"{evt.get('protocol', '?')} → {evt.get('dst_ip', '?')}:{evt.get('dst_port', '?')}"
+                    )
                 elif agent_id == "fim":
                     evt["event_category"] = "file_modification"
-                    evt["description"] = f"{evt.get('path', '?')} ({evt.get('change_type', '?')})"
+                    evt["description"] = (
+                        f"{evt.get('path', '?')} ({evt.get('change_type', '?')})"
+                    )
                 elif agent_id == "persistence":
                     evt["event_category"] = evt.get("mechanism", "persistence")
-                    evt["description"] = f"{evt.get('mechanism', '?')}: {evt.get('path', '?')}"
+                    evt["description"] = (
+                        f"{evt.get('mechanism', '?')}: {evt.get('path', '?')}"
+                    )
                 elif agent_id == "peripheral":
                     evt["event_category"] = evt.get("event_type", "peripheral")
-                    evt["description"] = f"{evt.get('device_type', '?')} — {evt.get('vendor_id', '?')}:{evt.get('product_id', '?')}"
+                    evt["description"] = (
+                        f"{evt.get('device_type', '?')} — {evt.get('vendor_id', '?')}:{evt.get('product_id', '?')}"
+                    )
                 elif agent_id == "kernel_audit":
                     evt["event_category"] = evt.get("event_type", "kernel_audit")
-                    evt["description"] = f"syscall:{evt.get('syscall', '?')} — {evt.get('exe', '?')}"
+                    evt["description"] = (
+                        f"syscall:{evt.get('syscall', '?')} — {evt.get('exe', '?')}"
+                    )
 
                 # Parse MITRE techniques
                 mt = evt.get("mitre_techniques", "")
                 if isinstance(mt, str) and mt.startswith("["):
                     try:
                         import json as _json
+
                         evt["mitre_techniques"] = _json.loads(mt)
                     except Exception:
                         evt["mitre_techniques"] = []
@@ -3038,7 +3217,16 @@ def agent_live_data(agent_id):
                         if not desc:
                             # Fallback: compose from common fields
                             parts = []
-                            for k in ("event_type", "process", "sender", "domain", "path", "exe", "src_ip", "dst_ip"):
+                            for k in (
+                                "event_type",
+                                "process",
+                                "sender",
+                                "domain",
+                                "path",
+                                "exe",
+                                "src_ip",
+                                "dst_ip",
+                            ):
                                 if k in parsed and parsed[k]:
                                     parts.append(f"{k}={parsed[k]}")
                             msg = parsed.get("message", "")
@@ -3046,9 +3234,7 @@ def agent_live_data(agent_id):
                                 parts.append(str(msg)[:80])
                             desc = " | ".join(parts) if parts else obs_domain + " event"
                         evt["description"] = desc
-                        evt["mitre_techniques"] = parsed.get(
-                            "mitre_techniques", []
-                        )
+                        evt["mitre_techniques"] = parsed.get("mitre_techniques", [])
                     except Exception:
                         evt["description"] = obs_domain + " observation"
                 recent_events.append(evt)
@@ -4906,7 +5092,9 @@ def dns_recent():
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
     search = request.args.get("search", "")
-    return jsonify(store.search_events(search, "dns_events", hours, min(limit, 500), offset))
+    return jsonify(
+        store.search_events(search, "dns_events", hours, min(limit, 500), offset)
+    )
 
 
 # ── Network Intelligence ──
@@ -4981,7 +5169,9 @@ def network_device_location():
         setattr(network_device_location, cache_key, result)
         return jsonify(result)
     except Exception:
-        return jsonify({"lat": 38.2542, "lon": -85.7594, "city": "Louisville", "country": "US"})
+        return jsonify(
+            {"lat": 38.2542, "lon": -85.7594, "city": "Louisville", "country": "US"}
+        )
 
 
 @dashboard_bp.route("/api/network/geo-points")
@@ -5035,7 +5225,9 @@ def network_flows():
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
     search = request.args.get("search", "")
-    return jsonify(store.search_events(search, "flow_events", hours, min(limit, 500), offset))
+    return jsonify(
+        store.search_events(search, "flow_events", hours, min(limit, 500), offset)
+    )
 
 
 # ── File Integrity ──
@@ -5103,7 +5295,9 @@ def fim_recent():
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
     search = request.args.get("search", "")
-    return jsonify(store.search_events(search, "fim_events", hours, min(limit, 500), offset))
+    return jsonify(
+        store.search_events(search, "fim_events", hours, min(limit, 500), offset)
+    )
 
 
 # ── Persistence Landscape ──
@@ -5187,7 +5381,9 @@ def audit_recent():
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
     search = request.args.get("search", "")
-    return jsonify(store.search_events(search, "audit_events", hours, min(limit, 500), offset))
+    return jsonify(
+        store.search_events(search, "audit_events", hours, min(limit, 500), offset)
+    )
 
 
 # ── Observation Domains ──
@@ -5216,7 +5412,9 @@ def observation_by_domain(domain):
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
-    return jsonify(store.get_observations_by_domain(domain, hours, min(limit, 500), offset))
+    return jsonify(
+        store.get_observations_by_domain(domain, hours, min(limit, 500), offset)
+    )
 
 
 @dashboard_bp.route("/api/observations/search")

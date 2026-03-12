@@ -47,7 +47,15 @@ _ALLOWED_SEVERITY = {
     "WARN",
     "ERROR",
 }
-_ALLOWED_DEVICE_TYPES = {"HOST", "IOT", "MEDICAL", "INDUSTRIAL", "ENDPOINT", "NETWORK", "UNKNOWN"}
+_ALLOWED_DEVICE_TYPES = {
+    "HOST",
+    "IOT",
+    "MEDICAL",
+    "INDUSTRIAL",
+    "ENDPOINT",
+    "NETWORK",
+    "UNKNOWN",
+}
 _REQUIRED_FIELDS = (
     "event_id",
     "event_time_ns",
@@ -257,7 +265,9 @@ def _derive_event_id(envelope: telemetry_pb2.UniversalEnvelope) -> str:
 
 
 def _tenant_id(envelope: telemetry_pb2.UniversalEnvelope) -> str:
-    if envelope.HasField("device_telemetry") and envelope.device_telemetry.HasField("metadata"):
+    if envelope.HasField("device_telemetry") and envelope.device_telemetry.HasField(
+        "metadata"
+    ):
         maybe = envelope.device_telemetry.metadata.custom_properties.get("tenant_id")
         if maybe:
             return maybe
@@ -301,7 +311,10 @@ def _probe_name(envelope: telemetry_pb2.UniversalEnvelope, *, source: str) -> st
 
 
 def _probe_version(envelope: telemetry_pb2.UniversalEnvelope) -> str:
-    if envelope.HasField("device_telemetry") and envelope.device_telemetry.agent_version:
+    if (
+        envelope.HasField("device_telemetry")
+        and envelope.device_telemetry.agent_version
+    ):
         return envelope.device_telemetry.agent_version
     return envelope.version or "unknown"
 
@@ -337,10 +350,15 @@ def _check_probe_contract(
         from amoskys.observability.probe_registry import get_probe_contract_registry
 
         registry = get_probe_contract_registry()
-        if not envelope.HasField("device_telemetry") or not envelope.device_telemetry.events:
+        if (
+            not envelope.HasField("device_telemetry")
+            or not envelope.device_telemetry.events
+        ):
             return
         for event in envelope.device_telemetry.events:
-            probe_name = event.probe_class or event.source_component or fallback_probe_name
+            probe_name = (
+                event.probe_class or event.source_component or fallback_probe_name
+            )
             contract = registry.get_contract(probe_name)
             if contract is None:
                 continue

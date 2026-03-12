@@ -38,6 +38,7 @@ FIXTURES_DIR = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "
 
 # ── serialisation helpers ───────────────────────────────────────────────
 
+
 def _serialise(obj: Any) -> Any:
     """Recursively serialise an object to JSON-safe primitives."""
     if obj is None or isinstance(obj, (bool, int, float, str)):
@@ -125,6 +126,7 @@ def _serialise_scenario(
 
 # ── main ────────────────────────────────────────────────────────────────
 
+
 def main() -> int:
     _load_all()
     harness = RedTeamHarness()
@@ -143,14 +145,16 @@ def main() -> int:
         out_path = FIXTURES_DIR / f"{name}.json"
         out_path.write_text(json.dumps(fixture, indent=2, sort_keys=False) + "\n")
 
-        manifest.append({
-            "name": name,
-            "file": f"{name}.json",
-            "total": result.total,
-            "passed": result.passed,
-            "failed": result.failed,
-            "mitre_techniques": sorted(scenario.mitre_techniques),
-        })
+        manifest.append(
+            {
+                "name": name,
+                "file": f"{name}.json",
+                "total": result.total,
+                "passed": result.passed,
+                "failed": result.failed,
+                "mitre_techniques": sorted(scenario.mitre_techniques),
+            }
+        )
         total_cases += result.total
         total_passed += result.passed
         status = "PASS" if result.all_passed else "FAIL"

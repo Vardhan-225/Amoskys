@@ -9,3 +9,7 @@ Components:
     YARAEngine     — YARA rule scanning for file/memory detection
     DetectionLifecycle — Rule lifecycle: create → test → deploy → tune → retire
 """
+
+from amoskys.detection.sigma_engine import SigmaEngine  # noqa: F401
+
+__all__ = ["SigmaEngine"]

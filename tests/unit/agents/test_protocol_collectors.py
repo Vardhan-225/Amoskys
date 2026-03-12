@@ -31,19 +31,19 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
-from amoskys.agents.shared.protocol_collectors.agent_types import (
+from amoskys.agents.os.macos.protocol_collectors.agent_types import (
     ProtocolEvent,
     ProtocolThreat,
     ProtocolType,
     ThreatCategory,
 )
-from amoskys.agents.shared.protocol_collectors.collector import (
+from amoskys.agents.os.macos.protocol_collectors.collector import (
     BaseProtocolCollector,
     NetworkLogCollector,
     StubProtocolCollector,
     create_protocol_collector,
 )
-from amoskys.agents.shared.protocol_collectors.probes import (
+from amoskys.agents.os.macos.protocol_collectors.probes import (
     PROTOCOL_PROBES,
     DNSTunnelingProbe,
     FTPCleartextCredsProbe,
@@ -57,7 +57,7 @@ from amoskys.agents.shared.protocol_collectors.probes import (
     TLSSSLAnomalyProbe,
     create_protocol_collector_probes,
 )
-from amoskys.agents.shared.protocol_collectors.protocol_collectors import (
+from amoskys.agents.os.macos.protocol_collectors.protocol_collectors import (
     ProtocolCollectors,
     create_protocol_collectors,
 )

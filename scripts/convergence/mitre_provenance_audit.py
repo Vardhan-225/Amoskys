@@ -9,7 +9,6 @@ import sqlite3
 from pathlib import Path
 from typing import Dict
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DB = PROJECT_ROOT / "data" / "telemetry.db"
 
@@ -28,7 +27,12 @@ def run_audit(db_path: Path) -> Dict:
             "message": "telemetry DB not found",
         }
 
-    required_cols = {"mitre_techniques", "mitre_source", "mitre_confidence", "mitre_evidence"}
+    required_cols = {
+        "mitre_techniques",
+        "mitre_source",
+        "mitre_confidence",
+        "mitre_evidence",
+    }
     with sqlite3.connect(str(db_path)) as conn:
         if not _table_has_columns(conn, "security_events", required_cols):
             return {

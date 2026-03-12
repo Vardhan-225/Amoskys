@@ -227,7 +227,7 @@ class TestRunAudit:
 
         single_map = {
             "proc": {
-                "module": "amoskys.agents.shared.process.probes",
+                "module": "amoskys.agents.os.macos.process.probes",
                 "factory": "create_proc_probes",
             }
         }

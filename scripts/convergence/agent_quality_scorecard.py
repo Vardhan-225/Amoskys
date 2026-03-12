@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
@@ -53,7 +52,9 @@ def _iter_probes() -> Iterable[Tuple[str, Any]]:
             continue
 
 
-def _score_probe(agent: str, probe: Any, routers: Dict[str, str], platform: str) -> ProbeScore:
+def _score_probe(
+    agent: str, probe: Any, routers: Dict[str, str], platform: str
+) -> ProbeScore:
     name = str(getattr(probe, "name", "unknown"))
     platforms = list(getattr(probe, "platforms", []) or [])
     requires_fields = list(getattr(probe, "requires_fields", []) or [])
@@ -61,7 +62,9 @@ def _score_probe(agent: str, probe: Any, routers: Dict[str, str], platform: str)
     requires_event_types = list(getattr(probe, "requires_event_types", []) or [])
     semantics = dict(getattr(probe, "field_semantics", {}) or {})
 
-    domain = str(semantics.get("_domain") or semantics.get("domain") or "").strip().lower()
+    domain = (
+        str(semantics.get("_domain") or semantics.get("domain") or "").strip().lower()
+    )
     canonical_route = routers.get(domain, "")
     missing_semantics = sorted(
         field_name for field_name in requires_fields if field_name not in semantics
@@ -155,7 +158,9 @@ def build_report(platform: str) -> Dict[str, Any]:
         "total_probes": len(probe_scores),
         "agent_count": len(by_agent),
         "overall_avg_score": overall_avg,
-        "drop_points": dict(sorted(all_drop_points.items(), key=lambda kv: (-kv[1], kv[0]))),
+        "drop_points": dict(
+            sorted(all_drop_points.items(), key=lambda kv: (-kv[1], kv[0]))
+        ),
         "observation_domain_routes": routers,
         "agents": by_agent,
     }

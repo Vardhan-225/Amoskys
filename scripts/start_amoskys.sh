@@ -55,7 +55,7 @@ if pgrep -f "proc_agent.py" > /dev/null; then
 else
     echo "🔄 Starting Proc Agent..."
     cd "$PROJECT_ROOT"
-    nohup python -m amoskys.agents.shared.process.agent > logs/proc_agent.log 2>&1 &
+    nohup python -m amoskys.agents.os.macos.process.agent > logs/proc_agent.log 2>&1 &
     PROC_PID=$!
     echo "✅ Proc Agent started (PID: $PROC_PID)"
     sleep 1
@@ -67,7 +67,7 @@ if pgrep -f "peripheral_agent.py" > /dev/null; then
 else
     echo "🔄 Starting Peripheral Agent..."
     cd "$PROJECT_ROOT"
-    nohup python -m amoskys.agents.shared.peripheral.agent > logs/peripheral_agent.log 2>&1 &
+    nohup python -m amoskys.agents.os.macos.peripheral.agent > logs/peripheral_agent.log 2>&1 &
     PERIPH_PID=$!
     echo "✅ Peripheral Agent started (PID: $PERIPH_PID)"
     sleep 1
@@ -79,7 +79,9 @@ if pgrep -f "snmp_agent.py" > /dev/null; then
 else
     echo "🔄 Starting SNMP Agent (NEWLY FIXED)..."
     cd "$PROJECT_ROOT"
-    nohup python -m amoskys.agents.shared.snmp.agent > logs/snmp_agent.log 2>&1 &
+    # TODO: Implement in macOS Observatory — no equivalent module
+    # nohup python -m amoskys.agents.shared.snmp.agent > logs/snmp_agent.log 2>&1 &
+    echo "SNMP Agent skipped (no macOS Observatory equivalent)"
     SNMP_PID=$!
     echo "✅ SNMP Agent started (PID: $SNMP_PID)"
     sleep 1

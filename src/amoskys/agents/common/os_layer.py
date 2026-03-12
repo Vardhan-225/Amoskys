@@ -1786,9 +1786,11 @@ class LinuxLayer(OSLayer):
         if stdout and outcome == SubprocessOutcome.SUCCESS:
             # If there are rules beyond default, firewall is active
             rule_lines = [
-                l
-                for l in stdout.strip().split("\n")
-                if l.strip() and not l.startswith("Chain") and not l.startswith("num")
+                line
+                for line in stdout.strip().split("\n")
+                if line.strip()
+                and not line.startswith("Chain")
+                and not line.startswith("num")
             ]
             return FirewallStatus(
                 enabled=len(rule_lines) > 0,

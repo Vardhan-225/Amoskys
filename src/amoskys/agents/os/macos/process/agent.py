@@ -188,8 +188,12 @@ class MacOSProcessAgent(MicroProbeAgentMixin, HardenedAgentBase):
             "ppid": str(proc.ppid),
             "parent_name": proc.parent_name,
             "create_time": str(proc.create_time),
-            "cpu_percent": str(proc.cpu_percent) if proc.cpu_percent is not None else "",
-            "memory_percent": str(proc.memory_percent) if proc.memory_percent is not None else "",
+            "cpu_percent": (
+                str(proc.cpu_percent) if proc.cpu_percent is not None else ""
+            ),
+            "memory_percent": (
+                str(proc.memory_percent) if proc.memory_percent is not None else ""
+            ),
             "status": proc.status,
             "cwd": proc.cwd,
             "is_own_user": str(proc.is_own_user),

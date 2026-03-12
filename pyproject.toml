@@ -29,9 +29,9 @@ classifiers = [
 
 dependencies = [
     # Core protocol & messaging
-    "grpcio>=1.66.0",
-    "grpcio-tools>=1.66.0",
-    "protobuf>=5.28.0",
+    "grpcio>=1.70.0",
+    "grpcio-tools>=1.70.0",
+    "protobuf>=6.31.0",
 
     # Configuration & serialization
     "pyyaml>=6.0",
@@ -128,24 +128,23 @@ all = [
 ]
 
 [project.scripts]
-# ─── Agent console entrypoints ───
-amoskys-proc = "amoskys.agents.shared.process.agent:main"
-amoskys-auth = "amoskys.agents.shared.auth.agent:main"
-amoskys-persist = "amoskys.agents.shared.persistence.agent:main"
-amoskys-dns = "amoskys.agents.shared.dns.agent:main"
-amoskys-fim = "amoskys.agents.shared.filesystem.agent:main"
-amoskys-flow = "amoskys.agents.shared.network.agent:main"
-amoskys-peripheral = "amoskys.agents.shared.peripheral.agent:main"
+# ─── macOS Observatory Agents ───
+amoskys-proc = "amoskys.agents.os.macos.process.__main__:main"
+amoskys-auth = "amoskys.agents.os.macos.auth.__main__:main"
+amoskys-persist = "amoskys.agents.os.macos.persistence.__main__:main"
+amoskys-dns = "amoskys.agents.os.macos.dns.__main__:main"
+amoskys-fim = "amoskys.agents.os.macos.filesystem.__main__:main"
+amoskys-flow = "amoskys.agents.os.macos.network.__main__:main"
+amoskys-peripheral = "amoskys.agents.os.macos.peripheral.__main__:main"
 
 # WAL drain publisher (EventBus pipeline)
 amoskys-flowagent = "amoskys.eventbus.flow_publisher:main"
 
-# ─── L7 Gap-Closure Agents ───
-amoskys-applog = "amoskys.agents.shared.applog.agent:main"
-amoskys-db-activity = "amoskys.agents.shared.db_activity.agent:main"
-amoskys-http-inspector = "amoskys.agents.shared.http_inspector.agent:main"
-amoskys-internet-activity = "amoskys.agents.shared.internet_activity.agent:main"
-amoskys-net-scanner = "amoskys.agents.shared.net_scanner.agent:main"
+# ─── Wave 2 Observatory Agents ───
+amoskys-applog = "amoskys.agents.os.macos.applog.__main__:main"
+amoskys-db-activity = "amoskys.agents.os.macos.db_activity.__main__:main"
+amoskys-http-inspector = "amoskys.agents.os.macos.http_inspector.__main__:main"
+amoskys-internet-activity = "amoskys.agents.os.macos.internet_activity.__main__:main"
 
 # ─── EventBus & Intelligence ───
 amoskys-eventbus = "amoskys.eventbus.server:serve"
@@ -284,7 +283,7 @@ ignore_missing_imports = true
 module = ["amoskys.proto.*"]
 ignore_errors = true
 
-# Modules with pre-existing type issues - to be fixed in Phase 3
+# Modules with pre-existing type issues - to be fixed incrementally
 [[tool.mypy.overrides]]
 module = [
     "amoskys.intelligence.pcap.ingestion",
@@ -293,16 +292,8 @@ module = [
     "amoskys.intel.rules",
     "amoskys.intel.advanced_rules",
     "amoskys.agents.common.threat_detection",
-    "amoskys.agents.peripheral.peripheral_agent",
-    "amoskys.agents.persistence.persistence_agent",
-    "amoskys.agents.kernel_audit.kernel_audit_agent",
-    "amoskys.agents.fim.fim_agent",
-    "amoskys.agents.dns.dns_agent",
     "amoskys.intelligence.score_junction",
     "amoskys.edge.edge_optimizer",
-    "amoskys.agents.snmp.enhanced_collector",
-    "amoskys.agents.protocols.universal_collector",
-    "amoskys.agents.discovery.device_scanner"
 ]
 ignore_errors = true
 

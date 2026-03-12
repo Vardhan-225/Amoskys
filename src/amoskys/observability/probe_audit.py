@@ -15,31 +15,31 @@ from typing import Any, Dict, List
 # Agent → probe factory mapping
 AGENT_PROBE_MAP: Dict[str, Dict[str, str]] = {
     "proc": {
-        "module": "amoskys.agents.shared.process.probes",
+        "module": "amoskys.agents.os.macos.process.probes",
         "factory": "create_proc_probes",
     },
     "fim": {
-        "module": "amoskys.agents.shared.filesystem.probes",
+        "module": "amoskys.agents.os.macos.filesystem.probes",
         "factory": "create_fim_probes",
     },
     "flow": {
-        "module": "amoskys.agents.shared.network.probes",
+        "module": "amoskys.agents.os.macos.network.probes",
         "factory": "create_flow_probes",
     },
     "dns": {
-        "module": "amoskys.agents.shared.dns.probes",
+        "module": "amoskys.agents.os.macos.dns.probes",
         "factory": "create_dns_probes",
     },
     "peripheral": {
-        "module": "amoskys.agents.shared.peripheral.probes",
+        "module": "amoskys.agents.os.macos.peripheral.probes",
         "factory": "create_peripheral_probes",
     },
     "auth": {
-        "module": "amoskys.agents.shared.auth.probes",
+        "module": "amoskys.agents.os.macos.auth.probes",
         "factory": "create_auth_probes",
     },
     "persistence": {
-        "module": "amoskys.agents.shared.persistence.probes",
+        "module": "amoskys.agents.os.macos.persistence.probes",
         "factory": "create_persistence_probes",
     },
     "kernel_audit": {
@@ -47,32 +47,32 @@ AGENT_PROBE_MAP: Dict[str, Dict[str, str]] = {
         "factory": "create_kernel_audit_probes",
     },
     "device_discovery": {
-        "module": "amoskys.agents.shared.device_discovery.probes",
+        "module": "amoskys.agents.os.macos.discovery.probes",
         "factory": "create_device_discovery_probes",
     },
     "protocol_collectors": {
-        "module": "amoskys.agents.shared.protocol_collectors.probes",
+        "module": "amoskys.agents.os.macos.protocol_collectors.probes",
         "factory": "create_protocol_collector_probes",
     },
     # L7 Gap-Closure Agents
     "applog": {
-        "module": "amoskys.agents.shared.applog.probes",
+        "module": "amoskys.agents.os.macos.applog.probes",
         "factory": "create_applog_probes",
     },
     "db_activity": {
-        "module": "amoskys.agents.shared.db_activity.probes",
+        "module": "amoskys.agents.os.macos.db_activity.probes",
         "factory": "create_db_activity_probes",
     },
     "http_inspector": {
-        "module": "amoskys.agents.shared.http_inspector.probes",
+        "module": "amoskys.agents.os.macos.http_inspector.probes",
         "factory": "create_http_inspector_probes",
     },
     "internet_activity": {
-        "module": "amoskys.agents.shared.internet_activity.probes",
+        "module": "amoskys.agents.os.macos.internet_activity.probes",
         "factory": "create_internet_activity_probes",
     },
     "net_scanner": {
-        "module": "amoskys.agents.shared.net_scanner.probes",
+        "module": "amoskys.agents.os.macos.discovery.probes",
         "factory": "create_net_scanner_probes",
     },
     # ── macOS Observatory Agents (ground-truth verified) ──

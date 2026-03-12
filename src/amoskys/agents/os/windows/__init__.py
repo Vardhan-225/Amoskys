@@ -9,6 +9,8 @@ Windows-specific detection modules. Key data sources (future):
     - Sysmon — enhanced process/network/file telemetry
 
 Status: Not implemented. Requires Windows device for ground truth.
+Roadmap: Igris multi-platform engine will provide the Windows collector layer,
+         reusing macOS probe logic wherever detection is platform-agnostic.
 """
 
 

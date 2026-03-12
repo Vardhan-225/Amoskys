@@ -18,30 +18,30 @@ class TestAgentModuleImports:
     @pytest.mark.smoke
     def test_proc_agent_import(self):
         """Proc agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.shared.process")
-        assert hasattr(mod, "ProcAgent")
+        mod = importlib.import_module("amoskys.agents.os.macos.process")
+        assert hasattr(mod, "MacOSProcessAgent")
 
     @pytest.mark.smoke
     def test_auth_agent_import(self):
         """Auth agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.shared.auth")
-        assert hasattr(mod, "AuthGuardAgent")
+        mod = importlib.import_module("amoskys.agents.os.macos.auth")
+        assert hasattr(mod, "MacOSAuthAgent")
 
     @pytest.mark.smoke
     def test_dns_agent_import(self):
         """DNS agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.shared.dns")
-        assert hasattr(mod, "DNSAgent")
+        mod = importlib.import_module("amoskys.agents.os.macos.dns")
+        assert hasattr(mod, "MacOSDNSAgent")
 
     def test_fim_agent_import(self):
         """FIM agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.shared.filesystem")
-        assert hasattr(mod, "FIMAgent")
+        mod = importlib.import_module("amoskys.agents.os.macos.filesystem")
+        assert hasattr(mod, "MacOSFileAgent")
 
     def test_persistence_agent_import(self):
         """Persistence agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.shared.persistence")
-        assert hasattr(mod, "PersistenceGuard")
+        mod = importlib.import_module("amoskys.agents.os.macos.persistence")
+        assert hasattr(mod, "MacOSPersistenceAgent")
 
     def test_kernel_audit_agent_import(self):
         """Kernel audit agent module imports successfully."""
@@ -50,8 +50,8 @@ class TestAgentModuleImports:
 
     def test_peripheral_agent_import(self):
         """Peripheral agent module imports successfully."""
-        mod = importlib.import_module("amoskys.agents.shared.peripheral")
-        assert hasattr(mod, "PeripheralAgent")
+        mod = importlib.import_module("amoskys.agents.os.macos.peripheral")
+        assert hasattr(mod, "MacOSPeripheralAgent")
 
 
 class TestAgentMainFunctions:
@@ -60,27 +60,27 @@ class TestAgentMainFunctions:
     @pytest.mark.smoke
     def test_proc_agent_has_main(self):
         """Proc agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.shared.process.__main__")
+        mod = importlib.import_module("amoskys.agents.os.macos.process.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
     @pytest.mark.smoke
     def test_auth_agent_has_main(self):
         """Auth agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.shared.auth.__main__")
+        mod = importlib.import_module("amoskys.agents.os.macos.auth.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
     @pytest.mark.smoke
     def test_dns_agent_has_main(self):
         """DNS agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.shared.dns.__main__")
+        mod = importlib.import_module("amoskys.agents.os.macos.dns.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
     def test_persistence_agent_has_main(self):
         """Persistence agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.shared.persistence.__main__")
+        mod = importlib.import_module("amoskys.agents.os.macos.persistence.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
@@ -92,15 +92,16 @@ class TestAgentMainFunctions:
 
     def test_peripheral_agent_has_main(self):
         """Peripheral agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.shared.peripheral.__main__")
+        mod = importlib.import_module("amoskys.agents.os.macos.peripheral.__main__")
         assert hasattr(mod, "main")
         assert callable(mod.main)
 
     def test_snmp_agent_has_main(self):
         """SNMP agent __main__ has main() function."""
-        mod = importlib.import_module("amoskys.agents.shared.snmp.__main__")
-        assert hasattr(mod, "main")
-        assert callable(mod.main)
+        # TODO: SNMP agent not yet ported to macOS Observatory — Igris multi-platform (future)
+        import pytest
+
+        pytest.skip("SNMP agent not yet ported to macOS Observatory")
 
     def test_flow_publisher_has_main(self):
         """EventBus flow publisher has main() function."""

@@ -646,7 +646,7 @@ class MacOSArsenal:
             r = subprocess.run(
                 ["lsof", "-i", "-nP"], capture_output=True, text=True, timeout=5
             )
-            conns = len([l for l in r.stdout.split("\n") if l.strip()]) - 1
+            conns = len([line for line in r.stdout.split("\n") if line.strip()]) - 1
             results["network_connections"] = conns
             self.capabilities["network_flow"].test_result = "PASS"
             self.capabilities["network_flow"].last_tested = timestamp

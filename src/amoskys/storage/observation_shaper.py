@@ -49,7 +49,9 @@ class ObservationShaper:
         self._counts: Dict[Tuple[str, int, str], int] = {}
         self._latest_window_start = 0
 
-    def decide(self, domain: str, attrs: Dict[str, Any], ts_ns: int) -> ObservationDecision:
+    def decide(
+        self, domain: str, attrs: Dict[str, Any], ts_ns: int
+    ) -> ObservationDecision:
         """Return whether to keep this observation raw or roll it up."""
         domain = (domain or "unknown").strip().lower()
         window_start = ts_ns - (ts_ns % self._WINDOW_NS)
@@ -67,10 +69,14 @@ class ObservationShaper:
 
         if fingerprint not in self._first_seen:
             self._first_seen.add(fingerprint)
-            return ObservationDecision(True, domain, fingerprint, window_start, window_end)
+            return ObservationDecision(
+                True, domain, fingerprint, window_start, window_end
+            )
 
         if self._is_risk_relevant(attrs):
-            return ObservationDecision(True, domain, fingerprint, window_start, window_end)
+            return ObservationDecision(
+                True, domain, fingerprint, window_start, window_end
+            )
 
         return ObservationDecision(
             store_raw=seen_count <= max_raw,
@@ -102,7 +108,9 @@ class ObservationShaper:
     def _fingerprint(domain: str, attrs: Dict[str, Any]) -> str:
         ignored = {"timestamp", "event_timestamp_ns", "collection_time_ms"}
         stable = {k: attrs[k] for k in sorted(attrs.keys()) if k not in ignored}
-        payload = json.dumps({"domain": domain, "attrs": stable}, sort_keys=True, default=str)
+        payload = json.dumps(
+            {"domain": domain, "attrs": stable}, sort_keys=True, default=str
+        )
         return hashlib.blake2b(payload.encode("utf-8"), digest_size=16).hexdigest()
 
     def _evict_stale(self) -> None:
@@ -112,4 +120,3 @@ class ObservationShaper:
         stale = [k for k in self._counts if k[1] < cutoff]
         for key in stale:
             del self._counts[key]
-

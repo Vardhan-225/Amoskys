@@ -41,7 +41,13 @@ __all__ = [
 # promotes alternative names to dst_ip so all enrichers fire automatically.
 
 _DST_IP_ALIASES = ("remote_ip", "client_ip")
-_DST_IP_LIST_ALIASES = ("remote_ips", "response_ips", "tor_ips", "cdn_ips", "unusual_ips")
+_DST_IP_LIST_ALIASES = (
+    "remote_ips",
+    "response_ips",
+    "tor_ips",
+    "cdn_ips",
+    "unusual_ips",
+)
 _IP_RE = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")
 _PRIVATE_PREFIXES = ("127.", "10.", "192.168.", "0.", "169.254.")
 

@@ -193,22 +193,43 @@ class DMGMountExecuteProbe(MicroProbe):
 # =============================================================================
 
 # Messaging apps that deliver ClickFix attack instructions
-_CLICKFIX_MESSAGING_APPS = frozenset({
-    "Messages", "Slack", "Microsoft Teams", "Teams", "Discord",
-    "WhatsApp", "Telegram", "Signal",
-})
+_CLICKFIX_MESSAGING_APPS = frozenset(
+    {
+        "Messages",
+        "Slack",
+        "Microsoft Teams",
+        "Teams",
+        "Discord",
+        "WhatsApp",
+        "Telegram",
+        "Signal",
+    }
+)
 
 # Suspicious commands pasted into terminal from messaging apps
-_CLICKFIX_SUSPICIOUS_COMMANDS = frozenset({
-    "curl", "wget", "bash", "sh", "python3", "python",
-    "base64", "nc", "ncat", "osascript",
-})
+_CLICKFIX_SUSPICIOUS_COMMANDS = frozenset(
+    {
+        "curl",
+        "wget",
+        "bash",
+        "sh",
+        "python3",
+        "python",
+        "base64",
+        "nc",
+        "ncat",
+        "osascript",
+    }
+)
 
 # Patterns in cmdline args that indicate a ClickFix paste-and-run
 _CLICKFIX_CMDLINE_PATTERNS = [
     "-c",  # bash -c, sh -c, python3 -c
-    "| bash", "| sh", "| zsh",  # pipe to shell
-    "base64", "eval",
+    "| bash",
+    "| sh",
+    "| zsh",  # pipe to shell
+    "base64",
+    "eval",
 ]
 
 
@@ -239,9 +260,16 @@ class ClickFixDetectionProbe(MicroProbe):
     scan_interval = 10.0
     requires_fields = ["messaging_apps_running", "terminal_children"]
 
-    _TERMINAL_EMULATORS = frozenset({
-        "Terminal", "iTerm2", "Warp", "Alacritty", "kitty", "Hyper",
-    })
+    _TERMINAL_EMULATORS = frozenset(
+        {
+            "Terminal",
+            "iTerm2",
+            "Warp",
+            "Alacritty",
+            "kitty",
+            "Hyper",
+        }
+    )
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         events: List[TelemetryEvent] = []
@@ -323,9 +351,7 @@ class ClickFixDetectionProbe(MicroProbe):
                         else f.get("modify_time", 0)
                     )
                     filename = (
-                        f.filename
-                        if hasattr(f, "filename")
-                        else f.get("filename", "")
+                        f.filename if hasattr(f, "filename") else f.get("filename", "")
                     )
 
                     # Recently modified file without quarantine = CLI download
@@ -506,7 +532,9 @@ class CLIDownloadExecuteProbe(MicroProbe):
                 if exe in no_xattr_files:
                     df = no_xattr_files[exe]
                     filename = (
-                        df.filename if hasattr(df, "filename") else df.get("filename", "")
+                        df.filename
+                        if hasattr(df, "filename")
+                        else df.get("filename", "")
                     )
                     events.append(
                         self._create_event(
@@ -571,12 +599,25 @@ class CLIDownloadExecuteProbe(MicroProbe):
 # 6. SuspiciousDownloadSourceProbe
 # =============================================================================
 
-_KNOWN_SAFE_DOMAINS = frozenset({
-    "apple.com", "cdn.apple.com", "github.com", "githubusercontent.com",
-    "google.com", "googleapis.com", "mozilla.org", "mozilla.net",
-    "microsoft.com", "npmjs.org", "pypi.org", "brew.sh",
-    "cloudflare.com", "akamaized.net", "amazonaws.com",
-})
+_KNOWN_SAFE_DOMAINS = frozenset(
+    {
+        "apple.com",
+        "cdn.apple.com",
+        "github.com",
+        "githubusercontent.com",
+        "google.com",
+        "googleapis.com",
+        "mozilla.org",
+        "mozilla.net",
+        "microsoft.com",
+        "npmjs.org",
+        "pypi.org",
+        "brew.sh",
+        "cloudflare.com",
+        "akamaized.net",
+        "amazonaws.com",
+    }
+)
 
 
 class SuspiciousDownloadSourceProbe(MicroProbe):
@@ -604,7 +645,9 @@ class SuspiciousDownloadSourceProbe(MicroProbe):
 
         for entry in entries:
             data_url = (
-                entry.data_url if hasattr(entry, "data_url") else entry.get("data_url", "")
+                entry.data_url
+                if hasattr(entry, "data_url")
+                else entry.get("data_url", "")
             )
             if not data_url:
                 continue
@@ -643,9 +686,7 @@ class SuspiciousDownloadSourceProbe(MicroProbe):
                         "origin_url": origin_url,
                         "agent_bundle_id": agent_bundle,
                         "timestamp": timestamp,
-                        "description": (
-                            f"Download from unrecognized domain: {domain}"
-                        ),
+                        "description": (f"Download from unrecognized domain: {domain}"),
                     },
                     confidence=0.6,
                 )
@@ -687,10 +728,21 @@ class SuspiciousDownloadSourceProbe(MicroProbe):
 # =============================================================================
 
 # Suspicious commands spawned by installer/pkgutil
-_INSTALLER_SUSPICIOUS_CHILDREN = frozenset({
-    "curl", "wget", "bash", "sh", "nc", "ncat", "python3", "python",
-    "osascript", "base64", "openssl",
-})
+_INSTALLER_SUSPICIOUS_CHILDREN = frozenset(
+    {
+        "curl",
+        "wget",
+        "bash",
+        "sh",
+        "nc",
+        "ncat",
+        "python3",
+        "python",
+        "osascript",
+        "base64",
+        "openssl",
+    }
+)
 
 
 class InstallerScriptAbuseProbe(MicroProbe):

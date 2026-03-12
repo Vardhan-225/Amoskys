@@ -11,7 +11,6 @@ from typing import Dict, List
 
 from dashboard_sql_inventory import scan_paths
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 AGENTS_ROOT = PROJECT_ROOT / "src" / "amoskys" / "agents"
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -32,7 +31,9 @@ SCAN_ALL_ALLOWLIST = {
 }
 
 
-def _scan_for_pattern(root: Path, pattern: re.Pattern[str], suffix: str = ".py") -> List[Dict]:
+def _scan_for_pattern(
+    root: Path, pattern: re.Pattern[str], suffix: str = ".py"
+) -> List[Dict]:
     findings: List[Dict] = []
     for path in sorted(root.rglob(f"*{suffix}")):
         try:
@@ -41,7 +42,9 @@ def _scan_for_pattern(root: Path, pattern: re.Pattern[str], suffix: str = ".py")
             continue
         for idx, line in enumerate(content.splitlines(), start=1):
             if pattern.search(line):
-                findings.append({"file": str(path), "line": idx, "line_text": line.strip()})
+                findings.append(
+                    {"file": str(path), "line": idx, "line_text": line.strip()}
+                )
     return findings
 
 
@@ -65,7 +68,12 @@ def run_checks() -> Dict:
             continue
         legacy_hits.append(item)
 
-    sql_findings = scan_paths([PROJECT_ROOT / "web" / "app" / "dashboard", PROJECT_ROOT / "web" / "app" / "api"])
+    sql_findings = scan_paths(
+        [
+            PROJECT_ROOT / "web" / "app" / "dashboard",
+            PROJECT_ROOT / "web" / "app" / "api",
+        ]
+    )
 
     return {
         "checks": {
@@ -95,7 +103,9 @@ def run_checks() -> Dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run convergence CI conformance checks")
+    parser = argparse.ArgumentParser(
+        description="Run convergence CI conformance checks"
+    )
     parser.add_argument("--json", action="store_true", help="Print JSON output")
     parser.add_argument("--output", default="", help="Optional output file")
     parser.add_argument("--strict", action="store_true", help="Exit 1 on any finding")

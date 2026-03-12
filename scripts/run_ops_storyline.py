@@ -62,7 +62,9 @@ def _run_cmd(
             cwd=str(cwd),
             capture_output=True,
             text=True,
-            timeout=timeout_seconds if timeout_seconds and timeout_seconds > 0 else None,
+            timeout=(
+                timeout_seconds if timeout_seconds and timeout_seconds > 0 else None
+            ),
         )
         elapsed = round(time.time() - t0, 2)
         return proc.returncode, proc.stdout, proc.stderr, elapsed, False
@@ -224,9 +226,11 @@ def run_redteam_step() -> StepResult:
                 "cases_total": result.total,
                 "cases_passed": result.passed,
                 "cases_failed": result.failed,
-                "reality_level_avg": round(statistics.mean(scenario_levels), 3)
-                if scenario_levels
-                else None,
+                "reality_level_avg": (
+                    round(statistics.mean(scenario_levels), 3)
+                    if scenario_levels
+                    else None
+                ),
                 "cases": case_rows,
             }
         )
@@ -261,9 +265,9 @@ def run_redteam_step() -> StepResult:
         "evasion_handling_rate_pct": round(evasion_handling_rate, 2),
         "mitre_techniques_covered": sorted(mitre_techniques),
         "mitre_technique_count": len(mitre_techniques),
-        "reality_level_avg": round(statistics.mean(reality_levels), 3)
-        if reality_levels
-        else None,
+        "reality_level_avg": (
+            round(statistics.mean(reality_levels), 3) if reality_levels else None
+        ),
         "reality_level_min": min(reality_levels) if reality_levels else None,
         "reality_level_max": max(reality_levels) if reality_levels else None,
     }
@@ -518,8 +522,12 @@ def write_reports(output_dir: Path, payload: Dict[str, Any]) -> None:
     lines.append("")
     lines.append("## Notes")
     lines.append("")
-    lines.append("- This report measures current architecture behavior; no probe-discovery migration assumptions are used.")
-    lines.append("- Use this as the release gate for simulation readiness before architectural consolidation.")
+    lines.append(
+        "- This report measures current architecture behavior; no probe-discovery migration assumptions are used."
+    )
+    lines.append(
+        "- Use this as the release gate for simulation readiness before architectural consolidation."
+    )
     lines.append("")
 
     md_path.write_text("\n".join(lines) + "\n")
@@ -533,7 +541,9 @@ def main() -> int:
     parser.add_argument("--skip-coverage", action="store_true")
     parser.add_argument("--skip-audit", action="store_true")
     parser.add_argument("--clear-db", action="store_true")
-    parser.add_argument("--agents", type=int, default=0, help="Limit collect step to first N agents")
+    parser.add_argument(
+        "--agents", type=int, default=0, help="Limit collect step to first N agents"
+    )
     parser.add_argument(
         "--collect-timeout-seconds",
         type=float,
@@ -560,7 +570,9 @@ def main() -> int:
     parser.add_argument("--db", default="data/telemetry.db")
     parser.add_argument("--model-dir", default="data/intel/models")
     parser.add_argument("--output-dir", default="results/ops_storyline")
-    parser.add_argument("--strict", action="store_true", help="Exit non-zero if gates fail")
+    parser.add_argument(
+        "--strict", action="store_true", help="Exit non-zero if gates fail"
+    )
     parser.add_argument("--min-redteam-pass", type=float, default=95.0)
     parser.add_argument("--min-positive-detection", type=float, default=95.0)
     parser.add_argument("--max-benign-fp", type=float, default=5.0)

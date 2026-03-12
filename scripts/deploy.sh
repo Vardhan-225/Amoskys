@@ -109,30 +109,30 @@ start_agents() {
 
     # Start proc_agent
     if [ ! -f "$PID_DIR/proc_agent.pid" ] || ! kill -0 $(cat "$PID_DIR/proc_agent.pid") 2>/dev/null; then
-        nohup "$VENV_PATH/bin/python" -m amoskys.agents.shared.process_agent > "$LOG_DIR/proc_agent.log" 2>&1 &
+        nohup "$VENV_PATH/bin/python" -m amoskys.agents.os.macos.process.agent > "$LOG_DIR/proc_agent.log" 2>&1 &
         echo $! > "$PID_DIR/proc_agent.pid"
         log_info "✓ proc_agent started (PID: $!)"
     fi
 
     # Start flowagent
     if [ ! -f "$PID_DIR/flowagent.pid" ] || ! kill -0 $(cat "$PID_DIR/flowagent.pid") 2>/dev/null; then
-        nohup "$VENV_PATH/bin/python" -m amoskys.agents.shared.networkagent > "$LOG_DIR/flowagent.log" 2>&1 &
+        nohup "$VENV_PATH/bin/python" -m amoskys.agents.os.macos.network.agent > "$LOG_DIR/flowagent.log" 2>&1 &
         echo $! > "$PID_DIR/flowagent.pid"
         log_info "✓ flowagent started (PID: $!)"
     fi
 
     # Start auth_agent
     if [ ! -f "$PID_DIR/auth_agent.pid" ] || ! kill -0 $(cat "$PID_DIR/auth_agent.pid") 2>/dev/null; then
-        nohup "$VENV_PATH/bin/python" src/amoskys/agents/auth/auth_agent.py > "$LOG_DIR/auth_agent.log" 2>&1 &
+        nohup "$VENV_PATH/bin/python" -m amoskys.agents.os.macos.auth > "$LOG_DIR/auth_agent.log" 2>&1 &
         echo $! > "$PID_DIR/auth_agent.pid"
         log_info "✓ auth_agent started (PID: $!)"
     fi
 
-    # Start device_scanner
-    if [ ! -f "$PID_DIR/device_scanner.pid" ] || ! kill -0 $(cat "$PID_DIR/device_scanner.pid") 2>/dev/null; then
-        nohup "$VENV_PATH/bin/python" src/amoskys/agents/discovery/device_scanner.py > "$LOG_DIR/device_scanner.log" 2>&1 &
-        echo $! > "$PID_DIR/device_scanner.pid"
-        log_info "✓ device_scanner started (PID: $!)"
+    # Start persistence_guard
+    if [ ! -f "$PID_DIR/persistence_guard.pid" ] || ! kill -0 $(cat "$PID_DIR/persistence_guard.pid") 2>/dev/null; then
+        nohup "$VENV_PATH/bin/python" -m amoskys.agents.os.macos.persistence > "$LOG_DIR/persistence_guard.log" 2>&1 &
+        echo $! > "$PID_DIR/persistence_guard.pid"
+        log_info "✓ persistence_guard started (PID: $!)"
     fi
 }
 
@@ -174,7 +174,7 @@ stop_all() {
     stop_service "proc_agent"
     stop_service "flowagent"
     stop_service "auth_agent"
-    stop_service "device_scanner"
+    stop_service "persistence_guard"
 
     log_info "✓ All services stopped"
 }
@@ -202,7 +202,7 @@ show_status() {
     check_service_status "proc_agent"
     check_service_status "flowagent"
     check_service_status "auth_agent"
-    check_service_status "device_scanner"
+    check_service_status "persistence_guard"
 
     echo ""
     echo "Ports:"

@@ -303,7 +303,12 @@ class StealerSequenceProbe(MicroProbe):
 
         # Group accesses by PID
         pid_categories: Dict[int, Dict[str, Any]] = defaultdict(
-            lambda: {"categories": set(), "files": [], "process_name": "", "process_guid": ""}
+            lambda: {
+                "categories": set(),
+                "files": [],
+                "process_name": "",
+                "process_guid": "",
+            }
         )
 
         for access in accesses:
@@ -665,7 +670,11 @@ class SensitiveFileExfilProbe(MicroProbe):
             for conn in connections:
                 try:
                     ip = ipaddress.ip_address(conn.remote_ip)
-                    if not ip.is_private and not ip.is_loopback and not ip.is_link_local:
+                    if (
+                        not ip.is_private
+                        and not ip.is_loopback
+                        and not ip.is_link_local
+                    ):
                         public_connections.append(
                             {
                                 "remote_ip": conn.remote_ip,

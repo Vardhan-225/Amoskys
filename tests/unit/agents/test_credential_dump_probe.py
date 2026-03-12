@@ -656,7 +656,7 @@ class TestProbeRegistry:
 
     def test_credential_dump_probe_platforms(self):
         probe = CredentialDumpProbe()
-        assert "darwin" in probe.platforms
+        # CredentialDumpProbe lives in kernel_audit (Linux-only)
         assert "linux" in probe.platforms
 
     def test_credential_dump_probe_requires_fields(self):

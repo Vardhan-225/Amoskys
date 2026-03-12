@@ -10,9 +10,9 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, g, jsonify, request
 
+from ..dashboard.query_service import get_dashboard_query_service
 from .agent_auth import require_auth
 from .rate_limiter import require_rate_limit
-from ..dashboard.query_service import get_dashboard_query_service
 
 events_bp = Blueprint("events", __name__, url_prefix="/events")
 _MSG_DB_UNAVAILABLE = "Database unavailable"
@@ -140,9 +140,7 @@ def list_events():
     if store is None:
         return jsonify({"status": "success", "event_count": 0, "events": []})
 
-    rows = store.get_recent_security_events(
-        limit=limit, hours=8760, severity=severity
-    )
+    rows = store.get_recent_security_events(limit=limit, hours=8760, severity=severity)
 
     return jsonify(
         {

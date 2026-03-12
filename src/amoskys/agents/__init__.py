@@ -1,170 +1,126 @@
 # filepath: src/amoskys/agents/__init__.py
 """
-AMOSKYS Agent Registry — Platform-Aware Canonical Agents
+AMOSKYS Agent Registry — macOS-First Observatory Architecture
 
 Central registry for all security agents in the AMOSKYS neural network.
-Agents are platform-routed: on macOS, Observatory agents are canonical;
-on Linux/Windows, shared cross-platform agents serve as the default.
+Every agent is a macOS Observatory implementation with real collectors,
+probes, and telemetry — no stubs, no NotImplementedError.
 
 Architecture:
     agents/common/   — Shared base classes, utilities (HardenedAgentBase, MicroProbe)
-    agents/shared/   — Platform-agnostic agent implementations
-    agents/os/macos/ — macOS Observatory agents (ground-truth verified)
-    agents/os/linux/ — Linux-specific agents (kernel_audit + stubs)
-    agents/os/windows/ — Windows agent stubs
+    agents/os/macos/ — macOS Observatory agents (production, ground-truth verified)
+    agents/os/linux/ — Linux agents (kernel_audit — future expansion via Igris)
 
 Usage:
     from amoskys.agents import ProcAgent, AuthGuardAgent, FIMAgent
+    from amoskys.agents import AGENT_REGISTRY
 
-    # On macOS: ProcAgent IS MacOSProcessAgent (Observatory)
-    # On Linux/Windows: ProcAgent is the shared cross-platform implementation
-    proc = ProcAgent(agent_id="proc-001", device_id="host-001")
+Future:
+    Linux/Windows platform support will be handled by Igris, the multi-platform
+    correlation engine. See docs/Engineering/ for the Igris architecture plan.
 """
 
-import sys as _sys
 from typing import Any, Dict, Optional
 
 # Common base classes
 from amoskys.agents.common.base import HardenedAgentBase
 from amoskys.agents.common.probes import MicroProbe, MicroProbeAgentMixin
-
-# ── Platform-routed agents ──────────────────────────────────────────────
-# On macOS: Observatory agents (ground-truth verified, higher probe counts)
-# On Linux/Windows: shared cross-platform agents (fallback)
-if _sys.platform == "darwin":
-    from amoskys.agents.os.macos.auth.agent import (  # noqa: F401
-        MacOSAuthAgent as AuthGuardAgent,
-    )
-    from amoskys.agents.os.macos.filesystem.agent import (  # noqa: F401
-        MacOSFileAgent as FIMAgent,
-    )
-    from amoskys.agents.os.macos.network.agent import (  # noqa: F401
-        MacOSNetworkAgent as FlowAgent,
-    )
-    from amoskys.agents.os.macos.peripheral.agent import (  # noqa: F401
-        MacOSPeripheralAgent as PeripheralAgent,
-    )
-    from amoskys.agents.os.macos.persistence.agent import (  # noqa: F401
-        MacOSPersistenceAgent as PersistenceGuard,
-    )
-    from amoskys.agents.os.macos.process.agent import (  # noqa: F401
-        MacOSProcessAgent as ProcAgent,
-    )
-else:
-    from amoskys.agents.shared.auth.agent import AuthGuardAgent  # noqa: F401
-    from amoskys.agents.shared.filesystem.agent import FIMAgent  # noqa: F401
-    from amoskys.agents.shared.network.agent import FlowAgent  # noqa: F401
-    from amoskys.agents.shared.peripheral.agent import PeripheralAgent  # noqa: F401
-    from amoskys.agents.shared.persistence.agent import PersistenceGuard  # noqa: F401
-    from amoskys.agents.shared.process.agent import ProcAgent  # noqa: F401
-
-# ── Cross-platform agents (same implementation on all platforms) ─────────
-# ── Platform-specific agents ────────────────────────────────────────────
-from amoskys.agents.os.linux.kernel_audit.kernel_audit_agent import KernelAuditAgent
 from amoskys.agents.os.macos.applog.agent import MacOSAppLogAgent
-
-# ── Direct Observatory imports (macOS only, explicit use) ────────────────
-from amoskys.agents.os.macos.auth.agent import MacOSAuthAgent
+from amoskys.agents.os.macos.auth.agent import MacOSAuthAgent as AuthGuardAgent
 from amoskys.agents.os.macos.db_activity.agent import MacOSDBActivityAgent
 from amoskys.agents.os.macos.discovery.agent import MacOSDiscoveryAgent
 
-# ── Wave 2 Observatory Agents (macOS-specific, ground-truth verified) ────
+# ── Wave 2 Observatory Agents ─────────────────────────────────────────
 from amoskys.agents.os.macos.dns.agent import MacOSDNSAgent
-from amoskys.agents.os.macos.filesystem.agent import MacOSFileAgent
+from amoskys.agents.os.macos.filesystem.agent import MacOSFileAgent as FIMAgent
 from amoskys.agents.os.macos.http_inspector.agent import MacOSHTTPInspectorAgent
+
+# ── macOS Shield Agents ───────────────────────────────────────────────
+from amoskys.agents.os.macos.infostealer_guard.agent import MacOSInfostealerGuardAgent
 from amoskys.agents.os.macos.internet_activity.agent import MacOSInternetActivityAgent
-from amoskys.agents.os.macos.network.agent import MacOSNetworkAgent
-from amoskys.agents.os.macos.peripheral.agent import MacOSPeripheralAgent
-from amoskys.agents.os.macos.persistence.agent import MacOSPersistenceAgent
-from amoskys.agents.os.macos.process.agent import MacOSProcessAgent
+from amoskys.agents.os.macos.network.agent import MacOSNetworkAgent as FlowAgent
+
+# ── Network & Infrastructure Agents ──────────────────────────────────
+from amoskys.agents.os.macos.network_sentinel.agent import NetworkSentinelAgent
+from amoskys.agents.os.macos.peripheral.agent import (
+    MacOSPeripheralAgent as PeripheralAgent,
+)
+from amoskys.agents.os.macos.persistence.agent import (
+    MacOSPersistenceAgent as PersistenceGuard,
+)
+
+# ── macOS Observatory Agents (canonical implementations) ──────────────
+from amoskys.agents.os.macos.process.agent import MacOSProcessAgent as ProcAgent
+from amoskys.agents.os.macos.protocol_collectors.protocol_collectors import (
+    ProtocolCollectors,
+)
+from amoskys.agents.os.macos.provenance.agent import MacOSProvenanceAgent
+from amoskys.agents.os.macos.quarantine_guard.agent import MacOSQuarantineGuardAgent
+
+# ── Platform-specific agents ─────────────────────────────────────────
 from amoskys.agents.os.macos.security_monitor.security_monitor_agent import (
     MacOSSecurityMonitorAgent,
 )
-from amoskys.agents.os.macos.infostealer_guard.agent import MacOSInfostealerGuardAgent
-from amoskys.agents.os.macos.quarantine_guard.agent import MacOSQuarantineGuardAgent
-from amoskys.agents.os.macos.provenance.agent import MacOSProvenanceAgent
 from amoskys.agents.os.macos.unified_log.agent import MacOSUnifiedLogAgent
-from amoskys.agents.shared.applog.agent import AppLogAgent
-from amoskys.agents.shared.db_activity.agent import DBActivityAgent
-from amoskys.agents.shared.device_discovery.agent import DeviceDiscovery
-from amoskys.agents.shared.dns.agent import DNSAgent
-from amoskys.agents.shared.http_inspector.agent import HTTPInspectorAgent
-from amoskys.agents.shared.internet_activity.agent import InternetActivityAgent
-from amoskys.agents.shared.net_scanner.agent import NetScannerAgent
-from amoskys.agents.shared.protocol_collectors.protocol_collectors import (
-    ProtocolCollectors,
-)
-from amoskys.agents.shared.network_sentinel.agent import NetworkSentinelAgent
-from amoskys.agents.shared.protocols.universal_collector import (
-    HL7FHIRCollector,
-    ModbusCollector,
-    MQTTCollector,
-    SyslogCollector,
-    UniversalTelemetryCollector,
-)
+
+# ── Direct Observatory name exports (for explicit use) ────────────────
+MacOSProcessAgent = ProcAgent  # noqa: F811 — alias for explicit import
+MacOSAuthAgent = AuthGuardAgent  # noqa: F811
+MacOSFileAgent = FIMAgent  # noqa: F811
+MacOSNetworkAgent = FlowAgent  # noqa: F811
+MacOSPeripheralAgent = PeripheralAgent  # noqa: F811
+MacOSPersistenceAgent = PersistenceGuard  # noqa: F811
+
+# ── Linux (future — Igris multi-platform engine) ─────────────────────
+from amoskys.agents.os.linux.kernel_audit.kernel_audit_agent import KernelAuditAgent
 
 __all__ = [
     # Base classes
     "HardenedAgentBase",
     "MicroProbe",
     "MicroProbeAgentMixin",
-    # Canonical agent names (platform-routed on Darwin)
-    "AuthGuardAgent",
+    # Canonical agent names
     "ProcAgent",
+    "AuthGuardAgent",
     "PersistenceGuard",
     "FIMAgent",
-    "DNSAgent",
-    "KernelAuditAgent",
-    "MacOSSecurityMonitorAgent",
     "FlowAgent",
     "PeripheralAgent",
-    "DeviceDiscovery",
-    # Protocol Collectors
-    "UniversalTelemetryCollector",
-    "MQTTCollector",
-    "ModbusCollector",
-    "HL7FHIRCollector",
-    "SyslogCollector",
-    "ProtocolCollectors",
-    # L7 Gap-Closure Agents
-    "AppLogAgent",
-    "DBActivityAgent",
-    "HTTPInspectorAgent",
-    "InternetActivityAgent",
-    "NetScannerAgent",
-    "NetworkSentinelAgent",
-    # Direct Observatory access (explicit use only)
-    "MacOSProcessAgent",
-    "MacOSPersistenceAgent",
-    "MacOSNetworkAgent",
-    "MacOSFileAgent",
-    "MacOSAuthAgent",
+    # Platform agents
+    "MacOSSecurityMonitorAgent",
     "MacOSUnifiedLogAgent",
-    "MacOSPeripheralAgent",
-    # Wave 2 Observatory Agents
+    "KernelAuditAgent",
+    # Wave 2 Observatory
     "MacOSDNSAgent",
     "MacOSAppLogAgent",
     "MacOSDiscoveryAgent",
     "MacOSInternetActivityAgent",
     "MacOSDBActivityAgent",
     "MacOSHTTPInspectorAgent",
-    # macOS Shield Agents
+    # macOS Shield
     "MacOSInfostealerGuardAgent",
     "MacOSQuarantineGuardAgent",
     "MacOSProvenanceAgent",
+    # Network & Infrastructure
+    "NetworkSentinelAgent",
+    "ProtocolCollectors",
+    # Direct Observatory access
+    "MacOSProcessAgent",
+    "MacOSPersistenceAgent",
+    "MacOSNetworkAgent",
+    "MacOSFileAgent",
+    "MacOSAuthAgent",
+    "MacOSPeripheralAgent",
 ]
 
 # ── Agent Registry — single source of truth for dynamic discovery ──
-#
-# On macOS, the 6 overlapping entries (proc, auth, fim, flow, peripheral,
-# persistence) already resolve to Observatory agents via platform routing above.
 AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
-    # ── Endpoint Agents (platform-routed via imports above) ──
+    # ── Core Endpoint Agents ──
     "proc": {
         "class": ProcAgent,
         "name": "Process Agent",
         "description": "Process behavior, resource abuse, and privilege escalation detection",
-        "platforms": ["darwin", "linux"],
+        "platforms": ["darwin"],
         "probes": 10,
         "category": "endpoint",
         "icon": "cpu",
@@ -173,7 +129,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "class": AuthGuardAgent,
         "name": "AuthGuard Agent",
         "description": "Authentication and authorization monitoring via unified logging",
-        "platforms": ["darwin", "linux"],
+        "platforms": ["darwin"],
         "probes": 7,
         "category": "endpoint",
         "icon": "lock",
@@ -182,7 +138,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "class": PersistenceGuard,
         "name": "Persistence Guard",
         "description": "Persistence mechanism detection (LaunchAgents, cron, SSH keys, login items)",
-        "platforms": ["darwin", "linux"],
+        "platforms": ["darwin"],
         "probes": 10,
         "category": "endpoint",
         "icon": "anchor",
@@ -191,7 +147,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "class": FIMAgent,
         "name": "File Integrity Monitor",
         "description": "File modification detection for critical system paths with baseline engine",
-        "platforms": ["darwin", "linux"],
+        "platforms": ["darwin"],
         "probes": 8,
         "category": "endpoint",
         "icon": "file-shield",
@@ -200,7 +156,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "class": FlowAgent,
         "name": "Flow Agent",
         "description": "Network flow analysis, C2 beaconing, lateral movement detection",
-        "platforms": ["darwin", "linux"],
+        "platforms": ["darwin"],
         "probes": 8,
         "category": "network",
         "icon": "network",
@@ -209,12 +165,12 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "class": PeripheralAgent,
         "name": "Peripheral Agent",
         "description": "USB, Bluetooth, and Thunderbolt device monitoring",
-        "platforms": ["darwin", "linux"],
+        "platforms": ["darwin"],
         "probes": 7,
         "category": "endpoint",
         "icon": "usb",
     },
-    # ── Platform-specific agents (no cross-platform equivalent) ──
+    # ── Platform-specific agents ──
     "kernel_audit": {
         "class": KernelAuditAgent,
         "name": "Kernel Audit Agent",
@@ -242,98 +198,14 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "category": "platform",
         "icon": "scroll",
     },
-    # ── Network & Discovery Agents ──
-    "dns": {
-        "class": DNSAgent,
-        "name": "DNS Agent",
-        "description": "DNS threat detection (C2 beaconing, DGA, tunneling, cache poisoning)",
-        "platforms": ["darwin", "linux"],
-        "probes": 9,
-        "category": "network",
-        "icon": "globe",
-    },
-    "device_discovery": {
-        "class": DeviceDiscovery,
-        "name": "Device Discovery",
-        "description": "Network device enumeration and asset tracking",
-        "platforms": ["darwin", "linux"],
-        "probes": 6,
-        "category": "network",
-        "icon": "radar",
-    },
-    "protocol_collectors": {
-        "class": ProtocolCollectors,
-        "name": "Protocol Threat Collector",
-        "description": "Protocol-level threat detection for HTTP, TLS, SSH, DNS, SQL injection",
-        "platforms": ["darwin", "linux"],
-        "probes": 10,
-        "category": "network",
-        "icon": "layers",
-    },
-    # ── L7 Gap-Closure Agents ──
-    "applog": {
-        "class": AppLogAgent,
-        "name": "AppLog Agent",
-        "description": "Application log analysis with webshell, tampering, and credential detection",
-        "platforms": ["darwin", "linux"],
-        "probes": 8,
-        "category": "application",
-        "icon": "file-text",
-    },
-    "db_activity": {
-        "class": DBActivityAgent,
-        "name": "Database Activity Agent",
-        "description": "Database query monitoring for SQL injection, privilege escalation, bulk extraction",
-        "platforms": ["darwin", "linux"],
-        "probes": 8,
-        "category": "application",
-        "icon": "database",
-    },
-    "http_inspector": {
-        "class": HTTPInspectorAgent,
-        "name": "HTTP Inspector Agent",
-        "description": "Deep HTTP payload analysis for XSS, SSRF, path traversal, API abuse",
-        "platforms": ["darwin", "linux"],
-        "probes": 8,
-        "category": "application",
-        "icon": "search",
-    },
-    "internet_activity": {
-        "class": InternetActivityAgent,
-        "name": "Internet Activity Agent",
-        "description": "Outbound connection monitoring for cloud exfil, TOR/VPN, crypto mining",
-        "platforms": ["darwin", "linux"],
-        "probes": 8,
-        "category": "application",
-        "icon": "activity",
-    },
-    "net_scanner": {
-        "class": NetScannerAgent,
-        "name": "Network Scanner Agent",
-        "description": "Active network probing with diff-based service/port/topology change detection",
-        "platforms": ["darwin", "linux"],
-        "probes": 7,
-        "category": "network",
-        "icon": "scan",
-    },
-    # ── Network Sentinel (HTTP log analysis, scan detection, payload inspection) ──
-    "network_sentinel": {
-        "class": NetworkSentinelAgent,
-        "name": "Network Sentinel",
-        "description": "HTTP access log analysis, scan detection, payload inspection, rate anomaly detection",
-        "platforms": ["darwin", "linux"],
-        "probes": 10,
-        "category": "network",
-        "icon": "shield-alert",
-    },
-    # ── Wave 2 macOS Observatory Agents (ground-truth, 45 new probes) ──
+    # ── Wave 2 Observatory Agents ──
     "macos_dns": {
         "class": MacOSDNSAgent,
         "name": "macOS DNS Observatory",
         "description": "DNS threat detection — DGA, tunneling, beaconing, fast-flux, DoH bypass",
         "platforms": ["darwin"],
         "probes": 8,
-        "category": "platform",
+        "category": "network",
         "icon": "globe",
     },
     "macos_applog": {
@@ -342,7 +214,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Application log analysis — webshell, tampering, error spikes, credential harvest",
         "platforms": ["darwin"],
         "probes": 7,
-        "category": "platform",
+        "category": "application",
         "icon": "file-text",
     },
     "macos_discovery": {
@@ -351,7 +223,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Network discovery — ARP changes, Bonjour services, rogue DHCP, topology shifts",
         "platforms": ["darwin"],
         "probes": 6,
-        "category": "platform",
+        "category": "network",
         "icon": "radar",
     },
     "macos_internet_activity": {
@@ -360,7 +232,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Internet activity — cloud exfil, TOR/VPN, crypto mining, CDN masquerade",
         "platforms": ["darwin"],
         "probes": 8,
-        "category": "platform",
+        "category": "application",
         "icon": "activity",
     },
     "macos_db_activity": {
@@ -369,7 +241,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "Database monitoring — SQL injection, bulk extraction, priv escalation, exfil",
         "platforms": ["darwin"],
         "probes": 8,
-        "category": "platform",
+        "category": "application",
         "icon": "database",
     },
     "macos_http_inspector": {
@@ -378,10 +250,29 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "HTTP inspection — XSS, SSRF, path traversal, API abuse, C2 beaconing",
         "platforms": ["darwin"],
         "probes": 8,
-        "category": "platform",
+        "category": "application",
         "icon": "search",
     },
-    # ── InfostealerGuard Observatory Agent (macOS kill chain detection) ──
+    # ── Network & Infrastructure ──
+    "network_sentinel": {
+        "class": NetworkSentinelAgent,
+        "name": "Network Sentinel",
+        "description": "HTTP access log analysis, scan detection, payload inspection, rate anomaly detection",
+        "platforms": ["darwin"],
+        "probes": 10,
+        "category": "network",
+        "icon": "shield-alert",
+    },
+    "protocol_collectors": {
+        "class": ProtocolCollectors,
+        "name": "Protocol Threat Collector",
+        "description": "Protocol-level threat detection for HTTP, TLS, SSH, DNS, SQL injection",
+        "platforms": ["darwin"],
+        "probes": 10,
+        "category": "network",
+        "icon": "layers",
+    },
+    # ── macOS Shield Agents ──
     "macos_infostealer_guard": {
         "class": MacOSInfostealerGuardAgent,
         "name": "macOS InfostealerGuard Observatory",
@@ -391,7 +282,6 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "category": "platform",
         "icon": "shield-alert",
     },
-    # ── QuarantineGuard Observatory Agent (download provenance, Gatekeeper bypass, ClickFix) ──
     "macos_quarantine_guard": {
         "class": MacOSQuarantineGuardAgent,
         "name": "macOS QuarantineGuard Observatory",
@@ -401,7 +291,6 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "category": "platform",
         "icon": "shield-check",
     },
-    # ── Provenance Observatory Agent (cross-application attack chain correlation) ──
     "macos_provenance": {
         "class": MacOSProvenanceAgent,
         "name": "macOS Provenance Observatory",
@@ -418,10 +307,10 @@ def get_available_agents(platform: Optional[str] = None) -> Dict[str, Dict[str, 
     """Get agents available for a given platform.
 
     Args:
-        platform: Target platform (darwin/linux/windows). If None, uses current.
+        platform: Target platform (darwin/linux). If None, uses current.
 
     Returns:
-        Dictionary of available agents with metadata
+        Dictionary of available agents with metadata.
     """
     import sys
 

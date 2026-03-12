@@ -160,16 +160,16 @@ def main():
 Examples:
   # Show current status
   %(prog)s --show
-  
+
   # Apply a profile
   %(prog)s --profile full
-  
+
   # Enable specific categories
   %(prog)s --enable cpu memory network
-  
+
   # Disable specific categories
   %(prog)s --disable processes disk
-  
+
   # List available profiles
   %(prog)s --list-profiles
         """,

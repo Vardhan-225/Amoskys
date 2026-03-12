@@ -53,7 +53,9 @@ class TimelineEvent:
     """A single event in the provenance timeline."""
 
     timestamp: float  # epoch seconds
-    event_type: str  # "process_spawned", "file_created", "app_active", "network_connect"
+    event_type: (
+        str  # "process_spawned", "file_created", "app_active", "network_connect"
+    )
     pid: int
     app_name: str
     detail: str  # file path, command, IP:port, etc.
@@ -98,26 +100,61 @@ class PIDConnection:
 # Known application categories
 # =============================================================================
 
-_MESSAGING_APPS: FrozenSet[str] = frozenset({
-    "Messages", "Slack", "Slack Helper", "Microsoft Teams",
-    "Discord", "Discord Helper", "WhatsApp", "Telegram",
-    "Signal", "Element", "Mattermost",
-})
+_MESSAGING_APPS: FrozenSet[str] = frozenset(
+    {
+        "Messages",
+        "Slack",
+        "Slack Helper",
+        "Microsoft Teams",
+        "Discord",
+        "Discord Helper",
+        "WhatsApp",
+        "Telegram",
+        "Signal",
+        "Element",
+        "Mattermost",
+    }
+)
 
-_BROWSERS: FrozenSet[str] = frozenset({
-    "Safari", "Google Chrome", "Google Chrome Helper",
-    "Firefox", "Brave Browser", "Microsoft Edge", "Arc",
-})
+_BROWSERS: FrozenSet[str] = frozenset(
+    {
+        "Safari",
+        "Google Chrome",
+        "Google Chrome Helper",
+        "Firefox",
+        "Brave Browser",
+        "Microsoft Edge",
+        "Arc",
+    }
+)
 
-_TERMINALS: FrozenSet[str] = frozenset({
-    "Terminal", "iTerm2", "Warp", "Alacritty", "kitty",
-    "Hyper", "WezTerm",
-})
+_TERMINALS: FrozenSet[str] = frozenset(
+    {
+        "Terminal",
+        "iTerm2",
+        "Warp",
+        "Alacritty",
+        "kitty",
+        "Hyper",
+        "WezTerm",
+    }
+)
 
-_SUSPICIOUS_COMMANDS: FrozenSet[str] = frozenset({
-    "curl", "wget", "nc", "ncat", "bash", "sh", "zsh",
-    "python3", "python", "osascript", "base64",
-})
+_SUSPICIOUS_COMMANDS: FrozenSet[str] = frozenset(
+    {
+        "curl",
+        "wget",
+        "nc",
+        "ncat",
+        "bash",
+        "sh",
+        "zsh",
+        "python3",
+        "python",
+        "osascript",
+        "base64",
+    }
+)
 
 
 # =============================================================================
@@ -214,9 +251,16 @@ class MacOSProvenanceCollector:
         """
         procs: Dict[int, Dict[str, Any]] = {}
 
-        for proc in psutil.process_iter([
-            "pid", "name", "exe", "cmdline", "ppid", "create_time",
-        ]):
+        for proc in psutil.process_iter(
+            [
+                "pid",
+                "name",
+                "exe",
+                "cmdline",
+                "ppid",
+                "create_time",
+            ]
+        ):
             try:
                 info = proc.info
                 pid = info["pid"]
@@ -263,15 +307,17 @@ class MacOSProvenanceCollector:
             if not self._first_run:
                 # New PID, or same PID but different create_time (recycled)
                 if pid not in self._known_pids or self._known_pids[pid] != ct:
-                    new_processes.append(NewProcess(
-                        pid=pid,
-                        name=info["name"],
-                        exe=info["exe"],
-                        cmdline=info["cmdline"],
-                        ppid=info["ppid"],
-                        parent_name=info["parent_name"],
-                        create_time=ct,
-                    ))
+                    new_processes.append(
+                        NewProcess(
+                            pid=pid,
+                            name=info["name"],
+                            exe=info["exe"],
+                            cmdline=info["cmdline"],
+                            ppid=info["ppid"],
+                            parent_name=info["parent_name"],
+                            create_time=ct,
+                        )
+                    )
 
         self._known_pids = current_pids
         return new_processes
@@ -312,14 +358,23 @@ class MacOSProvenanceCollector:
 
             if not self._first_run:
                 # New file, or existing file with changed mtime
-                if filename not in self._known_downloads or self._known_downloads[filename] != mtime:
-                    new_downloads.append(NewDownload(
-                        filename=filename,
-                        path=filepath,
-                        size=st.st_size,
-                        create_time=st.st_birthtime if hasattr(st, "st_birthtime") else st.st_ctime,
-                        modify_time=mtime,
-                    ))
+                if (
+                    filename not in self._known_downloads
+                    or self._known_downloads[filename] != mtime
+                ):
+                    new_downloads.append(
+                        NewDownload(
+                            filename=filename,
+                            path=filepath,
+                            size=st.st_size,
+                            create_time=(
+                                st.st_birthtime
+                                if hasattr(st, "st_birthtime")
+                                else st.st_ctime
+                            ),
+                            modify_time=mtime,
+                        )
+                    )
 
         self._known_downloads = current_downloads
         return new_downloads
@@ -413,7 +468,7 @@ class MacOSProvenanceCollector:
             if remote.startswith("["):
                 bracket_end = remote.index("]")
                 remote_ip = remote[1:bracket_end]
-                remote_port = int(remote[bracket_end + 2:])
+                remote_port = int(remote[bracket_end + 2 :])
             else:
                 ip_port = remote.rsplit(":", 1)
                 if len(ip_port) != 2:
@@ -447,53 +502,63 @@ class MacOSProvenanceCollector:
 
         # New process spawns
         for proc in new_processes:
-            timeline.append(TimelineEvent(
-                timestamp=proc.create_time,
-                event_type="process_spawned",
-                pid=proc.pid,
-                app_name=proc.name,
-                detail=f"exe={proc.exe} ppid={proc.ppid} parent={proc.parent_name}",
-            ))
+            timeline.append(
+                TimelineEvent(
+                    timestamp=proc.create_time,
+                    event_type="process_spawned",
+                    pid=proc.pid,
+                    app_name=proc.name,
+                    detail=f"exe={proc.exe} ppid={proc.ppid} parent={proc.parent_name}",
+                )
+            )
 
         # New downloads
         for dl in new_downloads:
-            timeline.append(TimelineEvent(
-                timestamp=dl.modify_time,
-                event_type="file_created",
-                pid=0,
-                app_name="Downloads",
-                detail=f"file={dl.filename} size={dl.size} path={dl.path}",
-            ))
+            timeline.append(
+                TimelineEvent(
+                    timestamp=dl.modify_time,
+                    event_type="file_created",
+                    pid=0,
+                    app_name="Downloads",
+                    detail=f"file={dl.filename} size={dl.size} path={dl.path}",
+                )
+            )
 
         # Active messaging apps
         for app in active_messaging:
-            timeline.append(TimelineEvent(
-                timestamp=now,
-                event_type="app_active",
-                pid=0,
-                app_name=app,
-                detail=f"category=messaging app={app}",
-            ))
+            timeline.append(
+                TimelineEvent(
+                    timestamp=now,
+                    event_type="app_active",
+                    pid=0,
+                    app_name=app,
+                    detail=f"category=messaging app={app}",
+                )
+            )
 
         # Active browsers
         for app in active_browsers:
-            timeline.append(TimelineEvent(
-                timestamp=now,
-                event_type="app_active",
-                pid=0,
-                app_name=app,
-                detail=f"category=browser app={app}",
-            ))
+            timeline.append(
+                TimelineEvent(
+                    timestamp=now,
+                    event_type="app_active",
+                    pid=0,
+                    app_name=app,
+                    detail=f"category=browser app={app}",
+                )
+            )
 
         # Active terminals
         for app in active_terminals:
-            timeline.append(TimelineEvent(
-                timestamp=now,
-                event_type="app_active",
-                pid=0,
-                app_name=app,
-                detail=f"category=terminal app={app}",
-            ))
+            timeline.append(
+                TimelineEvent(
+                    timestamp=now,
+                    event_type="app_active",
+                    pid=0,
+                    app_name=app,
+                    detail=f"category=terminal app={app}",
+                )
+            )
 
         # Sort by timestamp (chronological order)
         timeline.sort(key=lambda e: e.timestamp)
