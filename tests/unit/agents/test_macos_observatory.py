@@ -38,7 +38,6 @@ from amoskys.redteam.scenarios import SCENARIO_REGISTRY, _load_all
 
 # ── load scenarios once at module level ─────────────────────────────────
 _load_all()
-_HARNESS = RedTeamHarness()
 _FIXTURES_DIR = Path(__file__).resolve().parent.parent.parent / "fixtures" / "golden"
 
 # ── macOS Observatory scenario names ────────────────────────────────────
@@ -59,7 +58,10 @@ _ALL_SCENARIOS = sorted(SCENARIO_REGISTRY.keys())
 def test_scenario_passes(scenario_name: str) -> None:
     """Every scenario in the registry must pass all cases."""
     scenario = SCENARIO_REGISTRY[scenario_name]
-    result = _HARNESS.run_scenario(scenario)
+    # Fresh harness per test to avoid stateful probe contamination
+    # across scenarios (correlation probes accumulate state)
+    harness = RedTeamHarness()
+    result = harness.run_scenario(scenario)
 
     if not result.all_passed:
         # Collect failure details for diagnostics
@@ -128,7 +130,9 @@ def test_golden_fixture_matches(scenario_name: str) -> None:
         pytest.skip(f"No golden fixture for {scenario_name}")
 
     scenario = SCENARIO_REGISTRY[scenario_name]
-    result = _HARNESS.run_scenario(scenario)
+    # Fresh harness per golden test to avoid stateful probe contamination
+    harness = RedTeamHarness()
+    result = harness.run_scenario(scenario)
 
     assert (
         result.total == golden["total"]

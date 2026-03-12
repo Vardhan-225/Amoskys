@@ -1,0 +1,38 @@
+title: macOS Quarantine Attribute Bypass
+id: amoskys-de-010
+status: stable
+level: critical
+description: >-
+  Detects removal of the com.apple.quarantine extended attribute from downloaded
+  files. This is a Gatekeeper bypass technique that allows unsigned or unnotarized
+  binaries to execute without macOS security warnings. Post-Sequoia, this is one
+  of the primary remaining attack vectors for stealer delivery.
+author: AMOSKYS
+tags:
+    - attack.defense_evasion
+    - attack.t1553.001
+references:
+    - https://attack.mitre.org/techniques/T1553/001/
+logsource:
+    category: process_creation
+    product: amoskys
+detection:
+    selection_xattr:
+        event_type: quarantine_bypass
+        process_name: xattr
+    selection_args:
+        cmdline|contains:
+            - com.apple.quarantine
+            - -d
+            - -c
+    condition: selection_xattr and selection_args
+fields:
+    - process_name
+    - cmdline
+    - target_file
+    - pid
+    - ppid
+falsepositives:
+    - Developers removing quarantine from legitimate downloaded tools
+    - IT management scripts during software deployment
+confidence: 0.95

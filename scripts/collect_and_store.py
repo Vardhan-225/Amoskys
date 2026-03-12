@@ -147,6 +147,29 @@ def main():
     except ImportError as e:
         logger.warning("Cannot import NetworkSentinel: %s", e)
 
+    # macOS Shield — InfostealerGuard, QuarantineGuard, ProvenanceEngine
+    if sys.platform == "darwin":
+        try:
+            from amoskys.agents.os.macos.infostealer_guard.agent import MacOSInfostealerGuardAgent
+
+            agents.append(("InfostealerGuard", MacOSInfostealerGuardAgent, {}))
+        except ImportError as e:
+            logger.warning("Cannot import InfostealerGuard: %s", e)
+
+        try:
+            from amoskys.agents.os.macos.quarantine_guard.agent import MacOSQuarantineGuardAgent
+
+            agents.append(("QuarantineGuard", MacOSQuarantineGuardAgent, {}))
+        except ImportError as e:
+            logger.warning("Cannot import QuarantineGuard: %s", e)
+
+        try:
+            from amoskys.agents.os.macos.provenance.agent import MacOSProvenanceAgent
+
+            agents.append(("ProvenanceEngine", MacOSProvenanceAgent, {}))
+        except ImportError as e:
+            logger.warning("Cannot import ProvenanceEngine: %s", e)
+
     for name, cls, kwargs in agents:
         logger.info("--- %s ---", name)
         items = collect_from_agent(cls, name, **kwargs)
@@ -160,7 +183,23 @@ def main():
                 if ev.HasField("security_event"):
                     total_security += 1
 
-    # Step 3: Report results
+    # Step 3: Run FusionEngine correlation (connects independent detections)
+    if processor._fusion is not None:
+        logger.info("=" * 60)
+        logger.info("STEP 3: Running FusionEngine correlation")
+        logger.info("=" * 60)
+        for device_id in list(processor._fusion.device_state.keys()):
+            incidents, _ = processor._fusion.evaluate_device(device_id)
+            for inc in incidents:
+                processor._fusion.persist_incident(inc)
+                logger.info(
+                    "  INCIDENT [%s] %s: %s (%d events linked)",
+                    inc.severity.name, inc.rule_name, inc.summary[:80], len(inc.event_ids),
+                )
+        # Bridge fusion incidents to dashboard
+        processor._bridge_fusion_incidents()
+
+    # Step 4: Report results
     logger.info("=" * 60)
     logger.info("RESULTS")
     logger.info("=" * 60)
@@ -179,6 +218,13 @@ def main():
     ]:
         cnt = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
         logger.info("  %s: %d rows", t, cnt)
+
+    # Show fusion incidents
+    fusion_db = sqlite3.connect("data/intel/fusion.db")
+    inc_count = fusion_db.execute("SELECT COUNT(*) FROM incidents").fetchone()[0]
+    logger.info("  fusion_incidents: %d rows", inc_count)
+    fusion_db.close()
+
     conn.close()
 
 

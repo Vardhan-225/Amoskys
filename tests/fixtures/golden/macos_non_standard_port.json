@@ -15,7 +15,7 @@
   "cases": [
     {
       "id": "macos_nsp_sshd_high_port",
-      "title": "sshd listening on port 12345 \u2014 non-standard port MEDIUM",
+      "title": "sshd listening on port 12345 — non-standard port MEDIUM",
       "category": "positive",
       "stateful": false,
       "shared_data_key": "connections",
@@ -56,7 +56,7 @@
     },
     {
       "id": "macos_nsp_mysqld_wrong_port",
-      "title": "mysqld listening on port 33060 \u2014 non-standard port",
+      "title": "mysqld listening on port 9306 — non-standard port",
       "category": "positive",
       "stateful": false,
       "shared_data_key": "connections",
@@ -97,7 +97,7 @@
     },
     {
       "id": "macos_nsp_nginx_strange_port",
-      "title": "nginx on port 4444 \u2014 classic reverse shell port",
+      "title": "nginx on port 4444 — classic reverse shell port",
       "category": "positive",
       "stateful": false,
       "shared_data_key": "connections",
@@ -138,7 +138,7 @@
     },
     {
       "id": "macos_nsp_unknown_service",
-      "title": "Unknown process 'implant' on port 4444 \u2014 not in service map",
+      "title": "Unknown process 'implant' on port 4444 — not in service map",
       "category": "evasion",
       "stateful": false,
       "shared_data_key": "connections",
@@ -157,7 +157,7 @@
     },
     {
       "id": "macos_nsp_established_not_listen",
-      "title": "sshd ESTABLISHED on port 12345 \u2014 only LISTEN checked",
+      "title": "sshd ESTABLISHED on port 12345 — only LISTEN checked",
       "category": "evasion",
       "stateful": false,
       "shared_data_key": "connections",
@@ -176,7 +176,7 @@
     },
     {
       "id": "macos_nsp_renamed_sshd",
-      "title": "sshd renamed to 'httpd' on port 22 \u2014 wrong name, no mismatch",
+      "title": "sshd renamed to 'httpd' on port 22 — wrong name, no mismatch",
       "category": "evasion",
       "stateful": false,
       "shared_data_key": "connections",
@@ -195,7 +195,7 @@
     },
     {
       "id": "macos_nsp_sshd_standard",
-      "title": "sshd on port 22 \u2014 standard port, no alert",
+      "title": "sshd on port 22 — standard port, no alert",
       "category": "benign",
       "stateful": false,
       "shared_data_key": "connections",
@@ -214,7 +214,7 @@
     },
     {
       "id": "macos_nsp_node_custom_port",
-      "title": "node on port 3000 \u2014 not in service map, no alert",
+      "title": "node on port 3000 — not in service map, no alert",
       "category": "benign",
       "stateful": false,
       "shared_data_key": "connections",

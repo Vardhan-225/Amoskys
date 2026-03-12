@@ -1,0 +1,30 @@
+title: Browser Session Cookie Database Theft
+id: amoskys-cred-013
+status: stable
+level: high
+description: >-
+  Detects non-browser processes reading browser cookie databases. Session cookie
+  theft enables attackers to bypass MFA by hijacking authenticated sessions.
+  All major macOS infostealers (AMOS, Poseidon, Lumma) target Chrome Cookies DB.
+author: AMOSKYS
+tags:
+    - attack.credential_access
+    - attack.t1539
+references:
+    - https://attack.mitre.org/techniques/T1539/
+logsource:
+    category: file_access
+    product: amoskys
+detection:
+    selection:
+        event_type: session_cookie_theft
+    condition: selection
+fields:
+    - process_name
+    - file_path
+    - pid
+    - process_guid
+falsepositives:
+    - Browser processes accessing their own cookie stores
+    - Browser extensions with elevated file access
+confidence: 0.85

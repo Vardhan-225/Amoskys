@@ -15,9 +15,10 @@ Rules:
 7. Suspicious Process Tree
 """
 
+import json
 import logging
 from collections import defaultdict
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from amoskys.intel.models import Incident, MitreTactic, Severity, TelemetryEventView
 
@@ -686,6 +687,577 @@ def _get_persistence_techniques(persist_type: str) -> List[str]:
     return mapping.get(persist_type, ["T1543"])  # Generic persistence
 
 
+# ── NetworkSentinel event categories ──────────────────────────────────────
+_NETWORK_SENTINEL_CATEGORIES = {
+    "http_scan_storm",
+    "directory_brute_force",
+    "sqli_payload_detected",
+    "xss_payload_detected",
+    "path_traversal_detected",
+    "attack_tool_detected",
+    "rate_anomaly",
+    "admin_path_enumeration",
+    "credential_spray_detected",
+    "connection_flood_detected",
+}
+
+# Kill-chain stage mapping for network attack events
+_KILL_CHAIN_STAGES = {
+    "http_scan_storm": ("reconnaissance", 1),
+    "directory_brute_force": ("reconnaissance", 1),
+    "attack_tool_detected": ("weaponization", 2),
+    "rate_anomaly": ("delivery", 3),
+    "sqli_payload_detected": ("exploitation", 4),
+    "xss_payload_detected": ("exploitation", 4),
+    "path_traversal_detected": ("exploitation", 4),
+    "admin_path_enumeration": ("installation", 5),
+    "credential_spray_detected": ("exploitation", 4),
+    "connection_flood_detected": ("actions_on_objectives", 7),
+}
+
+
+def _get_event_category(event: TelemetryEventView) -> Optional[str]:
+    """Extract event category from a TelemetryEventView.
+
+    NetworkSentinel events store category in security_event['event_category'].
+    Falls back to event_type for non-security events.
+    """
+    if event.security_event:
+        return event.security_event.get("event_category")
+    return event.event_type
+
+
+def _extract_attacker_ip(event: TelemetryEventView) -> Optional[str]:
+    """Extract attacker IP from any event type.
+
+    NetworkSentinel stores it in attributes['attacker_ip'].
+    Auth events store it in security_event['source_ip'].
+    Flow events store it in flow_event['src_ip'].
+    """
+    ip = event.attributes.get("attacker_ip")
+    if ip:
+        return ip
+    if event.security_event:
+        ip = event.security_event.get("source_ip")
+        if ip:
+            return ip
+    if event.flow_event:
+        return event.flow_event.get("src_ip")
+    return None
+
+
+def rule_coordinated_reconnaissance(
+    events: List[TelemetryEventView], device_id: str
+) -> Optional[Incident]:
+    """Detect coordinated multi-vector attack from a single source IP.
+
+    Pattern:
+        - 3+ distinct NetworkSentinel probe detections from the same attacker IP
+        - within the correlation window (30 minutes)
+
+    This connects scan storm + directory brute force + SQLi + XSS +
+    path traversal + tool fingerprint + rate anomaly + admin enum
+    into ONE incident: "Coordinated Attack from X.X.X.X"
+
+    Returns:
+        Incident if pattern detected, None otherwise
+    """
+    # Collect NetworkSentinel events by attacker IP
+    ip_events: Dict[str, List[TelemetryEventView]] = defaultdict(list)
+    for event in events:
+        cat = _get_event_category(event)
+        if cat not in _NETWORK_SENTINEL_CATEGORIES:
+            continue
+        ip = _extract_attacker_ip(event)
+        if ip:
+            ip_events[ip].append(event)
+
+    for attacker_ip, attack_events in ip_events.items():
+        categories: set[str] = {
+            c for e in attack_events if (c := _get_event_category(e)) is not None
+        }
+        if len(categories) < 3:
+            continue
+
+        # Determine kill chain stages hit and collect MITRE techniques
+        stages_hit: set[str] = set()
+        techniques_all: set[str] = set()
+        for e in attack_events:
+            cat = _get_event_category(e)
+            stage_info = _KILL_CHAIN_STAGES.get(cat or "")
+            if stage_info:
+                stages_hit.add(stage_info[0])
+            mitre_raw = e.attributes.get("mitre_techniques", "")
+            if mitre_raw:
+                try:
+                    techniques_all.update(json.loads(mitre_raw))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        # Severity based on attack breadth
+        if len(categories) >= 6:
+            severity = Severity.CRITICAL
+        elif len(categories) >= 4:
+            severity = Severity.HIGH
+        else:
+            severity = Severity.MEDIUM
+
+        # Sort by kill chain stage for narrative
+        sorted_events = sorted(
+            attack_events,
+            key=lambda ev: _KILL_CHAIN_STAGES.get(
+                _get_event_category(ev) or "", ("unknown", 99)
+            )[1],
+        )
+
+        # Build attack narrative
+        narrative_lines = []
+        for e in sorted_events:
+            cat = _get_event_category(e) or "unknown"
+            stage = _KILL_CHAIN_STAGES.get(cat, ("unknown", 99))
+            desc = e.attributes.get("verdict", cat)
+            if len(desc) > 60:
+                desc = desc[:57] + "..."
+            narrative_lines.append(f"  [{stage[0].upper()}] {desc}")
+
+        timestamps = [e.timestamp for e in attack_events]
+        start_ts = min(timestamps)
+        end_ts = max(timestamps)
+        duration = (end_ts - start_ts).total_seconds()
+
+        incident = Incident(
+            incident_id=f"coordinated_recon_{device_id}_{attacker_ip}_{int(end_ts.timestamp())}",
+            device_id=device_id,
+            severity=severity,
+            tactics=[
+                MitreTactic.DISCOVERY.value,  # TA0007 (closest to Reconnaissance)
+                MitreTactic.INITIAL_ACCESS.value,
+            ],
+            techniques=sorted(techniques_all) if techniques_all else ["T1595", "T1190"],
+            rule_name="coordinated_reconnaissance",
+            summary=(
+                f"COORDINATED ATTACK from {attacker_ip}: "
+                f"{len(categories)} attack vectors, "
+                f"{len(stages_hit)} kill chain stages hit in {int(duration)}s"
+            ),
+            event_ids=[e.event_id for e in attack_events],
+            metadata={
+                "attacker_ip": attacker_ip,
+                "attack_categories": str(sorted(categories)),
+                "category_count": str(len(categories)),
+                "kill_chain_stages": str(sorted(stages_hit)),
+                "stages_hit": str(len(stages_hit)),
+                "duration_seconds": str(int(duration)),
+                "total_events": str(len(attack_events)),
+                "attack_narrative": "\n".join(narrative_lines),
+            },
+        )
+
+        incident.start_ts = start_ts
+        incident.end_ts = end_ts
+
+        logger.critical(
+            "COORDINATED ATTACK: %s → %d vectors, %d kill chain stages",
+            attacker_ip, len(categories), len(stages_hit),
+        )
+        return incident
+
+    return None
+
+
+def rule_web_attack_chain(
+    events: List[TelemetryEventView], device_id: str
+) -> Optional[Incident]:
+    """Detect kill chain progression: recon → exploitation → post-exploitation.
+
+    Pattern:
+        - Scan/recon event (http_scan_storm, directory_brute_force)
+        - FOLLOWED BY injection attempt (sqli, xss, path_traversal)
+        - FOLLOWED BY enumeration (admin_path_enumeration)
+        - All from same IP within window
+
+    Differs from coordinated_reconnaissance by requiring
+    temporal PROGRESSION through kill chain stages.
+
+    Returns:
+        Incident if kill chain progression detected, None otherwise
+    """
+    RECON = {"http_scan_storm", "directory_brute_force", "attack_tool_detected"}
+    EXPLOIT = {"sqli_payload_detected", "xss_payload_detected", "path_traversal_detected"}
+    POST_EXPLOIT = {"admin_path_enumeration", "credential_spray_detected"}
+
+    ip_events: Dict[str, List[TelemetryEventView]] = defaultdict(list)
+    for event in events:
+        cat = _get_event_category(event)
+        if cat not in _NETWORK_SENTINEL_CATEGORIES:
+            continue
+        ip = _extract_attacker_ip(event)
+        if ip:
+            ip_events[ip].append(event)
+
+    for attacker_ip, attack_events in ip_events.items():
+        categories: set[str] = {
+            c for e in attack_events if (c := _get_event_category(e)) is not None
+        }
+
+        has_recon = bool(categories & RECON)
+        has_exploit = bool(categories & EXPLOIT)
+        has_post = bool(categories & POST_EXPLOIT)
+
+        if not (has_recon and has_exploit):
+            continue
+
+        chain_stages = []
+        if has_recon:
+            chain_stages.append("RECON")
+        if has_exploit:
+            chain_stages.append("EXPLOIT")
+        if has_post:
+            chain_stages.append("POST-EXPLOIT")
+
+        severity = Severity.CRITICAL if has_post else Severity.HIGH
+
+        timestamps = [e.timestamp for e in attack_events]
+        start_ts = min(timestamps)
+        end_ts = max(timestamps)
+        duration = (end_ts - start_ts).total_seconds()
+
+        incident = Incident(
+            incident_id=f"web_attack_chain_{device_id}_{attacker_ip}_{int(end_ts.timestamp())}",
+            device_id=device_id,
+            severity=severity,
+            tactics=[
+                MitreTactic.DISCOVERY.value,
+                MitreTactic.INITIAL_ACCESS.value,
+                MitreTactic.EXECUTION.value,
+            ],
+            techniques=["T1595", "T1190", "T1059.007"],
+            rule_name="web_attack_chain",
+            summary=(
+                f"KILL CHAIN: {attacker_ip} progressed through "
+                f"{' → '.join(chain_stages)} "
+                f"({len(categories)} techniques in {int(duration)}s)"
+            ),
+            event_ids=[e.event_id for e in attack_events],
+            metadata={
+                "attacker_ip": attacker_ip,
+                "chain_stages": str(chain_stages),
+                "chain_depth": str(len(chain_stages)),
+                "recon_techniques": str(sorted(categories & RECON)),
+                "exploit_techniques": str(sorted(categories & EXPLOIT)),
+                "post_exploit_techniques": str(sorted(categories & POST_EXPLOIT)),
+                "duration_seconds": str(int(duration)),
+            },
+        )
+
+        incident.start_ts = start_ts
+        incident.end_ts = end_ts
+
+        logger.critical(
+            "KILL CHAIN: %s → %s", attacker_ip, " → ".join(chain_stages),
+        )
+        return incident
+
+    return None
+
+
+# ── macOS Shield Fusion Rules ──────────────────────────────────────────
+
+# Infostealer kill chain stages (event_category values from probes)
+_STEALER_STAGES = {
+    "dialog": {"fake_password_dialog"},
+    "credential_access": {
+        "keychain_access", "browser_cred_theft", "crypto_wallet_theft",
+        "session_cookie_theft", "stealer_sequence",
+    },
+    "staging": {"credential_archive"},
+    "exfil": {"sensitive_file_exfil", "exfil_detected"},
+}
+
+# ClickFix-related event categories
+_CLICKFIX_CATEGORIES = {
+    "clickfix_detected", "browser_to_terminal", "rapid_app_switch",
+    "msg_to_download", "download_to_execute",
+}
+
+# Download/execute chain categories
+_DOWNLOAD_EXECUTE_CATEGORIES = {
+    "quarantine_bypass", "dmg_mount_execute", "unsigned_download_exec",
+    "cli_download_execute", "quarantine_evasion", "installer_script_abuse",
+    "download_to_execute", "suspicious_download_source",
+}
+
+# Persistence categories (from existing persistence agent)
+_PERSISTENCE_CATEGORIES = {
+    "launch_agent_created", "launch_daemon_created", "cron_modified",
+    "ssh_key_added", "login_item_added", "shell_profile_modified",
+    "persistence_detected", "folder_action_created",
+}
+
+
+def rule_infostealer_kill_chain(
+    events: List[TelemetryEventView], device_id: str
+) -> Optional[Incident]:
+    """Detect macOS infostealer kill chain: dialog → credential access → archive → exfil.
+
+    Pattern:
+        - Fake password dialog (osascript display dialog with password keywords)
+        - Credential store access (keychain, browser, crypto wallet, cookies)
+        - Credential archiving (zip/tar/ditto with sensitive paths)
+        - Network exfiltration (sensitive file access + external connection)
+
+    Fires when 2+ distinct stages are detected from the same device.
+    """
+    stage_events: Dict[str, List[TelemetryEventView]] = defaultdict(list)
+
+    for event in events:
+        category = _get_event_category(event)
+        if not category:
+            continue
+        for stage_name, stage_categories in _STEALER_STAGES.items():
+            if category in stage_categories:
+                stage_events[stage_name].append(event)
+
+    if len(stage_events) < 2:
+        return None
+
+    # Build evidence
+    all_event_ids = []
+    stage_summary = []
+    techniques = set()
+
+    for stage_name, stage_evts in sorted(stage_events.items()):
+        for e in stage_evts:
+            all_event_ids.append(e.event_id)
+            if e.security_event and e.security_event.get("mitre_techniques"):
+                try:
+                    techs = json.loads(e.security_event["mitre_techniques"])
+                    techniques.update(techs)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        stage_summary.append(f"{stage_name}: {len(stage_evts)} events")
+
+    stages_hit = len(stage_events)
+    severity = Severity.CRITICAL if stages_hit >= 3 else Severity.HIGH
+
+    timestamps = [e.timestamp for e in events if _get_event_category(e) in
+                  {c for cats in _STEALER_STAGES.values() for c in cats}]
+    start_ts = min(timestamps) if timestamps else events[0].timestamp
+    end_ts = max(timestamps) if timestamps else events[-1].timestamp
+
+    return Incident(
+        incident_id=f"infostealer_chain_{device_id}_{int(start_ts.timestamp())}",
+        device_id=device_id,
+        severity=severity,
+        tactics=[MitreTactic.CREDENTIAL_ACCESS.value, MitreTactic.COLLECTION.value],
+        techniques=sorted(techniques) or ["T1555", "T1056.002"],
+        rule_name="infostealer_kill_chain",
+        summary=(
+            f"INFOSTEALER KILL CHAIN on {device_id}: {stages_hit} stages detected "
+            f"({', '.join(stage_summary)})"
+        ),
+        event_ids=all_event_ids,
+        metadata={
+            "stages_hit": str(stages_hit),
+            "stage_breakdown": str(stage_summary),
+            "kill_chain_type": "macos_infostealer",
+        },
+        start_ts=start_ts,
+        end_ts=end_ts,
+    )
+
+
+def rule_clickfix_attack(
+    events: List[TelemetryEventView], device_id: str
+) -> Optional[Incident]:
+    """Detect ClickFix social engineering attack chain.
+
+    Pattern:
+        - Messaging app activity detected
+        - Terminal spawned with suspicious command (curl, bash -c, wget)
+        - Possible execution or exfiltration follows
+
+    This is the primary post-Sequoia stealer delivery mechanism.
+    """
+    clickfix_events = []
+
+    for event in events:
+        category = _get_event_category(event)
+        if category and category in _CLICKFIX_CATEGORIES:
+            clickfix_events.append(event)
+
+    if not clickfix_events:
+        return None
+
+    # Check for the key indicators
+    has_clickfix = any(_get_event_category(e) in {"clickfix_detected", "browser_to_terminal"}
+                       for e in clickfix_events)
+    has_chain = any(_get_event_category(e) in {"msg_to_download", "download_to_execute"}
+                     for e in clickfix_events)
+
+    if not has_clickfix and not has_chain:
+        return None
+
+    all_event_ids = [e.event_id for e in clickfix_events]
+    techniques = set()
+    for e in clickfix_events:
+        if e.security_event and e.security_event.get("mitre_techniques"):
+            try:
+                techs = json.loads(e.security_event["mitre_techniques"])
+                techniques.update(techs)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    start_ts = min(e.timestamp for e in clickfix_events)
+    end_ts = max(e.timestamp for e in clickfix_events)
+
+    return Incident(
+        incident_id=f"clickfix_{device_id}_{int(start_ts.timestamp())}",
+        device_id=device_id,
+        severity=Severity.CRITICAL,
+        tactics=[MitreTactic.EXECUTION.value, MitreTactic.INITIAL_ACCESS.value],
+        techniques=sorted(techniques) or ["T1204.001", "T1059"],
+        rule_name="clickfix_attack",
+        summary=(
+            f"CLICKFIX ATTACK on {device_id}: messaging app → Terminal → suspicious "
+            f"command chain ({len(clickfix_events)} indicators)"
+        ),
+        event_ids=all_event_ids,
+        metadata={
+            "indicator_count": str(len(clickfix_events)),
+            "categories": str(sorted({_get_event_category(e) for e in clickfix_events
+                                       if _get_event_category(e)})),
+        },
+        start_ts=start_ts,
+        end_ts=end_ts,
+    )
+
+
+def rule_download_execute_persist(
+    events: List[TelemetryEventView], device_id: str
+) -> Optional[Incident]:
+    """Detect download → execute → persist chain.
+
+    Pattern:
+        - Download event (quarantine, DMG mount, CLI download)
+        - Execution from downloaded file
+        - Persistence mechanism created (LaunchAgent, cron, etc.)
+
+    Links quarantine_guard events with persistence agent events.
+    """
+    download_events = []
+    persist_events = []
+
+    for event in events:
+        category = _get_event_category(event)
+        if not category:
+            continue
+        if category in _DOWNLOAD_EXECUTE_CATEGORIES:
+            download_events.append(event)
+        elif category in _PERSISTENCE_CATEGORIES:
+            persist_events.append(event)
+
+    if not download_events or not persist_events:
+        return None
+
+    all_event_ids = [e.event_id for e in download_events + persist_events]
+    techniques = {"T1204.002", "T1543"}
+
+    start_ts = min(e.timestamp for e in download_events + persist_events)
+    end_ts = max(e.timestamp for e in download_events + persist_events)
+
+    return Incident(
+        incident_id=f"download_persist_{device_id}_{int(start_ts.timestamp())}",
+        device_id=device_id,
+        severity=Severity.HIGH,
+        tactics=[
+            MitreTactic.INITIAL_ACCESS.value,
+            MitreTactic.EXECUTION.value,
+            MitreTactic.PERSISTENCE.value,
+        ],
+        techniques=sorted(techniques),
+        rule_name="download_execute_persist",
+        summary=(
+            f"DOWNLOAD → EXECUTE → PERSIST on {device_id}: "
+            f"{len(download_events)} download/execute events + "
+            f"{len(persist_events)} persistence events"
+        ),
+        event_ids=all_event_ids,
+        metadata={
+            "download_count": str(len(download_events)),
+            "persistence_count": str(len(persist_events)),
+        },
+        start_ts=start_ts,
+        end_ts=end_ts,
+    )
+
+
+def rule_credential_harvest_exfil(
+    events: List[TelemetryEventView], device_id: str
+) -> Optional[Incident]:
+    """Detect credential harvesting followed by exfiltration.
+
+    Pattern:
+        - 3+ credential store access events (keychain + browser + wallet)
+        - Network exfiltration event within the same window
+
+    The cumulative credential access from multiple stores is the key signal —
+    legitimate processes only access their own store.
+    """
+    cred_categories_seen: Dict[str, List[TelemetryEventView]] = defaultdict(list)
+    exfil_events = []
+
+    for event in events:
+        category = _get_event_category(event)
+        if not category:
+            continue
+        # Check if this is a credential access event
+        if category in _STEALER_STAGES.get("credential_access", set()):
+            cred_categories_seen[category].append(event)
+        elif category in {"sensitive_file_exfil", "exfil_detected",
+                          "execute_to_exfil", "pid_network_anomaly"}:
+            exfil_events.append(event)
+
+    # Need 2+ distinct credential categories
+    if len(cred_categories_seen) < 2:
+        return None
+
+    all_cred_events = [e for evts in cred_categories_seen.values() for e in evts]
+    all_event_ids = [e.event_id for e in all_cred_events + exfil_events]
+
+    severity = Severity.CRITICAL if exfil_events else Severity.HIGH
+    category_names = sorted(cred_categories_seen.keys())
+
+    all_events_combined = all_cred_events + exfil_events
+    start_ts = min(e.timestamp for e in all_events_combined)
+    end_ts = max(e.timestamp for e in all_events_combined)
+
+    exfil_note = f" + {len(exfil_events)} exfil events" if exfil_events else ""
+
+    return Incident(
+        incident_id=f"cred_harvest_{device_id}_{int(start_ts.timestamp())}",
+        device_id=device_id,
+        severity=severity,
+        tactics=[MitreTactic.CREDENTIAL_ACCESS.value, MitreTactic.EXFILTRATION.value],
+        techniques=["T1555", "T1041"],
+        rule_name="credential_harvest_exfil",
+        summary=(
+            f"CREDENTIAL HARVESTING on {device_id}: {len(cred_categories_seen)} "
+            f"credential stores accessed ({', '.join(category_names)})"
+            f"{exfil_note}"
+        ),
+        event_ids=all_event_ids,
+        metadata={
+            "credential_categories": str(category_names),
+            "category_count": str(len(cred_categories_seen)),
+            "total_access_events": str(len(all_cred_events)),
+            "exfil_events": str(len(exfil_events)),
+        },
+        start_ts=start_ts,
+        end_ts=end_ts,
+    )
+
+
 # Rule registry - add new rules here
 ALL_RULES = [
     rule_ssh_brute_force,
@@ -695,6 +1267,13 @@ ALL_RULES = [
     rule_ssh_lateral_movement,
     rule_data_exfiltration_spike,
     rule_suspicious_process_tree,
+    rule_coordinated_reconnaissance,
+    rule_web_attack_chain,
+    # macOS Shield rules
+    rule_infostealer_kill_chain,
+    rule_clickfix_attack,
+    rule_download_execute_persist,
+    rule_credential_harvest_exfil,
 ]
 
 

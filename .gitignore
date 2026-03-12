@@ -164,6 +164,9 @@ activate_env.sh
 docs/_build/
 /site
 
+# ---- Red Team Exercise Data (SENSITIVE — real credentials & loot) ----
+docs/AMOSKYS Research/red_team_amos_killchain/
+
 # ---- Stale Root Files ----
 FRAMEWORK_SUMMARY.txt
 GIT_COMMIT_MESSAGE.txt

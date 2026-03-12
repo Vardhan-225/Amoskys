@@ -41,7 +41,10 @@ class WALProcessor:
     """Processes events from WAL to permanent storage"""
 
     _ALLOWED_EVENT_TYPES = frozenset(
-        {"METRIC", "LOG", "ALARM", "STATUS", "SECURITY", "AUDIT", "OBSERVATION"}
+        {
+            "METRIC", "LOG", "ALARM", "STATUS", "SECURITY", "AUDIT", "OBSERVATION",
+            "FLOW", "PROCESS", "DEVICE_TELEMETRY", "DEVICE_EVENT", "TELEMETRY_BATCH",
+        }
     )
     _ALLOWED_SEVERITY = frozenset(
         {"DEBUG", "INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL", "WARN", "ERROR"}

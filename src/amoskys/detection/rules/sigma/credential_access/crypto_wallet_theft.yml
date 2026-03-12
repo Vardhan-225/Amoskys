@@ -1,0 +1,33 @@
+title: Cryptocurrency Wallet File Theft
+id: amoskys-cred-012
+status: stable
+level: high
+description: >-
+  Detects non-wallet-application processes accessing cryptocurrency wallet
+  files (Exodus, Electrum, Atomic). macOS infostealers like AMOS specifically
+  target wallet data directories for seed phrases and private keys.
+author: AMOSKYS
+tags:
+    - attack.credential_access
+    - attack.t1005
+    - attack.collection
+references:
+    - https://attack.mitre.org/techniques/T1005/
+logsource:
+    category: file_access
+    product: amoskys
+detection:
+    selection:
+        event_type: crypto_wallet_theft
+        access_category|startswith: crypto_
+    condition: selection
+fields:
+    - process_name
+    - file_path
+    - access_category
+    - pid
+    - process_guid
+falsepositives:
+    - Wallet applications accessing their own data
+    - Time Machine and backup utilities
+confidence: 0.85

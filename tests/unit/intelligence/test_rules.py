@@ -784,8 +784,8 @@ class TestGetPersistenceTechniques:
 
 class TestEvaluateRules:
 
-    def test_registry_has_7_rules(self):
-        assert len(ALL_RULES) == 7
+    def test_registry_has_13_rules(self):
+        assert len(ALL_RULES) == 13
 
     def test_all_rules_in_registry(self):
         expected = [

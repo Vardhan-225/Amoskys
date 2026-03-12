@@ -804,7 +804,7 @@ class TestUniversalPublishTelemetry:
     def test_device_telemetry_accepted(self):
         env = tpb.UniversalEnvelope(idempotency_key="dev-tel")
         env.device_telemetry.device_id = "switch-01"
-        env.device_telemetry.device_type = "switch"
+        env.device_telemetry.device_type = "NETWORK"
         ack = self.servicer.PublishTelemetry(env, self.ctx)
         assert ack.status == tpb.UniversalAck.Status.OK
         assert ack.reason == "accepted"
@@ -825,11 +825,12 @@ class TestUniversalPublishTelemetry:
         ack = self.servicer.PublishTelemetry(env, self.ctx)
         assert ack.status == tpb.UniversalAck.Status.OK
 
-    # -- empty envelope (warning path) --
-    def test_empty_envelope_accepted(self):
+    # -- empty envelope (contract rejects — no payload_kind or event_type) --
+    def test_empty_envelope_rejected_by_contract(self):
         env = tpb.UniversalEnvelope(idempotency_key="empty-ev")
         ack = self.servicer.PublishTelemetry(env, self.ctx)
-        assert ack.status == tpb.UniversalAck.Status.OK
+        assert ack.status == tpb.UniversalAck.Status.INVALID
+        assert "Contract violation" in ack.reason
 
     # -- General exception --
     def test_exception_returns_processing_error(self):

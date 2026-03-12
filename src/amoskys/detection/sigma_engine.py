@@ -143,7 +143,10 @@ class SigmaEngine:
     callable matchers, and evaluates incoming events against all loaded rules.
     """
 
-    def __init__(self) -> None:
+    # Default rules directory relative to this file
+    _DEFAULT_RULES_DIR = str(Path(__file__).parent / "rules" / "sigma")
+
+    def __init__(self, rules_dir: Optional[str] = None, *, auto_load: bool = True) -> None:
         self._rules: Dict[str, SigmaRule] = {}  # rule_id → SigmaRule
         self._rules_by_category: Dict[str, List[SigmaRule]] = {}
         self._match_count: Dict[str, int] = {}  # rule_id → match count
@@ -151,6 +154,11 @@ class SigmaEngine:
 
         # Aggregation state for timeframe-based conditions
         self._agg_buffers: Dict[str, List[Dict[str, Any]]] = {}
+
+        if auto_load:
+            load_path = rules_dir or self._DEFAULT_RULES_DIR
+            if Path(load_path).is_dir():
+                self.load_rules(load_path)
 
     @property
     def rule_count(self) -> int:

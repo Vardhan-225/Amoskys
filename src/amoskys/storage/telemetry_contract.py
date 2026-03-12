@@ -30,6 +30,12 @@ _ALLOWED_EVENT_TYPES = {
     "SECURITY",
     "AUDIT",
     "OBSERVATION",
+    # Derived types from envelope payload kind (legacy + universal)
+    "FLOW",
+    "PROCESS",
+    "DEVICE_TELEMETRY",
+    "DEVICE_EVENT",
+    "TELEMETRY_BATCH",
 }
 _ALLOWED_SEVERITY = {
     "DEBUG",

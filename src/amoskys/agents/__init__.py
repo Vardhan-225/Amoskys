@@ -80,6 +80,9 @@ from amoskys.agents.os.macos.process.agent import MacOSProcessAgent
 from amoskys.agents.os.macos.security_monitor.security_monitor_agent import (
     MacOSSecurityMonitorAgent,
 )
+from amoskys.agents.os.macos.infostealer_guard.agent import MacOSInfostealerGuardAgent
+from amoskys.agents.os.macos.quarantine_guard.agent import MacOSQuarantineGuardAgent
+from amoskys.agents.os.macos.provenance.agent import MacOSProvenanceAgent
 from amoskys.agents.os.macos.unified_log.agent import MacOSUnifiedLogAgent
 from amoskys.agents.shared.applog.agent import AppLogAgent
 from amoskys.agents.shared.db_activity.agent import DBActivityAgent
@@ -145,6 +148,10 @@ __all__ = [
     "MacOSInternetActivityAgent",
     "MacOSDBActivityAgent",
     "MacOSHTTPInspectorAgent",
+    # macOS Shield Agents
+    "MacOSInfostealerGuardAgent",
+    "MacOSQuarantineGuardAgent",
+    "MacOSProvenanceAgent",
 ]
 
 # ── Agent Registry — single source of truth for dynamic discovery ──
@@ -373,6 +380,36 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "probes": 8,
         "category": "platform",
         "icon": "search",
+    },
+    # ── InfostealerGuard Observatory Agent (macOS kill chain detection) ──
+    "macos_infostealer_guard": {
+        "class": MacOSInfostealerGuardAgent,
+        "name": "macOS InfostealerGuard Observatory",
+        "description": "AMOS/Poseidon/Banshee kill chain — keychain, browser, wallet theft, fake dialogs, exfil",
+        "platforms": ["darwin"],
+        "probes": 10,
+        "category": "platform",
+        "icon": "shield-alert",
+    },
+    # ── QuarantineGuard Observatory Agent (download provenance, Gatekeeper bypass, ClickFix) ──
+    "macos_quarantine_guard": {
+        "class": MacOSQuarantineGuardAgent,
+        "name": "macOS QuarantineGuard Observatory",
+        "description": "Quarantine bypass, DMG delivery, ClickFix paste-and-run, Gatekeeper evasion",
+        "platforms": ["darwin"],
+        "probes": 8,
+        "category": "platform",
+        "icon": "shield-check",
+    },
+    # ── Provenance Observatory Agent (cross-application attack chain correlation) ──
+    "macos_provenance": {
+        "class": MacOSProvenanceAgent,
+        "name": "macOS Provenance Observatory",
+        "description": "Cross-application attack chain correlation — message, download, execute, exfiltrate kill chains",
+        "platforms": ["darwin"],
+        "probes": 8,
+        "category": "platform",
+        "icon": "git-merge",
     },
 }
 

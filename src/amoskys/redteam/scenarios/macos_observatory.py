@@ -764,20 +764,20 @@ _NSP_POS1_SSHD = AdversarialCase(
 
 _NSP_POS2_MYSQL = AdversarialCase(
     id="macos_nsp_mysqld_wrong_port",
-    title="mysqld listening on port 33060 — non-standard port",
+    title="mysqld listening on port 9306 — non-standard port",
     category="positive",
     description=(
-        "mysqld standard port is 3306. Listening on 33060 indicates "
+        "mysqld standard ports are 3306/33060. Listening on 9306 indicates "
         "a potentially rogue database or C2 listener masquerading as MySQL."
     ),
-    why="mysqld expected: {3306}. 33060 not in set → fires.",
+    why="mysqld expected: {3306, 33060}. 9306 not in set → fires.",
     events=[
         _conn(
             pid=600,
             process_name="mysqld",
             state="LISTEN",
-            local_port=33060,
-            local_addr="0.0.0.0:33060",
+            local_port=9306,
+            local_addr="0.0.0.0:9306",
         ),
     ],
     shared_data_key="connections",
