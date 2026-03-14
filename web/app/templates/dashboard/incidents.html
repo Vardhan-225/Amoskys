@@ -63,13 +63,20 @@
     </div>
 
     <!-- Filter Tabs -->
-    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;align-items:center;">
+    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;align-items:center;flex-wrap:wrap;">
         <button class="filter-btn active" data-status="">All</button>
         <button class="filter-btn" data-status="open">Open</button>
         <button class="filter-btn" data-status="investigating">Investigating</button>
         <button class="filter-btn" data-status="contained">Contained</button>
         <button class="filter-btn" data-status="resolved">Resolved</button>
-        <div style="margin-left:auto;font-size:0.75rem;">
+        <div style="margin-left:auto;display:flex;gap:0.75rem;align-items:center;font-size:0.75rem;">
+            <label style="color:var(--text-muted);">Per page</label>
+            <select id="per-page-select" class="form-input" style="width:auto;padding:0.35rem 0.5rem;">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
             <label style="color:var(--text-muted);cursor:pointer;"><input type="checkbox" id="select-all-cb" style="margin-right:0.3rem;">Select All</label>
         </div>
     </div>
@@ -77,6 +84,18 @@
     <!-- Incidents List -->
     <div id="incidents-list">
         <div style="color: var(--text-muted); text-align: center; padding: 2rem;">Loading incidents...</div>
+    </div>
+
+    <!-- Pagination -->
+    <div id="incidents-pagination" class="incidents-pagination" style="display:none;">
+        <span class="incidents-page-info" id="incidents-page-info"></span>
+        <div class="incidents-page-btns">
+            <button class="incidents-page-btn" id="incidents-first-btn" title="First page">&laquo;</button>
+            <button class="incidents-page-btn" id="incidents-prev-btn">&lsaquo; Prev</button>
+            <span id="incidents-page-nums"></span>
+            <button class="incidents-page-btn" id="incidents-next-btn">Next &rsaquo;</button>
+            <button class="incidents-page-btn" id="incidents-last-btn" title="Last page">&raquo;</button>
+        </div>
     </div>
 
     <!-- Create Incident Modal -->
@@ -242,6 +261,61 @@
     font-size: 0.85rem;
     font-weight: 700;
 }
+.incidents-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    padding: 0.75rem 0;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+.incidents-page-info {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+.incidents-page-btns {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.incidents-page-btn {
+    padding: 0.4rem 0.65rem;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+.incidents-page-btn:hover:not(:disabled) {
+    background: rgba(0,217,255,0.15);
+    border-color: var(--neural-primary);
+    color: var(--neural-primary);
+}
+.incidents-page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+.incidents-page-num {
+    padding: 0.35rem 0.6rem;
+    min-width: 2rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    text-align: center;
+}
+.incidents-page-num:hover { background: rgba(0,217,255,0.2); color: var(--neural-primary); }
+.incidents-page-num.active {
+    background: rgba(0,217,255,0.25);
+    border-color: var(--neural-primary);
+    color: #fff;
+}
 </style>
 
 {% endblock %}
@@ -252,47 +326,87 @@ var currentFilter = '';
 var allIncidents = [];
 var selectedIds = new Set();
 var SLA_HOURS = {critical: 4, high: 8, medium: 24, low: 72};
+var currentPage = 1;
+var perPage = 20;
+var totalIncidents = 0;
+var totalPages = 1;
+var statusCounts = {};
+var severityCounts = {critical:0, high:0, medium:0, low:0};
 
-async function loadIncidents(statusFilter) {
-    var url = '/dashboard/api/incidents';
-    if (statusFilter) url += '?status=' + statusFilter;
+async function loadIncidents(statusFilter, page) {
+    if (page === undefined) page = currentPage;
+    currentPage = page;
+    currentFilter = statusFilter;
+    var url = '/dashboard/api/incidents?page=' + page + '&per_page=' + perPage;
+    if (statusFilter) url += '&status=' + encodeURIComponent(statusFilter);
 
     try {
         var resp = await fetch(url);
         var data = await resp.json();
         if (data.status !== 'success') return;
 
-        // Always fetch all for counts
-        var allResp = await fetch('/dashboard/api/incidents');
-        var allData = await allResp.json();
-        allIncidents = allData.incidents || [];
+        var incidents = data.incidents || [];
+        totalIncidents = data.total || 0;
+        totalPages = Math.max(1, data.total_pages || 1);
+        statusCounts = data.status_counts || {};
+        allIncidents = incidents;
 
-        var counts = {open:0, investigating:0, contained:0, resolved:0, closed:0};
-        var sevCounts = {critical:0, high:0, medium:0, low:0};
-        for (var i = 0; i < allIncidents.length; i++) {
-            var inc = allIncidents[i];
-            counts[inc.status] = (counts[inc.status] || 0) + 1;
-            sevCounts[inc.severity] = (sevCounts[inc.severity] || 0) + 1;
-        }
+        document.getElementById('open-count').textContent = statusCounts.open || 0;
+        document.getElementById('investigating-count').textContent = statusCounts.investigating || 0;
+        document.getElementById('contained-count').textContent = statusCounts.contained || 0;
+        document.getElementById('resolved-count').textContent = (statusCounts.resolved || 0) + (statusCounts.closed || 0);
 
-        document.getElementById('open-count').textContent = counts.open || 0;
-        document.getElementById('investigating-count').textContent = counts.investigating || 0;
-        document.getElementById('contained-count').textContent = counts.contained || 0;
-        document.getElementById('resolved-count').textContent = (counts.resolved || 0) + (counts.closed || 0);
+        severityCounts = data.severity_counts || {critical:0, high:0, medium:0, low:0};
+        renderSeverityChart(severityCounts);
 
-        // Charts
-        renderSeverityChart(sevCounts);
-        var openTotal = (counts.open || 0) + (counts.investigating || 0) + (counts.contained || 0);
-        var resolvedTotal = (counts.resolved || 0) + (counts.closed || 0);
+        var openTotal = (statusCounts.open || 0) + (statusCounts.investigating || 0) + (statusCounts.contained || 0);
+        var resolvedTotal = (statusCounts.resolved || 0) + (statusCounts.closed || 0);
         document.getElementById('chart-open').textContent = openTotal;
         document.getElementById('chart-resolved').textContent = resolvedTotal;
 
         selectedIds.clear();
         updateBulkButton();
-        renderIncidents(data.incidents || []);
+        renderIncidents(incidents);
+        renderPagination();
     } catch (err) {
         document.getElementById('incidents-list').innerHTML = '<div style="color:#ff3366;padding:1rem;">Failed to load: ' + err.message + '</div>';
+        document.getElementById('incidents-pagination').style.display = 'none';
     }
+}
+
+function renderPagination() {
+    var el = document.getElementById('incidents-pagination');
+    if (totalPages <= 1 && totalIncidents <= perPage) {
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = 'flex';
+    var start = totalIncidents === 0 ? 0 : (currentPage - 1) * perPage + 1;
+    var end = Math.min(currentPage * perPage, totalIncidents);
+    document.getElementById('incidents-page-info').textContent =
+        'Showing ' + start + '–' + end + ' of ' + totalIncidents;
+
+    document.getElementById('incidents-first-btn').disabled = currentPage <= 1;
+    document.getElementById('incidents-prev-btn').disabled = currentPage <= 1;
+    document.getElementById('incidents-next-btn').disabled = currentPage >= totalPages;
+    document.getElementById('incidents-last-btn').disabled = currentPage >= totalPages;
+
+    var numsEl = document.getElementById('incidents-page-nums');
+    var pages = [];
+    var p = currentPage, tp = totalPages;
+    if (tp <= 7) {
+        for (var i = 1; i <= tp; i++) pages.push(i);
+    } else {
+        pages.push(1);
+        if (p > 3) pages.push('...');
+        for (var i = Math.max(2, p - 1); i <= Math.min(tp - 1, p + 1); i++) pages.push(i);
+        if (p < tp - 2) pages.push('...');
+        if (tp > 1) pages.push(tp);
+    }
+    numsEl.innerHTML = pages.map(function(v) {
+        if (v === '...') return '<span style="padding:0 0.35rem;color:var(--text-muted);">&hellip;</span>';
+        return '<button type="button" class="incidents-page-num' + (v === p ? ' active' : '') + '" data-page="' + v + '">' + v + '</button>';
+    }).join('');
 }
 
 function renderSeverityChart(counts) {
@@ -379,7 +493,7 @@ function filterIncidents(btn, status) {
     currentFilter = status;
     document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
-    loadIncidents(status);
+    loadIncidents(status, 1);
 }
 
 function toggleSelect(id, checked) {
@@ -389,13 +503,12 @@ function toggleSelect(id, checked) {
 
 function toggleSelectAll() {
     var checked = document.getElementById('select-all-cb').checked;
-    var visible = currentFilter ? allIncidents.filter(function(inc) { return inc.status === currentFilter; }) : allIncidents;
     if (checked) {
-        for (var i = 0; i < visible.length; i++) { selectedIds.add(visible[i].id); }
+        for (var i = 0; i < allIncidents.length; i++) { selectedIds.add(allIncidents[i].id); }
     } else {
         selectedIds.clear();
     }
-    renderIncidents(visible);
+    renderIncidents(allIncidents);
     updateBulkButton();
 }
 
@@ -405,11 +518,15 @@ function updateBulkButton() {
 }
 
 function exportIncidents() {
-    if (!allIncidents || allIncidents.length === 0) { alert('No incidents to export'); return; }
+    var toExport = allIncidents || [];
+    if (toExport.length === 0) {
+        alert('No incidents on this page to export. Use filters and pagination to view incidents, or export the full list by loading all pages.');
+        return;
+    }
     var headers = ['id','title','severity','status','assignee','created_at','description'];
     var csvLines = [headers.join(',')];
-    for (var i = 0; i < allIncidents.length; i++) {
-        var inc = allIncidents[i];
+    for (var i = 0; i < toExport.length; i++) {
+        var inc = toExport[i];
         var vals = headers.map(function(h) {
             var v = inc[h];
             if (v === null || v === undefined) v = '';
@@ -599,7 +716,29 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btn) updateIncident(parseInt(btn.getAttribute('data-update-incident')));
     });
 
-    loadIncidents('');
+    document.getElementById('per-page-select').addEventListener('change', function() {
+        perPage = parseInt(this.value, 10);
+        loadIncidents(currentFilter, 1);
+    });
+
+    document.getElementById('incidents-first-btn').addEventListener('click', function() {
+        if (!this.disabled) loadIncidents(currentFilter, 1);
+    });
+    document.getElementById('incidents-prev-btn').addEventListener('click', function() {
+        if (!this.disabled) loadIncidents(currentFilter, currentPage - 1);
+    });
+    document.getElementById('incidents-next-btn').addEventListener('click', function() {
+        if (!this.disabled) loadIncidents(currentFilter, currentPage + 1);
+    });
+    document.getElementById('incidents-last-btn').addEventListener('click', function() {
+        if (!this.disabled) loadIncidents(currentFilter, totalPages);
+    });
+    document.getElementById('incidents-pagination').addEventListener('click', function(e) {
+        var btn = e.target.closest('.incidents-page-num[data-page]');
+        if (btn) loadIncidents(currentFilter, parseInt(btn.getAttribute('data-page'), 10));
+    });
+
+    loadIncidents('', 1);
 });
 </script>
 {% endblock %}

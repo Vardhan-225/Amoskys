@@ -141,9 +141,12 @@
         <div class="cc-card cc-card-incidents">
             <div class="cc-card-hdr">
                 <h3>Open Incidents</h3>
-                <a href="/dashboard/incidents" class="cc-link">View All</a>
+                <div style="display:flex;gap:0.5rem;align-items:center;">
+                    <span class="cc-incidents-total" id="incidents-total-label" style="display:none;font-size:0.75rem;color:var(--text-muted);"></span>
+                    <a href="/dashboard/incidents" class="cc-link">View All &rarr;</a>
+                </div>
             </div>
-            <div id="incidents-list">
+            <div class="cc-incidents-list-wrap" id="incidents-list">
                 <div class="cc-loading">Loading incidents...</div>
             </div>
         </div>
@@ -422,6 +425,9 @@
 .threat-feed { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; }
 .threat-feed::-webkit-scrollbar { width: 4px; }
 .threat-feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.cc-incidents-list-wrap { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; }
+.cc-incidents-list-wrap::-webkit-scrollbar { width: 4px; }
+.cc-incidents-list-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 .tf-item {
     display: flex; gap: 0.6rem; padding: 0.55rem 0.7rem; border-radius: 8px;
     background: rgba(255,255,255,0.02); border-left: 3px solid #00ff88;
@@ -1520,11 +1526,20 @@ class CortexCommandCenter {
     /* ── 7. Recent Incidents ── */
     async fetchIncidents() {
         try {
-            const r = await fetch('/dashboard/api/incidents');
+            const r = await fetch('/dashboard/api/incidents?page=1&per_page=50');
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const d = await r.json();
+            const statusCounts = d.status_counts || {};
+            const totalOpen = (statusCounts.open || 0) + (statusCounts.investigating || 0);
             const list = (d.incidents || []).filter(i => i.status === 'open' || i.status === 'investigating').slice(0, 5);
             const container = document.getElementById('incidents-list');
+            const totalLabel = document.getElementById('incidents-total-label');
+            if (totalOpen > 5 && totalLabel) {
+                totalLabel.style.display = '';
+                totalLabel.textContent = 'Showing 5 of ' + totalOpen;
+            } else if (totalLabel) {
+                totalLabel.style.display = 'none';
+            }
             if (list.length === 0) { container.innerHTML = '<div class="cc-empty"><div class="cc-empty-msg">No open incidents</div></div>'; return; }
             container.innerHTML = list.map(inc => {
                 const sev = (inc.severity || 'low').toLowerCase();

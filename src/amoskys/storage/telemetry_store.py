@@ -3373,25 +3373,68 @@ class TelemetryStore:
             return False
 
     def get_incidents(
-        self, status: Optional[str] = None, limit: int = 50
+        self,
+        status: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> List[Dict[str, Any]]:
-        """Get incidents with optional status filter."""
+        """Get incidents with optional status filter and pagination."""
         with self._lock:
             try:
                 if status:
                     cursor = self.db.execute(
-                        "SELECT * FROM incidents WHERE status = ? ORDER BY created_at DESC LIMIT ?",
-                        (status, limit),
+                        "SELECT * FROM incidents WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                        (status, limit, offset),
                     )
                 else:
                     cursor = self.db.execute(
-                        "SELECT * FROM incidents ORDER BY created_at DESC LIMIT ?",
-                        (limit,),
+                        "SELECT * FROM incidents ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                        (limit, offset),
                     )
                 return [dict(r) for r in cursor.fetchall()]
             except sqlite3.Error as e:
                 logger.error("Failed to get incidents: %s", e)
                 return []
+
+    def get_incidents_count(self, status: Optional[str] = None) -> int:
+        """Get total count of incidents, optionally filtered by status."""
+        with self._lock:
+            try:
+                if status:
+                    row = self.db.execute(
+                        "SELECT COUNT(*) FROM incidents WHERE status = ?",
+                        (status,),
+                    ).fetchone()
+                else:
+                    row = self.db.execute("SELECT COUNT(*) FROM incidents").fetchone()
+                return int(row[0]) if row else 0
+            except sqlite3.Error as e:
+                logger.error("Failed to get incidents count: %s", e)
+                return 0
+
+    def get_incidents_status_counts(self) -> Dict[str, int]:
+        """Get counts per status for incident summary cards."""
+        with self._lock:
+            try:
+                cursor = self.db.execute(
+                    "SELECT status, COUNT(*) FROM incidents GROUP BY status"
+                )
+                return {row[0]: row[1] for row in cursor.fetchall()}
+            except sqlite3.Error as e:
+                logger.error("Failed to get incidents status counts: %s", e)
+                return {}
+
+    def get_incidents_severity_counts(self) -> Dict[str, int]:
+        """Get counts per severity for incident charts (all incidents)."""
+        with self._lock:
+            try:
+                cursor = self.db.execute(
+                    "SELECT severity, COUNT(*) FROM incidents GROUP BY severity"
+                )
+                return {row[0]: row[1] for row in cursor.fetchall()}
+            except sqlite3.Error as e:
+                logger.error("Failed to get incidents severity counts: %s", e)
+                return {}
 
     def get_incident(self, incident_id: int) -> Optional[Dict[str, Any]]:
         """Get a single incident by ID."""

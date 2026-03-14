@@ -2390,20 +2390,56 @@ def hunt_search():
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
 def list_incidents():
-    """List security incidents."""
+    """List security incidents with optional pagination and status filter."""
     from .telemetry_bridge import get_telemetry_store
 
     store = get_telemetry_store()
     if store is None:
-        return jsonify({"status": "success", "incidents": [], "count": 0})
+        return jsonify({
+            "status": "success",
+            "incidents": [],
+            "count": 0,
+            "total": 0,
+            "page": 1,
+            "per_page": 20,
+            "total_pages": 0,
+            "status_counts": {},
+            "severity_counts": {},
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
-    status_filter = request.args.get("status")
-    incidents = store.get_incidents(status=status_filter)
+    status_filter = request.args.get("status") or None
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
+    try:
+        per_page = min(max(1, int(request.args.get("per_page", 20))), 100)
+    except (ValueError, TypeError):
+        per_page = 20
+
+    total = store.get_incidents_count(status=status_filter)
+    total_pages = max(1, (total + per_page - 1) // per_page) if total else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+
+    incidents = store.get_incidents(
+        status=status_filter, limit=per_page, offset=offset
+    )
+    status_counts = store.get_incidents_status_counts()
+    severity_counts = store.get_incidents_severity_counts()
+
     return jsonify(
         {
             "status": "success",
             "incidents": incidents,
             "count": len(incidents),
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+            "status_counts": status_counts,
+            "severity_counts": severity_counts,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )

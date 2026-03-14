@@ -321,6 +321,13 @@ class FusionEngine:
         drift_incidents = self._emit_drift_alerts(device_id)
         incidents.extend(drift_incidents)
 
+        # Fallback: when we have security detections but no rule fired, create a
+        # single "High-risk detections" incident so real detections surface on the dashboard
+        if not incidents:
+            fallback = self._create_high_risk_fallback_incident(device_id, sorted_events)
+            if fallback is not None:
+                incidents.append(fallback)
+
         # Update device risk score (now reliability-weighted)
         risk_snapshot = self._calculate_device_risk(
             device_id, events, incidents, weights
@@ -683,6 +690,103 @@ class FusionEngine:
             logger.error(
                 f"Failed to persist risk snapshot for {snapshot.device_id}: {e}"
             )
+
+    def _create_high_risk_fallback_incident(
+        self, device_id: str, sorted_events: List[TelemetryEventView]
+    ) -> Optional[Incident]:
+        """Create a single incident when security detections exist but no rule fired.
+
+        Ensures real detections (e.g. from infostealer_guard, DNS, kernel) surface
+        on the dashboard even when they don't match SSH/persistence/flow patterns.
+
+        Dedup: incident_id is a hash of sorted event IDs, so the same set of
+        detections always produces the same incident — no duplicates across runs.
+        Threshold: requires at least 2 events or 1 event with risk >= 0.5.
+        """
+        candidates = self._collect_fallback_candidates(sorted_events)
+        if not candidates:
+            return None
+
+        event_ids = sorted(e.event_id for e, _ in candidates)
+        max_risk = max(r for _, r in candidates)
+
+        # Require at least 2 detections, or 1 with meaningful risk
+        if len(candidates) < 2 and max_risk < 0.5:
+            return None
+
+        severity = (
+            Severity.CRITICAL
+            if max_risk >= 0.75
+            else (Severity.HIGH if max_risk >= 0.5 else Severity.MEDIUM)
+        )
+        timestamps = [e.timestamp for e, _ in candidates]
+        start_ts = min(timestamps)
+        end_ts = max(timestamps)
+
+        categories = []
+        for e, _ in candidates:
+            cat = (e.security_event or {}).get("event_category") or e.event_type
+            if cat and cat not in categories:
+                categories.append(cat)
+
+        summary = (
+            f"{len(candidates)} high-risk security detection(s) on {device_id}"
+            f" (categories: {', '.join(categories[:5])}{'...' if len(categories) > 5 else ''})"
+        )
+
+        # Stable ID: hash of sorted event IDs so same detections = same incident
+        import hashlib
+
+        id_hash = hashlib.sha256(
+            "|".join(event_ids).encode()
+        ).hexdigest()[:16]
+        incident_id = f"high_risk_{device_id}_{id_hash}"
+
+        incident = Incident(
+            incident_id=incident_id,
+            device_id=device_id,
+            severity=severity,
+            tactics=[],
+            techniques=[],
+            rule_name="high_risk_detections",
+            summary=summary[:500],
+            start_ts=start_ts,
+            end_ts=end_ts,
+            event_ids=event_ids,
+            metadata={"event_count": str(len(candidates)), "max_risk_score": f"{max_risk:.2f}"},
+        )
+        logger.info(
+            "Fallback incident created: %s (%d events, max_risk=%.2f)",
+            incident.incident_id,
+            len(candidates),
+            max_risk,
+        )
+        return incident
+
+    @staticmethod
+    def _collect_fallback_candidates(
+        sorted_events: List[TelemetryEventView],
+    ) -> List[tuple]:
+        """Collect SECURITY events eligible for the fallback incident.
+
+        Prefers events with risk >= 0.3 or requires_investigation.  Falls back to
+        all SECURITY events only when none meet that bar (so benign low-risk
+        observations don't create noise).
+        """
+        noteworthy = []
+        all_security = []
+        for e in sorted_events:
+            if e.event_type != "SECURITY" or not e.security_event:
+                continue
+            se = e.security_event
+            try:
+                risk = float(se.get("risk_score") or 0)
+            except (TypeError, ValueError):
+                risk = 0.0
+            all_security.append((e, risk))
+            if risk >= 0.3 or bool(se.get("requires_investigation", False)):
+                noteworthy.append((e, risk))
+        return noteworthy if noteworthy else all_security
 
     def _detect_sequence_incidents(
         self, device_id: str, sorted_events: List[TelemetryEventView]
