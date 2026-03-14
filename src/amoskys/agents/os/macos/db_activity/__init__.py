@@ -14,7 +14,7 @@ Probes:
     - Unauthorized database access (unusual user/connection)
     - Exfiltration via database (INTO OUTFILE, COPY TO, exports)
 
-Coverage: T1005, T1087, T1078, T1190, T1555, T1485, T1078.004, T1048
+Coverage: T1005, T1087, T1078, T1190, T1555, T1485, T1078.003, T1048
 """
 
 from amoskys.agents.os.macos.db_activity.agent import MacOSDBActivityAgent

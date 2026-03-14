@@ -6,6 +6,7 @@ These tests verify the web dashboard can be initialized and basic endpoints work
 Used for VPS deployment smoke testing.
 """
 import os
+import sqlite3
 import sys
 
 import pytest
@@ -87,6 +88,94 @@ class TestThreatEndpoints:
         data = response.get_json()
         assert data["status"] == "success"
         assert "clusters" in data
+
+    def test_correlate_unwraps_double_encoded_indicators(self, client, monkeypatch):
+        """GET /dashboard/api/correlate handles double-encoded indicators JSON."""
+        import json
+
+        from app.dashboard import telemetry_bridge
+
+        db = sqlite3.connect(":memory:")
+        db.execute(
+            """CREATE TABLE security_events (
+                id INTEGER PRIMARY KEY,
+                timestamp_ns INTEGER,
+                timestamp_dt TEXT,
+                device_id TEXT,
+                event_category TEXT,
+                event_action TEXT,
+                risk_score REAL,
+                confidence REAL,
+                description TEXT,
+                mitre_techniques TEXT,
+                final_classification TEXT,
+                indicators TEXT,
+                requires_investigation INTEGER
+            )"""
+        )
+
+        encoded_indicators = json.dumps(
+            json.dumps(
+                {
+                    "source_ip": "192.168.1.100",
+                    "agent": "flowagent-001",
+                    "dst_ip": "10.0.0.1",
+                }
+            )
+        )
+        rows = [
+            (
+                37,
+                1_700_000_000_000_000_000,
+                "2026-03-14T09:28:44.143938+00:00",
+                "flowagent-001",
+                "network_anomaly",
+                "detected",
+                0.35,
+                0.8,
+                "Earlier anomaly",
+                "[]",
+                "suspicious",
+                encoded_indicators,
+                1,
+            ),
+            (
+                38,
+                1_700_000_000_500_000_000,
+                "2026-03-14T09:28:44.207876+00:00",
+                "flowagent-001",
+                "network_anomaly",
+                "detected",
+                0.35,
+                0.8,
+                "Seed anomaly",
+                "[]",
+                "suspicious",
+                encoded_indicators,
+                1,
+            ),
+        ]
+        db.executemany(
+            "INSERT INTO security_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+
+        class FakeStore:
+            def __init__(self, conn):
+                self.db = conn
+
+        monkeypatch.setattr(
+            telemetry_bridge, "get_telemetry_store", lambda: FakeStore(db)
+        )
+
+        response = client.get("/dashboard/api/correlate?event_id=38&window_minutes=60")
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["status"] == "success"
+        assert data["seed_event"]["indicators"]["source_ip"] == "192.168.1.100"
+        assert data["total_correlated"] == 1
+        assert data["correlated_events"][0]["id"] == 37
 
 
 class TestProbeHealthEndpoint:

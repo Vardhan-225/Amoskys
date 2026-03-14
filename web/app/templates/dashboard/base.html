@@ -1461,7 +1461,7 @@
                     detail: data
                 }));
                 // Dispatch granular events per data category so pages can subscribe
-                var categories = ['threats', 'agents', 'metrics', 'threat_score', 'events', 'neural'];
+                var categories = ['threats', 'agents', 'metrics', 'threat_score', 'events', 'neural', 'posture', 'signals'];
                 for (var i = 0; i < categories.length; i++) {
                     var key = categories[i];
                     if (data[key]) {

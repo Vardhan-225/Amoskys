@@ -83,61 +83,98 @@ def main():
 
     agents = []
 
-    # ProcAgentV3
+    # macOS Observatory core agents
     try:
-        from amoskys.agents.proc.proc_agent import ProcAgent
+        from amoskys.agents.os.macos.process.agent import MacOSProcessAgent
 
-        agents.append(("ProcAgent", ProcAgent, {}))
+        agents.append(("MacOSProcess", MacOSProcessAgent, {}))
     except ImportError as e:
-        logger.warning("Cannot import ProcAgent: %s", e)
+        logger.warning("Cannot import MacOSProcessAgent: %s", e)
 
-    # FlowAgentV2
     try:
-        from amoskys.agents.flow.flow_agent import FlowAgent
+        from amoskys.agents.os.macos.network.agent import MacOSNetworkAgent
 
-        agents.append(("FlowAgent", FlowAgent, {}))
+        agents.append(("MacOSNetwork", MacOSNetworkAgent, {}))
     except ImportError as e:
-        logger.warning("Cannot import FlowAgent: %s", e)
+        logger.warning("Cannot import MacOSNetworkAgent: %s", e)
 
-    # DNSAgentV2
     try:
-        from amoskys.agents.dns.dns_agent import DNSAgent
+        from amoskys.agents.os.macos.dns.agent import MacOSDNSAgent
 
-        agents.append(("DNSAgent", DNSAgent, {}))
+        agents.append(("MacOSDNS", MacOSDNSAgent, {}))
     except ImportError as e:
-        logger.warning("Cannot import DNSAgent: %s", e)
+        logger.warning("Cannot import MacOSDNSAgent: %s", e)
 
-    # AuthGuardAgentV2
     try:
-        from amoskys.agents.auth.auth_guard_agent import AuthGuardAgent
+        from amoskys.agents.os.macos.auth.agent import MacOSAuthAgent
 
-        agents.append(("AuthGuardAgent", AuthGuardAgent, {}))
+        agents.append(("MacOSAuth", MacOSAuthAgent, {}))
     except ImportError as e:
-        logger.warning("Cannot import AuthGuardAgent: %s", e)
+        logger.warning("Cannot import MacOSAuthAgent: %s", e)
 
-    # FIMAgentV2
     try:
-        from amoskys.agents.fim.fim_agent import FIMAgent
+        from amoskys.agents.os.macos.filesystem.agent import MacOSFileAgent
 
-        agents.append(("FIMAgent", FIMAgent, {}))
+        agents.append(("MacOSFilesystem", MacOSFileAgent, {}))
     except ImportError as e:
-        logger.warning("Cannot import FIMAgent: %s", e)
+        logger.warning("Cannot import MacOSFilesystemAgent: %s", e)
 
-    # PersistenceGuardV2
     try:
-        from amoskys.agents.persistence.persistence_agent import PersistenceGuard
+        from amoskys.agents.os.macos.persistence.agent import MacOSPersistenceAgent
 
-        agents.append(("PersistenceGuard", PersistenceGuard, {}))
+        agents.append(("MacOSPersistence", MacOSPersistenceAgent, {}))
     except ImportError as e:
-        logger.warning("Cannot import PersistenceGuard: %s", e)
+        logger.warning("Cannot import MacOSPersistenceAgent: %s", e)
 
-    # PeripheralAgentV2
     try:
-        from amoskys.agents.peripheral.peripheral_agent import PeripheralAgent
+        from amoskys.agents.os.macos.peripheral.agent import MacOSPeripheralAgent
 
-        agents.append(("PeripheralAgent", PeripheralAgent, {}))
+        agents.append(("MacOSPeripheral", MacOSPeripheralAgent, {}))
     except ImportError as e:
-        logger.warning("Cannot import PeripheralAgent: %s", e)
+        logger.warning("Cannot import MacOSPeripheralAgent: %s", e)
+
+    # Extended Observatory agents
+    try:
+        from amoskys.agents.os.macos.unified_log.agent import MacOSUnifiedLogAgent
+
+        agents.append(("UnifiedLog", MacOSUnifiedLogAgent, {}))
+    except ImportError as e:
+        logger.warning("Cannot import UnifiedLog: %s", e)
+
+    try:
+        from amoskys.agents.os.macos.applog.agent import MacOSAppLogAgent
+
+        agents.append(("AppLog", MacOSAppLogAgent, {}))
+    except ImportError as e:
+        logger.warning("Cannot import AppLog: %s", e)
+
+    try:
+        from amoskys.agents.os.macos.discovery.agent import MacOSDiscoveryAgent
+
+        agents.append(("Discovery", MacOSDiscoveryAgent, {}))
+    except ImportError as e:
+        logger.warning("Cannot import Discovery: %s", e)
+
+    try:
+        from amoskys.agents.os.macos.internet_activity.agent import MacOSInternetActivityAgent
+
+        agents.append(("InternetActivity", MacOSInternetActivityAgent, {}))
+    except ImportError as e:
+        logger.warning("Cannot import InternetActivity: %s", e)
+
+    try:
+        from amoskys.agents.os.macos.db_activity.agent import MacOSDBActivityAgent
+
+        agents.append(("DBActivity", MacOSDBActivityAgent, {}))
+    except ImportError as e:
+        logger.warning("Cannot import DBActivity: %s", e)
+
+    try:
+        from amoskys.agents.os.macos.http_inspector.agent import MacOSHTTPInspectorAgent
+
+        agents.append(("HTTPInspector", MacOSHTTPInspectorAgent, {}))
+    except ImportError as e:
+        logger.warning("Cannot import HTTPInspector: %s", e)
 
     # NetworkSentinel — HTTP access log analysis, scan detection
     try:

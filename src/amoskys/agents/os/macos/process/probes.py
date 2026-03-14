@@ -419,13 +419,15 @@ class DylibInjectionProbe(MicroProbe):
     Constraint: environ is only available for own-user processes.
     Root-level injection into system processes is INVISIBLE from uid=501.
 
-    MITRE: T1055.001 (Process Injection: Dynamic-link Library Injection)
+    MITRE: T1574.004 (Hijack Execution Flow: Dylib Hijacking)
+    Note: T1055.001 (DLL Injection) is Windows-only. macOS dylib injection
+    maps to T1574.004 (Dylib Hijacking) and T1574.006 (Dynamic Linker Hijacking).
     """
 
     name = "macos_dylib_injection"
     description = "Detects DYLD_INSERT_LIBRARIES injection on macOS"
     platforms = ["darwin"]
-    mitre_techniques = ["T1055.001", "T1574.004"]
+    mitre_techniques = ["T1574.004", "T1574.006"]
     mitre_tactics = ["privilege_escalation", "defense_evasion"]
     scan_interval = 10.0
     requires_fields = ["processes"]

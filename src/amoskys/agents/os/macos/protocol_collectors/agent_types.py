@@ -31,7 +31,7 @@ class ThreatCategory(str, Enum):
     SSH_BRUTE_FORCE = "ssh_brute_force"  # T1110, T1021.004
     DNS_TUNNELING = "dns_tunneling"  # T1048.003
     SQL_INJECTION = "sql_injection"  # T1190
-    RDP_SUSPICIOUS = "rdp_suspicious"  # T1021.001
+    RDP_SUSPICIOUS = "rdp_suspicious"  # T1021.005 (VNC on macOS)
     FTP_CLEARTEXT = "ftp_cleartext"  # T1552.001
     SMTP_SPAM_PHISH = "smtp_spam_phish"  # T1566.001
     IRC_P2P_C2 = "irc_p2p_c2"  # T1071.001

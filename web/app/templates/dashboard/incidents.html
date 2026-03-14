@@ -347,6 +347,7 @@ function renderIncidents(incidents) {
             + ' &middot; ' + created
             + '</div></div>'
             + '<div style="display:flex;gap:0.5rem;align-items:center;">'
+            + '<a href="/dashboard/timeline-replay?incident_id=' + inc.id + '" title="Timeline Replay" style="color:#00d9ff;font-size:1.1rem;text-decoration:none;padding:0.2rem;" onclick="event.stopPropagation();">&#9654;</a>'
             + '<span class="status-pill" style="background:' + statColor + '22;color:' + statColor + ';border:1px solid ' + statColor + '55;">' + inc.status + '</span>'
             + '<span class="status-pill" style="background:' + sevColor + '22;color:' + sevColor + ';border:1px solid ' + sevColor + '55;">' + inc.severity + '</span>'
             + '</div></div>';
@@ -522,7 +523,10 @@ async function showIncident(id) {
             + '<div><label class="form-label" for="update-status">Update Status</label><select id="update-status" class="form-input">' + statusSelect + '</select></div>'
             + '<div><label class="form-label" for="update-notes">Resolution Notes</label><input type="text" id="update-notes" class="form-input" placeholder="Add notes..." value="' + escapeHtml(inc.resolution_notes || '') + '"></div>'
             + '</div>'
+            + '<div style="display:flex;gap:0.75rem;align-items:center;">'
             + '<button data-update-incident="' + inc.id + '" class="neural-button" style="padding:0.5rem 1.5rem;cursor:pointer;">Update Incident</button>'
+            + '<a href="/dashboard/timeline-replay?incident_id=' + inc.id + '" class="neural-button" style="padding:0.5rem 1.5rem;text-decoration:none;display:inline-flex;align-items:center;gap:0.4rem;background:rgba(0,217,255,0.1);border-color:rgba(0,217,255,0.4);color:#00d9ff;cursor:pointer;">&#9654; Timeline Replay</a>'
+            + '</div>'
             + (inc.resolved_at ? '<div style="margin-top:1rem;font-size:0.85rem;color:#00ff88;">Resolved at: ' + escapeHtml(inc.resolved_at) + '</div>' : '');
         document.getElementById('detail-modal').style.display = 'flex';
     } catch (err) {

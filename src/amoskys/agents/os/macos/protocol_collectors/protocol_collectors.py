@@ -9,7 +9,7 @@ Each probe focuses on a specific protocol-level threat vector:
     3. SSHBruteForceProbe - SSH brute force (T1110, T1021.004)
     4. DNSTunnelingProbe - DNS exfiltration (T1048.003)
     5. SQLInjectionProbe - SQL injection (T1190)
-    6. RDPSuspiciousProbe - RDP suspicious activity (T1021.001)
+    6. RDPSuspiciousProbe - Remote desktop suspicious activity (T1021.005)
     7. FTPCleartextCredsProbe - FTP credential exposure (T1552.001)
     8. SMTPSpamPhishProbe - SMTP spam/phishing (T1566.001)
     9. IRCP2PC2Probe - IRC/P2P C2 (T1071.001)

@@ -85,8 +85,12 @@ def start_agent(agent_id: str) -> Dict[str, Any]:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-    # Check if already running
-    existing = find_process_by_pattern(agent_config["process_patterns"][0])
+    # Check if already running (try all patterns)
+    existing = None
+    for _pat in agent_config["process_patterns"]:
+        existing = find_process_by_pattern(_pat)
+        if existing:
+            break
     if existing:
         return {
             "status": "already_running",
@@ -117,11 +121,23 @@ def start_agent(agent_id: str) -> Dict[str, Any]:
         log_out = open(log_dir / f"{agent_id}.log", "a")
         log_err = open(log_dir / f"{agent_id}.err.log", "a")
 
+        # Build environment with PYTHONPATH so subprocesses find amoskys.*
+        env = os.environ.copy()
+        src_dir = str(repo_root / "src")
+        web_dir = str(repo_root / "web")
+        existing = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = os.pathsep.join(
+            [p for p in [src_dir, str(repo_root), web_dir, existing] if p]
+        )
+        env.setdefault("EVENTBUS_ALLOW_UNSIGNED", "true")
+        env.setdefault("EVENTBUS_REQUIRE_CLIENT_AUTH", "false")
+
         proc = subprocess.Popen(
             cmd,
             stdout=log_out,
             stderr=log_err,
             cwd=str(repo_root),
+            env=env,
             preexec_fn=os.setsid if hasattr(os, "setsid") else None,
         )
 
@@ -177,8 +193,12 @@ def stop_agent(agent_id: str) -> Dict[str, Any]:
 
     agent_config = AGENT_CATALOG[agent_id]
 
-    # Try to find running process
-    proc = find_process_by_pattern(agent_config["process_patterns"][0])
+    # Try to find running process (check all configured patterns)
+    proc = None
+    for _pat in agent_config["process_patterns"]:
+        proc = find_process_by_pattern(_pat)
+        if proc:
+            break
 
     if not proc:
         return {
@@ -259,8 +279,12 @@ def get_agent_status(agent_id: str) -> Dict[str, Any]:
 
     agent_config = AGENT_CATALOG[agent_id]
 
-    # Try to find running process
-    proc = find_process_by_pattern(agent_config["process_patterns"][0])
+    # Try to find running process (check all configured patterns)
+    proc = None
+    for _pat in agent_config["process_patterns"]:
+        proc = find_process_by_pattern(_pat)
+        if proc:
+            break
 
     if proc:
         try:
@@ -372,39 +396,23 @@ def health_check_agent(agent_id: str) -> Dict[str, Any]:
 
 
 def _build_startup_command(
-    agent_id: str, config: Dict[str, Any]
+    _agent_id: str, config: Dict[str, Any]
 ) -> Optional[List[str]]:
     """Build the appropriate startup command for an agent.
 
     Uses the 'module' field from AGENT_CATALOG to run agents via
-    `python -m <module> --no-heartbeat` (standardized CLI framework).
-    EventBus uses a dedicated entrypoint binary.
+    ``python -m <module>``.  All agents (including EventBus) follow
+    the same pattern.
     """
     import sys
 
-    python_exe = sys.executable  # Use the same Python running the web server
+    python_exe = sys.executable
 
-    # EventBus uses its own entrypoint
-    if agent_id == "eventbus":
-        if _check_command_exists("amoskys-eventbus"):
-            return ["amoskys-eventbus"]
-        return None
-
-    # All other agents use python -m <module>
     module = config.get("module")
     if module:
         return [python_exe, "-m", module]
 
     return None
-
-
-def _check_command_exists(command: str) -> bool:
-    """Check if a command exists in PATH"""
-    result = subprocess.run(
-        ["which", command] if platform.system() != "Windows" else ["where", command],
-        capture_output=True,
-    )
-    return result.returncode == 0
 
 
 def get_startup_logs(agent_id: str, lines: int = 50) -> Dict[str, Any]:

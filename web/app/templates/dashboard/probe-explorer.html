@@ -243,7 +243,7 @@ async function loadProbeData() {
         // Summary
         const s = data.summary;
         document.getElementById('pe-total').textContent = s.total_probes;
-        document.getElementById('pe-real').textContent = s.active_probes;
+        document.getElementById('pe-real').textContent = allProbes.filter(p => p.status === 'REAL').length;
         document.getElementById('pe-degraded').textContent =
             allProbes.filter(p => p.status === 'DEGRADED').length;
         document.getElementById('pe-mitre').textContent = totalMitre.size;

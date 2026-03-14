@@ -84,7 +84,6 @@
                 <tr>
                     <th class="tf-th-sev">Sev</th>
                     <th class="tf-th-time">Date / Time</th>
-                    <th class="tf-th-src">Source</th>
                     <th class="tf-th-type">Event Type</th>
                     <th class="tf-th-agent">Agent</th>
                     <th class="tf-th-host">Host / IP</th>
@@ -96,7 +95,7 @@
                 </tr>
             </thead>
             <tbody id="threat-tbody">
-                <tr><td colspan="11" class="tf-loading">Connecting to threat feed...</td></tr>
+                <tr><td colspan="10" class="tf-loading">Connecting to threat feed...</td></tr>
             </tbody>
         </table>
     </div>
@@ -234,29 +233,21 @@
 /* Column widths */
 .tf-th-sev { width: 60px; }
 .tf-th-time { width: 145px; }
-.tf-th-src { width: 70px; }
 .tf-th-type { width: auto; }
-.tf-th-agent { width: 90px; }
-.tf-th-host { width: 120px; }
+.tf-th-agent { width: 130px; }
+.tf-th-host { width: 200px; }
 .tf-th-mitre { width: 100px; }
 .tf-th-risk { width: 50px; text-align: center; }
 .tf-th-conf { width: 50px; text-align: center; }
 .tf-th-class { width: 80px; }
 .tf-th-actions { width: 140px; text-align: center; }
 
-/* Source domain badge */
+/* Source domain badge (legacy, kept for detail panel) */
 .tf-src-badge {
     display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px;
     font-size: 0.58rem; font-weight: 800; text-transform: uppercase;
     letter-spacing: 0.3px;
 }
-.tf-src-security { background: rgba(255,51,102,0.15); color: #ff3366; }
-.tf-src-process { background: rgba(0,217,255,0.12); color: #00d9ff; }
-.tf-src-persistence { background: rgba(249,115,22,0.15); color: #f97316; }
-.tf-src-fim { background: rgba(168,85,247,0.15); color: #a855f7; }
-.tf-src-flow { background: rgba(0,255,136,0.12); color: #00ff88; }
-.tf-src-dns { background: rgba(255,170,0,0.15); color: #ffaa00; }
-.tf-src-audit { background: rgba(6,182,212,0.15); color: #06b6d4; }
 
 /* ── Severity badge ── */
 .tf-sev {
@@ -281,12 +272,27 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tf-cell-agent {
-    font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    font-size: 0.7rem; font-weight: 600;
     letter-spacing: 0.3px; color: #00ff88;
+    line-height: 1.4; max-width: 140px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.tf-agent-src {
+    display: inline-block; padding: 0.05rem 0.3rem; border-radius: 3px;
+    font-size: 0.5rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.3px; margin-top: 2px; opacity: 0.8;
+}
+.tf-agent-src-security { background: rgba(255,51,102,0.12); color: #ff3366; }
+.tf-agent-src-fim { background: rgba(168,85,247,0.12); color: #a855f7; }
+.tf-agent-src-flow { background: rgba(0,255,136,0.1); color: #00ff88; }
+.tf-agent-src-process { background: rgba(0,217,255,0.1); color: #00d9ff; }
+.tf-agent-src-persistence { background: rgba(249,115,22,0.12); color: #f97316; }
+.tf-agent-src-dns { background: rgba(255,170,0,0.12); color: #ffaa00; }
+.tf-agent-src-audit { background: rgba(6,182,212,0.12); color: #06b6d4; }
 .tf-cell-host {
-    font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
     color: #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 200px;
 }
 .tf-cell-mitre {
     display: flex; flex-wrap: wrap; gap: 3px;
@@ -475,7 +481,7 @@
     .tf-summary { flex-wrap: wrap; }
     .tf-summary-sep { display: none; }
     .tf-th-mitre, .tf-table td:nth-child(6) { display: none; }
-    .tf-th-host, .tf-table td:nth-child(5) { display: none; }
+    .tf-th-host, .tf-table td:nth-child(5) { display: none; }  /* Host/IP */
     .tf-header-bar { flex-direction: column; align-items: stretch; }
 }
 </style>
@@ -770,7 +776,7 @@ class ThreatFeedController {
         var filtered = this.getFilteredThreats();
         this.filteredThreats = filtered;
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr class="tf-empty-row"><td colspan="11">No threats match your filters</td></tr>';
+            tbody.innerHTML = '<tr class="tf-empty-row"><td colspan="10">No threats match your filters</td></tr>';
             return;
         }
         tbody.innerHTML = filtered.map((t, i) => {
@@ -788,15 +794,15 @@ class ThreatFeedController {
             var confPct = t.confidence > 0 ? (t.confidence * 100).toFixed(0) + '%' : '--';
             var cls = t.classification || '';
             var clsClass = cls === 'malicious' ? 'tf-class-malicious' : cls === 'suspicious' ? 'tf-class-suspicious' : cls === 'legitimate' ? 'tf-class-legitimate' : '';
-            var srcClass = 'tf-src-' + (t.source || 'security');
+
+            var hostDisplay = this.fmtHost(t);
 
             return '<tr data-row-idx="' + i + '">' +
                 '<td><span class="tf-sev tf-sev-' + sev + '">' + sev + '</span></td>' +
                 '<td class="tf-cell-time"><span class="tf-date">' + dateStr + '</span><br><span class="tf-time">' + timeStr + '</span></td>' +
-                '<td><span class="tf-src-badge ' + srcClass + '">' + this.esc(t.source || '--') + '</span></td>' +
                 '<td class="tf-cell-type" title="' + this.esc(t.description || '') + '">' + this.fmtType(t.type) + '</td>' +
-                '<td class="tf-cell-agent">' + this.esc(t.agent_name || '--') + '</td>' +
-                '<td class="tf-cell-host" title="' + this.esc(t.device_id || '') + '">' + this.esc(t.source_ip || t.device_id || '--') + '</td>' +
+                '<td class="tf-cell-agent" title="' + this.esc(t.agent_name || '') + '">' + this.fmtAgent(t.agent_name) + '<br><span class="tf-agent-src tf-agent-src-' + (t.source || 'security') + '">' + this.esc(t.source || '--') + '</span></td>' +
+                '<td class="tf-cell-host" title="' + this.esc(t.device_id || '') + '">' + hostDisplay + '</td>' +
                 '<td><div class="tf-cell-mitre">' + (mitreTags || '--') + '</div></td>' +
                 '<td class="tf-cell-risk" style="color:' + this.riskColor(t.risk_score) + '">' + riskPct + '</td>' +
                 '<td class="tf-cell-conf">' + confPct + '</td>' +
@@ -882,11 +888,13 @@ class ThreatFeedController {
             this.detailField('Confidence', t.confidence > 0 ? (t.confidence * 100).toFixed(1) + '%' : '--') +
             this.detailField('Classification', t.classification || '--') +
             this.detailField('Agent', t.agent_name || '--') +
+            this.detailField('Source', (t.source || 'security').toUpperCase()) +
             this.detailField('Device', t.device_id || '--') +
             this.detailField('Source IP', t.source_ip || '--') +
+            ((t.indicators || {}).dst_ip ? this.detailField('Dest IP', t.indicators.dst_ip) : '') +
             this.detailField('Investigation', t.requires_investigation ? 'Yes' : 'No') +
         '</div>';
-        if (t.description) body += '<div class="tf-detail-desc">' + this.esc(t.description) + '</div>';
+        if (t.description) body += '<div class="tf-detail-desc">' + this.esc(this.fmtDescription(t.description)) + '</div>';
         if (t.mitre_techniques && t.mitre_techniques.length > 0) {
             body += '<div style="margin-bottom:0.5rem;font-size:0.6rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">MITRE ATT&CK</div>';
             body += '<div class="tf-mitre-cards">' + t.mitre_techniques.map(m => {
@@ -899,7 +907,7 @@ class ThreatFeedController {
             }).join('') + '</div>';
         }
         if (t.id) {
-            body += '<div style="margin-top:0.75rem;"><a href="/dashboard/timeline-replay?event_id=' + encodeURIComponent(t.id) + '" ' +
+            body += '<div style="margin-top:0.75rem;"><a href="/dashboard/timeline-replay?event_id=' + encodeURIComponent(t.id) + '&source=' + encodeURIComponent(t.source || 'security') + '" ' +
                 'style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.4rem 0.8rem;border-radius:6px;font-size:0.78rem;font-weight:700;' +
                 'text-decoration:none;color:#a78bfa;background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.25);transition:all 0.15s;"' +
                 ' onmouseover="this.style.background=\'rgba(167,139,250,0.2)\'" onmouseout="this.style.background=\'rgba(167,139,250,0.1)\'">' +
@@ -910,7 +918,7 @@ class ThreatFeedController {
         // Insert detail row right after the clicked row
         var detailRow = document.createElement('tr');
         detailRow.className = 'tf-detail-row';
-        detailRow.innerHTML = '<td colspan="11">' +
+        detailRow.innerHTML = '<td colspan="10">' +
             '<div class="tf-detail-inline">' +
                 '<div class="tf-detail-inline-header">' +
                     '<span class="tf-detail-title">' + this.esc(this.fmtType(t.type) + (t.event_action ? ' — ' + t.event_action : '')) + '</span>' +
@@ -943,12 +951,12 @@ class ThreatFeedController {
         if (!t) return;
 
         if (action === 'investigate') {
-            window.location.href = '/dashboard/timeline-replay?event_id=' + encodeURIComponent(t.id);
+            window.location.href = '/dashboard/timeline-replay?event_id=' + encodeURIComponent(t.id) + '&source=' + encodeURIComponent(t.source || 'security');
             return;
         }
         if (action === 'why') {
             this.toggleDetail(idx);
-            await this.loadExplanation(t.id, idx);
+            await this.loadExplanation(t.id, idx, t.source);
             return;
         }
         if (action === 'legit') {
@@ -991,12 +999,12 @@ class ThreatFeedController {
         }
     }
 
-    async loadExplanation(eventId, idx) {
+    async loadExplanation(eventId, idx, source) {
         var panel = document.getElementById('detail-explain-' + (idx !== undefined ? idx : this.selectedIdx));
         if (!panel || !eventId) return;
         panel.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Loading explanation...</div>';
         try {
-            var resp = await fetch('/dashboard/api/explain/event/' + eventId);
+            var resp = await fetch('/dashboard/api/explain/event/' + eventId + '?source=' + encodeURIComponent(source || 'security'));
             var data = await resp.json();
             if (data.status !== 'success' || !data.explanation) { panel.innerHTML = ''; return; }
             var ex = data.explanation;
@@ -1067,6 +1075,61 @@ class ThreatFeedController {
         if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
         if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
         return Math.floor(diff / 86400) + 'd ago';
+    }
+    fmtDescription(desc) {
+        if (!desc) return '';
+        // Detect raw indicator dict dumps: [agent_probe_name] {key: value, ...}
+        var match = desc.match(/^\[([^\]]+)\]\s*\{/);
+        if (match) {
+            // Extract probe name and make it the heading
+            var probe = match[1].replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+            // Try to extract key fields from the dict string
+            var parts = [];
+            var pidM = desc.match(/'pid':\s*(\d+)/);
+            var nameM = desc.match(/'(?:name|process_name)':\s*'([^']+)'/);
+            var exeM = desc.match(/'exe':\s*'([^']+)'/);
+            var pathM = desc.match(/'(?:suspect_path|file_path)':\s*'([^']+)'/);
+            var catM = desc.match(/'categories_accessed':\s*\[([^\]]+)\]/);
+            var connM = desc.match(/'connection_count':\s*(\d+)/);
+            var phaseM = desc.match(/'kill_chain_phase':\s*'([^']+)'/);
+            if (nameM) parts.push('Process: ' + nameM[1]);
+            if (pidM) parts.push('PID: ' + pidM[1]);
+            if (exeM) parts.push('Exe: ' + exeM[1]);
+            if (pathM) parts.push('Path: ' + pathM[1]);
+            if (catM) parts.push('Categories: ' + catM[1].replace(/'/g, ''));
+            if (connM) parts.push(connM[1] + ' external connections');
+            if (phaseM) parts.push('Kill chain: ' + phaseM[1]);
+            if (parts.length > 0) return probe + ' — ' + parts.join(' · ');
+            return probe;
+        }
+        // Truncate very long descriptions
+        if (desc.length > 300) return desc.substring(0, 297) + '...';
+        return desc;
+    }
+    fmtAgent(name) {
+        if (!name || name === '--') return '--';
+        // Humanize: infostealer_guard → Infostealer Guard, flow → Flow
+        return name.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    }
+    fmtHost(t) {
+        var ind = t.indicators || {};
+        var host = this.esc(t.device_id || '--');
+        var srcIp = t.source_ip || '';
+        var dstIp = ind.dst_ip || ind.destination_ip || ind.remote_ip || '';
+        var extra = ind.remote_ip_count > 1 ? ' <span style="color:var(--text-muted);font-size:0.55rem;">+' + (ind.remote_ip_count - 1) + '</span>' : '';
+
+        // Network events with actual IPs
+        if (srcIp && dstIp && srcIp !== dstIp) {
+            return '<span style="color:#a78bfa;">' + this.esc(srcIp) + '</span> <span style="color:var(--text-muted);font-size:0.6rem;">→</span> <span style="color:#ff6600;">' + this.esc(dstIp) + '</span>' + extra;
+        }
+        // Has source IP only
+        if (srcIp) return this.esc(srcIp);
+        // Has remote/dst IP — show host → remote
+        if (dstIp) {
+            return host + ' <span style="color:var(--text-muted);font-size:0.6rem;">→</span> <span style="color:#ff6600;">' + this.esc(dstIp) + '</span>' + extra;
+        }
+        // Host-only events
+        return host;
     }
     riskColor(score) {
         if (!score || score <= 0) return 'var(--text-muted)';

@@ -14,7 +14,7 @@ Probes:
     1. macos_usb_inventory -- USB device baseline-diff (T1200)
     2. macos_bluetooth_inventory -- Bluetooth device baseline-diff (T1200)
     3. macos_new_peripheral -- any new peripheral alert (T1200)
-    4. macos_removable_media -- /Volumes/ mount detection (T1091)
+    4. macos_removable_media -- /Volumes/ mount detection (T1200, T1052.001)
 
 Usage:
     agent = MacOSPeripheralAgent()

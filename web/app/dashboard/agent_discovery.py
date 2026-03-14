@@ -19,7 +19,7 @@ AGENT_CATALOG = {
         "name": "EventBus Server",
         "description": "Central message broker for distributed telemetry ingestion via gRPC with mTLS",
         "type": "Infrastructure",
-        "module": None,  # Uses amoskys-eventbus entrypoint
+        "module": "amoskys.eventbus.server",
         "port": 50051,
         "platform": ["linux", "darwin", "windows"],
         "capabilities": [
@@ -595,6 +595,36 @@ AGENT_CATALOG = {
         },
         "critical": False,
         "color": "#FF7F50",
+    },
+    "wal_processor": {
+        "id": "wal_processor",
+        "name": "WAL Processor",
+        "description": "Write-Ahead Log processor: enrichment, scoring, fusion, and SOMA pipeline",
+        "type": "Infrastructure",
+        "module": "amoskys.storage.wal_processor",
+        "port": None,
+        "platform": ["linux", "darwin", "windows"],
+        "capabilities": [
+            "enrichment",
+            "scoring",
+            "fusion",
+            "soma",
+            "wal-processing",
+        ],
+        "monitors": [],
+        "path": "src/amoskys/storage/wal_processor.py",
+        "process_patterns": [
+            "amoskys.storage.wal_processor",
+            "wal_processor.py",
+        ],
+        "protocol": "SQLite WAL",
+        "neurons": ["Enrichment Pipeline", "Scoring Engine", "Fusion Engine"],
+        "guarded_resources": {
+            "infrastructure": ["WAL Processing", "Event Enrichment"],
+            "protocols": ["SQLite"],
+        },
+        "critical": True,
+        "color": "#FFB347",
     },
 }
 

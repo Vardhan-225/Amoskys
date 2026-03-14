@@ -361,6 +361,15 @@ _AGENT_ID_MAP = {
     "macos_db_activity": "macos_db_activity",
     "macos_http_inspector": "macos_http_inspector",
     "macos_correlation": "macos_correlation",
+    # macOS Shield agents
+    "macos_infostealer_guard": "infostealer_guard",
+    "MACOS_INFOSTEALER_GUARD": "infostealer_guard",
+    "macos_quarantine_guard": "quarantine_guard",
+    "MACOS_QUARANTINE_GUARD": "quarantine_guard",
+    "macos_provenance": "provenance",
+    "MACOS_PROVENANCE": "provenance",
+    "macos_network_sentinel": "network_sentinel",
+    "MACOS_NETWORK_SENTINEL": "network_sentinel",
 }
 
 
@@ -368,9 +377,11 @@ def _normalize_agent_id(raw: str) -> str:
     """Map any known agent alias to its canonical short ID."""
     if not raw:
         return ""
-    return _AGENT_ID_MAP.get(
-        raw, raw.lower().replace("_agent", "").replace("agent", "")
-    )
+    # Try exact match first, then lowercased
+    result = _AGENT_ID_MAP.get(raw) or _AGENT_ID_MAP.get(raw.lower())
+    if result:
+        return result
+    return raw.lower().replace("_agent", "").replace("agent", "")
 
 
 # ── Dashboard-authenticated health summary (avoids health API auth issues) ──
@@ -441,38 +452,67 @@ def health_summary():
     agents_online = sum(1 for s in agents_status.values() if s == "running")
     agents_total = len([a for a in agents_status.values() if a != "incompatible"])
 
-    # ── Event count ──
-    telemetry_db = project_root / "data" / "telemetry.db"
+    # ── Event count (prefer pre-computed rollups, fall back to raw COUNT) ──
     events_24h = 0
-    if telemetry_db.exists():
-        try:
-            conn = sqlite3.connect(str(telemetry_db))
-            cutoff_ns = int((now - timedelta(hours=24)).timestamp() * 1_000_000_000)
-            for table in [
-                "security_events",
-                "process_events",
-                "flow_events",
-                "dns_events",
-                "persistence_events",
-                "fim_events",
-                "peripheral_events",
-                "audit_events",
-                "observation_events",
-            ]:
-                try:
-                    row = conn.execute(
-                        f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns > ?",
-                        (cutoff_ns,),
-                    ).fetchone()
-                    events_24h += row[0]
-                except sqlite3.OperationalError:
-                    pass
-            conn.close()
-        except Exception:
-            pass
+    try:
+        from .telemetry_bridge import get_telemetry_store
 
-    # ── Threat level ──
-    threat_level = "BENIGN"
+        _ev_store = get_telemetry_store()
+        if _ev_store:
+            rollup_counts = _ev_store.get_rollup_event_counts(hours=24)
+            if rollup_counts:
+                events_24h = sum(rollup_counts.values())
+    except Exception:
+        pass
+    if events_24h == 0:
+        # Fallback: direct COUNT queries (cold start before first rollup cycle)
+        telemetry_db = project_root / "data" / "telemetry.db"
+        if telemetry_db.exists():
+            try:
+                conn = sqlite3.connect(str(telemetry_db))
+                cutoff_ns = int((now - timedelta(hours=24)).timestamp() * 1_000_000_000)
+                for table in [
+                    "security_events",
+                    "process_events",
+                    "flow_events",
+                    "dns_events",
+                    "persistence_events",
+                    "fim_events",
+                    "peripheral_events",
+                    "audit_events",
+                    "observation_events",
+                ]:
+                    try:
+                        row = conn.execute(
+                            f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns > ?",
+                            (cutoff_ns,),
+                        ).fetchone()
+                        events_24h += row[0]
+                    except sqlite3.OperationalError:
+                        pass
+                conn.close()
+            except Exception:
+                pass
+
+    # ── Threat level — unified from posture (risk-based) + fusion (incident-based) ──
+    # Posture provides continuous risk assessment; fusion provides confirmed incidents.
+    # Use the worse of the two so the dashboard never underreports.
+    posture_threat = "clear"
+    posture_score = 100.0
+    posture_model = "legacy"
+    try:
+        from .telemetry_bridge import get_telemetry_store
+
+        _store = get_telemetry_store()
+        if _store:
+            _posture = _store.compute_nerve_posture(hours=24)
+            posture_threat = _posture.get("threat_level", "clear")
+            posture_score = _posture.get("posture_score", 100.0)
+            posture_model = _posture.get("model", "nerve_signal_v1")
+    except Exception:
+        pass
+
+    fusion_threat = "clear"
     fusion_db = project_root / "data" / "intel" / "fusion.db"
     if fusion_db.exists():
         try:
@@ -489,14 +529,29 @@ def health_summary():
                     (cutoff,),
                 ).fetchone()
                 if row:
-                    threat_level = row[0]
+                    fusion_threat = row[0]
             except sqlite3.OperationalError:
                 pass
             conn.close()
         except Exception:
             pass
 
-    # ── Health score ──
+    # Severity ordering for comparison (includes Nerve Signal levels)
+    _THREAT_ORDER = {
+        "clear": 0,
+        "low": 1,
+        "guarded": 2,
+        "medium": 2,
+        "elevated": 3,
+        "high": 4,
+        "critical": 5,
+    }
+    threat_level = max(
+        [posture_threat.lower(), fusion_threat.lower()],
+        key=lambda t: _THREAT_ORDER.get(t, 0),
+    ).upper()
+
+    # ── Health score — operational health (are agents running and collecting?) ──
     infra_ok = agents_online > 0 or events_24h > 0
     agent_score = (agents_online / max(agents_total, 1)) * 40
     infra_score = 40 if infra_ok else 0
@@ -518,6 +573,8 @@ def health_summary():
                 ),
             },
             "threat_level": threat_level,
+            "posture_score": posture_score,
+            "posture_model": posture_model,
             "events_last_24h": events_24h,
             "health_score": health_score,
             "health_status": (
@@ -588,24 +645,27 @@ def live_threats():
     recent_events = []
     for row in rows:
         # Extract source_ip from indicators JSON if available
-        indicators = row.get("indicators") or "{}"
-        if isinstance(indicators, str):
-            try:
-                indicators = json.loads(indicators)
-            except (json.JSONDecodeError, TypeError):
-                indicators = {}
+        indicators = _parse_indicators(row.get("indicators"))
 
         source_ip = ""
         if isinstance(indicators, dict):
-            source_ip = indicators.get("source_ip") or indicators.get("src_ip") or ""
-        source_ip = source_ip or row.get("device_id", "")
+            source_ip = (
+                indicators.get("source_ip")
+                or indicators.get("src_ip")
+                or ""
+            )
+            # Extract first remote IP from public_connections if present
+            if not indicators.get("dst_ip") and not indicators.get("remote_ip"):
+                conns = indicators.get("public_connections")
+                if isinstance(conns, list) and conns:
+                    first_remote = conns[0].get("remote_ip", "")
+                    if first_remote:
+                        indicators["remote_ip"] = first_remote
+                        if len(conns) > 1:
+                            indicators["remote_ip_count"] = len(conns)
 
         # Parse MITRE techniques
-        mitre_raw = row.get("mitre_techniques") or "[]"
-        try:
-            mitre = json.loads(mitre_raw) if isinstance(mitre_raw, str) else mitre_raw
-        except (json.JSONDecodeError, TypeError):
-            mitre = []
+        mitre = _parse_mitre(row.get("mitre_techniques"))
 
         # Resolve agent name with normalization
         agent_raw = ""
@@ -633,12 +693,12 @@ def live_threats():
                 "device_id": device_id,
                 "agent_id": agent_name or device_id,
                 "classification": row.get("final_classification", ""),
-                "mitre_techniques": mitre if isinstance(mitre, list) else [],
+                "mitre_techniques": mitre,
                 "requires_investigation": bool(
                     row.get("requires_investigation", False)
                 ),
                 "event_action": row.get("event_action", ""),
-                "indicators": indicators if isinstance(indicators, dict) else {},
+                "indicators": indicators,
             }
         )
 
@@ -719,6 +779,8 @@ def unified_events():
         severity: Filter by severity (critical, high, medium, low)
         search: Text search on event_category and description
         hour: Filter by specific hour (ISO format)
+        domain: Filter by event domain (process, flow, dns, fim, persistence,
+                security, audit, peripheral, observation)
     """
     from .telemetry_bridge import get_telemetry_store
 
@@ -743,6 +805,7 @@ def unified_events():
     severity_filter = request.args.get("severity", "")
     search_filter = request.args.get("search", "")
     hour_filter = request.args.get("hour", "")
+    domain_filter = request.args.get("domain", "")
     cutoff_ns = int((time.time() - hours * 3600) * 1e9)
 
     # Severity filter ranges
@@ -770,26 +833,48 @@ def unified_events():
     # Normalize agent filter
     norm_agent = _normalize_agent_id(agent_filter) if agent_filter else ""
 
+    # Domain filter → set of source_table names to include
+    # Maps domain pill values to the source_table names used by _query_table_* functions
+    _domain_to_tables = {
+        "process": {"process"},
+        "flow": {"flow"},
+        "dns": {"dns"},
+        "fim": {"fim"},
+        "persistence": {"persistence"},
+        "security": {"security"},
+        "audit": {"security"},
+        "peripheral": {"security"},
+        "observation": {"security"},
+    }
+    domain_tables = _domain_to_tables.get(domain_filter) if domain_filter else None
+
+    def _include_table(table_name):
+        """Check if a table should be queried given domain filter."""
+        if domain_tables is None:
+            return True
+        return table_name in domain_tables
+
     try:
         all_events = []
 
         with store._lock:
             # ── 1. security_events ──
-            all_events.extend(
-                _query_table_security(
-                    store,
-                    cutoff_ns,
-                    norm_agent,
-                    sev_lo,
-                    sev_hi,
-                    search_filter,
-                    hour_start_ns,
-                    hour_end_ns,
+            if _include_table("security"):
+                all_events.extend(
+                    _query_table_security(
+                        store,
+                        cutoff_ns,
+                        norm_agent,
+                        sev_lo,
+                        sev_hi,
+                        search_filter,
+                        hour_start_ns,
+                        hour_end_ns,
+                    )
                 )
-            )
 
             # ── 2. process_events ──
-            if not norm_agent or norm_agent == "proc":
+            if (not norm_agent or norm_agent == "proc") and _include_table("process"):
                 all_events.extend(
                     _query_table_process(
                         store,
@@ -803,7 +888,7 @@ def unified_events():
                 )
 
             # ── 3. flow_events ──
-            if not norm_agent or norm_agent == "flow":
+            if (not norm_agent or norm_agent == "flow") and _include_table("flow"):
                 all_events.extend(
                     _query_table_flow(
                         store,
@@ -817,7 +902,7 @@ def unified_events():
                 )
 
             # ── 4. dns_events ──
-            if not norm_agent or norm_agent == "dns":
+            if (not norm_agent or norm_agent == "dns") and _include_table("dns"):
                 all_events.extend(
                     _query_table_dns(
                         store,
@@ -831,7 +916,9 @@ def unified_events():
                 )
 
             # ── 5. persistence_events ──
-            if not norm_agent or norm_agent == "persistence":
+            if (not norm_agent or norm_agent == "persistence") and _include_table(
+                "persistence"
+            ):
                 all_events.extend(
                     _query_table_persistence(
                         store,
@@ -845,7 +932,7 @@ def unified_events():
                 )
 
             # ── 6. fim_events ──
-            if not norm_agent or norm_agent == "fim":
+            if (not norm_agent or norm_agent == "fim") and _include_table("fim"):
                 all_events.extend(
                     _query_table_fim(
                         store,
@@ -857,6 +944,30 @@ def unified_events():
                         hour_end_ns,
                     )
                 )
+
+        # Post-filter for domain types that share the security_events table
+        if domain_filter in ("audit", "peripheral", "observation"):
+            _domain_agent_prefixes = {
+                "audit": ("auth", "audit"),
+                "peripheral": ("peripheral", "periph", "usb"),
+                "observation": (
+                    "obs",
+                    "infostealer",
+                    "quarantine",
+                    "provenance",
+                    "network_sentinel",
+                ),
+            }
+            prefixes = _domain_agent_prefixes[domain_filter]
+            all_events = [
+                ev
+                for ev in all_events
+                if any(
+                    (ev.get("agent") or "").lower().startswith(p)
+                    or (ev.get("event_category") or "").lower().startswith(p)
+                    for p in prefixes
+                )
+            ]
 
         # Sort all events by timestamp descending, paginate
         all_events.sort(key=lambda e: e.get("_sort_ts", 0), reverse=True)
@@ -874,13 +985,38 @@ def unified_events():
 
 def _parse_mitre(raw):
     """Parse mitre_techniques from DB value."""
-    if not raw:
+    parsed = _parse_nested_json(raw, [])
+    if isinstance(parsed, str):
+        parsed = parsed.strip()
+        return [parsed] if parsed else []
+    if not isinstance(parsed, list):
         return []
-    try:
-        parsed = json.loads(raw) if isinstance(raw, str) else raw
-        return parsed if isinstance(parsed, list) else []
-    except (json.JSONDecodeError, TypeError):
-        return []
+    return [item.strip() for item in parsed if isinstance(item, str) and item.strip()]
+
+
+def _parse_nested_json(raw, fallback, max_depth: int = 3):
+    """Parse JSON fields that may be encoded more than once."""
+    parsed = raw
+    for _ in range(max_depth):
+        if parsed is None:
+            return [] if isinstance(fallback, list) else {}
+        if isinstance(parsed, str):
+            text = parsed.strip()
+            if not text:
+                return [] if isinstance(fallback, list) else {}
+            try:
+                parsed = json.loads(text)
+            except (json.JSONDecodeError, TypeError):
+                return [] if isinstance(fallback, list) else {}
+            continue
+        return parsed
+    return parsed
+
+
+def _parse_indicators(raw):
+    """Parse indicators JSON into a dict, unwrapping double-encoded payloads."""
+    parsed = _parse_nested_json(raw, {})
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _time_conditions(cutoff_ns, hour_start_ns, hour_end_ns):
@@ -934,12 +1070,7 @@ def _query_table_security(
     events = []
     for row in rows:
         ev = dict(zip(columns, row))
-        indicators = ev.get("indicators", "{}")
-        if isinstance(indicators, str):
-            try:
-                indicators = json.loads(indicators)
-            except (json.JSONDecodeError, TypeError):
-                indicators = {}
+        indicators = _parse_indicators(ev.get("indicators"))
         mitre_list = _parse_mitre(ev.get("mitre_techniques"))
         agent_name = indicators.get("agent") or ev.get("collection_agent") or ""
         agent_name = _normalize_agent_id(agent_name) if agent_name else ""
@@ -1618,9 +1749,9 @@ def event_clustering():
     by_source_ip: dict = {}
     try:
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
-        with store._lock:
-            # Security events: JSON indicators
-            cursor = store.db.execute(
+        with store._read_pool.connection() as rdb:
+            # Security events: JSON indicators (cap scan to 1000 recent)
+            cursor = rdb.execute(
                 """SELECT ip, COUNT(*) as cnt FROM (
                     SELECT COALESCE(
                         JSON_EXTRACT(indicators, '$.source_ip'),
@@ -1629,19 +1760,23 @@ def event_clustering():
                     ) AS ip
                     FROM security_events
                     WHERE timestamp_ns > ? AND indicators IS NOT NULL
-                    ORDER BY timestamp_ns DESC LIMIT 5000
+                    ORDER BY timestamp_ns DESC LIMIT 1000
                 ) WHERE ip IS NOT NULL
                 GROUP BY ip ORDER BY cnt DESC LIMIT 50""",
                 (cutoff_ns,),
             )
             for row in cursor.fetchall():
                 by_source_ip[row[0]] = row[1]
-            # Flow events: explicit columns
-            cursor = store.db.execute(
+            # Flow events: use indexed src_ip/dst_ip with LIMIT
+            cursor = rdb.execute(
                 """SELECT ip, COUNT(*) FROM (
-                    SELECT src_ip AS ip FROM flow_events WHERE timestamp_ns > ?
+                    SELECT src_ip AS ip FROM flow_events
+                    WHERE timestamp_ns > ? AND src_ip IS NOT NULL
+                    ORDER BY timestamp_ns DESC LIMIT 5000
                     UNION ALL
-                    SELECT dst_ip FROM flow_events WHERE timestamp_ns > ?
+                    SELECT dst_ip FROM flow_events
+                    WHERE timestamp_ns > ? AND dst_ip IS NOT NULL
+                    ORDER BY timestamp_ns DESC LIMIT 5000
                 ) WHERE ip IS NOT NULL
                 GROUP BY ip ORDER BY COUNT(*) DESC LIMIT 50""",
                 (cutoff_ns, cutoff_ns),
@@ -1979,19 +2114,173 @@ def restart_all_agents():
         # Wait a moment between shutdown and startup
         time.sleep(2)
 
-        # Then, start critical agents
-        for agent_id, config in AGENT_CATALOG.items():
-            if config.get("critical", False):
-                start_result = start_agent_fn(agent_id)
-                if start_result.get("status") in ("started", "already_running"):
-                    results["started"] += 1
-                else:
-                    results["failed"] += 1
-                results["agents"][agent_id]["started"] = start_result.get("status")
+        # Then, start all agents (infrastructure first, then security)
+        import platform as _plat
+
+        current = _plat.system().lower()
+        infra_first = sorted(
+            AGENT_CATALOG.items(),
+            key=lambda x: (0 if x[1].get("critical") else 1),
+        )
+        for agent_id, config in infra_first:
+            if current not in config.get("platform", []):
+                continue
+            start_result = start_agent_fn(agent_id)
+            if start_result.get("status") in ("started", "already_running"):
+                results["started"] += 1
+            else:
+                results["failed"] += 1
+            results["agents"].setdefault(agent_id, {})
+            results["agents"][agent_id]["started"] = start_result.get("status")
 
         return jsonify(
             {
                 "status": "success",
+                "data": results,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": str(e),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            ),
+            500,
+        )
+
+
+# ── Pipeline Start API ────────────────────────────────────────────
+
+
+@dashboard_bp.route("/api/pipeline/start", methods=["POST"])
+@require_login
+@require_rate_limit(max_requests=5, window_seconds=60)
+def start_entire_pipeline():
+    """Start the entire AMOSKYS pipeline in dependency order.
+
+    Order: EventBus → WAL Processor → All security agents.
+    Each infrastructure component waits for confirmation before proceeding.
+    """
+    from .agent_control import start_agent as start_agent_fn
+    from .agent_discovery import AGENT_CATALOG
+
+    try:
+        results = {
+            "phase": [],
+            "started": 0,
+            "failed": 0,
+            "skipped": 0,
+            "agents": {},
+        }
+
+        # Phase 1: Infrastructure (EventBus, WAL Processor) — order matters
+        infra_ids = ["eventbus", "wal_processor"]
+        for agent_id in infra_ids:
+            if agent_id not in AGENT_CATALOG:
+                continue
+            r = start_agent_fn(agent_id)
+            status = r.get("status")
+            results["agents"][agent_id] = r
+            if status in ("started", "already_running"):
+                results["started"] += 1
+            else:
+                results["failed"] += 1
+        results["phase"].append(
+            {"name": "infrastructure", "agents": infra_ids}
+        )
+
+        # Brief pause for infra to initialize
+        time.sleep(2)
+
+        # Phase 2: All security agents
+        security_ids = [
+            aid for aid in AGENT_CATALOG
+            if aid not in infra_ids
+        ]
+        for agent_id in security_ids:
+            cfg = AGENT_CATALOG[agent_id]
+            # Skip agents not for this platform
+            import platform as _plat
+
+            current = _plat.system().lower()
+            if current not in cfg.get("platform", []):
+                results["skipped"] += 1
+                continue
+            r = start_agent_fn(agent_id)
+            status = r.get("status")
+            results["agents"][agent_id] = r
+            if status in ("started", "already_running"):
+                results["started"] += 1
+            else:
+                results["failed"] += 1
+        results["phase"].append(
+            {"name": "security_agents", "agents": security_ids}
+        )
+
+        return jsonify(
+            {
+                "status": "success",
+                "message": (
+                    f"Pipeline started: {results['started']} running, "
+                    f"{results['failed']} failed, {results['skipped']} skipped"
+                ),
+                "data": results,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": str(e),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            ),
+            500,
+        )
+
+
+@dashboard_bp.route("/api/pipeline/stop", methods=["POST"])
+@require_login
+@require_rate_limit(max_requests=5, window_seconds=60)
+def stop_entire_pipeline():
+    """Stop the entire AMOSKYS pipeline in reverse dependency order."""
+    from .agent_control import stop_agent as stop_agent_fn
+    from .agent_discovery import AGENT_CATALOG
+
+    try:
+        results = {"stopped": 0, "failed": 0, "agents": {}}
+
+        # Phase 1: Stop security agents first
+        infra_ids = {"eventbus", "wal_processor"}
+        for agent_id in AGENT_CATALOG:
+            if agent_id in infra_ids:
+                continue
+            r = stop_agent_fn(agent_id)
+            results["agents"][agent_id] = r
+            if r.get("status") in ("stopped", "force_killed", "not_running"):
+                results["stopped"] += 1
+
+        time.sleep(1)
+
+        # Phase 2: Stop infrastructure (reverse order)
+        for agent_id in reversed(list(infra_ids)):
+            r = stop_agent_fn(agent_id)
+            results["agents"][agent_id] = r
+            if r.get("status") in ("stopped", "force_killed", "not_running"):
+                results["stopped"] += 1
+
+        return jsonify(
+            {
+                "status": "success",
+                "message": f"Pipeline stopped: {results['stopped']} components",
                 "data": results,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
@@ -2273,30 +2562,71 @@ def correlate_events():
     if not event_id:
         return jsonify({"status": "error", "message": "event_id required"}), 400
 
+    source_table = request.args.get("source", "security")
+
+    # Table-specific queries for seed event lookup
+    _SEED_QUERIES = {
+        "security": (
+            "SELECT id, timestamp_ns, timestamp_dt, device_id, collection_agent, "
+            "event_category, event_action, risk_score, confidence, description, "
+            "mitre_techniques, final_classification, indicators, requires_investigation "
+            "FROM security_events WHERE id = ?"
+        ),
+        "fim": (
+            "SELECT id, timestamp_ns, timestamp_dt, device_id, collection_agent, "
+            "event_type AS event_category, change_type AS event_action, "
+            "risk_score, confidence, reason AS description, "
+            "mitre_techniques, NULL AS final_classification, NULL AS indicators, "
+            "0 AS requires_investigation "
+            "FROM fim_events WHERE id = ?"
+        ),
+        "persistence": (
+            "SELECT id, timestamp_ns, timestamp_dt, device_id, collection_agent, "
+            "event_type AS event_category, change_type AS event_action, "
+            "risk_score, confidence, reason AS description, "
+            "mitre_techniques, NULL AS final_classification, NULL AS indicators, "
+            "1 AS requires_investigation "
+            "FROM persistence_events WHERE id = ?"
+        ),
+        "flow": (
+            "SELECT id, timestamp_ns, timestamp_dt, device_id, NULL AS collection_agent, "
+            "protocol AS event_category, NULL AS event_action, "
+            "threat_score AS risk_score, 0.5 AS confidence, "
+            "'Flow: ' || COALESCE(src_ip,'?') || ' -> ' || COALESCE(dst_ip,'?') AS description, "
+            "NULL AS mitre_techniques, NULL AS final_classification, NULL AS indicators, "
+            "CAST(is_suspicious AS INT) AS requires_investigation "
+            "FROM flow_events WHERE id = ?"
+        ),
+        "process": (
+            "SELECT id, timestamp_ns, timestamp_dt, device_id, collection_agent, "
+            "process_category AS event_category, NULL AS event_action, "
+            "anomaly_score AS risk_score, confidence_score AS confidence, "
+            "exe AS description, NULL AS mitre_techniques, NULL AS final_classification, "
+            "NULL AS indicators, CAST(is_suspicious AS INT) AS requires_investigation "
+            "FROM process_events WHERE id = ?"
+        ),
+    }
+
     try:
-        # 1) Load seed event
-        cursor = store.db.execute(
-            "SELECT id, timestamp_ns, timestamp_dt, device_id, event_category, "
-            "event_action, risk_score, confidence, description, mitre_techniques, "
-            "final_classification, indicators, requires_investigation "
-            "FROM security_events WHERE id = ?",
-            (event_id,),
-        )
-        row = cursor.fetchone()
-        if not row:
+        # 1) Load seed event — try specified source table, then fall back
+        seed = None
+        tables_to_try = [source_table] if source_table in _SEED_QUERIES else []
+        tables_to_try += [t for t in _SEED_QUERIES if t != source_table]
+
+        for tbl in tables_to_try:
+            cursor = store.db.execute(_SEED_QUERIES[tbl], (event_id,))
+            row = cursor.fetchone()
+            if row:
+                cols = [d[0] for d in cursor.description]
+                seed = dict(zip(cols, row))
+                break
+
+        if not seed:
             return jsonify({"status": "error", "message": "Event not found"}), 404
 
-        cols = [d[0] for d in cursor.description]
-        seed = dict(zip(cols, row))
-
         # Parse JSON fields
-        for field in ("mitre_techniques", "indicators"):
-            val = seed.get(field, "")
-            if isinstance(val, str):
-                try:
-                    seed[field] = json.loads(val)
-                except (json.JSONDecodeError, TypeError):
-                    seed[field] = [] if field == "mitre_techniques" else {}
+        seed["mitre_techniques"] = _parse_mitre(seed.get("mitre_techniques"))
+        seed["indicators"] = _parse_indicators(seed.get("indicators"))
 
         # 2) Extract correlation keys
         seed_ts_ns = seed.get("timestamp_ns", 0)
@@ -2315,52 +2645,73 @@ def correlate_events():
         start_ns = seed_ts_ns - window_ns
         end_ns = seed_ts_ns + window_ns
 
-        # 3) Find correlated security events
+        # 3) Find correlated events across all domain tables
         correlated = []
-        cursor = store.db.execute(
-            "SELECT id, timestamp_ns, timestamp_dt, device_id, event_category, "
-            "event_action, risk_score, confidence, description, mitre_techniques, "
-            "final_classification, indicators "
-            "FROM security_events "
-            "WHERE id != ? AND timestamp_ns BETWEEN ? AND ? "
-            "ORDER BY timestamp_ns ASC LIMIT ?",
-            (event_id, start_ns, end_ns, max_results),
-        )
-        cols2 = [d[0] for d in cursor.description]
-        for r in cursor.fetchall():
-            evt = dict(zip(cols2, r))
-            # Parse JSON
-            for f in ("mitre_techniques", "indicators"):
-                v = evt.get(f, "")
-                if isinstance(v, str):
-                    try:
-                        evt[f] = json.loads(v)
-                    except (json.JSONDecodeError, TypeError):
-                        evt[f] = [] if f == "mitre_techniques" else {}
+        _CORR_QUERIES = [
+            (
+                "SELECT id, timestamp_ns, timestamp_dt, device_id, collection_agent, "
+                "event_category, event_action, risk_score, confidence, description, "
+                "mitre_techniques, final_classification, indicators "
+                "FROM security_events "
+                "WHERE id != ? AND timestamp_ns BETWEEN ? AND ? "
+                "ORDER BY timestamp_ns ASC LIMIT ?",
+                (event_id, start_ns, end_ns, max_results),
+            ),
+            (
+                "SELECT id, timestamp_ns, timestamp_dt, device_id, collection_agent, "
+                "event_type AS event_category, change_type AS event_action, "
+                "risk_score, confidence, reason AS description, "
+                "mitre_techniques, NULL AS final_classification, NULL AS indicators "
+                "FROM fim_events "
+                "WHERE timestamp_ns BETWEEN ? AND ? "
+                "ORDER BY timestamp_ns ASC LIMIT ?",
+                (start_ns, end_ns, max_results),
+            ),
+            (
+                "SELECT id, timestamp_ns, timestamp_dt, device_id, collection_agent, "
+                "event_type AS event_category, change_type AS event_action, "
+                "risk_score, confidence, reason AS description, "
+                "mitre_techniques, NULL AS final_classification, NULL AS indicators "
+                "FROM persistence_events "
+                "WHERE timestamp_ns BETWEEN ? AND ? "
+                "ORDER BY timestamp_ns ASC LIMIT ?",
+                (start_ns, end_ns, max_results),
+            ),
+        ]
+        for query, params in _CORR_QUERIES:
+            try:
+                cursor = store.db.execute(query, params)
+            except Exception:
+                continue
+            cols2 = [d[0] for d in cursor.description]
+            for r in cursor.fetchall():
+                evt = dict(zip(cols2, r))
+                evt["mitre_techniques"] = _parse_mitre(evt.get("mitre_techniques"))
+                evt["indicators"] = _parse_indicators(evt.get("indicators"))
 
-            # Score correlation strength
-            score = 0
-            evt_device = evt.get("device_id", "")
-            evt_indicators = evt.get("indicators", {})
-            evt_ip = (
-                evt_indicators.get("source_ip")
-                or evt_indicators.get("src_ip")
-                or evt_indicators.get("dst_ip")
-                or ""
-            )
-            evt_mitre = evt.get("mitre_techniques", [])
+                # Score correlation strength
+                score = 0
+                evt_device = evt.get("device_id", "")
+                evt_indicators = evt.get("indicators", {}) if isinstance(evt.get("indicators"), dict) else {}
+                evt_ip = (
+                    evt_indicators.get("source_ip")
+                    or evt_indicators.get("src_ip")
+                    or evt_indicators.get("dst_ip")
+                    or ""
+                )
+                evt_mitre = evt.get("mitre_techniques", [])
 
-            if seed_device and evt_device == seed_device:
-                score += 3
-            if seed_ip and evt_ip and seed_ip == evt_ip:
-                score += 2
-            if seed_mitre and evt_mitre:
-                shared = set(seed_mitre) & set(evt_mitre)
-                score += len(shared)
+                if seed_device and evt_device == seed_device:
+                    score += 3
+                if seed_ip and evt_ip and seed_ip == evt_ip:
+                    score += 2
+                if seed_mitre and evt_mitre:
+                    shared = set(seed_mitre) & set(evt_mitre)
+                    score += len(shared)
 
-            if score > 0:
-                evt["correlation_score"] = score
-                correlated.append(evt)
+                if score > 0:
+                    evt["correlation_score"] = score
+                    correlated.append(evt)
 
         # Sort by timestamp
         correlated.sort(key=lambda e: e.get("timestamp_ns", 0))
@@ -2762,85 +3113,85 @@ def agents_deep_overview():
     event_counts_by_agent = {}  # canonical agent_id → count
     if store:
         cutoff_ns = int((time.time() - 7 * 24 * 3600) * 1e9)
-        # Query each domain table for collection_agent counts
-        _EVENT_TABLES_WITH_AGENT = [
-            ("security_events", "collection_agent"),
-            ("process_events", "collection_agent"),
-            ("dns_events", "collection_agent"),
-            ("persistence_events", "collection_agent"),
-            ("peripheral_events", "collection_agent"),
-        ]
-        for table, col in _EVENT_TABLES_WITH_AGENT:
+        # Use read pool for all queries (avoids serialisation with writes)
+        with store._read_pool.connection() as rdb:
+            # Query each domain table for collection_agent counts
+            _EVENT_TABLES_WITH_AGENT = [
+                ("security_events", "collection_agent"),
+                ("process_events", "collection_agent"),
+                ("dns_events", "collection_agent"),
+                ("persistence_events", "collection_agent"),
+                ("peripheral_events", "collection_agent"),
+            ]
+            for table, col in _EVENT_TABLES_WITH_AGENT:
+                try:
+                    cursor = rdb.execute(
+                        f"SELECT {col}, COUNT(*) FROM {table} "
+                        f"WHERE timestamp_ns > ? GROUP BY {col}",
+                        (cutoff_ns,),
+                    )
+                    for row in cursor.fetchall():
+                        raw_agent = row[0] or ""
+                        canonical = _normalize_agent_id(raw_agent)
+                        event_counts_by_agent[canonical] = (
+                            event_counts_by_agent.get(canonical, 0) + row[1]
+                        )
+                except Exception:
+                    pass
+            # observation_events: count by domain → agent mapping
+            _OBS_DOMAIN_TO_AGENT = {
+                "security": "macos_security_monitor",
+                "unified_log": "macos_unified_log",
+                "dns": "macos_dns",
+                "applog": "macos_applog",
+                "discovery": "macos_discovery",
+                "internet_activity": "macos_internet_activity",
+                "db_activity": "macos_db_activity",
+                "http_inspector": "macos_http_inspector",
+                "net_scanner": "net_scanner",
+            }
             try:
-                cursor = store.db.execute(
-                    f"SELECT {col}, COUNT(*) FROM {table} "
-                    f"WHERE timestamp_ns > ? GROUP BY {col}",
+                cursor = rdb.execute(
+                    "SELECT domain, COUNT(*) FROM observation_events "
+                    "WHERE timestamp_ns > ? GROUP BY domain",
                     (cutoff_ns,),
                 )
                 for row in cursor.fetchall():
-                    raw_agent = row[0] or ""
-                    canonical = _normalize_agent_id(raw_agent)
-                    event_counts_by_agent[canonical] = (
-                        event_counts_by_agent.get(canonical, 0) + row[1]
+                    domain_val = row[0] or ""
+                    mapped_agent = _OBS_DOMAIN_TO_AGENT.get(domain_val, domain_val)
+                    event_counts_by_agent[mapped_agent] = (
+                        event_counts_by_agent.get(mapped_agent, 0) + row[1]
                     )
             except Exception:
                 pass
-        # observation_events: count by domain → agent mapping
-        _OBS_DOMAIN_TO_AGENT = {
-            "security": "macos_security_monitor",
-            "unified_log": "macos_unified_log",
-            "dns": "macos_dns",
-            "applog": "macos_applog",
-            "discovery": "macos_discovery",
-            "internet_activity": "macos_internet_activity",
-            "db_activity": "macos_db_activity",
-            "http_inspector": "macos_http_inspector",
-            "net_scanner": "net_scanner",
-        }
-        try:
-            cursor = store.db.execute(
-                "SELECT domain, COUNT(*) FROM observation_events "
-                "WHERE timestamp_ns > ? GROUP BY domain",
-                (cutoff_ns,),
-            )
-            for row in cursor.fetchall():
-                domain_val = row[0] or ""
-                mapped_agent = _OBS_DOMAIN_TO_AGENT.get(domain_val, domain_val)
-                event_counts_by_agent[mapped_agent] = (
-                    event_counts_by_agent.get(mapped_agent, 0) + row[1]
-                )
-        except Exception:
-            pass
-        # Tables without collection_agent: count totals
-        for table, agent_id in [
-            ("flow_events", "flow"),
-            ("fim_events", "fim"),
-            ("audit_events", "kernel_audit"),
-        ]:
+            # Tables without collection_agent: count totals
+            for table, agent_id in [
+                ("flow_events", "flow"),
+                ("fim_events", "fim"),
+                ("audit_events", "kernel_audit"),
+            ]:
+                try:
+                    row = rdb.execute(
+                        f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns > ?",
+                        (cutoff_ns,),
+                    ).fetchone()
+                    if row and row[0]:
+                        event_counts_by_agent[agent_id] = (
+                            event_counts_by_agent.get(agent_id, 0) + row[0]
+                        )
+                except Exception:
+                    pass
+            # Also get event_category counts for backward compat
             try:
-                row = store.db.execute(
-                    f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns > ?",
+                cursor = rdb.execute(
+                    "SELECT event_category, COUNT(*) FROM security_events "
+                    "WHERE timestamp_ns > ? GROUP BY event_category",
                     (cutoff_ns,),
-                ).fetchone()
-                if row and row[0]:
-                    event_counts_by_agent[agent_id] = (
-                        event_counts_by_agent.get(agent_id, 0) + row[0]
-                    )
+                )
+                for row in cursor.fetchall():
+                    event_counts_by_cat[row[0]] = row[1]
             except Exception:
                 pass
-        # Also get event_category counts for backward compat
-        try:
-            cursor = store.db.execute(
-                "SELECT event_category, COUNT(*) FROM ("
-                "  SELECT event_category FROM security_events "
-                "  WHERE timestamp_ns > ? ORDER BY timestamp_ns DESC LIMIT 100000"
-                ") GROUP BY event_category",
-                (cutoff_ns,),
-            )
-            for row in cursor.fetchall():
-                event_counts_by_cat[row[0]] = row[1]
-        except Exception:
-            pass
 
     # 3) Build per-agent deep data
     agents = []
@@ -2915,7 +3266,9 @@ def agents_deep_overview():
         broken = sum(1 for p in probe_list if p["status"] == "BROKEN")
         disabled = sum(1 for p in probe_list if p["status"] == "DISABLED")
 
-        total_probes += len(probe_list)
+        total_probes += sum(
+            1 for p in probe_list if p["status"] not in ("SKIPPED",)
+        )
         total_events += agent_event_count
         total_mitre.update(agent_mitre)
 
@@ -3412,63 +3765,64 @@ def agents_activity():
             result[aid]["last_min"] += last_min
             result[aid]["last_hour"] += last_hour
 
-        try:
-            # 1. security_events — use event_category prefix matching
-            cursor = store.db.execute(
-                """SELECT event_category,
-                   SUM(CASE WHEN timestamp_ns > ? THEN 1 ELSE 0 END) as last_min,
-                   COUNT(*) as last_hour
-                   FROM security_events
-                   WHERE timestamp_ns > ?
-                   GROUP BY event_category""",
-                (one_min_ns, sixty_min_ns),
-            )
-            for row in cursor.fetchall():
-                cat, last_min, last_hour = row[0], row[1], row[2]
-                for agent_id, prefixes in _AGENT_EVENT_CATEGORIES.items():
-                    for prefix in prefixes:
-                        if cat and (cat.startswith(prefix) or cat == prefix):
-                            _add_activity(agent_id, last_min, last_hour)
-                            break
-        except Exception:
-            pass
-
-        # 2. Domain tables with collection_agent column
-        for table, default_agent in [
-            ("process_events", "proc"),
-            ("dns_events", "dns"),
-            ("persistence_events", "persistence"),
-        ]:
+        with store._read_pool.connection() as rdb:
             try:
-                cursor = store.db.execute(
-                    f"""SELECT COALESCE(collection_agent, ?) as agent,
+                # 1. security_events — use event_category prefix matching
+                cursor = rdb.execute(
+                    """SELECT event_category,
                        SUM(CASE WHEN timestamp_ns > ? THEN 1 ELSE 0 END) as last_min,
                        COUNT(*) as last_hour
-                       FROM {table}
+                       FROM security_events
                        WHERE timestamp_ns > ?
-                       GROUP BY agent""",
-                    (default_agent, one_min_ns, sixty_min_ns),
+                       GROUP BY event_category""",
+                    (one_min_ns, sixty_min_ns),
                 )
                 for row in cursor.fetchall():
-                    _add_activity(row[0] or default_agent, row[1], row[2])
+                    cat, last_min, last_hour = row[0], row[1], row[2]
+                    for agent_id, prefixes in _AGENT_EVENT_CATEGORIES.items():
+                        for prefix in prefixes:
+                            if cat and (cat.startswith(prefix) or cat == prefix):
+                                _add_activity(agent_id, last_min, last_hour)
+                                break
             except Exception:
                 pass
 
-        # 3. Tables without collection_agent (fixed agent assignment)
-        for table, agent_id in [("flow_events", "flow"), ("fim_events", "fim")]:
-            try:
-                row = store.db.execute(
-                    f"""SELECT
-                       SUM(CASE WHEN timestamp_ns > ? THEN 1 ELSE 0 END) as last_min,
-                       COUNT(*) as last_hour
-                       FROM {table}
-                       WHERE timestamp_ns > ?""",
-                    (one_min_ns, sixty_min_ns),
-                ).fetchone()
-                if row and (row[0] or row[1]):
-                    _add_activity(agent_id, row[0] or 0, row[1] or 0)
-            except Exception:
-                pass
+            # 2. Domain tables with collection_agent column
+            for table, default_agent in [
+                ("process_events", "proc"),
+                ("dns_events", "dns"),
+                ("persistence_events", "persistence"),
+            ]:
+                try:
+                    cursor = rdb.execute(
+                        f"""SELECT COALESCE(collection_agent, ?) as agent,
+                           SUM(CASE WHEN timestamp_ns > ? THEN 1 ELSE 0 END) as last_min,
+                           COUNT(*) as last_hour
+                           FROM {table}
+                           WHERE timestamp_ns > ?
+                           GROUP BY agent""",
+                        (default_agent, one_min_ns, sixty_min_ns),
+                    )
+                    for row in cursor.fetchall():
+                        _add_activity(row[0] or default_agent, row[1], row[2])
+                except Exception:
+                    pass
+
+            # 3. Tables without collection_agent (fixed agent assignment)
+            for table, agent_id in [("flow_events", "flow"), ("fim_events", "fim")]:
+                try:
+                    row = rdb.execute(
+                        f"""SELECT
+                           SUM(CASE WHEN timestamp_ns > ? THEN 1 ELSE 0 END) as last_min,
+                           COUNT(*) as last_hour
+                           FROM {table}
+                           WHERE timestamp_ns > ?""",
+                        (one_min_ns, sixty_min_ns),
+                    ).fetchone()
+                    if row and (row[0] or row[1]):
+                        _add_activity(agent_id, row[0] or 0, row[1] or 0)
+                except Exception:
+                    pass
 
     return jsonify(
         {
@@ -4055,6 +4409,42 @@ def soma_agents():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@dashboard_bp.route("/api/agents/trust", methods=["GET"])
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def agent_trust():
+    """Get cross-validated agent trust scores from AMRDR.
+
+    Returns trust data from TelemetryStore's reliability tracker which
+    performs cross-validation (FIM↔process, network↔DNS, auth↔process).
+    """
+    store = _get_store()
+    if not store or not getattr(store, "_reliability", None):
+        return jsonify({"status": "success", "agents": [], "source": "unavailable"})
+    try:
+        tracker = store._reliability
+        agents = []
+        weights = tracker.get_fusion_weights()
+        for agent_id in sorted(tracker.list_agents()):
+            state = tracker.get_state(agent_id)
+            agents.append(
+                {
+                    "agent_id": agent_id,
+                    "alpha": round(state.alpha, 2),
+                    "beta": round(state.beta, 2),
+                    "reliability_score": round(state.reliability_score, 3),
+                    "fusion_weight": round(weights.get(agent_id, 1.0), 3),
+                    "tier": state.tier.name,
+                    "drift_type": state.drift_type.name,
+                }
+            )
+        return jsonify(
+            {"status": "success", "agents": agents, "source": "cross_validation"}
+        )
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @dashboard_bp.route("/api/soma/status", methods=["GET"])
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
@@ -4133,31 +4523,66 @@ def explain_event(event_id):
     if store is None:
         return jsonify({"status": "error", "message": _MSG_DB_UNAVAILABLE}), 500
 
+    source_table = request.args.get("source", "security")
+
+    # Map source to table names
+    _TABLE_MAP = {
+        "security": "security_events",
+        "fim": "fim_events",
+        "persistence": "persistence_events",
+        "flow": "flow_events",
+        "process": "process_events",
+    }
+
     try:
-        row = store.db.execute(
-            "SELECT * FROM security_events WHERE id = ?", (event_id,)
-        ).fetchone()
+        # Try specified table first, then fall back through all tables
+        tables_to_try = [_TABLE_MAP.get(source_table, "security_events")]
+        tables_to_try += [
+            t for t in _TABLE_MAP.values() if t != tables_to_try[0]
+        ]
+
+        row = None
+        used_table = None
+        for tbl in tables_to_try:
+            try:
+                row = store.db.execute(
+                    f"SELECT * FROM {tbl} WHERE id = ?", (event_id,)
+                ).fetchone()
+                if row:
+                    used_table = tbl
+                    break
+            except Exception:
+                continue
+
         if not row:
             return jsonify({"status": "error", "message": "Event not found"}), 404
 
         columns = [
             desc[0]
             for desc in store.db.execute(
-                "SELECT * FROM security_events LIMIT 0"
+                f"SELECT * FROM {used_table} LIMIT 0"
             ).description
         ]
         event_dict = dict(zip(columns, row))
 
+        # Normalize column names for non-security tables
+        if used_table != "security_events":
+            if "event_type" in event_dict and "event_category" not in event_dict:
+                event_dict["event_category"] = event_dict["event_type"]
+            if "anomaly_score" in event_dict and "risk_score" not in event_dict:
+                event_dict["risk_score"] = event_dict["anomaly_score"]
+            if "threat_score" in event_dict and "risk_score" not in event_dict:
+                event_dict["risk_score"] = event_dict["threat_score"]
+            if "confidence_score" in event_dict and "confidence" not in event_dict:
+                event_dict["confidence"] = event_dict["confidence_score"]
+            if "reason" in event_dict and "description" not in event_dict:
+                event_dict["description"] = event_dict["reason"]
+
         # Parse JSON fields with null-safe defaults
-        for field in ("mitre_techniques", "indicators"):
-            val = event_dict.get(field)
-            if isinstance(val, str):
-                try:
-                    event_dict[field] = json.loads(val)
-                except (json.JSONDecodeError, TypeError):
-                    event_dict[field] = [] if field == "mitre_techniques" else {}
-            elif val is None:
-                event_dict[field] = [] if field == "mitre_techniques" else {}
+        event_dict["mitre_techniques"] = _parse_mitre(
+            event_dict.get("mitre_techniques")
+        )
+        event_dict["indicators"] = _parse_indicators(event_dict.get("indicators"))
 
         # Ensure indicators has meaningful content for the explainer
         if not event_dict.get("indicators"):
@@ -4992,12 +5417,17 @@ def _get_store():
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
 def posture_summary():
-    """Device posture — cross-domain health overview."""
+    """Device posture — Nerve Signal Model (v1).
+
+    Returns posture_score (0-100) computed via signal classification,
+    time-decay, and tanh mapping.  Backwards compatible: includes
+    domain breakdown, total_events, security_detections.
+    """
     store = _get_store()
     if not store:
         return jsonify({"status": "error", "message": _MSG_DB_UNAVAILABLE})
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_device_posture(hours))
+    return jsonify(store.compute_nerve_posture(hours))
 
 
 @dashboard_bp.route("/api/posture/timeline")
@@ -5013,6 +5443,134 @@ def posture_timeline():
     return jsonify(store.get_cross_domain_timeline(hours, min(limit, 500)))
 
 
+# ── Signals (Directive 3) ──
+
+
+@dashboard_bp.route("/api/signals")
+@require_login
+@require_rate_limit(max_requests=60, window_seconds=60)
+def list_signals():
+    """List signals with optional status filter."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    status = request.args.get("status")
+    limit = request.args.get("limit", 50, type=int)
+    return jsonify(store.get_signals(status=status, limit=min(limit, 200)))
+
+
+@dashboard_bp.route("/api/signals", methods=["POST"])
+@require_login
+def create_signal_api():
+    """Manually create a signal (analyst-initiated)."""
+    store = _get_store()
+    if not store:
+        return jsonify({"status": "error", "message": _MSG_DB_UNAVAILABLE}), 500
+    data = request.get_json(silent=True) or {}
+    required = ("device_id", "signal_type", "trigger_summary")
+    for field in required:
+        if not data.get(field):
+            return (
+                jsonify({"status": "error", "message": f"Missing: {field}"}),
+                400,
+            )
+    signal_id = store.create_signal(
+        device_id=data["device_id"],
+        signal_type=data.get("signal_type", "manual"),
+        trigger_summary=data["trigger_summary"],
+        contributing_event_ids=data.get("contributing_event_ids", []),
+        risk_score=data.get("risk_score", 0.5),
+    )
+    return jsonify({"status": "ok", "signal_id": signal_id}), 201
+
+
+@dashboard_bp.route("/api/signals/<signal_id>/promote", methods=["POST"])
+@require_login
+def promote_signal(signal_id):
+    """Promote a signal to an incident."""
+    store = _get_store()
+    if not store:
+        return jsonify({"status": "error", "message": _MSG_DB_UNAVAILABLE}), 500
+    incident_id = store.promote_signal(signal_id)
+    if incident_id:
+        return jsonify({"status": "ok", "incident_id": incident_id})
+    return jsonify({"status": "error", "message": "Signal not found or not open"}), 404
+
+
+@dashboard_bp.route("/api/signals/<signal_id>/dismiss", methods=["POST"])
+@require_login
+def dismiss_signal(signal_id):
+    """Dismiss a signal with reason."""
+    store = _get_store()
+    if not store:
+        return jsonify({"status": "error", "message": _MSG_DB_UNAVAILABLE}), 500
+    data = request.get_json(silent=True) or {}
+    ok = store.dismiss_signal(
+        signal_id,
+        dismissed_by=data.get("dismissed_by", "analyst"),
+        reason=data.get("reason", ""),
+    )
+    if ok:
+        return jsonify({"status": "ok"})
+    return jsonify({"status": "error", "message": "Signal not found or not open"}), 404
+
+
+@dashboard_bp.route("/api/incidents/<int:incident_id>/timeline")
+@require_login
+@require_rate_limit(max_requests=30, window_seconds=60)
+def incident_timeline(incident_id):
+    """Get cross-agent investigation timeline for an incident."""
+    store = _get_store()
+    if not store:
+        return jsonify([])
+    incident = store.get_incident(incident_id)
+    if not incident:
+        return jsonify({"status": "error", "message": "Incident not found"}), 404
+    device_id = incident.get("device_id") or incident.get("assignee", "")
+    # Use incident time window or default to last 24h
+    end_ns = int(time.time() * 1e9)
+    start_ns = end_ns - int(24 * 3600 * 1e9)
+    if incident.get("created_at"):
+        try:
+            from datetime import datetime as _dt
+
+            created = _dt.fromisoformat(incident["created_at"].replace("Z", "+00:00"))
+            start_ns = int(created.timestamp() * 1e9) - int(3600 * 1e9)  # 1h before
+        except (ValueError, TypeError):
+            pass
+    # Extract device_id from title/description (fusion incidents embed it)
+    # Format: "[rule] DESCRIPTION on DEVICE_ID: ..."
+    if not device_id:
+        import re
+
+        for field in ("title", "description"):
+            text = incident.get(field, "")
+            m = re.search(r" on ([A-Za-z0-9._-]+\.local)\b", text)
+            if not m:
+                m = re.search(r" on ([A-Za-z0-9._-]+):", text)
+            if m:
+                device_id = m.group(1)
+                break
+    # Fallback: try device_id from linked security events
+    if not device_id:
+        try:
+            event_ids = json.loads(incident.get("source_event_ids", "[]"))
+            if event_ids:
+                # source_event_ids may be probe string IDs, try integer lookup first
+                row = store.db.execute(
+                    "SELECT device_id FROM security_events WHERE id = ?",
+                    (event_ids[0],),
+                ).fetchone()
+                if row:
+                    device_id = row[0]
+        except Exception:
+            pass
+    if not device_id:
+        return jsonify([])
+    timeline = store.build_incident_timeline(device_id, start_ns, end_ns)
+    return jsonify(timeline)
+
+
 # ── DNS Intelligence ──
 
 
@@ -5025,7 +5583,12 @@ def dns_stats():
     if not store:
         return jsonify({"total_queries": 0})
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_dns_stats(hours))
+    stats = store.get_dns_stats(hours)
+    # JS expects 'response_codes' (not 'by_response_code') and 'nxdomain_count'
+    rc = stats.pop("by_response_code", {})
+    stats["response_codes"] = rc
+    stats.setdefault("nxdomain_count", rc.get("NXDOMAIN", 0))
+    return jsonify(stats)
 
 
 @dashboard_bp.route("/api/dns/top-domains")
@@ -5242,7 +5805,10 @@ def fim_stats():
     if not store:
         return jsonify({"total_changes": 0})
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_fim_stats(hours))
+    stats = store.get_fim_stats(hours)
+    # JS expects 'total' (not 'total_changes')
+    stats["total"] = stats.get("total_changes", 0)
+    return jsonify(stats)
 
 
 @dashboard_bp.route("/api/fim/critical")
@@ -5312,7 +5878,13 @@ def persistence_stats():
     if not store:
         return jsonify({"total_entries": 0})
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_persistence_stats(hours))
+    stats = store.get_persistence_stats(hours)
+    # JS expects 'mechanism_counts' (not 'by_mechanism'),
+    # 'change_type_counts' (not 'by_change_type'), and 'total_changes'
+    stats["mechanism_counts"] = stats.pop("by_mechanism", {})
+    stats["change_type_counts"] = stats.pop("by_change_type", {})
+    stats.setdefault("total_changes", sum(stats["change_type_counts"].values()))
+    return jsonify(stats)
 
 
 @dashboard_bp.route("/api/persistence/inventory")
@@ -5325,7 +5897,9 @@ def persistence_inventory():
         return jsonify([])
     mechanism = request.args.get("mechanism")
     limit = request.args.get("limit", 200, type=int)
-    return jsonify(store.get_persistence_inventory(mechanism, min(limit, 500)))
+    entries = store.get_persistence_inventory(mechanism, min(limit, 500))
+    # JS expects {inventory: [...]} or {entries: [...]}, not a flat list
+    return jsonify({"inventory": entries})
 
 
 @dashboard_bp.route("/api/persistence/changes")
@@ -5337,7 +5911,18 @@ def persistence_changes():
     if not store:
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
-    return jsonify(store.get_persistence_changes(hours))
+    raw = store.get_persistence_changes(hours)
+    # JS expects {buckets: [{label, mechanisms: {mech: count}}, ...]}
+    # Store returns flat [{hour, mechanism, count}, ...]
+    from collections import OrderedDict
+
+    buckets_map = OrderedDict()
+    for row in raw:
+        h = row.get("hour", "")
+        if h not in buckets_map:
+            buckets_map[h] = {"label": h, "mechanisms": {}}
+        buckets_map[h]["mechanisms"][row.get("mechanism", "")] = row.get("count", 0)
+    return jsonify({"buckets": list(buckets_map.values())})
 
 
 # ── Auth / Audit ──

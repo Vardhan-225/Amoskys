@@ -9,7 +9,7 @@ Ground truth (macOS 26.0, uid=501, Apple Silicon):
     - /Volumes/: real-time removable media detection (no root required)
     - No IOKit subscription needed (polling via system_profiler)
 
-Coverage: T1200 (Hardware Additions), T1091 (Replication Through Removable Media)
+Coverage: T1200 (Hardware Additions), T1052.001 (Exfiltration Over USB)
 """
 
 from amoskys.agents.os.macos.peripheral.agent import MacOSPeripheralAgent

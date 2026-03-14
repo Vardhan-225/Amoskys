@@ -13,26 +13,21 @@ import platform
 from typing import Any, Dict, List
 
 # Agent → probe factory mapping
+# Keys MUST match AGENT_REGISTRY keys in src/amoskys/agents/__init__.py
+# so that capabilities.py can resolve probe metadata by agent_id.
 AGENT_PROBE_MAP: Dict[str, Dict[str, str]] = {
+    # ── Core Observatory (short names from AGENT_REGISTRY) ──
     "proc": {
         "module": "amoskys.agents.os.macos.process.probes",
-        "factory": "create_proc_probes",
+        "factory": "create_process_probes",
     },
     "fim": {
         "module": "amoskys.agents.os.macos.filesystem.probes",
-        "factory": "create_fim_probes",
+        "factory": "create_filesystem_probes",
     },
     "flow": {
         "module": "amoskys.agents.os.macos.network.probes",
-        "factory": "create_flow_probes",
-    },
-    "dns": {
-        "module": "amoskys.agents.os.macos.dns.probes",
-        "factory": "create_dns_probes",
-    },
-    "peripheral": {
-        "module": "amoskys.agents.os.macos.peripheral.probes",
-        "factory": "create_peripheral_probes",
+        "factory": "create_network_probes",
     },
     "auth": {
         "module": "amoskys.agents.os.macos.auth.probes",
@@ -42,73 +37,15 @@ AGENT_PROBE_MAP: Dict[str, Dict[str, str]] = {
         "module": "amoskys.agents.os.macos.persistence.probes",
         "factory": "create_persistence_probes",
     },
-    "kernel_audit": {
-        "module": "amoskys.agents.os.linux.kernel_audit.probes",
-        "factory": "create_kernel_audit_probes",
+    "peripheral": {
+        "module": "amoskys.agents.os.macos.peripheral.probes",
+        "factory": "create_peripheral_probes",
     },
-    "device_discovery": {
-        "module": "amoskys.agents.os.macos.discovery.probes",
-        "factory": "create_device_discovery_probes",
-    },
-    "protocol_collectors": {
-        "module": "amoskys.agents.os.macos.protocol_collectors.probes",
-        "factory": "create_protocol_collector_probes",
-    },
-    # L7 Gap-Closure Agents
-    "applog": {
-        "module": "amoskys.agents.os.macos.applog.probes",
-        "factory": "create_applog_probes",
-    },
-    "db_activity": {
-        "module": "amoskys.agents.os.macos.db_activity.probes",
-        "factory": "create_db_activity_probes",
-    },
-    "http_inspector": {
-        "module": "amoskys.agents.os.macos.http_inspector.probes",
-        "factory": "create_http_inspector_probes",
-    },
-    "internet_activity": {
-        "module": "amoskys.agents.os.macos.internet_activity.probes",
-        "factory": "create_internet_activity_probes",
-    },
-    "net_scanner": {
-        "module": "amoskys.agents.os.macos.discovery.probes",
-        "factory": "create_net_scanner_probes",
-    },
-    # ── macOS Observatory Agents (ground-truth verified) ──
-    "macos_process": {
-        "module": "amoskys.agents.os.macos.process.probes",
-        "factory": "create_process_probes",
-    },
-    "macos_persistence": {
-        "module": "amoskys.agents.os.macos.persistence.probes",
-        "factory": "create_persistence_probes",
-    },
-    "macos_network": {
-        "module": "amoskys.agents.os.macos.network.probes",
-        "factory": "create_network_probes",
-    },
-    "macos_filesystem": {
-        "module": "amoskys.agents.os.macos.filesystem.probes",
-        "factory": "create_filesystem_probes",
-    },
-    "macos_auth": {
-        "module": "amoskys.agents.os.macos.auth.probes",
-        "factory": "create_auth_probes",
-    },
+    # ── Platform Observatory (macos_ prefix from AGENT_REGISTRY) ──
     "macos_unified_log": {
         "module": "amoskys.agents.os.macos.unified_log.probes",
         "factory": "create_unified_log_probes",
     },
-    "macos_peripheral": {
-        "module": "amoskys.agents.os.macos.peripheral.probes",
-        "factory": "create_peripheral_probes",
-    },
-    "macos_correlation": {
-        "module": "amoskys.agents.os.macos.correlation.probes",
-        "factory": "create_correlation_probes",
-    },
-    # ── Wave 2 macOS Observatory Agents ──
     "macos_dns": {
         "module": "amoskys.agents.os.macos.dns.probes",
         "factory": "create_dns_probes",
@@ -133,7 +70,106 @@ AGENT_PROBE_MAP: Dict[str, Dict[str, str]] = {
         "module": "amoskys.agents.os.macos.http_inspector.probes",
         "factory": "create_http_inspector_probes",
     },
+    # ── Network & Infrastructure ──
+    "network_sentinel": {
+        "module": "amoskys.agents.os.macos.network_sentinel.probes",
+        "factory": "create_network_sentinel_probes",
+    },
+    "protocol_collectors": {
+        "module": "amoskys.agents.os.macos.protocol_collectors.probes",
+        "factory": "create_protocol_collector_probes",
+    },
+    # ── macOS Shield Agents ──
+    "macos_infostealer_guard": {
+        "module": "amoskys.agents.os.macos.infostealer_guard.probes",
+        "factory": "create_infostealer_guard_probes",
+    },
+    "macos_quarantine_guard": {
+        "module": "amoskys.agents.os.macos.quarantine_guard.probes",
+        "factory": "create_quarantine_guard_probes",
+    },
+    "macos_provenance": {
+        "module": "amoskys.agents.os.macos.provenance.probes",
+        "factory": "create_provenance_probes",
+    },
+    "macos_security_monitor": {
+        "module": "amoskys.agents.os.macos.security_monitor.probes",
+        "factory": "create_macos_security_probes",
+    },
+    # ── Linux ──
+    "kernel_audit": {
+        "module": "amoskys.agents.os.linux.kernel_audit.probes",
+        "factory": "create_kernel_audit_probes",
+    },
 }
+
+# ── Central Field Semantics Registry ──────────────────────────────
+# Defines the semantic type for every shared_data field name used by probes.
+# The audit engine resolves field_semantics from this registry when probes
+# don't declare their own, eliminating "No field_semantics documented" warnings.
+#
+# Format:  field_name → semantic_type
+#   - "snapshot_list":     field is a list of snapshot dicts from a single collection
+#   - "event_log":         field is a list of parsed log/event entries
+#   - "baseline_diff":     field is diffed against a baseline (first-run safe)
+#   - "gauge":             field is a point-in-time status value
+#   - "connection_table":  field is the current connection table (psutil/netstat)
+#   - "rolling_window":    field accumulates across cycles for temporal analysis
+FIELD_SEMANTICS_REGISTRY: Dict[str, str] = {
+    # Network & connections
+    "connections":        "connection_table",
+    "pid_connections":    "connection_table",
+    # Process telemetry
+    "processes":          "snapshot_list",
+    # Persistence mechanisms
+    "entries":            "snapshot_list",
+    # File integrity
+    "files":              "baseline_diff",
+    "suid_binaries":      "baseline_diff",
+    "sip_status":         "gauge",
+    # DNS
+    "dns_queries":        "snapshot_list",
+    "dns_servers":        "snapshot_list",
+    # Authentication
+    "auth_events":        "event_log",
+    # Application / database / HTTP
+    "app_logs":           "event_log",
+    "db_logs":            "event_log",
+    "http_requests":      "event_log",
+    # Kernel audit
+    "kernel_events":      "event_log",
+    # Unified log
+    "log_entries":        "event_log",
+    # Peripherals
+    "usb_devices":        "baseline_diff",
+    "bluetooth_devices":  "baseline_diff",
+    "volumes":            "baseline_diff",
+    # Discovery
+    "arp_entries":        "baseline_diff",
+    "bonjour_services":   "baseline_diff",
+    "routes":             "snapshot_list",
+    "hardware_ports":     "snapshot_list",
+    # Temporal
+    "rolling":            "rolling_window",
+}
+
+
+def _resolve_field_semantics(
+    probe_semantics: Dict[str, str],
+    requires_fields: List[str],
+) -> Dict[str, str]:
+    """Merge probe-declared semantics with the central registry.
+
+    Probe-level declarations take precedence over the registry.
+    """
+    resolved = {}
+    for field_name in requires_fields:
+        if field_name in probe_semantics:
+            resolved[field_name] = probe_semantics[field_name]
+        elif field_name in FIELD_SEMANTICS_REGISTRY:
+            resolved[field_name] = FIELD_SEMANTICS_REGISTRY[field_name]
+    return resolved
+
 
 # Known collector event types per agent
 COLLECTOR_EVENT_TYPES: Dict[str, List[str]] = {
@@ -198,9 +234,12 @@ def audit_probe(probe: object, agent_name: str, target_platform: str) -> Dict[st
             result["verdict"] = "BROKEN"
             result["issues"].append(f"Event type {evt_type} not generated by collector")
 
-    # Check 4: Field semantics documented
-    if requires_fields and not field_semantics:
-        result["issues"].append("No field_semantics documented")
+    # Check 4: Field semantics documented (resolve from central registry if needed)
+    resolved_semantics = _resolve_field_semantics(field_semantics, requires_fields or [])
+    result["field_semantics"] = resolved_semantics
+    unresolved = [f for f in (requires_fields or []) if f not in resolved_semantics]
+    if unresolved:
+        result["issues"].append(f"No field_semantics for: {', '.join(unresolved)}")
 
     # Check 5: Degraded fields
     if degraded_without:
@@ -281,13 +320,16 @@ def summarize_audit(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         if verdict in by_agent[agent]:
             by_agent[agent][verdict] += 1
 
+    # Total excludes SKIPPED (platform-incompatible probes aren't real probes here)
+    skipped = by_verdict.get("SKIPPED", 0)
     return {
-        "total": len(results),
+        "total": len(results) - skipped,
         "real": by_verdict.get("REAL", 0),
         "degraded": by_verdict.get("DEGRADED", 0),
         "broken": by_verdict.get("BROKEN", 0),
         "disabled": by_verdict.get("DISABLED", 0),
         "error": by_verdict.get("ERROR", 0),
+        "skipped": skipped,
         "by_agent": by_agent,
     }
 

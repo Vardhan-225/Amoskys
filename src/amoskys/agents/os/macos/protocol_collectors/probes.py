@@ -6,7 +6,7 @@ Each probe focuses on a specific protocol-level threat category:
     3. SSHBruteForceProbe - SSH authentication brute force (T1110, T1021.004)
     4. DNSTunnelingProbe - DNS exfiltration/tunneling (T1048.003)
     5. SQLInjectionProbe - SQL injection patterns (T1190)
-    6. RDPSuspiciousProbe - RDP suspicious activity (T1021.001)
+    6. RDPSuspiciousProbe - Remote desktop suspicious activity (T1021.005)
     7. FTPCleartextCredsProbe - FTP cleartext credential exposure (T1552.001)
     8. SMTPSpamPhishProbe - SMTP spam/phishing (T1566.001)
     9. IRCP2PC2Probe - IRC/P2P C2 communication (T1071.001)
@@ -455,7 +455,9 @@ class SQLInjectionProbe(MicroProbe):
 class RDPSuspiciousProbe(MicroProbe):
     """Detect suspicious RDP activity.
 
-    MITRE ATT&CK: T1021.001 (Remote Services: Remote Desktop Protocol)
+    MITRE ATT&CK: T1021.002 (Remote Services: SMB/Windows Admin Shares)
+    Note: RDP (T1021.001) is Windows-only. On macOS this probe monitors
+    for VNC/ARD (T1021.005) and generic remote service abuse patterns.
 
     Detection patterns:
         - RDP from unusual sources
@@ -465,8 +467,8 @@ class RDPSuspiciousProbe(MicroProbe):
     """
 
     name = "rdp_suspicious"
-    description = "Detect suspicious RDP activity"
-    mitre_techniques = ["T1021.001"]
+    description = "Detect suspicious remote desktop activity"
+    mitre_techniques = ["T1021.005"]  # VNC (macOS), not RDP (Windows)
 
     RDP_STANDARD_PORT = 3389
 

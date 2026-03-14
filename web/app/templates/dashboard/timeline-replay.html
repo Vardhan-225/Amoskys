@@ -135,7 +135,20 @@
 .tr-progress { }
 .tr-progress-bg { height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
 .tr-progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #00d9ff, #00ff88); transition: width 0.3s ease; border-radius: 3px; }
-.tr-progress-labels { display: flex; justify-content: space-between; margin-top: 4px; font-size: 0.6rem; color: var(--text-muted); }
+.tr-progress-labels {
+    display: flex; margin-top: 6px; font-size: 0.6rem; color: var(--text-muted);
+    overflow: hidden; gap: 2px;
+}
+.tr-progress-label {
+    flex: 1 1 0; min-width: 0; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    padding: 2px 4px; border-radius: 3px;
+    background: rgba(255,255,255,0.03); cursor: default;
+}
+.tr-progress-label:hover {
+    overflow: visible; z-index: 1; background: rgba(0,217,255,0.12);
+    color: var(--neural-primary);
+}
 
 /* ── Main Layout ── */
 .tr-main { display: grid; grid-template-columns: 260px 1fr; gap: 1rem; }
@@ -194,6 +207,13 @@
 .tr-event-sev.sev-low { background: rgba(0,136,255,0.15); color: #0088ff; }
 
 .tr-event-desc { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.5rem; }
+.tr-event-summary {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    margin-bottom: 0.6rem; padding: 0.25rem 0.6rem;
+    border-radius: 999px; font-size: 0.68rem; font-weight: 700;
+    background: rgba(0,217,255,0.08); color: var(--neural-primary);
+    border: 1px solid rgba(0,217,255,0.18);
+}
 .tr-event-meta { display: flex; gap: 0.75rem; flex-wrap: wrap; font-size: 0.7rem; color: var(--text-muted); }
 .tr-event-meta span { white-space: nowrap; }
 
@@ -217,6 +237,11 @@
 .tr-history::-webkit-scrollbar { width: 4px; }
 .tr-history::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 .tr-history .tr-event { opacity: 0.7; }
+.tr-history-badge {
+    margin-left: 0.45rem; padding: 0.1rem 0.4rem; border-radius: 999px;
+    font-size: 0.62rem; font-weight: 700; color: #00ff88;
+    background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.18);
+}
 
 /* ── Responsive ── */
 @media (max-width: 900px) {
@@ -235,6 +260,7 @@ class TimelineReplay {
         this.playbackSpeed = 1000;
         this.playbackInterval = null;
         this.events = [];
+        this.rawEventCount = 0;
         this.phases = [];
         this.mitreChain = [];
         this.seedEvent = null;
@@ -245,29 +271,104 @@ class TimelineReplay {
     async init() {
         const params = new URLSearchParams(window.location.search);
         const eventId = params.get('event_id');
+        const incidentId = params.get('incident_id');
+        this.eventSource = params.get('source') || 'security';
 
         if (eventId) {
             await this.loadFromAPI(eventId);
+        } else if (incidentId) {
+            await this.loadFromIncident(incidentId);
         } else {
-            // Try to load the highest-risk recent event instead of demo
+            // Try to load the highest-risk recent event
             await this.loadRecentOrDemo();
+        }
+    }
+
+    async loadFromIncident(incidentId) {
+        const status = document.getElementById('loading-status');
+        status.textContent = 'Loading incident #' + incidentId + ' timeline...';
+        try {
+            const r = await fetch('/dashboard/api/incidents/' + incidentId + '/timeline');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const timeline = await r.json();
+            if (!timeline || timeline.length === 0) {
+                // Fallback: load the incident directly and try its first source event
+                const ir = await fetch('/dashboard/api/incidents/' + incidentId);
+                const id = await ir.json();
+                if (id.status === 'success' && id.incident) {
+                    const inc = id.incident;
+                    let eventIds = [];
+                    try { eventIds = JSON.parse(inc.source_event_ids || '[]'); } catch(e) {}
+                    if (eventIds.length > 0 && typeof eventIds[0] === 'number') {
+                        await this.loadFromAPI(eventIds[0]);
+                        return;
+                    }
+                }
+                status.textContent = 'No correlated events found for incident #' + incidentId;
+                this.showEmptyState();
+                return;
+            }
+            // Timeline API returns array of events — compact overlapping rows into replay steps
+            const rawEvents = timeline.map(e => {
+                const sev = this.riskToSeverity(e.risk_score || 0);
+                const indicators = [];
+                if (e.source_ip) indicators.push('Source: ' + e.source_ip);
+                if (e.dest_ip) indicators.push('Dest: ' + e.dest_ip);
+                if (e.process_name) indicators.push('Process: ' + e.process_name);
+                if (e.file_path) indicators.push('File: ' + e.file_path);
+                return {
+                    timestamp: e.timestamp_dt || '',
+                    severity: sev,
+                    title: this.fmtType(e.event_category || e.event_type || 'Event'),
+                    description: e.description || '',
+                    detectedBy: [e.agent_id || e.collection_agent || e.device_id || 'System'],
+                    indicators: indicators,
+                    mitre: (e.mitre_techniques || []).join(', '),
+                    id: e.id,
+                    risk_score: e.risk_score || 0,
+                    classification: e.final_classification || '',
+                    category: e.event_category || '',
+                    sortTs: e.timestamp_ns || Date.parse(e.timestamp_dt || '') || 0,
+                    rawCount: 1,
+                };
+            });
+            this.events = this.compactEvents(rawEvents);
+            this.rawEventCount = rawEvents.length;
+            this.phases = this.buildPhasesFromEvents(this.events);
+            this.mitreChain = this.extractMitreChain(this.events);
+
+            const badge = document.getElementById('scenario-badge');
+            badge.textContent = 'Incident #' + incidentId + ' Timeline';
+            badge.style.background = 'rgba(255,51,102,0.15)';
+            badge.style.borderColor = 'rgba(255,51,102,0.3)';
+            badge.style.color = '#ff3366';
+
+            this.loaded = true;
+            this.renderPhases();
+            this.renderMitreChain();
+            this.updateUI();
+            status.textContent = this.buildReplayStatus('incident #' + incidentId);
+        } catch (e) {
+            status.textContent = 'Failed to load incident timeline: ' + e.message;
+            this.showEmptyState();
         }
     }
 
     async loadRecentOrDemo() {
         try {
-            const r = await fetch('/dashboard/api/live/threats?hours=8760');
+            const r = await fetch('/dashboard/api/live/threats?hours=168');
             const d = await r.json();
             if (d.status === 'success' && d.threats && d.threats.length > 0) {
                 // Pick the highest-risk event
                 var best = d.threats.reduce(function(a, b) { return (b.risk_score || 0) > (a.risk_score || 0) ? b : a; });
                 if (best.id) {
+                    this.eventSource = best.source || 'security';
                     await this.loadFromAPI(best.id);
                     return;
                 }
             }
-        } catch (e) { /* fall through to demo */ }
-        this.loadDemoScenario();
+        } catch (e) { /* fall through to empty state */ }
+        this.showEmptyState();
     }
 
     async loadFromAPI(eventId) {
@@ -275,57 +376,60 @@ class TimelineReplay {
         status.textContent = 'Loading correlated events for #' + eventId + '...';
 
         try {
-            const r = await fetch('/dashboard/api/correlate?event_id=' + eventId + '&window_minutes=60');
+            const r = await fetch('/dashboard/api/correlate?event_id=' + eventId + '&source=' + encodeURIComponent(this.eventSource) + '&window_minutes=60');
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const d = await r.json();
             if (d.status !== 'success') throw new Error(d.message || 'API error');
 
             this.seedEvent = d.seed_event;
-            this.mitreChain = d.mitre_chain || [];
             const allEvents = [d.seed_event, ...(d.correlated_events || [])];
             allEvents.sort((a, b) => (a.timestamp_ns || 0) - (b.timestamp_ns || 0));
 
             // Build events array for playback
-            this.events = allEvents.map(e => {
+            const rawEvents = allEvents.map(e => {
                 const sev = this.riskToSeverity(e.risk_score || 0);
                 const indicators = e.indicators || {};
                 const indicatorList = [];
+                const _SKIP_KEYS = new Set([
+                    'agent', 'collection_agent', 'training_exclude', 'contract_violation_code',
+                    'enrichment_status', 'quality_state', 'missing_fields', 'threat_intel_match',
+                    'public_connections', 'files_accessed'
+                ]);
                 for (const [k, v] of Object.entries(indicators)) {
-                    if (v && typeof v === 'string') indicatorList.push(k + ': ' + v);
+                    if (v === null || v === undefined || _SKIP_KEYS.has(k)) continue;
+                    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+                        indicatorList.push(k + ': ' + v);
+                    }
+                }
+                // Surface public_connections as a summary
+                if (indicators.public_connections && Array.isArray(indicators.public_connections)) {
+                    const ips = indicators.public_connections.map(c => c.remote_ip + ':' + c.remote_port).slice(0, 3);
+                    indicatorList.push('Remote connections: ' + ips.join(', ') + (indicators.public_connections.length > 3 ? ' +' + (indicators.public_connections.length - 3) + ' more' : ''));
+                }
+                // Surface accessed file categories
+                if (indicators.categories_accessed && Array.isArray(indicators.categories_accessed)) {
+                    indicatorList.push('Categories: ' + indicators.categories_accessed.join(', '));
                 }
                 return {
                     timestamp: e.timestamp_dt || '',
                     severity: sev,
                     title: this.fmtType(e.event_category || 'Unknown'),
                     description: e.description || '',
-                    detectedBy: indicators.agent ? [indicators.agent] : [e.device_id || 'System'],
+                    detectedBy: [indicators.agent || indicators.collection_agent || e.collection_agent || e.device_id || 'System'],
                     indicators: indicatorList,
                     mitre: (e.mitre_techniques || []).join(', '),
                     id: e.id,
                     risk_score: e.risk_score || 0,
                     classification: e.final_classification || '',
                     category: e.event_category || '',
+                    sortTs: e.timestamp_ns || Date.parse(e.timestamp_dt || '') || 0,
+                    rawCount: 1,
                 };
             });
-
-            // Build phases from API response
-            if (d.phases && d.phases.length > 0) {
-                let eventOffset = 0;
-                this.phases = d.phases.map((p, i) => {
-                    const count = p.event_count || p.events.length;
-                    const phase = {
-                        id: i + 1,
-                        name: p.label || p.name,
-                        eventRange: [eventOffset, eventOffset + count - 1],
-                        time: p.start_time || '',
-                    };
-                    eventOffset += count;
-                    return phase;
-                });
-            } else {
-                // Single phase fallback
-                this.phases = [{ id: 1, name: 'All Events', eventRange: [0, this.events.length - 1] }];
-            }
+            this.events = this.compactEvents(rawEvents);
+            this.rawEventCount = rawEvents.length;
+            this.phases = this.buildPhasesFromEvents(this.events);
+            this.mitreChain = this.extractMitreChain(this.events);
 
             // Update badge
             const badge = document.getElementById('scenario-badge');
@@ -342,60 +446,73 @@ class TimelineReplay {
             this.renderMitreChain();
             this.updateUI();
 
-            status.textContent = this.events.length + ' correlated events loaded. Press Play.';
+            status.textContent = this.buildReplayStatus('event #' + eventId);
         } catch (e) {
-            status.textContent = 'Failed to load: ' + e.message + '. Loading demo scenario...';
-            setTimeout(() => this.loadDemoScenario(), 1500);
+            status.textContent = 'Failed to load correlation for event #' + eventId + ': ' + e.message;
         }
     }
 
-    loadDemoScenario() {
+    showEmptyState() {
+        this.pause();
+        this.isPlaying = false;
+        this.currentEventIndex = -1;
+        this.events = [];
+        this.rawEventCount = 0;
+        this.phases = [];
+        this.mitreChain = [];
+        this.loaded = false;
         const badge = document.getElementById('scenario-badge');
-        badge.textContent = 'DEMO: APT Lateral Movement';
+        badge.textContent = 'No Events';
+        badge.style.background = 'rgba(255,255,255,0.05)';
+        badge.style.borderColor = 'rgba(255,255,255,0.1)';
+        badge.style.color = 'var(--text-muted)';
 
-        this.events = [
-            { timestamp: '2024-01-15 08:23:14', severity: 'medium', title: 'Suspicious Email Attachment Opened', description: 'User opened weaponized document with embedded macro', detectedBy: ['Email Guardian'], indicators: ['Macro: VBA_AutoOpen()', 'Outbound: 185.220.101.42:443'], mitre: 'T1566.001', category: 'phishing' },
-            { timestamp: '2024-01-15 08:23:47', severity: 'high', title: 'Encoded PowerShell Execution', description: 'Base64-encoded PowerShell command from Office process', detectedBy: ['ProcAgent'], indicators: ['powershell.exe -enc JABz...', 'Parent: WINWORD.EXE'], mitre: 'T1059.001', category: 'execution' },
-            { timestamp: '2024-01-15 08:24:15', severity: 'critical', title: 'C2 Beacon Established', description: 'Cobalt Strike beacon with HTTPS C2 channel', detectedBy: ['FlowAgent'], indicators: ['C2: 185.220.101.42:8443', 'Beacon: 60s + 20% jitter'], mitre: 'T1071.001', category: 'c2' },
-            { timestamp: '2024-01-15 08:26:33', severity: 'medium', title: 'Active Directory Enumeration', description: 'AD recon using native Windows tools', detectedBy: ['ProcAgent'], indicators: ['net group "Domain Admins" /domain', 'LDAP queries to DC01'], mitre: 'T1087.002', category: 'discovery' },
-            { timestamp: '2024-01-15 08:31:05', severity: 'high', title: 'LSASS Memory Credential Dump', description: 'Mimikatz variant scanned LSASS memory', detectedBy: ['KernelAudit'], indicators: ['lsass.exe read access', 'SeDebugPrivilege enabled'], mitre: 'T1003.001', category: 'credential_access' },
-            { timestamp: '2024-01-15 08:33:42', severity: 'critical', title: 'Credentials Harvested', description: '5 plaintext credentials and 12 NTLM hashes extracted', detectedBy: ['AuthGuard'], indicators: ['Dumped: alice, bob, svc_backup', '12 NTLM hashes'], mitre: 'T1003', category: 'credential_access' },
-            { timestamp: '2024-01-15 08:40:26', severity: 'critical', title: 'Lateral Movement to DC', description: 'PSExec-style lateral movement to domain controller', detectedBy: ['FlowAgent', 'ProcAgent'], indicators: ['SMB: desktop → DC01:445', 'Service installed: BTOBTO'], mitre: 'T1021.002', category: 'lateral_movement' },
-            { timestamp: '2024-01-15 08:45:37', severity: 'critical', title: 'DCSync - Domain Secrets Exfiltrated', description: 'DCSync attack extracted all domain password hashes including KRBTGT', detectedBy: ['AuthGuard', 'FlowAgent'], indicators: ['DRS replication from non-DC', 'KRBTGT hash extracted', '23.4 MB exfiltrated'], mitre: 'T1003.006', category: 'exfiltration' },
-        ];
+        document.getElementById('play-pause-btn').textContent = 'Play';
+        document.getElementById('event-history').innerHTML = '';
+        document.getElementById('progress-labels').innerHTML = '';
+        document.getElementById('mitre-chain').style.display = 'none';
 
-        this.phases = [
-            { id: 1, name: 'Initial Compromise', eventRange: [0, 2] },
-            { id: 2, name: 'Reconnaissance', eventRange: [3, 3] },
-            { id: 3, name: 'Credential Harvesting', eventRange: [4, 5] },
-            { id: 4, name: 'Lateral Movement', eventRange: [6, 6] },
-            { id: 5, name: 'Exfiltration', eventRange: [7, 7] },
-        ];
+        document.getElementById('attack-phases').innerHTML =
+            '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.82rem;">' +
+            'No attack phases to display.</div>';
 
-        this.mitreChain = ['T1566.001', 'T1059.001', 'T1071.001', 'T1087.002', 'T1003.001', 'T1003', 'T1021.002', 'T1003.006'];
-        this.loaded = true;
-        this.renderPhases();
-        this.renderMitreChain();
+        document.getElementById('current-event-details').innerHTML =
+            '<div class="tr-placeholder">' +
+            '<div class="tr-placeholder-icon">&#128269;</div>' +
+            '<p>No events available for timeline replay</p>' +
+            '<p class="tr-placeholder-sub">To replay an attack chain, open an incident and click <strong>Timeline Replay</strong>,<br>' +
+            'or navigate here from a threat in the <a href="/dashboard/threat-feed" style="color:var(--neural-primary);">Threat Feed</a>.</p>' +
+            '</div>';
         this.updateUI();
-
-        document.getElementById('loading-status').textContent = 'Demo scenario loaded. Press Play.';
     }
 
     renderPhases() {
         const container = document.getElementById('attack-phases');
+        if (this.phases.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.82rem;">No attack phases to display.</div>';
+            this.renderProgressLabels();
+            return;
+        }
         container.innerHTML = this.phases.map(p =>
             '<div class="tr-phase" id="phase-' + p.id + '" data-action="jump-to-phase" data-phase-id="' + p.id + '">' +
                 '<div class="tr-phase-name">' + this.esc(p.name) + '</div>' +
-                '<div class="tr-phase-count">Events ' + (p.eventRange[0] + 1) + '-' + (p.eventRange[1] + 1) + '</div>' +
+                '<div class="tr-phase-count">Steps ' + (p.eventRange[0] + 1) + '-' + (p.eventRange[1] + 1) +
+                    (p.rawEventCount > p.stepCount ? ' • ' + p.rawEventCount + ' detections' : '') +
+                '</div>' +
                 (p.time ? '<div class="tr-phase-label">' + p.time + '</div>' : '') +
             '</div>'
         ).join('');
+        this.renderProgressLabels();
     }
 
     renderMitreChain() {
-        if (this.mitreChain.length === 0) return;
         const container = document.getElementById('mitre-chain');
         const tags = document.getElementById('mitre-tags');
+        if (this.mitreChain.length === 0) {
+            container.style.display = 'none';
+            tags.innerHTML = '';
+            return;
+        }
         container.style.display = 'block';
         tags.innerHTML = this.mitreChain.map(t => '<span class="tr-mitre-tag">' + t + '</span>').join('');
     }
@@ -444,7 +561,7 @@ class TimelineReplay {
             this.removeLastHistory();
             this.currentEventIndex--;
             if (this.currentEventIndex >= 0) {
-                this.showEvent(this.currentEventIndex);
+                this.showEvent(this.currentEventIndex, { skipHistory: true });
             } else {
                 document.getElementById('current-event-details').innerHTML =
                     '<div class="tr-placeholder"><div class="tr-placeholder-icon">&#9208;</div><p>Press <strong>Play</strong> to start</p></div>';
@@ -487,12 +604,14 @@ class TimelineReplay {
             this.currentEventIndex = i;
             this.addEventToHistory(this.events[i], i);
         }
-        this.showEvent(phase.eventRange[0]);
+        this.showEvent(phase.eventRange[0], { skipHistory: true });
         this.updateUI();
     }
 
-    showEvent(index) {
+    showEvent(index, options = {}) {
         const event = this.events[index];
+        if (!event) return;
+        const skipHistory = Boolean(options.skipHistory);
         const sev = (event.severity || 'low').toLowerCase();
 
         let indicatorHtml = '';
@@ -506,12 +625,17 @@ class TimelineReplay {
             mitreHtml = '<div class="tr-event-mitre"><strong>MITRE ATT&CK:</strong> ' + this.esc(event.mitre) + '</div>';
         }
 
+        const summaryHtml = event.rawCount > 1
+            ? '<div class="tr-event-summary">Merged ' + event.rawCount + ' overlapping detections</div>'
+            : '';
+
         document.getElementById('current-event-details').innerHTML =
             '<div class="tr-event sev-' + sev + '">' +
                 '<div class="tr-event-header">' +
                     '<div class="tr-event-title">' + this.esc(event.title) + '</div>' +
                     '<div class="tr-event-sev sev-' + sev + '">' + sev.toUpperCase() + '</div>' +
                 '</div>' +
+                summaryHtml +
                 '<div class="tr-event-desc">' + this.esc(event.description) + '</div>' +
                 '<div class="tr-event-meta">' +
                     '<span>' + this.esc(event.timestamp) + '</span>' +
@@ -528,7 +652,9 @@ class TimelineReplay {
                 '</div>' +
             '</div>';
 
-        this.addEventToHistory(event, index);
+        if (!skipHistory) {
+            this.addEventToHistory(event, index);
+        }
     }
 
     addEventToHistory(event, index) {
@@ -540,12 +666,13 @@ class TimelineReplay {
             '<div class="tr-event-header">' +
                 '<div style="font-size:0.82rem;font-weight:600;color:var(--text-primary);">' +
                     (index + 1) + '. ' + this.esc(event.title) +
+                    (event.rawCount > 1 ? '<span class="tr-history-badge">x' + event.rawCount + '</span>' : '') +
                 '</div>' +
                 '<div class="tr-event-sev sev-' + sev + '">' + sev.toUpperCase() + '</div>' +
             '</div>' +
             '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.25rem;">' +
                 this.esc(event.timestamp) +
-                (event.detectedBy ? ' | ' + event.detectedBy.join(', ') : '') +
+                (event.detectedBy ? ' | ' + this.esc(event.detectedBy.join(', ')) : '') +
             '</div>';
         container.insertBefore(card, container.firstChild);
     }
@@ -558,7 +685,7 @@ class TimelineReplay {
     updateUI() {
         // Event counter
         document.getElementById('current-event').textContent =
-            (this.currentEventIndex + 1) + ' / ' + this.events.length;
+            (this.events.length > 0 && this.currentEventIndex >= 0 ? this.currentEventIndex + 1 : 0) + ' / ' + this.events.length;
 
         // Progress bar
         const progress = this.events.length > 0 ? ((this.currentEventIndex + 1) / this.events.length) * 100 : 0;
@@ -575,6 +702,144 @@ class TimelineReplay {
                 el.className = 'tr-phase completed';
             }
         });
+    }
+
+    compactEvents(events) {
+        const ordered = events.slice().sort((a, b) => (a.sortTs || 0) - (b.sortTs || 0));
+        const compacted = [];
+        for (const source of ordered) {
+            const event = {
+                ...source,
+                rawCount: source.rawCount || 1,
+                detectedBy: Array.from(new Set(source.detectedBy || [])),
+                indicators: Array.from(new Set(source.indicators || [])),
+                mergedIds: source.id ? [source.id] : [],
+            };
+            const previous = compacted[compacted.length - 1];
+            if (previous && this.canMergeEvents(previous, event)) {
+                previous.rawCount += event.rawCount;
+                previous.risk_score = Math.max(previous.risk_score || 0, event.risk_score || 0);
+                previous.severity = this.riskToSeverity(previous.risk_score || 0);
+                previous.detectedBy = Array.from(new Set([...(previous.detectedBy || []), ...(event.detectedBy || [])]));
+                previous.indicators = Array.from(new Set([...(previous.indicators || []), ...(event.indicators || [])])).slice(0, 8);
+                previous.mergedIds = Array.from(new Set([...(previous.mergedIds || []), ...(event.mergedIds || [])]));
+                if ((event.description || '').length > (previous.description || '').length) {
+                    previous.description = event.description;
+                }
+                previous.mitre = this.mergeMitre(previous.mitre, event.mitre);
+                continue;
+            }
+            compacted.push(event);
+        }
+        return compacted;
+    }
+
+    canMergeEvents(left, right) {
+        const leftTs = left.sortTs || Date.parse(left.timestamp || '') || 0;
+        const rightTs = right.sortTs || Date.parse(right.timestamp || '') || 0;
+        if (!leftTs || !rightTs || Math.abs(rightTs - leftTs) > 1000) return false;
+        return (left.category || '') === (right.category || '') && (left.title || '') === (right.title || '');
+    }
+
+    mergeMitre(left, right) {
+        const merged = new Set();
+        [left, right].forEach(value => {
+            (value || '').split(', ').forEach(tag => {
+                if (tag) merged.add(tag);
+            });
+        });
+        return Array.from(merged).join(', ');
+    }
+
+    buildPhasesFromEvents(events) {
+        if (events.length === 0) return [];
+        const phases = [];
+        let start = 0;
+        for (let i = 1; i < events.length; i++) {
+            if (this.isPhaseBoundary(events[i - 1], events[i], i - start)) {
+                phases.push(this.makePhase(events, start, i - 1, phases.length + 1));
+                start = i;
+            }
+        }
+        phases.push(this.makePhase(events, start, events.length - 1, phases.length + 1));
+        return phases;
+    }
+
+    isPhaseBoundary(previous, next, currentSize) {
+        const previousTs = previous.sortTs || Date.parse(previous.timestamp || '') || 0;
+        const nextTs = next.sortTs || Date.parse(next.timestamp || '') || 0;
+        if (previousTs && nextTs && nextTs - previousTs > 90000) return true;
+        const previousFamily = ((previous.category || '').split('_')[0] || '').toLowerCase();
+        const nextFamily = ((next.category || '').split('_')[0] || '').toLowerCase();
+        return currentSize >= 4 && previousFamily && nextFamily && previousFamily !== nextFamily;
+    }
+
+    makePhase(events, start, end, id) {
+        const slice = events.slice(start, end + 1);
+        const rawEventCount = slice.reduce((total, event) => total + (event.rawCount || 1), 0);
+        return {
+            id: id,
+            name: this.phaseLabel(slice),
+            eventRange: [start, end],
+            stepCount: slice.length,
+            rawEventCount: rawEventCount,
+            time: this.phaseTime(slice),
+        };
+    }
+
+    phaseLabel(events) {
+        const weights = {};
+        let highestRisk = events[0];
+        for (const event of events) {
+            const key = event.category || event.title || 'event';
+            weights[key] = (weights[key] || 0) + (event.rawCount || 1);
+            if ((event.risk_score || 0) > (highestRisk.risk_score || 0)) highestRisk = event;
+        }
+        const dominant = Object.entries(weights).sort((a, b) => b[1] - a[1])[0];
+        const label = dominant ? dominant[0] : (highestRisk.category || highestRisk.title || 'Event');
+        return this.fmtType(label);
+    }
+
+    phaseTime(events) {
+        const first = this.shortTime(events[0].timestamp);
+        const last = this.shortTime(events[events.length - 1].timestamp);
+        return first && last && first !== last ? first + ' -> ' + last : first;
+    }
+
+    shortTime(timestamp) {
+        const parsed = new Date(timestamp || '');
+        if (Number.isNaN(parsed.getTime())) return timestamp || '';
+        return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    extractMitreChain(events) {
+        const mitreSet = new Set();
+        events.forEach(event => {
+            (event.mitre || '').split(', ').forEach(tag => {
+                if (tag) mitreSet.add(tag);
+            });
+        });
+        return Array.from(mitreSet);
+    }
+
+    buildReplayStatus(sourceLabel) {
+        if (this.rawEventCount > this.events.length) {
+            return this.events.length + ' replay steps built from ' + this.rawEventCount + ' detections for ' + sourceLabel + '. Press Play.';
+        }
+        return this.events.length + ' replay steps loaded for ' + sourceLabel + '. Press Play.';
+    }
+
+    renderProgressLabels() {
+        const container = document.getElementById('progress-labels');
+        if (!container) return;
+        if (this.events.length <= 1 || this.phases.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+        container.innerHTML = this.phases.map(phase => {
+            const span = phase.eventRange[1] - phase.eventRange[0] + 1;
+            return '<span class="tr-progress-label" style="flex-grow:' + span + ';" title="' + this.esc(phase.name) + '">' + this.esc(phase.name) + '</span>';
+        }).join('');
     }
 
     riskToSeverity(score) {

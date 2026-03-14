@@ -65,7 +65,7 @@ REQUIRED_DIRS = [
 
 # ── Ports ───────────────────────────────────────────────────────────────────
 
-PORT_EVENTBUS = int(os.environ.get("BUS_SERVER_PORT", "50053"))
+PORT_EVENTBUS = int(os.environ.get("BUS_SERVER_PORT", "50051"))
 PORT_DASHBOARD = int(os.environ.get("FLASK_PORT", "5003"))
 PORT_PROMETHEUS = 9102
 

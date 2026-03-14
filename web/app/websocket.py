@@ -51,6 +51,34 @@ def _get_live_incidents() -> dict:
         return {"incidents": [], "incident_count": 0}
 
 
+def _get_live_posture() -> dict:
+    """Fetch nerve posture score for real-time push."""
+    try:
+        store = get_telemetry_store()
+        if store is None:
+            return {}
+        posture = store.compute_nerve_posture(hours=24)
+        return {
+            "posture_score": posture.get("posture_score", 100.0),
+            "threat_level": posture.get("threat_level", "clear"),
+            "model": posture.get("model", "nerve_signal_v1"),
+        }
+    except Exception:
+        return {}
+
+
+def _get_live_signals() -> dict:
+    """Fetch open signals for real-time push."""
+    try:
+        store = get_telemetry_store()
+        if store is None:
+            return {"signals": [], "signal_count": 0}
+        signals = store.get_signals(status="open", limit=20)
+        return {"signals": signals, "signal_count": len(signals)}
+    except Exception:
+        return {"signals": [], "signal_count": 0}
+
+
 class DashboardUpdater:
     """Real-time dashboard data updater"""
 
@@ -58,6 +86,7 @@ class DashboardUpdater:
         self.socketio = socketio_instance
         self.running = False
         self._prev_incident_count = 0
+        self._prev_signal_count = 0
 
     def start_updates(self):
         """Start real-time data updates"""
@@ -101,6 +130,8 @@ class DashboardUpdater:
                         ("threat_score", calculate_threat_score),
                         ("events", get_event_clustering_data),
                         ("neural", get_neural_readiness_status),
+                        ("posture", _get_live_posture),
+                        ("signals", _get_live_signals),
                     ):
                         try:
                             updates[key] = fn()
@@ -122,6 +153,22 @@ class DashboardUpdater:
                             to="soc",
                         )
                         self._prev_incident_count = incident_data["incident_count"]
+
+                    # Push dedicated signal update to SOC room on new signals
+                    signal_data = updates.get("signals", {})
+                    sig_count = (
+                        signal_data.get("signal_count", 0)
+                        if isinstance(signal_data, dict)
+                        else 0
+                    )
+                    if sig_count != self._prev_signal_count:
+                        self.socketio.emit(
+                            "signals_update",
+                            signal_data,
+                            namespace="/dashboard",
+                            to="soc",
+                        )
+                        self._prev_signal_count = sig_count
 
                     logger.debug(f"Sent updates to {len(active_connections)} clients")
 

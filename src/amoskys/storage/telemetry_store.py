@@ -19,12 +19,13 @@ Supports the 3-layer ML architecture:
 
 import json
 import logging
+import math
 import queue
 import sqlite3
 import threading
 import time
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -43,9 +44,12 @@ class _ReadPool:
         self._pool: queue.Queue = queue.Queue()
         for _ in range(size):
             conn = sqlite3.connect(db_path, check_same_thread=False, timeout=5.0)
+            conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA query_only=ON")
             conn.execute("PRAGMA cache_size=-16000")  # 16 MB per conn
+            conn.execute("PRAGMA temp_store=MEMORY")
+            conn.execute("PRAGMA mmap_size=268435456")  # 256MB mmap
             self._pool.put(conn)
 
     @contextmanager
@@ -701,7 +705,77 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_observation_rollups_unique
     ON observation_rollups(domain, window_start_ns, fingerprint);
 CREATE INDEX IF NOT EXISTS idx_observation_rollups_domain
     ON observation_rollups(domain, window_start_ns DESC);
+
+-- Dashboard performance: composite indexes for filtered + sorted queries
+-- These cover the hot paths: /live/threats, /agents/deep-overview, /agents/activity
+CREATE INDEX IF NOT EXISTS idx_security_ts_risk ON security_events(timestamp_ns DESC, risk_score DESC);
+CREATE INDEX IF NOT EXISTS idx_security_ts_agent ON security_events(timestamp_ns DESC, collection_agent);
+CREATE INDEX IF NOT EXISTS idx_security_ts_category ON security_events(timestamp_ns DESC, event_category);
+CREATE INDEX IF NOT EXISTS idx_process_ts_agent ON process_events(timestamp_ns DESC, collection_agent);
+CREATE INDEX IF NOT EXISTS idx_process_ts_anomaly ON process_events(timestamp_ns DESC, anomaly_score DESC);
+CREATE INDEX IF NOT EXISTS idx_flow_ts_threat ON flow_events(timestamp_ns DESC, threat_score DESC);
+CREATE INDEX IF NOT EXISTS idx_flow_ts_src ON flow_events(timestamp_ns DESC, src_ip);
+CREATE INDEX IF NOT EXISTS idx_flow_ts_dst ON flow_events(timestamp_ns DESC, dst_ip);
+CREATE INDEX IF NOT EXISTS idx_dns_ts_risk ON dns_events(timestamp_ns DESC, risk_score DESC);
+CREATE INDEX IF NOT EXISTS idx_dns_ts_agent ON dns_events(timestamp_ns DESC, collection_agent);
+CREATE INDEX IF NOT EXISTS idx_persistence_ts_risk ON persistence_events(timestamp_ns DESC, risk_score DESC);
+CREATE INDEX IF NOT EXISTS idx_persistence_ts_agent ON persistence_events(timestamp_ns DESC, collection_agent);
+CREATE INDEX IF NOT EXISTS idx_peripheral_ts_agent ON peripheral_events(timestamp_ns DESC, collection_agent);
+CREATE INDEX IF NOT EXISTS idx_audit_ts_risk ON audit_events(timestamp_ns DESC, risk_score DESC);
+CREATE INDEX IF NOT EXISTS idx_fim_ts_risk ON fim_events(timestamp_ns DESC, risk_score DESC);
+CREATE INDEX IF NOT EXISTS idx_fim_ts_agent ON fim_events(timestamp_ns DESC, collection_agent);
+CREATE INDEX IF NOT EXISTS idx_observation_ts_domain ON observation_events(timestamp_ns DESC, domain);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- Unified Snapshot Dedup (Layer 1)
+--
+-- Single baseline table for ALL snapshot-producing agents.  Each row
+-- tracks the last-known content hash for a (table_name, dedup_key)
+-- pair.  When an insert arrives with the same hash, it is suppressed.
+--
+-- Dedup keys per table:
+--   fim_events          → device_id|path
+--   persistence_events  → device_id|mechanism|entry_id
+--   process_events      → device_id|pid|exe
+--   peripheral_events   → device_id|peripheral_device_id
+--   observation_events  → device_id|domain|fingerprint
+-- ══════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS _snapshot_baseline (
+    table_name   TEXT NOT NULL,   -- e.g. 'fim_events', 'process_events'
+    dedup_key    TEXT NOT NULL,   -- pipe-delimited composite key
+    content_hash TEXT,            -- hash of the mutable content fields
+    updated_ns   INTEGER NOT NULL,
+    PRIMARY KEY (table_name, dedup_key)
+) WITHOUT ROWID;
+
+-- Keep legacy tables so migration 012 doesn't break on existing DBs.
+-- New code only reads/writes _snapshot_baseline.
+CREATE TABLE IF NOT EXISTS _fim_baseline (
+    device_id TEXT NOT NULL, path TEXT NOT NULL, content_hash TEXT,
+    mtime TEXT, size INTEGER, updated_ns INTEGER NOT NULL,
+    PRIMARY KEY (device_id, path)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS _persistence_baseline (
+    device_id TEXT NOT NULL, mechanism TEXT NOT NULL, entry_id TEXT NOT NULL,
+    content_hash TEXT, command TEXT, updated_ns INTEGER NOT NULL,
+    PRIMARY KEY (device_id, mechanism, entry_id)
+) WITHOUT ROWID;
+
+-- Dashboard rollup table (Layer 2: pre-computed aggregations)
+CREATE TABLE IF NOT EXISTS dashboard_rollups (
+    rollup_type TEXT NOT NULL,   -- 'events_by_domain', 'threats_by_severity', etc.
+    bucket_key  TEXT NOT NULL,   -- 'fim', 'CRITICAL', 'T1070', agent_id, etc.
+    bucket_hour TEXT NOT NULL,   -- '2026-03-13T02' (hourly bucket)
+    value       INTEGER NOT NULL DEFAULT 0,
+    updated_ns  INTEGER NOT NULL,
+    PRIMARY KEY (rollup_type, bucket_key, bucket_hour)
+) WITHOUT ROWID;
 """
+
+
+_HOUR_FMT = "%Y-%m-%dT%H"
 
 
 class TelemetryStore:
@@ -722,6 +796,10 @@ class TelemetryStore:
         self.db = sqlite3.connect(db_path, check_same_thread=False, timeout=10.0)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
+        self.db.execute("PRAGMA synchronous=NORMAL")  # safe with WAL, reduces fsync
+        self.db.execute("PRAGMA temp_store=MEMORY")  # temp indices in RAM
+        self.db.execute("PRAGMA mmap_size=268435456")  # 256MB mmap for read perf
+        self.db.execute("PRAGMA optimize")  # update query planner statistics
 
         # Create schema
         self.db.executescript(SCHEMA)
@@ -759,6 +837,16 @@ class TelemetryStore:
         # WALProcessor calls begin_batch() before a batch and end_batch() after.
         self._batch_mode: bool = False
         self._batch_count: int = 0
+
+        # AMRDR: reliability tracker for agent trust cross-validation
+        try:
+            from amoskys.intel.reliability import BayesianReliabilityTracker
+
+            self._reliability = BayesianReliabilityTracker(
+                store_path="data/intel/reliability.db"
+            )
+        except Exception:
+            self._reliability = None
 
         # Dashboard query cache — coalesces bursts of identical queries
         # within a 5-second window (typical WebSocket push interval).
@@ -893,14 +981,19 @@ class TelemetryStore:
     # ── Cache Prewarm ──
 
     def _prewarm_loop(self) -> None:
-        """Background thread that refreshes expensive summary caches.
+        """Background thread that refreshes caches + writes dashboard rollups.
 
-        Invalidates then re-queries the 5 heaviest endpoints so the cache
-        is always fresh.  Cycle: ~5 s queries + 20 s sleep = 25 s < 30 s TTL.
+        Each cycle:
+        1. Prewarms the 8 heaviest dashboard query caches
+        2. Writes incremental hourly rollups to dashboard_rollups table
+        3. Runs PRAGMA optimize every ~10 minutes
+
+        Cycle: ~5s queries + 20s sleep = 25s < 30s TTL.
         """
         time.sleep(2)
         _keys = [
             ("device_posture:24", lambda: self.get_device_posture(hours=24)),
+            ("nerve_posture:24", lambda: self.compute_nerve_posture(hours=24)),
             (
                 "observation_domain_stats:24",
                 lambda: self.get_observation_domain_stats(hours=24),
@@ -918,14 +1011,386 @@ class TelemetryStore:
                 lambda: self.get_threat_count(hours=24, min_risk=0.1),
             ),
         ]
+        _optimize_counter = 0
+        _amrdr_counter = 0
         while True:
             try:
                 for cache_key, fn in _keys:
                     self._cache.invalidate(cache_key)
                     fn()
+                # Write incremental rollups (non-critical)
+                try:
+                    self._write_hourly_rollups()
+                except Exception:
+                    pass
+                # Evaluate auto-signal rules (non-critical)
+                try:
+                    self.evaluate_auto_signals()
+                except Exception:
+                    pass
+                # AMRDR trust update every ~2 min (5 cycles × 25s)
+                _amrdr_counter += 1
+                if _amrdr_counter >= 5:
+                    try:
+                        self._update_agent_trust()
+                    except Exception:
+                        pass
+                    _amrdr_counter = 0
+                # Re-run ANALYZE every ~10 minutes (24 cycles × 25s)
+                _optimize_counter += 1
+                if _optimize_counter >= 24:
+                    self.db.execute("PRAGMA optimize")
+                    _optimize_counter = 0
             except Exception:
                 pass  # non-critical — next cycle will retry
             time.sleep(20)
+
+    def _write_hourly_rollups(self) -> None:
+        """Compute and upsert hourly rollups into dashboard_rollups.
+
+        Aggregates event counts by domain and by severity for the current
+        hour.  Uses ON CONFLICT upsert so each hour's bucket is updated
+        incrementally — the prewarm loop calls this every ~25s, keeping
+        rollups within seconds of real-time without full-table scans.
+        """
+        now_ns = int(time.time() * 1e9)
+        now_dt = datetime.now(timezone.utc)
+        bucket_hour = now_dt.strftime(_HOUR_FMT)
+        hour_start_ns = int(
+            now_dt.replace(minute=0, second=0, microsecond=0).timestamp() * 1e9
+        )
+
+        # --- Events by domain (table) for the current hour ---
+        _domain_tables = [
+            ("security", "security_events"),
+            ("process", "process_events"),
+            ("flow", "flow_events"),
+            ("dns", "dns_events"),
+            ("audit", "audit_events"),
+            ("fim", "fim_events"),
+            ("persistence", "persistence_events"),
+            ("peripheral", "peripheral_events"),
+            ("observation", "observation_events"),
+        ]
+        with self._read_pool.connection() as conn:
+            for domain, table in _domain_tables:
+                try:
+                    row = conn.execute(
+                        f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns >= ?",
+                        (hour_start_ns,),
+                    ).fetchone()
+                    count = row[0] if row else 0
+                    self.db.execute(
+                        "INSERT INTO dashboard_rollups "
+                        "(rollup_type, bucket_key, bucket_hour, value, updated_ns) "
+                        "VALUES ('events_by_domain', ?, ?, ?, ?) "
+                        "ON CONFLICT(rollup_type, bucket_key, bucket_hour) DO UPDATE SET "
+                        "value=excluded.value, updated_ns=excluded.updated_ns",
+                        (domain, bucket_hour, count, now_ns),
+                    )
+                except Exception:
+                    pass
+
+            # --- Threat events by severity for the current hour ---
+            risk_col_map = {
+                "security_events": "risk_score",
+                "flow_events": "threat_score",
+                "dns_events": "risk_score",
+                "fim_events": "risk_score",
+                "persistence_events": "risk_score",
+                "process_events": "anomaly_score",
+            }
+            severity_counts: dict = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+            for table, col in risk_col_map.items():
+                try:
+                    row = conn.execute(
+                        f"""SELECT
+                            SUM(CASE WHEN {col} >= 0.8 THEN 1 ELSE 0 END),
+                            SUM(CASE WHEN {col} >= 0.5 AND {col} < 0.8 THEN 1 ELSE 0 END),
+                            SUM(CASE WHEN {col} >= 0.3 AND {col} < 0.5 THEN 1 ELSE 0 END),
+                            SUM(CASE WHEN {col} > 0 AND {col} < 0.3 THEN 1 ELSE 0 END)
+                        FROM {table} WHERE timestamp_ns >= ?""",
+                        (hour_start_ns,),
+                    ).fetchone()
+                    if row:
+                        severity_counts["critical"] += row[0] or 0
+                        severity_counts["high"] += row[1] or 0
+                        severity_counts["medium"] += row[2] or 0
+                        severity_counts["low"] += row[3] or 0
+                except Exception:
+                    pass
+
+            for sev, cnt in severity_counts.items():
+                self.db.execute(
+                    "INSERT INTO dashboard_rollups "
+                    "(rollup_type, bucket_key, bucket_hour, value, updated_ns) "
+                    "VALUES ('threats_by_severity', ?, ?, ?, ?) "
+                    "ON CONFLICT(rollup_type, bucket_key, bucket_hour) DO UPDATE SET "
+                    "value=excluded.value, updated_ns=excluded.updated_ns",
+                    (sev, bucket_hour, cnt, now_ns),
+                )
+
+        # --- Posture snapshot (Nerve Signal v1) ---
+        try:
+            posture = self.compute_nerve_posture(hours=24)
+            self.db.execute(
+                "INSERT INTO dashboard_rollups "
+                "(rollup_type, bucket_key, bucket_hour, value, updated_ns) "
+                "VALUES ('posture_snapshot', 'score', ?, ?, ?) "
+                "ON CONFLICT(rollup_type, bucket_key, bucket_hour) DO UPDATE SET "
+                "value=excluded.value, updated_ns=excluded.updated_ns",
+                (bucket_hour, int(posture["posture_score"] * 10), now_ns),
+            )
+        except Exception:
+            pass
+
+        # --- Observation rollups (Directive 2) ---
+        # Roll up high-frequency observation domains into fingerprinted buckets.
+        # Keeps raw data for _OBSERVATION_RAW_RETENTION_HOURS, then only rollups.
+        try:
+            self._write_observation_rollups(hour_start_ns, now_ns, bucket_hour)
+        except Exception:
+            logger.debug("Observation rollup write failed", exc_info=True)
+
+        self.db.commit()
+
+    # ── Observation Rollup Configuration ──────────────────────────────────
+    _OBSERVATION_RAW_RETENTION_HOURS = 2  # Keep raw data for 2h, configurable
+    _ROLLUP_DOMAINS = frozenset(
+        {
+            "unified_log",
+            "applog",
+            "infostealer",
+            "quarantine",
+            "provenance",
+            "discovery",
+            "internet_activity",
+            "db_activity",
+            "http",
+            "security_monitor",
+        }
+    )
+
+    @staticmethod
+    def _observation_fingerprint(domain: str, attrs_json: str) -> str:
+        """Generate a stable fingerprint from observation attributes.
+
+        Strips variable parts (numbers, hex strings, UUIDs, timestamps,
+        PIDs) from attribute values, then hashes the domain + normalized
+        key-value pairs.  Two observations with the same structure but
+        different PIDs or timestamps collapse to the same fingerprint.
+        """
+        import hashlib
+        import re
+
+        try:
+            attrs = (
+                json.loads(attrs_json) if isinstance(attrs_json, str) else attrs_json
+            )
+        except (json.JSONDecodeError, TypeError):
+            attrs = {}
+
+        # Remove internal metadata keys
+        _SKIP_KEYS = {
+            "quality_state",
+            "contract_violation_code",
+            "missing_fields",
+            "training_exclude",
+            "_domain",
+        }
+
+        # Keys whose values are inherently variable — use key only, not value
+        _VARIABLE_KEYS = {
+            "pid",
+            "process_guid",
+            "timestamp",
+            "file_path",
+            "source_ip",
+            "dest_ip",
+            "port",
+        }
+
+        # Build normalized key=template pairs
+        parts = [domain]
+        for key in sorted(attrs.keys()):
+            if key in _SKIP_KEYS:
+                continue
+            # Variable keys: include key presence but not value
+            if key in _VARIABLE_KEYS:
+                parts.append(f"{key}=<VAR>")
+                continue
+            val = str(attrs[key])
+            # Strip variable parts: UUIDs, long hex, numbers, PIDs
+            template = re.sub(
+                r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+                "<UUID>",
+                val,
+            )
+            template = re.sub(r"[0-9a-fA-F]{16,}", "<HEX>", template)
+            template = re.sub(r"\b\d+\b", "<N>", template)
+            parts.append(f"{key}={template}")
+
+        fingerprint_input = "|".join(parts)
+        return hashlib.md5(
+            fingerprint_input.encode(), usedforsecurity=False
+        ).hexdigest()
+
+    def _write_observation_rollups(
+        self, hour_start_ns: int, now_ns: int, bucket_hour: str
+    ) -> None:
+        """Roll up observation_events for the current hour into fingerprinted buckets.
+
+        For each (domain, fingerprint) combination in the current hour:
+        - Write/update a row in observation_rollups with count + sample
+        - Prune raw observation_events older than retention window
+
+        Called every ~25s by _write_hourly_rollups().
+        """
+        with self._read_pool.connection() as rdb:
+            # Read current hour's observations grouped by domain
+            try:
+                rows = rdb.execute(
+                    """SELECT id, timestamp_ns, domain, attributes,
+                              device_id, collection_agent
+                       FROM observation_events
+                       WHERE timestamp_ns >= ? AND timestamp_ns < ?
+                       ORDER BY domain, timestamp_ns""",
+                    (hour_start_ns, hour_start_ns + int(3600 * 1e9)),
+                ).fetchall()
+            except sqlite3.Error:
+                return
+
+        if not rows:
+            return
+
+        # Group by (domain, fingerprint) and aggregate
+        buckets: Dict[tuple, dict] = {}  # (domain, fp) -> aggregation
+        for row in rows:
+            _id, ts_ns, domain, attrs_json, device_id, agent = row
+            if domain not in self._ROLLUP_DOMAINS:
+                continue
+
+            fp = self._observation_fingerprint(domain, attrs_json)
+            key = (domain, fp)
+
+            if key not in buckets:
+                buckets[key] = {
+                    "count": 0,
+                    "first_seen_ns": ts_ns,
+                    "last_seen_ns": ts_ns,
+                    "sample_attributes": attrs_json,
+                    "device_id": device_id,
+                    "collection_agent": agent,
+                }
+            bucket = buckets[key]
+            bucket["count"] += 1
+            bucket["last_seen_ns"] = max(bucket["last_seen_ns"], ts_ns)
+
+        # Write rollup buckets
+        for (domain, fp), bucket in buckets.items():
+            self.upsert_observation_rollup(
+                {
+                    "window_start_ns": hour_start_ns,
+                    "window_end_ns": now_ns,
+                    "domain": domain,
+                    "fingerprint": fp,
+                    "sample_attributes": (
+                        json.loads(bucket["sample_attributes"])
+                        if isinstance(bucket["sample_attributes"], str)
+                        else bucket["sample_attributes"]
+                    ),
+                    "total_count": bucket["count"],
+                    "first_seen_ns": bucket["first_seen_ns"],
+                    "last_seen_ns": bucket["last_seen_ns"],
+                    "device_id": bucket["device_id"],
+                    "collection_agent": bucket["collection_agent"],
+                }
+            )
+
+        # Prune raw observations older than retention window
+        # BUT: skip pruning if any active signals/incidents reference that window
+        retention_cutoff_ns = int(
+            (time.time() - self._OBSERVATION_RAW_RETENTION_HOURS * 3600) * 1e9
+        )
+        try:
+            # Check for active incidents that might need this evidence
+            has_active_incidents = False
+            try:
+                row = self.db.execute(
+                    "SELECT COUNT(*) FROM incidents WHERE status IN ('open','investigating','contained')"
+                ).fetchone()
+                has_active_incidents = (row[0] or 0) > 0
+            except sqlite3.Error:
+                pass
+
+            if not has_active_incidents:
+                pruned = self.db.execute(
+                    """DELETE FROM observation_events
+                       WHERE timestamp_ns < ? AND domain IN ({})""".format(
+                        ",".join(f"'{d}'" for d in self._ROLLUP_DOMAINS)
+                    ),
+                    (retention_cutoff_ns,),
+                ).rowcount
+                if pruned:
+                    logger.debug("Pruned %d old observation rows", pruned)
+        except sqlite3.Error:
+            pass
+
+    def backfill_rollups(self, hours: int = 72) -> int:
+        """Backfill dashboard_rollups for the last N hours of historical data.
+
+        Scans each table once per hour bucket and writes the counts.
+        Should be called once after installing the rollup system to make
+        historical data visible through rollup readers.
+
+        Returns total rollup rows written.
+        """
+        now = datetime.now(timezone.utc)
+        now_ns = int(time.time() * 1e9)
+        total = 0
+
+        _domain_tables = [
+            ("security", "security_events"),
+            ("process", "process_events"),
+            ("flow", "flow_events"),
+            ("dns", "dns_events"),
+            ("audit", "audit_events"),
+            ("fim", "fim_events"),
+            ("persistence", "persistence_events"),
+            ("peripheral", "peripheral_events"),
+            ("observation", "observation_events"),
+        ]
+
+        for h in range(hours):
+            hour_dt = now - timedelta(hours=h)
+            bucket_hour = hour_dt.strftime(_HOUR_FMT)
+            hour_start = hour_dt.replace(minute=0, second=0, microsecond=0)
+            hour_end = hour_start + timedelta(hours=1)
+            start_ns = int(hour_start.timestamp() * 1e9)
+            end_ns = int(hour_end.timestamp() * 1e9)
+
+            for domain, table in _domain_tables:
+                try:
+                    row = self.db.execute(
+                        f"SELECT COUNT(*) FROM {table} "
+                        f"WHERE timestamp_ns >= ? AND timestamp_ns < ?",
+                        (start_ns, end_ns),
+                    ).fetchone()
+                    count = row[0] if row else 0
+                    if count > 0:
+                        self.db.execute(
+                            "INSERT OR REPLACE INTO dashboard_rollups "
+                            "(rollup_type, bucket_key, bucket_hour, value, updated_ns) "
+                            "VALUES ('events_by_domain', ?, ?, ?, ?)",
+                            (domain, bucket_hour, count, now_ns),
+                        )
+                        total += 1
+                except Exception:
+                    pass
+
+        self.db.commit()
+        logger.info("Backfilled %d rollup entries for %d hours", total, hours)
+        return total
 
     # ── Batch API (used by WALProcessor for single-commit batches) ──
 
@@ -952,6 +1417,283 @@ class TelemetryStore:
             return
         self.db.commit()
         self._cache.invalidate()
+
+    # ------------------------------------------------------------------
+    # Layer 1: Unified snapshot dedup
+    # ------------------------------------------------------------------
+
+    def _check_snapshot_dedup(
+        self, table_name: str, dedup_key: str, content_hash: str, timestamp_ns: int
+    ) -> bool:
+        """Check if a snapshot event is a duplicate and should be suppressed.
+
+        Compares content_hash against _snapshot_baseline for the given
+        (table_name, dedup_key).  If the hash matches, updates the timestamp
+        and returns True (suppress).  If different or missing, upserts the
+        baseline and returns False (allow insert).
+
+        This is the single entry point for ALL snapshot dedup — called by
+        insert_fim_event, insert_persistence_event, insert_process_event,
+        insert_peripheral_event, and insert_observation_event.
+
+        Args:
+            table_name: The target table (e.g. 'process_events').
+            dedup_key:  Pipe-delimited composite key (e.g. 'dev1|1234|/usr/bin/python').
+            content_hash: Hash of the mutable content fields.
+            timestamp_ns: Current event timestamp in nanoseconds.
+
+        Returns:
+            True if the event is a duplicate (caller should skip INSERT).
+            False if the event is new or changed (caller should INSERT).
+        """
+        try:
+            row = self.db.execute(
+                "SELECT content_hash FROM _snapshot_baseline "
+                "WHERE table_name=? AND dedup_key=?",
+                (table_name, dedup_key),
+            ).fetchone()
+
+            if row and row[0] == content_hash:
+                # Unchanged — bump timestamp, suppress insert
+                self.db.execute(
+                    "UPDATE _snapshot_baseline SET updated_ns=? "
+                    "WHERE table_name=? AND dedup_key=?",
+                    (timestamp_ns, table_name, dedup_key),
+                )
+                return True
+
+            # New or changed — upsert baseline, allow insert
+            self.db.execute(
+                "INSERT INTO _snapshot_baseline "
+                "(table_name, dedup_key, content_hash, updated_ns) "
+                "VALUES (?,?,?,?) "
+                "ON CONFLICT(table_name, dedup_key) DO UPDATE SET "
+                "content_hash=excluded.content_hash, "
+                "updated_ns=excluded.updated_ns",
+                (table_name, dedup_key, content_hash, timestamp_ns),
+            )
+            return False
+        except sqlite3.Error:
+            return False  # on error, allow the insert
+
+    @staticmethod
+    def _dedup_key(*parts: object) -> str:
+        """Build a pipe-delimited dedup key from component parts."""
+        return "|".join(str(p) if p is not None else "" for p in parts)
+
+    @staticmethod
+    def _content_fingerprint(*fields: object) -> str:
+        """Compute a fast content hash from the mutable fields of a snapshot.
+
+        Uses hashlib.md5 (speed > collision resistance — this is dedup, not
+        security).  Returns hex digest.
+        """
+        import hashlib
+
+        payload = "|".join(str(f) if f is not None else "" for f in fields)
+        return hashlib.md5(payload.encode("utf-8", errors="replace")).hexdigest()
+
+    # ------------------------------------------------------------------
+    # Layer 1: Bulk baseline population + historical dedup
+    # ------------------------------------------------------------------
+
+    def populate_baselines(self) -> dict:
+        """Seed _snapshot_baseline from existing snapshot events (all tables).
+
+        Safe to run multiple times — uses INSERT OR REPLACE (SQLite doesn't
+        support ON CONFLICT with INSERT...SELECT from a table source).
+        Returns {table: rows_upserted}.
+        """
+        stats: dict = {}
+        _queries = [
+            (
+                "fim_events",
+                """
+                INSERT OR REPLACE INTO _snapshot_baseline (table_name, dedup_key, content_hash, updated_ns)
+                SELECT 'fim_events', device_id || '|' || path, new_hash, MAX(timestamp_ns)
+                FROM fim_events
+                WHERE device_id IS NOT NULL AND path != ''
+                GROUP BY device_id, path
+            """,
+            ),
+            (
+                "persistence_events",
+                """
+                INSERT OR REPLACE INTO _snapshot_baseline (table_name, dedup_key, content_hash, updated_ns)
+                SELECT 'persistence_events',
+                       device_id || '|' || mechanism || '|' || entry_id,
+                       content_hash, MAX(timestamp_ns)
+                FROM persistence_events
+                WHERE device_id IS NOT NULL
+                  AND mechanism IS NOT NULL AND mechanism != ''
+                  AND entry_id IS NOT NULL AND entry_id != ''
+                GROUP BY device_id, mechanism, entry_id
+            """,
+            ),
+            (
+                "process_events",
+                """
+                INSERT OR REPLACE INTO _snapshot_baseline (table_name, dedup_key, content_hash, updated_ns)
+                SELECT 'process_events',
+                       device_id || '|' || pid || '|' || COALESCE(exe, ''),
+                       COALESCE(cmdline, ''), MAX(timestamp_ns)
+                FROM process_events
+                WHERE device_id IS NOT NULL AND pid IS NOT NULL
+                GROUP BY device_id, pid, exe
+            """,
+            ),
+            (
+                "peripheral_events",
+                """
+                INSERT OR REPLACE INTO _snapshot_baseline (table_name, dedup_key, content_hash, updated_ns)
+                SELECT 'peripheral_events',
+                       device_id || '|' || peripheral_device_id,
+                       COALESCE(connection_status, '') || '|' || COALESCE(device_name, ''),
+                       MAX(timestamp_ns)
+                FROM peripheral_events
+                WHERE device_id IS NOT NULL
+                GROUP BY device_id, peripheral_device_id
+            """,
+            ),
+            (
+                "observation_events_discovery",
+                """
+                INSERT OR REPLACE INTO _snapshot_baseline (table_name, dedup_key, content_hash, updated_ns)
+                SELECT 'observation_events',
+                       device_id || '|discovery|' || COALESCE(attributes, ''),
+                       COALESCE(attributes, ''), MAX(timestamp_ns)
+                FROM observation_events
+                WHERE domain = 'discovery' AND device_id IS NOT NULL
+                GROUP BY device_id, attributes
+            """,
+            ),
+        ]
+        for label, sql in _queries:
+            try:
+                cur = self.db.execute(sql)
+                self.db.commit()
+                stats[label] = cur.rowcount
+                logger.info("Baseline seeded for %s: %d entries", label, cur.rowcount)
+            except sqlite3.Error as e:
+                logger.error("Baseline seed failed for %s: %s", label, e)
+                stats[label] = 0
+        return stats
+
+    def deduplicate_snapshots(self) -> dict:
+        """Remove duplicate snapshot rows from ALL snapshot-heavy tables.
+
+        Keeps only the LATEST row per dedup key group.  Event tables
+        (security, flow, dns, audit) and log-type observations are untouched.
+
+        Returns {table: rows_deleted}.
+        """
+        stats: dict = {}
+        _dedup_ops = [
+            # (table, group_by_clause for keeping latest per unique combo)
+            ("fim_events", "device_id, path, new_hash", "change_type = 'snapshot'"),
+            (
+                "persistence_events",
+                "device_id, mechanism, entry_id, content_hash",
+                "change_type = 'snapshot'",
+            ),
+            (
+                "process_events",
+                "device_id, pid, exe, cmdline",
+                "1=1",
+            ),  # all process rows are snapshots
+            (
+                "peripheral_events",
+                "device_id, peripheral_device_id, connection_status, device_name",
+                "1=1",
+            ),  # all peripheral rows are snapshots
+            (
+                "observation_events",
+                "device_id, domain, attributes",
+                "domain = 'discovery'",
+            ),  # only discovery is snapshot-like
+        ]
+        for table, group_cols, where_clause in _dedup_ops:
+            try:
+                cur = self.db.execute(
+                    f"""
+                    DELETE FROM {table}
+                    WHERE {where_clause}
+                      AND id NOT IN (
+                          SELECT MAX(id)
+                          FROM {table}
+                          WHERE {where_clause}
+                          GROUP BY {group_cols}
+                      )
+                """
+                )
+                stats[table] = cur.rowcount
+                self.db.commit()
+                logger.info("Deduped %s: %d rows deleted", table, cur.rowcount)
+            except sqlite3.Error as e:
+                logger.error("Dedup failed for %s: %s", table, e)
+                stats[table] = 0
+        return stats
+
+    # ------------------------------------------------------------------
+    # Layer 2: Dashboard rollup readers
+    # ------------------------------------------------------------------
+
+    def get_rollup_event_counts(self, hours: int = 24) -> dict:
+        """Read pre-computed event counts by domain from dashboard_rollups.
+
+        Returns {domain: total_count} for the requested window.  Falls back
+        to an empty dict if no rollups exist yet (first boot).
+        """
+        now = datetime.now(timezone.utc)
+        buckets = []
+        for h in range(hours):
+            dt = now - timedelta(hours=h)
+            buckets.append(dt.strftime(_HOUR_FMT))
+        placeholders = ",".join("?" for _ in buckets)
+
+        result: dict = {}
+        try:
+            with self._read_pool.connection() as conn:
+                rows = conn.execute(
+                    f"SELECT bucket_key, SUM(value) FROM dashboard_rollups "
+                    f"WHERE rollup_type='events_by_domain' "
+                    f"AND bucket_hour IN ({placeholders}) "
+                    f"GROUP BY bucket_key",
+                    buckets,
+                ).fetchall()
+                for row in rows:
+                    result[row[0]] = row[1]
+        except Exception:
+            pass
+        return result
+
+    def get_rollup_threat_severity(self, hours: int = 24) -> dict:
+        """Read pre-computed threat counts by severity from dashboard_rollups.
+
+        Returns {severity: count}.
+        """
+        now = datetime.now(timezone.utc)
+        buckets = []
+        for h in range(hours):
+            dt = now - timedelta(hours=h)
+            buckets.append(dt.strftime(_HOUR_FMT))
+        placeholders = ",".join("?" for _ in buckets)
+
+        result: dict = {}
+        try:
+            with self._read_pool.connection() as conn:
+                rows = conn.execute(
+                    f"SELECT bucket_key, SUM(value) FROM dashboard_rollups "
+                    f"WHERE rollup_type='threats_by_severity' "
+                    f"AND bucket_hour IN ({placeholders}) "
+                    f"GROUP BY bucket_key",
+                    buckets,
+                ).fetchall()
+                for row in rows:
+                    result[row[0]] = row[1]
+        except Exception:
+            pass
+        return result
 
     def insert_telemetry_event(self, event_data: Dict[str, Any]) -> Optional[int]:
         """Insert canonical ingress envelope event into telemetry_events."""
@@ -997,15 +1739,33 @@ class TelemetryStore:
             return None
 
     def insert_process_event(self, event_data: dict[str, Any]) -> Optional[int]:
-        """Insert a process event.
+        """Insert a process event (with unified snapshot dedup).
 
-        Args:
-            event_data: Dictionary with process event fields.
-
-        Returns:
-            Row ID of inserted event, or None if failed.
+        Process scans are full-table snapshots — same PID/exe/cmdline combo
+        repeats every cycle.  Dedup key: (device_id, pid, exe).  Content hash:
+        fingerprint of (cmdline, username, cpu_percent, memory_percent, status).
         """
         try:
+            timestamp_ns = event_data.get("timestamp_ns") or int(time.time() * 1e9)
+            device_id = event_data.get("device_id") or "unknown"
+            pid = event_data.get("pid")
+            exe = event_data.get("exe") or ""
+
+            # Unified snapshot dedup — process events are always snapshots
+            if device_id and pid is not None:
+                key = self._dedup_key(device_id, pid, exe)
+                fingerprint = self._content_fingerprint(
+                    event_data.get("cmdline"),
+                    event_data.get("username"),
+                    event_data.get("status"),
+                    event_data.get("ppid"),
+                )
+                if self._check_snapshot_dedup(
+                    "process_events", key, fingerprint, timestamp_ns
+                ):
+                    self._commit()
+                    return None  # suppressed duplicate
+
             cursor = self.db.execute(
                 """
                 INSERT OR REPLACE INTO process_events (
@@ -1299,8 +2059,31 @@ class TelemetryStore:
             return None
 
     def insert_peripheral_event(self, event_data: Dict[str, Any]) -> Optional[int]:
-        """Insert a peripheral (USB/Bluetooth) event."""
+        """Insert a peripheral (USB/Bluetooth) event (with unified snapshot dedup).
+
+        Peripheral scans are full-table snapshots — same device appears
+        every cycle.  Dedup key: (device_id, peripheral_device_id).
+        """
         try:
+            timestamp_ns = event_data.get("timestamp_ns", int(time.time() * 1e9))
+            device_id = event_data.get("device_id", "unknown")
+            peripheral_id = event_data.get("peripheral_device_id", "unknown")
+
+            # Unified snapshot dedup
+            if device_id and peripheral_id:
+                key = self._dedup_key(device_id, peripheral_id)
+                fingerprint = self._content_fingerprint(
+                    event_data.get("connection_status"),
+                    event_data.get("device_name"),
+                    event_data.get("vendor_id"),
+                    event_data.get("product_id"),
+                )
+                if self._check_snapshot_dedup(
+                    "peripheral_events", key, fingerprint, timestamp_ns
+                ):
+                    self._commit()
+                    return None  # suppressed duplicate
+
             cursor = self.db.execute(
                 """
                 INSERT INTO peripheral_events (
@@ -1478,8 +2261,25 @@ class TelemetryStore:
             return None
 
     def insert_persistence_event(self, event_data: Dict[str, Any]) -> Optional[int]:
-        """Insert a persistence mechanism event."""
+        """Insert a persistence mechanism event (with unified snapshot dedup)."""
         try:
+            timestamp_ns = event_data.get("timestamp_ns", int(time.time() * 1e9))
+            device_id = event_data.get("device_id", "unknown")
+            mechanism = event_data.get("mechanism") or ""
+            entry_id = event_data.get("entry_id") or ""
+            content_hash = event_data.get("content_hash") or ""
+            command = event_data.get("command")
+            change_type = event_data.get("change_type")
+
+            # Unified snapshot dedup
+            if change_type == "snapshot" and device_id and mechanism and entry_id:
+                key = self._dedup_key(device_id, mechanism, entry_id)
+                if self._check_snapshot_dedup(
+                    "persistence_events", key, content_hash, timestamp_ns
+                ):
+                    self._commit()
+                    return None  # suppressed duplicate
+
             cursor = self.db.execute(
                 """
                 INSERT INTO persistence_events (
@@ -1495,19 +2295,19 @@ class TelemetryStore:
                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    event_data.get("timestamp_ns", int(time.time() * 1e9)),
+                    timestamp_ns,
                     event_data.get(
                         "timestamp_dt", datetime.now(timezone.utc).isoformat()
                     ),
-                    event_data.get("device_id", "unknown"),
+                    device_id,
                     event_data.get("event_type", ""),
-                    event_data.get("mechanism"),
-                    event_data.get("entry_id"),
+                    mechanism,
+                    entry_id,
                     event_data.get("path"),
-                    event_data.get("command"),
+                    command,
                     event_data.get("schedule"),
                     event_data.get("user"),
-                    event_data.get("change_type"),
+                    change_type,
                     event_data.get("old_command"),
                     event_data.get("new_command"),
                     event_data.get("risk_score", 0.0),
@@ -1516,7 +2316,7 @@ class TelemetryStore:
                     event_data.get("reason"),
                     event_data.get("collection_agent"),
                     event_data.get("agent_version"),
-                    event_data.get("content_hash"),
+                    content_hash,
                     event_data.get("program"),
                     event_data.get("label"),
                     event_data.get("run_at_load", False),
@@ -1536,8 +2336,25 @@ class TelemetryStore:
             return None
 
     def insert_fim_event(self, event_data: Dict[str, Any]) -> Optional[int]:
-        """Insert a file integrity monitoring event."""
+        """Insert a file integrity monitoring event (with unified snapshot dedup)."""
         try:
+            timestamp_ns = event_data.get("timestamp_ns", int(time.time() * 1e9))
+            device_id = event_data.get("device_id", "unknown")
+            path = event_data.get("path", "")
+            new_hash = event_data.get("new_hash") or ""
+            mtime = event_data.get("mtime")
+            size = event_data.get("size")
+            change_type = event_data.get("change_type")
+
+            # Unified snapshot dedup
+            if change_type == "snapshot" and device_id and path:
+                key = self._dedup_key(device_id, path)
+                if self._check_snapshot_dedup(
+                    "fim_events", key, new_hash, timestamp_ns
+                ):
+                    self._commit()
+                    return None  # suppressed duplicate
+
             cursor = self.db.execute(
                 """
                 INSERT INTO fim_events (
@@ -1551,24 +2368,24 @@ class TelemetryStore:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    event_data.get("timestamp_ns", int(time.time() * 1e9)),
+                    timestamp_ns,
                     event_data.get(
                         "timestamp_dt", datetime.now(timezone.utc).isoformat()
                     ),
-                    event_data.get("device_id", "unknown"),
+                    device_id,
                     event_data.get("event_type", ""),
-                    event_data.get("path", ""),
-                    event_data.get("change_type"),
+                    path,
+                    change_type,
                     event_data.get("old_hash"),
-                    event_data.get("new_hash"),
+                    new_hash,
                     event_data.get("old_mode"),
                     event_data.get("new_mode"),
                     event_data.get("file_extension"),
                     event_data.get("owner_uid"),
                     event_data.get("owner_gid"),
                     event_data.get("is_suid", False),
-                    event_data.get("mtime"),
-                    event_data.get("size"),
+                    mtime,
+                    size,
                     event_data.get("risk_score", 0.0),
                     event_data.get("confidence", 0.0),
                     json.dumps(event_data.get("mitre_techniques", [])),
@@ -1590,9 +2407,39 @@ class TelemetryStore:
             logger.error("Failed to insert FIM event: %s", e)
             return None
 
+    # Snapshot-like observation domains — these scan full state every cycle
+    _SNAPSHOT_OBSERVATION_DOMAINS = frozenset(
+        {"discovery", "internet_activity", "db_activity"}
+    )
+
     def insert_observation_event(self, event_data: Dict[str, Any]) -> Optional[int]:
-        """Insert a generic observation event (P3 domains without dedicated tables)."""
+        """Insert an observation event (with unified snapshot dedup for scan domains).
+
+        Domains like 'discovery' and 'internet_activity' produce full-state
+        snapshots every cycle.  Log domains like 'unified_log' are true
+        append-only events and bypass dedup.
+        """
         try:
+            timestamp_ns = event_data.get("timestamp_ns", int(time.time() * 1e9))
+            device_id = event_data.get("device_id", "unknown")
+            domain = event_data.get("domain", "unknown")
+            attributes = event_data.get("attributes", {})
+            attrs_json = (
+                json.dumps(attributes)
+                if isinstance(attributes, dict)
+                else str(attributes)
+            )
+
+            # Unified snapshot dedup for scan-type domains
+            if domain in self._SNAPSHOT_OBSERVATION_DOMAINS and device_id:
+                fingerprint = self._content_fingerprint(attrs_json)
+                key = self._dedup_key(device_id, domain, fingerprint)
+                if self._check_snapshot_dedup(
+                    "observation_events", key, fingerprint, timestamp_ns
+                ):
+                    self._commit()
+                    return None  # suppressed duplicate
+
             cursor = self.db.execute(
                 """
                 INSERT INTO observation_events (
@@ -1792,34 +2639,48 @@ class TelemetryStore:
         Returns events from all domain tables, optionally filtered to only
         those exceeding min_risk (for threat-feed: show actual detections).
         """
+        # 10s cache for identical params (dashboard polls every 5-15s)
+        cache_key = f"unified_threats:{hours}:{limit}:{offset}:{min_risk}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
         risk_clause = f"AND risk_score > {min_risk}" if min_risk > 0 else ""
         risk_clause_anom = f"AND anomaly_score > {min_risk}" if min_risk > 0 else ""
         risk_clause_threat = f"AND threat_score > {min_risk}" if min_risk > 0 else ""
+        # Cap per-subquery to avoid scanning millions of rows before the
+        # outer ORDER BY + LIMIT.  Each table contributes at most sub_limit
+        # rows; the final sort picks the top `limit` across all tables.
+        sub_limit = limit + offset
         query = f"""
+            SELECT * FROM (
             SELECT id, 'security' as source, event_category as type,
                    description, risk_score, confidence,
                    timestamp_ns, timestamp_dt, mitre_techniques, indicators,
                    collection_agent, device_id, final_classification,
                    requires_investigation, event_action
             FROM security_events WHERE timestamp_ns > ? {risk_clause}
-            UNION ALL
+            ORDER BY timestamp_ns DESC LIMIT {sub_limit}
+            ) UNION ALL SELECT * FROM (
             SELECT id, 'persistence', event_type, reason, risk_score,
                    confidence, timestamp_ns, timestamp_dt, mitre_techniques,
                    NULL, collection_agent, device_id, NULL, 1, change_type
             FROM persistence_events WHERE timestamp_ns > ? {risk_clause}
-            UNION ALL
+            ORDER BY timestamp_ns DESC LIMIT {sub_limit}
+            ) UNION ALL SELECT * FROM (
             SELECT id, 'process', process_category, exe, anomaly_score,
                    confidence_score, timestamp_ns, timestamp_dt, NULL,
                    NULL, collection_agent, device_id, NULL,
                    CAST(is_suspicious AS INT), NULL
             FROM process_events WHERE timestamp_ns > ? {risk_clause_anom}
-            UNION ALL
+            ORDER BY timestamp_ns DESC LIMIT {sub_limit}
+            ) UNION ALL SELECT * FROM (
             SELECT id, 'fim', event_type, reason, risk_score,
                    confidence, timestamp_ns, timestamp_dt, mitre_techniques,
                    NULL, collection_agent, device_id, NULL, 0, change_type
             FROM fim_events WHERE timestamp_ns > ? {risk_clause}
-            UNION ALL
+            ORDER BY timestamp_ns DESC LIMIT {sub_limit}
+            ) UNION ALL SELECT * FROM (
             SELECT id, 'flow', protocol,
                    'Flow: ' || COALESCE(src_ip,'?') || ':' || COALESCE(src_port,0)
                    || ' -> ' || COALESCE(dst_ip,'?') || ':' || COALESCE(dst_port,0),
@@ -1827,24 +2688,30 @@ class TelemetryStore:
                    NULL, NULL, device_id, NULL,
                    CAST(is_suspicious AS INT), NULL
             FROM flow_events WHERE timestamp_ns > ? {risk_clause_threat}
-            UNION ALL
+            ORDER BY timestamp_ns DESC LIMIT {sub_limit}
+            ) UNION ALL SELECT * FROM (
             SELECT id, 'dns', event_type, 'DNS: ' || domain, risk_score,
                    confidence, timestamp_ns, timestamp_dt, mitre_techniques,
                    NULL, collection_agent, device_id, NULL, 0, NULL
             FROM dns_events WHERE timestamp_ns > ? {risk_clause}
-            UNION ALL
+            ORDER BY timestamp_ns DESC LIMIT {sub_limit}
+            ) UNION ALL SELECT * FROM (
             SELECT id, 'audit', event_type, reason, risk_score,
                    confidence, timestamp_ns, timestamp_dt, mitre_techniques,
                    NULL, collection_agent, device_id, NULL, 0, NULL
             FROM audit_events WHERE timestamp_ns > ? {risk_clause}
+            ORDER BY timestamp_ns DESC LIMIT {sub_limit}
+            )
             ORDER BY timestamp_ns DESC LIMIT ? OFFSET ?
         """
         params = [cutoff_ns] * 7 + [limit, offset]
-        with self._lock:
+        with self._read_pool.connection() as rdb:
             try:
-                cursor = self.db.execute(query, params)
+                cursor = rdb.execute(query, params)
                 cols = [d[0] for d in cursor.description]
-                return [dict(zip(cols, row)) for row in cursor.fetchall()]
+                rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
+                self._cache.put(cache_key, rows, ttl=10)
+                return rows
             except sqlite3.Error as e:
                 logger.error("Failed unified threat query: %s", e)
                 return []
@@ -2469,15 +3336,23 @@ class TelemetryStore:
     def update_incident(self, incident_id: int, data: Dict[str, Any]) -> bool:
         """Update an existing incident."""
         now = datetime.now(timezone.utc).isoformat()
-        sets = ["updated_at = ?"]
-        params: list = [now]
+        now_ns = int(time.time() * 1e9)
+        sets = ["updated_at = ?", "last_activity_ns = ?"]
+        params: list = [now, now_ns]
         allowed = {
             "title",
             "description",
             "severity",
             "status",
             "assignee",
+            "assigned_to",
             "resolution_notes",
+            "resolution_summary",
+            "investigation_notes",
+            "containment_actions",
+            "signal_ids",
+            "timeline_events",
+            "sla_deadline_ns",
         }
         for k, v in data.items():
             if k in allowed:
@@ -2530,6 +3405,416 @@ class TelemetryStore:
             except sqlite3.Error as e:
                 logger.error("Failed to get incident: %s", e)
                 return None
+
+    # ── Signals Layer (Directive 3) ──────────────────────────────────────────
+    # Signals are candidate incidents — the complement cascade's recognition
+    # phase.  They sit between detections and incidents, providing triage,
+    # deduplication, and a feedback path into AMRDR.
+
+    _SIGNAL_MERGE_WINDOW_NS = int(3600 * 1e9)  # 1h merge window
+    _SIGNAL_AUTO_EXPIRE_NS = int(72 * 3600 * 1e9)  # 72h auto-age
+
+    def create_signal(
+        self,
+        device_id: str,
+        signal_type: str,
+        trigger_summary: str,
+        contributing_event_ids: List[int],
+        risk_score: float,
+    ) -> Optional[str]:
+        """Create a new signal or merge into existing open signal.
+
+        Merge rules (prevent signal spam):
+        - Same device_id + same signal_type + overlapping 1h window
+        - → Update existing signal's risk_score and event_ids instead
+        """
+        import secrets
+
+        now_ns = int(time.time() * 1e9)
+        merge_cutoff = now_ns - self._SIGNAL_MERGE_WINDOW_NS
+
+        # Check for mergeable open signal
+        try:
+            existing = self.db.execute(
+                """SELECT id, signal_id, contributing_event_ids, risk_score
+                   FROM signals
+                   WHERE device_id = ? AND signal_type = ? AND status = 'open'
+                     AND created_ns > ?
+                   ORDER BY created_ns DESC LIMIT 1""",
+                (device_id, signal_type, merge_cutoff),
+            ).fetchone()
+
+            if existing:
+                # Merge: update existing signal
+                old_ids = json.loads(existing[2]) if existing[2] else []
+                merged_ids = list(set(old_ids + contributing_event_ids))
+                new_risk = max(existing[3], risk_score)
+                self.db.execute(
+                    """UPDATE signals SET contributing_event_ids = ?,
+                       risk_score = ?, updated_ns = ?
+                       WHERE id = ?""",
+                    (json.dumps(merged_ids), new_risk, now_ns, existing[0]),
+                )
+                self._commit()
+                logger.info(
+                    "Merged into signal %s: %d events, risk=%.2f",
+                    existing[1],
+                    len(merged_ids),
+                    new_risk,
+                )
+                return existing[1]
+
+        except sqlite3.Error:
+            pass
+
+        # Create new signal
+        signal_id = f"SIG-{secrets.token_hex(8)}"
+        try:
+            self.db.execute(
+                """INSERT INTO signals (
+                    signal_id, device_id, created_ns, signal_type,
+                    trigger_summary, contributing_event_ids, risk_score,
+                    status, updated_ns
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)""",
+                (
+                    signal_id,
+                    device_id,
+                    now_ns,
+                    signal_type,
+                    trigger_summary,
+                    json.dumps(contributing_event_ids),
+                    risk_score,
+                    now_ns,
+                ),
+            )
+            self._commit()
+            logger.info(
+                "Created signal %s: type=%s device=%s risk=%.2f",
+                signal_id,
+                signal_type,
+                device_id,
+                risk_score,
+            )
+            return signal_id
+        except sqlite3.Error as e:
+            logger.error("Failed to create signal: %s", e)
+            return None
+
+    def promote_signal(self, signal_id: str) -> Optional[int]:
+        """Promote a signal to an incident. Returns incident ID."""
+        now_ns = int(time.time() * 1e9)
+        try:
+            row = self.db.execute(
+                "SELECT * FROM signals WHERE signal_id = ? AND status = 'open'",
+                (signal_id,),
+            ).fetchone()
+            if not row:
+                return None
+
+            sig = dict(row)
+            event_ids = (
+                json.loads(sig["contributing_event_ids"])
+                if sig["contributing_event_ids"]
+                else []
+            )
+
+            # Create incident from signal
+            incident_id = self.create_incident(
+                {
+                    "title": f"[{sig['signal_type'].upper()}] {sig['trigger_summary']}",
+                    "description": f"Auto-promoted from signal {signal_id}",
+                    "severity": (
+                        "critical"
+                        if sig["risk_score"] >= 0.8
+                        else "high" if sig["risk_score"] >= 0.5 else "medium"
+                    ),
+                    "source_event_ids": event_ids,
+                }
+            )
+
+            if incident_id:
+                # Update signal status
+                self.db.execute(
+                    """UPDATE signals SET status = 'promoted',
+                       promoted_to_incident = ?, updated_ns = ?
+                       WHERE signal_id = ?""",
+                    (incident_id, now_ns, signal_id),
+                )
+                # Link signal to incident
+                self.db.execute(
+                    "UPDATE incidents SET signal_ids = ? WHERE id = ?",
+                    (json.dumps([signal_id]), incident_id),
+                )
+                self._commit()
+                logger.info("Promoted signal %s → incident #%d", signal_id, incident_id)
+
+            return incident_id
+        except sqlite3.Error as e:
+            logger.error("Failed to promote signal: %s", e)
+            return None
+
+    def dismiss_signal(
+        self, signal_id: str, dismissed_by: str = "system", reason: str = ""
+    ) -> bool:
+        """Dismiss a signal. Feeds back into AMRDR for tuning."""
+        now_ns = int(time.time() * 1e9)
+        try:
+            self.db.execute(
+                """UPDATE signals SET status = 'dismissed',
+                   dismissed_by = ?, dismissed_reason = ?, updated_ns = ?
+                   WHERE signal_id = ? AND status = 'open'""",
+                (dismissed_by, reason, now_ns, signal_id),
+            )
+            self._commit()
+            return True
+        except sqlite3.Error as e:
+            logger.error("Failed to dismiss signal: %s", e)
+            return False
+
+    def get_signals(
+        self, status: Optional[str] = None, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """Get signals with optional status filter."""
+        try:
+            if status:
+                cursor = self.db.execute(
+                    "SELECT * FROM signals WHERE status = ? ORDER BY created_ns DESC LIMIT ?",
+                    (status, limit),
+                )
+            else:
+                cursor = self.db.execute(
+                    "SELECT * FROM signals ORDER BY created_ns DESC LIMIT ?",
+                    (limit,),
+                )
+            return [dict(r) for r in cursor.fetchall()]
+        except sqlite3.Error as e:
+            logger.error("Failed to get signals: %s", e)
+            return []
+
+    def expire_stale_signals(self) -> int:
+        """Auto-expire signals older than 72h that are still open."""
+        cutoff_ns = int(time.time() * 1e9) - self._SIGNAL_AUTO_EXPIRE_NS
+        try:
+            result = self.db.execute(
+                """UPDATE signals SET status = 'expired', updated_ns = ?
+                   WHERE status = 'open' AND created_ns < ?""",
+                (int(time.time() * 1e9), cutoff_ns),
+            )
+            self._commit()
+            return result.rowcount
+        except sqlite3.Error:
+            return 0
+
+    def evaluate_auto_signals(self) -> List[str]:
+        """Evaluate auto-signal rules against recent security events.
+
+        Rules:
+        1. Risk threshold: any event with risk_score >= 0.8 → auto-signal
+        2. Anomaly burst: 5+ DANGER events on same device in 10 min → signal
+        3. Kill chain: 2+ MITRE tactic phases on same device in 1h → signal
+
+        Called by the prewarm loop every cycle.
+        Returns list of signal_ids created/merged.
+        """
+        created = []
+        now_ns = int(time.time() * 1e9)
+        window_10m = now_ns - int(600 * 1e9)
+        window_1h = now_ns - int(3600 * 1e9)
+
+        with self._read_pool.connection() as rdb:
+            # Rule 1: Risk threshold (>= 0.8)
+            try:
+                high_risk = rdb.execute(
+                    """SELECT id, device_id, risk_score, event_category,
+                              mitre_techniques
+                       FROM security_events
+                       WHERE timestamp_ns > ? AND risk_score >= 0.8""",
+                    (window_1h,),
+                ).fetchall()
+
+                # Group by device
+                device_events: Dict[str, list] = {}
+                for row in high_risk:
+                    did = row[1]
+                    device_events.setdefault(did, []).append(row)
+
+                for device_id, events in device_events.items():
+                    event_ids = [e[0] for e in events]
+                    max_risk = max(e[2] for e in events)
+                    categories = [e[3] for e in events if e[3]]
+                    sig_id = self.create_signal(
+                        device_id=device_id,
+                        signal_type="threshold",
+                        trigger_summary=f"{len(events)} high-risk event(s): {', '.join(list(set(categories))[:3])}",
+                        contributing_event_ids=event_ids,
+                        risk_score=max_risk,
+                    )
+                    if sig_id:
+                        created.append(sig_id)
+            except sqlite3.Error:
+                pass
+
+            # Rule 2: Anomaly burst (5+ events in 10min)
+            try:
+                burst_rows = rdb.execute(
+                    """SELECT device_id, COUNT(*) as cnt,
+                              GROUP_CONCAT(id) as ids, MAX(risk_score) as max_r
+                       FROM security_events
+                       WHERE timestamp_ns > ? AND risk_score > 0
+                       GROUP BY device_id
+                       HAVING cnt >= 5""",
+                    (window_10m,),
+                ).fetchall()
+
+                for row in burst_rows:
+                    device_id = row[0]
+                    count = row[1]
+                    event_ids = [int(x) for x in row[2].split(",")]
+                    sig_id = self.create_signal(
+                        device_id=device_id,
+                        signal_type="anomaly_burst",
+                        trigger_summary=f"{count} security events in 10 min",
+                        contributing_event_ids=event_ids,
+                        risk_score=row[3],
+                    )
+                    if sig_id:
+                        created.append(sig_id)
+            except sqlite3.Error:
+                pass
+
+            # Rule 3: Kill chain progression (2+ tactics in 1h)
+            try:
+                tactic_rows = rdb.execute(
+                    """SELECT device_id, mitre_techniques, id
+                       FROM security_events
+                       WHERE timestamp_ns > ? AND mitre_techniques IS NOT NULL
+                         AND mitre_techniques != '[]'""",
+                    (window_1h,),
+                ).fetchall()
+
+                device_tactics: Dict[str, Dict[str, list]] = {}
+                for row in tactic_rows:
+                    device_id = row[0]
+                    try:
+                        techniques = json.loads(row[1]) if row[1] else []
+                    except json.JSONDecodeError:
+                        continue
+                    device_tactics.setdefault(device_id, {})
+                    for tech in techniques:
+                        # Extract tactic from technique ID (T1XXX → tactic mapping)
+                        device_tactics[device_id].setdefault(tech, []).append(row[2])
+
+                for device_id, techs in device_tactics.items():
+                    if len(techs) >= 2:
+                        all_ids = []
+                        for ids in techs.values():
+                            all_ids.extend(ids)
+                        sig_id = self.create_signal(
+                            device_id=device_id,
+                            signal_type="kill_chain",
+                            trigger_summary=f"{len(techs)} MITRE techniques: {', '.join(list(techs.keys())[:4])}",
+                            contributing_event_ids=list(set(all_ids)),
+                            risk_score=0.75,
+                        )
+                        if sig_id:
+                            created.append(sig_id)
+            except sqlite3.Error:
+                pass
+
+        # Expire stale signals
+        self.expire_stale_signals()
+
+        return created
+
+    def build_incident_timeline(
+        self, device_id: str, start_ns: int, end_ns: int, limit: int = 200
+    ) -> List[Dict[str, Any]]:
+        """Assemble cross-agent timeline for incident investigation.
+
+        Queries all event tables for the device in the time window,
+        normalizes sources, ranks by significance, and collapses
+        repetitive low-value entries.
+
+        Returns chronologically sorted timeline with anchors.
+        """
+        timeline: List[Dict[str, Any]] = []
+
+        # Significance weights for event ranking
+        _SIGNIFICANCE = {
+            "security": 10,
+            "process": 3,
+            "flow": 4,
+            "dns": 3,
+            "audit": 5,
+            "fim": 6,
+            "persistence": 8,
+            "peripheral": 4,
+            "observation": 1,
+        }
+
+        tables = [
+            ("security_events", "security", "device_id"),
+            ("process_events", "process", "device_id"),
+            ("flow_events", "flow", "device_id"),
+            ("dns_events", "dns", "device_id"),
+            ("audit_events", "audit", "device_id"),
+            ("fim_events", "fim", "device_id"),
+            ("persistence_events", "persistence", "device_id"),
+        ]
+
+        with self._read_pool.connection() as rdb:
+            for table, source, dev_col in tables:
+                try:
+                    rows = rdb.execute(
+                        f"""SELECT timestamp_ns, * FROM {table}
+                            WHERE {dev_col} = ? AND timestamp_ns BETWEEN ? AND ?
+                            ORDER BY timestamp_ns
+                            LIMIT ?""",
+                        (device_id, start_ns, end_ns, limit),
+                    ).fetchall()
+                    for row in rows:
+                        row_dict = dict(row)
+                        timeline.append(
+                            {
+                                "ts": row_dict.get("timestamp_ns", 0),
+                                "source": source,
+                                "significance": _SIGNIFICANCE.get(source, 1),
+                                "data": row_dict,
+                            }
+                        )
+                except sqlite3.Error:
+                    pass
+
+        # Sort by timestamp, then by significance (higher first for same ts)
+        timeline.sort(key=lambda x: (x["ts"], -x["significance"]))
+
+        # Collapse repetitive low-significance entries
+        collapsed: List[Dict[str, Any]] = []
+        run_source = None
+        run_count = 0
+        for entry in timeline:
+            if entry["significance"] <= 2 and entry["source"] == run_source:
+                run_count += 1
+                if run_count <= 3:
+                    collapsed.append(entry)
+                elif run_count == 4:
+                    collapsed.append(
+                        {
+                            "ts": entry["ts"],
+                            "source": entry["source"],
+                            "significance": 0,
+                            "data": {
+                                "_collapsed": True,
+                                "_message": f"...and more {entry['source']} events",
+                            },
+                        }
+                    )
+            else:
+                run_source = entry["source"]
+                run_count = 1
+                collapsed.append(entry)
+
+        return collapsed[:limit]
 
     # --- Metrics History ---
 
@@ -2762,6 +4047,404 @@ class TelemetryStore:
         result["posture_score"] = max(0, round(100 - (max_risk * 100), 1))
         self._cache.put(cache_key, result, ttl=30)  # summary view — 30s TTL
         return result
+
+    # ── Nerve Signal Posture Engine (v1) ─────────────────────────────────────
+    # Replaces MAX(risk_score) with signal-classified, time-decayed, tanh-mapped
+    # posture score.  See project_four_directives.md for research foundation.
+    #
+    # Signal types (Danger Theory / DCA):
+    #   PAMP   — known IOC, threat_intel hit   → weight 1.0
+    #   DANGER — anomaly, behavioral deviation  → weight 0.6
+    #   SAFE   — clean scans, normal baselines  → weight -0.3 (heals)
+    #
+    # v1 simplifications (per user guidance):
+    #   - No asset criticality (all devices weight 1.0)
+    #   - Uniform agent trust (all agents weight 1.0)
+    #   - Weighted sum instead of kill-chain amplification
+    #   - Safe healing bounded: cannot heal past 50% of accumulated danger
+
+    _POSTURE_HALF_LIFE_HOURS = 4.0  # event loses half influence every 4h
+    _POSTURE_DECAY_LAMBDA = math.log(2) / _POSTURE_HALF_LIFE_HOURS
+    _POSTURE_SAFE_HEAL_CAP = 0.5  # safe signals can heal at most 50% of danger
+
+    _POSTURE_LEVELS = [
+        (80, "CLEAR"),
+        (60, "ELEVATED"),
+        (40, "GUARDED"),
+        (20, "HIGH"),
+        (0, "CRITICAL"),
+    ]
+
+    @staticmethod
+    def _classify_signal(
+        risk_score: float,
+        threat_intel_match: bool,
+        mitre_techniques: str,
+        event_category: str,
+    ) -> tuple[str, float]:
+        """Classify a security event into PAMP, DANGER, or SAFE.
+
+        Returns (signal_type, signal_weight).
+        """
+        # PAMP: confirmed IOC or high-confidence threat intel
+        if threat_intel_match or risk_score >= 0.8:
+            return ("PAMP", 1.0)
+
+        # DANGER: anomaly, suspicious classification, medium+ risk
+        if risk_score >= 0.3:
+            return ("DANGER", 0.6)
+
+        # Events with some risk but low — still danger, lower weight
+        if risk_score > 0:
+            return ("DANGER", 0.3)
+
+        # SAFE: zero-risk events — clean scans, passed checks
+        return ("SAFE", -0.3)
+
+    def compute_nerve_posture(self, hours: int = 24) -> Dict[str, Any]:
+        """Compute posture score using the Nerve Signal Model.
+
+        Instead of MAX(risk_score), this method:
+        1. Gathers all security_events in the time window
+        2. Classifies each as PAMP/DANGER/SAFE
+        3. Applies exponential time-decay (4h half-life)
+        4. Sums decayed contributions with bounded safe healing
+        5. Maps through tanh for 0-100 score
+
+        Returns dict with posture_score, threat_level, signal_breakdown,
+        and the full domain posture data (backwards compatible).
+        """
+        cache_key = f"nerve_posture:{hours}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        now_s = time.time()
+        now_ns = int(now_s * 1e9)
+        cutoff_ns = int((now_s - hours * 3600) * 1e9)
+
+        # ── Step 1: Gather security events with timestamps + risk data ────
+        sec_query = """
+            SELECT timestamp_ns, risk_score, threat_intel_match,
+                   mitre_techniques, event_category, collection_agent
+            FROM security_events
+            WHERE timestamp_ns > ?
+            ORDER BY timestamp_ns DESC
+        """
+        signal_counts = {"PAMP": 0, "DANGER": 0, "SAFE": 0}
+        danger_sum = 0.0
+        safe_sum = 0.0
+
+        with self._read_pool.connection() as rdb:
+            try:
+                rows = rdb.execute(sec_query, (cutoff_ns,)).fetchall()
+            except sqlite3.Error:
+                rows = []
+
+        for row in rows:
+            ts_ns = row[0] or now_ns
+            risk = row[1] or 0.0
+            ti_match = bool(row[2])
+            mitre = row[3] or ""
+            category = row[4] or ""
+
+            # Classify signal
+            sig_type, sig_weight = self._classify_signal(
+                risk, ti_match, mitre, category
+            )
+            signal_counts[sig_type] += 1
+
+            # Time decay: e^(-λ * hours_since_event)
+            hours_ago = max(0, (now_ns - ts_ns) / 3.6e12)
+            decay = math.exp(-self._POSTURE_DECAY_LAMBDA * hours_ago)
+
+            # Decayed contribution
+            contribution = abs(sig_weight) * risk * decay if sig_type != "SAFE" else 0
+            if sig_type == "SAFE":
+                safe_sum += abs(sig_weight) * decay * 0.1  # bounded heal unit
+            else:
+                danger_sum += contribution
+
+        # ── Step 2: Also scan domain tables for risk signals ──────────────
+        # Domain events contribute to danger_sum via their risk scores
+        domain_risk_query = """
+            SELECT timestamp_ns, {risk_col}
+            FROM {table}
+            WHERE timestamp_ns > ? AND {risk_col} > 0
+        """
+        domain_risk_tables = [
+            ("process_events", "anomaly_score"),
+            ("flow_events", "threat_score"),
+            ("dns_events", "risk_score"),
+            ("fim_events", "risk_score"),
+            ("persistence_events", "risk_score"),
+            ("audit_events", "risk_score"),
+        ]
+        with self._read_pool.connection() as rdb:
+            for table, risk_col in domain_risk_tables:
+                try:
+                    drows = rdb.execute(
+                        domain_risk_query.format(risk_col=risk_col, table=table),
+                        (cutoff_ns,),
+                    ).fetchall()
+                    for dr in drows:
+                        ts_ns = dr[0] or now_ns
+                        risk = dr[1] or 0.0
+                        if risk > 0:
+                            hours_ago = max(0, (now_ns - ts_ns) / 3.6e12)
+                            decay = math.exp(-self._POSTURE_DECAY_LAMBDA * hours_ago)
+                            # Domain events are DANGER signals
+                            danger_sum += 0.6 * risk * decay
+                            signal_counts["DANGER"] += 1
+                except sqlite3.Error:
+                    pass
+
+        # ── Step 3: Bounded safe healing ──────────────────────────────────
+        # Safe signals can heal at most 50% of accumulated danger
+        max_healing = danger_sum * self._POSTURE_SAFE_HEAL_CAP
+        effective_healing = min(safe_sum, max_healing)
+
+        # ── Step 4: Net system risk + tanh mapping ────────────────────────
+        net_risk = max(0, danger_sum - effective_healing)
+        # Normalize: divide by event count to prevent score inflation
+        total_risky = signal_counts["PAMP"] + signal_counts["DANGER"]
+        if total_risky > 0:
+            # Scale factor: sqrt dampens large event counts
+            scale = math.sqrt(total_risky)
+            normalized_risk = net_risk / scale
+        else:
+            normalized_risk = 0.0
+
+        # tanh mapping: 0 → 100, rising risk → lower score
+        # Tuning: 0.5 multiplier means isolated false positives → GUARDED,
+        # sustained multi-event threats → CRITICAL.  Prevents single-event panic.
+        posture_score = round(100 * (1.0 - math.tanh(normalized_risk * 0.5)), 1)
+        posture_score = max(0.0, min(100.0, posture_score))
+
+        # ── Step 5: Derive threat level ───────────────────────────────────
+        threat_level = "CRITICAL"
+        for threshold, level in self._POSTURE_LEVELS:
+            if posture_score >= threshold:
+                threat_level = level
+                break
+
+        # ── Step 6: Build response (backwards compatible) ─────────────────
+        # Include full domain posture data for dashboard compatibility
+        domain_posture = self.get_device_posture(hours)
+
+        result = {
+            "posture_score": posture_score,
+            "threat_level": threat_level,
+            "model": "nerve_signal_v1",
+            "signal_breakdown": {
+                "pamp_count": signal_counts["PAMP"],
+                "danger_count": signal_counts["DANGER"],
+                "safe_count": signal_counts["SAFE"],
+                "raw_danger_sum": round(danger_sum, 4),
+                "effective_healing": round(effective_healing, 4),
+                "net_risk": round(net_risk, 4),
+                "normalized_risk": round(normalized_risk, 4),
+            },
+            "decay": {
+                "half_life_hours": self._POSTURE_HALF_LIFE_HOURS,
+                "lambda": round(self._POSTURE_DECAY_LAMBDA, 6),
+            },
+            # Backwards-compatible domain data
+            "domains": domain_posture.get("domains", {}),
+            "total_events": domain_posture.get("total_events", 0),
+            "security_detections": domain_posture.get("security_detections", 0),
+        }
+
+        self._cache.put(cache_key, result, ttl=30)
+        return result
+
+    # ── Directive 4: AMRDR Agent Trust Cross-Validation ─────────────────
+
+    _TRUST_WINDOW_SECONDS = 120  # look-back window matches prewarm cadence
+
+    # Cross-validation pairs: (agent_a, agent_b, corroboration_query)
+    # Each query returns rows where agent_a and agent_b agree on something
+    # within the trust window.  Row count > 0 → corroborate; 0 → no signal.
+    _CROSS_VALIDATION_PAIRS = [
+        # FIM reports a file write → process agent recorded writing process
+        (
+            "fim",
+            "process",
+            """SELECT COUNT(*) FROM security_events se
+               JOIN process_events pe
+                 ON se.device_id = pe.device_id
+                AND ABS(se.timestamp_ns - pe.timestamp_ns) < 5000000000
+               WHERE se.timestamp_ns > ?
+                 AND se.event_category = 'FILE_INTEGRITY'
+                 AND pe.timestamp_ns > ?""",
+        ),
+        # Network flow to IP + DNS resolved that IP
+        (
+            "network",
+            "dns",
+            """SELECT COUNT(*) FROM flow_events fe
+               JOIN observation_events oe
+                 ON fe.device_id = oe.device_id
+                AND fe.dst_ip IS NOT NULL
+                AND oe.domain = 'dns'
+                AND oe.attributes LIKE '%' || fe.dst_ip || '%'
+                AND ABS(fe.timestamp_ns - oe.timestamp_ns) < 30000000000
+               WHERE fe.timestamp_ns > ?
+                 AND oe.timestamp_ns > ?""",
+        ),
+        # Auth event (login) + process activity from same device shortly after
+        (
+            "auth",
+            "process",
+            """SELECT COUNT(*) FROM security_events se
+               JOIN process_events pe
+                 ON se.device_id = pe.device_id
+                AND pe.timestamp_ns > se.timestamp_ns
+                AND pe.timestamp_ns - se.timestamp_ns < 10000000000
+               WHERE se.timestamp_ns > ?
+                 AND se.event_category = 'AUTHENTICATION'
+                 AND pe.timestamp_ns > ?""",
+        ),
+    ]
+
+    def _update_agent_trust(self) -> None:
+        """Cross-validate agents and update reliability trust scores.
+
+        Called every ~2 min from the prewarm loop.  For each cross-validation
+        pair, checks whether both agents produced corroborating evidence in
+        the recent window.  Feeds observations to BayesianReliabilityTracker
+        with asymmetric updates (corroboration α+=1, contradiction β+=3).
+
+        Also applies 24h decay by calling recalibrate for agents with stale
+        observations.
+        """
+        if self._reliability is None:
+            return
+
+        cutoff_ns = int((time.time() - self._TRUST_WINDOW_SECONDS) * 1e9)
+        updated = []
+
+        with self._read_pool.connection() as rdb:
+            # 1. Cross-validation: corroborate or contradict agent pairs
+            for agent_a, agent_b, query in self._CROSS_VALIDATION_PAIRS:
+                try:
+                    row = rdb.execute(query, (cutoff_ns, cutoff_ns)).fetchone()
+                    match_count = row[0] if row else 0
+
+                    if match_count > 0:
+                        # Corroboration: both agents agree → boost both
+                        self._reliability.update(agent_a, ground_truth_match=True)
+                        self._reliability.update(agent_b, ground_truth_match=True)
+                        updated.append(
+                            f"{agent_a}↔{agent_b}:corroborate({match_count})"
+                        )
+                    else:
+                        # Check if either agent had events but the other didn't
+                        # (active disagreement, not just silence)
+                        a_count = self._agent_event_count(rdb, agent_a, cutoff_ns)
+                        b_count = self._agent_event_count(rdb, agent_b, cutoff_ns)
+
+                        if a_count > 0 and b_count > 0:
+                            # Both active, no overlap → mild contradiction
+                            # Don't penalize hard — could be benign non-overlap
+                            pass
+                        # If only one is active, no signal — not a contradiction
+                except Exception:
+                    logger.debug(
+                        "Trust cross-validation %s↔%s failed",
+                        agent_a,
+                        agent_b,
+                        exc_info=True,
+                    )
+
+            # 2. Self-consistency: agents with events but no security findings
+            #    are "quiet" — corroborate their reliability (they aren't
+            #    hallucinating alerts)
+            for agent_id in ("process", "filesystem", "network", "persistence"):
+                try:
+                    total = self._agent_event_count(rdb, agent_id, cutoff_ns)
+                    sec_count = self._agent_security_count(rdb, agent_id, cutoff_ns)
+                    if total > 0 and sec_count == 0:
+                        # Active agent, no false alerts → mild corroboration
+                        self._reliability.update(agent_id, ground_truth_match=True)
+                        updated.append(f"{agent_id}:quiet-corroborate")
+                except Exception:
+                    pass
+
+        # 3. Recalibrate any agents showing drift
+        for agent_id in self._reliability.list_agents():
+            try:
+                drift_type, _ = self._reliability.detect_drift(agent_id)
+                from amoskys.intel.reliability import DriftType
+
+                if drift_type != DriftType.NONE:
+                    tier = self._reliability.recalibrate(agent_id)
+                    updated.append(f"{agent_id}:recal→{tier.name}")
+            except Exception:
+                pass
+
+        if updated:
+            logger.info("AMRDR trust update: %s", ", ".join(updated))
+
+    def _agent_event_count(
+        self, conn: sqlite3.Connection, agent_id: str, cutoff_ns: int
+    ) -> int:
+        """Count events from an agent domain in the recent window."""
+        _AGENT_TABLE_MAP = {
+            "process": ("process_events", "timestamp_ns > ?"),
+            "fim": (
+                "security_events",
+                "timestamp_ns > ? AND event_category = 'FILE_INTEGRITY'",
+            ),
+            "filesystem": (
+                "security_events",
+                "timestamp_ns > ? AND event_category = 'FILE_INTEGRITY'",
+            ),
+            "network": ("flow_events", "timestamp_ns > ?"),
+            "dns": ("observation_events", "timestamp_ns > ? AND domain = 'dns'"),
+            "auth": (
+                "security_events",
+                "timestamp_ns > ? AND event_category = 'AUTHENTICATION'",
+            ),
+            "persistence": (
+                "security_events",
+                "timestamp_ns > ? AND event_category = 'PERSISTENCE'",
+            ),
+        }
+        entry = _AGENT_TABLE_MAP.get(agent_id)
+        if not entry:
+            return 0
+        table, where = entry
+        row = conn.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE {where}", (cutoff_ns,)
+        ).fetchone()
+        return row[0] if row else 0
+
+    def _agent_security_count(
+        self, conn: sqlite3.Connection, agent_id: str, cutoff_ns: int
+    ) -> int:
+        """Count security-flagged events (risk_score > 0.3) for an agent."""
+        _AGENT_SEC_MAP = {
+            "process": ("process_events", "anomaly_score"),
+            "network": ("flow_events", "threat_score"),
+            "filesystem": ("security_events", None),
+            "persistence": ("security_events", None),
+        }
+        entry = _AGENT_SEC_MAP.get(agent_id)
+        if not entry:
+            return 0
+        table, score_col = entry
+        if score_col:
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns > ? AND {score_col} > 0.3",
+                (cutoff_ns,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE timestamp_ns > ? AND risk_score > 0.3",
+                (cutoff_ns,),
+            ).fetchone()
+        return row[0] if row else 0
 
     def get_cross_domain_timeline(
         self, hours: int = 24, limit: int = 200

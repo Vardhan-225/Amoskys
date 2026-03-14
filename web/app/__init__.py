@@ -134,9 +134,14 @@ def create_app():
     # Initialize Flask request logging (correlation IDs, timing)
     init_flask_logging(app)
 
-    # Lightweight schema migration (add any missing columns without heavy imports)
-    from amoskys.db.web_db import _migrate_user_onboarding_columns, get_web_engine
+    # Ensure auth/web tables exist (idempotent) then run migrations
+    from amoskys.db.web_db import (
+        _migrate_user_onboarding_columns,
+        get_web_engine,
+        init_web_db,
+    )
 
+    init_web_db()
     _migrate_user_onboarding_columns(get_web_engine())
 
     # Register blueprints

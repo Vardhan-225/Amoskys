@@ -105,8 +105,24 @@ class WALProcessor:
         self._observation_shaper = ObservationShaper()
 
         # SOMA: FusionEngine for single-device correlation
+        # AMRDR: Use BayesianReliabilityTracker for trust-weighted fusion
         try:
-            self._fusion = FusionEngine(db_path="data/intel/fusion.db")
+            from amoskys.intel.reliability import BayesianReliabilityTracker
+
+            amrdr_tracker = BayesianReliabilityTracker(
+                store_path="data/intel/reliability.db"
+            )
+            logger.info("AMRDR BayesianReliabilityTracker activated")
+        except Exception as e:
+            from amoskys.intel.reliability import NoOpReliabilityTracker
+
+            amrdr_tracker = NoOpReliabilityTracker()
+            logger.warning("AMRDR unavailable, using NoOp: %s", e)
+        try:
+            self._fusion = FusionEngine(
+                db_path="data/intel/fusion.db",
+                reliability_tracker=amrdr_tracker,
+            )
             logger.info("FusionEngine initialized (correlation active)")
         except Exception as e:
             logger.warning("FusionEngine unavailable: %s", e)
@@ -451,13 +467,13 @@ class WALProcessor:
                 registry = get_probe_contract_registry()
                 contract = registry.get_contract(probe_name)
                 if contract is not None:
-                    required = set(contract.requires_fields)
-                    degraded = set(contract.degraded_without)
-                    hard_required = required - degraded
-                    for field_name in sorted(hard_required):
-                        if field_name not in attrs:
-                            missing_required.append(f"probe:{field_name}")
-                    for field_name in sorted(degraded):
+                    # NOTE: requires_fields describes probe *input* context
+                    # (shared_data keys), not required *output* event attributes.
+                    # Treat all probe contract fields as degraded, not invalid.
+                    all_contract_fields = set(contract.requires_fields) | set(
+                        contract.degraded_without
+                    )
+                    for field_name in sorted(all_contract_fields):
                         if field_name not in attrs:
                             missing_degraded.append(f"probe:{field_name}")
             except Exception:
@@ -632,6 +648,28 @@ class WALProcessor:
         if fed > 0:
             logger.debug("Fed %d events to FusionEngine for %s", fed, device_id)
 
+    def _hydrate_bridged_ids(self) -> None:
+        """Load already-bridged fusion incident IDs from the dashboard DB.
+
+        Survives process restarts — reads the indicators JSON column to find
+        fusion_incident_id values that were previously bridged.
+        """
+        if self._bridged_incident_ids:
+            return
+        try:
+            import json as _json
+
+            rows = self.store.db.execute(
+                "SELECT indicators FROM incidents WHERE indicators LIKE '%fusion_incident_id%'"
+            ).fetchall()
+            for (raw,) in rows:
+                ind = _json.loads(raw) if isinstance(raw, str) else raw
+                fid = ind.get("fusion_incident_id") if isinstance(ind, dict) else None
+                if fid:
+                    self._bridged_incident_ids.add(fid)
+        except Exception:
+            pass  # Table may not have indicators column yet
+
     def _bridge_fusion_incidents(self) -> None:
         """Copy new FusionEngine incidents to TelemetryStore for dashboard visibility.
 
@@ -641,7 +679,10 @@ class WALProcessor:
         """
         if self._fusion is None:
             return
+
+        self._hydrate_bridged_ids()
         recent = self._fusion.get_recent_incidents(limit=50)
+
         bridged = 0
         for inc in recent:
             fid = inc["incident_id"]
@@ -704,6 +745,10 @@ class WALProcessor:
         "internet_activity": "_insert_generic_observation",
         "security_monitor": "_insert_generic_observation",
         "unified_log": "_insert_generic_observation",
+        # macOS Shield agents
+        "infostealer": "_insert_generic_observation",
+        "quarantine": "_insert_generic_observation",
+        "provenance": "_insert_generic_observation",
     }
 
     def _route_events(

@@ -49,7 +49,7 @@ class MacOSDBActivityAgent(MicroProbeAgentMixin, HardenedAgentBase):
         macos_db_sql_injection      — T1190     SQL injection
         macos_db_credential_query   — T1555     Credential access
         macos_db_data_destruction   — T1485     Data destruction
-        macos_db_unauthorized_access — T1078.004 Unauthorized access
+        macos_db_unauthorized_access — T1078.003 Unauthorized access (local accounts)
         macos_db_exfiltration       — T1048     Exfiltration via DB
     """
 

@@ -597,17 +597,18 @@ class DataDestructionProbe(MicroProbe):
 class UnauthorizedAccessProbe(MicroProbe):
     """Detect unusual user/connection patterns accessing the database.
 
-    MITRE: T1078.004 — Valid Accounts: Cloud Accounts
+    MITRE: T1078.003 — Valid Accounts: Local Accounts
 
     Attackers use stolen or default credentials to access databases.
     Indicators: authentication failures, connections from non-admin users
     performing admin operations, unusual database user/client combinations.
+    Note: T1078.004 (Cloud Accounts) is for cloud/SaaS platforms, not endpoint.
     """
 
     name = "macos_db_unauthorized_access"
     description = "Detects unusual user/connection accessing database"
     platforms = ["darwin"]
-    mitre_techniques = ["T1078.004"]
+    mitre_techniques = ["T1078.003"]
     mitre_tactics = ["persistence"]
     scan_interval = 10.0
     requires_fields = ["db_logs"]

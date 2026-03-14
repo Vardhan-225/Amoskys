@@ -8,7 +8,7 @@ Probes:
     1. USBInventoryProbe -- baseline-diff for USB device changes (T1200)
     2. BluetoothInventoryProbe -- baseline-diff for BT device changes (T1200)
     3. NewPeripheralProbe -- alerts on any new peripheral device (T1200)
-    4. RemovableMediaProbe -- new volume mounts in /Volumes/ (T1091)
+    4. RemovableMediaProbe -- new volume mounts in /Volumes/ (T1200, T1052.001)
 
 Detection pattern: baseline-diff
     First scan establishes the baseline of known devices. Subsequent scans
@@ -17,7 +17,7 @@ Detection pattern: baseline-diff
 
 MITRE Coverage:
     - T1200: Hardware Additions (rogue USB/BT devices)
-    - T1091: Replication Through Removable Media (USB drive attacks)
+    - T1052.001: Exfiltration Over USB (data theft via removable media)
 """
 
 from __future__ import annotations
@@ -314,17 +314,19 @@ class RemovableMediaProbe(MicroProbe):
     volumes (Macintosh HD, Recovery, etc.). Removable media mounts indicate
     USB drives, external SSDs, mounted DMGs, or network shares.
 
-    Security concern: USB drives are the primary vector for T1091 attacks
+    Security concern: USB drives are the primary vector for hardware attacks
     (BadUSB, rubber ducky, data exfiltration via removable media).
 
-    MITRE: T1091 (Replication Through Removable Media)
+    MITRE: T1200 (Hardware Additions) + T1052.001 (Exfiltration Over USB)
+    Note: T1091 (Replication Through Removable Media) is Windows-only in ATT&CK.
+    macOS removable media maps to T1200 (hardware vector) and T1052.001 (exfil).
     """
 
     name = "macos_removable_media"
     description = "Detects new removable media mounts on macOS"
     platforms = ["darwin"]
-    mitre_techniques = ["T1091"]
-    mitre_tactics = ["initial_access", "lateral_movement"]
+    mitre_techniques = ["T1200", "T1052.001"]
+    mitre_tactics = ["initial_access", "exfiltration"]
     scan_interval = 15.0
     requires_fields = ["volumes"]
 
