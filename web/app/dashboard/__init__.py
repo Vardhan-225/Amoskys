@@ -5072,6 +5072,73 @@ def igris_coherence():
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
+# ── IGRIS Chat (AI-powered security analyst) ────────────────────
+_igris_chat_instance = None
+
+
+def _get_igris_chat():
+    global _igris_chat_instance
+    if _igris_chat_instance is None:
+        try:
+            from amoskys.igris.chat import IgrisChat
+
+            _igris_chat_instance = IgrisChat(backend_type="claude")
+        except Exception as e:
+            logger.error("Failed to initialize IGRIS chat: %s", e)
+            return None
+    return _igris_chat_instance
+
+
+@dashboard_bp.route("/api/igris/chat", methods=["POST"])
+@require_login
+@require_rate_limit(max_requests=30, window_seconds=60)
+def igris_chat():
+    """IGRIS AI chat endpoint — security analyst copilot."""
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify({"status": "error", "message": "No message provided"}), 400
+
+    chat = _get_igris_chat()
+    if chat is None:
+        return jsonify({
+            "status": "error",
+            "message": "IGRIS chat unavailable. Check ANTHROPIC_API_KEY.",
+        }), 503
+
+    try:
+        response = chat.chat(message)
+        return jsonify({
+            "status": "success",
+            "response": response,
+            "history_length": len(chat.get_history()),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.error("IGRIS chat error: %s", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@dashboard_bp.route("/api/igris/chat/reset", methods=["POST"])
+@require_login
+def igris_chat_reset():
+    """Reset IGRIS chat conversation history."""
+    chat = _get_igris_chat()
+    if chat:
+        chat.reset()
+    return jsonify({"status": "success", "message": "Conversation reset"})
+
+
+@dashboard_bp.route("/api/igris/chat/history")
+@require_login
+def igris_chat_history():
+    """Get IGRIS chat conversation history."""
+    chat = _get_igris_chat()
+    if not chat:
+        return jsonify({"status": "success", "history": []})
+    return jsonify({"status": "success", "history": chat.get_history()})
+
+
 @dashboard_bp.route("/api/guardian/execute", methods=["POST"])
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)

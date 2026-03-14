@@ -131,7 +131,12 @@ class IgrisState:
         self._state["metrics_snapshot"] = snapshot
 
         # Signal summary
-        self._state["active_signal_count"] = len(signals_emitted)
+        # active_signal_count = persistent conditions in signal_index,
+        # NOT just this-cycle emissions (which would show 0 during cooldown)
+        self._state["active_signal_count"] = len(
+            self._state.get("signal_index", {})
+        )
+        self._state["signals_emitted_this_cycle"] = len(signals_emitted)
         self._state["signal_count_since_start"] = self._state.get(
             "signal_count_since_start", 0
         ) + len(signals_emitted)
@@ -224,6 +229,19 @@ class IgrisState:
             except (ValueError, TypeError):
                 pass
 
+        signal_index = self._state.get("signal_index", {})
+        active_signals = [
+            {
+                "dedup_key": k,
+                "signal_type": v.get("signal_type", ""),
+                "metric_name": v.get("metric_name", ""),
+                "severity": v.get("last_severity", ""),
+                "subsystem": v.get("subsystem", ""),
+                "since_epoch": v.get("last_emitted_at_epoch", 0),
+            }
+            for k, v in signal_index.items()
+        ]
+
         return {
             "igris_version": IGRIS_VERSION,
             "status": self._state.get("status", "stopped"),
@@ -232,13 +250,17 @@ class IgrisState:
             "cycle_count": self._state.get("cycle_count", 0),
             "last_cycle_at": self._state.get("last_cycle_at"),
             "cycle_duration_ms": self._state.get("cycle_duration_ms", 0),
-            "active_signal_count": self._state.get("active_signal_count", 0),
+            "active_signal_count": len(signal_index),
+            "active_signals": active_signals,
+            "signals_emitted_this_cycle": self._state.get(
+                "signals_emitted_this_cycle", 0
+            ),
             "signal_count_since_start": self._state.get("signal_count_since_start", 0),
             "cleared_this_cycle": self._state.get("cleared_this_cycle", 0),
             "cleared_count_since_start": self._state.get(
                 "cleared_count_since_start", 0
             ),
-            "cooldown_entries": len(self._state.get("signal_index", {})),
+            "cooldown_entries": len(signal_index),
             "fleet_summary": self._state.get("fleet_summary", {}),
         }
 

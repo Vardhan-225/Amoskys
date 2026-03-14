@@ -76,12 +76,26 @@ class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
         logger.info("MacOSNetworkAgent setup complete")
         return True
 
+    # Socket states that represent real traffic (not just listening/binding)
+    _ACTIVE_STATES = frozenset({
+        "ESTABLISHED", "SYN_SENT", "SYN_RECEIVED", "FIN_WAIT_1",
+        "FIN_WAIT_2", "CLOSE_WAIT", "CLOSING", "LAST_ACK", "TIME_WAIT",
+    })
+
     def collect_data(self) -> Sequence[Any]:
         snapshot = self.collector.collect()
 
-        # Build OBSERVATION events for ALL connections (raw observability)
+        # Filter: only store real connections as flow observations.
+        # LISTEN/bind sockets are socket inventory, not traffic flows.
+        # They inflate flow_events (55% blank dst_ip) and mask real patterns.
+        all_conns = snapshot.get("connections", [])
+        active_conns = [
+            c for c in all_conns if c.state in self._ACTIVE_STATES
+        ]
+
+        # Build OBSERVATION events for active connections only
         obs_events = self._make_observation_events(
-            snapshot.get("connections", []),
+            active_conns,
             domain="flow",
             field_mapper=self._connection_to_obs,
         )
@@ -107,8 +121,11 @@ class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
         )
 
         logger.info(
-            "Network: %d connections in %.1fms, %d observations, %d probe events",
+            "Network: %d connections (%d active, %d listen) in %.1fms, "
+            "%d observations, %d probe events",
             snapshot["connection_count"],
+            len(active_conns),
+            len(all_conns) - len(active_conns),
             snapshot["collection_time_ms"],
             len(obs_events),
             len(probe_events),
