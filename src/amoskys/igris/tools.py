@@ -1,8 +1,8 @@
 """
-IGRIS Security Query Toolkit — 22 typed tools for the IGRIS chatbot.
+IGRIS Security Toolkit — 22 query tools + 11 action tools.
 
-Each tool wraps a TelemetryStore / FusionEngine / AGENT_REGISTRY query.
-No raw SQL exposed to the LLM. Parameterized, safe, cached where sensible.
+Query tools: read-only SQL against TelemetryStore/FusionEngine/AGENT_REGISTRY.
+Action tools: confidence-gated operations via ActionExecutor (mesh/actions.py).
 
 Tool-use pattern (same as Microsoft Security Copilot, Splunk AI, CrowdStrike Charlotte):
   User question → LLM picks tool(s) → execute → LLM synthesizes answer
@@ -21,13 +21,15 @@ logger = logging.getLogger("igris.tools")
 
 
 class IgrisToolkit:
-    """22 security query tools backed by AMOSKYS data layer."""
+    """33 security tools (22 query + 11 action) backed by AMOSKYS data layer."""
 
     def __init__(self, telemetry_db: str = "data/telemetry.db",
                  fusion_db: str = "data/intel/fusion.db",
-                 reliability_db: str = "data/intel/reliability.db"):
+                 reliability_db: str = "data/intel/reliability.db",
+                 action_executor=None):
         self._telemetry_db = telemetry_db
         self._fusion_db = fusion_db
+        self._action_executor = action_executor
         self._reliability_db = reliability_db
 
     def _query(self, db_path: str, sql: str, params: tuple = ()) -> List[Dict]:
@@ -60,10 +62,9 @@ class IgrisToolkit:
     # Tool definitions (schema for Claude tool-use)
     # ══════════════════════════════════════════════════════════════
 
-    @staticmethod
-    def get_tool_definitions() -> List[Dict]:
-        """Return Claude-compatible tool definitions for all 22 tools."""
-        return [
+    def get_tool_definitions(self) -> List[Dict]:
+        """Return tool definitions for all query + action tools."""
+        defs = [
             {
                 "name": "get_threat_posture",
                 "description": "Get current device threat posture: risk score, active threats, agent health, MITRE techniques seen, and overall security stance.",
@@ -300,12 +301,34 @@ class IgrisToolkit:
             },
         ]
 
+        # Append action tool definitions if ActionExecutor is available
+        if self._action_executor is not None:
+            try:
+                action_defs = self._action_executor.get_tool_definitions()
+                defs.extend(action_defs)
+            except Exception:
+                pass
+
+        return defs
+
     # ══════════════════════════════════════════════════════════════
     # Tool implementations
     # ══════════════════════════════════════════════════════════════
 
     def execute(self, tool_name: str, args: Dict[str, Any]) -> Any:
         """Execute a tool by name. Returns JSON-serializable result."""
+        # Check action tools first (if executor available)
+        if self._action_executor is not None:
+            action_method = getattr(self._action_executor, tool_name, None)
+            if action_method and callable(action_method):
+                try:
+                    receipt = action_method(**args)
+                    if hasattr(receipt, 'to_dict'):
+                        return receipt.to_dict()
+                    return {"status": "ok", "result": str(receipt)}
+                except Exception as e:
+                    return {"status": "error", "error": str(e)}
+
         handler = getattr(self, f"_tool_{tool_name}", None)
         if not handler:
             return {"error": f"Unknown tool: {tool_name}"}

@@ -52,12 +52,14 @@ class IgrisChat:
         telemetry_db: str = "data/telemetry.db",
         fusion_db: str = "data/intel/fusion.db",
         reliability_db: str = "data/intel/reliability.db",
+        action_executor=None,
         **backend_kwargs,
     ):
         self.toolkit = IgrisToolkit(
             telemetry_db=telemetry_db,
             fusion_db=fusion_db,
             reliability_db=reliability_db,
+            action_executor=action_executor,
         )
         self.backend = create_backend(backend_type, **backend_kwargs)
         self._history: List[Dict[str, Any]] = []

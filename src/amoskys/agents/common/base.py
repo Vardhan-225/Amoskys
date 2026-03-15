@@ -174,6 +174,10 @@ class HardenedAgentBase(abc.ABC):
     Provides a consistent foundation for agent development with built-in
     resilience, observability, and error handling patterns.
 
+    Includes MeshMixin capability: agents can publish SecurityEvents to the
+    inter-agent mesh bus and receive directed watch commands from IGRIS.
+    Mesh is optional — agents work without it (publish = no-op if no bus).
+
     Responsibilities:
         - Provide structured run loop with lifecycle hooks
         - Wrap collection/publish in error handling
@@ -181,6 +185,7 @@ class HardenedAgentBase(abc.ABC):
         - Support local queue for offline resilience
         - Track health and metrics
         - Handle signals for graceful shutdown
+        - Publish to / subscribe from agent mesh (MeshMixin)
 
     Subclasses must implement:
         - setup(): Initialize agent resources
@@ -240,6 +245,14 @@ class HardenedAgentBase(abc.ABC):
         # Observability metrics
         self.metrics = AgentMetrics()
         self._metrics_interval_seconds = metrics_interval
+
+        # Agent mesh (inter-agent communication) — safe no-op if bus not set
+        try:
+            from amoskys.mesh.mixin import MeshMixin
+
+            MeshMixin.__init_mesh__(self)
+        except Exception:
+            pass  # Mesh is optional — agents work without it
         self._last_metrics_emit_ns = int(time.time() * 1e9)
 
         # Wire queue adapter metrics (P0-1)

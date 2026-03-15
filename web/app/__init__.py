@@ -214,6 +214,34 @@ def create_app():
 
     socketio = init_socketio(app)
 
+    # Start Agent Mesh + IGRIS orchestrator (singleton, idempotent)
+    if not is_testing:
+        try:
+            from amoskys.mesh import MeshBus, ActionExecutor, MeshStore, MeshMixin
+            from amoskys.igris.orchestrator import IGRISOrchestrator
+
+            mesh_bus = MeshBus(db_path="data/mesh_events.db")
+            MeshMixin.set_mesh_bus(mesh_bus)
+
+            action_executor = ActionExecutor(mesh_bus=mesh_bus, dry_run=False)
+            mesh_store = MeshStore(db_path="data/mesh_events.db")
+
+            orchestrator = IGRISOrchestrator(
+                mesh_bus=mesh_bus,
+                action_executor=action_executor,
+                mesh_store=mesh_store,
+            )
+            orchestrator.start()
+
+            app.config["MESH_BUS"] = mesh_bus
+            app.config["ACTION_EXECUTOR"] = action_executor
+            app.config["MESH_STORE"] = mesh_store
+            app.config["IGRIS_ORCHESTRATOR"] = orchestrator
+
+            logging.info("Agent Mesh + IGRIS Orchestrator started (autonomous defense active)")
+        except Exception as e:
+            logging.warning("Agent Mesh failed to start: %s", e)
+
     # Start IGRIS supervisory daemon (singleton, idempotent)
     if not is_testing:
         try:

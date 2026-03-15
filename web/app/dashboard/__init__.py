@@ -5080,9 +5080,12 @@ def _get_igris_chat():
     global _igris_chat_instance
     if _igris_chat_instance is None:
         try:
+            from flask import current_app
             from amoskys.igris.chat import IgrisChat
 
-            _igris_chat_instance = IgrisChat(backend_type="claude")
+            # Pass action executor from app config (set during mesh startup)
+            action_executor = current_app.config.get("ACTION_EXECUTOR")
+            _igris_chat_instance = IgrisChat(action_executor=action_executor)
         except Exception as e:
             logger.error("Failed to initialize IGRIS chat: %s", e)
             return None
