@@ -973,16 +973,25 @@ def rule_web_attack_chain(
 
 # Infostealer kill chain stages (event_category values from probes)
 _STEALER_STAGES = {
-    "dialog": {"fake_password_dialog"},
+    "dialog": {"fake_password_dialog", "fake_dialog"},
     "credential_access": {
         "keychain_access",
         "browser_cred_theft",
+        "browser_credential_theft",  # actual probe event_category
         "crypto_wallet_theft",
         "session_cookie_theft",
         "stealer_sequence",
+        "clipboard_harvest",
+        "screen_capture_abuse",
     },
     "staging": {"credential_archive"},
-    "exfil": {"sensitive_file_exfil", "exfil_detected"},
+    "exfil": {
+        "sensitive_file_exfil",
+        "exfil_detected",
+        "cloud_exfil_detected",  # internet_activity probe category
+        "execute_to_exfil",
+        "pid_network_anomaly",
+    },
 }
 
 # ClickFix-related event categories

@@ -1916,6 +1916,7 @@ class TelemetryStore:
                     timestamp_ns, timestamp_dt, device_id,
                     event_category, event_action, event_outcome,
                     risk_score, confidence, mitre_techniques,
+                    geometric_score, temporal_score, behavioral_score,
                     final_classification, description, indicators,
                     requires_investigation, collection_agent, agent_version,
                     enrichment_status, threat_intel_match,
@@ -1928,8 +1929,8 @@ class TelemetryStore:
                     mitre_source, mitre_confidence, mitre_evidence,
                     raw_attributes_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                          ?, ?, ?, ?)
+                          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                          ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event_data.get("timestamp_ns", int(time.time() * 1e9)),
@@ -1944,6 +1945,9 @@ class TelemetryStore:
                     event_data.get("risk_score", 0.0),
                     event_data.get("confidence", 0.0),
                     json.dumps(event_data.get("mitre_techniques", [])),
+                    event_data.get("geometric_score", 0.0),
+                    event_data.get("temporal_score", 0.0),
+                    event_data.get("behavioral_score", 0.0),
                     event_data.get("final_classification", "legitimate"),
                     event_data.get("description"),
                     json.dumps(event_data.get("indicators", {})),

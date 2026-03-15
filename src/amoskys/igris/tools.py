@@ -672,7 +672,9 @@ class IgrisToolkit:
 
     def _tool_get_reliability_scores(self) -> List[Dict]:
         return self._query(self._reliability_db,
-            "SELECT * FROM agent_states ORDER BY weight ASC")
+            "SELECT agent_id, fusion_weight as weight, drift_type, "
+            "recalibration_tier, alpha, beta FROM agent_reliability "
+            "ORDER BY fusion_weight ASC")
 
     # ── 21. Sigma Rule Hits ──
 

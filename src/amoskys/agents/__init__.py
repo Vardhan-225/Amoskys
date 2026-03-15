@@ -124,15 +124,17 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "probes": 10,
         "category": "endpoint",
         "icon": "cpu",
+        "collection_agent": "macos_process",
     },
     "auth": {
         "class": AuthGuardAgent,
         "name": "AuthGuard Agent",
         "description": "Authentication and authorization monitoring via unified logging",
         "platforms": ["darwin"],
-        "probes": 7,
+        "probes": 6,
         "category": "endpoint",
         "icon": "lock",
+        "collection_agent": "macos_auth",
     },
     "persistence": {
         "class": PersistenceGuard,
@@ -142,6 +144,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "probes": 10,
         "category": "endpoint",
         "icon": "anchor",
+        "collection_agent": "macos_persistence",
     },
     "fim": {
         "class": FIMAgent,
@@ -151,6 +154,7 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "probes": 8,
         "category": "endpoint",
         "icon": "file-shield",
+        "collection_agent": "macos_filesystem",
     },
     "flow": {
         "class": FlowAgent,
@@ -160,15 +164,17 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "probes": 8,
         "category": "network",
         "icon": "network",
+        "collection_agent": "macos_network",
     },
     "peripheral": {
         "class": PeripheralAgent,
         "name": "Peripheral Agent",
         "description": "USB, Bluetooth, and Thunderbolt device monitoring",
         "platforms": ["darwin"],
-        "probes": 7,
+        "probes": 4,
         "category": "endpoint",
         "icon": "usb",
+        "collection_agent": "macos_peripheral",
     },
     # ── Platform-specific agents ──
     "kernel_audit": {
