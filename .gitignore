@@ -101,6 +101,13 @@ logs/
 .amoskys_lab/
 .local_backup/
 
+# ---- Ollama / LLM Models (multi-GB, never committed) ----
+data/ollama/
+*.gguf
+*.ggml
+*.bin
+*.safetensors
+
 # ---- Database Files ----
 *.db
 *.db-shm
