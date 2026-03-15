@@ -39,6 +39,20 @@ active_connections = {}
 update_threads = {}
 
 
+def broadcast_dashboard_event(
+    event_name: str,
+    payload: dict,
+    *,
+    room: str | None = None,
+) -> None:
+    """Emit a dashboard websocket event to all clients or a specific room."""
+
+    kwargs = {"namespace": "/dashboard"}
+    if room:
+        kwargs["to"] = room
+    socketio.emit(event_name, payload, **kwargs)
+
+
 def _get_live_incidents() -> dict:
     """Fetch open incidents from TelemetryStore for real-time push."""
     try:

@@ -185,13 +185,14 @@ class OllamaBackend:
         if "<think>" in text:
             text = re.sub(r"<think>.*?</think>\s*", "", text, flags=re.DOTALL).strip()
 
+        raw_tool_calls = msg.get("tool_calls") or []
         tool_calls = [
             {
                 "id": f"ollama_{uuid.uuid4().hex[:8]}",
                 "name": tc.get("function", {}).get("name", ""),
                 "input": tc.get("function", {}).get("arguments", {}),
             }
-            for tc in msg.get("tool_calls", [])
+            for tc in raw_tool_calls
         ]
 
         return CompletionResult(
@@ -258,9 +259,11 @@ class ClaudeBackend:
 
     def __init__(self, api_key: str = None, model: str = None):
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+        # Only use IGRIS_MODEL env var if it looks like a Claude model name
+        env_model = os.environ.get("IGRIS_MODEL", "")
         self._model = (
             model
-            or os.environ.get("IGRIS_MODEL")
+            or (env_model if env_model.startswith("claude") else "")
             or _DEFAULT_CLAUDE_MODEL
         )
         self._client = None

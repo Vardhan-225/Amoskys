@@ -214,6 +214,16 @@ def create_app():
 
     socketio = init_socketio(app)
 
+    # Start coordination bus bridge for cross-process health/alert signals
+    if not is_testing:
+        try:
+            from .control_bus import init_control_bus
+
+            init_control_bus()
+            logging.info("Dashboard coordination bus initialized")
+        except Exception as e:
+            logging.warning("Dashboard coordination bus failed to start: %s", e)
+
     # Start Agent Mesh + IGRIS orchestrator (singleton, idempotent)
     if not is_testing:
         try:

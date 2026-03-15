@@ -72,6 +72,9 @@ class ProcessSpawnProbe(MicroProbe):
         self._first_run = True
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        from amoskys.agents.common.apple_allowlist import is_apple_system_process
+        from amoskys.agents.common.self_identity import self_identity
+
         events: List[TelemetryEvent] = []
         processes = context.shared_data.get("processes", [])
         current: Dict[int, float] = {}
@@ -86,6 +89,14 @@ class ProcessSpawnProbe(MicroProbe):
 
             # New PID, or same PID but different create_time (recycled)
             if pid not in self._known or self._known[pid] != ct:
+                # Skip AMOSKYS's own processes
+                if self_identity.is_self_process(pid=pid, name=proc.name, exe=proc.exe):
+                    continue
+
+                # Check Apple allowlist for trust disposition
+                allowlist = is_apple_system_process(proc.name, proc.exe)
+                trust_disposition = allowlist.disposition
+
                 events.append(
                     self._create_event(
                         event_type="process_spawned",
@@ -99,8 +110,9 @@ class ProcessSpawnProbe(MicroProbe):
                             "ppid": proc.ppid,
                             "parent_name": proc.parent_name,
                             "process_guid": proc.process_guid,
+                            "trust_disposition": trust_disposition,
                         },
-                        confidence=1.0,
+                        confidence=0.2 if trust_disposition == "apple_system" else 1.0,
                         correlation_id=proc.process_guid,
                     )
                 )

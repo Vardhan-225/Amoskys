@@ -89,6 +89,7 @@ class MacOSProcessAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
         self.collector = MacOSProcessCollector(device_id=device_id)
         self.register_probes(create_process_probes())
+        # Coordination bus is now initialized in HardenedAgentBase.__init__()
 
         logger.info(
             "MacOSProcessAgent initialized: %d probes, device=%s",
@@ -175,6 +176,9 @@ class MacOSProcessAgent(MicroProbeAgentMixin, HardenedAgentBase):
         if all_events:
             return [self._events_to_telemetry(all_events)]
         return []
+
+    # Coordination methods (init, health, alert, control, shutdown) inherited
+    # from HardenedAgentBase — all 20 agents get them automatically.
 
     @staticmethod
     def _process_to_obs(proc) -> Dict[str, Any]:

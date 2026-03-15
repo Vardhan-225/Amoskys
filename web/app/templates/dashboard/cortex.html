@@ -39,6 +39,10 @@
                     <span class="freshness-dot" id="freshness-dot"></span>
                     <span class="freshness-text" id="freshness-text">--</span>
                 </div>
+                <div class="hero-fleet-health" id="fleet-health-pill" style="display:none;">
+                    <span class="health-dot" id="fleet-health-dot"></span>
+                    <span class="health-text" id="fleet-health-text">Agents healthy</span>
+                </div>
             </div>
 
             <div class="hero-actions">
@@ -360,6 +364,32 @@
 .freshness-dot.stale { background: #ffaa00; }
 .freshness-dot.old { background: #ff3366; }
 .freshness-text { color: var(--text-muted); white-space: nowrap; }
+
+.hero-fleet-health {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    width: fit-content;
+}
+.health-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 6px rgba(0,255,136,0.6);
+    background: #00ff88;
+}
+.health-dot.warn {
+    background: #ffaa00;
+    box-shadow: 0 0 6px rgba(255,170,0,0.7);
+}
+.health-dot.crit {
+    background: #ff3366;
+    box-shadow: 0 0 6px rgba(255,51,102,0.8);
+}
+.health-text { white-space: nowrap; }
 
 .hero-actions { display: flex; flex-direction: column; gap: 0.4rem; flex-shrink: 0; }
 .hero-btn {
@@ -1770,6 +1800,92 @@ class CortexCommandCenter {
 
 document.addEventListener('DOMContentLoaded', () => {
     window.cortex = new CortexCommandCenter();
+    const fleet = Object.create(null);
+    const HEARTBEAT_TTL_MS = 90 * 1000;
+    const EVICT_AFTER_MS = 30 * 60 * 1000;
+    const SWEEP_INTERVAL_MS = 30 * 1000;
+
+    function normalizeFleetStatus(status) {
+        const value = String(status || 'healthy').toLowerCase();
+        if (value === 'failed' || value === 'down') return 'failed';
+        if (value === 'degraded' || value === 'warn' || value === 'warning') return 'degraded';
+        return 'healthy';
+    }
+
+    function recomputeFleetHealth() {
+        const pill = document.getElementById('fleet-health-pill');
+        const dot = document.getElementById('fleet-health-dot');
+        const text = document.getElementById('fleet-health-text');
+        if (!pill || !dot || !text) return;
+
+        const now = Date.now();
+        let total = 0;
+        let degraded = 0;
+        let down = 0;
+
+        Object.keys(fleet).forEach((agentId) => {
+            const info = fleet[agentId];
+            if (!info || !info.last_seen) {
+                delete fleet[agentId];
+                return;
+            }
+
+            const age = now - info.last_seen;
+            if (age > EVICT_AFTER_MS) {
+                delete fleet[agentId];
+                return;
+            }
+
+            total += 1;
+
+            // TTL expiry becomes an inferred offline state, but the UI still presents it as down.
+            const effectiveStatus = age > HEARTBEAT_TTL_MS ? 'offline' : info.status;
+            if (effectiveStatus === 'healthy') return;
+            if (effectiveStatus === 'degraded') {
+                degraded += 1;
+                return;
+            }
+            down += 1;
+        });
+
+        if (total === 0) {
+            pill.style.display = 'none';
+            return;
+        }
+
+        pill.style.display = 'inline-flex';
+        dot.classList.remove('warn', 'crit');
+
+        if (down > 0) {
+            dot.classList.add('crit');
+            text.textContent = down + ' agent' + (down === 1 ? '' : 's') + ' down';
+            return;
+        }
+
+        if (degraded > 0) {
+            dot.classList.add('warn');
+            text.textContent = 'Some agents degraded';
+            return;
+        }
+
+        text.textContent = 'All ' + total + ' agents healthy';
+    }
+
+    function recordHeartbeat(agentId, status) {
+        const normalizedAgentId = agentId || 'unknown';
+        fleet[normalizedAgentId] = {
+            status: normalizeFleetStatus(status),
+            last_seen: Date.now(),
+        };
+        recomputeFleetHealth();
+    }
+
+    window.addEventListener('ws:agent_health', (event) => {
+        const detail = event.detail || {};
+        recordHeartbeat(detail.agent_id, detail.status);
+    });
+
+    window.setInterval(recomputeFleetHealth, SWEEP_INTERVAL_MS);
 
     // Time range selector
     document.getElementById('time-range-select').addEventListener('change', function() {

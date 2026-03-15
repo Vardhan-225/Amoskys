@@ -208,6 +208,9 @@ class FusionEngine:
             ("end_ts_ns", "INTEGER DEFAULT NULL"),
             ("duration_seconds", "REAL DEFAULT NULL"),
             ("mitre_sequence", "TEXT DEFAULT NULL"),
+            # Incident merge columns — forensic-preserving dedup
+            ("observation_count", "INTEGER DEFAULT 1"),
+            ("observation_metadata", "TEXT DEFAULT '{}'"),
         ]
 
         for col_name, col_def in migrations:
@@ -595,6 +598,103 @@ class FusionEngine:
             level=level,
             metadata={"window_minutes": str(self.window_minutes)},
         )
+
+    def _merge_or_create_incident(
+        self, incident: Incident, device_id: str
+    ) -> bool:
+        """Merge into existing open incident or create new one.
+
+        If an open incident exists for the same (rule_name, device_id),
+        merge the new event IDs into it and bump the observation count.
+        All contributing events are preserved for forensic analysis.
+
+        Returns True if a NEW incident was created, False if merged.
+        """
+        try:
+            row = self.db.execute(
+                """
+                SELECT incident_id, event_ids, observation_count,
+                       observation_metadata, severity
+                FROM incidents
+                WHERE rule_name = ? AND device_id = ?
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (incident.rule_name, device_id),
+            ).fetchone()
+        except Exception:
+            row = None
+
+        if row:
+            existing_id = row[0]
+            existing_event_ids = json.loads(row[1]) if row[1] else []
+            obs_count = (row[2] or 1) + 1
+            obs_meta = json.loads(row[3]) if row[3] else {}
+
+            # Merge event IDs (deduplicated, preserving order)
+            seen = set(existing_event_ids)
+            merged_event_ids = list(existing_event_ids)
+            for eid in incident.event_ids:
+                if eid not in seen:
+                    merged_event_ids.append(eid)
+                    seen.add(eid)
+
+            # Record this observation cycle
+            cycles = obs_meta.get("observation_cycles", [])
+            cycles.append({
+                "cycle_ts": incident.created_at.isoformat(),
+                "event_ids": incident.event_ids,
+                "event_count": len(incident.event_ids),
+            })
+            # Cap at 100 cycles (FIFO)
+            if len(cycles) > 100:
+                cycles = cycles[-100:]
+            obs_meta["observation_cycles"] = cycles
+            obs_meta["first_seen"] = obs_meta.get(
+                "first_seen", incident.created_at.isoformat()
+            )
+            obs_meta["last_seen"] = incident.created_at.isoformat()
+            obs_meta["total_contributing_events"] = len(merged_event_ids)
+
+            # Escalate severity if new observation is more severe
+            _SEV_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+            existing_sev = row[4] or "low"
+            new_sev = incident.severity.value
+            final_sev = (
+                new_sev
+                if _SEV_ORDER.get(new_sev, 0) > _SEV_ORDER.get(existing_sev, 0)
+                else existing_sev
+            )
+
+            try:
+                self.db.execute(
+                    """
+                    UPDATE incidents
+                    SET event_ids = ?, observation_count = ?,
+                        observation_metadata = ?, severity = ?,
+                        end_ts = ?
+                    WHERE incident_id = ?
+                    """,
+                    (
+                        json.dumps(merged_event_ids),
+                        obs_count,
+                        json.dumps(obs_meta),
+                        final_sev,
+                        incident.end_ts.isoformat() if incident.end_ts else None,
+                        existing_id,
+                    ),
+                )
+                logger.info(
+                    "Merged incident %s: observation #%d, %d total events",
+                    existing_id, obs_count, len(merged_event_ids),
+                )
+            except Exception as e:
+                logger.error("Failed to merge incident %s: %s", existing_id, e)
+
+            return False  # Merged, not new
+
+        # No existing incident — create new one
+        self.persist_incident(incident)
+        return True
 
     def persist_incident(self, incident: Incident):
         """Save incident to database (includes AMRDR + temporal columns)
@@ -1001,39 +1101,24 @@ class FusionEngine:
             try:
                 incidents, risk_snapshot = self.evaluate_device(device_id)
 
-                # Persist incidents (with cooldown dedup)
-                now = time.time()
+                # Persist incidents with merge-or-create dedup
                 for incident in incidents:
-                    # Cooldown: suppress if same rule+device fired recently
-                    cooldown_key = (incident.rule_name, device_id)
-                    last_fire = self._incident_cooldowns.get(cooldown_key, 0)
-                    if (now - last_fire) < self._cooldown_seconds:
-                        logger.debug(
-                            "Incident cooldown: suppressed %s for %s (%.0fs remaining)",
-                            incident.rule_name,
-                            device_id,
-                            self._cooldown_seconds - (now - last_fire),
+                    merged = self._merge_or_create_incident(incident, device_id)
+                    if merged:
+                        # Update metrics only for new incidents (not merges)
+                        self.metrics["total_incidents_created"] += 1
+                        self.metrics["incidents_by_severity"][incident.severity.value] += 1
+                        self.metrics["incidents_by_rule"][incident.rule_name] += 1
+
+                        logger.warning(
+                            f"INCIDENT_CREATED | "
+                            f"device_id={device_id} | "
+                            f"incident_id={incident.incident_id} | "
+                            f"rule={incident.rule_name} | "
+                            f"severity={incident.severity.value} | "
+                            f"tactics={','.join(incident.tactics)} | "
+                            f"techniques={','.join(incident.techniques)}"
                         )
-                        continue
-                    self._incident_cooldowns[cooldown_key] = now
-
-                    self.persist_incident(incident)
-
-                    # Update metrics
-                    self.metrics["total_incidents_created"] += 1
-                    self.metrics["incidents_by_severity"][incident.severity.value] += 1
-                    self.metrics["incidents_by_rule"][incident.rule_name] += 1
-
-                    # Structured log for each incident
-                    logger.warning(
-                        f"INCIDENT_CREATED | "
-                        f"device_id={device_id} | "
-                        f"incident_id={incident.incident_id} | "
-                        f"rule={incident.rule_name} | "
-                        f"severity={incident.severity.value} | "
-                        f"tactics={','.join(incident.tactics)} | "
-                        f"techniques={','.join(incident.techniques)}"
-                    )
 
                 # Persist risk snapshot
                 self.persist_risk_snapshot(risk_snapshot)

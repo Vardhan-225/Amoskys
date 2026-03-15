@@ -1434,6 +1434,18 @@
                     console.log('🔄 Dashboard update received');
                     this.handleDataUpdate(data);
                 });
+
+                this.socket.on('agent_health_update', (data) => {
+                    window.dispatchEvent(new CustomEvent('ws:agent_health', {
+                        detail: data
+                    }));
+                });
+
+                this.socket.on('agent_alert_signal', (data) => {
+                    window.dispatchEvent(new CustomEvent('ws:agent_alert', {
+                        detail: data
+                    }));
+                });
                 
                 this.socket.on('error', (error) => {
                     console.error('WebSocket error:', error);
@@ -1899,6 +1911,10 @@
                 </div>
             </div>
             <div class="igris-header-actions">
+                <select id="igris-backend-select" class="igris-backend-select" onchange="igrisSwitchBackend(this.value)" title="LLM Backend">
+                    <option value="ollama">Ollama (Local)</option>
+                    <option value="claude">Claude API</option>
+                </select>
                 <button class="igris-hdr-btn" onclick="igrisReset()" title="New conversation">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                 </button>
@@ -1962,6 +1978,17 @@
     cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 .igris-hdr-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.igris-backend-select {
+    background: rgba(0,217,255,0.08); border: 1px solid rgba(0,217,255,0.2);
+    color: var(--neural-primary); border-radius: 6px; padding: 0.2rem 0.4rem;
+    font-size: 0.65rem; font-family: inherit; cursor: pointer; outline: none;
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2300d9ff' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 0.35rem center; padding-right: 1.2rem;
+}
+.igris-backend-select:hover { border-color: rgba(0,217,255,0.4); background-color: rgba(0,217,255,0.12); }
+.igris-backend-select option { background: #0d1230; color: #fff; }
+.igris-backend-switching { opacity: 0.5; pointer-events: none; }
 .igris-messages {
     flex: 1; overflow-y: auto; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem;
     max-height: 400px; min-height: 200px;
@@ -2041,6 +2068,58 @@
     window.igrisReset = function() {
         fetch('/dashboard/api/igris/chat/reset', { method: 'POST' });
         messages.innerHTML = '<div class="igris-msg igris-msg-bot"><div class="igris-msg-content">Conversation reset. How can I help?</div></div>';
+    };
+
+    // Fetch current backend on load and set dropdown
+    fetch('/dashboard/api/igris/chat/backend')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.status === 'success') {
+                var sel = document.getElementById('igris-backend-select');
+                sel.value = d.current;
+                // Disable unavailable options
+                Array.from(sel.options).forEach(function(opt) {
+                    var info = d.backends[opt.value];
+                    if (info && !info.available) {
+                        opt.disabled = true;
+                        opt.text = info.label + ' (unavailable)';
+                    }
+                });
+                document.getElementById('igris-status-dot').textContent =
+                    'Security Analyst \u00b7 ' + (d.backends[d.current] || {}).model;
+            }
+        }).catch(function() {});
+
+    window.igrisSwitchBackend = async function(backend) {
+        var sel = document.getElementById('igris-backend-select');
+        sel.classList.add('igris-backend-switching');
+        try {
+            var resp = await fetch('/dashboard/api/igris/chat/backend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ backend: backend }),
+            });
+            var data = await resp.json();
+            if (data.status === 'success') {
+                messages.innerHTML = '<div class="igris-msg igris-msg-bot"><div class="igris-msg-content">Switched to **' + backend + '** backend. How can I help?</div></div>';
+                // Update subtitle with model name
+                var infoResp = await fetch('/dashboard/api/igris/chat/backend');
+                var info = await infoResp.json();
+                if (info.status === 'success') {
+                    document.getElementById('igris-status-dot').textContent =
+                        'Security Analyst \u00b7 ' + (info.backends[backend] || {}).model;
+                }
+            } else {
+                addMsg('bot', '**Error switching backend:** ' + data.message);
+                // Revert dropdown
+                var curResp = await fetch('/dashboard/api/igris/chat/backend');
+                var cur = await curResp.json();
+                if (cur.status === 'success') sel.value = cur.current;
+            }
+        } catch (err) {
+            addMsg('bot', '**Error:** ' + err.message);
+        }
+        sel.classList.remove('igris-backend-switching');
     };
 
     toggle.addEventListener('click', igrisToggle);

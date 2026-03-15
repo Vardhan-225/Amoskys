@@ -44,6 +44,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence
 
 from amoskys.agents.common.metrics import AgentMetrics
+from amoskys.config import get_config
 
 if TYPE_CHECKING:
     from amoskys.agents.common.agent_bus import AgentBus
@@ -255,9 +256,116 @@ class HardenedAgentBase(abc.ABC):
             pass  # Mesh is optional — agents work without it
         self._last_metrics_emit_ns = int(time.time() * 1e9)
 
+        # Coordination bus — cross-process health/alert/control plane
+        # All agents get this automatically; gracefully falls back to LocalBus
+        self._coordination_bus = self._init_coordination_bus()
+
         # Wire queue adapter metrics (P0-1)
         if self.queue_adapter and hasattr(self.queue_adapter, "_metrics"):
             self.queue_adapter._metrics = self.metrics
+
+    # ----------------- Coordination Bus (All Agents) ----------------------
+
+    def _init_coordination_bus(self):
+        """Initialize coordination bus for health/alert/control messaging.
+
+        Tries the configured backend (env AMOSKYS_COORDINATION_BACKEND),
+        falls back to LocalBus if unavailable. Never fails — agents work
+        without coordination.
+        """
+        try:
+            from amoskys.common.coordination import (
+                CoordinationConfig,
+                create_coordination_bus,
+            )
+
+            config = get_config()
+            backend = os.environ.get("AMOSKYS_COORDINATION_BACKEND", "local")
+            cfg = CoordinationConfig(
+                backend=backend,
+                agent_id=self.agent_name,
+                eventbus_address=config.agent.bus_address,
+                cert_dir=config.agent.cert_dir,
+                default_topics=["CONTROL"],
+            )
+            try:
+                bus = create_coordination_bus(cfg)
+                bus.subscribe("CONTROL", self._handle_coordination_control)
+                return bus
+            except Exception:
+                logger.warning(
+                    "Coordination bus backend '%s' unavailable for %s; falling back to local",
+                    backend,
+                    self.agent_name,
+                    exc_info=True,
+                )
+                return create_coordination_bus(
+                    CoordinationConfig(backend="local", agent_id=self.agent_name)
+                )
+        except Exception:
+            return None  # Coordination is fully optional
+
+    def _handle_coordination_control(
+        self, topic: str, payload: dict
+    ) -> None:
+        """Handle CONTROL topic signals (log level, feature toggles)."""
+        target = payload.get("target")
+        if target not in (None, "", "all", self.agent_name):
+            return
+
+        command = payload.get("command")
+        if command == "set_log_level":
+            level = str(payload.get("level", "INFO")).upper()
+            logging.getLogger().setLevel(level)
+            logger.info("Coordination: set_log_level=%s for %s", level, self.agent_name)
+
+    def coordination_publish_health(
+        self, loop_latency_ms: float = 0.0, **extra
+    ) -> None:
+        """Publish agent health to the HEALTH topic."""
+        if not self._coordination_bus:
+            return
+        try:
+            self._coordination_bus.publish(
+                "HEALTH",
+                {
+                    "agent_id": self.agent_name,
+                    "status": "healthy",
+                    "loop_latency_ms": round(loop_latency_ms, 2),
+                    "errors_last_min": self.error_count,
+                    "collection_count": self.collection_count,
+                    **extra,
+                },
+            )
+        except Exception:
+            pass  # Never break the agent for coordination
+
+    def coordination_publish_alert(
+        self, severity: str, summary: str, probe_name: str = ""
+    ) -> None:
+        """Publish a detection alert to the ALERT topic."""
+        if not self._coordination_bus:
+            return
+        try:
+            self._coordination_bus.publish(
+                "ALERT",
+                {
+                    "agent_id": self.agent_name,
+                    "severity": severity,
+                    "probe": probe_name,
+                    "summary": summary,
+                },
+            )
+        except Exception:
+            pass
+
+    def _close_coordination_bus(self) -> None:
+        """Close coordination bus on shutdown."""
+        if self._coordination_bus:
+            try:
+                self._coordination_bus.close()
+            except Exception:
+                pass
 
     # ----------------- Lifecycle Hooks (Override These) -------------------
 
@@ -806,6 +914,9 @@ class HardenedAgentBase(abc.ABC):
             },
         )
 
+        # Publish health to coordination bus (all agents, every cycle)
+        self.coordination_publish_health()
+
     def _emit_aoc1_event(self, event_type: str, data: dict) -> None:
         """Emit an AOC-1 observability event through the queue adapter.
 
@@ -1046,6 +1157,7 @@ class HardenedAgentBase(abc.ABC):
                 logger.error(
                     "Agent %s shutdown failed: %s", self.agent_name, e, exc_info=True
                 )
+            self._close_coordination_bus()
             logger.info("Agent %s stopped", self.agent_name)
 
     def run_forever(self) -> None:
@@ -1108,4 +1220,5 @@ class HardenedAgentBase(abc.ABC):
                 logger.error(
                     "Agent %s shutdown failed: %s", self.agent_name, e, exc_info=True
                 )
+            self._close_coordination_bus()
             logger.info("Agent %s stopped", self.agent_name)

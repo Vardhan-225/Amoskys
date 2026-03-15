@@ -333,6 +333,8 @@ class BeaconingPatternProbe(MicroProbe):
         self._query_history: Dict[str, List[float]] = collections.defaultdict(list)
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        from amoskys.agents.common.self_identity import self_identity
+
         events: List[TelemetryEvent] = []
         queries = context.shared_data.get("dns_queries", [])
 
@@ -340,6 +342,9 @@ class BeaconingPatternProbe(MicroProbe):
         for query in queries:
             domain = _extract_effective_domain(query.domain)
             if _is_benign_domain(domain):
+                continue
+            # Skip AMOSKYS's own API destinations
+            if self_identity.is_self_destination(domain):
                 continue
             self._query_history[domain].append(query.timestamp)
 

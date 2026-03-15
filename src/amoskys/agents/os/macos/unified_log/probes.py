@@ -505,6 +505,8 @@ class TCCEventProbe(MicroProbe):
     degraded_without = ["tcc_full_history"]  # Explicit: FDA needed for full coverage
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        from amoskys.agents.common.apple_allowlist import is_expected_tcc_action
+
         events: List[TelemetryEvent] = []
         log_entries = context.shared_data.get("log_entries", [])
 
@@ -519,6 +521,19 @@ class TCCEventProbe(MicroProbe):
                     if "full_disk" in event_subtype:
                         severity = Severity.HIGH
 
+                    # Check Apple allowlist: tccd/sandboxd managing permissions is expected
+                    allowlist_result = is_expected_tcc_action(
+                        entry.process, event_subtype
+                    )
+                    if allowlist_result.is_expected:
+                        # Downgrade to INFO with low confidence — still log, don't alert
+                        severity = Severity.INFO
+                        trust_disposition = "apple_system"
+                        confidence = 0.1
+                    else:
+                        trust_disposition = "unknown"
+                        confidence = 0.65
+
                     events.append(
                         self._create_event(
                             event_type=f"tcc_{event_subtype}",
@@ -531,9 +546,10 @@ class TCCEventProbe(MicroProbe):
                                 "event_subtype": event_subtype,
                                 "log_timestamp": entry.timestamp,
                                 "process_id": entry.process_id,
-                                "degraded": True,  # Always mark: FDA status unknown at probe level
+                                "degraded": True,
+                                "trust_disposition": trust_disposition,
                             },
-                            confidence=0.65,  # Lower confidence: degraded without FDA
+                            confidence=confidence,
                         )
                     )
                     break  # One match per log entry

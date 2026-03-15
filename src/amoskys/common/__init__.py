@@ -2,11 +2,19 @@
 AMOSKYS Common Utilities
 
 Shared utilities used across all AMOSKYS components including:
+- Coordination bus abstractions
 - Unified exception hierarchy
 - Structured logging infrastructure
 - Cryptographic utilities
 """
 
+from .coordination import (
+    CoordinationBus,
+    CoordinationConfig,
+    EventBusCoordinationBus,
+    LocalBus,
+    create_coordination_bus,
+)
 from .exceptions import (  # Base classes
     AgentConnectionError,
     AgentError,
@@ -58,6 +66,12 @@ from .logging import (
 )
 
 __all__ = [
+    # Coordination
+    "CoordinationBus",
+    "CoordinationConfig",
+    "EventBusCoordinationBus",
+    "LocalBus",
+    "create_coordination_bus",
     # Exceptions
     "AmoskysError",
     "ErrorCode",

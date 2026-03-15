@@ -68,6 +68,7 @@ Security Considerations:
 """
 import logging
 import os
+import queue
 import signal
 import sys
 import threading
@@ -86,6 +87,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 # Clean imports for new structure
 from amoskys.common.crypto.signing import load_public_key, verify
 from amoskys.config import get_config
+from amoskys.proto import control_pb2, control_pb2_grpc
 from amoskys.proto import messaging_schema_pb2 as pb
 from amoskys.proto import messaging_schema_pb2_grpc as pbrpc
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
@@ -108,6 +110,77 @@ WAL_PATH = config.agent.wal_path
 wal_storage = None  # Will be initialized in serve()
 _wal_lock = threading.Lock()  # Thread-safe WAL access
 _wal_batch_writer = None  # Group-commit writer (initialized in serve())
+
+
+class _ControlSubscriber:
+    """Active subscriber to the EventBus control plane."""
+
+    def __init__(self, agent_id: str, topics: list[str], max_queue: int = 256):
+        self.agent_id = agent_id
+        self.topics = set(topics or ["*"])
+        self.queue: "queue.Queue[control_pb2.AgentSignal]" = queue.Queue(
+            maxsize=max_queue
+        )
+
+
+class _ControlHub:
+    """In-memory fanout hub for control-plane coordination signals."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._subscribers: list[_ControlSubscriber] = []
+
+    def register(self, agent_id: str, topics: list[str]) -> _ControlSubscriber:
+        subscriber = _ControlSubscriber(agent_id=agent_id, topics=topics)
+        with self._lock:
+            self._subscribers.append(subscriber)
+        return subscriber
+
+    def unregister(self, subscriber: _ControlSubscriber) -> None:
+        with self._lock:
+            self._subscribers = [s for s in self._subscribers if s is not subscriber]
+
+    def publish(self, signal: control_pb2.AgentSignal) -> int:
+        with self._lock:
+            subscribers = list(self._subscribers)
+
+        delivered = 0
+        for subscriber in subscribers:
+            if signal.source and signal.source == subscriber.agent_id:
+                continue
+            if signal.target not in ("", "all", subscriber.agent_id):
+                continue
+            if not self._matches_topic(signal.topic, subscriber.topics):
+                continue
+            if self._enqueue(subscriber, signal):
+                delivered += 1
+        return delivered
+
+    @staticmethod
+    def _matches_topic(topic: str, topics: set[str]) -> bool:
+        return "*" in topics or topic in topics
+
+    @staticmethod
+    def _enqueue(
+        subscriber: _ControlSubscriber,
+        signal: control_pb2.AgentSignal,
+    ) -> bool:
+        try:
+            subscriber.queue.put_nowait(signal)
+            return True
+        except queue.Full:
+            try:
+                subscriber.queue.get_nowait()
+            except queue.Empty:
+                return False
+            try:
+                subscriber.queue.put_nowait(signal)
+                return True
+            except queue.Full:
+                return False
+
+
+_control_hub = _ControlHub()
 
 
 class WALBatchWriter:
@@ -1209,6 +1282,49 @@ OVERLOAD_REASON = "Server is overloaded"
 OVERLOAD_LOG = "[Publish] Server is overloaded"
 
 
+class EventBusControlServicer(control_pb2_grpc.EventBusControlServicer):
+    """Minimal control-plane RPCs for cross-process coordination."""
+
+    def PublishSignal(self, request, context):
+        signal = control_pb2.AgentSignal()
+        signal.CopyFrom(request)
+
+        if not signal.topic:
+            return control_pb2.SignalAck(accepted=False, reason="missing topic")
+
+        if not signal.id:
+            signal.id = f"{signal.source or 'unknown'}-{time.time_ns()}"
+        if not signal.ts_ns:
+            signal.ts_ns = time.time_ns()
+        if not signal.target:
+            signal.target = "all"
+
+        delivered = _control_hub.publish(signal)
+        logger.debug(
+            "[Control] signal topic=%s source=%s target=%s delivered=%d",
+            signal.topic,
+            signal.source,
+            signal.target,
+            delivered,
+        )
+        return control_pb2.SignalAck(accepted=True, reason=f"delivered:{delivered}")
+
+    def SubscribeSignals(self, request, context):
+        agent_id = request.agent_id or f"anonymous-{time.time_ns()}"
+        topics = list(request.topics) or ["*"]
+        subscriber = _control_hub.register(agent_id=agent_id, topics=topics)
+
+        try:
+            while context.is_active():
+                try:
+                    signal = subscriber.queue.get(timeout=1.0)
+                except queue.Empty:
+                    continue
+                yield signal
+        finally:
+            _control_hub.unregister(subscriber)
+
+
 class EventBusServicer(pbrpc.EventBusServicer):
     """Implements the EventBus gRPC service for message routing.
 
@@ -2004,6 +2120,11 @@ def serve():
                 UniversalEventBusServicer(), server
             )
             logger.info("Registered UniversalEventBusServicer with gRPC server")
+
+            control_pb2_grpc.add_EventBusControlServicer_to_server(
+                EventBusControlServicer(), server
+            )
+            logger.info("Registered EventBusControlServicer with gRPC server")
         except Exception as e:
             logger.exception("Failed to register EventBus services: %s", e)
             raise

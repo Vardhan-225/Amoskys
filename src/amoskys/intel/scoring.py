@@ -1091,6 +1091,17 @@ class ScoringEngine:
         sus_thresh, mal_thresh = self._dynamic_thresholds.get_thresholds(
             category, event.get("event_action", "")
         )
+
+        # Trust-aware classification: Apple system processes and AMOSKYS self-traffic
+        # get capped — they can never classify as "malicious"
+        trust_disposition = event.get("trust_disposition", "unknown")
+        if trust_disposition == "apple_system":
+            # Apple system process: cap at "legitimate", reduce composite score
+            composite = min(composite, sus_thresh * 0.5)
+        elif trust_disposition == "self":
+            # AMOSKYS own traffic: always legitimate
+            composite = 0.0
+
         if composite >= mal_thresh:
             classification = "malicious"
         elif composite >= sus_thresh:
@@ -1099,11 +1110,13 @@ class ScoringEngine:
             classification = "legitimate"
 
         # Preserve agent's original classification if more severe —
-        # operational safety net: never downgrade a genuine alert.
+        # EXCEPT for trusted actors where we know the classification is wrong.
         _SEVERITY_ORDER = {"legitimate": 0, "suspicious": 1, "malicious": 2}
         original = event.get("final_classification", "legitimate")
-        if _SEVERITY_ORDER.get(original, 0) > _SEVERITY_ORDER.get(classification, 0):
-            classification = original
+        if trust_disposition == "unknown":
+            # Only apply the never-downgrade rule for unknown processes
+            if _SEVERITY_ORDER.get(original, 0) > _SEVERITY_ORDER.get(classification, 0):
+                classification = original
 
         # Populate event
         event["geometric_score"] = round(geo_score, 4)

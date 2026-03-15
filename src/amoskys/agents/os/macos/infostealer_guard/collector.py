@@ -140,11 +140,31 @@ _EXPECTED_ACCESSORS: Dict[str, Set[str]] = {
         "securityd",
         "authorizationhost",
         "secd",
+        # Apple system processes that legitimately access Keychain
+        "TrustedPeersHelper",
+        "TrustedPe",  # Truncated by lsof/psutil
+        "nsurlsessiond",
+        "com.apple",  # Truncated com.apple.* process names
+        "authd",
+        "accountsd",
+        "CloudKeychainProxy",
+        "kcm",  # Keychain circle manager
     },
     "chrome_creds": {"Google Chrome", "Google Chrome Helper", "chrome"},
     "chrome_cookies": {"Google Chrome", "Google Chrome Helper", "chrome"},
     "firefox_creds": {"firefox", "Firefox"},
-    "safari": {"Safari", "SafariServices", "com.apple.Safari"},
+    "safari": {
+        "Safari",
+        "SafariServices",
+        "com.apple.Safari",
+        # Apple system processes that legitimately access Safari data
+        "SafariBookmarksSyncAgent",
+        "SafariBoo",  # Truncated by lsof/psutil
+        "com.apple.Safari.SafeBrowsing",
+        "com.apple",  # Truncated com.apple.* names
+        "nsurlsessiond",
+        "SafariLaunchAgent",
+    },
     "brave_creds": {"Brave Browser", "brave"},
     "edge_creds": {"Microsoft Edge", "msedge"},
     "crypto_exodus": {"Exodus"},

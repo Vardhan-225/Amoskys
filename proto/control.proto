@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package messaging;
+
+message AgentSignal {
+  string id = 1;
+  string source = 2;
+  string target = 3;
+  string topic = 4;
+  string payload_json = 5;
+  uint64 ts_ns = 6;
+}
+
+message SignalSubscribe {
+  string agent_id = 1;
+  repeated string topics = 2;
+}
+
+message SignalAck {
+  bool accepted = 1;
+  string reason = 2;
+}
+
+service EventBusControl {
+  rpc PublishSignal(AgentSignal) returns (SignalAck);
+  rpc SubscribeSignals(SignalSubscribe) returns (stream AgentSignal);
+}

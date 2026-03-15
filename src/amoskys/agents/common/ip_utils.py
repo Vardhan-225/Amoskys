@@ -87,6 +87,9 @@ BENIGN_DOMAINS: FrozenSet[str] = frozenset(
         "fastly.net",
         "edgecastcdn.net",
         "jsdelivr.net",
+        # AI / LLM
+        "anthropic.com",
+        "openai.com",
         # Development
         "github.com",
         "githubusercontent.com",

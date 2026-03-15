@@ -1121,6 +1121,23 @@ class MicroProbeAgentMixin:
 
                 all_events.extend(events)
 
+                # Publish CRITICAL/HIGH alerts to coordination bus (all agents)
+                for event in events:
+                    if (
+                        event.severity in (Severity.CRITICAL, Severity.HIGH)
+                        and hasattr(self, "coordination_publish_alert")
+                    ):
+                        summary = (
+                            event.data.get("message")
+                            or event.data.get("summary")
+                            or event.event_type
+                        )
+                        self.coordination_publish_alert(
+                            severity=event.severity.value,
+                            summary=str(summary),
+                            probe_name=event.probe_name,
+                        )
+
                 logger.debug(
                     f"Probe {probe.name} returned {len(events)} events "
                     f"in {scan_duration:.3f}s"
