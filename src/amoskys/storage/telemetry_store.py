@@ -1981,7 +1981,15 @@ class TelemetryStore:
             return None
 
     def insert_flow_event(self, event_data: Dict[str, Any]) -> Optional[int]:
-        """Insert a network flow event."""
+        """Insert a network flow event.
+
+        Rejects LISTEN/bind sockets — single gate for all call paths.
+        """
+        state = (event_data.get("state") or "").strip().upper()
+        dst_ip = (event_data.get("dst_ip") or "").strip()
+        if state == "LISTEN" or (not dst_ip and state in ("", "NONE")):
+            return None  # Not a real connection — socket inventory
+
         try:
             cursor = self.db.execute(
                 """

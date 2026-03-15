@@ -1049,6 +1049,9 @@ class WALProcessor:
             }
         )
 
+    # Socket states that are NOT real traffic — filter at WAL level as defense-in-depth
+    _LISTEN_STATES = frozenset({"LISTEN", "NONE", ""})
+
     def _insert_flow_observation(
         self,
         attrs,
@@ -1058,7 +1061,17 @@ class WALProcessor:
         agent,
         version,
     ) -> None:
-        """Insert raw flow observation into flow_events with GeoIP/ASN enrichment."""
+        """Insert raw flow observation into flow_events with GeoIP/ASN enrichment.
+
+        Filters out LISTEN/bind sockets — they're socket inventory, not traffic.
+        Defense-in-depth: agents should also filter, but WAL catches stragglers.
+        """
+        state = (attrs.get("state") or "").strip().upper()
+        dst_ip = (attrs.get("dst_ip") or "").strip()
+        # Drop LISTEN/bind sockets and entries with no destination
+        if state in ("LISTEN", "NONE", "") or not dst_ip:
+            return
+
         quality = self._quality_payload(attrs)
         # Enrich flow observations (GeoIP + ASN for dst_ip)
         if self._pipeline is not None:
