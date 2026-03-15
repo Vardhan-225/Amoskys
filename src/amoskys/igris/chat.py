@@ -48,7 +48,7 @@ class IgrisChat:
 
     def __init__(
         self,
-        backend_type: str = "claude",
+        backend_type: str | None = None,
         telemetry_db: str = "data/telemetry.db",
         fusion_db: str = "data/intel/fusion.db",
         reliability_db: str = "data/intel/reliability.db",

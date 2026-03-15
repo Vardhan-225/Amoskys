@@ -8,6 +8,9 @@ an intelligent neural interface.
 """
 
 import importlib
+import logging
+
+logger = logging.getLogger("web.app.dashboard")
 import json
 import os
 import time

@@ -324,7 +324,7 @@ class ClaudeBackend:
 # ═══════════════════════════════════════════════════════════════════
 
 
-def create_backend(backend_type: str = None, **kwargs) -> LLMBackend:
+def create_backend(backend_type: str | None = None, **kwargs) -> LLMBackend:
     """Create the right backend based on .env config or explicit type.
 
     Priority:
@@ -337,7 +337,15 @@ def create_backend(backend_type: str = None, **kwargs) -> LLMBackend:
 
     # Explicit ollama
     if backend_type == "ollama":
-        return OllamaBackend(**kwargs)
+        # Verify Ollama is reachable before committing
+        try:
+            import ollama as _ol
+            _ol.Client(host=os.environ.get("OLLAMA_HOST", "http://localhost:11434")).list()
+            return OllamaBackend(**kwargs)
+        except Exception as e:
+            logger.warning("IGRIS_BACKEND=ollama but Ollama not reachable: %s", e)
+            logger.info("Falling back to Claude API")
+            # Fall through to Claude
 
     # Explicit claude
     if backend_type == "claude":
@@ -354,9 +362,8 @@ def create_backend(backend_type: str = None, **kwargs) -> LLMBackend:
 
     # Auto-detect: try Ollama first (free), fall back to Claude
     try:
-        import ollama
-
-        ollama.Client().list()
+        import ollama as _ol
+        _ol.Client().list()
         logger.info("Auto-detected Ollama — using local inference (free)")
         return OllamaBackend(**kwargs)
     except Exception:
@@ -364,11 +371,9 @@ def create_backend(backend_type: str = None, **kwargs) -> LLMBackend:
 
     api_key = kwargs.get("api_key") or os.environ.get("ANTHROPIC_API_KEY", "")
     if api_key:
-        logger.info("Using Claude API backend")
-        return ClaudeBackend(
-            api_key=api_key,
-            **{k: v for k, v in kwargs.items() if k != "api_key"},
-        )
+        logger.info("Ollama not available — using Claude API backend")
+        # Don't pass Ollama model name to Claude
+        return ClaudeBackend(api_key=api_key)
 
     raise ValueError(
         "No LLM backend available. Either:\n"
