@@ -10,9 +10,34 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
 logger = logging.getLogger("igris.backends")
+
+# Load .env from project root (data never committed — .gitignore covers .env*)
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_ENV_FILE = _PROJECT_ROOT / ".env"
+
+
+def _load_dotenv() -> None:
+    """Minimal .env loader — no dependency on python-dotenv."""
+    if not _ENV_FILE.exists():
+        return
+    for line in _ENV_FILE.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip("\"'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_dotenv()
 
 
 @dataclass
