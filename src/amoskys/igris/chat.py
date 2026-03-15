@@ -23,7 +23,7 @@ logger = logging.getLogger("igris.chat")
 # Maximum conversation history before truncation
 MAX_HISTORY = 20
 # Maximum tool call rounds per user message (prevent infinite loops)
-MAX_TOOL_ROUNDS = 5
+MAX_TOOL_ROUNDS = 10
 
 SYSTEM_PROMPT = """You are IGRIS, the autonomous security intelligence layer of AMOSKYS — an endpoint detection and response platform protecting macOS systems.
 
