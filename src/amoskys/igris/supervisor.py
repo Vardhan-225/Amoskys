@@ -402,6 +402,19 @@ class Igris:
                         cond.get("subsystem", "unknown"),
                     )
 
+        # 5b. Auto-refresh SOMA when MODEL_STALENESS signal fires.
+        #     This closes the loop: IGRIS detects staleness → triggers training
+        #     directly instead of just recommending a playbook (Phase 2.5).
+        for sig in emitted:
+            sig_type = (
+                sig.signal_type.value
+                if isinstance(sig.signal_type, SignalType)
+                else str(sig.signal_type)
+            )
+            if sig_type == SignalType.MODEL_STALENESS.value:
+                self._auto_refresh_soma()
+                break
+
         # 6. Compute duration
         duration_ms = (time.monotonic() - t0) * 1000
 
@@ -555,6 +568,58 @@ class Igris:
                     related[rk] = self._latest_metrics[rk]
 
         return self.explainer.format_for_c2(sig, baseline_ctx, related)
+
+    def _auto_refresh_soma(self) -> None:
+        """Trigger SOMA Brain retraining when MODEL_STALENESS is detected.
+
+        Runs in a background thread to avoid blocking the observation cycle.
+        Resolves the Phase 2 gap: IGRIS now acts on staleness instead of
+        just recommending a playbook.
+        """
+
+        def _train():
+            try:
+                from amoskys.intel.soma_brain import SomaBrain
+
+                telemetry_db = self.collector._telemetry_db
+                if not telemetry_db:
+                    telemetry_db = os.path.join(_DATA_DIR, "telemetry.db")
+
+                brain = SomaBrain(telemetry_db_path=telemetry_db)
+                result = brain.train_once()
+                status = result.get("status", "unknown")
+                event_count = result.get("event_count", 0)
+                if status == "completed":
+                    logger.info(
+                        "IGRIS → SOMA auto-refresh: training completed "
+                        "(%d events, cycle %d)",
+                        event_count,
+                        result.get("cycle", 0),
+                    )
+                elif status == "cold_start":
+                    logger.warning(
+                        "IGRIS → SOMA auto-refresh: cold start "
+                        "(%d events, need %d)",
+                        event_count,
+                        brain.MIN_EVENTS_FOR_TRAINING,
+                    )
+                elif status == "validation_failed":
+                    logger.warning(
+                        "IGRIS → SOMA auto-refresh: validation failed — %s",
+                        result.get("validation", {}).get("reason", "unknown"),
+                    )
+                else:
+                    logger.warning(
+                        "IGRIS → SOMA auto-refresh: %s", status
+                    )
+            except Exception:
+                logger.error(
+                    "IGRIS → SOMA auto-refresh failed", exc_info=True
+                )
+
+        t = threading.Thread(target=_train, name="igris-soma-refresh", daemon=True)
+        t.start()
+        logger.info("IGRIS: Triggered SOMA auto-refresh (background thread)")
 
     def reset_baselines(self) -> dict:
         """Reset all baselines and re-enter warmup. Clears cooldown index."""

@@ -707,10 +707,46 @@ class WALProcessor:
                 )
                 self._bridged_incident_ids.add(fid)
                 bridged += 1
+
+                # Back-label contributing events as high-trust for SOMA training.
+                # Events that contributed to a fusion incident get label_source='incident'
+                # so GradientBoostingClassifier can train on analyst-grade labels (G2).
+                self._label_incident_events(inc.get("event_ids", []))
             except Exception as e:
                 logger.error("Failed to bridge incident %s: %s", fid, e)
         if bridged > 0:
             logger.info("Bridged %d fusion incidents to dashboard", bridged)
+
+    def _label_incident_events(self, event_ids: list) -> None:
+        """Back-label events that contributed to a fusion incident.
+
+        Sets label_source='incident' on matching security_events rows so SOMA's
+        GradientBoostingClassifier can use them as high-trust training labels (G2).
+        """
+        if not event_ids:
+            return
+        try:
+            # event_ids may contain duplicates and non-string types
+            unique_ids = list({str(eid) for eid in event_ids if eid})
+            if not unique_ids:
+                return
+
+            # Match by event_id column in security_events
+            placeholders = ",".join("?" for _ in unique_ids)
+            updated = self.store.db.execute(
+                f"UPDATE security_events SET label_source = 'incident' "
+                f"WHERE event_id IN ({placeholders}) "
+                f"AND (label_source IS NULL OR label_source = '' OR label_source = 'heuristic')",
+                unique_ids,
+            ).rowcount
+            if updated > 0:
+                self.store.db.commit()
+                logger.info(
+                    "SOMA label: marked %d events as label_source='incident'",
+                    updated,
+                )
+        except Exception as e:
+            logger.debug("Failed to back-label incident events: %s", e)
 
     def _run_fusion_eval(self) -> None:
         """Run fusion evaluation + incident bridging in a background thread.

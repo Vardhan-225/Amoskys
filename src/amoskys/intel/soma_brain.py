@@ -265,30 +265,139 @@ class SomaBrain:
         self._persist_artifact(self._feature_columns, "feature_columns")
         self._persist_artifact(self._label_encoders, "label_encoders")
 
-        # 8. Save metrics
-        elapsed = time.time() - t0
-        metrics["elapsed_seconds"] = round(elapsed, 2)
-        metrics["status"] = "completed"
-        self._last_metrics = metrics
-        self._training_count += 1
-        self._last_train_time = time.time()
-        self._status = "idle"
+        # 8. Post-training validation — verify model quality before deploying
+        validation = self._validate_trained_model(X, if_metrics)
+        metrics["validation"] = validation
 
-        self._save_metrics(metrics)
-        self._notify_scorer_reload()
+        if validation.get("passed", False):
+            # 9. Save metrics and activate model
+            elapsed = time.time() - t0
+            metrics["elapsed_seconds"] = round(elapsed, 2)
+            metrics["status"] = "completed"
+            self._last_metrics = metrics
+            self._training_count += 1
+            self._last_train_time = time.time()
+            self._status = "idle"
 
-        logger.info(
-            "SomaBrain: training cycle %d complete in %.1fs (IF anomaly_rate=%.3f)",
-            self._training_count,
-            elapsed,
-            if_metrics.get("anomaly_rate", -1),
-        )
+            self._save_metrics(metrics)
+            self._notify_scorer_reload()
+
+            logger.info(
+                "SomaBrain: training cycle %d complete in %.1fs "
+                "(IF anomaly_rate=%.3f, validation=%s)",
+                self._training_count,
+                elapsed,
+                if_metrics.get("anomaly_rate", -1),
+                "PASSED",
+            )
+        else:
+            elapsed = time.time() - t0
+            metrics["elapsed_seconds"] = round(elapsed, 2)
+            metrics["status"] = "validation_failed"
+            self._last_metrics = metrics
+            self._status = "idle"
+
+            # Save metrics but don't bump training count or notify scorer
+            self._save_metrics(metrics)
+            logger.warning(
+                "SomaBrain: training cycle FAILED validation in %.1fs — %s",
+                elapsed,
+                validation.get("reason", "unknown"),
+            )
+
         return metrics
+
+    # ── Post-training validation ────────────────────────────────────
+
+    def _validate_trained_model(
+        self, X: Any, if_metrics: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Validate the newly trained IsolationForest before deploying.
+
+        Checks:
+        1. Anomaly rate is within reasonable bounds (1%-30%)
+        2. Calibration spread is non-degenerate (p95 - p5 > 0.01)
+        3. Model can score without error (inference smoke test)
+        """
+        anomaly_rate = if_metrics.get("anomaly_rate", 0)
+        p5 = if_metrics.get("calibration_p5", 0)
+        p95 = if_metrics.get("calibration_p95", 0)
+        checks: List[Dict] = []
+
+        # Check 1: Anomaly rate bounds
+        if anomaly_rate < 0.001:
+            checks.append({
+                "check": "anomaly_rate_floor",
+                "passed": False,
+                "detail": f"Anomaly rate {anomaly_rate:.4f} below 0.1% — model may be undertrained",
+            })
+        elif anomaly_rate > 0.30:
+            checks.append({
+                "check": "anomaly_rate_ceiling",
+                "passed": False,
+                "detail": f"Anomaly rate {anomaly_rate:.4f} above 30% — model flagging too much",
+            })
+        else:
+            checks.append({
+                "check": "anomaly_rate",
+                "passed": True,
+                "detail": f"Anomaly rate {anomaly_rate:.4f} within bounds",
+            })
+
+        # Check 2: Calibration spread
+        spread = abs(p95 - p5)
+        if spread < 0.01:
+            checks.append({
+                "check": "calibration_spread",
+                "passed": False,
+                "detail": f"Calibration spread {spread:.6f} is degenerate (p5={p5:.4f}, p95={p95:.4f})",
+            })
+        else:
+            checks.append({
+                "check": "calibration_spread",
+                "passed": True,
+                "detail": f"Calibration spread {spread:.4f} is healthy",
+            })
+
+        # Check 3: Inference smoke test on 5 random samples
+        try:
+            import joblib
+
+            model_path = os.path.join(self._model_dir, "isolation_forest.joblib")
+            model = joblib.load(model_path)
+            rng = np.random.default_rng(42)
+            sample_indices = rng.choice(len(X), min(5, len(X)), replace=False)
+            sample = X[sample_indices]
+            scores = -model.score_samples(sample)
+            checks.append({
+                "check": "inference_smoke",
+                "passed": True,
+                "detail": f"Scored {len(sample)} samples, scores range [{scores.min():.4f}, {scores.max():.4f}]",
+            })
+        except Exception as e:
+            checks.append({
+                "check": "inference_smoke",
+                "passed": False,
+                "detail": f"Inference failed: {e}",
+            })
+
+        all_passed = all(c["passed"] for c in checks)
+        failed = [c for c in checks if not c["passed"]]
+        return {
+            "passed": all_passed,
+            "checks": checks,
+            "reason": failed[0]["detail"] if failed else "all checks passed",
+        }
 
     # ── Data query ───────────────────────────────────────────────────
 
     def _query_training_data(self):
-        """Read latest events from telemetry.db (read-only)."""
+        """Read latest events from telemetry.db (read-only).
+
+        Queries security_events first (scored, classified — ideal training data).
+        If insufficient, supplements with observation_events and domain tables
+        (process_events, fim_events, persistence_events) using column mapping.
+        """
         try:
             import pandas as pd
         except ImportError:
@@ -337,10 +446,11 @@ class SomaBrain:
             )
             conn.execute("PRAGMA query_only = ON")
 
-            # Discover which optional columns exist
-            cursor = conn.execute("PRAGMA table_info(security_events)")
-            existing_cols = {row[1] for row in cursor.fetchall()}
+            frames = []
 
+            # ── Primary source: security_events (fully scored) ──
+            sec_cols_info = conn.execute("PRAGMA table_info(security_events)").fetchall()
+            existing_cols = {row[1] for row in sec_cols_info}
             select_cols = [c for c in core_cols if c in existing_cols]
             for oc in optional_cols:
                 if oc in existing_cols:
@@ -364,14 +474,140 @@ class SomaBrain:
                 ORDER BY timestamp_dt DESC
                 LIMIT ?
             """
-            df = pd.read_sql_query(query, conn, params=(self.TRAINING_SAMPLE_SIZE,))
+            df_sec = pd.read_sql_query(query, conn, params=(self.TRAINING_SAMPLE_SIZE,))
+            if not df_sec.empty:
+                frames.append(df_sec)
+            logger.info("SomaBrain: security_events yielded %d rows", len(df_sec))
+
+            # ── Supplementary sources if security_events insufficient ──
+            remaining = self.TRAINING_SAMPLE_SIZE - len(df_sec)
+            if remaining > 0:
+                # observation_events — map columns to match security_events schema
+                try:
+                    obs_cols = {
+                        row[1]
+                        for row in conn.execute(
+                            "PRAGMA table_info(observation_events)"
+                        ).fetchall()
+                    }
+                    if obs_cols:
+                        obs_where = []
+                        if "quality_state" in obs_cols:
+                            obs_where.append(
+                                "LOWER(COALESCE(quality_state, 'valid')) = 'valid'"
+                            )
+                        if "training_exclude" in obs_cols:
+                            obs_where.append(
+                                "COALESCE(CAST(training_exclude AS TEXT), '0') "
+                                "IN ('0', 'false', 'FALSE', 'False')"
+                            )
+                        obs_where_sql = (
+                            f"WHERE {' AND '.join(obs_where)}" if obs_where else ""
+                        )
+                        obs_query = f"""
+                            SELECT timestamp_dt, device_id,
+                                   COALESCE(domain, 'unknown') as event_category,
+                                   COALESCE(event_type, 'observation') as event_action,
+                                   collection_agent,
+                                   COALESCE(risk_score, 0.0) as risk_score,
+                                   0.5 as confidence,
+                                   0.0 as geometric_score,
+                                   0.0 as temporal_score,
+                                   0.0 as behavioral_score,
+                                   'unknown' as final_classification,
+                                   COALESCE(attributes, '{{}}') as indicators,
+                                   '[]' as mitre_techniques,
+                                   0 as requires_investigation
+                            FROM observation_events
+                            {obs_where_sql}
+                            ORDER BY timestamp_dt DESC
+                            LIMIT ?
+                        """
+                        df_obs = pd.read_sql_query(
+                            obs_query, conn, params=(remaining,)
+                        )
+                        if not df_obs.empty:
+                            frames.append(df_obs)
+                            remaining -= len(df_obs)
+                        logger.info(
+                            "SomaBrain: observation_events yielded %d rows",
+                            len(df_obs),
+                        )
+                except Exception:
+                    logger.debug("observation_events query failed", exc_info=True)
+
+                # Domain tables — process_events, fim_events, persistence_events
+                domain_tables = [
+                    ("process_events", "exe", "process"),
+                    ("fim_events", "path", "filesystem"),
+                    ("persistence_events", "path", "persistence"),
+                ]
+                for table_name, resource_col, domain in domain_tables:
+                    if remaining <= 0:
+                        break
+                    try:
+                        tcols = {
+                            row[1]
+                            for row in conn.execute(
+                                f"PRAGMA table_info({table_name})"
+                            ).fetchall()
+                        }
+                        if not tcols:
+                            continue
+                        agent_col = (
+                            "collection_agent"
+                            if "collection_agent" in tcols
+                            else f"'{domain}_agent'"
+                        )
+                        dom_query = f"""
+                            SELECT timestamp_dt, device_id,
+                                   '{domain}' as event_category,
+                                   COALESCE(event_type, '{domain}') as event_action,
+                                   {agent_col} as collection_agent,
+                                   0.0 as risk_score,
+                                   0.5 as confidence,
+                                   0.0 as geometric_score,
+                                   0.0 as temporal_score,
+                                   0.0 as behavioral_score,
+                                   'unknown' as final_classification,
+                                   '{{}}' as indicators,
+                                   '[]' as mitre_techniques,
+                                   0 as requires_investigation
+                            FROM {table_name}
+                            ORDER BY timestamp_dt DESC
+                            LIMIT ?
+                        """
+                        df_dom = pd.read_sql_query(
+                            dom_query, conn, params=(remaining,)
+                        )
+                        if not df_dom.empty:
+                            frames.append(df_dom)
+                            remaining -= len(df_dom)
+                        logger.info(
+                            "SomaBrain: %s yielded %d rows", table_name, len(df_dom)
+                        )
+                    except Exception:
+                        logger.debug(
+                            "%s query failed", table_name, exc_info=True
+                        )
+
             conn.close()
+
+            if not frames:
+                return None
+
+            df = pd.concat(frames, ignore_index=True)
 
             # Fill missing optional columns with defaults
             for oc in optional_cols:
                 if oc not in df.columns:
                     df[oc] = ""
 
+            logger.info(
+                "SomaBrain: total training data = %d rows from %d source(s)",
+                len(df),
+                len(frames),
+            )
             return df
         except Exception:
             logger.error("Failed to query training data", exc_info=True)

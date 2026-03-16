@@ -243,7 +243,41 @@ def main():
         # Bridge fusion incidents to dashboard
         processor._bridge_fusion_incidents()
 
-    # Step 4: Report results
+    # Step 4: SOMA Brain training on fresh data
+    logger.info("=" * 60)
+    logger.info("STEP 4: Training SOMA Brain on collected telemetry")
+    logger.info("=" * 60)
+    if processor._brain is not None:
+        try:
+            metrics = processor._brain.train_once()
+            status = metrics.get("status", "unknown")
+            event_count = metrics.get("event_count", 0)
+            if status == "completed":
+                if_metrics = metrics.get("isolation_forest", {})
+                gbc_metrics = metrics.get("gradient_boost", {})
+                logger.info(
+                    "SOMA training cycle %d: %d events, IF anomaly_rate=%.3f, GBC=%s (%.1fs)",
+                    metrics.get("cycle", 0),
+                    event_count,
+                    if_metrics.get("anomaly_rate", -1),
+                    gbc_metrics.get("status", "skipped"),
+                    metrics.get("elapsed_seconds", 0),
+                )
+            elif status == "cold_start":
+                logger.warning(
+                    "SOMA cold start: only %d events (need %d). "
+                    "Run more collection cycles to accumulate data.",
+                    event_count,
+                    processor._brain.MIN_EVENTS_FOR_TRAINING,
+                )
+            else:
+                logger.warning("SOMA training status: %s", status)
+        except Exception as e:
+            logger.error("SOMA training failed: %s", e)
+    else:
+        logger.warning("SOMA Brain not available — skipping training")
+
+    # Step 5: Report results
     logger.info("=" * 60)
     logger.info("RESULTS")
     logger.info("=" * 60)
