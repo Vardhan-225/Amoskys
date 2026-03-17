@@ -299,6 +299,65 @@ class IgrisToolkit:
                     },
                 },
             },
+            # ── Sub-Agent Tools (agentic AI) ──
+            {
+                "name": "spawn_threat_hunter",
+                "description": "Spawn an autonomous threat hunter sub-agent to trace an IOC (IP, domain, PID, or file path) across all AMOSKYS data sources in parallel. Returns correlated findings with risk assessment.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "ioc_type": {"type": "string", "enum": ["ip", "domain", "pid", "path"], "description": "Type of indicator of compromise"},
+                        "ioc_value": {"type": "string", "description": "The IOC value to hunt (e.g., '185.220.101.1', 'evil.com', '1234', '/tmp/payload.sh')"},
+                    },
+                    "required": ["ioc_value"],
+                },
+            },
+            {
+                "name": "spawn_incident_analyst",
+                "description": "Spawn an autonomous incident analyst sub-agent to build the full forensic narrative for an incident. Traces contributing events, checks kill chain, and recommends containment.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "incident_id": {"type": "integer", "description": "Incident ID to analyze"},
+                    },
+                    "required": ["incident_id"],
+                },
+            },
+            {
+                "name": "spawn_pattern_scout",
+                "description": "Spawn an autonomous pattern scout sub-agent to scan for emerging threats, anomalies, and drift across the entire system. Returns concerns and recommendations.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "hours": {"type": "integer", "description": "Lookback window in hours", "default": 1},
+                    },
+                },
+            },
+            {
+                "name": "spawn_parallel_investigation",
+                "description": "Spawn multiple sub-agents in parallel for comprehensive investigation. Each task runs concurrently and results are collected together.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "tasks": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "agent_type": {"type": "string", "enum": ["threat_hunter", "incident_analyst", "pattern_scout"]},
+                                    "ioc_type": {"type": "string"},
+                                    "ioc_value": {"type": "string"},
+                                    "incident_id": {"type": "integer"},
+                                    "hours": {"type": "integer"},
+                                },
+                                "required": ["agent_type"],
+                            },
+                            "description": "List of sub-agent tasks to run in parallel",
+                        },
+                    },
+                    "required": ["tasks"],
+                },
+            },
         ]
 
         # Append action tool definitions if ActionExecutor is available
@@ -317,6 +376,10 @@ class IgrisToolkit:
 
     def execute(self, tool_name: str, args: Dict[str, Any]) -> Any:
         """Execute a tool by name. Returns JSON-serializable result."""
+        # Sub-agent tools
+        if tool_name.startswith("spawn_"):
+            return self._execute_sub_agent(tool_name, args)
+
         # Check action tools first (if executor available)
         if self._action_executor is not None:
             action_method = getattr(self._action_executor, tool_name, None)
@@ -337,6 +400,58 @@ class IgrisToolkit:
         except Exception as e:
             logger.error("Tool %s failed: %s", tool_name, e)
             return {"error": str(e)}
+
+    def _execute_sub_agent(self, tool_name: str, args: Dict[str, Any]) -> Any:
+        """Execute sub-agent tools (agentic AI)."""
+        from .sub_agents import SubAgentManager
+
+        mgr = SubAgentManager(self)
+
+        if tool_name == "spawn_threat_hunter":
+            result = mgr.spawn("threat_hunter", args, blocking=True)
+        elif tool_name == "spawn_incident_analyst":
+            result = mgr.spawn("incident_analyst", args, blocking=True)
+        elif tool_name == "spawn_pattern_scout":
+            result = mgr.spawn("pattern_scout", args, blocking=True)
+        elif tool_name == "spawn_parallel_investigation":
+            tasks = args.get("tasks", [])
+            results = mgr.spawn_parallel(tasks)
+            return {
+                "status": "completed",
+                "agents_spawned": len(tasks),
+                "results": [
+                    {
+                        "agent_id": r.agent_id,
+                        "agent_type": r.agent_type,
+                        "task": r.task,
+                        "status": r.status,
+                        "summary": r.summary,
+                        "findings_count": len(r.findings),
+                        "findings": r.findings[:10],
+                        "confidence": r.confidence,
+                        "recommendations": r.recommendations,
+                        "duration_ms": r.duration_ms,
+                        "tool_calls": r.tool_calls_made,
+                    }
+                    for r in results
+                ],
+            }
+        else:
+            return {"error": f"Unknown sub-agent tool: {tool_name}"}
+
+        return {
+            "agent_id": result.agent_id,
+            "agent_type": result.agent_type,
+            "task": result.task,
+            "status": result.status,
+            "summary": result.summary,
+            "findings_count": len(result.findings),
+            "findings": result.findings[:10],
+            "confidence": result.confidence,
+            "recommendations": result.recommendations,
+            "duration_ms": result.duration_ms,
+            "tool_calls": result.tool_calls_made,
+        }
 
     def _cutoff_ns(self, hours: int) -> int:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
