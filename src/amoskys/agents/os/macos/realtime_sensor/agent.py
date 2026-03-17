@@ -125,7 +125,7 @@ class TempExecutionProbe(MicroProbe):
         device_id = shared_data.get("device_id", "")
 
         for rt in rt_events:
-            if rt.source != "fsevents" or rt.event_type != "file_created":
+            if rt.source != "fsevents" or rt.event_type not in ("file_created", "file_modified"):
                 continue
             if not (rt.path.startswith("/tmp/") or rt.path.startswith("/var/tmp/")):
                 continue
