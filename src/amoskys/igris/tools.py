@@ -299,6 +299,26 @@ class IgrisToolkit:
                     },
                 },
             },
+            # ── Deep Inspection Tools ──
+            {
+                "name": "verify_code_signing",
+                "description": "Verify code signing status of a binary or running process. Returns: signed/unsigned, Apple/developer/adhoc, hardened runtime, team ID. Use to distinguish legitimate Apple processes from masquerading threats.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "exe_path": {"type": "string", "description": "Path to binary (e.g., /usr/bin/curl, /Applications/Chrome.app)"},
+                        "pid": {"type": "integer", "description": "PID to check (looks up exe path automatically)"},
+                    },
+                },
+            },
+            {
+                "name": "scan_dyld_injection",
+                "description": "Scan all running processes for DYLD_INSERT_LIBRARIES and other injection environment variables. Returns list of processes with suspicious DYLD vars. Covers T1574.006.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                },
+            },
             # ── Sub-Agent Tools (agentic AI) ──
             {
                 "name": "spawn_threat_hunter",
@@ -380,6 +400,12 @@ class IgrisToolkit:
         if tool_name.startswith("spawn_"):
             return self._execute_sub_agent(tool_name, args)
 
+        # Deep inspection tools
+        if tool_name == "verify_code_signing":
+            return self._tool_verify_code_signing(**args)
+        if tool_name == "scan_dyld_injection":
+            return self._tool_scan_dyld_injection(**args)
+
         # Check action tools first (if executor available)
         if self._action_executor is not None:
             action_method = getattr(self._action_executor, tool_name, None)
@@ -400,6 +426,47 @@ class IgrisToolkit:
         except Exception as e:
             logger.error("Tool %s failed: %s", tool_name, e)
             return {"error": str(e)}
+
+    # ── Deep Inspection Tools ──
+
+    def _tool_verify_code_signing(self, exe_path: str = "", pid: int = 0) -> Dict:
+        """Verify code signing for a binary or PID."""
+        from amoskys.agents.common.deep_inspect import verify_code_signing
+
+        if pid and not exe_path:
+            try:
+                import psutil
+                p = psutil.Process(pid)
+                exe_path = p.exe()
+            except Exception:
+                return {"error": f"Cannot find exe for PID {pid}"}
+
+        if not exe_path:
+            return {"error": "Provide exe_path or pid"}
+
+        cs = verify_code_signing(exe_path)
+        return {
+            "path": cs.path,
+            "signed": cs.signed,
+            "valid": cs.valid,
+            "trust_level": cs.trust_level,
+            "identity": cs.identity,
+            "team_id": cs.team_id,
+            "hardened_runtime": cs.hardened_runtime,
+            "is_apple": cs.is_apple,
+            "is_adhoc": cs.is_adhoc,
+            "risk_modifier": cs.risk_modifier,
+        }
+
+    def _tool_scan_dyld_injection(self) -> Dict:
+        """Scan all processes for DYLD injection."""
+        from amoskys.agents.common.deep_inspect import scan_all_processes_for_dyld
+
+        findings = scan_all_processes_for_dyld()
+        return {
+            "total_suspicious": len(findings),
+            "findings": findings[:20],
+        }
 
     def _execute_sub_agent(self, tool_name: str, args: Dict[str, Any]) -> Any:
         """Execute sub-agent tools (agentic AI)."""
@@ -642,20 +709,20 @@ class IgrisToolkit:
         conditions = ["timestamp_ns > ?"]
         params: list = [cutoff]
         if exe:
-            conditions.append("process_name LIKE ?")
-            params.append(f"%{exe}%")
+            conditions.append("(name LIKE ? OR exe LIKE ?)")
+            params.extend([f"%{exe}%", f"%{exe}%"])
         if pid:
             conditions.append("pid = ?")
             params.append(pid)
         if user:
-            conditions.append("conn_user LIKE ?")
+            conditions.append("username LIKE ?")
             params.append(f"%{user}%")
         if suspicious_only:
             conditions.append("is_suspicious = 1")
         where = " AND ".join(conditions)
         return self._query(self._telemetry_db,
-            f"SELECT pid, process_name, ppid, timestamp_dt, "
-            f"is_suspicious, anomaly_score "
+            f"SELECT pid, name, exe, ppid, parent_name, username, timestamp_dt, "
+            f"cmdline, is_suspicious, anomaly_score, process_guid "
             f"FROM process_events WHERE {where} "
             f"ORDER BY timestamp_ns DESC LIMIT ?",
             tuple(params) + (limit,))
@@ -819,11 +886,13 @@ class IgrisToolkit:
     def _tool_get_sigma_rule_hits(self, hours: int = 24) -> List[Dict]:
         cutoff = self._cutoff_ns(hours)
         return self._query(self._telemetry_db,
-            "SELECT detection_rule_id, detection_rule_source, COUNT(*) as hit_count, "
-            "AVG(risk_score) as avg_risk "
+            "SELECT event_category, collection_agent, COUNT(*) as hit_count, "
+            "AVG(risk_score) as avg_risk, "
+            "GROUP_CONCAT(DISTINCT mitre_techniques) as mitre_techniques "
             "FROM security_events WHERE timestamp_ns > ? "
-            "AND detection_rule_id IS NOT NULL "
-            "GROUP BY detection_rule_id ORDER BY hit_count DESC",
+            "AND risk_score > 0.3 "
+            "GROUP BY event_category, collection_agent "
+            "ORDER BY hit_count DESC",
             (cutoff,))
 
     # ── 22. Event Timeline ──
