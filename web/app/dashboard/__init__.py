@@ -5136,6 +5136,30 @@ def igris_chat_reset():
     return jsonify({"status": "success", "message": "Conversation reset"})
 
 
+@dashboard_bp.route("/api/igris/chat/brief", methods=["POST"])
+@require_login
+@require_rate_limit(max_requests=5, window_seconds=60)
+def igris_proactive_brief():
+    """IGRIS proactive security briefing — it tells you what matters."""
+    chat = _get_igris_chat()
+    if chat is None:
+        return jsonify({
+            "status": "error",
+            "message": "IGRIS unavailable. Check ANTHROPIC_API_KEY.",
+        }), 503
+
+    try:
+        response = chat.proactive_brief()
+        return jsonify({
+            "status": "success",
+            "response": response,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.error("IGRIS proactive brief failed: %s", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @dashboard_bp.route("/api/igris/chat/backend", methods=["GET"])
 @require_login
 def igris_chat_backend():
