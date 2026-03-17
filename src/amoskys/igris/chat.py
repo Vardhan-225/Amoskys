@@ -51,7 +51,6 @@ class IgrisChat:
 
     def __init__(
         self,
-        backend_type: str | None = None,
         telemetry_db: str = "data/telemetry.db",
         fusion_db: str = "data/intel/fusion.db",
         reliability_db: str = "data/intel/reliability.db",
@@ -64,7 +63,7 @@ class IgrisChat:
             reliability_db=reliability_db,
             action_executor=action_executor,
         )
-        self.backend = create_backend(backend_type, **backend_kwargs)
+        self.backend = create_backend(**backend_kwargs)
         self._history: List[Dict[str, Any]] = []
         self._briefing_cache: Optional[str] = None
         self._briefing_ts: float = 0

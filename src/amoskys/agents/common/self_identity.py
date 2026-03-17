@@ -63,10 +63,8 @@ class SelfIdentity:
 
         # API destinations we talk to (not threats)
         self._own_destinations: FrozenSet[str] = frozenset({
-            # Anthropic / Claude API
             "anthropic.com",
             "api.anthropic.com",
-            # Ollama (local)
             "localhost",
             "127.0.0.1",
         })

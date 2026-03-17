@@ -5077,14 +5077,10 @@ def igris_coherence():
 
 # ── IGRIS Chat (AI-powered security analyst) ────────────────────
 _igris_chat_instance = None
-_igris_chat_backend = None  # Track current backend type
 
 
-def _get_igris_chat(backend_type=None):
-    global _igris_chat_instance, _igris_chat_backend
-    # Re-create if backend changed
-    if backend_type and backend_type != _igris_chat_backend:
-        _igris_chat_instance = None
+def _get_igris_chat():
+    global _igris_chat_instance
     if _igris_chat_instance is None:
         try:
             from flask import current_app
@@ -5092,10 +5088,8 @@ def _get_igris_chat(backend_type=None):
 
             action_executor = current_app.config.get("ACTION_EXECUTOR")
             _igris_chat_instance = IgrisChat(
-                backend_type=backend_type,
                 action_executor=action_executor,
             )
-            _igris_chat_backend = backend_type
         except Exception as e:
             logger.error("Failed to initialize IGRIS chat: %s", e)
             return None
@@ -5142,48 +5136,20 @@ def igris_chat_reset():
     return jsonify({"status": "success", "message": "Conversation reset"})
 
 
-@dashboard_bp.route("/api/igris/chat/backend", methods=["GET", "POST"])
+@dashboard_bp.route("/api/igris/chat/backend", methods=["GET"])
 @require_login
 def igris_chat_backend():
-    """Get or switch IGRIS LLM backend."""
+    """Get IGRIS LLM backend status."""
     import os
 
-    if request.method == "GET":
-        current = _igris_chat_backend or os.environ.get("IGRIS_BACKEND", "ollama")
-        model = os.environ.get("IGRIS_MODEL", "qwen2.5:14b")
-        # Check which backends are available
-        ollama_ok = False
-        try:
-            import ollama as _ol
-            _ol.Client(host=os.environ.get("OLLAMA_HOST", "http://localhost:11434")).list()
-            ollama_ok = True
-        except Exception:
-            pass
-        claude_ok = bool(os.environ.get("ANTHROPIC_API_KEY", ""))
-        return jsonify({
-            "status": "success",
-            "current": current,
-            "model": model,
-            "backends": {
-                "ollama": {"available": ollama_ok, "label": "Ollama (Local)", "model": os.environ.get("IGRIS_MODEL", "qwen2.5:14b")},
-                "claude": {"available": claude_ok, "label": "Claude API", "model": "claude-sonnet-4-20250514"},
-            },
-        })
-
-    # POST — switch backend
-    data = request.get_json(silent=True) or {}
-    backend = data.get("backend", "").lower()
-    if backend not in ("ollama", "claude"):
-        return jsonify({"status": "error", "message": "Invalid backend. Use 'ollama' or 'claude'."}), 400
-
-    chat = _get_igris_chat(backend_type=backend)
-    if chat is None:
-        return jsonify({"status": "error", "message": f"Failed to initialize {backend} backend."}), 503
-
+    claude_ok = bool(os.environ.get("ANTHROPIC_API_KEY", ""))
     return jsonify({
         "status": "success",
-        "backend": backend,
-        "message": f"Switched to {backend} backend.",
+        "current": "claude",
+        "model": os.environ.get("IGRIS_MODEL", "claude-sonnet-4-20250514"),
+        "backends": {
+            "claude": {"available": claude_ok, "label": "Claude API", "model": "claude-sonnet-4-20250514"},
+        },
     })
 
 

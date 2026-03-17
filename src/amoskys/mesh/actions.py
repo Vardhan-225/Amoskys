@@ -596,7 +596,7 @@ class ActionExecutor:
 
     @staticmethod
     def get_tool_definitions() -> list:
-        """Return Claude/Ollama-compatible tool definitions for all actions."""
+        """Return Claude-compatible tool definitions for all actions."""
         return [
             {
                 "name": "kill_process",
