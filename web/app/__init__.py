@@ -224,6 +224,41 @@ def create_app():
         except Exception as e:
             logging.warning("Dashboard coordination bus failed to start: %s", e)
 
+    # Start EventBus gRPC server (infrastructure — must be up before agents)
+    if not is_testing:
+        try:
+            import subprocess
+            import socket
+
+            def _eventbus_alive(port=50051):
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s.settimeout(1)
+                    s.connect(("127.0.0.1", port))
+                    s.close()
+                    return True
+                except (ConnectionRefusedError, OSError):
+                    return False
+
+            if not _eventbus_alive():
+                _eb_proc = subprocess.Popen(
+                    [sys.executable, "-m", "amoskys.eventbus.server"],
+                    stdout=open("logs/eventbus.log", "a"),
+                    stderr=open("logs/eventbus.err.log", "a"),
+                    env={**os.environ, "PYTHONPATH": os.environ.get("PYTHONPATH", "")},
+                )
+                # Wait for it to come up
+                for _ in range(30):
+                    if _eventbus_alive():
+                        break
+                    import time
+                    time.sleep(0.5)
+                logging.info("EventBus auto-started (PID %d, port 50051)", _eb_proc.pid)
+            else:
+                logging.info("EventBus already running on port 50051")
+        except Exception as e:
+            logging.warning("EventBus auto-start failed: %s", e)
+
     # Start Agent Mesh + IGRIS orchestrator (singleton, idempotent)
     if not is_testing:
         try:

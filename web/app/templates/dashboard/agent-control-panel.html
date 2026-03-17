@@ -460,9 +460,8 @@ class AgentControlPanel {
     render() {
         var grid = document.getElementById('agent-controls-grid');
         if (!grid) return;
-        // Separate EventBus from security agents
+        // Filter EventBus from agent grid — it's infrastructure, managed via pipeline view
         var securityAgents = this.agents.filter(function(a) { return a.agent_id !== 'eventbus'; });
-        this.eventbusAgent = this.agents.find(function(a) { return a.agent_id === 'eventbus'; });
 
         if (securityAgents.length === 0) {
             grid.innerHTML = '<div class="acp-loading"><div>No agents discovered on this platform.</div></div>';
@@ -470,34 +469,7 @@ class AgentControlPanel {
         }
         var self = this;
 
-        // EventBus control bar (rendered above the agent grid)
-        var ebHtml = '';
-        if (this.eventbusAgent) {
-            var eb = this.eventbusAgent;
-            var ebRunning = eb.status === 'running';
-            var ebColor = ebRunning ? '#00ff88' : '#ff3366';
-            ebHtml = '<div style="grid-column:1/-1;margin-bottom:0.5rem;padding:0.8rem 1rem;background:rgba(0,217,255,0.04);border:1px solid rgba(0,217,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">' +
-                '<div style="display:flex;align-items:center;gap:0.6rem;">' +
-                    '<span style="width:10px;height:10px;border-radius:50%;background:' + ebColor + ';box-shadow:0 0 8px ' + ebColor + ';"></span>' +
-                    '<div>' +
-                        '<div style="font-size:0.85rem;font-weight:700;color:var(--neural-primary);">EventBus Server</div>' +
-                        '<div style="font-size:0.65rem;color:var(--text-muted);">Central event routing &mdash; LocalQueue &rarr; WAL &rarr; SQL storage' +
-                            (ebRunning ? ' &middot; PID ' + (eb.pid || '--') : '') + '</div>' +
-                    '</div>' +
-                '</div>' +
-                '<div style="display:flex;gap:0.4rem;align-items:center;">' +
-                    (ebRunning ?
-                        '<span style="font-size:0.7rem;color:#00ff88;font-weight:700;">RUNNING</span>' +
-                        '<button class="acp-action-btn acp-btn-stop" data-agent-id="eventbus" style="padding:0.25rem 0.6rem;font-size:0.7rem;">Stop EventBus</button>'
-                    :
-                        '<span style="font-size:0.7rem;color:#ff3366;font-weight:700;">STOPPED</span>' +
-                        '<button class="acp-action-btn acp-btn-start" data-agent-id="eventbus" style="padding:0.25rem 0.6rem;font-size:0.7rem;">Start EventBus</button>'
-                    ) +
-                '</div>' +
-            '</div>';
-        }
-
-        grid.innerHTML = ebHtml + securityAgents.map(function(agent) { return self.createCard(agent); }).join('');
+        grid.innerHTML = securityAgents.map(function(agent) { return self.createCard(agent); }).join('');
         this.attachCardListeners();
         this.startMetricsUpdate();
     }
