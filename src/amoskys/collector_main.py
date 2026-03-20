@@ -301,15 +301,72 @@ def main() -> int:
         len(agent_configs),
     )
 
-    # ── Supervision loop with graceful degradation ──
+    # ── Supervision loop with IGRIS directive reading ──
     dead_agents: set = set()
+    last_igris_posture = "NOMINAL"
 
     while not shutdown_event.is_set():
-        shutdown_event.wait(timeout=30)
+        shutdown_event.wait(timeout=10)  # Check directives every 10s (was 30s)
 
         if shutdown_event.is_set():
             break
 
+        # ── Read IGRIS directives ──
+        try:
+            from amoskys.igris.tactical import read_directives
+
+            directives = read_directives()
+            if directives:
+                posture = directives.get("posture", "NOMINAL")
+                hunt = directives.get("hunt_mode", False)
+
+                if posture != last_igris_posture:
+                    logger.info(
+                        "IGRIS directive: posture %s -> %s (%s)",
+                        last_igris_posture,
+                        posture,
+                        directives.get("assessment_reason", ""),
+                    )
+                    last_igris_posture = posture
+
+                if hunt:
+                    logger.warning(
+                        "IGRIS HUNT MODE: watching PIDs=%s paths=%d domains=%s",
+                        directives.get("watched_pids", [])[:5],
+                        len(directives.get("watched_paths", [])),
+                        directives.get("watched_domains", [])[:3],
+                    )
+
+                # Publish WATCH directives to agent coordination bus
+                for d in directives.get("directives", []):
+                    dtype = d.get("directive_type", "")
+                    target = d.get("target", "")
+                    if dtype in ("WATCH_PID", "WATCH_PATH", "WATCH_DOMAIN") and target:
+                        # Push to any agent that has a coordination bus
+                        for at in agent_threads:
+                            if at.agent and hasattr(at.agent, "_coordination_bus"):
+                                bus = at.agent._coordination_bus
+                                if bus:
+                                    try:
+                                        bus.publish(
+                                            dtype,
+                                            {
+                                                "target": target,
+                                                "reason": d.get("reason", ""),
+                                                "urgency": d.get("urgency", "HIGH"),
+                                                "source_agent": "igris",
+                                                "mitre_technique": d.get(
+                                                    "mitre_technique", ""
+                                                ),
+                                            },
+                                        )
+                                    except Exception:
+                                        pass
+                                break  # LocalBus is shared, publish once
+        except Exception:
+            pass
+
+        # ── Agent health check ──
         running = 0
         total_cycles = 0
         for at in agent_threads:
@@ -317,7 +374,6 @@ def main() -> int:
             if at.thread and at.thread.is_alive():
                 running += 1
             elif at.agent_name not in dead_agents:
-                # Thread died — log degradation but keep collector running
                 dead_agents.add(at.agent_name)
                 logger.warning(
                     "DEGRADED: Agent %s thread died after %d cycles (last_error: %s). "
@@ -332,11 +388,12 @@ def main() -> int:
         _write_heartbeat(device_id, total_cycles, running, len(agent_threads))
 
         logger.info(
-            "Collector status: %d/%d agents alive, %d total cycles%s",
+            "Collector: %d/%d agents, %d cycles, posture=%s%s",
             running,
             len(agent_threads),
             total_cycles,
-            f" (degraded: {', '.join(sorted(dead_agents))})" if dead_agents else "",
+            last_igris_posture,
+            f" HUNT" if last_igris_posture == "CRITICAL" else "",
         )
 
     # ── Shutdown ──

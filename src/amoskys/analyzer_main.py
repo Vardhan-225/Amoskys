@@ -97,7 +97,17 @@ def main() -> int:
         igris = Igris()
         logger.info("IGRIS supervisor initialized")
     except Exception as e:
-        logger.warning("IGRIS not available: %s", e)
+        logger.warning("IGRIS supervisor not available: %s", e)
+
+    # ── IGRIS Tactical Engine (the minister) ──
+    tactical = None
+    try:
+        from amoskys.igris.tactical import IGRISTacticalEngine
+
+        tactical = IGRISTacticalEngine()
+        logger.info("IGRIS tactical engine initialized — the minister is awake")
+    except Exception as e:
+        logger.warning("IGRIS tactical not available: %s", e)
 
     # ── WAL Processor (if available) ──
     wal_processor = None
@@ -269,7 +279,21 @@ def main() -> int:
             except Exception:
                 logger.error("Queue drain failed", exc_info=True)
 
-            # Run IGRIS observation cycle (every 60s)
+            # IGRIS tactical assessment (every 10s — the minister reads the battlefield)
+            if tactical and cycle % 5 == 0:  # 5 * 2s = 10s
+                try:
+                    state = tactical.assess()
+                    if state.hunt_mode:
+                        logger.warning(
+                            "IGRIS HUNT MODE: posture=%s directives=%d pids=%s",
+                            state.posture,
+                            len(state.active_directives),
+                            state.watched_pids[:5],
+                        )
+                except Exception:
+                    logger.debug("IGRIS tactical assessment failed", exc_info=True)
+
+            # IGRIS observation cycle (every 60s — organism coherence)
             if igris and cycle % 30 == 0:  # 30 * 2s = 60s
                 try:
                     igris.observe()

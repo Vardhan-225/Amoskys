@@ -457,6 +457,118 @@ def show_signals(limit: int = 5):
         print()
 
 
+def show_igris():
+    """Show IGRIS tactical briefing — what the minister is thinking."""
+    try:
+        from amoskys.igris.tactical import TACTICAL_LOG, read_directives
+    except ImportError:
+        print(f"  {C.DIM}IGRIS tactical module not available.{C.RESET}")
+        return
+
+    directives = read_directives()
+
+    print(f"  {C.BOLD}IGRIS Tactical Briefing{C.RESET}")
+    print()
+
+    if not directives:
+        print(f"  {C.DIM}No active directives. IGRIS is observing.{C.RESET}")
+
+        # Check if tactical log exists for historical context
+        if TACTICAL_LOG.exists():
+            try:
+                lines = TACTICAL_LOG.read_text().strip().split("\n")
+                if lines:
+                    last = json.loads(lines[-1])
+                    print(
+                        f"  {C.DIM}Last assessment: {last.get('posture', '?')} "
+                        f"(threat={last.get('threat_level', 0):.0%}) "
+                        f"— {last.get('reason', '')}{C.RESET}"
+                    )
+            except Exception:
+                pass
+        print()
+        return
+
+    # Posture
+    posture = directives.get("posture", "NOMINAL")
+    threat = directives.get("threat_level", 0)
+    reason = directives.get("assessment_reason", "")
+    hunt = directives.get("hunt_mode", False)
+
+    posture_colors = {
+        "NOMINAL": C.GREEN,
+        "GUARDED": C.BLUE,
+        "ELEVATED": C.YELLOW,
+        "CRITICAL": C.RED + C.BOLD,
+    }
+    pc = posture_colors.get(posture, C.WHITE)
+
+    print(f"  Posture:  {pc}{posture}{C.RESET} (threat: {_risk_bar(threat)})")
+    print(f"  Reason:   {reason}")
+    if hunt:
+        print(
+            f"  Mode:     {C.RED}{C.BOLD}HUNT{C.RESET} — all agents at maximum collection"
+        )
+    print()
+
+    # Watched targets
+    pids = directives.get("watched_pids", [])
+    paths = directives.get("watched_paths", [])
+    domains = directives.get("watched_domains", [])
+
+    if pids or paths or domains:
+        print(f"  {C.BOLD}Watched targets{C.RESET}")
+        if pids:
+            print(f"    PIDs:    {', '.join(pids[:10])}")
+        if paths:
+            for p in paths[:5]:
+                print(f"    Path:    {p}")
+        if domains:
+            print(f"    Domains: {', '.join(domains[:5])}")
+        print()
+
+    # Active directives
+    dirs = directives.get("directives", [])
+    if dirs:
+        print(f"  {C.BOLD}Active directives{C.RESET} ({len(dirs)})")
+        for d in dirs[:8]:
+            dtype = d.get("directive_type", "?")
+            target = d.get("target", "?")
+            urgency = d.get("urgency", "MEDIUM")
+            reason_d = d.get("reason", "")
+
+            uc = C.sev(urgency.lower())
+            print(f"    {uc}{urgency:8s}{C.RESET} {dtype} → {target}")
+            if reason_d:
+                print(f"             {C.DIM}{reason_d[:70]}{C.RESET}")
+        print()
+
+    # Tactical log — last few decisions
+    if TACTICAL_LOG.exists():
+        try:
+            lines = TACTICAL_LOG.read_text().strip().split("\n")
+            recent = [json.loads(line) for line in lines[-5:]]
+            if recent:
+                print(f"  {C.BOLD}Recent tactical decisions{C.RESET}")
+                for entry in reversed(recent):
+                    ts = entry.get("timestamp", "")[:19]
+                    p = entry.get("posture", "?")
+                    t = entry.get("threat_level", 0)
+                    n_dirs = entry.get("directives_issued", 0)
+                    assessed = entry.get("events_assessed", 0)
+                    pc_r = posture_colors.get(p, C.DIM)
+                    hunt_str = (
+                        f" {C.RED}HUNT{C.RESET}" if entry.get("hunt_mode") else ""
+                    )
+                    print(
+                        f"    {C.DIM}{ts}{C.RESET} {pc_r}{p:8s}{C.RESET} "
+                        f"assessed={assessed} directives={n_dirs}{hunt_str}"
+                    )
+                print()
+        except Exception:
+            pass
+
+
 def show_search(query: str):
     """Search and display matching events."""
     results = search_events(query)
@@ -520,6 +632,7 @@ HELP_TEXT = f"""
   {C.CYAN}network{C.RESET}             Network/C2 events
   {C.CYAN}ssh{C.RESET}                 SSH authentication events
 
+  {C.CYAN}igris{C.RESET}               IGRIS tactical briefing (what is the minister thinking?)
   {C.CYAN}status{C.RESET}              System status (agents, queues)
   {C.CYAN}help{C.RESET}                This help
   {C.CYAN}quit{C.RESET}                Exit shell
@@ -659,6 +772,9 @@ def handle_command(line: str) -> bool:
         return True
     if cmd == "ssh":
         show_search("ssh")
+        return True
+    if cmd == "igris":
+        show_igris()
         return True
     if cmd == "status":
         os.system(
