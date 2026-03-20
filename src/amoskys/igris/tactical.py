@@ -108,13 +108,42 @@ class IGRISTacticalEngine:
     """
 
     # Thresholds for posture escalation
-    _CRITICAL_THRESHOLD = 5  # N critical events → CRITICAL posture
-    _ELEVATED_THRESHOLD = 10  # N high events → ELEVATED
+    _CRITICAL_THRESHOLD = 3  # N critical events → CRITICAL posture
+    _ELEVATED_THRESHOLD = 5  # N high events → ELEVATED
     _GUARDED_THRESHOLD = 3  # N medium events → GUARDED
 
-    # Hunt mode: when IGRIS actively focuses all agents on targets
-    _HUNT_TRIGGER_RISK = 0.85  # Risk score that triggers hunt
-    _HUNT_KILL_CHAIN_STAGES = 3  # Kill chain stages that trigger hunt
+    # Hunt mode: requires CORROBORATION — not just one signal
+    _HUNT_TRIGGER_RISK = 0.85
+    _HUNT_MIN_INDEPENDENT_SOURCES = 2  # Need 2+ distinct agent sources
+    _HUNT_EXIT_QUIET_SECONDS = 300  # 5 min quiet → exit hunt
+
+    # ── Self-awareness: IGRIS does not watch its own spine ──
+    _SELF_PROCESS_NAMES = frozenset(
+        {
+            "python",
+            "python3",
+            "python3.13",  # AMOSKYS runs as Python
+            "amoskys",
+            "collector_main",
+            "analyzer_main",
+        }
+    )
+    _SELF_PATHS = frozenset(
+        {
+            "/opt/anaconda3/",  # Common Python env
+            "/usr/local/bin/python",
+            "amoskys-venv/",
+            "src/amoskys/",
+        }
+    )
+    _NOISE_CATEGORIES = frozenset(
+        {
+            "app_launch",  # runningboard noise
+            "process_exit",  # kqueue noise
+            "tcc_tcc_permission_request",  # TCC noise
+            "tcc_tcc_event",  # TCC noise
+        }
+    )
 
     def __init__(self):
         self._state = TacticalState(
@@ -132,6 +161,11 @@ class IGRISTacticalEngine:
         )
         self._seen_event_ids: Set[str] = set()
         self._directive_history: List[TacticalDirective] = []
+        self._hunt_entered_at: float = 0.0
+        self._last_critical_event_at: float = 0.0
+
+        # Self-awareness: our own PID and parent PID
+        self._self_pids = {str(os.getpid()), str(os.getppid())}
 
         # Ensure directories
         DIRECTIVES_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -141,36 +175,47 @@ class IGRISTacticalEngine:
         return self._state
 
     def assess(self) -> TacticalState:
-        """Run one tactical assessment cycle. Called every 10 seconds."""
+        """Run one tactical assessment cycle. Called every 10 seconds.
+
+        The minister reads the battlefield with discrimination:
+        - Filters out self-generated noise (own PIDs, AMOSKYS paths)
+        - Filters out known benign categories (TCC noise, app_launch churn)
+        - Requires corroboration for hunt mode (not just one signal)
+        - Ranks directives by confidence and novelty
+        - Explains WHY each target is watched
+        """
         now = time.time()
 
-        # ── 1. Read recent security events ──
-        events = self._read_recent_events(window_seconds=300)
+        # ── 1. Read + FILTER events (remove self-noise) ──
+        raw_events = self._read_recent_events(window_seconds=300)
+        events = [e for e in raw_events if self._is_real_threat(e)]
 
-        # ── 2. Count by severity ──
+        # ── 2. Count by severity (after noise removal) ──
         critical_count = sum(1 for e in events if (e.get("risk_score") or 0) >= 0.85)
         high_count = sum(1 for e in events if 0.7 <= (e.get("risk_score") or 0) < 0.85)
         medium_count = sum(1 for e in events if 0.4 <= (e.get("risk_score") or 0) < 0.7)
+
+        noise_filtered = len(raw_events) - len(events)
 
         # ── 3. Determine posture ──
         if critical_count >= self._CRITICAL_THRESHOLD:
             posture = "CRITICAL"
             threat_level = min(1.0, 0.8 + critical_count * 0.02)
-            reason = f"{critical_count} critical events in 5min window"
+            reason = f"{critical_count} critical threats (filtered {noise_filtered} noise events)"
         elif high_count >= self._ELEVATED_THRESHOLD:
             posture = "ELEVATED"
             threat_level = min(0.8, 0.5 + high_count * 0.03)
-            reason = f"{high_count} high-risk events in 5min window"
+            reason = f"{high_count} high-risk threats detected"
         elif medium_count >= self._GUARDED_THRESHOLD:
             posture = "GUARDED"
             threat_level = min(0.5, 0.2 + medium_count * 0.05)
-            reason = f"{medium_count} medium-risk events in 5min window"
+            reason = f"{medium_count} medium-risk events worth watching"
         else:
             posture = "NOMINAL"
             threat_level = 0.1
-            reason = "no significant threats"
+            reason = f"quiet ({len(events)} events, {noise_filtered} filtered as noise)"
 
-        # ── 4. Identify targets for focused collection ──
+        # ── 4. Identify REAL targets (not self, not noise) ──
         directives = []
         watched_pids = []
         watched_paths = []
@@ -178,7 +223,7 @@ class IGRISTacticalEngine:
 
         for event in events:
             risk = event.get("risk_score") or 0
-            if risk < 0.6:
+            if risk < 0.65:  # Higher threshold than before — be selective
                 continue
 
             event_id = event.get("event_id", "")
@@ -186,7 +231,6 @@ class IGRISTacticalEngine:
                 continue
             self._seen_event_ids.add(event_id)
 
-            # Cap seen set
             if len(self._seen_event_ids) > 10000:
                 self._seen_event_ids = set(list(self._seen_event_ids)[-5000:])
 
@@ -194,7 +238,6 @@ class IGRISTacticalEngine:
             raw = event.get("raw_attributes_json", "")
             techs = event.get("mitre_techniques", "")
 
-            # Extract targets from event attributes
             attrs = {}
             if raw:
                 try:
@@ -207,17 +250,29 @@ class IGRISTacticalEngine:
             domain = attrs.get("domain", attrs.get("query_name", ""))
             process_name = attrs.get("process_name", "")
 
-            # Issue WATCH directives for high-risk targets
+            # Skip self-PIDs
+            if str(pid) in self._self_pids:
+                continue
+            # Skip self-paths
+            if path and any(sp in path for sp in self._SELF_PATHS):
+                continue
+
+            priority = "HIGH" if risk >= 0.8 else "MEDIUM"
+
+            # Build tactical reason (WHY this target)
+            tech_name = self._first_tech(techs)
+
             if pid and str(pid) not in watched_pids:
                 watched_pids.append(str(pid))
                 directives.append(
                     TacticalDirective(
                         directive_type="WATCH_PID",
                         target=str(pid),
-                        reason=f"{cat} detection (risk={risk:.2f}): {process_name or pid}",
-                        urgency="HIGH" if risk >= 0.7 else "MEDIUM",
+                        reason=f"{cat} (risk={risk:.2f}, {tech_name}): process '{process_name or pid}' "
+                        f"flagged by detection engine",
+                        urgency=priority,
                         source_event=event_id,
-                        mitre_technique=self._first_tech(techs),
+                        mitre_technique=tech_name,
                         ttl_seconds=300,
                         issued_at=now,
                     )
@@ -229,10 +284,10 @@ class IGRISTacticalEngine:
                     TacticalDirective(
                         directive_type="WATCH_PATH",
                         target=path,
-                        reason=f"{cat} detection at {path}",
-                        urgency="HIGH" if risk >= 0.7 else "MEDIUM",
+                        reason=f"{cat} at '{path}' — {tech_name or 'suspicious activity'}",
+                        urgency=priority,
                         source_event=event_id,
-                        mitre_technique=self._first_tech(techs),
+                        mitre_technique=tech_name,
                         ttl_seconds=600,
                         issued_at=now,
                     )
@@ -244,28 +299,55 @@ class IGRISTacticalEngine:
                     TacticalDirective(
                         directive_type="WATCH_DOMAIN",
                         target=domain,
-                        reason=f"{cat} involving domain {domain}",
-                        urgency="HIGH" if risk >= 0.7 else "MEDIUM",
+                        reason=f"{cat} involving '{domain}' — {tech_name or 'needs investigation'}",
+                        urgency=priority,
                         source_event=event_id,
-                        mitre_technique=self._first_tech(techs),
+                        mitre_technique=tech_name,
                         ttl_seconds=600,
                         issued_at=now,
                     )
                 )
 
-        # ── 5. Hunt mode ──
-        hunt_mode = critical_count >= 2 or any(
-            (e.get("risk_score") or 0) >= self._HUNT_TRIGGER_RISK for e in events
+        # ── 5. Hunt mode (requires CORROBORATION, not just one signal) ──
+        distinct_sources = set()
+        for e in events:
+            if (e.get("risk_score") or 0) >= self._HUNT_TRIGGER_RISK:
+                raw_h = e.get("raw_attributes_json", "")
+                src = e.get("event_category", "unknown")
+                if raw_h:
+                    try:
+                        src = json.loads(raw_h).get("detection_source", src)
+                    except Exception:
+                        pass
+                distinct_sources.add(src)
+
+        # Entry: 2+ critical AND from 2+ independent sources
+        hunt_entry = (
+            critical_count >= 2
+            and len(distinct_sources) >= self._HUNT_MIN_INDEPENDENT_SOURCES
         )
-        if hunt_mode and not self._state.hunt_mode:
+        # Exit: no critical events for quiet period
+        if critical_count > 0:
+            self._last_critical_event_at = now
+        quiet = (
+            now - self._last_critical_event_at
+            if self._last_critical_event_at > 0
+            else 999
+        )
+        hunt_exit = quiet >= self._HUNT_EXIT_QUIET_SECONDS
+
+        if hunt_entry and not self._state.hunt_mode:
+            self._hunt_entered_at = now
             logger.warning(
-                "IGRIS: Entering HUNT MODE — all agents tightening collection"
+                "IGRIS: HUNT MODE — %d critical from %d independent sources",
+                critical_count,
+                len(distinct_sources),
             )
             directives.append(
                 TacticalDirective(
                     directive_type="TIGHTEN",
                     target="all",
-                    reason="Hunt mode activated — multiple critical threats detected",
+                    reason=f"Hunt: {critical_count} critical from {len(distinct_sources)} sources",
                     urgency="CRITICAL",
                     source_event="",
                     mitre_technique="",
@@ -273,13 +355,14 @@ class IGRISTacticalEngine:
                     issued_at=now,
                 )
             )
-        elif not hunt_mode and self._state.hunt_mode:
-            logger.info("IGRIS: Exiting hunt mode — threat level reduced")
+            hunt_mode = True
+        elif self._state.hunt_mode and hunt_exit:
+            logger.info("IGRIS: Exiting hunt — quiet for %.0fs", quiet)
             directives.append(
                 TacticalDirective(
                     directive_type="LOOSEN",
                     target="all",
-                    reason="Threat level reduced — returning to normal collection intervals",
+                    reason=f"Quiet: no critical events for {quiet:.0f}s",
                     urgency="LOW",
                     source_event="",
                     mitre_technique="",
@@ -287,6 +370,9 @@ class IGRISTacticalEngine:
                     issued_at=now,
                 )
             )
+            hunt_mode = False
+        else:
+            hunt_mode = self._state.hunt_mode
 
         # ── 6. Top threats summary ──
         top_threats = []
@@ -408,6 +494,49 @@ class IGRISTacticalEngine:
                 f.write(json.dumps(entry) + "\n")
         except Exception:
             pass
+
+    def _is_real_threat(self, event: dict) -> bool:
+        """Filter: is this event a real threat or self-generated noise?
+
+        The minister does not panic at his own reflection.
+        """
+        cat = event.get("event_category", "")
+        risk = event.get("risk_score") or 0
+
+        # Skip known noise categories entirely
+        if cat in self._NOISE_CATEGORIES:
+            return False
+
+        # Skip low-risk events (not worth tactical attention)
+        if risk < 0.4:
+            return False
+
+        # Check if this is AMOSKYS watching itself
+        raw = event.get("raw_attributes_json", "")
+        if raw:
+            try:
+                attrs = json.loads(raw)
+                pid = str(attrs.get("pid", ""))
+                path = attrs.get("path", attrs.get("exe", ""))
+                proc = attrs.get("process_name", "")
+
+                # Our own PIDs
+                if pid in self._self_pids:
+                    return False
+
+                # Our own processes by name
+                if proc in self._SELF_PROCESS_NAMES:
+                    # Only filter if the path also matches self
+                    if path and any(sp in path for sp in self._SELF_PATHS):
+                        return False
+
+                # Our own paths
+                if path and any(sp in path for sp in self._SELF_PATHS):
+                    return False
+            except Exception:
+                pass
+
+        return True
 
     @staticmethod
     def _first_tech(techs_str: str) -> str:

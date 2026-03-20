@@ -553,7 +553,7 @@ def show_igris():
                 for entry in reversed(recent):
                     ts = entry.get("timestamp", "")[:19]
                     p = entry.get("posture", "?")
-                    t = entry.get("threat_level", 0)
+                    _ = entry.get("threat_level", 0)
                     n_dirs = entry.get("directives_issued", 0)
                     assessed = entry.get("events_assessed", 0)
                     pc_r = posture_colors.get(p, C.DIM)
@@ -567,6 +567,63 @@ def show_igris():
                 print()
         except Exception:
             pass
+
+
+def show_igris_why(target: str):
+    """Explain WHY IGRIS is watching a specific target."""
+    try:
+        from amoskys.igris.tactical import read_directives
+    except ImportError:
+        print(f"  {C.DIM}IGRIS tactical module not available.{C.RESET}")
+        return
+
+    directives = read_directives()
+    if not directives:
+        print(f"  {C.DIM}No active directives.{C.RESET}")
+        return
+
+    if not target:
+        # Show all watched targets with reasons
+        print(f"  {C.BOLD}Why is IGRIS watching these targets?{C.RESET}")
+        print()
+        for d in directives.get("directives", []):
+            dtype = d.get("directive_type", "?")
+            tgt = d.get("target", "?")
+            reason = d.get("reason", "no reason recorded")
+            urgency = d.get("urgency", "MEDIUM")
+            mitre = d.get("mitre_technique", "")
+
+            uc = C.sev(urgency.lower())
+            print(f"  {uc}{urgency:8s}{C.RESET} {dtype} → {tgt}")
+            print(f"           {C.DIM}Why: {reason}{C.RESET}")
+            if mitre:
+                print(f"           {C.DIM}MITRE: {_mitre_name(mitre)}{C.RESET}")
+            print()
+        return
+
+    # Search for specific target
+    found = False
+    for d in directives.get("directives", []):
+        tgt = d.get("target", "")
+        if target in tgt or tgt in target:
+            found = True
+            dtype = d.get("directive_type", "?")
+            reason = d.get("reason", "no reason recorded")
+            urgency = d.get("urgency", "MEDIUM")
+            mitre = d.get("mitre_technique", "")
+            source = d.get("source_event", "")
+
+            uc = C.sev(urgency.lower())
+            print(f"  {uc}{urgency}{C.RESET} {dtype} → {tgt}")
+            print(f"  {C.BOLD}Why:{C.RESET} {reason}")
+            if mitre:
+                print(f"  MITRE: {_mitre_name(mitre)} ({mitre})")
+            if source:
+                print(f"  {C.DIM}Source event: {source[:60]}{C.RESET}")
+            print()
+
+    if not found:
+        print(f"  {C.DIM}No active directive for '{target}'.{C.RESET}")
 
 
 def show_search(query: str):
@@ -774,7 +831,10 @@ def handle_command(line: str) -> bool:
         show_search("ssh")
         return True
     if cmd == "igris":
-        show_igris()
+        if arg and arg.startswith("why"):
+            show_igris_why(arg[3:].strip())
+        else:
+            show_igris()
         return True
     if cmd == "status":
         os.system(
