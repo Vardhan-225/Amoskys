@@ -114,6 +114,136 @@ def main() -> int:
     except Exception as e:
         logger.warning("WAL processor not available: %s", e)
 
+    # ── Direct Queue Reader (single-machine mode, bypasses EventBus) ──
+    queue_dir = DATA_DIR / "queue"
+
+    def _drain_agent_queues():
+        """Read events directly from per-agent queue DBs into telemetry.db.
+
+        This bypasses the EventBus → WAL path for single-machine deployment.
+        Each agent writes DeviceTelemetry protobufs to its own queue DB.
+        We read them, deserialize, and store directly.
+        """
+        import glob
+        import sqlite3 as _sqlite3
+
+        from amoskys.proto import universal_telemetry_pb2 as pb2
+
+        total = 0
+        for qdb_path in glob.glob(str(queue_dir / "*.db")):
+            try:
+                conn = _sqlite3.connect(qdb_path, timeout=2)
+                rows = conn.execute(
+                    "SELECT id, bytes FROM queue ORDER BY id LIMIT 100"
+                ).fetchall()
+
+                if not rows:
+                    conn.close()
+                    continue
+
+                processed_ids = []
+                for row_id, raw_bytes in rows:
+                    try:
+                        dt = pb2.DeviceTelemetry()
+                        dt.ParseFromString(raw_bytes)
+
+                        for ev in dt.events:
+                            if ev.event_type == "SECURITY" and ev.HasField(
+                                "security_event"
+                            ):
+                                se = ev.security_event
+                                store.insert_security_event(
+                                    {
+                                        "event_id": ev.event_id,
+                                        "device_id": dt.device_id,
+                                        "event_type": ev.event_type,
+                                        "event_category": se.event_category,
+                                        "event_action": se.event_category,
+                                        "event_outcome": "alert",
+                                        "risk_score": se.risk_score,
+                                        "confidence": float(
+                                            ev.attributes.get("confidence", "0.5")
+                                        ),
+                                        "mitre_techniques": json.dumps(
+                                            list(se.mitre_techniques)
+                                        ),
+                                        "source_agent": dt.collection_agent,
+                                        "raw_attributes_json": json.dumps(
+                                            dict(ev.attributes)
+                                        ),
+                                        "event_timestamp_ns": ev.event_timestamp_ns
+                                        or dt.timestamp_ns,
+                                    }
+                                )
+
+                                # Feed fusion engine
+                                if fusion:
+                                    from datetime import datetime
+
+                                    from amoskys.intel.models import TelemetryEventView
+
+                                    try:
+                                        fusion.add_event(
+                                            TelemetryEventView(
+                                                event_id=ev.event_id,
+                                                event_type=ev.event_type,
+                                                device_id=dt.device_id,
+                                                severity=ev.severity or "MEDIUM",
+                                                timestamp=datetime.now(),
+                                                security_event={
+                                                    "event_category": se.event_category,
+                                                    "event_action": se.event_category,
+                                                    "risk_score": se.risk_score,
+                                                    "mitre_techniques": list(
+                                                        se.mitre_techniques
+                                                    ),
+                                                },
+                                                attributes=dict(ev.attributes),
+                                            )
+                                        )
+                                    except Exception:
+                                        pass
+
+                            elif ev.event_type == "OBSERVATION":
+                                try:
+                                    store.insert_observation_event(
+                                        {
+                                            "event_id": ev.event_id,
+                                            "device_id": dt.device_id,
+                                            "domain": ev.attributes.get(
+                                                "_domain",
+                                                dt.collection_agent,
+                                            ),
+                                            "event_timestamp_ns": ev.event_timestamp_ns
+                                            or dt.timestamp_ns,
+                                            "raw_attributes_json": json.dumps(
+                                                dict(ev.attributes)
+                                            ),
+                                        }
+                                    )
+                                except Exception:
+                                    pass
+
+                        processed_ids.append(row_id)
+                        total += 1
+                    except Exception:
+                        processed_ids.append(row_id)  # Skip corrupted
+
+                # Delete processed rows
+                if processed_ids:
+                    placeholders = ",".join("?" * len(processed_ids))
+                    conn.execute(
+                        f"DELETE FROM queue WHERE id IN ({placeholders})",
+                        processed_ids,
+                    )
+                    conn.commit()
+                conn.close()
+            except Exception:
+                pass
+        return total
+
+    logger.info("Direct queue reader enabled (single-machine mode)")
+
     # ── Analysis loop ──
     cycle = 0
     total_events_processed = 0
@@ -124,13 +254,20 @@ def main() -> int:
             t0 = time.time()
             events_this_cycle = 0
 
-            # Process WAL batches
+            # Process WAL batches (EventBus path)
             if wal_processor:
                 try:
                     processed = wal_processor.process_batch(batch_size=500)
                     events_this_cycle += processed
                 except Exception:
                     logger.error("WAL processing failed", exc_info=True)
+
+            # Direct queue drain (single-machine path — bypasses EventBus)
+            try:
+                drained = _drain_agent_queues()
+                events_this_cycle += drained
+            except Exception:
+                logger.error("Queue drain failed", exc_info=True)
 
             # Run IGRIS observation cycle (every 60s)
             if igris and cycle % 30 == 0:  # 30 * 2s = 60s
