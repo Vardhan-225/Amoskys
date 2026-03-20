@@ -28,6 +28,18 @@ def wait_port(port, timeout=8):
 def ensure_certs():
     if not pathlib.Path("certs/ca.crt").exists():
         pytest.skip("generate certs first: make certs && make ed25519")
+    # Skip if EventBus is already running (avoids port conflict)
+    import socket as _sock
+
+    with _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM) as s:
+        s.settimeout(0.2)
+        try:
+            s.connect(("127.0.0.1", 50051))
+            pytest.skip(
+                "EventBus already running on port 50051 — test needs isolated instance"
+            )
+        except OSError:
+            pass
 
 
 def mtls_channel():
@@ -70,6 +82,8 @@ def test_wal_grows_then_drains():
 
     env = os.environ.copy()
     env["BUS_OVERLOAD"] = "1"
+    # Allow unsigned envelopes in integration tests
+    env["EVENTBUS_ALLOW_UNSIGNED"] = "true"
     # Set up environment to ensure the subprocess can find imports
     if "PYTHONPATH" in env:
         env["PYTHONPATH"] = f"src:{env['PYTHONPATH']}"

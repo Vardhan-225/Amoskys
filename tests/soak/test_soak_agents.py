@@ -73,6 +73,10 @@ def _check_db_integrity(db_path: str) -> tuple:
         return False, -1
 
 
+@pytest.mark.skipif(
+    not os.environ.get("SOAK_ENABLED"),
+    reason="Soak tests require SOAK_ENABLED=1 (long-running, environment-dependent)",
+)
 class TestSoakAgents:
     """CL-23: 3 Trinity agents run concurrently without memory leak or crash."""
 

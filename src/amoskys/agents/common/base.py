@@ -34,6 +34,7 @@ from __future__ import annotations
 import abc
 import json
 import logging
+import os
 import signal
 import sys
 import threading
@@ -256,6 +257,13 @@ class HardenedAgentBase(abc.ABC):
             pass  # Mesh is optional — agents work without it
         self._last_metrics_emit_ns = int(time.time() * 1e9)
 
+        # Tactical watchlist — populated by peer agents via WATCH_PID/PATH/DOMAIN
+        self._watch_pids: dict[str, Any] = {}  # pid_str -> WatchDirective
+        self._watch_paths: dict[str, Any] = {}  # path -> WatchDirective
+        self._watch_domains: dict[str, Any] = {}  # domain -> WatchDirective
+        self._watch_lock = threading.Lock()
+        self._base_collection_interval = collection_interval  # Original interval
+
         # Coordination bus — cross-process health/alert/control plane
         # All agents get this automatically; gracefully falls back to LocalBus
         self._coordination_bus = self._init_coordination_bus()
@@ -267,7 +275,14 @@ class HardenedAgentBase(abc.ABC):
     # ----------------- Coordination Bus (All Agents) ----------------------
 
     def _init_coordination_bus(self):
-        """Initialize coordination bus for health/alert/control messaging.
+        """Initialize coordination bus for health/alert/control + tactical topics.
+
+        Subscribes to:
+            CONTROL     — log level, interval override, watchlist, mode
+            WATCH_PID   — focus collection on a PID (from peer agent)
+            WATCH_PATH  — focus collection on a file path
+            WATCH_DOMAIN — focus collection on a domain
+            CLEAR_WATCH — remove a previously published watch
 
         Tries the configured backend (env AMOSKYS_COORDINATION_BACKEND),
         falls back to LocalBus if unavailable. Never fails — agents work
@@ -276,21 +291,27 @@ class HardenedAgentBase(abc.ABC):
         try:
             from amoskys.common.coordination import (
                 CoordinationConfig,
+                TacticalTopic,
                 create_coordination_bus,
             )
 
             config = get_config()
             backend = os.environ.get("AMOSKYS_COORDINATION_BACKEND", "local")
+            tactical_topics = [t.value for t in TacticalTopic]
             cfg = CoordinationConfig(
                 backend=backend,
                 agent_id=self.agent_name,
                 eventbus_address=config.agent.bus_address,
                 cert_dir=config.agent.cert_dir,
-                default_topics=["CONTROL"],
+                default_topics=tactical_topics,
             )
             try:
                 bus = create_coordination_bus(cfg)
                 bus.subscribe("CONTROL", self._handle_coordination_control)
+                bus.subscribe("WATCH_PID", self._handle_watch_directive)
+                bus.subscribe("WATCH_PATH", self._handle_watch_directive)
+                bus.subscribe("WATCH_DOMAIN", self._handle_watch_directive)
+                bus.subscribe("CLEAR_WATCH", self._handle_clear_watch)
                 return bus
             except Exception:
                 logger.warning(
@@ -305,10 +326,15 @@ class HardenedAgentBase(abc.ABC):
         except Exception:
             return None  # Coordination is fully optional
 
-    def _handle_coordination_control(
-        self, topic: str, payload: dict
-    ) -> None:
-        """Handle CONTROL topic signals (log level, feature toggles)."""
+    def _handle_coordination_control(self, topic: str, payload: dict) -> None:
+        """Handle CONTROL topic signals.
+
+        Supported commands:
+            set_log_level   — change agent log level
+            set_interval    — override collection interval (seconds)
+            restore_interval — restore original collection interval
+            burst_collect   — trigger N immediate collection cycles
+        """
         target = payload.get("target")
         if target not in (None, "", "all", self.agent_name):
             return
@@ -318,6 +344,182 @@ class HardenedAgentBase(abc.ABC):
             level = str(payload.get("level", "INFO")).upper()
             logging.getLogger().setLevel(level)
             logger.info("Coordination: set_log_level=%s for %s", level, self.agent_name)
+
+        elif command == "set_interval":
+            new_interval = float(
+                payload.get("interval", self._base_collection_interval)
+            )
+            new_interval = max(1.0, new_interval)  # Floor at 1 second
+            self.collection_interval = new_interval
+            logger.info(
+                "Coordination: set_interval=%.1fs for %s (base=%.1fs)",
+                new_interval,
+                self.agent_name,
+                self._base_collection_interval,
+            )
+
+        elif command == "restore_interval":
+            self.collection_interval = self._base_collection_interval
+            logger.info(
+                "Coordination: restore_interval=%.1fs for %s",
+                self._base_collection_interval,
+                self.agent_name,
+            )
+
+        elif command == "burst_collect":
+            count = int(payload.get("count", 3))
+            count = min(count, 10)  # Cap at 10
+            logger.info(
+                "Coordination: burst_collect count=%d for %s",
+                count,
+                self.agent_name,
+            )
+            # Temporarily set interval to 0 — the main loop will fire immediately.
+            # After `count` rapid cycles, restore the original interval.
+            self._burst_remaining = getattr(self, "_burst_remaining", 0) + count
+            self.collection_interval = 0.5  # Near-instant collection
+
+    # --------------- Tactical Watch Directives (Lateral Bus) ----------------
+
+    def _handle_watch_directive(self, topic: str, payload: dict) -> None:
+        """Handle WATCH_PID / WATCH_PATH / WATCH_DOMAIN from peer agents."""
+        try:
+            from amoskys.common.coordination import WatchDirective
+
+            directive = WatchDirective.from_payload(topic, payload)
+            # Don't watch our own signals (avoid feedback loops)
+            if directive.source_agent == self.agent_name:
+                return
+
+            with self._watch_lock:
+                if topic == "WATCH_PID":
+                    self._watch_pids[directive.value] = directive
+                    logger.info(
+                        "Tactical: WATCH_PID %s from %s reason=%s",
+                        directive.value,
+                        directive.source_agent,
+                        directive.reason,
+                    )
+                elif topic == "WATCH_PATH":
+                    self._watch_paths[directive.value] = directive
+                    logger.info(
+                        "Tactical: WATCH_PATH %s from %s reason=%s",
+                        directive.value,
+                        directive.source_agent,
+                        directive.reason,
+                    )
+                elif topic == "WATCH_DOMAIN":
+                    self._watch_domains[directive.value] = directive
+                    logger.info(
+                        "Tactical: WATCH_DOMAIN %s from %s reason=%s",
+                        directive.value,
+                        directive.source_agent,
+                        directive.reason,
+                    )
+        except Exception:
+            logger.debug("Failed to process watch directive", exc_info=True)
+
+    def _handle_clear_watch(self, topic: str, payload: dict) -> None:
+        """Handle CLEAR_WATCH — remove a watch directive by value."""
+        value = str(payload.get("value", ""))
+        if not value:
+            return
+        with self._watch_lock:
+            removed = False
+            if value in self._watch_pids:
+                del self._watch_pids[value]
+                removed = True
+            if value in self._watch_paths:
+                del self._watch_paths[value]
+                removed = True
+            if value in self._watch_domains:
+                del self._watch_domains[value]
+                removed = True
+            if removed:
+                logger.info("Tactical: CLEAR_WATCH %s", value)
+
+    def _expire_watches(self) -> None:
+        """Remove expired watch directives. Called each collection cycle."""
+        with self._watch_lock:
+            for store in (self._watch_pids, self._watch_paths, self._watch_domains):
+                expired = [k for k, v in store.items() if v.expired]
+                for k in expired:
+                    logger.debug("Tactical: watch expired key=%s", k)
+                    del store[k]
+
+    def _check_burst_complete(self) -> None:
+        """Decrement burst counter and restore interval when done."""
+        remaining = getattr(self, "_burst_remaining", 0)
+        if remaining > 0:
+            self._burst_remaining = remaining - 1
+            if self._burst_remaining <= 0:
+                self.collection_interval = self._base_collection_interval
+                logger.info(
+                    "Coordination: burst complete, restored interval=%.1fs for %s",
+                    self._base_collection_interval,
+                    self.agent_name,
+                )
+
+    @property
+    def active_watch_pids(self) -> set[str]:
+        """PIDs currently under tactical watch (thread-safe snapshot)."""
+        with self._watch_lock:
+            return {k for k, v in self._watch_pids.items() if not v.expired}
+
+    @property
+    def active_watch_paths(self) -> set[str]:
+        """Paths currently under tactical watch (thread-safe snapshot)."""
+        with self._watch_lock:
+            return {k for k, v in self._watch_paths.items() if not v.expired}
+
+    @property
+    def active_watch_domains(self) -> set[str]:
+        """Domains currently under tactical watch (thread-safe snapshot)."""
+        with self._watch_lock:
+            return {k for k, v in self._watch_domains.items() if not v.expired}
+
+    def coordination_publish_watch(
+        self,
+        topic: str,
+        value: str,
+        reason: str,
+        urgency: str = "HIGH",
+        mitre_technique: str = "",
+        ttl_seconds: float = 300.0,
+    ) -> None:
+        """Publish a tactical watch directive to peer agents.
+
+        Example:
+            self.coordination_publish_watch(
+                "WATCH_PID", "4523",
+                reason="T1555_credential_access",
+                mitre_technique="T1555.001",
+            )
+        """
+        if not self._coordination_bus:
+            return
+        try:
+            from amoskys.common.coordination import WatchDirective
+
+            directive = WatchDirective(
+                topic=topic,
+                value=value,
+                reason=reason,
+                urgency=urgency,
+                source_agent=self.agent_name,
+                mitre_technique=mitre_technique,
+                ttl_seconds=ttl_seconds,
+            )
+            self._coordination_bus.publish(topic, directive.to_payload())
+            logger.info(
+                "Published %s: value=%s reason=%s urgency=%s",
+                topic,
+                value,
+                reason,
+                urgency,
+            )
+        except Exception:
+            pass  # Never break the agent for coordination
 
     def coordination_publish_health(
         self, loop_latency_ms: float = 0.0, **extra
@@ -1141,8 +1343,15 @@ class HardenedAgentBase(abc.ABC):
                 # Heartbeat every cycle regardless of success/failure (P0-2)
                 self._emit_heartbeat()
 
+                # Tactical housekeeping — expire stale watches, check burst
+                self._expire_watches()
+                self._check_burst_complete()
+
                 # Emit metrics telemetry if interval elapsed
                 self._maybe_emit_metrics_telemetry()
+
+                # Publish health to coordination bus (all agents, every cycle)
+                self.coordination_publish_health()
 
                 # Sleep for remaining interval
                 elapsed = time.time() - loop_start

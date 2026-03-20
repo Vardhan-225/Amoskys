@@ -38,9 +38,9 @@ class TestFlowProbes:
     """Test suite for FlowAgent probes."""
 
     def test_create_flow_probes(self):
-        """Test probe factory creates all 8 probes."""
+        """Test probe factory creates all 9 probes."""
         probes = create_network_probes()
-        assert len(probes) == 8
+        assert len(probes) == 9
 
         probe_names = [p.name for p in probes]
         assert "macos_c2_beacon" in probe_names
@@ -51,6 +51,7 @@ class TestFlowProbes:
         assert "macos_non_standard_port" in probe_names
         assert "macos_cloud_exfil" in probe_names
         assert "macos_new_connection" in probe_names
+        assert "macos_port_scan_detection" in probe_names
 
     @pytest.mark.skip(
         reason="Test uses pre-Observatory FlowEvent data model. "

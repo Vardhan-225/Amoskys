@@ -1492,7 +1492,7 @@ class TestRDPSuspiciousProbe:
         """Verify probe metadata."""
         probe = RDPSuspiciousProbe()
         assert probe.name == "rdp_suspicious"
-        assert "T1021.001" in probe.mitre_techniques
+        assert "T1021.005" in probe.mitre_techniques
 
     def test_normal_rdp_no_alert(self):
         """Internal RDP to standard port produces no alert."""

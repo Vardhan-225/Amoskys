@@ -35,9 +35,9 @@ class TestAuthProbes:
     """Test suite for AuthGuard probes."""
 
     def test_create_auth_probes(self):
-        """Test probe factory creates all 6 probes."""
+        """Test probe factory creates all 9 probes."""
         probes = create_auth_probes()
-        assert len(probes) == 6
+        assert len(probes) == 9
 
         probe_names = [p.name for p in probes]
         assert "macos_ssh_brute_force" in probe_names
@@ -46,6 +46,9 @@ class TestAuthProbes:
         assert "macos_impossible_travel" in probe_names
         assert "macos_account_lockout" in probe_names
         assert "macos_credential_access" in probe_names
+        assert "macos_ssh_brute_force_rate" in probe_names
+        assert "macos_valid_account_login" in probe_names
+        assert "macos_ssh_agent_forwarding" in probe_names
 
     # NOTE: SSHBruteForceProbe replaces the old SSHPasswordSprayProbe.
     # The old test constructed AuthEvent(timestamp_ns=..., event_type="SSH_LOGIN",

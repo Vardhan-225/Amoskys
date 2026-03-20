@@ -36,6 +36,16 @@ def certs_available():
     missing = [p for p in need if not (CERT_DIR / p).exists()]
     if missing:
         pytest.skip(f"certs missing: {missing} (run `make certs` first)")
+    # Skip if EventBus is already running (avoids port conflict)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.2)
+        try:
+            s.connect(("127.0.0.1", 50051))
+            pytest.skip(
+                "EventBus already running on port 50051 — test needs isolated instance"
+            )
+        except OSError:
+            pass
 
 
 @pytest.fixture(scope="session")
@@ -46,6 +56,8 @@ def bus_process(certs_available):
         env["PYTHONPATH"] = f"src:{env['PYTHONPATH']}"
     else:
         env["PYTHONPATH"] = "src"
+    # Allow unsigned envelopes in integration tests
+    env["EVENTBUS_ALLOW_UNSIGNED"] = "true"
 
     proc = subprocess.Popen(
         SERVER_CMD, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env

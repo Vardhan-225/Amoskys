@@ -52,7 +52,9 @@ def test_eventbus_coordination_bus_round_trip():
     )
 
     received = []
-    subscriber.subscribe("ALERT", lambda topic, payload: received.append((topic, payload)))
+    subscriber.subscribe(
+        "ALERT", lambda topic, payload: received.append((topic, payload))
+    )
 
     try:
         time.sleep(0.2)

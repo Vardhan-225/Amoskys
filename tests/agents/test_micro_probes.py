@@ -222,18 +222,18 @@ class TestProcProbes:
     """Test Process probe implementations."""
 
     def test_proc_probes_exist(self):
-        """Verify all 10 process probes are available."""
+        """Verify all 13 process probes are available."""
         from amoskys.agents.os.macos.process.probes import create_process_probes
 
         probes = create_process_probes()
-        assert len(probes) == 10
+        assert len(probes) == 13
 
     def test_create_proc_probes(self):
         """Test creating process probe instances."""
         from amoskys.agents.os.macos.process.probes import create_process_probes
 
         probes = create_process_probes()
-        assert len(probes) == 10
+        assert len(probes) == 13
 
         names = {p.name for p in probes}
         assert "macos_process_spawn" in names

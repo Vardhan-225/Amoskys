@@ -68,8 +68,8 @@ class TestInfostealerGuardAgent:
         assert self.agent.agent_name == "macos_infostealer_guard"
 
     def test_probe_count(self):
-        """InfostealerGuard has exactly 10 probes."""
-        assert len(self.agent._probes) == 10
+        """InfostealerGuard has exactly 11 probes."""
+        assert len(self.agent._probes) == 11
 
     def test_probes_have_valid_mitre_techniques(self):
         """Every probe declares at least one valid MITRE technique ID."""

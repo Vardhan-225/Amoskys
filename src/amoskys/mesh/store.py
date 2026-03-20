@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .events import EventType, SecurityEvent, Severity
 
@@ -87,20 +87,18 @@ class MeshStore:
             for r in rows
         ]
 
-    def get_kill_chain_events(
-        self, pid: int, seconds: int = 600
-    ) -> List[Dict]:
+    def get_kill_chain_events(self, pid: int, seconds: int = 600) -> List[Dict]:
         """Get all mesh events related to a specific PID.
 
         Used to reconstruct the kill chain for an incident report.
         """
         return self.get_timeline(
-            seconds=seconds, related_pid=pid, limit=500,
+            seconds=seconds,
+            related_pid=pid,
+            limit=500,
         )
 
-    def get_action_history(
-        self, seconds: int = 3600, limit: int = 50
-    ) -> List[Dict]:
+    def get_action_history(self, seconds: int = 3600, limit: int = 50) -> List[Dict]:
         """Get recent actions taken by IGRIS."""
         return self.get_timeline(
             seconds=seconds,
@@ -163,8 +161,7 @@ class MeshStore:
         result = []
         for t in threats:
             is_resolved = (
-                str(t["related_pid"]) in acted_pids
-                or t["related_ip"] in acted_ips
+                str(t["related_pid"]) in acted_pids or t["related_ip"] in acted_ips
             )
             entry = {
                 "event_id": t["event_id"],
@@ -187,9 +184,7 @@ class MeshStore:
         hour_ago = now - 3_600_000_000_000
         five_min = now - 300_000_000_000
 
-        total = conn.execute(
-            "SELECT COUNT(*) FROM mesh_events"
-        ).fetchone()[0]
+        total = conn.execute("SELECT COUNT(*) FROM mesh_events").fetchone()[0]
         last_hour = conn.execute(
             "SELECT COUNT(*) FROM mesh_events WHERE timestamp_ns > ?",
             (hour_ago,),

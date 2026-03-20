@@ -11,6 +11,7 @@ Tests the 7 kernel audit probes with various attack scenarios:
     7. SyscallFloodProbe - High volume syscalls
 """
 
+import sys
 import time
 from typing import List
 
@@ -585,6 +586,10 @@ class TestSyscallFloodProbe:
 # =============================================================================
 
 
+@pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="Kernel audit probes are Linux-only; most probes disabled on darwin",
+)
 class TestKernelAuditAgentIntegration:
     """Integration tests for the v2 agent."""
 

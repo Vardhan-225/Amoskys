@@ -66,7 +66,15 @@ class TestAgentProbeMap:
             assert "factory" in info, f"{agent_name} missing 'factory'"
 
     def test_known_agents_present(self):
-        expected = {"proc", "fim", "flow", "dns", "peripheral", "auth", "persistence"}
+        expected = {
+            "proc",
+            "fim",
+            "flow",
+            "macos_dns",
+            "peripheral",
+            "auth",
+            "persistence",
+        }
         assert expected.issubset(set(AGENT_PROBE_MAP.keys()))
 
 
@@ -94,7 +102,11 @@ class TestAuditProbe:
             platforms=["darwin", "linux"],
             requires_fields=["pid", "ppid", "name"],
             requires_event_types=[],
-            field_semantics={"pid": "Process ID"},
+            field_semantics={
+                "pid": "Process ID",
+                "ppid": "Parent process ID",
+                "name": "Process name",
+            },
         )
         result = audit_probe(probe, "proc", "darwin")
         assert result["verdict"] == "REAL"
