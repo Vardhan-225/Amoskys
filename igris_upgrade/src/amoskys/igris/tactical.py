@@ -108,55 +108,15 @@ class TacticalState:
 
 # ── Self-Awareness ───────────────────────────────────────────────────────────
 
-# AMOSKYS process tree — built at startup, checked by ancestry
-_SELF_PID_TREE: set = set()
-
-
-def _build_self_pid_tree() -> set:
-    """Build the set of PIDs belonging to the AMOSKYS process tree.
-
-    Uses process ancestry (parent chain) instead of fragile string matching.
-    Any PID whose ancestor is our launcher/watchdog is self-owned.
-    """
-    import psutil
-
-    pids = set()
-    my_pid = os.getpid()
-    # Walk up to root to find our ancestor chain
-    try:
-        proc = psutil.Process(my_pid)
-        while proc:
-            pids.add(str(proc.pid))
-            if proc.pid <= 1:
-                break
-            try:
-                proc = proc.parent()
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                break
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        pids.add(str(my_pid))
-
-    # Walk down — find all children of our root process
-    try:
-        root_pid = int(min(pids, key=int))
-        root = psutil.Process(root_pid)
-        for child in root.children(recursive=True):
-            pids.add(str(child.pid))
-    except (psutil.NoSuchProcess, psutil.AccessDenied, ValueError):
-        pass
-
-    return pids
-
-
-def _refresh_self_pid_tree() -> None:
-    """Refresh the self PID tree (called periodically)."""
-    global _SELF_PID_TREE
-    _SELF_PID_TREE = _build_self_pid_tree()
-
-
-# Build initial tree
-_refresh_self_pid_tree()
-
+# Paths that belong to AMOSKYS itself — never watch these
+_SELF_PATHS = {
+    "amoskys",
+    "amoskys-venv",
+    ".venv",
+    "anaconda3",
+    "python3",
+    "python",
+}
 
 # Event categories that are infrastructure noise, not threats
 _NOISE_CATEGORIES = {
@@ -168,24 +128,14 @@ _NOISE_CATEGORIES = {
 }
 
 
-def _is_self_process(
-    pid: str, path: str, process_name: str = ""
-) -> bool:  # noqa: ARG001
-    """Check if a target belongs to AMOSKYS itself.
-
-    Uses process ancestry (PID tree) instead of fragile string matching.
-    An attacker naming their binary 'amoskys_loader' won't be filtered.
-    """
-    if pid in _SELF_PID_TREE:
+def _is_self_process(pid: str, path: str, process_name: str) -> bool:
+    """Check if a target belongs to AMOSKYS itself."""
+    my_pid = str(os.getpid())
+    my_ppid = str(os.getppid())
+    if pid in (my_pid, my_ppid):
         return True
-    # Fallback: check if the path is inside our project directory
-    if path:
-        proj_dir = os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        )  # → /Volumes/Akash_Lab/Amoskys
-        if path.startswith(proj_dir):
-            return True
-    return False
+    p = (path + " " + process_name).lower()
+    return any(sp in p for sp in _SELF_PATHS)
 
 
 def _is_noise_event(event: dict) -> bool:
@@ -228,22 +178,9 @@ class IGRISTacticalEngine:
         self._inspector = IGRISInspector()
         self._chain_reader = IGRISChainReader()
 
-        # SOMA strategic brain — ML anomaly scoring
-        self._soma_brain = None
-        try:
-            from amoskys.intel.soma_brain import SomaBrain
-
-            self._soma_brain = SomaBrain()
-            logger.info("IGRIS: SOMA strategic brain connected")
-        except ImportError:
-            logger.info(
-                "IGRIS: SOMA strategic brain unavailable (sklearn/pandas missing)"
-            )
-
         self._seen_event_ids: Set[str] = set()
         self._hunt_exit_time: float = 0.0
         self._last_critical_time: float = 0.0
-        self._self_tree_refresh_time: float = 0.0
 
         # Restore state from memory
         self._state = self._restore_state()
@@ -328,7 +265,9 @@ class IGRISTacticalEngine:
 
         # ── 2. Filter noise and self ──
         real_events = [
-            e for e in events if not _is_noise_event(e) and self._is_real_threat(e)
+            e
+            for e in events
+            if not _is_noise_event(e) and self._is_real_threat(e)
         ]
 
         # ── 3. Count by severity ──
@@ -363,14 +302,6 @@ class IGRISTacticalEngine:
             known = self._memory.soma_is_known(cat, proc, path)
             if not known:
                 novel_count += 1
-            # Consult strategic SOMA brain for anomaly scoring
-            if self._soma_brain and self._soma_brain.available():
-                try:
-                    anomaly = self._soma_brain.score_event(event)
-                    if anomaly and anomaly.get("anomaly_score", 0) > 0.8:
-                        novel_count += 1  # SOMA says statistically anomalous
-                except Exception:
-                    pass  # SOMA scoring is advisory, not blocking
             # Record observation for future baseline
             self._memory.record_soma_observation(
                 event_category=cat,
@@ -487,14 +418,17 @@ class IGRISTacticalEngine:
         for old in self._state.active_directives:
             if now - old.issued_at < old.ttl_seconds:
                 if not any(
-                    d.target == old.target and d.directive_type == old.directive_type
+                    d.target == old.target
+                    and d.directive_type == old.directive_type
                     for d in active
                 ):
                     active.append(old)
 
         # ── 11. Top threats ──
         top_threats = []
-        for e in sorted(real_events, key=lambda x: -(x.get("risk_score") or 0))[:5]:
+        for e in sorted(
+            real_events, key=lambda x: -(x.get("risk_score") or 0)
+        )[:5]:
             top_threats.append(
                 {
                     "category": e.get("event_category", "?"),
@@ -522,14 +456,20 @@ class IGRISTacticalEngine:
             posture=base_posture,
             threat_level=threat_level,
             active_directives=active,
-            watched_pids=[d.target for d in active if d.directive_type == "WATCH_PID"][
-                :20
-            ],
+            watched_pids=[
+                d.target
+                for d in active
+                if d.directive_type == "WATCH_PID"
+            ][:20],
             watched_paths=[
-                d.target for d in active if d.directive_type == "WATCH_PATH"
+                d.target
+                for d in active
+                if d.directive_type == "WATCH_PATH"
             ][:20],
             watched_domains=[
-                d.target for d in active if d.directive_type == "WATCH_DOMAIN"
+                d.target
+                for d in active
+                if d.directive_type == "WATCH_DOMAIN"
             ][:20],
             hunt_mode=hunt_mode,
             last_assessment=now,
@@ -607,7 +547,9 @@ class IGRISTacticalEngine:
                 continue
             self._seen_event_ids.add(event_id)
             if len(self._seen_event_ids) > 10000:
-                self._seen_event_ids = set(list(self._seen_event_ids)[-5000:])
+                self._seen_event_ids = set(
+                    list(self._seen_event_ids)[-5000:]
+                )
 
             cat = event.get("event_category", "")
             raw = event.get("raw_attributes_json", "")
@@ -713,7 +655,9 @@ class IGRISTacticalEngine:
 
             # Persistence: inspect the plist
             if "persistence" in cat and path and path.endswith(".plist"):
-                req_id = self._memory.request_investigation("INSPECT_PLIST", path)
+                req_id = self._memory.request_investigation(
+                    "INSPECT_PLIST", path
+                )
                 result = self._inspector.inspect("INSPECT_PLIST", path)
                 self._memory.complete_investigation(
                     req_id,
@@ -734,7 +678,9 @@ class IGRISTacticalEngine:
                 or path.startswith("/var/tmp")
                 or "Downloads" in path
             ):
-                req_id = self._memory.request_investigation("INSPECT_CODESIGN", path)
+                req_id = self._memory.request_investigation(
+                    "INSPECT_CODESIGN", path
+                )
                 result = self._inspector.inspect("INSPECT_CODESIGN", path)
                 self._memory.complete_investigation(
                     req_id,
@@ -751,7 +697,9 @@ class IGRISTacticalEngine:
 
             # High-risk PID: check connections
             if pid and risk >= 0.85:
-                req_id = self._memory.request_investigation("INSPECT_CONNECTIONS", pid)
+                req_id = self._memory.request_investigation(
+                    "INSPECT_CONNECTIONS", pid
+                )
                 result = self._inspector.inspect("INSPECT_CONNECTIONS", pid)
                 self._memory.complete_investigation(
                     req_id,
@@ -836,7 +784,9 @@ class IGRISTacticalEngine:
                 "posture_trend": self._state.posture_trend,
                 "novel_events": self._state.novel_events_count,
                 "timestamp": time.time(),
-                "directives": [asdict(d) for d in self._state.active_directives],
+                "directives": [
+                    asdict(d) for d in self._state.active_directives
+                ],
                 "watched_pids": self._state.watched_pids,
                 "watched_paths": self._state.watched_paths,
                 "watched_domains": self._state.watched_domains,
@@ -898,7 +848,9 @@ class IGRISTacticalEngine:
         lines.append(f"Reason: {s.assessment_reason}")
 
         if s.hunt_mode:
-            lines.append("Mode: HUNT — all agents at maximum collection frequency")
+            lines.append(
+                "Mode: HUNT — all agents at maximum collection frequency"
+            )
 
         if s.chain_narrative:
             lines.append("")
@@ -927,7 +879,9 @@ class IGRISTacticalEngine:
             for p in s.watched_paths[:3]:
                 lines.append(f"  {p}")
         if s.watched_domains:
-            lines.append(f"Watching domains: {', '.join(s.watched_domains[:5])}")
+            lines.append(
+                f"Watching domains: {', '.join(s.watched_domains[:5])}"
+            )
 
         # Directive effectiveness
         stats = self._memory.get_directive_stats()

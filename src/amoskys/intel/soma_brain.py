@@ -47,6 +47,9 @@ except ImportError:
     pass
 
 
+# ── Constants ─────────────────────────────────────────────────────────
+_IF_MODEL_FILENAME = "isolation_forest.joblib"
+
 # ── SomaBrain: Autonomous Training Daemon ─────────────────────────────
 
 
@@ -63,7 +66,6 @@ class SomaBrain:
     MIN_EVENTS_FOR_TRAINING = 200
     TRAINING_SAMPLE_SIZE = 50_000
     HIGH_TRUST_LABEL_SOURCES = frozenset({"incident", "ioc_strong", "manual"})
-
     # Suspicious tokens for feature extraction (G3)
     _SUSPICIOUS_TOKENS = frozenset(
         {
@@ -373,7 +375,7 @@ class SomaBrain:
         try:
             import joblib
 
-            model_path = os.path.join(self._model_dir, "isolation_forest.joblib")
+            model_path = os.path.join(self._model_dir, _IF_MODEL_FILENAME)
             model = joblib.load(model_path)
             rng = np.random.default_rng(42)
             sample_indices = rng.choice(len(X), min(5, len(X)), replace=False)
@@ -1192,6 +1194,43 @@ class SomaBrain:
             "SomaBrain: models written, scorer will hot-reload on next mtime check"
         )
 
+    # ── IGRIS Bridge ────────────────────────────────────────────────
+
+    def available(self) -> bool:
+        """Check if SOMA has trained models ready for scoring.
+
+        Used by IGRIS tactical engine to decide whether to consult SOMA.
+        """
+        if self._training_count == 0:
+            return False
+        model_path = os.path.join(self._model_dir, _IF_MODEL_FILENAME)
+        return os.path.exists(model_path)
+
+    def score_event(self, event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Score a single event using trained models.
+
+        Bridge method for IGRIS: takes a raw event dict (from telemetry.db query)
+        and returns anomaly scoring if models are available.
+
+        Returns:
+            Dict with anomaly_score, classification, confidence — or None if unavailable.
+        """
+        if not self.available():
+            return None
+        try:
+            # Use the ModelScorerAdapter for inference
+            adapter = ModelScorerAdapter(model_dir=self._model_dir)
+            if not adapter.available():
+                return None
+            score, explanations = adapter.score(event)
+            return {
+                "anomaly_score": score,
+                "explanations": explanations,
+                "model_cycle": self._training_count,
+            }
+        except Exception:
+            return None
+
     # ── Status ───────────────────────────────────────────────────────
 
     def status(self) -> Dict[str, Any]:
@@ -1203,6 +1242,7 @@ class SomaBrain:
             "last_metrics": self._last_metrics,
             "interval_seconds": self._interval,
             "model_dir": self._model_dir,
+            "available": self.available(),
             "embedder": self._embedder.status() if self._embedder else None,
             "auto_calibrator": (
                 self._auto_calibrator.status() if self._auto_calibrator else None
@@ -1251,7 +1291,7 @@ class ModelScorerAdapter:
         if self._if_model is None:
             return False
         # Check if model file still exists and isn't too old
-        path = os.path.join(self._model_dir, "isolation_forest.joblib")
+        path = os.path.join(self._model_dir, _IF_MODEL_FILENAME)
         if not os.path.exists(path):
             return False
         age = time.time() - os.path.getmtime(path)
@@ -1452,7 +1492,7 @@ class ModelScorerAdapter:
         import joblib
 
         # IsolationForest
-        if_path = os.path.join(self._model_dir, "isolation_forest.joblib")
+        if_path = os.path.join(self._model_dir, _IF_MODEL_FILENAME)
         if os.path.exists(if_path):
             try:
                 self._if_model = joblib.load(if_path)
@@ -1506,7 +1546,7 @@ class ModelScorerAdapter:
         """Check if model files have been updated and reload if needed."""
         try:
             # IF model
-            if_path = os.path.join(self._model_dir, "isolation_forest.joblib")
+            if_path = os.path.join(self._model_dir, _IF_MODEL_FILENAME)
             if os.path.exists(if_path):
                 mtime = os.path.getmtime(if_path)
                 if mtime > self._if_mtime:

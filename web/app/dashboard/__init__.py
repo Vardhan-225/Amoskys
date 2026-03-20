@@ -4481,16 +4481,72 @@ def agent_trust():
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
 def soma_baseline_status():
-    """Get SOMA baseline learning/detection status."""
+    """Get SOMA baseline learning/detection status + IGRIS tactical memory."""
+    result = {"status": "success"}
+
+    # Strategic SOMA (ML models)
     try:
         from amoskys.intel.scoring import ScoringEngine
 
         scorer = ScoringEngine()
         device_id = request.args.get("device_id")
-        status = scorer.get_baseline_status(device_id)
-        return jsonify({"status": "success", "baseline": status})
+        result["baseline"] = scorer.get_baseline_status(device_id)
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        result["baseline"] = {"error": str(e)}
+
+    # Strategic SOMA brain status
+    try:
+        from amoskys.intel.soma_brain import SomaBrain
+
+        brain = SomaBrain()
+        result["brain"] = brain.status()
+    except Exception:
+        result["brain"] = {"status": "unavailable"}
+
+    # Tactical SOMA (IGRIS observations)
+    try:
+        import sqlite3 as _sqlite3
+
+        mem_db = os.path.join("data", "igris", "memory.db")
+        if os.path.exists(mem_db):
+            conn = _sqlite3.connect(mem_db, timeout=2)
+            conn.row_factory = _sqlite3.Row
+
+            total = conn.execute("SELECT COUNT(*) FROM soma_observations").fetchone()[0]
+            known = conn.execute(
+                "SELECT COUNT(*) FROM soma_observations WHERE seen_count > 3"
+            ).fetchone()[0]
+            novel = conn.execute(
+                "SELECT COUNT(*) FROM soma_observations WHERE seen_count = 1"
+            ).fetchone()[0]
+            top_patterns = [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT event_category, process_name, seen_count, risk_score "
+                    "FROM soma_observations ORDER BY seen_count DESC LIMIT 10"
+                ).fetchall()
+            ]
+            recent_novel = [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT event_category, process_name, path, risk_score "
+                    "FROM soma_observations WHERE seen_count = 1 "
+                    "ORDER BY risk_score DESC LIMIT 5"
+                ).fetchall()
+            ]
+            conn.close()
+            result["tactical_memory"] = {
+                "total_patterns": total,
+                "known_patterns": known,
+                "novel_patterns": novel,
+                "learning_progress": round(known / max(total, 1) * 100, 1),
+                "top_patterns": top_patterns,
+                "recent_novel": recent_novel,
+            }
+    except Exception:
+        result["tactical_memory"] = {"status": "unavailable"}
+
+    return jsonify(result)
 
 
 @dashboard_bp.route("/api/soma/mode", methods=["POST"])
@@ -5045,8 +5101,29 @@ def guardian_anomalies():
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
 def igris_status():
-    """IGRIS operational status."""
-    return jsonify(_igris_status_summary())
+    """IGRIS operational status + tactical state."""
+    result = _igris_status_summary()
+
+    # Add tactical state from directives.json
+    try:
+        directives_path = os.path.join("data", "igris", "directives.json")
+        if os.path.exists(directives_path):
+            with open(directives_path) as f:
+                directives = json.load(f)
+            result["tactical"] = {
+                "posture": directives.get("posture", "UNKNOWN"),
+                "threat_level": directives.get("threat_level", 0),
+                "hunt_mode": directives.get("hunt_mode", False),
+                "directive_count": len(directives.get("directives", [])),
+                "watched_pids": directives.get("watched_pids", []),
+                "watched_paths": directives.get("watched_paths", []),
+                "watched_domains": directives.get("watched_domains", []),
+                "timestamp": directives.get("timestamp"),
+            }
+    except Exception:
+        result["tactical"] = {"status": "unavailable"}
+
+    return jsonify(result)
 
 
 @dashboard_bp.route("/api/igris/coherence")

@@ -167,7 +167,6 @@ def verify_code_signing(exe_path: str) -> CodeSignResult:
 
 
 def _cache_result(path: str, result: CodeSignResult) -> None:
-    global _codesign_cache
     _codesign_cache[path] = result
     if len(_codesign_cache) > _CACHE_MAX:
         # Evict oldest half

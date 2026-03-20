@@ -249,12 +249,18 @@ class HardenedAgentBase(abc.ABC):
         self._metrics_interval_seconds = metrics_interval
 
         # Agent mesh (inter-agent communication) — safe no-op if bus not set
+        self._mesh_degraded = False
         try:
             from amoskys.mesh.mixin import MeshMixin
 
             MeshMixin.__init_mesh__(self)
-        except Exception:
-            pass  # Mesh is optional — agents work without it
+        except Exception as e:
+            self._mesh_degraded = True
+            logger.warning(
+                "Agent %s mesh init failed — running in local-only mode: %s",
+                self.agent_name,
+                e,
+            )
         self._last_metrics_emit_ns = int(time.time() * 1e9)
 
         # Tactical watchlist — populated by peer agents via WATCH_PID/PATH/DOMAIN
@@ -518,8 +524,15 @@ class HardenedAgentBase(abc.ABC):
                 reason,
                 urgency,
             )
-        except Exception:
-            pass  # Never break the agent for coordination
+        except Exception as e:
+            self._coordination_failures = getattr(self, "_coordination_failures", 0) + 1
+            if self._coordination_failures <= 3:
+                logger.warning(
+                    "Agent %s: WATCH directive publish failed (%d failures): %s",
+                    self.agent_name,
+                    self._coordination_failures,
+                    e,
+                )
 
     def coordination_publish_health(
         self, loop_latency_ms: float = 0.0, **extra
@@ -539,8 +552,17 @@ class HardenedAgentBase(abc.ABC):
                     **extra,
                 },
             )
-        except Exception:
-            pass  # Never break the agent for coordination
+        except Exception as e:
+            self._health_publish_failures = (
+                getattr(self, "_health_publish_failures", 0) + 1
+            )
+            if self._health_publish_failures <= 3:
+                logger.warning(
+                    "Agent %s: health publish failed (%d failures): %s",
+                    self.agent_name,
+                    self._health_publish_failures,
+                    e,
+                )
 
     def coordination_publish_alert(
         self, severity: str, summary: str, probe_name: str = ""
@@ -558,8 +580,16 @@ class HardenedAgentBase(abc.ABC):
                     "summary": summary,
                 },
             )
-        except Exception:
-            pass
+        except Exception as e:
+            self._alert_publish_failures = (
+                getattr(self, "_alert_publish_failures", 0) + 1
+            )
+            if self._alert_publish_failures <= 3:
+                logger.warning(
+                    "Agent %s: alert publish failed — detection signal lost: %s",
+                    self.agent_name,
+                    e,
+                )
 
     def _close_coordination_bus(self) -> None:
         """Close coordination bus on shutdown."""
@@ -858,7 +888,7 @@ class HardenedAgentBase(abc.ABC):
         queue = self.local_queue or self.queue_adapter
         if not queue:
             logger.error(
-                "DATA_LOSS: Agent %s has no local queue; " "%d events permanently lost",
+                "DATA_LOSS: Agent %s has no local queue; %d events permanently lost",
                 self.agent_name,
                 len(events),
             )

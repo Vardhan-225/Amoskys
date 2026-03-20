@@ -72,7 +72,12 @@ MacOSPeripheralAgent = PeripheralAgent  # noqa: F811
 MacOSPersistenceAgent = PersistenceGuard  # noqa: F811
 
 # ── Linux (future — Igris multi-platform engine) ─────────────────────
-from amoskys.agents.os.linux.kernel_audit.kernel_audit_agent import KernelAuditAgent
+import platform as _platform
+
+if _platform.system() == "Linux":
+    from amoskys.agents.os.linux.kernel_audit.kernel_audit_agent import KernelAuditAgent
+else:
+    KernelAuditAgent = None  # type: ignore[assignment,misc]
 
 __all__ = [
     # Base classes

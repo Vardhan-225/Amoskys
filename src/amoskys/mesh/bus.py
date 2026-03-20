@@ -37,11 +37,12 @@ class MeshBus:
 
     def __init__(self, db_path: str = "data/mesh_events.db"):
         self._db_path = db_path
-        self._subscribers: Dict[EventType, List[EventHandler]] = defaultdict(list)
-        self._global_subscribers: List[EventHandler] = []
+        self._subscribers: Dict[EventType, Set[EventHandler]] = defaultdict(set)
+        self._global_subscribers: Set[EventHandler] = set()
         self._lock = threading.Lock()
         self._event_count = 0
         self._running = True
+        self._handler_failures: Dict[str, int] = {}  # handler_name -> failure count
 
         # Initialize SQLite storage
         self._init_db()
@@ -102,18 +103,36 @@ class MeshBus:
             handler: Callable that receives SecurityEvent. Must be thread-safe.
         """
         with self._lock:
-            self._subscribers[event_type].append(handler)
+            self._subscribers[event_type].add(handler)
         logger.debug(
             "Subscriber added for %s: %s",
             event_type.value,
             handler.__qualname__,
         )
 
+    def unsubscribe(
+        self,
+        event_type: EventType,
+        handler: EventHandler,
+    ) -> None:
+        """Unsubscribe a handler from an event type."""
+        with self._lock:
+            self._subscribers[event_type].discard(handler)
+        logger.debug(
+            "Subscriber removed for %s: %s", event_type.value, handler.__qualname__
+        )
+
     def subscribe_all(self, handler: EventHandler) -> None:
         """Subscribe to ALL event types (used by IGRIS Orchestrator)."""
         with self._lock:
-            self._global_subscribers.append(handler)
+            self._global_subscribers.add(handler)
         logger.debug("Global subscriber added: %s", handler.__qualname__)
+
+    def unsubscribe_all(self, handler: EventHandler) -> None:
+        """Remove a global subscriber."""
+        with self._lock:
+            self._global_subscribers.discard(handler)
+        logger.debug("Global subscriber removed: %s", handler.__qualname__)
 
     def publish(self, event: SecurityEvent) -> None:
         """Publish an event to the mesh.
@@ -131,20 +150,30 @@ class MeshBus:
 
         # 2. Dispatch to subscribers
         with self._lock:
-            handlers = list(self._subscribers.get(event.event_type, []))
+            handlers = list(self._subscribers.get(event.event_type, set()))
             global_handlers = list(self._global_subscribers)
-
-        self._event_count += 1
+            self._event_count += 1
 
         for handler in handlers + global_handlers:
             try:
                 handler(event)
             except Exception:
-                logger.exception(
-                    "Handler %s failed for event %s",
-                    handler.__qualname__,
-                    event.event_id,
-                )
+                hname = getattr(handler, "__qualname__", str(handler))
+                self._handler_failures[hname] = self._handler_failures.get(hname, 0) + 1
+                count = self._handler_failures[hname]
+                if count <= 5:
+                    logger.error(
+                        "Handler %s failed for event %s (failure #%d)",
+                        hname,
+                        event.event_id,
+                        count,
+                    )
+                elif count == 10:
+                    logger.error(
+                        "Handler %s has failed %d times — suppressing further logs",
+                        hname,
+                        count,
+                    )
 
         if event.severity in (Severity.HIGH, Severity.CRITICAL):
             logger.warning("MESH [%s] %s", event.severity.value.upper(), event)
@@ -262,7 +291,17 @@ class MeshBus:
         """Total events dispatched since bus start."""
         return self._event_count
 
+    @property
+    def handler_failures(self) -> Dict[str, int]:
+        """Get failure counts per handler — for IGRIS monitoring."""
+        return dict(self._handler_failures)
+
     def shutdown(self) -> None:
         """Gracefully shut down the bus."""
-        self._running = False
-        logger.info("MeshBus shutdown. Total events dispatched: %d", self._event_count)
+        with self._lock:
+            self._running = False
+        logger.info(
+            "MeshBus shutdown. Events dispatched: %d, handler failures: %d",
+            self._event_count,
+            sum(self._handler_failures.values()),
+        )
