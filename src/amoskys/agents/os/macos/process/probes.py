@@ -165,6 +165,28 @@ _MACOS_LOLBINS: Dict[str, str] = {
     "tar": "archive",
     "zip": "archive",
     "unzip": "archive",
+    # ── Extended LOLBins (fileless/evasion coverage) ──
+    # Reconnaissance
+    "pmset": "power_management",
+    "mdls": "metadata_query",
+    "mdfind": "spotlight_search",
+    "ioreg": "hardware_query",
+    # Network configuration
+    "networksetup": "network_config",
+    "systemsetup": "system_config",
+    "scutil": "system_config",
+    # Disk / image
+    "hdiutil": "disk_image",
+    "diskutil": "disk_utility",
+    # Security manipulation
+    "tccutil": "tcc_manipulation",
+    "sysadminctl": "admin_management",
+    "profiles": "profile_install",
+    # Log manipulation (evidence destruction)
+    "log": "log_manipulation",
+    # Anti-forensics
+    "caffeinate": "sleep_prevention",
+    "srm": "secure_delete",
 }
 
 # Parent processes that commonly spawn LOLBins legitimately
@@ -595,16 +617,33 @@ _SCRIPT_INTERPRETERS = frozenset(
         "node",
         "php",
         "lua",
+        # Shells — detect bash -c 'echo X|base64 -d|sh' chains
+        "bash",
+        "sh",
+        "zsh",
     }
 )
 
 # Suspicious script patterns in cmdline arguments
 _SUSPICIOUS_SCRIPT_PATTERNS = [
-    (r"-c\s+['\"].*?(curl|wget|nc |bash|eval|exec)", "inline_code_execution"),
+    # Inline execution flags (-c for python/bash, -e for perl/ruby/node)
+    (
+        r"-[ce]\s+['\"].*?(curl|wget|nc |bash|eval|exec|system\(|socket)",
+        "inline_code_execution",
+    ),
     (r"(http://|https://|ftp://)", "remote_url_in_args"),
     (r"\|\s*(bash|sh|zsh|python)", "pipe_to_shell"),
     (r"base64\s+(--decode|-d|-D)", "base64_decode"),
+    (r"echo\s+[A-Za-z0-9+/=]{20,}", "base64_payload_echo"),
+    (r"openssl\s+enc\s+-d", "openssl_decrypt_chain"),
     (r"(\/tmp\/|\/var\/tmp\/|\/private\/tmp\/)", "temp_path_script"),
+    # JXA (JavaScript for Automation) — modern macOS attack scripting
+    (r"-l\s+JavaScript", "jxa_execution"),
+    (r"\$\.NSTask|\$\.NSFileManager|ObjC\.import|ObjC\.unwrap", "jxa_objc_bridge"),
+    (r"Application\(['\"]System Events", "jxa_system_events"),
+    # Reverse shell patterns
+    (r"socket\.socket|TCPSocket|SOCK_STREAM|Socket\.", "reverse_shell_indicator"),
+    (r"subprocess\.call|subprocess\.Popen|subprocess\.run", "subprocess_spawn"),
 ]
 
 
@@ -947,6 +986,294 @@ class ProcessMasqueradeProbe(MicroProbe):
 # =============================================================================
 
 
+# =============================================================================
+# 11. SystemDiscoveryProbe
+# =============================================================================
+
+
+class SystemDiscoveryProbe(MicroProbe):
+    """Detects system information discovery commands used in post-exploitation.
+
+    Fires when multiple fingerprinting commands run from the same parent PID
+    (burst detection) or individually for high-value commands.
+
+    MITRE: T1082 (System Information Discovery)
+    """
+
+    name = "macos_system_discovery"
+    description = "Detects system fingerprinting command patterns on macOS"
+    platforms = ["darwin"]
+    mitre_techniques = ["T1082"]
+    mitre_tactics = ["discovery"]
+    scan_interval = 15.0
+    requires_fields = ["processes"]
+
+    _DISCOVERY_COMMANDS = {
+        # System identification
+        "sw_vers": "macOS version query",
+        "system_profiler": "Hardware/software inventory",
+        "uname": "Kernel version query",
+        "sysctl": "Kernel parameter enumeration",
+        "hostinfo": "Host information query",
+        "ioreg": "I/O registry dump (VM detection)",
+        # Security posture
+        "csrutil": "SIP status check",
+        "fdesetup": "FileVault status check",
+        "spctl": "Gatekeeper status check",
+        "systemsetup": "System configuration query",
+        # User / identity
+        "dscl": "Directory service enumeration",
+        "id": "User identity query",
+        "whoami": "Current user identity",
+        "groups": "Group membership query",
+        # Network
+        "ifconfig": "Network interface enumeration",
+        "networksetup": "Network configuration query",
+        "scutil": "System configuration query",
+        "netstat": "Network statistics",
+        # Filesystem / metadata
+        "mdls": "Spotlight metadata query",
+        "mdfind": "Spotlight search (file discovery)",
+        "diskutil": "Disk utility enumeration",
+        "pmset": "Power management query",
+    }
+
+    _BURST_THRESHOLD = 3
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        processes = context.shared_data.get("processes", [])
+
+        hits_by_ppid: Dict[int, List[str]] = {}
+        for proc in processes:
+            binary = os.path.basename(proc.exe) if proc.exe else proc.name
+            if binary in self._DISCOVERY_COMMANDS:
+                ppid = proc.ppid
+                if ppid not in hits_by_ppid:
+                    hits_by_ppid[ppid] = []
+                hits_by_ppid[ppid].append(binary)
+
+        for ppid, commands in hits_by_ppid.items():
+            if len(commands) >= self._BURST_THRESHOLD:
+                events.append(
+                    self._create_event(
+                        event_type="system_discovery_burst",
+                        severity=Severity.MEDIUM,
+                        data={
+                            "parent_pid": ppid,
+                            "discovery_commands": commands,
+                            "command_count": len(commands),
+                        },
+                        confidence=min(0.90, 0.40 + len(commands) * 0.10),
+                        tags=["discovery", "system-info"],
+                    )
+                )
+
+        return events
+
+
+# =============================================================================
+# 12. SecurityToolDisableProbe
+# =============================================================================
+
+
+class SecurityToolDisableProbe(MicroProbe):
+    """Detects attempts to disable macOS security mechanisms.
+
+    Watches for commands like spctl --master-disable, csrutil disable,
+    pfctl -d, and XProtect unloading.
+
+    MITRE: T1562.001 (Impair Defenses: Disable or Modify Tools)
+    """
+
+    name = "macos_security_tool_disable"
+    description = "Detects commands that disable Gatekeeper, SIP, firewall, or other security tools"
+    platforms = ["darwin"]
+    mitre_techniques = ["T1562.001"]
+    mitre_tactics = ["defense_evasion"]
+    scan_interval = 10.0
+    requires_fields = ["processes"]
+
+    # (pattern, description, severity)
+    _DISABLE_PATTERNS = [
+        # ── Gatekeeper / SIP ──
+        ("spctl --master-disable", "Gatekeeper disabled", Severity.CRITICAL),
+        ("spctl --global-disable", "Gatekeeper globally disabled", Severity.CRITICAL),
+        ("csrutil disable", "SIP disable attempted", Severity.CRITICAL),
+        ("csrutil clear", "SIP configuration cleared", Severity.CRITICAL),
+        (
+            "csrutil authenticated-root disable",
+            "SIP authenticated-root disabled (Big Sur+)",
+            Severity.CRITICAL,
+        ),
+        # ── AMFI bypass ──
+        (
+            "nvram boot-args",
+            "NVRAM boot-args modification (potential AMFI bypass)",
+            Severity.CRITICAL,
+        ),
+        # ── FileVault / encryption ──
+        ("fdesetup disable", "FileVault disable attempted", Severity.HIGH),
+        # ── Firewall ──
+        ("pfctl -d", "Packet filter firewall disabled", Severity.HIGH),
+        (
+            "socketfilterfw --setglobalstate off",
+            "Application firewall disabled",
+            Severity.HIGH,
+        ),
+        # ── Quarantine ──
+        (
+            "xattr -d com.apple.quarantine",
+            "Quarantine attribute stripped",
+            Severity.MEDIUM,
+        ),
+        ("xattr -c", "All extended attributes cleared", Severity.MEDIUM),
+        # ── Log evidence destruction ──
+        ("log erase", "Unified log erased (evidence destruction)", Severity.CRITICAL),
+        # ── TCC manipulation ──
+        ("tccutil reset", "TCC permissions bulk reset", Severity.HIGH),
+        # ── Security daemon disruption ──
+        (
+            "launchctl bootout system/com.apple",
+            "System daemon killed via launchctl",
+            Severity.CRITICAL,
+        ),
+        ("launchctl unload", "Daemon unloaded via launchctl", Severity.HIGH),
+        # ── Backup / recovery disruption ──
+        ("tmutil disable", "Time Machine disabled", Severity.MEDIUM),
+    ]
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        processes = context.shared_data.get("processes", [])
+
+        for proc in processes:
+            cmdline_str = " ".join(proc.cmdline) if proc.cmdline else ""
+            if not cmdline_str:
+                continue
+
+            cmd_lower = cmdline_str.lower()
+            for pattern, description, severity in self._DISABLE_PATTERNS:
+                if pattern.lower() in cmd_lower:
+                    events.append(
+                        self._create_event(
+                            event_type="security_tool_disabled",
+                            severity=severity,
+                            data={
+                                "pid": proc.pid,
+                                "process_name": proc.name,
+                                "exe": proc.exe,
+                                "cmdline": cmdline_str[:500],
+                                "pattern_matched": pattern,
+                                "security_impact": description,
+                            },
+                            confidence=0.95,
+                            correlation_id=proc.process_guid,
+                        )
+                    )
+                    break
+
+        return events
+
+
+# =============================================================================
+# 13. ProcessMasqueradeEnhancedProbe
+# =============================================================================
+
+
+class ProcessMasqueradeEnhancedProbe(MicroProbe):
+    """Enhanced masquerade detection: system-named binaries from /tmp + homoglyphs.
+
+    Complements the existing ProcessMasqueradeProbe by catching:
+    - Any process from /tmp, /var/tmp whose name matches a system binary
+    - Unicode homoglyph names (non-ASCII chars in process names)
+    - Process names with suspicious whitespace
+
+    MITRE: T1036.005 (Masquerading: Match Legitimate Name or Location)
+    """
+
+    name = "macos_masquerade_enhanced"
+    description = (
+        "Detects system-named binaries from suspicious locations and homoglyphs"
+    )
+    platforms = ["darwin"]
+    mitre_techniques = ["T1036.005", "T1036"]
+    mitre_tactics = ["defense_evasion"]
+    scan_interval = 15.0
+    requires_fields = ["processes"]
+
+    _SYSTEM_NAMES = {
+        "sshd",
+        "bash",
+        "zsh",
+        "sh",
+        "python3",
+        "sudo",
+        "login",
+        "cron",
+        "launchd",
+        "kernel_task",
+        "WindowServer",
+        "loginwindow",
+        "Finder",
+        "Dock",
+        "Safari",
+        "Terminal",
+        "ssh",
+        "curl",
+    }
+
+    _SUSPICIOUS_DIRS = {"/tmp", "/var/tmp", "/private/tmp", "/dev/shm"}
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        processes = context.shared_data.get("processes", [])
+
+        for proc in processes:
+            if not proc.name or not proc.exe:
+                continue
+
+            reasons: List[str] = []
+
+            # 1. System-named binary from suspicious directory
+            exe_dir = os.path.dirname(proc.exe).rstrip("/")
+            if exe_dir in self._SUSPICIOUS_DIRS and proc.name in self._SYSTEM_NAMES:
+                reasons.append(f"System binary '{proc.name}' running from {exe_dir}")
+
+            # 2. Unicode homoglyph detection
+            try:
+                proc.name.encode("ascii")
+            except UnicodeEncodeError:
+                reasons.append(
+                    f"Process name '{proc.name}' contains non-ASCII (homoglyph?)"
+                )
+
+            # 3. Suspicious whitespace
+            if "  " in proc.name or proc.name != proc.name.strip():
+                reasons.append(f"Process name has suspicious whitespace")
+
+            if reasons:
+                events.append(
+                    self._create_event(
+                        event_type="process_masquerade_enhanced",
+                        severity=(
+                            Severity.HIGH if len(reasons) >= 2 else Severity.MEDIUM
+                        ),
+                        data={
+                            "pid": proc.pid,
+                            "ppid": proc.ppid,
+                            "process_name": proc.name,
+                            "exe": proc.exe,
+                            "reasons": reasons,
+                        },
+                        confidence=min(0.95, 0.60 + len(reasons) * 0.15),
+                        correlation_id=proc.process_guid,
+                    )
+                )
+
+        return events
+
+
 def create_process_probes() -> List[MicroProbe]:
     """Create all macOS process probes."""
     return [
@@ -960,4 +1287,7 @@ def create_process_probes() -> List[MicroProbe]:
         BinaryFromTempProbe(),
         SuspiciousUserProbe(),
         ProcessMasqueradeProbe(),
+        SystemDiscoveryProbe(),
+        SecurityToolDisableProbe(),
+        ProcessMasqueradeEnhancedProbe(),
     ]

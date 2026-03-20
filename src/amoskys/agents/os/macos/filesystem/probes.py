@@ -57,6 +57,9 @@ class _BaselineDiffProbe(MicroProbe):
     def __init__(self) -> None:
         super().__init__()
         self._baseline: Dict[str, str] = {}  # path -> sha256
+        self._baseline_mtime: Dict[str, float] = (
+            {}
+        )  # path -> mtime (timestomping detection)
         self._first_run = True
 
     def _matches(self, entry: Any) -> bool:
@@ -81,6 +84,7 @@ class _BaselineDiffProbe(MicroProbe):
 
         if self._first_run:
             self._baseline = {path: e.sha256 for path, e in current.items()}
+            self._baseline_mtime = {path: e.mtime for path, e in current.items()}
             self._first_run = False
             return events
 
@@ -97,18 +101,35 @@ class _BaselineDiffProbe(MicroProbe):
 
         # Detect MODIFIED files
         for path, entry in current.items():
-            if (
-                path in self._baseline
-                and entry.sha256
-                and entry.sha256 != self._baseline[path]
-            ):
-                events.append(
-                    self._make_file_event(
-                        "modified",
-                        entry,
-                        Severity.HIGH,
+            if path in self._baseline and entry.sha256:
+                prev_hash = self._baseline[path]
+                prev_mtime = self._baseline_mtime.get(path, 0)
+
+                if entry.sha256 != prev_hash:
+                    events.append(
+                        self._make_file_event(
+                            "modified",
+                            entry,
+                            Severity.HIGH,
+                        )
                     )
-                )
+                    # Timestomping detection: hash changed but mtime went backwards
+                    if prev_mtime > 0 and entry.mtime < prev_mtime:
+                        events.append(
+                            self._create_event(
+                                event_type=f"{self.name}_timestomping",
+                                severity=Severity.HIGH,
+                                data={
+                                    "path": entry.path,
+                                    "current_mtime": entry.mtime,
+                                    "previous_mtime": prev_mtime,
+                                    "sha256": entry.sha256,
+                                    "detection": "mtime_regression",
+                                },
+                                confidence=0.85,
+                                mitre_techniques=["T1070.006"],
+                            )
+                        )
 
         # Detect REMOVED files
         for path in self._baseline:
@@ -125,8 +146,9 @@ class _BaselineDiffProbe(MicroProbe):
                     )
                 )
 
-        # Update baseline
+        # Update baseline (hash + mtime for timestomping detection)
         self._baseline = {path: e.sha256 for path, e in current.items()}
+        self._baseline_mtime = {path: e.mtime for path, e in current.items()}
 
         return events
 

@@ -13,6 +13,7 @@ import ctypes.util
 import json
 import logging
 import os
+import re
 import select
 import struct
 import subprocess
@@ -75,17 +76,29 @@ class FSEventsCollector:
 
     # Paths to watch for security-relevant filesystem changes
     DEFAULT_WATCH_PATHS = [
+        # ── Persistence locations ──
         str(Path.home() / "Library/LaunchAgents"),
         "/Library/LaunchAgents",
         "/Library/LaunchDaemons",
         str(Path.home() / ".ssh"),
-        str(Path.home() / "Downloads"),
         str(Path.home() / ".zshrc"),
         str(Path.home() / ".zshenv"),
         str(Path.home() / ".bash_profile"),
+        str(Path.home() / ".zprofile"),
+        # ── User activity surfaces ──
+        str(Path.home() / "Downloads"),
+        str(Path.home() / "Documents"),
+        str(Path.home() / "Desktop"),
+        # ── System binaries ──
+        "/usr/local/bin",
+        "/usr/local/sbin",
+        # ── Temp / staging areas ──
         "/tmp",
         "/var/tmp",
-        "/usr/local/bin",
+        # ── Critical config ──
+        "/etc",
+        # ── Applications ──
+        "/Applications",
     ]
 
     def __init__(
@@ -97,47 +110,114 @@ class FSEventsCollector:
         self._latency = latency
         self._events: Deque[RealTimeEvent] = deque(maxlen=10000)
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._observer = None
 
-        # Load CoreServices
+        # Try watchdog library (real kernel FSEvents)
         try:
-            cs_path = ctypes.util.find_library("CoreServices")
-            cf_path = ctypes.util.find_library("CoreFoundation")
-            if cs_path and cf_path:
-                self._cs = ctypes.cdll.LoadLibrary(cs_path)
-                self._cf = ctypes.cdll.LoadLibrary(cf_path)
-                self._available = True
-            else:
+            from watchdog.observers import Observer
+
+            self._available = True
+            self._use_watchdog = True
+        except ImportError:
+            self._use_watchdog = False
+            # Fallback: ctypes CoreServices (stat-based polling)
+            try:
+                cs_path = ctypes.util.find_library("CoreServices")
+                cf_path = ctypes.util.find_library("CoreFoundation")
+                if cs_path and cf_path:
+                    self._cs = ctypes.cdll.LoadLibrary(cs_path)
+                    self._cf = ctypes.cdll.LoadLibrary(cf_path)
+                    self._available = True
+                else:
+                    self._available = False
+            except OSError:
                 self._available = False
-        except OSError:
-            self._available = False
 
         if not self._available:
-            logger.warning("FSEvents: CoreServices not available")
+            logger.warning("FSEvents: no backend available (install watchdog)")
 
     @property
     def available(self) -> bool:
         return self._available
 
     def start(self) -> None:
-        """Start watching filesystem paths in a background thread."""
+        """Start watching filesystem paths."""
         if not self._available or self._running:
             return
 
         self._running = True
-        self._thread = threading.Thread(
-            target=self._poll_loop,
-            name="fsevents-collector",
-            daemon=True,
-        )
-        self._thread.start()
+
+        if self._use_watchdog:
+            self._start_watchdog()
+        else:
+            self._thread = threading.Thread(
+                target=self._poll_loop,
+                name="fsevents-collector",
+                daemon=True,
+            )
+            self._thread.start()
+
         logger.info(
-            "FSEvents collector started: watching %d paths", len(self._watch_paths)
+            "FSEvents collector started: watching %d paths (backend=%s)",
+            len(self._watch_paths),
+            "watchdog" if self._use_watchdog else "stat-poll",
         )
+
+    def _start_watchdog(self) -> None:
+        """Start real kernel FSEvents monitoring via watchdog library."""
+        from watchdog.events import FileSystemEventHandler
+        from watchdog.observers import Observer
+
+        events_deque = self._events
+
+        class _Handler(FileSystemEventHandler):
+            def on_any_event(self, event):
+                if event.is_directory and event.event_type not in (
+                    "created",
+                    "deleted",
+                ):
+                    return  # Skip dir modification noise
+                now_ns = int(time.time() * 1e9)
+                etype_map = {
+                    "created": "file_created",
+                    "modified": "file_modified",
+                    "deleted": "file_deleted",
+                    "moved": "file_renamed",
+                }
+                etype = etype_map.get(event.event_type, event.event_type)
+                events_deque.append(
+                    RealTimeEvent(
+                        source="fsevents",
+                        event_type=etype,
+                        timestamp_ns=now_ns,
+                        path=event.src_path,
+                        details={
+                            "is_directory": event.is_directory,
+                            "change_type": event.event_type,
+                        },
+                    )
+                )
+
+        self._observer = Observer()
+        handler = _Handler()
+
+        for watch_path in self._watch_paths:
+            p = Path(watch_path)
+            if p.is_dir():
+                self._observer.schedule(handler, str(p), recursive=True)
+            elif p.exists():
+                # Watch parent directory for single-file paths like ~/.zshrc
+                self._observer.schedule(handler, str(p.parent), recursive=False)
+
+        self._observer.daemon = True
+        self._observer.start()
 
     def stop(self) -> None:
         self._running = False
-        if self._thread:
+        if self._observer:
+            self._observer.stop()
+            self._observer.join(timeout=5)
+        if hasattr(self, "_thread") and self._thread:
             self._thread.join(timeout=5)
 
     def drain(self) -> List[RealTimeEvent]:
@@ -174,43 +254,49 @@ class FSEventsCollector:
                     # New files
                     for path, mtime in current.items():
                         if path not in previous:
-                            self._events.append(RealTimeEvent(
-                                source="fsevents",
-                                event_type="file_created",
-                                timestamp_ns=now_ns,
-                                path=path,
-                                details={
-                                    "watch_dir": watch_path,
-                                    "size": self._safe_size(path),
-                                    "change_type": "created",
-                                },
-                            ))
+                            self._events.append(
+                                RealTimeEvent(
+                                    source="fsevents",
+                                    event_type="file_created",
+                                    timestamp_ns=now_ns,
+                                    path=path,
+                                    details={
+                                        "watch_dir": watch_path,
+                                        "size": self._safe_size(path),
+                                        "change_type": "created",
+                                    },
+                                )
+                            )
                         elif mtime > previous[path]:
-                            self._events.append(RealTimeEvent(
-                                source="fsevents",
-                                event_type="file_modified",
-                                timestamp_ns=now_ns,
-                                path=path,
-                                details={
-                                    "watch_dir": watch_path,
-                                    "size": self._safe_size(path),
-                                    "change_type": "modified",
-                                },
-                            ))
+                            self._events.append(
+                                RealTimeEvent(
+                                    source="fsevents",
+                                    event_type="file_modified",
+                                    timestamp_ns=now_ns,
+                                    path=path,
+                                    details={
+                                        "watch_dir": watch_path,
+                                        "size": self._safe_size(path),
+                                        "change_type": "modified",
+                                    },
+                                )
+                            )
 
                     # Deleted files
                     for path in previous:
                         if path not in current:
-                            self._events.append(RealTimeEvent(
-                                source="fsevents",
-                                event_type="file_deleted",
-                                timestamp_ns=now_ns,
-                                path=path,
-                                details={
-                                    "watch_dir": watch_path,
-                                    "change_type": "deleted",
-                                },
-                            ))
+                            self._events.append(
+                                RealTimeEvent(
+                                    source="fsevents",
+                                    event_type="file_deleted",
+                                    timestamp_ns=now_ns,
+                                    path=path,
+                                    details={
+                                        "watch_dir": watch_path,
+                                        "change_type": "deleted",
+                                    },
+                                )
+                            )
 
                     snapshots[watch_path] = current
                 except Exception:
@@ -322,9 +408,7 @@ class ProcessLifecycleCollector:
         except ImportError:
             # Fallback: read /proc or use sysctl
             try:
-                output = subprocess.check_output(
-                    ["ps", "-axo", "pid"], text=True
-                )
+                output = subprocess.check_output(["ps", "-axo", "pid"], text=True)
                 current_pids = set()
                 for line in output.strip().split("\n")[1:]:
                     try:
@@ -377,18 +461,24 @@ class ProcessLifecycleCollector:
                     proc_name = self._get_process_name(pid)
 
                     if ev.fflags & NOTE_EXIT:
-                        exit_status = (ev.fflags >> 8) & 0xFF if ev.fflags & NOTE_EXITSTATUS else -1
-                        self._events.append(RealTimeEvent(
-                            source="kqueue",
-                            event_type="process_exit",
-                            timestamp_ns=now_ns,
-                            pid=pid,
-                            process_name=proc_name,
-                            details={
-                                "exit_status": exit_status,
-                                "fflags": ev.fflags,
-                            },
-                        ))
+                        exit_status = (
+                            (ev.fflags >> 8) & 0xFF
+                            if ev.fflags & NOTE_EXITSTATUS
+                            else -1
+                        )
+                        self._events.append(
+                            RealTimeEvent(
+                                source="kqueue",
+                                event_type="process_exit",
+                                timestamp_ns=now_ns,
+                                pid=pid,
+                                process_name=proc_name,
+                                details={
+                                    "exit_status": exit_status,
+                                    "fflags": ev.fflags,
+                                },
+                            )
+                        )
 
             except OSError:
                 time.sleep(0.1)
@@ -412,6 +502,165 @@ class ProcessLifecycleCollector:
             return ""
 
 
+# ── Critical File Watcher (kqueue VNODE) ─────────────────────────────────────
+
+
+class CriticalFileWatcher:
+    """Zero-latency kqueue watcher for high-value files.
+
+    Unlike FSEvents (directory-level, 0.5s coalesce), kqueue VNODE events
+    fire immediately when a watched file is written, deleted, or renamed.
+    Used for files where any modification is a security event.
+    """
+
+    CRITICAL_FILES = [
+        "/etc/hosts",
+        "/etc/sudoers",
+        "/etc/pam.d/sudo",
+        "/etc/ssh/sshd_config",
+        "/etc/resolv.conf",
+        str(Path.home() / ".ssh/authorized_keys"),
+        str(Path.home() / ".ssh/config"),
+        str(Path.home() / ".zshrc"),
+        str(Path.home() / ".bash_profile"),
+        str(Path.home() / ".zprofile"),
+    ]
+
+    def __init__(self) -> None:
+        self._events: Deque[RealTimeEvent] = deque(maxlen=1000)
+        self._running = False
+        self._thread: Optional[threading.Thread] = None
+        self._kq: Optional[Any] = None
+        self._fd_to_path: Dict[int, str] = {}
+        self._available = True
+
+        try:
+            self._kq = select.kqueue()
+        except (AttributeError, OSError):
+            self._available = False
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    def start(self) -> None:
+        if not self._available or self._running:
+            return
+        self._running = True
+        self._thread = threading.Thread(
+            target=self._watch_loop, name="kqueue-file-watcher", daemon=True
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=5)
+        for fd in list(self._fd_to_path):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        self._fd_to_path.clear()
+        if self._kq:
+            self._kq.close()
+
+    def drain(self) -> List[RealTimeEvent]:
+        events = []
+        while self._events:
+            try:
+                events.append(self._events.popleft())
+            except IndexError:
+                break
+        return events
+
+    def _watch_loop(self) -> None:
+        kevents = self._register_files()
+        if not kevents:
+            logger.warning("CriticalFileWatcher: no files to watch")
+            return
+
+        logger.info(
+            "CriticalFileWatcher started: watching %d files", len(self._fd_to_path)
+        )
+
+        while self._running:
+            try:
+                events = self._kq.control(None, 8, 1.0)
+                now_ns = int(time.time() * 1e9)
+                for ev in events:
+                    path = self._fd_to_path.get(ev.ident, "unknown")
+                    changes = []
+                    if ev.fflags & select.KQ_NOTE_WRITE:
+                        changes.append("written")
+                    if ev.fflags & select.KQ_NOTE_DELETE:
+                        changes.append("deleted")
+                    if ev.fflags & select.KQ_NOTE_RENAME:
+                        changes.append("renamed")
+                    if ev.fflags & select.KQ_NOTE_ATTRIB:
+                        changes.append("attrib_changed")
+
+                    self._events.append(
+                        RealTimeEvent(
+                            source="kqueue_vnode",
+                            event_type="critical_file_modified",
+                            timestamp_ns=now_ns,
+                            path=path,
+                            details={
+                                "changes": changes,
+                                "fflags": ev.fflags,
+                            },
+                        )
+                    )
+
+                    # Re-register if deleted (new inode)
+                    if ev.fflags & select.KQ_NOTE_DELETE:
+                        try:
+                            os.close(ev.ident)
+                        except OSError:
+                            pass
+                        self._fd_to_path.pop(ev.ident, None)
+                        time.sleep(0.1)  # Brief wait for file recreation
+                        self._register_single(path)
+
+            except OSError:
+                time.sleep(0.5)
+
+    def _register_files(self) -> List:
+        kevents = []
+        for path in self.CRITICAL_FILES:
+            kev = self._register_single(path)
+            if kev:
+                kevents.append(kev)
+        if kevents and self._kq:
+            try:
+                self._kq.control(kevents, 0, 0)
+            except OSError:
+                pass
+        return kevents
+
+    def _register_single(self, path: str):
+        if not os.path.exists(path):
+            return None
+        try:
+            fd = os.open(path, os.O_RDONLY)
+            self._fd_to_path[fd] = path
+            return select.kevent(
+                fd,
+                filter=select.KQ_FILTER_VNODE,
+                flags=select.KQ_EV_ADD | select.KQ_EV_CLEAR,
+                fflags=(
+                    select.KQ_NOTE_WRITE
+                    | select.KQ_NOTE_DELETE
+                    | select.KQ_NOTE_RENAME
+                    | select.KQ_NOTE_ATTRIB
+                    | select.KQ_NOTE_EXTEND
+                ),
+            )
+        except OSError:
+            return None
+
+
 # ── Unified Log Stream Collector ─────────────────────────────────────────────
 
 
@@ -426,13 +675,47 @@ class UnifiedLogStreamCollector:
     a persistent stream that catches events as they happen.
     """
 
-    # Predicate filters for security-relevant events
+    # Predicate filters for security-relevant events.
+    # Single log stream process covers ALL security subsystems.
+    # Filtering happens kernel-side — negligible CPU impact.
     SECURITY_PREDICATES = [
+        # ── Privacy & Permissions ──
         'subsystem == "com.apple.TCC"',
-        'subsystem == "com.apple.securityd"',
+        # ── Auth & Identity ──
         'subsystem == "com.apple.Authorization"',
+        'subsystem == "com.apple.authd"',
         'subsystem == "com.apple.opendirectoryd"',
-        'category == "access"',
+        # ── Security Framework ──
+        'subsystem == "com.apple.securityd"',
+        # ── Code Signing Enforcement ──
+        'subsystem == "com.apple.MobileFileIntegrity"',
+        # ── Malware Detection (XProtect + MRT) ──
+        'subsystem == "com.apple.XProtect"',
+        'subsystem == "com.apple.MRT"',
+        # ── App Lifecycle (real-time launch/quit) ──
+        'subsystem == "com.apple.runningboard"',
+        # ── Gatekeeper ──
+        'process == "syspolicyd"',
+        'process == "GatekeeperXPC"',
+        # ── Network Stack ──
+        'subsystem == "com.apple.networkd"',
+        # ── Firewall ──
+        'subsystem == "com.apple.alf"',
+        # ── Disk & USB ──
+        'subsystem == "com.apple.diskarbitration"',
+        'subsystem == "com.apple.usb"',
+        # ── XPC Services ──
+        'subsystem == "com.apple.xpc"',
+        # ── DNS ──
+        'process == "mDNSResponder"',
+        # ── Auth processes ──
+        'process == "sshd"',
+        'process == "sudo"',
+        'process == "loginwindow"',
+        'process == "screensaverengine"',
+        'process == "SecurityAgent"',
+        # ── Installer ──
+        'process == "installer"',
     ]
 
     def __init__(self) -> None:
@@ -485,10 +768,14 @@ class UnifiedLogStreamCollector:
         predicate = " OR ".join(f"({p})" for p in self.SECURITY_PREDICATES)
 
         cmd = [
-            "log", "stream",
-            "--predicate", predicate,
-            "--style", "json",
-            "--level", "info",
+            "log",
+            "stream",
+            "--predicate",
+            predicate,
+            "--style",
+            "ndjson",
+            "--level",
+            "info",
         ]
 
         while self._running:
@@ -505,14 +792,16 @@ class UnifiedLogStreamCollector:
                     if not self._running:
                         break
                     line = line.strip()
-                    if not line or line.startswith("Filtering"):
+                    if not line or line.startswith("Filtering") or line == "[":
                         continue
 
+                    # ndjson: one complete JSON object per line
+                    # json: pretty-printed array, strip trailing commas
+                    clean = line.rstrip(",")
                     try:
-                        entry = json.loads(line)
+                        entry = json.loads(clean)
                         self._parse_log_entry(entry)
                     except json.JSONDecodeError:
-                        # log stream sometimes outputs non-JSON headers
                         pass
 
             except FileNotFoundError:
@@ -523,6 +812,19 @@ class UnifiedLogStreamCollector:
                 logger.debug("Log stream error, restarting", exc_info=True)
                 time.sleep(2)
 
+    # PID → bundle_id mapping, populated from runningboard events.
+    # Format in logs: <type<bundle_id(uid_or_pid)>:session_id>
+    # We extract bundle_id and session_id (which correlates to process group).
+    _pid_bundle_map: Dict[int, str] = {}
+    _BUNDLE_PID_PATTERN = re.compile(r"<([\w.]+)\(\d+\)>:(\d+)")
+    # Simpler pattern: <bundle>:pid (no uid)
+    _BUNDLE_SIMPLE_PATTERN = re.compile(r"<([\w.]+)>:(\d+)")
+
+    @classmethod
+    def get_bundle_id(cls, pid: int) -> str:
+        """Look up bundle_id for a PID from runningboard events."""
+        return cls._pid_bundle_map.get(pid, "")
+
     def _parse_log_entry(self, entry: Dict[str, Any]) -> None:
         """Convert a log stream JSON entry to a RealTimeEvent."""
         now_ns = int(time.time() * 1e9)
@@ -530,37 +832,175 @@ class UnifiedLogStreamCollector:
         category = entry.get("category", "")
         message = entry.get("eventMessage", "")
         process = entry.get("processImagePath", "")
+        process_name = os.path.basename(process) if process else ""
         pid = entry.get("processID", 0)
 
-        # Classify the event
-        event_type = "log_event"
-        if subsystem == "com.apple.TCC":
-            if "Granting" in message:
-                event_type = "tcc_permission_granted"
-            elif "REQUEST" in message:
-                event_type = "tcc_permission_request"
-            elif "deny" in message.lower():
-                event_type = "tcc_permission_denied"
-            else:
-                event_type = "tcc_event"
-        elif subsystem in ("com.apple.Authorization", "com.apple.opendirectoryd"):
-            event_type = "auth_event"
-        elif subsystem == "com.apple.securityd":
-            event_type = "security_framework_event"
+        # ── Extract PID→bundle_id from runningboard messages ──
+        if subsystem == "com.apple.runningboard":
+            for match in self._BUNDLE_PID_PATTERN.finditer(message):
+                bid = match.group(1)
+                session_id = int(match.group(2))
+                if "." in bid:  # Only reverse-DNS identifiers
+                    self._pid_bundle_map[session_id] = bid
+            for match in self._BUNDLE_SIMPLE_PATTERN.finditer(message):
+                bid = match.group(1)
+                session_id = int(match.group(2))
+                if "." in bid and session_id not in self._pid_bundle_map:
+                    self._pid_bundle_map[session_id] = bid
 
-        self._events.append(RealTimeEvent(
-            source="logstream",
-            event_type=event_type,
-            timestamp_ns=now_ns,
-            pid=pid,
-            process_name=os.path.basename(process) if process else "",
-            details={
-                "subsystem": subsystem,
-                "category": category,
-                "message": message[:500],
-                "process_path": process,
-            },
-        ))
+            # Cap map size
+            if len(self._pid_bundle_map) > 5000:
+                entries = sorted(
+                    self._pid_bundle_map.items(), key=lambda x: x[0], reverse=True
+                )
+                self._pid_bundle_map = dict(entries[:2500])
+
+        # ── Classify by subsystem ──
+        event_type = self._classify_event(subsystem, process_name, message)
+
+        # ── Enrich with bundle_id if available ──
+        bundle_id = self._pid_bundle_map.get(pid, "")
+
+        details = {
+            "subsystem": subsystem,
+            "category": category,
+            "message": message[:500],
+            "process_path": process,
+        }
+        if bundle_id:
+            details["bundle_id"] = bundle_id
+
+        self._events.append(
+            RealTimeEvent(
+                source="logstream",
+                event_type=event_type,
+                timestamp_ns=now_ns,
+                pid=pid,
+                process_name=process_name,
+                details=details,
+            )
+        )
+
+    @staticmethod
+    def _classify_event(subsystem: str, process_name: str, message: str) -> str:
+        """Classify a Unified Log entry into a semantic event type."""
+        msg_lower = message.lower()
+
+        # ── TCC (Privacy permissions) ──
+        if subsystem == "com.apple.TCC":
+            if "granting" in msg_lower:
+                return "tcc_permission_granted"
+            if "request" in msg_lower:
+                return "tcc_permission_request"
+            if "deny" in msg_lower:
+                return "tcc_permission_denied"
+            return "tcc_event"
+
+        # ── Auth ──
+        if subsystem in (
+            "com.apple.Authorization",
+            "com.apple.authd",
+            "com.apple.opendirectoryd",
+        ):
+            if "succeed" in msg_lower or "allow" in msg_lower:
+                return "auth_success"
+            if "fail" in msg_lower or "deny" in msg_lower:
+                return "auth_failure"
+            return "auth_event"
+
+        # ── Code Signing Enforcement (AMFI) ──
+        if subsystem == "com.apple.MobileFileIntegrity":
+            if "deny" in msg_lower or "not valid" in msg_lower:
+                return "amfi_code_signing_denied"
+            return "amfi_event"
+
+        # ── XProtect / Malware Removal Tool ──
+        if subsystem in ("com.apple.XProtect", "com.apple.MRT"):
+            if "block" in msg_lower or "malware" in msg_lower or "threat" in msg_lower:
+                return "xprotect_malware_blocked"
+            if "scan" in msg_lower or "update" in msg_lower:
+                return "xprotect_scan"
+            return "xprotect_event"
+
+        # ── App Lifecycle (RunningBoard) ──
+        if subsystem == "com.apple.runningboard":
+            if "launch" in msg_lower or "acquiring" in msg_lower:
+                return "app_launched"
+            if "terminat" in msg_lower or "exit" in msg_lower:
+                return "app_terminated"
+            if "foreground" in msg_lower or "role" in msg_lower:
+                return "app_focus_changed"
+            return "app_lifecycle"
+
+        # ── Network daemon ──
+        if subsystem == "com.apple.networkd":
+            if "dns" in msg_lower or "query" in msg_lower or "resolv" in msg_lower:
+                return "network_dns_event"
+            if "connect" in msg_lower:
+                return "network_connection_event"
+            if "tls" in msg_lower or "ssl" in msg_lower:
+                return "network_tls_event"
+            return "network_event"
+
+        # ── Firewall (ALF) ──
+        if subsystem == "com.apple.alf":
+            if "deny" in msg_lower or "block" in msg_lower:
+                return "firewall_blocked"
+            if "allow" in msg_lower:
+                return "firewall_allowed"
+            return "firewall_event"
+
+        # ── Disk / USB ──
+        if subsystem == "com.apple.diskarbitration":
+            if "mount" in msg_lower:
+                return "disk_mounted"
+            if "unmount" in msg_lower:
+                return "disk_unmounted"
+            if "eject" in msg_lower:
+                return "disk_ejected"
+            return "disk_event"
+        if subsystem == "com.apple.usb":
+            return "usb_event"
+
+        # ── Gatekeeper ──
+        if process_name in ("syspolicyd", "GatekeeperXPC"):
+            if "allow" in msg_lower or "pass" in msg_lower:
+                return "gatekeeper_allowed"
+            if "deny" in msg_lower or "block" in msg_lower:
+                return "gatekeeper_blocked"
+            return "gatekeeper_event"
+
+        # ── DNS (mDNSResponder) ──
+        if process_name == "mDNSResponder":
+            if "query" in msg_lower:
+                return "dns_query"
+            return "dns_event"
+
+        # ── SSH / sudo / login ──
+        if process_name == "sshd":
+            if "accepted" in msg_lower:
+                return "ssh_login_success"
+            if "failed" in msg_lower or "invalid" in msg_lower:
+                return "ssh_login_failure"
+            return "ssh_event"
+        if process_name == "sudo":
+            return "sudo_event"
+        if process_name in ("loginwindow", "screensaverengine", "SecurityAgent"):
+            return "login_event"
+
+        # ── Installer ──
+        if process_name in ("installer", "Installer"):
+            return "installer_event"
+
+        # ── Security framework ──
+        if subsystem == "com.apple.securityd":
+            return "security_framework_event"
+
+        # ── XPC ──
+        if subsystem == "com.apple.xpc":
+            return "xpc_event"
+
+        return "log_event"
 
 
 # ── Unified Real-Time Collector ──────────────────────────────────────────────
@@ -577,8 +1017,9 @@ class RealtimeSensorCollector:
         self._fs = FSEventsCollector()
         self._proc = ProcessLifecycleCollector()
         self._log = UnifiedLogStreamCollector()
+        self._crit = CriticalFileWatcher()
 
-        self._sources = [self._fs, self._proc, self._log]
+        self._sources = [self._fs, self._proc, self._log, self._crit]
         self._started = False
 
     def start(self) -> None:
@@ -609,12 +1050,14 @@ class RealtimeSensorCollector:
         events.extend(self._fs.drain())
         events.extend(self._proc.drain())
         events.extend(self._log.drain())
+        events.extend(self._crit.drain())
         return events
 
     def status(self) -> Dict[str, Any]:
         return {
             "fsevents": {"available": self._fs.available},
-            "kqueue": {"available": self._proc.available},
+            "kqueue_proc": {"available": self._proc.available},
             "logstream": {"available": self._log.available},
+            "kqueue_files": {"available": self._crit.available},
             "started": self._started,
         }

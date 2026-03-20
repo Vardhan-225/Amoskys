@@ -1,0 +1,369 @@
+#!/usr/bin/env python3
+"""AMOSKYS Collector Daemon — Tier 1.
+
+Runs all collection sources in a single process:
+  Real-time (event-driven):
+    - UnifiedLogStreamCollector (23 macOS subsystems)
+    - FSEventsCollector (17 filesystem paths)
+    - CriticalFileWatcher (kqueue VNODE on 10 critical files)
+    - ProcessLifecycleCollector (kqueue process exit events)
+
+  Snapshot (polling at per-agent intervals):
+    - ProcessAgent (10s)    - NetworkAgent (10s)
+    - AuthAgent (30s)       - PersistenceAgent (60s)
+    - FilesystemAgent (60s) - PeripheralAgent (60s)
+    - DNSAgent (30s)        - InfostealerGuardAgent (30s)
+    - DiscoveryAgent (60s)  - ProvenanceAgent (15s)
+    + 10 more Observatory agents
+
+All events flow to per-agent WAL queues → Analyzer (Tier 2) reads them.
+
+Usage:
+    PYTHONPATH=src python -m amoskys.collector_main
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import platform
+import signal
+import socket
+import sys
+import threading
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("amoskys.collector")
+
+
+# ── Agent Thread Runner ──────────────────────────────────────────────────────
+
+
+class AgentThread:
+    """Runs a single agent in a background thread with crash isolation."""
+
+    def __init__(self, agent_cls, agent_name: str, interval: float, device_id: str):
+        self.agent_cls = agent_cls
+        self.agent_name = agent_name
+        self.interval = interval
+        self.device_id = device_id
+        self.agent = None
+        self.thread: Optional[threading.Thread] = None
+        self.shutdown_event = threading.Event()
+        self.status = "pending"
+        self.cycle_count = 0
+        self.last_error: Optional[str] = None
+
+    def start(self, shutdown_event: threading.Event) -> bool:
+        """Initialize agent and start collection thread."""
+        self.shutdown_event = shutdown_event
+        try:
+            try:
+                self.agent = self.agent_cls(collection_interval=self.interval)
+            except TypeError:
+                self.agent = self.agent_cls()
+            if not self.agent.setup():
+                self.status = "setup_failed"
+                logger.warning("Agent %s setup failed", self.agent_name)
+                return False
+            self.status = "running"
+        except Exception as e:
+            self.status = "init_failed"
+            self.last_error = str(e)
+            logger.warning("Agent %s init failed: %s", self.agent_name, e)
+            return False
+
+        self.thread = threading.Thread(
+            target=self._run_loop,
+            name=f"agent-{self.agent_name}",
+            daemon=True,
+        )
+        self.thread.start()
+        return True
+
+    def _run_loop(self):
+        """Collection loop with per-cycle error isolation."""
+        while not self.shutdown_event.is_set():
+            try:
+                self.cycle_count += 1
+                self.agent._run_one_cycle()
+            except Exception as e:
+                self.last_error = str(e)
+                logger.error(
+                    "Agent %s cycle %d failed: %s",
+                    self.agent_name,
+                    self.cycle_count,
+                    e,
+                )
+            self.shutdown_event.wait(timeout=self.interval)
+
+    def stop(self):
+        if self.agent and hasattr(self.agent, "shutdown"):
+            try:
+                self.agent.shutdown()
+            except Exception:
+                pass
+
+
+# ── Agent Registry ───────────────────────────────────────────────────────────
+
+
+def _load_agents() -> List[Dict[str, Any]]:
+    """Load all macOS agents with their configurations.
+
+    Returns list of dicts: {cls, name, interval}.
+    Agents that fail to import are skipped with a warning.
+    """
+    agents = []
+
+    def _try_load(module_path: str, class_name: str, name: str, interval: float):
+        try:
+            import importlib
+
+            mod = importlib.import_module(module_path)
+            cls = getattr(mod, class_name)
+            agents.append({"cls": cls, "name": name, "interval": interval})
+        except Exception as e:
+            logger.warning("Skipping %s: %s", name, e)
+
+    if platform.system() != "Darwin":
+        logger.error("Collector requires macOS (Darwin)")
+        return agents
+
+    # ── Real-time sensor (runs at 2s, handles log stream + FSEvents + kqueue) ──
+    _try_load(
+        "amoskys.agents.os.macos.realtime_sensor.agent",
+        "MacOSRealtimeSensorAgent",
+        "realtime_sensor",
+        2.0,
+    )
+
+    # ── Core Observatory agents ──
+    _try_load(
+        "amoskys.agents.os.macos.process.agent",
+        "MacOSProcessAgent",
+        "proc",
+        10.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.network.agent",
+        "MacOSNetworkAgent",
+        "flow",
+        10.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.auth.agent",
+        "MacOSAuthAgent",
+        "auth",
+        30.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.persistence.agent",
+        "MacOSPersistenceAgent",
+        "persistence",
+        60.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.filesystem.agent",
+        "MacOSFileAgent",
+        "fim",
+        60.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.peripheral.agent",
+        "MacOSPeripheralAgent",
+        "peripheral",
+        60.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.dns.agent",
+        "MacOSDNSAgent",
+        "dns",
+        30.0,
+    )
+
+    # ── Shield agents ──
+    _try_load(
+        "amoskys.agents.os.macos.infostealer_guard.agent",
+        "MacOSInfostealerGuardAgent",
+        "infostealer_guard",
+        30.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.quarantine_guard.agent",
+        "MacOSQuarantineGuardAgent",
+        "quarantine_guard",
+        30.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.provenance.agent",
+        "MacOSProvenanceAgent",
+        "provenance",
+        15.0,
+    )
+
+    # ── Discovery (slower interval due to Bonjour timeout) ──
+    _try_load(
+        "amoskys.agents.os.macos.discovery.agent",
+        "MacOSDiscoveryAgent",
+        "discovery",
+        60.0,
+    )
+
+    # ── Extended Observatory agents ──
+    _try_load(
+        "amoskys.agents.os.macos.applog.agent",
+        "MacOSAppLogAgent",
+        "applog",
+        30.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.internet_activity.agent",
+        "MacOSInternetActivityAgent",
+        "internet_activity",
+        30.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.db_activity.agent",
+        "MacOSDBActivityAgent",
+        "db_activity",
+        60.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.http_inspector.agent",
+        "MacOSHTTPInspectorAgent",
+        "http_inspector",
+        30.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.network_sentinel.agent",
+        "NetworkSentinelAgent",
+        "network_sentinel",
+        15.0,
+    )
+    _try_load(
+        "amoskys.agents.os.macos.protocol_collectors.protocol_collectors",
+        "ProtocolCollectorsAgent",
+        "protocol_collectors",
+        30.0,
+    )
+
+    return agents
+
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
+
+def main() -> int:
+    """Collector process entry point."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    logger.info("AMOSKYS Collector Daemon starting (pid=%d)", os.getpid())
+
+    device_id = socket.gethostname()
+    shutdown_event = threading.Event()
+
+    def handle_signal(signum, frame):
+        logger.info("Collector received signal %d, shutting down", signum)
+        shutdown_event.set()
+
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+
+    # ── Load and start all agents ──
+    agent_configs = _load_agents()
+    logger.info("Loaded %d agent configurations", len(agent_configs))
+
+    agent_threads: List[AgentThread] = []
+    for cfg in agent_configs:
+        at = AgentThread(
+            agent_cls=cfg["cls"],
+            agent_name=cfg["name"],
+            interval=cfg["interval"],
+            device_id=device_id,
+        )
+        if at.start(shutdown_event):
+            agent_threads.append(at)
+            logger.info("  Started %s (interval=%.0fs)", cfg["name"], cfg["interval"])
+        else:
+            logger.warning("  Failed to start %s: %s", cfg["name"], at.last_error)
+
+    logger.info(
+        "Collector running: %d/%d agents active",
+        len(agent_threads),
+        len(agent_configs),
+    )
+
+    # ── Supervision loop with graceful degradation ──
+    dead_agents: set = set()
+
+    while not shutdown_event.is_set():
+        shutdown_event.wait(timeout=30)
+
+        if shutdown_event.is_set():
+            break
+
+        running = 0
+        total_cycles = 0
+        for at in agent_threads:
+            total_cycles += at.cycle_count
+            if at.thread and at.thread.is_alive():
+                running += 1
+            elif at.agent_name not in dead_agents:
+                # Thread died — log degradation but keep collector running
+                dead_agents.add(at.agent_name)
+                logger.warning(
+                    "DEGRADED: Agent %s thread died after %d cycles (last_error: %s). "
+                    "Collector continues with %d/%d agents.",
+                    at.agent_name,
+                    at.cycle_count,
+                    at.last_error or "unknown",
+                    running,
+                    len(agent_threads),
+                )
+
+        _write_heartbeat(device_id, total_cycles, running, len(agent_threads))
+
+        logger.info(
+            "Collector status: %d/%d agents alive, %d total cycles%s",
+            running,
+            len(agent_threads),
+            total_cycles,
+            f" (degraded: {', '.join(sorted(dead_agents))})" if dead_agents else "",
+        )
+
+    # ── Shutdown ──
+    logger.info("Collector shutting down %d agents", len(agent_threads))
+    for at in agent_threads:
+        at.stop()
+    return 0
+
+
+def _write_heartbeat(device_id: str, total_cycles: int, running: int, total: int):
+    """Write heartbeat file for watchdog liveness check."""
+    heartbeat_dir = Path("data/heartbeats")
+    heartbeat_dir.mkdir(parents=True, exist_ok=True)
+    heartbeat = {
+        "agent": "collector",
+        "device_id": device_id,
+        "total_cycles": total_cycles,
+        "agents_running": running,
+        "agents_total": total,
+        "timestamp": time.time(),
+        "pid": os.getpid(),
+    }
+    try:
+        (heartbeat_dir / "collector.json").write_text(json.dumps(heartbeat))
+    except OSError:
+        pass
+
+
+if __name__ == "__main__":
+    sys.exit(main())

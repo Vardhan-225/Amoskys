@@ -21,6 +21,7 @@ import logging
 import re
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -79,7 +80,7 @@ class MacOSDiscoveryCollector:
     """
 
     _ARP_TIMEOUT = 10  # Subprocess timeout for arp -a
-    _BONJOUR_TIMEOUT = 5  # Subprocess timeout for dns-sd (short — it streams)
+    _BONJOUR_TIMEOUT = 3  # Subprocess timeout for dns-sd (short — it streams)
     _NETSETUP_TIMEOUT = 10  # Subprocess timeout for networksetup
     _NETSTAT_TIMEOUT = 10  # Subprocess timeout for netstat
 
@@ -138,10 +139,16 @@ class MacOSDiscoveryCollector:
         """
         start = time.monotonic()
 
-        arp_entries = self._collect_arp_table()
-        bonjour_services = self._collect_bonjour_services()
-        hardware_ports = self._collect_hardware_ports()
-        routes = self._collect_routing_table()
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            arp_future = pool.submit(self._collect_arp_table)
+            bonjour_future = pool.submit(self._collect_bonjour_services)
+            hw_future = pool.submit(self._collect_hardware_ports)
+            routes_future = pool.submit(self._collect_routing_table)
+
+            arp_entries = arp_future.result()
+            bonjour_services = bonjour_future.result()
+            hardware_ports = hw_future.result()
+            routes = routes_future.result()
 
         elapsed_ms = (time.monotonic() - start) * 1000
 

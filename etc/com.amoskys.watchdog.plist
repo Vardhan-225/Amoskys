@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.amoskys.watchdog</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Volumes/Akash_Lab/Amoskys/amoskys-venv/bin/python</string>
+        <string>-m</string>
+        <string>amoskys.watchdog</string>
+    </array>
+
+    <!-- Start at boot / login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart on crash (non-zero exit), stay down on clean exit -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- Minimum 10s between restarts (prevents crash loops) -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Volumes/Akash_Lab/Amoskys</string>
+
+    <!-- Environment -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Volumes/Akash_Lab/Amoskys/src</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <!-- Logging -->
+    <key>StandardOutPath</key>
+    <string>/Volumes/Akash_Lab/Amoskys/logs/watchdog.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Volumes/Akash_Lab/Amoskys/logs/watchdog.err.log</string>
+
+    <!-- File descriptor limit -->
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>4096</integer>
+    </dict>
+
+    <!-- Graceful shutdown timeout -->
+    <key>ExitTimeOut</key>
+    <integer>30</integer>
+
+    <!-- Process priority -->
+    <key>ProcessType</key>
+    <string>Standard</string>
+</dict>
+</plist>
