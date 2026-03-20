@@ -1042,6 +1042,45 @@ class ScoringEngine:
                     }
                 )
 
+        # SOMA suppression: frequency-based memory from IGRIS
+        try:
+            from amoskys.intel.soma import UnifiedSOMA
+
+            soma = UnifiedSOMA()
+            soma_result = soma.assess(
+                category=event.get("event_category", ""),
+                process=event.get("process_name", ""),
+                path=event.get("path", event.get("exe", "")),
+                risk=event.get("risk_score", 0),
+            )
+            soma.close()
+
+            if soma_result.suppression_factor > 0.1:
+                original_behav = behav_score
+                behav_score = behav_score * (1.0 - soma_result.suppression_factor)
+                if original_behav > 0.01:
+                    behav_factors.append(
+                        {
+                            "name": "SOMA Suppression",
+                            "contribution": round(-(original_behav - behav_score), 3),
+                            "detail": f"SOMA: {soma_result.verdict} (seen {soma_result.seen_count}x, "
+                            f"suppression={soma_result.suppression_factor:.0%})",
+                        }
+                    )
+            elif soma_result.novelty > 0.7:
+                # Novel event — boost behavioral score
+                novel_boost = 0.15 * soma_result.novelty
+                behav_score = min(1.0, behav_score + novel_boost)
+                behav_factors.append(
+                    {
+                        "name": "SOMA Novelty Boost",
+                        "contribution": round(novel_boost, 3),
+                        "detail": f"SOMA: {soma_result.verdict} (novelty={soma_result.novelty:.2f})",
+                    }
+                )
+        except Exception:
+            pass  # SOMA not available — score without it
+
         # INADS sequence scoring: boost behavioral if attack chain detected
         category = event.get("event_category", "")
         seq_score, seq_name = self._seq.record_and_score(device_id, category)
