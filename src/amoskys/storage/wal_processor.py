@@ -594,9 +594,10 @@ class WALProcessor:
                 probe_name = "legacy_process_probe"
                 event_type = "PROCESS"
 
+            event_id = envelope.idempotency_key or idem
             self.store.insert_telemetry_event(
                 {
-                    "event_id": envelope.idempotency_key or idem,
+                    "event_id": event_id,
                     "idempotency_key": idem,
                     "timestamp_ns": ts_ns,
                     "ingest_timestamp_ns": int(time.time() * 1e9),
@@ -625,6 +626,10 @@ class WALProcessor:
                     ),
                 }
             )
+
+            # Receipt ledger checkpoint 3: WAL accepted the envelope
+            self.store.receipt_wal(event_id, agent_id or "unknown")
+
         except Exception:
             logger.debug("Failed to persist canonical telemetry event", exc_info=True)
 
@@ -762,6 +767,33 @@ class WALProcessor:
         except Exception as e:
             logger.error("Async fusion evaluation failed: %s", e)
 
+    def _sweep_stale_processes(self) -> None:
+        """Mark processes as exited if they no longer appear in the OS process table.
+
+        Runs periodically (~every 5 min) to catch exits missed by the realtime
+        sensor (e.g., sensor not running, kqueue fd limit, race conditions).
+        """
+        try:
+            import psutil
+
+            live_pids = set(psutil.pids())
+            rows = self.store.db.execute(
+                "SELECT DISTINCT device_id FROM process_genealogy " "WHERE is_alive = 1"
+            ).fetchall()
+            total_swept = 0
+            for row in rows:
+                total_swept += self.store.sweep_stale_processes(
+                    row["device_id"],
+                    live_pids,
+                    time.time_ns(),
+                )
+            if total_swept > 0:
+                logger.info(
+                    "Genealogy sweep: marked %d processes as exited", total_swept
+                )
+        except Exception as e:
+            logger.debug("Stale process sweep failed: %s", e)
+
     # Domain routers for OBSERVATION events → domain tables
     # P1/P2 domains have dedicated tables; P3 domains use generic observation_events
     _OBSERVATION_ROUTERS = {
@@ -785,6 +817,32 @@ class WALProcessor:
         "infostealer": "_insert_generic_observation",
         "quarantine": "_insert_generic_observation",
         "provenance": "_insert_generic_observation",
+        # Event-driven / sentinel agents
+        "network_sentinel": "_insert_generic_observation",
+        "realtime_sensor": "_insert_generic_observation",
+    }
+
+    # Receipt ledger: domain → destination table name
+    _OBSERVATION_DEST_TABLE = {
+        "process": "process_events",
+        "flow": "flow_events",
+        "dns": "dns_events",
+        "auth": "audit_events",
+        "filesystem": "fim_events",
+        "persistence": "persistence_events",
+        "peripheral": "observation_events",
+        "applog": "observation_events",
+        "db_activity": "observation_events",
+        "discovery": "observation_events",
+        "http": "observation_events",
+        "internet_activity": "observation_events",
+        "security_monitor": "observation_events",
+        "unified_log": "observation_events",
+        "infostealer": "observation_events",
+        "quarantine": "observation_events",
+        "provenance": "observation_events",
+        "network_sentinel": "observation_events",
+        "realtime_sensor": "observation_events",
     }
 
     def _route_events(
@@ -875,7 +933,14 @@ class WALProcessor:
 
     # Agent-name tokens that map to each domain extractor.
     _PROCESS_AGENTS = frozenset(
-        {"proc-agent", "proc_agent", "proc", "macos_process", "process"}
+        {
+            "proc-agent",
+            "proc_agent",
+            "proc",
+            "macos_process",
+            "process",
+            "realtime_sensor",
+        }
     )
     _FLOW_TOKENS = frozenset({"flow", "network"})
     _FIM_TOKENS = frozenset({"fim", "filesystem"})
@@ -948,13 +1013,65 @@ class WALProcessor:
         if "kernel" in collection_agent or cat.startswith("kernel_"):
             self._extract_audit_from_security(attrs, se, *common, cat, mitre)
 
-        if "persistence" in collection_agent or "persistence_" in cat:
+        if self._is_persistence_event(collection_agent, cat, mitre):
             self._extract_persistence_from_security(attrs, se, *common, cat, mitre)
 
         if self._agent_matches(collection_agent, self._FIM_TOKENS) and attrs.get(
             "path"
         ):
             self._extract_fim_from_security(attrs, se, *common, cat, mitre)
+
+    # Persistence probe name prefixes — matches macos_launchagent, macos_cron, etc.
+    _PERSISTENCE_PROBE_PREFIXES = (
+        "macos_launchagent",
+        "macos_launchdaemon",
+        "macos_login_item",
+        "macos_cron",
+        "macos_shell_profile",
+        "macos_ssh_key",
+        "macos_auth_plugin",
+        "macos_folder_action",
+        "macos_system_extension",
+        "macos_periodic_script",
+    )
+    # MITRE techniques that indicate persistence regardless of source agent
+    _PERSISTENCE_TECHNIQUES = frozenset(
+        {
+            "T1543",
+            "T1543.001",
+            "T1543.004",  # Launch Agent/Daemon
+            "T1053",
+            "T1053.003",  # Cron
+            "T1546",
+            "T1546.004",
+            "T1546.015",  # Shell profile, folder action
+            "T1547",
+            "T1547.002",
+            "T1547.015",  # Login items, system ext
+            "T1098",
+            "T1098.004",  # SSH authorized keys
+        }
+    )
+
+    def _is_persistence_event(
+        self, collection_agent: str, cat: str, mitre: list
+    ) -> bool:
+        """Check if an event should route to persistence_events.
+
+        Matches by:
+          1. Agent name contains "persistence"
+          2. Category starts with a known persistence probe prefix
+          3. Any MITRE technique is persistence-related (T1543, T1053, etc.)
+        """
+        if "persistence" in collection_agent:
+            return True
+        if "persistence_" in cat:
+            return True
+        if any(cat.startswith(prefix) for prefix in self._PERSISTENCE_PROBE_PREFIXES):
+            return True
+        if mitre and self._PERSISTENCE_TECHNIQUES.intersection(mitre):
+            return True
+        return False
 
     def _route_observation(
         self,
@@ -998,6 +1115,21 @@ class WALProcessor:
                 getattr(self, router)(
                     attrs, device_id, ts_ns, timestamp_dt, agent, version
                 )
+                # Receipt ledger checkpoint 4: persisted to domain table
+                event_id = event.event_id
+                if event_id:
+                    dest = self._OBSERVATION_DEST_TABLE.get(
+                        domain, "observation_events"
+                    )
+                    try:
+                        self.store.receipt_persisted(
+                            event_id,
+                            agent,
+                            dest,
+                            attrs.get("quality_state", "valid"),
+                        )
+                    except Exception:
+                        pass
             except Exception as e:
                 logger.error("Observation routing failed for domain=%s: %s", domain, e)
         else:
@@ -1046,13 +1178,17 @@ class WALProcessor:
         else:
             user_type = "unknown"
 
+        pid = int(attrs["pid"]) if attrs.get("pid") else None
+        ppid = int(attrs["ppid"]) if attrs.get("ppid") else None
+        create_time = float(attrs["create_time"]) if attrs.get("create_time") else None
+
         self.store.insert_process_event(
             {
                 "timestamp_ns": ts_ns,
                 "timestamp_dt": timestamp_dt,
                 "device_id": device_id,
-                "pid": int(attrs["pid"]) if attrs.get("pid") else None,
-                "ppid": int(attrs["ppid"]) if attrs.get("ppid") else None,
+                "pid": pid,
+                "ppid": ppid,
                 "name": attrs.get("name", ""),
                 "parent_name": attrs.get("parent_name", ""),
                 "exe": attrs.get("exe", ""),
@@ -1066,14 +1202,12 @@ class WALProcessor:
                     if attrs.get("memory_percent")
                     else None
                 ),
-                "num_threads": None,
-                "num_fds": None,
+                "num_threads": int(attrs.get("num_threads", 0)) or None,
+                "num_fds": int(attrs.get("num_fds", 0)) or None,
                 "user_type": user_type,
                 "process_category": "observed",
                 "is_suspicious": False,
-                "create_time": (
-                    float(attrs["create_time"]) if attrs.get("create_time") else None
-                ),
+                "create_time": create_time,
                 "status": attrs.get("status", ""),
                 "cwd": attrs.get("cwd", ""),
                 "is_own_user": attrs.get("is_own_user", "False") == "True",
@@ -1084,6 +1218,29 @@ class WALProcessor:
                 **quality,
             }
         )
+
+        # Feed process genealogy — durable spawn chain
+        if pid is not None:
+            try:
+                self.store.upsert_genealogy(
+                    {
+                        "device_id": device_id,
+                        "pid": pid,
+                        "ppid": ppid,
+                        "name": attrs.get("name", ""),
+                        "exe": attrs.get("exe", ""),
+                        "cmdline": attrs.get("cmdline", ""),
+                        "username": username,
+                        "parent_name": attrs.get("parent_name", ""),
+                        "create_time": create_time,
+                        "is_alive": True,
+                        "first_seen_ns": ts_ns,
+                        "last_seen_ns": ts_ns,
+                        "process_guid": attrs.get("process_guid", ""),
+                    }
+                )
+            except Exception:
+                logger.debug("Genealogy upsert failed for PID %s", pid, exc_info=True)
 
     # Socket states that are NOT real traffic — filter at WAL level as defense-in-depth
     _LISTEN_STATES = frozenset({"LISTEN", "NONE", ""})
@@ -1130,8 +1287,8 @@ class WALProcessor:
                 "process_name": attrs.get("process_name"),
                 "conn_user": attrs.get("conn_user"),
                 "state": attrs.get("state"),
-                "bytes_tx": 0,
-                "bytes_rx": 0,
+                "bytes_tx": int(attrs["bytes_tx"]) if attrs.get("bytes_tx") else None,
+                "bytes_rx": int(attrs["bytes_rx"]) if attrs.get("bytes_rx") else None,
                 "is_suspicious": False,
                 "threat_score": 0.0,
                 "event_source": "observation",
@@ -1687,6 +1844,15 @@ class WALProcessor:
                     pass
 
             self.store.insert_security_event(event_data)
+
+            # Receipt ledger checkpoint 4: persisted to security_events
+            self.store.receipt_persisted(
+                event.event_id or event_data.get("event_id", ""),
+                collection_agent,
+                "security_events",
+                event_data.get("quality_state", "valid"),
+            )
+
             logger.debug(
                 "Stored security event: %s (risk=%.2f, agent=%s)",
                 se.event_category,
@@ -1778,8 +1944,8 @@ class WALProcessor:
                     "username": username,
                     "cpu_percent": None,
                     "memory_percent": None,
-                    "num_threads": None,
-                    "num_fds": None,
+                    "num_threads": int(attrs.get("num_threads", 0)) or None,
+                    "num_fds": int(attrs.get("num_fds", 0)) or None,
                     "user_type": "root" if username == "root" else "user",
                     "process_category": category,
                     "is_suspicious": True,
@@ -1789,6 +1955,48 @@ class WALProcessor:
                     "agent_version": version,
                 }
             )
+
+            # Feed process genealogy from security-path events
+            if pid is not None:
+                event_type = attrs.get("event_type", "")
+                is_exit = (
+                    category == "process_exit"
+                    or "exit" in category
+                    or "exit" in event_type
+                )
+                if is_exit:
+                    self.store.mark_process_exited(
+                        device_id,
+                        pid,
+                        ts_ns,
+                        exit_status=(
+                            int(attrs["exit_status"])
+                            if attrs.get("exit_status")
+                            else None
+                        ),
+                    )
+                else:
+                    self.store.upsert_genealogy(
+                        {
+                            "device_id": device_id,
+                            "pid": pid,
+                            "ppid": ppid,
+                            "name": attrs.get("name", attrs.get("process_name", "")),
+                            "exe": exe,
+                            "cmdline": cmdline,
+                            "username": username,
+                            "parent_name": attrs.get("parent_name", ""),
+                            "create_time": (
+                                float(attrs["create_time"])
+                                if attrs.get("create_time")
+                                else None
+                            ),
+                            "is_alive": True,
+                            "first_seen_ns": ts_ns,
+                            "last_seen_ns": ts_ns,
+                            "process_guid": attrs.get("process_guid", ""),
+                        }
+                    )
         except Exception as e:
             logger.error("Failed to extract process from security event: %s", e)
 
@@ -2396,6 +2604,10 @@ class WALProcessor:
                         target=self._run_fusion_eval, daemon=True
                     )
                     self._fusion_thread.start()
+
+                # Periodic stale process sweep (every ~5 min)
+                if cycle % 60 == 0:
+                    self._sweep_stale_processes()
 
                 # Periodic data retention cleanup
                 if cycle % retention_interval == 0:

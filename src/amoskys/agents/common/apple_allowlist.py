@@ -116,7 +116,6 @@ APPLE_SYSTEM_PROCESSES: Dict[str, AppleProcessProfile] = {
         mitre_exclusions=frozenset({"T1555", "T1555.001", "T1555.003"}),
         description="Apple URL session background transfer daemon",
     ),
-
     # ── Safari / Browser ──
     "SafariBookmarksSyncAgent": AppleProcessProfile(
         exe_prefixes=("/System/Library/",),
@@ -131,7 +130,7 @@ APPLE_SYSTEM_PROCESSES: Dict[str, AppleProcessProfile] = {
         description="Safari bookmark sync (truncated name)",
     ),
     "com.apple.Safari": AppleProcessProfile(
-        exe_prefixes=("/System/",  "/Applications/Safari.app/"),
+        exe_prefixes=("/System/", "/Applications/Safari.app/"),
         allowed_accesses={"safari": {f"{_HOME}/Library/Safari/"}},
         mitre_exclusions=frozenset({"T1555.003"}),
         description="Safari browser",
@@ -163,27 +162,33 @@ APPLE_SYSTEM_PROCESSES: Dict[str, AppleProcessProfile] = {
         mitre_exclusions=frozenset({"T1555.003"}),
         description="Safari Safe Browsing service",
     ),
-
     # ── TCC / Permission Management ──
     "tccd": AppleProcessProfile(
         exe_prefixes=("/System/Library/PrivateFrameworks/", "/usr/libexec/"),
-        allowed_tcc_actions=frozenset({
-            "tcc_permission_granted", "tcc_permission_denied",
-            "tcc_permission_request", "tcc_full_disk_access",
-            "tcc_accessibility", "tcc_camera_microphone",
-        }),
+        allowed_tcc_actions=frozenset(
+            {
+                "tcc_permission_granted",
+                "tcc_permission_denied",
+                "tcc_permission_request",
+                "tcc_full_disk_access",
+                "tcc_accessibility",
+                "tcc_camera_microphone",
+            }
+        ),
         mitre_exclusions=frozenset({"T1548"}),
         description="TCC daemon — manages privacy permissions",
     ),
     "sandboxd": AppleProcessProfile(
         exe_prefixes=("/usr/libexec/",),
-        allowed_tcc_actions=frozenset({
-            "tcc_permission_request", "tcc_permission_denied",
-        }),
+        allowed_tcc_actions=frozenset(
+            {
+                "tcc_permission_request",
+                "tcc_permission_denied",
+            }
+        ),
         mitre_exclusions=frozenset({"T1548"}),
         description="macOS sandbox enforcement daemon",
     ),
-
     # ── Spotlight / Indexing ──
     "mdworker_shared": AppleProcessProfile(
         exe_prefixes=(
@@ -212,21 +217,23 @@ APPLE_SYSTEM_PROCESSES: Dict[str, AppleProcessProfile] = {
         mitre_exclusions=frozenset({"T1059", "T1204"}),
         description="Spotlight metadata server",
     ),
-
     # ── Contacts / Calendar / Address Book ──
     "contactsd": AppleProcessProfile(
         exe_prefixes=("/System/Library/Frameworks/Contacts.framework/",),
-        allowed_tcc_actions=frozenset({"tcc_permission_granted", "tcc_permission_request"}),
+        allowed_tcc_actions=frozenset(
+            {"tcc_permission_granted", "tcc_permission_request"}
+        ),
         mitre_exclusions=frozenset({"T1548"}),
         description="Contacts sync daemon",
     ),
     "AddressBookSourceSync": AppleProcessProfile(
         exe_prefixes=("/System/Library/Frameworks/AddressBook.framework/",),
-        allowed_tcc_actions=frozenset({"tcc_permission_granted", "tcc_permission_request"}),
+        allowed_tcc_actions=frozenset(
+            {"tcc_permission_granted", "tcc_permission_request"}
+        ),
         mitre_exclusions=frozenset({"T1548"}),
         description="Address Book sync agent",
     ),
-
     # ── Accessibility / UI ──
     "AXVisualSupportAgent": AppleProcessProfile(
         exe_prefixes=("/System/Library/PrivateFrameworks/UniversalAccess.framework/",),
@@ -234,14 +241,12 @@ APPLE_SYSTEM_PROCESSES: Dict[str, AppleProcessProfile] = {
         mitre_exclusions=frozenset({"T1548"}),
         description="Accessibility visual support agent",
     ),
-
     # ── Power / System ──
     "powerlogd": AppleProcessProfile(
         exe_prefixes=("/usr/libexec/",),
         mitre_exclusions=frozenset({"T1070"}),
         description="Power management logging daemon",
     ),
-
     # ── Sharing / Networking ──
     "sharingd": AppleProcessProfile(
         exe_prefixes=("/usr/libexec/", "/System/Library/"),
@@ -427,9 +432,7 @@ def should_exclude_mitre(process_name: str, technique: str) -> bool:
     return technique in profile.mitre_exclusions
 
 
-def get_trust_disposition(
-    process_name: str, exe_path: str = ""
-) -> str:
+def get_trust_disposition(process_name: str, exe_path: str = "") -> str:
     """Get the trust disposition for a process.
 
     Returns: "apple_system", "self", or "unknown"

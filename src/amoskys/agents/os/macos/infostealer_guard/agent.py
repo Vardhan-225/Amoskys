@@ -158,6 +158,9 @@ class MacOSInfostealerGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
         context.shared_data = snapshot
         probe_events = self.run_probes(context)
 
+        # Step 3.5: Publish WATCH_PID for any PID that triggered a detection
+        self._publish_tactical_watches(probe_events)
+
         # Step 4: Combine observations + probe detections + metadata
         all_events = obs_events + probe_events
         all_events.append(
@@ -192,6 +195,51 @@ class MacOSInfostealerGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
         if all_events:
             return [self._events_to_telemetry(all_events)]
         return []
+
+    # --------------- Tactical Bus Integration --------------------------------
+
+    # Probes whose detections should trigger WATCH_PID on peer agents.
+    _WATCH_WORTHY_TECHNIQUES = frozenset(
+        {
+            "T1555.001",  # Keychain access
+            "T1555.003",  # Browser credential theft
+            "T1005",  # Crypto wallet / data from local system
+            "T1056.002",  # Fake password dialog
+            "T1539",  # Session cookie theft
+            "T1560.001",  # Credential archiving
+            "T1041",  # Exfiltration over C2
+        }
+    )
+
+    def _publish_tactical_watches(self, probe_events: List[TelemetryEvent]) -> None:
+        """Publish WATCH_PID for PIDs that triggered credential-access probes.
+
+        This is the lateral nervous system activation: when InfostealerGuard
+        detects credential theft by PID 4523, it publishes WATCH_PID so that
+        Network, DNS, and Process agents immediately focus on that PID.
+        """
+        seen_pids: set[str] = set()
+        for event in probe_events:
+            pid = str(event.data.get("pid", ""))
+            if not pid or pid in seen_pids:
+                continue
+            # Only publish for watch-worthy MITRE techniques
+            techniques = set(event.mitre_techniques or [])
+            matching = techniques & self._WATCH_WORTHY_TECHNIQUES
+            if not matching:
+                continue
+            seen_pids.add(pid)
+            technique_str = ",".join(sorted(matching))
+            self.coordination_publish_watch(
+                topic="WATCH_PID",
+                value=pid,
+                reason=f"{event.probe_name}_{technique_str}",
+                urgency=(
+                    "HIGH" if event.severity.value in ("HIGH", "CRITICAL") else "MEDIUM"
+                ),
+                mitre_technique=technique_str,
+                ttl_seconds=300.0,
+            )
 
     @staticmethod
     def _access_to_obs(access) -> Dict[str, Any]:

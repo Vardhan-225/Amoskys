@@ -164,12 +164,38 @@ class MacOSDNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
             field_mapper=self._dns_to_obs,
         )
 
+        # --- Tactical watch: tag DNS queries from watched PIDs ---
+        watched_pids = self.active_watch_pids
+        tactical_events = []
+        if watched_pids:
+            for query in snapshot.get("dns_queries", []):
+                if str(getattr(query, "source_pid", "")) in watched_pids:
+                    obs = self._dns_to_obs(query)
+                    obs["tactical_watch"] = "true"
+                    obs["watch_reason"] = self._get_watch_reason(
+                        "WATCH_PID", str(query.source_pid)
+                    )
+                    tactical_events.append(
+                        TelemetryEvent(
+                            event_type="obs_tactical_dns",
+                            severity=Severity.MEDIUM,
+                            probe_name="tactical_watch_dns",
+                            data=obs,
+                            tags=["tactical_watch", "watch_pid"],
+                        )
+                    )
+            if tactical_events:
+                logger.info(
+                    "Tactical: %d DNS queries from watched PIDs",
+                    len(tactical_events),
+                )
+
         # Run probes (detection events, unchanged)
         context = self._create_probe_context()
         context.shared_data = snapshot
         probe_events = self.run_probes(context)
 
-        all_events = obs_events + probe_events
+        all_events = obs_events + tactical_events + probe_events
         all_events.append(
             TelemetryEvent(
                 event_type="collection_metadata",
@@ -180,24 +206,38 @@ class MacOSDNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
                     "unique_domains": snapshot["unique_domains"],
                     "collection_time_ms": snapshot["collection_time_ms"],
                     "observation_events": len(obs_events),
+                    "tactical_events": len(tactical_events),
                     "probe_events": len(probe_events),
+                    "watched_pids": len(watched_pids),
                 },
             )
         )
 
         logger.info(
             "DNS collected in %.1fms: %d queries, %d unique, "
-            "%d observations, %d probe events",
+            "%d observations, %d tactical, %d probe events",
             snapshot["collection_time_ms"],
             snapshot["query_count"],
             snapshot["unique_domains"],
             len(obs_events),
+            len(tactical_events),
             len(probe_events),
         )
 
         if all_events:
             return [self._events_to_telemetry(all_events)]
         return []
+
+    def _get_watch_reason(self, topic: str, value: str) -> str:
+        """Get the reason string for a watch directive."""
+        with self._watch_lock:
+            store = {
+                "WATCH_PID": self._watch_pids,
+                "WATCH_PATH": self._watch_paths,
+                "WATCH_DOMAIN": self._watch_domains,
+            }.get(topic, {})
+            directive = store.get(value)
+            return directive.reason if directive else "unknown"
 
     @staticmethod
     def _dns_to_obs(query) -> Dict[str, Any]:

@@ -132,6 +132,8 @@ _SENSITIVE_FILES: Dict[str, str] = {
 }
 
 # Expected benign processes for each category
+_APPLE_PROC_PREFIX = "com.apple"
+
 _EXPECTED_ACCESSORS: Dict[str, Set[str]] = {
     "keychain": {
         "loginwindow",
@@ -144,7 +146,7 @@ _EXPECTED_ACCESSORS: Dict[str, Set[str]] = {
         "TrustedPeersHelper",
         "TrustedPe",  # Truncated by lsof/psutil
         "nsurlsessiond",
-        "com.apple",  # Truncated com.apple.* process names
+        _APPLE_PROC_PREFIX,  # Truncated com.apple.* process names
         "authd",
         "accountsd",
         "CloudKeychainProxy",
@@ -161,7 +163,7 @@ _EXPECTED_ACCESSORS: Dict[str, Set[str]] = {
         "SafariBookmarksSyncAgent",
         "SafariBoo",  # Truncated by lsof/psutil
         "com.apple.Safari.SafeBrowsing",
-        "com.apple",  # Truncated com.apple.* names
+        _APPLE_PROC_PREFIX,  # Truncated com.apple.* names
         "nsurlsessiond",
         "SafariLaunchAgent",
     },
@@ -264,11 +266,26 @@ def _parse_lsof_lines(
         except (ValueError, IndexError):
             continue
 
+        # Resolve full process name — lsof COMMAND column is truncated on macOS
+        # (e.g. com.apple.Safari.SafeBrowsingAgent → com.apple). Use psutil
+        # to get the real name while the process is still alive.
+        if PSUTIL_AVAILABLE:
+            try:
+                process_name = psutil.Process(pid).name()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass  # keep lsof-truncated name as fallback
+
         # Reconstruct file path (NAME field may contain spaces)
         file_path = " ".join(parts[8:])
 
-        # Skip expected/benign accessors
+        # Skip expected/benign accessors.
+        # Exact match first; then treat "com.apple" sentinel as a prefix
+        # wildcard covering all Apple system process names.
         if process_name in expected:
+            continue
+        if _APPLE_PROC_PREFIX in expected and process_name.startswith(
+            f"{_APPLE_PROC_PREFIX}."
+        ):
             continue
 
         # Build a basic GUID (no create_time from lsof — use PID hash)

@@ -166,25 +166,29 @@ class ThreatHunter(SubAgent):
         if isinstance(flows, list):
             for f in flows:
                 if ip in str(f.get("dst_ip", "")) or ip in str(f.get("src_ip", "")):
-                    findings.append({
-                        "source": "flow",
-                        "detail": f"Flow: {f.get('process_name', '?')} → {f.get('dst_ip')}:{f.get('dst_port')}",
-                        "risk": f.get("threat_score", 0),
-                        "geo": f.get("geo_dst_country"),
-                        "process": f.get("process_name"),
-                        "pid": f.get("pid"),
-                    })
+                    findings.append(
+                        {
+                            "source": "flow",
+                            "detail": f"Flow: {f.get('process_name', '?')} → {f.get('dst_ip')}:{f.get('dst_port')}",
+                            "risk": f.get("threat_score", 0),
+                            "geo": f.get("geo_dst_country"),
+                            "process": f.get("process_name"),
+                            "pid": f.get("pid"),
+                        }
+                    )
 
         # Check geo summary
         geo = self._query("get_flow_geo_summary", {"hours": 24})
         if isinstance(geo, list):
             for g in geo:
                 if ip in str(g):
-                    findings.append({
-                        "source": "geo",
-                        "detail": f"Geo: {g.get('geo_dst_country')} via {g.get('asn_dst_org')}",
-                        "risk": 0.3,
-                    })
+                    findings.append(
+                        {
+                            "source": "geo",
+                            "detail": f"Geo: {g.get('geo_dst_country')} via {g.get('asn_dst_org')}",
+                            "risk": 0.3,
+                        }
+                    )
 
         return findings
 
@@ -194,11 +198,13 @@ class ThreatHunter(SubAgent):
         if isinstance(dns, list):
             for d in dns:
                 if domain.lower() in str(d.get("domain", "")).lower():
-                    findings.append({
-                        "source": "dns",
-                        "detail": f"DNS: {d.get('domain')} (queries={d.get('query_count', 0)})",
-                        "risk": 0.5,
-                    })
+                    findings.append(
+                        {
+                            "source": "dns",
+                            "detail": f"DNS: {d.get('domain')} (queries={d.get('query_count', 0)})",
+                            "risk": 0.5,
+                        }
+                    )
         return findings
 
     def _hunt_pid(self, pid: int) -> List[Dict]:
@@ -207,23 +213,27 @@ class ThreatHunter(SubAgent):
         if isinstance(procs, list):
             for p in procs:
                 if p.get("pid") == pid or p.get("ppid") == pid:
-                    findings.append({
-                        "source": "process",
-                        "detail": f"Process: PID={p.get('pid')} name={p.get('name')} exe={p.get('exe')}",
-                        "risk": 0.4,
-                        "cmdline": p.get("cmdline"),
-                    })
+                    findings.append(
+                        {
+                            "source": "process",
+                            "detail": f"Process: PID={p.get('pid')} name={p.get('name')} exe={p.get('exe')}",
+                            "risk": 0.4,
+                            "cmdline": p.get("cmdline"),
+                        }
+                    )
         return findings
 
     def _hunt_path(self, path: str) -> List[Dict]:
         findings = []
         fim = self._query("query_fim_events", {"hours": 24, "limit": 50})
         if isinstance(fim, dict) and "count" in fim:
-            findings.append({
-                "source": "fim",
-                "detail": f"FIM: {fim.get('count', 0)} file events in last 24h",
-                "risk": 0.3,
-            })
+            findings.append(
+                {
+                    "source": "fim",
+                    "detail": f"FIM: {fim.get('count', 0)} file events in last 24h",
+                    "risk": 0.3,
+                }
+            )
         return findings
 
 
@@ -250,30 +260,36 @@ class IncidentAnalyst(SubAgent):
             # 1. Get incident detail
             detail = self._query("get_incident_detail", {"incident_id": incident_id})
             if isinstance(detail, dict) and "error" not in detail:
-                findings.append({
-                    "source": "incident",
-                    "detail": f"Incident #{incident_id}: {detail.get('title', 'unknown')}",
-                    "severity": detail.get("severity", "unknown"),
-                    "mitre": detail.get("mitre_techniques", "[]"),
-                })
+                findings.append(
+                    {
+                        "source": "incident",
+                        "detail": f"Incident #{incident_id}: {detail.get('title', 'unknown')}",
+                        "severity": detail.get("severity", "unknown"),
+                        "mitre": detail.get("mitre_techniques", "[]"),
+                    }
+                )
 
             # 2. Get kill chain state
             kill_chain = self._query("get_kill_chain_summary", {})
             if isinstance(kill_chain, dict):
                 tech_count = kill_chain.get("techniques_observed", 0)
-                findings.append({
-                    "source": "kill_chain",
-                    "detail": f"Kill chain: {tech_count} techniques observed",
-                    "techniques": kill_chain.get("technique_details", {}),
-                })
+                findings.append(
+                    {
+                        "source": "kill_chain",
+                        "detail": f"Kill chain: {tech_count} techniques observed",
+                        "techniques": kill_chain.get("technique_details", {}),
+                    }
+                )
 
             # 3. Check MITRE coverage for this incident's techniques
             mitre = self._query("get_mitre_coverage", {})
             if isinstance(mitre, dict):
-                findings.append({
-                    "source": "mitre_coverage",
-                    "detail": f"Total MITRE coverage: {mitre.get('total_techniques', 0)} techniques",
-                })
+                findings.append(
+                    {
+                        "source": "mitre_coverage",
+                        "detail": f"Total MITRE coverage: {mitre.get('total_techniques', 0)} techniques",
+                    }
+                )
 
             # 4. Get event timeline
             timeline = self._query("get_event_timeline", {"hours": 4})
@@ -281,20 +297,26 @@ class IncidentAnalyst(SubAgent):
                 high_risk_events = [
                     e for e in timeline if (e.get("risk_score") or 0) >= 0.7
                 ]
-                findings.append({
-                    "source": "timeline",
-                    "detail": (
-                        f"Timeline (4h): {len(timeline)} events, "
-                        f"{len(high_risk_events)} high-risk"
-                    ),
-                    "high_risk_count": len(high_risk_events),
-                })
+                findings.append(
+                    {
+                        "source": "timeline",
+                        "detail": (
+                            f"Timeline (4h): {len(timeline)} events, "
+                            f"{len(high_risk_events)} high-risk"
+                        ),
+                        "high_risk_count": len(high_risk_events),
+                    }
+                )
 
             # 5. Recommendations
-            severity = detail.get("severity", "low") if isinstance(detail, dict) else "unknown"
+            severity = (
+                detail.get("severity", "low") if isinstance(detail, dict) else "unknown"
+            )
             if severity in ("critical", "high"):
                 recommendations.append("Immediate investigation required")
-                recommendations.append("Check process tree for lateral movement indicators")
+                recommendations.append(
+                    "Check process tree for lateral movement indicators"
+                )
                 recommendations.append("Verify no data exfiltration in flow events")
 
             confidence = 0.8 if findings else 0.3
@@ -353,13 +375,15 @@ class PatternScout(SubAgent):
             if isinstance(posture, dict):
                 risk = posture.get("device_risk_score", 0)
                 techniques = posture.get("mitre_techniques_observed", [])
-                findings.append({
-                    "source": "posture",
-                    "detail": f"Risk: {risk}/100, {len(techniques)} techniques, "
-                    f"{posture.get('open_incidents', 0)} incidents",
-                    "risk_score": risk,
-                    "techniques": techniques,
-                })
+                findings.append(
+                    {
+                        "source": "posture",
+                        "detail": f"Risk: {risk}/100, {len(techniques)} techniques, "
+                        f"{posture.get('open_incidents', 0)} incidents",
+                        "risk_score": risk,
+                        "techniques": techniques,
+                    }
+                )
 
             # 2. IGRIS status
             igris = self._query("get_igris_status", {})
@@ -367,14 +391,18 @@ class PatternScout(SubAgent):
                 active_signals = igris.get("active_signal_count", 0)
                 coherence = igris.get("coherence", "unknown")
                 fleet = igris.get("fleet_summary", {})
-                findings.append({
-                    "source": "igris",
-                    "detail": f"Coherence: {coherence}, signals: {active_signals}, "
-                    f"fleet: {fleet.get('healthy', 0)}/{fleet.get('total', 0)}",
-                })
+                findings.append(
+                    {
+                        "source": "igris",
+                        "detail": f"Coherence: {coherence}, signals: {active_signals}, "
+                        f"fleet: {fleet.get('healthy', 0)}/{fleet.get('total', 0)}",
+                    }
+                )
 
                 if coherence == "degraded":
-                    recommendations.append("System coherence degraded — investigate governance signals")
+                    recommendations.append(
+                        "System coherence degraded — investigate governance signals"
+                    )
                 if fleet.get("offline", 0) > 0:
                     recommendations.append(
                         f"{fleet['offline']} agents offline — check fleet health"
@@ -384,25 +412,30 @@ class PatternScout(SubAgent):
             reliability = self._query("get_reliability_scores", {})
             if isinstance(reliability, list):
                 low_reliability = [
-                    r for r in reliability
+                    r
+                    for r in reliability
                     if isinstance(r, dict) and (r.get("reliability_score") or 1.0) < 0.7
                 ]
                 if low_reliability:
-                    findings.append({
-                        "source": "reliability",
-                        "detail": f"{len(low_reliability)} agents with low reliability",
-                        "agents": [r.get("agent_id") for r in low_reliability],
-                    })
+                    findings.append(
+                        {
+                            "source": "reliability",
+                            "detail": f"{len(low_reliability)} agents with low reliability",
+                            "agents": [r.get("agent_id") for r in low_reliability],
+                        }
+                    )
                     recommendations.append("Review low-reliability agents for drift")
 
             # 4. Sigma rule hits
             sigma = self._query("get_sigma_rule_hits", {"hours": lookback_hours})
             if isinstance(sigma, list) and sigma:
-                findings.append({
-                    "source": "sigma",
-                    "detail": f"{len(sigma)} Sigma rule hits in last {lookback_hours}h",
-                    "rules": sigma[:5],
-                })
+                findings.append(
+                    {
+                        "source": "sigma",
+                        "detail": f"{len(sigma)} Sigma rule hits in last {lookback_hours}h",
+                        "rules": sigma[:5],
+                    }
+                )
 
             confidence = 0.5
             if any(f.get("risk_score", 0) >= 70 for f in findings):

@@ -227,8 +227,8 @@ def create_app():
     # Start EventBus gRPC server (infrastructure — must be up before agents)
     if not is_testing:
         try:
-            import subprocess
             import socket
+            import subprocess
 
             def _eventbus_alive(port=50051):
                 try:
@@ -252,6 +252,7 @@ def create_app():
                     if _eventbus_alive():
                         break
                     import time
+
                     time.sleep(0.5)
                 logging.info("EventBus auto-started (PID %d, port 50051)", _eb_proc.pid)
             else:
@@ -262,8 +263,8 @@ def create_app():
     # Start Agent Mesh + IGRIS orchestrator (singleton, idempotent)
     if not is_testing:
         try:
-            from amoskys.mesh import MeshBus, ActionExecutor, MeshStore, MeshMixin
             from amoskys.igris.orchestrator import IGRISOrchestrator
+            from amoskys.mesh import ActionExecutor, MeshBus, MeshMixin, MeshStore
 
             mesh_bus = MeshBus(db_path="data/mesh_events.db")
             MeshMixin.set_mesh_bus(mesh_bus)
@@ -283,7 +284,9 @@ def create_app():
             app.config["MESH_STORE"] = mesh_store
             app.config["IGRIS_ORCHESTRATOR"] = orchestrator
 
-            logging.info("Agent Mesh + IGRIS Orchestrator started (autonomous defense active)")
+            logging.info(
+                "Agent Mesh + IGRIS Orchestrator started (autonomous defense active)"
+            )
         except Exception as e:
             logging.warning("Agent Mesh failed to start: %s", e)
 
@@ -333,4 +336,4 @@ def main():
     host = os.environ.get("FLASK_HOST", "127.0.0.1")
     debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
     app, socketio = create_app()
-    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=debug)
+    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)

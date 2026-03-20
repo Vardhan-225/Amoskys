@@ -1115,7 +1115,9 @@ class ScoringEngine:
         original = event.get("final_classification", "legitimate")
         if trust_disposition == "unknown":
             # Only apply the never-downgrade rule for unknown processes
-            if _SEVERITY_ORDER.get(original, 0) > _SEVERITY_ORDER.get(classification, 0):
+            if _SEVERITY_ORDER.get(original, 0) > _SEVERITY_ORDER.get(
+                classification, 0
+            ):
                 classification = original
 
         # Populate event

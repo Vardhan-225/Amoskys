@@ -195,12 +195,14 @@ class IgrisChat:
             if result.text:
                 assistant_content.append({"type": "text", "text": result.text})
             for tc in result.tool_calls:
-                assistant_content.append({
-                    "type": "tool_use",
-                    "id": tc["id"],
-                    "name": tc["name"],
-                    "input": tc["input"],
-                })
+                assistant_content.append(
+                    {
+                        "type": "tool_use",
+                        "id": tc["id"],
+                        "name": tc["name"],
+                        "input": tc["input"],
+                    }
+                )
 
             messages.append({"role": "assistant", "content": assistant_content})
 
@@ -212,11 +214,13 @@ class IgrisChat:
                 if len(output_str) > 8000:
                     output_str = output_str[:8000] + "... (truncated)"
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tc["id"],
-                    "content": output_str,
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tc["id"],
+                        "content": output_str,
+                    }
+                )
                 logger.info(
                     "Tool call: %s(%s) → %d bytes",
                     tc["name"],
@@ -241,6 +245,13 @@ class IgrisChat:
     def get_history(self) -> List[Dict]:
         """Return conversation history for UI display."""
         return [
-            {"role": m["role"], "content": m["content"] if isinstance(m["content"], str) else "[tool interaction]"}
+            {
+                "role": m["role"],
+                "content": (
+                    m["content"]
+                    if isinstance(m["content"], str)
+                    else "[tool interaction]"
+                ),
+            }
             for m in self._history
         ]

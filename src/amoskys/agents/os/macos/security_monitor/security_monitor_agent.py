@@ -193,6 +193,9 @@ class MacOSSecurityMonitorAgent(MicroProbeAgentMixin, HardenedAgentBase):
             metrics_interval=metrics_interval,
         )
 
+        # Initialize collector eagerly so collect_data() works without setup()
+        if collector is None:
+            collector = create_macos_security_collector()
         self._collector = collector
         self._total_security_events: int = 0
         self._total_threats_detected: int = 0

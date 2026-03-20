@@ -50,6 +50,8 @@ class ProcessSnapshot:
     create_time: float
     cpu_percent: Optional[float]  # None if permission denied
     memory_percent: Optional[float]  # None if permission denied
+    num_threads: Optional[int]  # None if permission denied
+    num_fds: Optional[int]  # None if permission denied
     status: str
     cwd: str
     environ: Optional[Dict[str, str]]  # None if permission denied
@@ -130,6 +132,9 @@ class MacOSProcessCollector:
                 cwd = ""
                 environ = None
 
+                num_threads = None
+                num_fds = None
+
                 if is_own:
                     try:
                         cpu_pct = proc.cpu_percent(interval=0)
@@ -138,6 +143,14 @@ class MacOSProcessCollector:
                     try:
                         mem_pct = proc.memory_percent()
                     except (psutil.AccessDenied, psutil.NoSuchProcess):
+                        pass
+                    try:
+                        num_threads = proc.num_threads()
+                    except (psutil.AccessDenied, psutil.NoSuchProcess):
+                        pass
+                    try:
+                        num_fds = proc.num_fds()
+                    except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
                         pass
                     try:
                         cwd = proc.cwd()
@@ -162,6 +175,8 @@ class MacOSProcessCollector:
                     create_time=create_time,
                     cpu_percent=cpu_pct,
                     memory_percent=mem_pct,
+                    num_threads=num_threads,
+                    num_fds=num_fds,
                     status=info.get("status") or "",
                     cwd=cwd,
                     environ=environ,

@@ -620,6 +620,86 @@ class NewConnectionProbe(MicroProbe):
 # =============================================================================
 
 
+# =============================================================================
+# 9. PortScanDetectionProbe
+# =============================================================================
+
+
+class PortScanDetectionProbe(MicroProbe):
+    """Detects inbound port scanning from a single source IP.
+
+    Fires when a single remote IP connects to 8+ unique local ports,
+    indicating nmap or similar reconnaissance.
+
+    MITRE: T1046 (Network Service Discovery)
+    """
+
+    name = "macos_port_scan_detection"
+    description = "Detects port scanning from single source IP hitting multiple ports"
+    platforms = ["darwin"]
+    mitre_techniques = ["T1046"]
+    mitre_tactics = ["discovery"]
+    scan_interval = 15.0
+    requires_fields = ["connections"]
+
+    _MIN_PORTS = 8
+    _ALLOWLIST_IPS = {"127.0.0.1", "::1", "0.0.0.0", ""}
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._alerted: Set[str] = set()
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        connections = context.shared_data.get("connections", [])
+
+        src_ports: Dict[str, Set[int]] = {}
+        for conn in connections:
+            src_ip = conn.remote_ip
+            dst_port = conn.local_port
+            if not src_ip or src_ip in self._ALLOWLIST_IPS:
+                continue
+            if src_ip not in src_ports:
+                src_ports[src_ip] = set()
+            if dst_port:
+                src_ports[src_ip].add(dst_port)
+
+        for src_ip, ports in src_ports.items():
+            if len(ports) >= self._MIN_PORTS:
+                key = f"{src_ip}:{len(ports)}"
+                if key in self._alerted:
+                    continue
+                self._alerted.add(key)
+
+                if len(ports) > 100:
+                    scan_type, severity = "full_port_scan", Severity.HIGH
+                elif sum(1 for p in ports if p < 1024) > 10:
+                    scan_type, severity = "service_scan", Severity.HIGH
+                else:
+                    scan_type, severity = "targeted_scan", Severity.MEDIUM
+
+                events.append(
+                    self._create_event(
+                        event_type="port_scan_detected",
+                        severity=severity,
+                        data={
+                            "source_ip": src_ip,
+                            "unique_ports_hit": len(ports),
+                            "scan_type": scan_type,
+                            "sample_ports": sorted(list(ports))[:20],
+                        },
+                        confidence=min(0.95, 0.50 + len(ports) / 100),
+                        tags=["reconnaissance", "port-scan"],
+                    )
+                )
+
+        # Prune dedup cache
+        if len(self._alerted) > 1000:
+            self._alerted = set(list(self._alerted)[-500:])
+
+        return events
+
+
 def create_network_probes() -> List[MicroProbe]:
     """Create all macOS network probes."""
     return [
@@ -631,4 +711,5 @@ def create_network_probes() -> List[MicroProbe]:
         NonStandardPortProbe(),
         CloudExfilProbe(),
         NewConnectionProbe(),
+        PortScanDetectionProbe(),
     ]

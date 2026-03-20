@@ -36,7 +36,14 @@ try:
     )
 except ImportError:
     # Fallback for standalone testing
-    from mesh import ActionExecutor, EventType, MeshBus, MeshStore, SecurityEvent, Severity
+    from mesh import (
+        ActionExecutor,
+        EventType,
+        MeshBus,
+        MeshStore,
+        SecurityEvent,
+        Severity,
+    )
 
 
 class IGRISOrchestrator:
@@ -112,7 +119,8 @@ class IGRISOrchestrator:
                 receipt = action_fn(**kwargs)
                 logger.info(
                     "Action executed: %s -> %s",
-                    receipt.action, receipt.result,
+                    receipt.action,
+                    receipt.result,
                 )
             except Exception:
                 logger.exception("Action failed: %s", kwargs)
@@ -165,24 +173,21 @@ class IGRISOrchestrator:
             chain.append(event)
             # Prune old events
             self._pid_events[event.related_pid] = [
-                e for e in chain
-                if (now - e.timestamp_ns / 1e9) < window
+                e for e in chain if (now - e.timestamp_ns / 1e9) < window
             ]
 
         if event.related_ip:
             chain = self._ip_events[event.related_ip]
             chain.append(event)
             self._ip_events[event.related_ip] = [
-                e for e in chain
-                if (now - e.timestamp_ns / 1e9) < window
+                e for e in chain if (now - e.timestamp_ns / 1e9) < window
             ]
 
         if event.related_domain:
             chain = self._domain_events[event.related_domain]
             chain.append(event)
             self._domain_events[event.related_domain] = [
-                e for e in chain
-                if (now - e.timestamp_ns / 1e9) < window
+                e for e in chain if (now - e.timestamp_ns / 1e9) < window
             ]
 
     def _score(self, event: SecurityEvent) -> float:
@@ -227,9 +232,7 @@ class IGRISOrchestrator:
 
         return min(score, 1.0)
 
-    def _decide(
-        self, event: SecurityEvent, confidence: float
-    ) -> List[tuple]:
+    def _decide(self, event: SecurityEvent, confidence: float) -> List[tuple]:
         """Map confidence to specific actions.
 
         Returns list of (action_function, kwargs) tuples.
@@ -240,61 +243,82 @@ class IGRISOrchestrator:
         if confidence >= 0.9:
             if event.related_pid:
                 evidence = [
-                    e.event_id
-                    for e in self._pid_events.get(event.related_pid, [])
+                    e.event_id for e in self._pid_events.get(event.related_pid, [])
                 ]
-                actions.append((
-                    self._actions.kill_process,
-                    {"pid": event.related_pid, "confidence": confidence, "evidence": evidence},
-                ))
+                actions.append(
+                    (
+                        self._actions.kill_process,
+                        {
+                            "pid": event.related_pid,
+                            "confidence": confidence,
+                            "evidence": evidence,
+                        },
+                    )
+                )
             if event.related_ip:
-                actions.append((
-                    self._actions.block_ip,
-                    {"ip": event.related_ip, "confidence": confidence},
-                ))
+                actions.append(
+                    (
+                        self._actions.block_ip,
+                        {"ip": event.related_ip, "confidence": confidence},
+                    )
+                )
 
         # HIGH (0.7-0.9): Block network, direct watch
         elif confidence >= 0.7:
             if event.related_ip:
-                actions.append((
-                    self._actions.block_ip,
-                    {"ip": event.related_ip, "confidence": confidence, "duration_s": 1800},
-                ))
+                actions.append(
+                    (
+                        self._actions.block_ip,
+                        {
+                            "ip": event.related_ip,
+                            "confidence": confidence,
+                            "duration_s": 1800,
+                        },
+                    )
+                )
             if event.related_domain:
-                actions.append((
-                    self._actions.block_domain,
-                    {"domain": event.related_domain, "confidence": confidence},
-                ))
+                actions.append(
+                    (
+                        self._actions.block_domain,
+                        {"domain": event.related_domain, "confidence": confidence},
+                    )
+                )
 
         # MEDIUM (0.5-0.7): Watch and alert
         elif confidence >= 0.5:
             if event.related_pid:
-                actions.append((
-                    self._actions.direct_watch,
-                    {
-                        "agent_id": "network",
-                        "target_type": "pid",
-                        "target_value": str(event.related_pid),
-                        "confidence": confidence,
-                    },
-                ))
+                actions.append(
+                    (
+                        self._actions.direct_watch,
+                        {
+                            "agent_id": "network",
+                            "target_type": "pid",
+                            "target_value": str(event.related_pid),
+                            "confidence": confidence,
+                        },
+                    )
+                )
             if event.related_ip:
-                actions.append((
-                    self._actions.add_threat_indicator,
-                    {
-                        "indicator_type": "ip",
-                        "value": event.related_ip,
-                        "source": "igris_correlation",
-                        "confidence": confidence,
-                    },
-                ))
+                actions.append(
+                    (
+                        self._actions.add_threat_indicator,
+                        {
+                            "indicator_type": "ip",
+                            "value": event.related_ip,
+                            "source": "igris_correlation",
+                            "confidence": confidence,
+                        },
+                    )
+                )
 
         # LOW (0.3-0.5): Just collect more data
         elif confidence >= 0.3:
-            actions.append((
-                self._actions.trigger_collection,
-                {"confidence": confidence},
-            ))
+            actions.append(
+                (
+                    self._actions.trigger_collection,
+                    {"confidence": confidence},
+                )
+            )
 
         return actions
 
@@ -309,8 +333,7 @@ class IGRISOrchestrator:
             return
 
         action_names = [
-            f[0].__name__ if hasattr(f[0], "__name__") else str(f[0])
-            for f in actions
+            f[0].__name__ if hasattr(f[0], "__name__") else str(f[0]) for f in actions
         ]
 
         message = {
@@ -354,17 +377,22 @@ class IGRISOrchestrator:
             self._mode_history.append((time.time(), new_mode))
 
             # Publish mode change to mesh
-            self._bus.publish(SecurityEvent(
-                event_type=EventType.ADAPTIVE_MODE_CHANGE,
-                source_agent="igris_orchestrator",
-                severity=Severity.INFO,
-                payload={"mode": new_mode},
-            ))
+            self._bus.publish(
+                SecurityEvent(
+                    event_type=EventType.ADAPTIVE_MODE_CHANGE,
+                    source_agent="igris_orchestrator",
+                    severity=Severity.INFO,
+                    payload={"mode": new_mode},
+                )
+            )
 
             logger.warning(
                 "IGRIS Adaptive Mode: %s -> %s (critical=%d, high=%d, medium=%d)",
                 self._mode_history[-2][1] if len(self._mode_history) > 1 else "init",
-                new_mode, critical, high, medium,
+                new_mode,
+                critical,
+                high,
+                medium,
             )
 
     # ═══════════════════════════════════════════════════════════
@@ -378,7 +406,9 @@ class IGRISOrchestrator:
 
         self._running = True
         self._thread = threading.Thread(
-            target=self._run_loop, daemon=True, name="igris-orchestrator",
+            target=self._run_loop,
+            daemon=True,
+            name="igris-orchestrator",
         )
         self._thread.start()
         logger.info("IGRIS Orchestrator started (defender mode active)")
@@ -395,9 +425,7 @@ class IGRISOrchestrator:
                 try:
                     self._process_event(event)
                 except Exception:
-                    logger.exception(
-                        "Failed to process event: %s", event.event_id
-                    )
+                    logger.exception("Failed to process event: %s", event.event_id)
 
             # Sleep briefly between drain cycles
             time.sleep(0.1)

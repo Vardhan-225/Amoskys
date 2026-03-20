@@ -211,6 +211,8 @@ class FusionEngine:
             # Incident merge columns — forensic-preserving dedup
             ("observation_count", "INTEGER DEFAULT 1"),
             ("observation_metadata", "TEXT DEFAULT '{}'"),
+            # Materialized incident context — complete evidence package
+            ("incident_context_json", "TEXT DEFAULT NULL"),
         ]
 
         for col_name, col_def in migrations:
@@ -327,7 +329,9 @@ class FusionEngine:
         # Fallback: when we have security detections but no rule fired, create a
         # single "High-risk detections" incident so real detections surface on the dashboard
         if not incidents:
-            fallback = self._create_high_risk_fallback_incident(device_id, sorted_events)
+            fallback = self._create_high_risk_fallback_incident(
+                device_id, sorted_events
+            )
             if fallback is not None:
                 incidents.append(fallback)
 
@@ -599,9 +603,7 @@ class FusionEngine:
             metadata={"window_minutes": str(self.window_minutes)},
         )
 
-    def _merge_or_create_incident(
-        self, incident: Incident, device_id: str
-    ) -> bool:
+    def _merge_or_create_incident(self, incident: Incident, device_id: str) -> bool:
         """Merge into existing open incident or create new one.
 
         If an open incident exists for the same (rule_name, device_id),
@@ -640,11 +642,13 @@ class FusionEngine:
 
             # Record this observation cycle
             cycles = obs_meta.get("observation_cycles", [])
-            cycles.append({
-                "cycle_ts": incident.created_at.isoformat(),
-                "event_ids": incident.event_ids,
-                "event_count": len(incident.event_ids),
-            })
+            cycles.append(
+                {
+                    "cycle_ts": incident.created_at.isoformat(),
+                    "event_ids": incident.event_ids,
+                    "event_count": len(incident.event_ids),
+                }
+            )
             # Cap at 100 cycles (FIFO)
             if len(cycles) > 100:
                 cycles = cycles[-100:]
@@ -685,7 +689,9 @@ class FusionEngine:
                 )
                 logger.info(
                     "Merged incident %s: observation #%d, %d total events",
-                    existing_id, obs_count, len(merged_event_ids),
+                    existing_id,
+                    obs_count,
+                    len(merged_event_ids),
                 )
             except Exception as e:
                 logger.error("Failed to merge incident %s: %s", existing_id, e)
@@ -718,6 +724,15 @@ class FusionEngine:
                 [{"technique": t, "ts": start_ts_ns} for t in incident.techniques]
             )
 
+        # Materialize incident context — complete evidence package
+        incident_context = self._materialize_incident_context(
+            incident,
+            start_ts_ns,
+            end_ts_ns,
+            duration_seconds,
+            mitre_sequence,
+        )
+
         try:
             self.db.execute(
                 """
@@ -725,8 +740,9 @@ class FusionEngine:
                 (incident_id, device_id, severity, tactics, techniques, rule_name,
                  summary, start_ts, end_ts, event_ids, metadata, created_at,
                  agent_weights, weighted_confidence, contributing_agents,
-                 start_ts_ns, end_ts_ns, duration_seconds, mitre_sequence)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 start_ts_ns, end_ts_ns, duration_seconds, mitre_sequence,
+                 incident_context_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     incident.incident_id,
@@ -748,6 +764,7 @@ class FusionEngine:
                     end_ts_ns,
                     duration_seconds,
                     mitre_sequence,
+                    json.dumps(incident_context, default=str),
                 ),
             )
             duration_str = (
@@ -759,6 +776,147 @@ class FusionEngine:
             )
         except Exception as e:
             logger.error(f"Failed to persist incident {incident.incident_id}: {e}")
+
+    def _materialize_incident_context(
+        self,
+        incident: Incident,
+        start_ts_ns: int | None,
+        end_ts_ns: int | None,
+        duration_seconds: float | None,
+        mitre_sequence: str | None,
+    ) -> dict:
+        """Build a materialized incident context document.
+
+        One JSON object containing the complete evidence package for an incident:
+        involved processes, network flows, MITRE techniques with evidence,
+        ordered timeline, and agent reliability scores.
+
+        This is what IGRIS reads instead of running 5+ queries across tables.
+        """
+        context: dict = {
+            "incident_id": incident.incident_id,
+            "device_id": incident.device_id,
+            "severity": incident.severity.value,
+            "rule_name": incident.rule_name,
+            "summary": incident.summary,
+            "weighted_confidence": incident.weighted_confidence,
+            "agent_weights": incident.agent_weights,
+            "contributing_agents": incident.contributing_agents,
+            "tactics": incident.tactics,
+            "techniques": incident.techniques,
+            "mitre_sequence": json.loads(mitre_sequence) if mitre_sequence else [],
+            "temporal": {
+                "start_ts_ns": start_ts_ns,
+                "end_ts_ns": end_ts_ns,
+                "duration_seconds": duration_seconds,
+                "start_ts": (
+                    incident.start_ts.isoformat() if incident.start_ts else None
+                ),
+                "end_ts": incident.end_ts.isoformat() if incident.end_ts else None,
+            },
+            "event_ids": incident.event_ids,
+            "event_count": len(incident.event_ids),
+            "processes": [],
+            "network_flows": [],
+            "dns_queries": [],
+            "files": [],
+            "timeline": [],
+        }
+
+        # Reconstruct evidence from the FusionEngine's event buffer
+        state = self.device_state.get(incident.device_id)
+        if state:
+            event_id_set = set(incident.event_ids)
+            seen_pids = set()
+            for ev in state["events"]:
+                if ev.event_id not in event_id_set:
+                    continue
+
+                timeline_entry = {
+                    "event_id": ev.event_id,
+                    "event_type": ev.event_type,
+                    "severity": ev.severity,
+                    "timestamp": ev.timestamp.isoformat(),
+                    "timestamp_ns": ev.event_timestamp_ns,
+                    "source_component": ev.attributes.get("source_component", ""),
+                }
+
+                # Extract process info
+                pid = ev.attributes.get("pid", "")
+                if pid and pid not in seen_pids:
+                    seen_pids.add(pid)
+                    context["processes"].append(
+                        {
+                            "pid": pid,
+                            "name": ev.attributes.get(
+                                "name", ev.attributes.get("process_name", "")
+                            ),
+                            "exe": ev.attributes.get(
+                                "exe", ev.attributes.get("binary", "")
+                            ),
+                            "ppid": ev.attributes.get("ppid", ""),
+                            "username": ev.attributes.get("username", ""),
+                            "cmdline": ev.attributes.get("cmdline", ""),
+                        }
+                    )
+
+                # Extract network info
+                dst_ip = ev.attributes.get("dst_ip", "")
+                if dst_ip:
+                    context["network_flows"].append(
+                        {
+                            "src_ip": ev.attributes.get("src_ip", ""),
+                            "dst_ip": dst_ip,
+                            "dst_port": ev.attributes.get("dst_port", ""),
+                            "protocol": ev.attributes.get("protocol", ""),
+                            "pid": pid,
+                            "geo_dst_country": ev.attributes.get("geo_dst_country", ""),
+                            "asn_name": ev.attributes.get("asn_name", ""),
+                        }
+                    )
+
+                # Extract DNS info
+                domain = ev.attributes.get("domain", "")
+                if domain:
+                    context["dns_queries"].append(
+                        {
+                            "domain": domain,
+                            "query_type": ev.attributes.get("query_type", ""),
+                            "source_pid": ev.attributes.get("source_pid", pid),
+                        }
+                    )
+
+                # Extract file info
+                file_path = ev.attributes.get(
+                    "file_path", ev.attributes.get("path", "")
+                )
+                if file_path:
+                    context["files"].append(
+                        {
+                            "path": file_path,
+                            "access_category": ev.attributes.get("access_category", ""),
+                            "pid": pid,
+                        }
+                    )
+
+                # Security event enrichment
+                if ev.security_event:
+                    timeline_entry["mitre_techniques"] = ev.security_event.get(
+                        "mitre_techniques", []
+                    )
+                    timeline_entry["risk_score"] = ev.security_event.get(
+                        "risk_score", 0
+                    )
+                    timeline_entry["event_category"] = ev.security_event.get(
+                        "event_category", ""
+                    )
+
+                context["timeline"].append(timeline_entry)
+
+        # Sort timeline by timestamp
+        context["timeline"].sort(key=lambda e: e.get("timestamp_ns", 0))
+
+        return context
 
     def persist_risk_snapshot(self, snapshot: DeviceRiskSnapshot):
         """Save device risk snapshot to database
@@ -837,23 +995,37 @@ class FusionEngine:
         # Stable ID: hash of sorted event IDs so same detections = same incident
         import hashlib
 
-        id_hash = hashlib.sha256(
-            "|".join(event_ids).encode()
-        ).hexdigest()[:16]
+        id_hash = hashlib.sha256("|".join(event_ids).encode()).hexdigest()[:16]
         incident_id = f"high_risk_{device_id}_{id_hash}"
+
+        all_techniques, all_tactics, all_agents = self._extract_mitre_context(
+            candidates
+        )
+
+        # Compute confidence from contributing events' risk scores
+        # instead of hardcoding 1.0
+        risk_scores = [r for _, r in candidates if r > 0]
+        avg_risk = sum(risk_scores) / len(risk_scores) if risk_scores else 0.5
+        # Blend average and max: high max means at least one strong signal
+        confidence = round(0.6 * avg_risk + 0.4 * max_risk, 3)
 
         incident = Incident(
             incident_id=incident_id,
             device_id=device_id,
             severity=severity,
-            tactics=[],
-            techniques=[],
+            tactics=all_tactics,
+            techniques=all_techniques,
             rule_name="high_risk_detections",
             summary=summary[:500],
             start_ts=start_ts,
             end_ts=end_ts,
             event_ids=event_ids,
-            metadata={"event_count": str(len(candidates)), "max_risk_score": f"{max_risk:.2f}"},
+            metadata={
+                "event_count": str(len(candidates)),
+                "max_risk_score": f"{max_risk:.2f}",
+            },
+            contributing_agents=all_agents,
+            weighted_confidence=confidence,
         )
         logger.info(
             "Fallback incident created: %s (%d events, max_risk=%.2f)",
@@ -887,6 +1059,84 @@ class FusionEngine:
             if risk >= 0.3 or bool(se.get("requires_investigation", False)):
                 noteworthy.append((e, risk))
         return noteworthy if noteworthy else all_security
+
+    # Technique prefix → MITRE tactic mapping
+    _TECH_PREFIX_TO_TACTIC = {
+        "T1190": "TA0001",
+        "T1566": "TA0001",
+        "T1204": "TA0001",
+        "T1059": "TA0002",
+        "T1106": "TA0002",
+        "T1218": "TA0002",
+        "T1543": "TA0003",
+        "T1053": "TA0003",
+        "T1546": "TA0003",
+        "T1547": "TA0003",
+        "T1098": "TA0003",
+        "T1037": "TA0003",
+        "T1548": "TA0004",
+        "T1036": "TA0005",
+        "T1070": "TA0005",
+        "T1562": "TA0005",
+        "T1564": "TA0005",
+        "T1553": "TA0005",
+        "T1140": "TA0005",
+        "T1027": "TA0005",
+        "T1574": "TA0005",
+        "T1555": "TA0006",
+        "T1539": "TA0006",
+        "T1110": "TA0006",
+        "T1056": "TA0006",
+        "T1552": "TA0006",
+        "T1082": "TA0007",
+        "T1083": "TA0007",
+        "T1057": "TA0007",
+        "T1016": "TA0007",
+        "T1046": "TA0007",
+        "T1018": "TA0007",
+        "T1021": "TA0008",
+        "T1105": "TA0008",
+        "T1005": "TA0009",
+        "T1113": "TA0009",
+        "T1115": "TA0009",
+        "T1560": "TA0009",
+        "T1071": "TA0011",
+        "T1568": "TA0011",
+        "T1572": "TA0011",
+        "T1571": "TA0011",
+        "T1090": "TA0011",
+        "T1041": "TA0010",
+        "T1048": "TA0010",
+        "T1567": "TA0010",
+    }
+
+    @staticmethod
+    def _extract_mitre_context(
+        candidates: list,
+    ) -> tuple:
+        """Extract MITRE techniques, tactics, and agent names from candidate events."""
+        tech_set: dict[str, None] = {}  # ordered set via dict
+        agent_set: dict[str, None] = {}
+        for e, _ in candidates:
+            se = e.security_event or {}
+            for tech in se.get("mitre_techniques", []):
+                if tech:
+                    tech_set[tech] = None
+            agent = getattr(e, "agent_id", None) or se.get("collection_agent", "")
+            if agent:
+                agent_set[agent] = None
+
+        techniques = list(tech_set)
+        agents = list(agent_set)
+        tactics = list(
+            dict.fromkeys(
+                FusionEngine._TECH_PREFIX_TO_TACTIC[p]
+                for t in techniques
+                for p in [t.split(".")[0] if "." in t else t]
+                if p in FusionEngine._TECH_PREFIX_TO_TACTIC
+            )
+        )
+        return techniques, tactics, agents
 
     def _detect_sequence_incidents(
         self, device_id: str, sorted_events: List[TelemetryEventView]
@@ -1107,7 +1357,9 @@ class FusionEngine:
                     if merged:
                         # Update metrics only for new incidents (not merges)
                         self.metrics["total_incidents_created"] += 1
-                        self.metrics["incidents_by_severity"][incident.severity.value] += 1
+                        self.metrics["incidents_by_severity"][
+                            incident.severity.value
+                        ] += 1
                         self.metrics["incidents_by_rule"][incident.rule_name] += 1
 
                         logger.warning(

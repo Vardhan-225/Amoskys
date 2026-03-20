@@ -54,20 +54,26 @@ class SelfIdentity:
 
         # Process names that are always "us"
         self._own_process_names: Set[str] = {
-            "python3", "python3.13", "python3.12", "python3.11",
-            "python", "amoskys",
+            "python3",
+            "python3.13",
+            "python3.12",
+            "python3.11",
+            "python",
+            "amoskys",
         }
 
         # Agent collection intervals (agent_id → interval_seconds)
         self._agent_intervals: Dict[str, float] = {}
 
         # API destinations we talk to (not threats)
-        self._own_destinations: FrozenSet[str] = frozenset({
-            "anthropic.com",
-            "api.anthropic.com",
-            "localhost",
-            "127.0.0.1",
-        })
+        self._own_destinations: FrozenSet[str] = frozenset(
+            {
+                "anthropic.com",
+                "api.anthropic.com",
+                "localhost",
+                "127.0.0.1",
+            }
+        )
 
         # Known AMOSKYS destination IPs
         self._own_destination_ips: Set[str] = set()
@@ -88,7 +94,9 @@ class SelfIdentity:
             self._agent_intervals[agent_id] = interval
         logger.debug(
             "SelfIdentity: registered agent=%s pid=%s interval=%s",
-            agent_id, pid, interval,
+            agent_id,
+            pid,
+            interval,
         )
 
     def update_pid(self, pid: int) -> None:
@@ -115,13 +123,9 @@ class SelfIdentity:
 
         # Name match — only if exe points to our venv or project
         if name and exe:
-            name_matches = any(
-                name.startswith(n) for n in self._own_process_names
-            )
+            name_matches = any(name.startswith(n) for n in self._own_process_names)
             exe_is_ours = (
-                "amoskys" in exe.lower()
-                or ".venv" in exe
-                or "site-packages" in exe
+                "amoskys" in exe.lower() or ".venv" in exe or "site-packages" in exe
             )
             if name_matches and exe_is_ours:
                 return True

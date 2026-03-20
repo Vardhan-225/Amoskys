@@ -1123,9 +1123,8 @@ class MicroProbeAgentMixin:
 
                 # Publish CRITICAL/HIGH alerts to coordination bus (all agents)
                 for event in events:
-                    if (
-                        event.severity in (Severity.CRITICAL, Severity.HIGH)
-                        and hasattr(self, "coordination_publish_alert")
+                    if event.severity in (Severity.CRITICAL, Severity.HIGH) and hasattr(
+                        self, "coordination_publish_alert"
                     ):
                         summary = (
                             event.data.get("message")

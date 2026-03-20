@@ -69,7 +69,10 @@ _TECHNIQUE_CONTEXT = {
         "match legitimate name or location to evade detection",
     ),
     "T1547": ("persistence", "boot or logon autostart execution"),
-    "T1547.001": ("persistence", "registry run keys or startup folder persistence (Windows)"),
+    "T1547.001": (
+        "persistence",
+        "registry run keys or startup folder persistence (Windows)",
+    ),
     "T1543": ("persistence", "creation or modification of system-level processes"),
     "T1053": ("persistence", "abuse of task scheduling for execution or persistence"),
     "T1204": ("execution", "user execution of malicious file or link"),

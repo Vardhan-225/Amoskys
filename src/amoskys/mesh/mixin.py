@@ -113,7 +113,10 @@ class MeshMixin:
                 )
                 logger.info(
                     "[%s] Added to watch list: %s=%s for %ds",
-                    agent_id, target_type, target_value, duration_s,
+                    agent_id,
+                    target_type,
+                    target_value,
+                    duration_s,
                 )
 
         elif event.event_type == EventType.ADAPTIVE_MODE_CHANGE:
@@ -153,9 +156,7 @@ class MeshMixin:
     def prune_expired_watches(self) -> int:
         """Remove expired watch entries. Returns count removed."""
         now = time.time()
-        expired = [
-            k for k, v in self._watch_expiry.items() if now > v
-        ]
+        expired = [k for k, v in self._watch_expiry.items() if now > v]
         for key in expired:
             target_type, _, value = key.partition(":")
             self._watch_list.get(target_type, set()).discard(value)

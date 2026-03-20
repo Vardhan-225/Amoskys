@@ -326,38 +326,48 @@ class SomaBrain:
 
         # Check 1: Anomaly rate bounds
         if anomaly_rate < 0.001:
-            checks.append({
-                "check": "anomaly_rate_floor",
-                "passed": False,
-                "detail": f"Anomaly rate {anomaly_rate:.4f} below 0.1% — model may be undertrained",
-            })
+            checks.append(
+                {
+                    "check": "anomaly_rate_floor",
+                    "passed": False,
+                    "detail": f"Anomaly rate {anomaly_rate:.4f} below 0.1% — model may be undertrained",
+                }
+            )
         elif anomaly_rate > 0.30:
-            checks.append({
-                "check": "anomaly_rate_ceiling",
-                "passed": False,
-                "detail": f"Anomaly rate {anomaly_rate:.4f} above 30% — model flagging too much",
-            })
+            checks.append(
+                {
+                    "check": "anomaly_rate_ceiling",
+                    "passed": False,
+                    "detail": f"Anomaly rate {anomaly_rate:.4f} above 30% — model flagging too much",
+                }
+            )
         else:
-            checks.append({
-                "check": "anomaly_rate",
-                "passed": True,
-                "detail": f"Anomaly rate {anomaly_rate:.4f} within bounds",
-            })
+            checks.append(
+                {
+                    "check": "anomaly_rate",
+                    "passed": True,
+                    "detail": f"Anomaly rate {anomaly_rate:.4f} within bounds",
+                }
+            )
 
         # Check 2: Calibration spread
         spread = abs(p95 - p5)
         if spread < 0.01:
-            checks.append({
-                "check": "calibration_spread",
-                "passed": False,
-                "detail": f"Calibration spread {spread:.6f} is degenerate (p5={p5:.4f}, p95={p95:.4f})",
-            })
+            checks.append(
+                {
+                    "check": "calibration_spread",
+                    "passed": False,
+                    "detail": f"Calibration spread {spread:.6f} is degenerate (p5={p5:.4f}, p95={p95:.4f})",
+                }
+            )
         else:
-            checks.append({
-                "check": "calibration_spread",
-                "passed": True,
-                "detail": f"Calibration spread {spread:.4f} is healthy",
-            })
+            checks.append(
+                {
+                    "check": "calibration_spread",
+                    "passed": True,
+                    "detail": f"Calibration spread {spread:.4f} is healthy",
+                }
+            )
 
         # Check 3: Inference smoke test on 5 random samples
         try:
@@ -369,17 +379,21 @@ class SomaBrain:
             sample_indices = rng.choice(len(X), min(5, len(X)), replace=False)
             sample = X[sample_indices]
             scores = -model.score_samples(sample)
-            checks.append({
-                "check": "inference_smoke",
-                "passed": True,
-                "detail": f"Scored {len(sample)} samples, scores range [{scores.min():.4f}, {scores.max():.4f}]",
-            })
+            checks.append(
+                {
+                    "check": "inference_smoke",
+                    "passed": True,
+                    "detail": f"Scored {len(sample)} samples, scores range [{scores.min():.4f}, {scores.max():.4f}]",
+                }
+            )
         except Exception as e:
-            checks.append({
-                "check": "inference_smoke",
-                "passed": False,
-                "detail": f"Inference failed: {e}",
-            })
+            checks.append(
+                {
+                    "check": "inference_smoke",
+                    "passed": False,
+                    "detail": f"Inference failed: {e}",
+                }
+            )
 
         all_passed = all(c["passed"] for c in checks)
         failed = [c for c in checks if not c["passed"]]
@@ -449,7 +463,9 @@ class SomaBrain:
             frames = []
 
             # ── Primary source: security_events (fully scored) ──
-            sec_cols_info = conn.execute("PRAGMA table_info(security_events)").fetchall()
+            sec_cols_info = conn.execute(
+                "PRAGMA table_info(security_events)"
+            ).fetchall()
             existing_cols = {row[1] for row in sec_cols_info}
             select_cols = [c for c in core_cols if c in existing_cols]
             for oc in optional_cols:
@@ -523,9 +539,7 @@ class SomaBrain:
                             ORDER BY timestamp_dt DESC
                             LIMIT ?
                         """
-                        df_obs = pd.read_sql_query(
-                            obs_query, conn, params=(remaining,)
-                        )
+                        df_obs = pd.read_sql_query(obs_query, conn, params=(remaining,))
                         if not df_obs.empty:
                             frames.append(df_obs)
                             remaining -= len(df_obs)
@@ -577,9 +591,7 @@ class SomaBrain:
                             ORDER BY timestamp_dt DESC
                             LIMIT ?
                         """
-                        df_dom = pd.read_sql_query(
-                            dom_query, conn, params=(remaining,)
-                        )
+                        df_dom = pd.read_sql_query(dom_query, conn, params=(remaining,))
                         if not df_dom.empty:
                             frames.append(df_dom)
                             remaining -= len(df_dom)
@@ -587,9 +599,7 @@ class SomaBrain:
                             "SomaBrain: %s yielded %d rows", table_name, len(df_dom)
                         )
                     except Exception:
-                        logger.debug(
-                            "%s query failed", table_name, exc_info=True
-                        )
+                        logger.debug("%s query failed", table_name, exc_info=True)
 
             conn.close()
 

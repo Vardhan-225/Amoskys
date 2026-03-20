@@ -356,7 +356,7 @@ async function loadIncidents(statusFilter, page) {
         document.getElementById('contained-count').textContent = statusCounts.contained || 0;
         document.getElementById('resolved-count').textContent = (statusCounts.resolved || 0) + (statusCounts.closed || 0);
 
-        severityCounts = data.severity_counts || {critical:0, high:0, medium:0, low:0};
+        severityCounts = Object.assign({critical:0, high:0, medium:0, low:0}, data.severity_counts || {});
         renderSeverityChart(severityCounts);
 
         var openTotal = (statusCounts.open || 0) + (statusCounts.investigating || 0) + (statusCounts.contained || 0);
@@ -410,6 +410,7 @@ function renderPagination() {
 }
 
 function renderSeverityChart(counts) {
+    counts = Object.assign({critical:0, high:0, medium:0, low:0}, counts || {});
     var maxCount = Math.max(counts.critical, counts.high, counts.medium, counts.low, 1);
     var colors = {critical:'#ff0000',high:'#ff6600',medium:'#ffaa00',low:'#00ff88'};
     var container = document.getElementById('severity-chart');
@@ -417,9 +418,10 @@ function renderSeverityChart(counts) {
     var sevs = ['critical','high','medium','low'];
     for (var i = 0; i < sevs.length; i++) {
         var s = sevs[i];
-        var h = Math.max(4, Math.round((counts[s] / maxCount) * 100));
+        var count = counts[s] || 0;
+        var h = Math.max(4, Math.round((count / maxCount) * 100));
         html += '<div class="sev-bar">'
-            + '<div class="sev-bar-count" style="color:' + colors[s] + ';">' + counts[s] + '</div>'
+            + '<div class="sev-bar-count" style="color:' + colors[s] + ';">' + count + '</div>'
             + '<div class="sev-bar-fill" style="background:' + colors[s] + ';height:' + h + 'px;"></div>'
             + '<div class="sev-bar-label">' + s + '</div></div>';
     }

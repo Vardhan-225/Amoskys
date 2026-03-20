@@ -16,6 +16,8 @@ from pathlib import Path
 
 # Proto modules that need namespace qualification
 PROTO_MODULES = [
+    "control_pb2",
+    "control_pb2_grpc",
     "messaging_schema_pb2",
     "messaging_schema_pb2_grpc",
     "universal_telemetry_pb2",

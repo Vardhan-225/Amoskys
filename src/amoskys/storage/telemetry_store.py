@@ -50,6 +50,7 @@ class _ReadPool:
             conn.execute("PRAGMA cache_size=-16000")  # 16 MB per conn
             conn.execute("PRAGMA temp_store=MEMORY")
             conn.execute("PRAGMA mmap_size=268435456")  # 256MB mmap
+            conn.execute("PRAGMA busy_timeout=5000")  # match writer timeout
             self._pool.put(conn)
 
     @contextmanager
@@ -763,6 +764,75 @@ CREATE TABLE IF NOT EXISTS _persistence_baseline (
     PRIMARY KEY (device_id, mechanism, entry_id)
 ) WITHOUT ROWID;
 
+-- ══════════════════════════════════════════════════════════════════════
+-- Telemetry Receipt Ledger (completeness verification)
+--
+-- Tracks every event through 4 pipeline checkpoints:
+--   1. emitted_ns   — agent created the event (set by queue_adapter)
+--   2. queued_ns    — event entered the local queue
+--   3. wal_ns       — WAL processor accepted the envelope
+--   4. persisted_ns — TelemetryStore committed to domain table
+--
+-- IGRIS reconciliation: compare counts at each boundary per source_agent.
+-- Any delta means events were lost, misrouted, or quarantined.
+-- ══════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS telemetry_receipts (
+    event_id      TEXT NOT NULL,
+    source_agent  TEXT NOT NULL,
+    device_id     TEXT,
+    emitted_ns    INTEGER,
+    queued_ns     INTEGER,
+    wal_ns        INTEGER,
+    persisted_ns  INTEGER,
+    dest_table    TEXT,           -- which domain table received the event
+    quality_state TEXT,           -- valid/degraded/invalid/quarantined
+    PRIMARY KEY (event_id, source_agent)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_receipts_agent
+    ON telemetry_receipts(source_agent, emitted_ns DESC);
+CREATE INDEX IF NOT EXISTS idx_receipts_gaps
+    ON telemetry_receipts(source_agent)
+    WHERE persisted_ns IS NULL;  -- partial index for incomplete receipts
+
+-- ══════════════════════════════════════════════════════════════════════
+-- Process Genealogy (durable spawn chain)
+--
+-- Records every observed process with full ancestry.  Fed by:
+--   1. MacOSProcessAgent — each collection cycle snapshots live processes
+--   2. RealtimeSensor    — kqueue NOTE_EXIT events capture exits
+--
+-- Unlike process_events (which is a time-series of observations),
+-- genealogy is a durable record that survives process exit.  Each PID
+-- gets one row updated over time; the spawn chain is built by joining
+-- on ppid.
+-- ══════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS process_genealogy (
+    device_id     TEXT NOT NULL,
+    pid           INTEGER NOT NULL,
+    ppid          INTEGER,
+    name          TEXT,
+    exe           TEXT,
+    cmdline       TEXT,           -- JSON array
+    username      TEXT,
+    parent_name   TEXT,
+    create_time   REAL,           -- Unix epoch
+    exit_time_ns  INTEGER,        -- kqueue NOTE_EXIT timestamp
+    exit_status   INTEGER,
+    code_signing  TEXT,           -- signed/unsigned/tampered/unknown
+    is_alive      BOOLEAN DEFAULT 1,
+    first_seen_ns INTEGER NOT NULL,
+    last_seen_ns  INTEGER NOT NULL,
+    process_guid  TEXT,           -- stable GUID for cross-agent correlation
+    PRIMARY KEY (device_id, pid, first_seen_ns)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_genealogy_alive
+    ON process_genealogy(device_id, is_alive)
+    WHERE is_alive = 1;
+CREATE INDEX IF NOT EXISTS idx_genealogy_ppid
+    ON process_genealogy(device_id, ppid, first_seen_ns DESC);
+CREATE INDEX IF NOT EXISTS idx_genealogy_guid
+    ON process_genealogy(process_guid);
+
 -- Dashboard rollup table (Layer 2: pre-computed aggregations)
 CREATE TABLE IF NOT EXISTS dashboard_rollups (
     rollup_type TEXT NOT NULL,   -- 'events_by_domain', 'threats_by_severity', etc.
@@ -799,6 +869,12 @@ class TelemetryStore:
         self.db.execute("PRAGMA synchronous=NORMAL")  # safe with WAL, reduces fsync
         self.db.execute("PRAGMA temp_store=MEMORY")  # temp indices in RAM
         self.db.execute("PRAGMA mmap_size=268435456")  # 256MB mmap for read perf
+        self.db.execute(
+            "PRAGMA wal_autocheckpoint=1000"
+        )  # checkpoint every 1000 pages (~4MB); prevents unbounded WAL growth and mid-write corruption on concurrent writers
+        self.db.execute(
+            "PRAGMA busy_timeout=5000"
+        )  # 5s retry on locked DB instead of immediate SQLITE_BUSY error
         self.db.execute("PRAGMA optimize")  # update query planner statistics
 
         # Create schema
@@ -3440,13 +3516,18 @@ class TelemetryStore:
         """Get counts per severity for incident charts (all incidents)."""
         with self._lock:
             try:
+                counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
                 cursor = self.db.execute(
                     "SELECT severity, COUNT(*) FROM incidents GROUP BY severity"
                 )
-                return {row[0]: row[1] for row in cursor.fetchall()}
+                for row in cursor.fetchall():
+                    severity = str(row[0] or "").lower()
+                    if severity in counts:
+                        counts[severity] = row[1]
+                return counts
             except sqlite3.Error as e:
                 logger.error("Failed to get incidents severity counts: %s", e)
-                return {}
+                return {"critical": 0, "high": 0, "medium": 0, "low": 0}
 
     def get_incident(self, incident_id: int) -> Optional[Dict[str, Any]]:
         """Get a single incident by ID."""
@@ -5362,6 +5443,347 @@ class TelemetryStore:
             except sqlite3.Error as e:
                 logger.error("Observation search failed: %s", e)
                 return {"results": [], "total_count": 0, "has_more": False}
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Telemetry Receipt Ledger — completeness verification
+    # ══════════════════════════════════════════════════════════════════════
+
+    def receipt_emit(
+        self, event_id: str, source_agent: str, device_id: str = ""
+    ) -> None:
+        """Checkpoint 1: agent emitted the event."""
+        now_ns = time.time_ns()
+        with self._lock:
+            self.db.execute(
+                """INSERT OR IGNORE INTO telemetry_receipts
+                   (event_id, source_agent, device_id, emitted_ns)
+                   VALUES (?, ?, ?, ?)""",
+                (event_id, source_agent, device_id, now_ns),
+            )
+            if not self._batch_mode:
+                self.db.commit()
+
+    def receipt_queued(self, event_id: str, source_agent: str) -> None:
+        """Checkpoint 2: event entered the local queue."""
+        now_ns = time.time_ns()
+        with self._lock:
+            self.db.execute(
+                """INSERT INTO telemetry_receipts
+                   (event_id, source_agent, queued_ns)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(event_id, source_agent) DO UPDATE
+                   SET queued_ns = excluded.queued_ns""",
+                (event_id, source_agent, now_ns),
+            )
+            if not self._batch_mode:
+                self.db.commit()
+
+    def receipt_wal(self, event_id: str, source_agent: str) -> None:
+        """Checkpoint 3: WAL processor accepted the envelope."""
+        now_ns = time.time_ns()
+        with self._lock:
+            self.db.execute(
+                """INSERT INTO telemetry_receipts
+                   (event_id, source_agent, wal_ns)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(event_id, source_agent) DO UPDATE
+                   SET wal_ns = excluded.wal_ns""",
+                (event_id, source_agent, now_ns),
+            )
+            if not self._batch_mode:
+                self.db.commit()
+
+    def receipt_persisted(
+        self,
+        event_id: str,
+        source_agent: str,
+        dest_table: str,
+        quality_state: str = "valid",
+    ) -> None:
+        """Checkpoint 4: TelemetryStore committed to a domain table."""
+        now_ns = time.time_ns()
+        with self._lock:
+            self.db.execute(
+                """INSERT INTO telemetry_receipts
+                   (event_id, source_agent, persisted_ns, dest_table, quality_state)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(event_id, source_agent) DO UPDATE
+                   SET persisted_ns = excluded.persisted_ns,
+                       dest_table   = excluded.dest_table,
+                       quality_state = excluded.quality_state""",
+                (event_id, source_agent, now_ns, dest_table, quality_state),
+            )
+            if not self._batch_mode:
+                self.db.commit()
+
+    def receipt_reconcile(self, source_agent: str = "") -> dict:
+        """IGRIS reconciliation: compare counts at each pipeline boundary.
+
+        Returns:
+            {
+                "source_agent": str,
+                "emitted": int,
+                "queued": int,
+                "wal_processed": int,
+                "persisted": int,
+                "gaps": [
+                    {"boundary": "queued→wal", "missing": 3, "event_ids": [...]},
+                ]
+            }
+        """
+        agent_filter = ""
+        params: tuple = ()
+        if source_agent:
+            agent_filter = "WHERE source_agent = ?"
+            params = (source_agent,)
+
+        with self._lock:
+            row = self.db.execute(
+                f"""SELECT
+                    COUNT(emitted_ns)   AS emitted,
+                    COUNT(queued_ns)    AS queued,
+                    COUNT(wal_ns)       AS wal_processed,
+                    COUNT(persisted_ns) AS persisted
+                FROM telemetry_receipts {agent_filter}""",
+                params,
+            ).fetchone()
+
+            result = {
+                "source_agent": source_agent or "all",
+                "emitted": row["emitted"],
+                "queued": row["queued"],
+                "wal_processed": row["wal_processed"],
+                "persisted": row["persisted"],
+                "gaps": [],
+            }
+
+            # Find events that were emitted but never reached persistence
+            if source_agent:
+                missing_sql = """
+                    SELECT event_id, source_agent,
+                        emitted_ns, queued_ns, wal_ns, persisted_ns
+                    FROM telemetry_receipts
+                    WHERE source_agent = ?
+                    AND persisted_ns IS NULL
+                    AND emitted_ns IS NOT NULL
+                    ORDER BY emitted_ns DESC LIMIT 100"""
+            else:
+                missing_sql = """
+                    SELECT event_id, source_agent,
+                        emitted_ns, queued_ns, wal_ns, persisted_ns
+                    FROM telemetry_receipts
+                    WHERE persisted_ns IS NULL
+                    AND emitted_ns IS NOT NULL
+                    ORDER BY emitted_ns DESC LIMIT 100"""
+            missing_rows = self.db.execute(missing_sql, params).fetchall()
+
+            if missing_rows:
+                # Classify gaps by which boundary they stopped at
+                emit_only = []
+                queue_only = []
+                wal_only = []
+                for r in missing_rows:
+                    eid = r["event_id"]
+                    if r["wal_ns"] and not r["persisted_ns"]:
+                        wal_only.append(eid)
+                    elif r["queued_ns"] and not r["wal_ns"]:
+                        queue_only.append(eid)
+                    elif r["emitted_ns"] and not r["queued_ns"]:
+                        emit_only.append(eid)
+
+                if emit_only:
+                    result["gaps"].append(
+                        {
+                            "boundary": "emit→queue",
+                            "missing": len(emit_only),
+                            "event_ids": emit_only[:10],
+                        }
+                    )
+                if queue_only:
+                    result["gaps"].append(
+                        {
+                            "boundary": "queue→wal",
+                            "missing": len(queue_only),
+                            "event_ids": queue_only[:10],
+                        }
+                    )
+                if wal_only:
+                    result["gaps"].append(
+                        {
+                            "boundary": "wal→persist",
+                            "missing": len(wal_only),
+                            "event_ids": wal_only[:10],
+                        }
+                    )
+
+            return result
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Process Genealogy — durable spawn chain
+    # ══════════════════════════════════════════════════════════════════════
+
+    def upsert_genealogy(self, entry: dict) -> None:
+        """Insert or update a process genealogy record.
+
+        Called by the Process agent each collection cycle (live processes)
+        and by the Realtime sensor on process exit events.
+
+        Args:
+            entry: dict with keys matching process_genealogy columns.
+                   Required: device_id, pid, first_seen_ns
+        """
+        now_ns = time.time_ns()
+        with self._lock:
+            self.db.execute(
+                """INSERT INTO process_genealogy
+                   (device_id, pid, ppid, name, exe, cmdline, username,
+                    parent_name, create_time, exit_time_ns, exit_status,
+                    code_signing, is_alive, first_seen_ns, last_seen_ns,
+                    process_guid)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(device_id, pid, first_seen_ns) DO UPDATE SET
+                    ppid        = COALESCE(excluded.ppid, ppid),
+                    name        = COALESCE(excluded.name, name),
+                    exe         = COALESCE(excluded.exe, exe),
+                    cmdline     = COALESCE(excluded.cmdline, cmdline),
+                    username    = COALESCE(excluded.username, username),
+                    parent_name = COALESCE(excluded.parent_name, parent_name),
+                    exit_time_ns = COALESCE(excluded.exit_time_ns, exit_time_ns),
+                    exit_status  = COALESCE(excluded.exit_status, exit_status),
+                    code_signing = COALESCE(excluded.code_signing, code_signing),
+                    is_alive     = excluded.is_alive,
+                    last_seen_ns = excluded.last_seen_ns,
+                    process_guid = COALESCE(excluded.process_guid, process_guid)
+                """,
+                (
+                    entry["device_id"],
+                    entry["pid"],
+                    entry.get("ppid"),
+                    entry.get("name"),
+                    entry.get("exe"),
+                    entry.get("cmdline"),
+                    entry.get("username"),
+                    entry.get("parent_name"),
+                    entry.get("create_time"),
+                    entry.get("exit_time_ns"),
+                    entry.get("exit_status"),
+                    entry.get("code_signing"),
+                    entry.get("is_alive", True),
+                    entry.get("first_seen_ns", now_ns),
+                    entry.get("last_seen_ns", now_ns),
+                    entry.get("process_guid"),
+                ),
+            )
+            if not self._batch_mode:
+                self.db.commit()
+
+    def mark_process_exited(
+        self,
+        device_id: str,
+        pid: int,
+        exit_time_ns: int,
+        exit_status: int | None = None,
+    ) -> None:
+        """Mark a process as exited in the genealogy table.
+
+        Called by the Realtime sensor on kqueue NOTE_EXIT events.
+        """
+        with self._lock:
+            self.db.execute(
+                """UPDATE process_genealogy
+                   SET is_alive = 0,
+                       exit_time_ns = ?,
+                       exit_status = COALESCE(?, exit_status),
+                       last_seen_ns = ?
+                   WHERE device_id = ? AND pid = ? AND is_alive = 1""",
+                (exit_time_ns, exit_status, exit_time_ns, device_id, pid),
+            )
+            if not self._batch_mode:
+                self.db.commit()
+
+    def sweep_stale_processes(
+        self,
+        device_id: str,
+        live_pids: set[int],
+        sweep_time_ns: int,
+    ) -> int:
+        """Mark processes as exited if they weren't seen in the latest collection.
+
+        Called after each polling cycle with the set of currently-alive PIDs.
+        Any process in the genealogy that is marked is_alive=1 but NOT in
+        live_pids is marked as exited.
+
+        Returns the number of processes marked as exited.
+        """
+        with self._lock:
+            # Get all alive processes for this device
+            rows = self.db.execute(
+                "SELECT pid FROM process_genealogy "
+                "WHERE device_id = ? AND is_alive = 1",
+                (device_id,),
+            ).fetchall()
+
+            stale_pids = [r["pid"] for r in rows if r["pid"] not in live_pids]
+            if not stale_pids:
+                return 0
+
+            # Batch update stale processes
+            self.db.executemany(
+                """UPDATE process_genealogy
+                   SET is_alive = 0,
+                       exit_time_ns = ?,
+                       last_seen_ns = ?
+                   WHERE device_id = ? AND pid = ? AND is_alive = 1""",
+                [(sweep_time_ns, sweep_time_ns, device_id, pid) for pid in stale_pids],
+            )
+            if not self._batch_mode:
+                self.db.commit()
+            return len(stale_pids)
+
+    def get_spawn_chain(
+        self, device_id: str, pid: int, max_depth: int = 10
+    ) -> list[dict]:
+        """Walk the genealogy tree upward from a PID to its root ancestor.
+
+        Returns a list from the target PID up to launchd (PID 1),
+        e.g. [{"pid": 4523, "name": "malware", ...}, {"pid": 4510, "name": "bash", ...}, ...]
+        """
+        chain = []
+        current_pid = pid
+        seen = set()
+        with self._lock:
+            for _ in range(max_depth):
+                if current_pid in seen or current_pid <= 0:
+                    break
+                seen.add(current_pid)
+                row = self.db.execute(
+                    """SELECT pid, ppid, name, exe, cmdline, username,
+                              parent_name, create_time, exit_time_ns,
+                              exit_status, code_signing, is_alive,
+                              first_seen_ns, process_guid
+                       FROM process_genealogy
+                       WHERE device_id = ? AND pid = ?
+                       ORDER BY first_seen_ns DESC LIMIT 1""",
+                    (device_id, current_pid),
+                ).fetchone()
+                if not row:
+                    break
+                chain.append(dict(row))
+                current_pid = row["ppid"] or 0
+        return chain
+
+    def get_children(self, device_id: str, pid: int) -> list[dict]:
+        """Get all child processes of a PID from the genealogy table."""
+        with self._lock:
+            rows = self.db.execute(
+                """SELECT pid, name, exe, cmdline, username, create_time,
+                          is_alive, exit_time_ns, process_guid
+                   FROM process_genealogy
+                   WHERE device_id = ? AND ppid = ?
+                   ORDER BY first_seen_ns DESC""",
+                (device_id, pid),
+            ).fetchall()
+            return [dict(r) for r in rows]
 
     def close(self) -> None:
         """Close database connection."""

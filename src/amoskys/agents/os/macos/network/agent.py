@@ -55,7 +55,7 @@ class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
             queue_adapter=queue_adapter,
         )
 
-        self.collector = MacOSNetworkCollector()
+        self.collector = MacOSNetworkCollector(use_nettop=True)
         self.register_probes(create_network_probes())
 
     def setup(self) -> bool:
@@ -77,10 +77,19 @@ class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
         return True
 
     # Socket states that represent real traffic (not just listening/binding)
-    _ACTIVE_STATES = frozenset({
-        "ESTABLISHED", "SYN_SENT", "SYN_RECEIVED", "FIN_WAIT_1",
-        "FIN_WAIT_2", "CLOSE_WAIT", "CLOSING", "LAST_ACK", "TIME_WAIT",
-    })
+    _ACTIVE_STATES = frozenset(
+        {
+            "ESTABLISHED",
+            "SYN_SENT",
+            "SYN_RECEIVED",
+            "FIN_WAIT_1",
+            "FIN_WAIT_2",
+            "CLOSE_WAIT",
+            "CLOSING",
+            "LAST_ACK",
+            "TIME_WAIT",
+        }
+    )
 
     def collect_data(self) -> Sequence[Any]:
         snapshot = self.collector.collect()
@@ -89,23 +98,60 @@ class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
         # LISTEN/bind sockets are socket inventory, not traffic flows.
         # They inflate flow_events (55% blank dst_ip) and mask real patterns.
         all_conns = snapshot.get("connections", [])
-        active_conns = [
-            c for c in all_conns if c.state in self._ACTIVE_STATES
-        ]
+        active_conns = [c for c in all_conns if c.state in self._ACTIVE_STATES]
+
+        # --- Tactical watch: emit extra detail for watched PIDs ---
+        watched_pids = self.active_watch_pids
+        watched_conns = []
+        if watched_pids:
+            watched_conns = [c for c in all_conns if str(c.pid) in watched_pids]
+            if watched_conns:
+                logger.info(
+                    "Tactical: %d connections from %d watched PIDs",
+                    len(watched_conns),
+                    len(watched_pids),
+                )
+
+        # Build PID→bandwidth lookup from nettop data (may be empty if nettop unavailable)
+        bw_by_pid = {bw.pid: bw for bw in snapshot.get("bandwidth", [])}
+
+        def _conn_to_obs_with_bw(conn):
+            obs = self._connection_to_obs(conn)
+            bw = bw_by_pid.get(conn.pid)
+            if bw:
+                obs["bytes_tx"] = str(bw.bytes_out)
+                obs["bytes_rx"] = str(bw.bytes_in)
+            return obs
 
         # Build OBSERVATION events for active connections only
         obs_events = self._make_observation_events(
             active_conns,
             domain="flow",
-            field_mapper=self._connection_to_obs,
+            field_mapper=_conn_to_obs_with_bw,
         )
+
+        # Add tactical observations for watched PIDs (all states, tagged)
+        tactical_events = []
+        for conn in watched_conns:
+            obs = self._connection_to_obs(conn)
+            obs["tactical_watch"] = "true"
+            obs["watch_reason"] = self._get_watch_reason("WATCH_PID", str(conn.pid))
+            tactical_events.append(
+                TelemetryEvent(
+                    event_type="obs_tactical_flow",
+                    severity=Severity.MEDIUM,
+                    probe_name="tactical_watch_network",
+                    data=obs,
+                    tags=["tactical_watch", "watch_pid"],
+                )
+            )
 
         # Run probes (detection events, unchanged)
         context = self._create_probe_context()
         context.shared_data = snapshot
         probe_events = self.run_probes(context)
 
-        all_events = obs_events + probe_events
+        all_events = obs_events + tactical_events + probe_events
         all_events.append(
             TelemetryEvent(
                 event_type="collection_metadata",
@@ -115,25 +161,39 @@ class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
                     "connection_count": snapshot["connection_count"],
                     "collection_time_ms": snapshot["collection_time_ms"],
                     "observation_events": len(obs_events),
+                    "tactical_events": len(tactical_events),
                     "probe_events": len(probe_events),
+                    "watched_pids": len(watched_pids),
                 },
             )
         )
 
         logger.info(
             "Network: %d connections (%d active, %d listen) in %.1fms, "
-            "%d observations, %d probe events",
+            "%d observations, %d tactical, %d probe events",
             snapshot["connection_count"],
             len(active_conns),
             len(all_conns) - len(active_conns),
             snapshot["collection_time_ms"],
             len(obs_events),
+            len(tactical_events),
             len(probe_events),
         )
 
         if all_events:
             return [self._events_to_telemetry(all_events)]
         return []
+
+    def _get_watch_reason(self, topic: str, value: str) -> str:
+        """Get the reason string for a watch directive."""
+        with self._watch_lock:
+            store = {
+                "WATCH_PID": self._watch_pids,
+                "WATCH_PATH": self._watch_paths,
+                "WATCH_DOMAIN": self._watch_domains,
+            }.get(topic, {})
+            directive = store.get(value)
+            return directive.reason if directive else "unknown"
 
     @staticmethod
     def _connection_to_obs(conn) -> Dict[str, Any]:

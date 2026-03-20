@@ -717,6 +717,133 @@ class SensitiveFileExfilProbe(MicroProbe):
 # =============================================================================
 
 
+# =============================================================================
+# 11. KeychainCLIAbuseProbe
+# =============================================================================
+
+
+class KeychainCLIAbuseProbe(MicroProbe):
+    """Detects macOS `security` CLI abuse for keychain credential theft.
+
+    The collector already flags keychain_cli processes as SuspiciousProcess.
+    This probe fires a proper MITRE-tagged event for T1555.001 when it sees
+    `security dump-keychain`, `find-generic-password`, etc.
+
+    MITRE: T1555.001 (Credentials from Password Stores: Keychain)
+    """
+
+    name = "keychain_cli_abuse"
+    description = (
+        "Detects security CLI commands that dump or query keychain credentials"
+    )
+    platforms = ["darwin"]
+    mitre_techniques = ["T1555.001"]
+    mitre_tactics = ["credential_access"]
+    scan_interval = 10.0
+    requires_fields = ["suspicious_processes"]
+
+    _ABUSE_PATTERNS = [
+        "dump-keychain",
+        "find-generic-password",
+        "find-internet-password",
+        "find-certificate",
+        "export-keychain",
+        "delete-keychain",
+        "find-key",
+    ]
+
+    _ALLOWLIST = {
+        "Keychain Access",
+        "SecurityAgent",
+        "securityd",
+        "trustd",
+        "codesign",
+        "xcodebuild",
+        "Xcode",
+    }
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        suspicious = context.shared_data.get("suspicious_processes", [])
+
+        for proc in suspicious:
+            if proc.category != "keychain_cli":
+                continue
+            if proc.name in self._ALLOWLIST:
+                continue
+
+            cmdline_str = (
+                " ".join(proc.cmdline)
+                if isinstance(proc.cmdline, list)
+                else str(proc.cmdline)
+            )
+            matched_pattern = "keychain_cli"
+            for pattern in self._ABUSE_PATTERNS:
+                if pattern in cmdline_str.lower():
+                    matched_pattern = pattern
+                    break
+
+            events.append(
+                self._create_event(
+                    event_type="keychain_cli_abuse",
+                    severity=Severity.HIGH,
+                    data={
+                        "pid": proc.pid,
+                        "process_name": proc.name,
+                        "exe": proc.exe,
+                        "cmdline": cmdline_str[:500],
+                        "abuse_pattern": matched_pattern,
+                        "process_guid": proc.process_guid,
+                    },
+                    confidence=0.92,
+                    correlation_id=proc.process_guid,
+                )
+            )
+
+        # Also check process_snapshot (dicts) for security CLI invocations
+        # that the collector might not have flagged
+        snapshots = context.shared_data.get("process_snapshot", [])
+        flagged_pids = {
+            proc.pid for proc in suspicious if proc.category == "keychain_cli"
+        }
+
+        for snap in snapshots:
+            pid = snap.get("pid", 0)
+            if pid in flagged_pids:
+                continue
+            name = snap.get("name", "")
+            if name in self._ALLOWLIST:
+                continue
+            cmdline = snap.get("cmdline", [])
+            cmdline_str = (
+                " ".join(cmdline) if isinstance(cmdline, list) else str(cmdline)
+            )
+            cmd_lower = cmdline_str.lower()
+
+            if "security " not in cmd_lower and "/security " not in cmd_lower:
+                continue
+
+            for pattern in self._ABUSE_PATTERNS:
+                if pattern in cmd_lower:
+                    events.append(
+                        self._create_event(
+                            event_type="keychain_cli_abuse",
+                            severity=Severity.HIGH,
+                            data={
+                                "pid": pid,
+                                "process_name": name,
+                                "exe": snap.get("exe", ""),
+                                "cmdline": cmdline_str[:500],
+                                "abuse_pattern": pattern,
+                            },
+                            confidence=0.88,
+                        )
+                    )
+                    break
+
+        return events
+
+
 def create_infostealer_guard_probes() -> List[MicroProbe]:
     """Create all macOS InfostealerGuard probes."""
     return [
@@ -730,4 +857,5 @@ def create_infostealer_guard_probes() -> List[MicroProbe]:
         ClipboardHarvestProbe(),
         ScreenCaptureAbuseProbe(),
         SensitiveFileExfilProbe(),
+        KeychainCLIAbuseProbe(),
     ]

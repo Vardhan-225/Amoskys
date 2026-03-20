@@ -184,6 +184,24 @@ def main():
     except ImportError as e:
         logger.warning("Cannot import NetworkSentinel: %s", e)
 
+    # Security Monitor — kernel audit, syscall analysis, CSR/SIP checks
+    try:
+        from amoskys.agents.os.macos.security_monitor.security_monitor_agent import (
+            MacOSSecurityMonitorAgent,
+        )
+
+        agents.append(("SecurityMonitor", MacOSSecurityMonitorAgent, {}))
+    except ImportError as e:
+        logger.warning("Cannot import SecurityMonitor: %s", e)
+
+    # Realtime Sensor — kqueue/FSEvents persistence drops, TCC, temp execution
+    try:
+        from amoskys.agents.os.macos.realtime_sensor.agent import MacOSRealtimeSensorAgent
+
+        agents.append(("RealtimeSensor", MacOSRealtimeSensorAgent, {}))
+    except ImportError as e:
+        logger.warning("Cannot import RealtimeSensor: %s", e)
+
     # macOS Shield — InfostealerGuard, QuarantineGuard, ProvenanceEngine
     if sys.platform == "darwin":
         try:

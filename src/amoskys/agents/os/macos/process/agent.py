@@ -140,13 +140,45 @@ class MacOSProcessAgent(MicroProbeAgentMixin, HardenedAgentBase):
             field_mapper=self._process_to_obs,
         )
 
+        # Step 2.5: Tactical watch — emit enriched detail for watched PIDs
+        watched_pids = self.active_watch_pids
+        tactical_events = []
+        if watched_pids:
+            for proc in snapshot["processes"]:
+                pid_str = str(proc.pid)
+                if pid_str in watched_pids:
+                    obs = self._process_to_obs(proc)
+                    obs["tactical_watch"] = "true"
+                    obs["watch_reason"] = self._get_watch_reason("WATCH_PID", pid_str)
+                    # Include child processes of watched PIDs
+                    children = [
+                        p for p in snapshot["processes"] if str(p.ppid) == pid_str
+                    ]
+                    obs["child_pids"] = ",".join(str(c.pid) for c in children)
+                    obs["child_count"] = str(len(children))
+                    tactical_events.append(
+                        TelemetryEvent(
+                            event_type="obs_tactical_process",
+                            severity=Severity.MEDIUM,
+                            probe_name="tactical_watch_process",
+                            data=obs,
+                            tags=["tactical_watch", "watch_pid"],
+                        )
+                    )
+            if tactical_events:
+                logger.info(
+                    "Tactical: %d processes under watch (%d watched PIDs)",
+                    len(tactical_events),
+                    len(watched_pids),
+                )
+
         # Step 3: Run probes (unchanged — detection events)
         context = self._create_probe_context()
         context.shared_data = snapshot
         probe_events = self.run_probes(context)
 
-        # Step 4: Combine observations + probe detections + metadata
-        all_events = obs_events + probe_events
+        # Step 4: Combine observations + tactical + probe detections + metadata
+        all_events = obs_events + tactical_events + probe_events
         all_events.append(
             TelemetryEvent(
                 event_type="collection_metadata",
@@ -158,17 +190,20 @@ class MacOSProcessAgent(MicroProbeAgentMixin, HardenedAgentBase):
                     "collection_time_ms": snapshot["collection_time_ms"],
                     "probe_events": len(probe_events),
                     "observation_events": len(obs_events),
+                    "tactical_events": len(tactical_events),
+                    "watched_pids": len(watched_pids),
                 },
             )
         )
 
         logger.info(
             "Collected: %d processes (%d own-user) in %.1fms, "
-            "%d observations, %d probe events",
+            "%d observations, %d tactical, %d probe events",
             snapshot["total_count"],
             snapshot["own_user_count"],
             snapshot["collection_time_ms"],
             len(obs_events),
+            len(tactical_events),
             len(probe_events),
         )
 
@@ -176,6 +211,17 @@ class MacOSProcessAgent(MicroProbeAgentMixin, HardenedAgentBase):
         if all_events:
             return [self._events_to_telemetry(all_events)]
         return []
+
+    def _get_watch_reason(self, topic: str, value: str) -> str:
+        """Get the reason string for a watch directive."""
+        with self._watch_lock:
+            store = {
+                "WATCH_PID": self._watch_pids,
+                "WATCH_PATH": self._watch_paths,
+                "WATCH_DOMAIN": self._watch_domains,
+            }.get(topic, {})
+            directive = store.get(value)
+            return directive.reason if directive else "unknown"
 
     # Coordination methods (init, health, alert, control, shutdown) inherited
     # from HardenedAgentBase — all 20 agents get them automatically.
@@ -198,6 +244,8 @@ class MacOSProcessAgent(MicroProbeAgentMixin, HardenedAgentBase):
             "memory_percent": (
                 str(proc.memory_percent) if proc.memory_percent is not None else ""
             ),
+            "num_threads": proc.num_threads if proc.num_threads is not None else 0,
+            "num_fds": proc.num_fds if proc.num_fds is not None else 0,
             "status": proc.status,
             "cwd": proc.cwd,
             "is_own_user": str(proc.is_own_user),

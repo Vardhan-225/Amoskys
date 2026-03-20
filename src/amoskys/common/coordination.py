@@ -1,4 +1,14 @@
-"""Cross-process coordination bus abstraction for agents and dashboard."""
+"""Cross-process coordination bus abstraction for agents and dashboard.
+
+Tactical topics (lateral nervous system):
+    CONTROL      — log level, interval override, watchlist directives, mode changes
+    HEALTH       — periodic agent heartbeat
+    ALERT        — detection alert from a probe
+    WATCH_PID    — "focus collection on this PID" (InfostealerGuard → Network/Process/DNS)
+    WATCH_PATH   — "focus collection on this file path" (FIM → other agents)
+    WATCH_DOMAIN — "focus collection on this domain" (DNS → Network)
+    CLEAR_WATCH  — remove a previously published watch directive
+"""
 
 from __future__ import annotations
 
@@ -9,7 +19,8 @@ import threading
 import time
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Callable, DefaultDict, Dict, List, Optional
 
 try:
@@ -26,6 +37,76 @@ except Exception:  # pragma: no cover - generated stubs may not exist yet
 logger = logging.getLogger(__name__)
 
 Handler = Callable[[str, Dict[str, Any]], None]
+
+
+# ---------------------------------------------------------------------------
+# Tactical topics — the lateral nervous system
+# ---------------------------------------------------------------------------
+
+
+class TacticalTopic(str, Enum):
+    """Named topics for the coordination bus."""
+
+    CONTROL = "CONTROL"
+    HEALTH = "HEALTH"
+    ALERT = "ALERT"
+    WATCH_PID = "WATCH_PID"
+    WATCH_PATH = "WATCH_PATH"
+    WATCH_DOMAIN = "WATCH_DOMAIN"
+    CLEAR_WATCH = "CLEAR_WATCH"
+
+
+class Urgency(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+@dataclass
+class WatchDirective:
+    """A tactical watch directive published on the coordination bus.
+
+    Agents publish these when they detect something worth coordinated attention.
+    Peer agents consume them to tighten collection around the target.
+    """
+
+    topic: str  # WATCH_PID | WATCH_PATH | WATCH_DOMAIN
+    value: str  # The PID, path, or domain to watch
+    reason: str  # Why — e.g. "T1555_credential_access"
+    urgency: str = "HIGH"
+    source_agent: str = ""
+    mitre_technique: str = ""
+    ttl_seconds: float = 300.0  # Auto-expire after 5 minutes by default
+    ts: float = field(default_factory=time.time)
+
+    def to_payload(self) -> Dict[str, Any]:
+        return {
+            "value": self.value,
+            "reason": self.reason,
+            "urgency": self.urgency,
+            "source_agent": self.source_agent,
+            "mitre_technique": self.mitre_technique,
+            "ttl_seconds": self.ttl_seconds,
+            "ts": self.ts,
+        }
+
+    @classmethod
+    def from_payload(cls, topic: str, payload: Dict[str, Any]) -> "WatchDirective":
+        return cls(
+            topic=topic,
+            value=str(payload.get("value", "")),
+            reason=str(payload.get("reason", "")),
+            urgency=str(payload.get("urgency", "HIGH")),
+            source_agent=str(payload.get("source_agent", "")),
+            mitre_technique=str(payload.get("mitre_technique", "")),
+            ttl_seconds=float(payload.get("ttl_seconds", 300.0)),
+            ts=float(payload.get("ts", time.time())),
+        )
+
+    @property
+    def expired(self) -> bool:
+        return (time.time() - self.ts) > self.ttl_seconds
 
 
 @dataclass

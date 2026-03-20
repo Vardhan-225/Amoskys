@@ -598,8 +598,7 @@ class Igris:
                     )
                 elif status == "cold_start":
                     logger.warning(
-                        "IGRIS → SOMA auto-refresh: cold start "
-                        "(%d events, need %d)",
+                        "IGRIS → SOMA auto-refresh: cold start " "(%d events, need %d)",
                         event_count,
                         brain.MIN_EVENTS_FOR_TRAINING,
                     )
@@ -609,13 +608,9 @@ class Igris:
                         result.get("validation", {}).get("reason", "unknown"),
                     )
                 else:
-                    logger.warning(
-                        "IGRIS → SOMA auto-refresh: %s", status
-                    )
+                    logger.warning("IGRIS → SOMA auto-refresh: %s", status)
             except Exception:
-                logger.error(
-                    "IGRIS → SOMA auto-refresh failed", exc_info=True
-                )
+                logger.error("IGRIS → SOMA auto-refresh failed", exc_info=True)
 
         t = threading.Thread(target=_train, name="igris-soma-refresh", daemon=True)
         t.start()

@@ -86,7 +86,9 @@ def verify_code_signing(exe_path: str) -> CodeSignResult:
         return _codesign_cache[exe_path]
 
     if not exe_path or not os.path.exists(exe_path):
-        result = CodeSignResult(path=exe_path, signed=False, valid=False, error="not_found")
+        result = CodeSignResult(
+            path=exe_path, signed=False, valid=False, error="not_found"
+        )
         _cache_result(exe_path, result)
         return result
 
@@ -94,7 +96,9 @@ def verify_code_signing(exe_path: str) -> CodeSignResult:
         # Step 1: Verify signature validity
         verify = subprocess.run(
             ["codesign", "--verify", "--deep", exe_path],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         is_valid = verify.returncode == 0
         is_signed = "not signed" not in verify.stderr
@@ -102,7 +106,9 @@ def verify_code_signing(exe_path: str) -> CodeSignResult:
         # Step 2: Get signing details
         detail = subprocess.run(
             ["codesign", "-dvvv", exe_path],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         detail_text = detail.stderr  # codesign outputs to stderr
 
@@ -146,9 +152,13 @@ def verify_code_signing(exe_path: str) -> CodeSignResult:
         )
 
     except subprocess.TimeoutExpired:
-        result = CodeSignResult(path=exe_path, signed=False, valid=False, error="timeout")
+        result = CodeSignResult(
+            path=exe_path, signed=False, valid=False, error="timeout"
+        )
     except FileNotFoundError:
-        result = CodeSignResult(path=exe_path, signed=False, valid=False, error="codesign_not_found")
+        result = CodeSignResult(
+            path=exe_path, signed=False, valid=False, error="codesign_not_found"
+        )
     except Exception as e:
         result = CodeSignResult(path=exe_path, signed=False, valid=False, error=str(e))
 
@@ -184,18 +194,20 @@ def batch_verify_processes(processes: List[Dict]) -> List[Dict]:
 
         cs = verify_code_signing(exe)
         if cs.trust_level in ("unsigned", "adhoc"):
-            results.append({
-                "pid": proc.get("pid", 0),
-                "name": proc.get("name", ""),
-                "exe": exe,
-                "trust_level": cs.trust_level,
-                "signed": cs.signed,
-                "valid": cs.valid,
-                "identity": cs.identity,
-                "team_id": cs.team_id,
-                "hardened_runtime": cs.hardened_runtime,
-                "risk_modifier": cs.risk_modifier,
-            })
+            results.append(
+                {
+                    "pid": proc.get("pid", 0),
+                    "name": proc.get("name", ""),
+                    "exe": exe,
+                    "trust_level": cs.trust_level,
+                    "signed": cs.signed,
+                    "valid": cs.valid,
+                    "identity": cs.identity,
+                    "team_id": cs.team_id,
+                    "hardened_runtime": cs.hardened_runtime,
+                    "risk_modifier": cs.risk_modifier,
+                }
+            )
 
     return results
 
@@ -205,18 +217,20 @@ def batch_verify_processes(processes: List[Dict]) -> List[Dict]:
 # ═══════════════════════════════════════════════════════════════════════════
 
 # TCC services that matter for security
-TCC_SENSITIVE_SERVICES = frozenset({
-    "kTCCServiceAccessibility",       # Input monitoring, keylogging
-    "kTCCServiceScreenCapture",       # Screen recording
-    "kTCCServiceMicrophone",          # Audio recording
-    "kTCCServiceCamera",              # Video recording
-    "kTCCServiceSystemPolicyAllFiles", # Full Disk Access
-    "kTCCServiceAddressBook",         # Contact exfiltration
-    "kTCCServiceCalendar",            # Calendar data
-    "kTCCServiceReminders",           # Reminders data
-    "kTCCServicePhotos",              # Photo library
-    "kTCCServicePostEvent",           # Input injection
-})
+TCC_SENSITIVE_SERVICES = frozenset(
+    {
+        "kTCCServiceAccessibility",  # Input monitoring, keylogging
+        "kTCCServiceScreenCapture",  # Screen recording
+        "kTCCServiceMicrophone",  # Audio recording
+        "kTCCServiceCamera",  # Video recording
+        "kTCCServiceSystemPolicyAllFiles",  # Full Disk Access
+        "kTCCServiceAddressBook",  # Contact exfiltration
+        "kTCCServiceCalendar",  # Calendar data
+        "kTCCServiceReminders",  # Reminders data
+        "kTCCServicePhotos",  # Photo library
+        "kTCCServicePostEvent",  # Input injection
+    }
+)
 
 
 def parse_tcc_log_entry(message: str) -> Optional[Dict[str, Any]]:
@@ -267,21 +281,35 @@ def parse_tcc_log_entry(message: str) -> Optional[Dict[str, Any]]:
 # ═══════════════════════════════════════════════════════════════════════════
 
 # Known-safe processes that legitimately access keychain
-KEYCHAIN_SAFE_PROCESSES = frozenset({
-    "securityd", "secd", "SecurityAgent", "TrustedPeersHelper",
-    "accountsd", "authd", "CloudKeychainProxy", "nsurlsessiond",
-    "Keychain Access", "Safari", "Mail", "Calendar",
-    "com.apple.Safari", "com.apple.mail",
-})
+KEYCHAIN_SAFE_PROCESSES = frozenset(
+    {
+        "securityd",
+        "secd",
+        "SecurityAgent",
+        "TrustedPeersHelper",
+        "accountsd",
+        "authd",
+        "CloudKeychainProxy",
+        "nsurlsessiond",
+        "Keychain Access",
+        "Safari",
+        "Mail",
+        "Calendar",
+        "com.apple.Safari",
+        "com.apple.mail",
+    }
+)
 
 # Suspicious keychain CLI arguments
-KEYCHAIN_THEFT_ARGS = frozenset({
-    "find-generic-password",
-    "find-internet-password",
-    "dump-keychain",
-    "export",
-    "find-certificate",
-})
+KEYCHAIN_THEFT_ARGS = frozenset(
+    {
+        "find-generic-password",
+        "find-internet-password",
+        "dump-keychain",
+        "export",
+        "find-certificate",
+    }
+)
 
 # Keychain file paths to monitor
 KEYCHAIN_PATHS = [
@@ -348,21 +376,29 @@ def check_keychain_file_access(
 # ═══════════════════════════════════════════════════════════════════════════
 
 # Dangerous DYLD environment variables
-DYLD_INJECTION_VARS = frozenset({
-    "DYLD_INSERT_LIBRARIES",
-    "DYLD_LIBRARY_PATH",
-    "DYLD_FRAMEWORK_PATH",
-    "DYLD_FALLBACK_LIBRARY_PATH",
-    "DYLD_FORCE_FLAT_NAMESPACE",
-})
+DYLD_INJECTION_VARS = frozenset(
+    {
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH",
+        "DYLD_FRAMEWORK_PATH",
+        "DYLD_FALLBACK_LIBRARY_PATH",
+        "DYLD_FORCE_FLAT_NAMESPACE",
+    }
+)
 
 # Processes known to legitimately use DYLD vars
-DYLD_SAFE_PROCESSES = frozenset({
-    "ollama",  # Historical — sets DYLD_LIBRARY_PATH for bundled libs
-    "Xcode", "lldb", "instruments",  # Developer tools
-    "python3", "python3.13",  # May use virtualenv paths
-    "ruby", "node",  # Interpreters
-})
+DYLD_SAFE_PROCESSES = frozenset(
+    {
+        "ollama",  # Historical — sets DYLD_LIBRARY_PATH for bundled libs
+        "Xcode",
+        "lldb",
+        "instruments",  # Developer tools
+        "python3",
+        "python3.13",  # May use virtualenv paths
+        "ruby",
+        "node",  # Interpreters
+    }
+)
 
 
 def check_dyld_injection(
@@ -426,6 +462,7 @@ def _get_process_environ(pid: int) -> Dict[str, str]:
     """Get environment variables for a process."""
     try:
         import psutil
+
         p = psutil.Process(pid)
         return p.environ()
     except Exception:
@@ -437,6 +474,7 @@ def scan_all_processes_for_dyld() -> List[Dict[str, Any]]:
     findings = []
     try:
         import psutil
+
         for proc in psutil.process_iter(["pid", "name", "exe", "environ"]):
             try:
                 info = proc.info

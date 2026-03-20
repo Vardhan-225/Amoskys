@@ -100,7 +100,8 @@ class ActionExecutor:
 
     def _init_db(self) -> None:
         conn = sqlite3.connect(self._db_path)
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS action_receipts (
                 receipt_id TEXT PRIMARY KEY,
                 action TEXT NOT NULL,
@@ -111,7 +112,8 @@ class ActionExecutor:
                 evidence_chain TEXT,
                 signature BLOB
             )
-        """)
+        """
+        )
         conn.commit()
         conn.close()
 
@@ -144,16 +146,19 @@ class ActionExecutor:
         if not self._bus:
             return
         event_type = (
-            EventType.ACTION_TAKEN if "success" in result.lower()
+            EventType.ACTION_TAKEN
+            if "success" in result.lower()
             else EventType.ACTION_FAILED
         )
-        self._bus.publish(SecurityEvent(
-            event_type=event_type,
-            source_agent="igris_actions",
-            severity=Severity.INFO,
-            payload={"action": action, "target": target, "result": result},
-            confidence=confidence,
-        ))
+        self._bus.publish(
+            SecurityEvent(
+                event_type=event_type,
+                source_agent="igris_actions",
+                severity=Severity.INFO,
+                payload={"action": action, "target": target, "result": result},
+                confidence=confidence,
+            )
+        )
 
     def _make_receipt(
         self,
@@ -189,22 +194,33 @@ class ActionExecutor:
 
         if self._dry_run:
             return self._make_receipt(
-                "trigger_collection", "all_agents",
-                "SUCCESS (dry run)", confidence,
+                "trigger_collection",
+                "all_agents",
+                "SUCCESS (dry run)",
+                confidence,
             )
 
         # Import here to avoid circular dependency
         try:
             result = subprocess.run(
                 ["python", "-m", "amoskys.launcher", "collect"],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
-            status = "SUCCESS" if result.returncode == 0 else f"FAILED: {result.stderr[:200]}"
+            status = (
+                "SUCCESS"
+                if result.returncode == 0
+                else f"FAILED: {result.stderr[:200]}"
+            )
         except Exception as e:
             status = f"FAILED: {e}"
 
         return self._make_receipt(
-            "trigger_collection", "all_agents", status, confidence,
+            "trigger_collection",
+            "all_agents",
+            status,
+            confidence,
         )
 
     def direct_watch(
@@ -228,17 +244,19 @@ class ActionExecutor:
         _check_confidence("direct_watch", confidence, TIER_LOW)
 
         if self._bus:
-            self._bus.publish(SecurityEvent(
-                event_type=EventType.DIRECTED_WATCH,
-                source_agent="igris_orchestrator",
-                severity=Severity.INFO,
-                payload={
-                    "target_agent": agent_id,
-                    "target_type": target_type,
-                    "target_value": target_value,
-                    "duration_s": duration_s,
-                },
-            ))
+            self._bus.publish(
+                SecurityEvent(
+                    event_type=EventType.DIRECTED_WATCH,
+                    source_agent="igris_orchestrator",
+                    severity=Severity.INFO,
+                    payload={
+                        "target_agent": agent_id,
+                        "target_type": target_type,
+                        "target_value": target_value,
+                        "duration_s": duration_s,
+                    },
+                )
+            )
 
         return self._make_receipt(
             "direct_watch",
@@ -278,7 +296,10 @@ class ActionExecutor:
             status = f"FAILED: {e}"
 
         return self._make_receipt(
-            "promote_signal", signal_id, status, confidence,
+            "promote_signal",
+            signal_id,
+            status,
+            confidence,
         )
 
     def dismiss_signal(
@@ -308,7 +329,10 @@ class ActionExecutor:
             status = f"FAILED: {e}"
 
         return self._make_receipt(
-            "dismiss_signal", signal_id, status, confidence,
+            "dismiss_signal",
+            signal_id,
+            status,
+            confidence,
         )
 
     def add_threat_indicator(
@@ -336,8 +360,12 @@ class ActionExecutor:
                    (type, value, source, confidence, first_seen, last_seen)
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 (
-                    indicator_type, value, source, confidence,
-                    time.time_ns(), time.time_ns(),
+                    indicator_type,
+                    value,
+                    source,
+                    confidence,
+                    time.time_ns(),
+                    time.time_ns(),
                 ),
             )
             conn.commit()
@@ -349,7 +377,8 @@ class ActionExecutor:
         return self._make_receipt(
             "add_threat_indicator",
             f"{indicator_type}:{value}",
-            status, confidence,
+            status,
+            confidence,
         )
 
     # ═══════════════════════════════════════════════════════════
@@ -374,7 +403,10 @@ class ActionExecutor:
 
         if self._dry_run:
             return self._make_receipt(
-                "block_ip", ip, f"SUCCESS (dry run, {duration_s}s)", confidence,
+                "block_ip",
+                ip,
+                f"SUCCESS (dry run, {duration_s}s)",
+                confidence,
             )
 
         try:
@@ -385,13 +417,16 @@ class ActionExecutor:
             # Append rule (create file if needed)
             os.makedirs(os.path.dirname(anchor_path), exist_ok=True)
             with open(anchor_path, "a") as f:
-                f.write(f"# Blocked by IGRIS at {time.strftime('%Y-%m-%d %H:%M:%S')} for {duration_s}s\n")
+                f.write(
+                    f"# Blocked by IGRIS at {time.strftime('%Y-%m-%d %H:%M:%S')} for {duration_s}s\n"
+                )
                 f.write(rule)
 
             # Reload pf rules
             subprocess.run(
                 ["pfctl", "-a", "amoskys_blocks", "-f", anchor_path],
-                capture_output=True, timeout=10,
+                capture_output=True,
+                timeout=10,
             )
             status = f"SUCCESS: blocked for {duration_s}s"
         except Exception as e:
@@ -412,7 +447,10 @@ class ActionExecutor:
 
         if self._dry_run:
             return self._make_receipt(
-                "block_domain", domain, "SUCCESS (dry run)", confidence,
+                "block_domain",
+                domain,
+                "SUCCESS (dry run)",
+                confidence,
             )
 
         try:
@@ -440,15 +478,18 @@ class ActionExecutor:
 
         # Publish stop directive to mesh
         if self._bus:
-            self._bus.publish(SecurityEvent(
-                event_type=EventType.AGENT_STOPPED,
-                source_agent="igris_orchestrator",
-                severity=Severity.INFO,
-                payload={"agent_id": agent_id, "reason": reason},
-            ))
+            self._bus.publish(
+                SecurityEvent(
+                    event_type=EventType.AGENT_STOPPED,
+                    source_agent="igris_orchestrator",
+                    severity=Severity.INFO,
+                    payload={"agent_id": agent_id, "reason": reason},
+                )
+            )
 
         return self._make_receipt(
-            "stop_agent", agent_id,
+            "stop_agent",
+            agent_id,
             f"SUCCESS: stop directive published ({reason})",
             confidence,
         )
@@ -465,15 +506,19 @@ class ActionExecutor:
         _check_confidence("start_agent", confidence, TIER_HIGH)
 
         if self._bus:
-            self._bus.publish(SecurityEvent(
-                event_type=EventType.AGENT_STARTED,
-                source_agent="igris_orchestrator",
-                severity=Severity.INFO,
-                payload={"agent_id": agent_id},
-            ))
+            self._bus.publish(
+                SecurityEvent(
+                    event_type=EventType.AGENT_STARTED,
+                    source_agent="igris_orchestrator",
+                    severity=Severity.INFO,
+                    payload={"agent_id": agent_id},
+                )
+            )
 
         return self._make_receipt(
-            "start_agent", agent_id, "SUCCESS: start directive published",
+            "start_agent",
+            agent_id,
+            "SUCCESS: start directive published",
             confidence,
         )
 
@@ -500,8 +545,11 @@ class ActionExecutor:
 
         if self._dry_run:
             return self._make_receipt(
-                "kill_process", str(pid), "SUCCESS (dry run)",
-                confidence, evidence,
+                "kill_process",
+                str(pid),
+                "SUCCESS (dry run)",
+                confidence,
+                evidence,
             )
 
         try:
@@ -524,7 +572,11 @@ class ActionExecutor:
             status = f"FAILED: {e}"
 
         return self._make_receipt(
-            "kill_process", str(pid), status, confidence, evidence,
+            "kill_process",
+            str(pid),
+            status,
+            confidence,
+            evidence,
         )
 
     def quarantine_binary(
@@ -547,17 +599,22 @@ class ActionExecutor:
 
         if self._dry_run:
             return self._make_receipt(
-                "quarantine_binary", binary_path, "SUCCESS (dry run)",
-                confidence, evidence,
+                "quarantine_binary",
+                binary_path,
+                "SUCCESS (dry run)",
+                confidence,
+                evidence,
             )
 
         try:
             src = Path(binary_path)
             if not src.exists():
                 return self._make_receipt(
-                    "quarantine_binary", binary_path,
+                    "quarantine_binary",
+                    binary_path,
                     f"FAILED: {binary_path} not found",
-                    confidence, evidence,
+                    confidence,
+                    evidence,
                 )
 
             # Compute hash before moving
@@ -587,7 +644,11 @@ class ActionExecutor:
             status = f"FAILED: {e}"
 
         return self._make_receipt(
-            "quarantine_binary", binary_path, status, confidence, evidence,
+            "quarantine_binary",
+            binary_path,
+            status,
+            confidence,
+            evidence,
         )
 
     # ═══════════════════════════════════════════════════════════
@@ -605,8 +666,15 @@ class ActionExecutor:
                     "type": "object",
                     "properties": {
                         "pid": {"type": "integer", "description": "Process ID to kill"},
-                        "confidence": {"type": "number", "description": "Confidence score (must be >= 0.9)"},
-                        "evidence": {"type": "array", "items": {"type": "string"}, "description": "Event IDs justifying this action"},
+                        "confidence": {
+                            "type": "number",
+                            "description": "Confidence score (must be >= 0.9)",
+                        },
+                        "evidence": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Event IDs justifying this action",
+                        },
                     },
                     "required": ["pid", "confidence"],
                 },
@@ -617,7 +685,10 @@ class ActionExecutor:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "binary_path": {"type": "string", "description": "Full path to the binary"},
+                        "binary_path": {
+                            "type": "string",
+                            "description": "Full path to the binary",
+                        },
                         "confidence": {"type": "number"},
                         "evidence": {"type": "array", "items": {"type": "string"}},
                     },
@@ -631,7 +702,11 @@ class ActionExecutor:
                     "type": "object",
                     "properties": {
                         "ip": {"type": "string", "description": "IP address to block"},
-                        "duration_s": {"type": "integer", "description": "Block duration in seconds (default 3600)", "default": 3600},
+                        "duration_s": {
+                            "type": "integer",
+                            "description": "Block duration in seconds (default 3600)",
+                            "default": 3600,
+                        },
                         "confidence": {"type": "number"},
                     },
                     "required": ["ip", "confidence"],
@@ -665,8 +740,14 @@ class ActionExecutor:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "agent_id": {"type": "string", "description": "Agent to direct (dns, network, process, fim)"},
-                        "target_type": {"type": "string", "enum": ["pid", "ip", "domain", "path"]},
+                        "agent_id": {
+                            "type": "string",
+                            "description": "Agent to direct (dns, network, process, fim)",
+                        },
+                        "target_type": {
+                            "type": "string",
+                            "enum": ["pid", "ip", "domain", "path"],
+                        },
                         "target_value": {"type": "string"},
                         "duration_s": {"type": "integer", "default": 300},
                         "confidence": {"type": "number", "default": 0.3},
@@ -706,7 +787,10 @@ class ActionExecutor:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "indicator_type": {"type": "string", "enum": ["ip", "domain", "hash", "url"]},
+                        "indicator_type": {
+                            "type": "string",
+                            "enum": ["ip", "domain", "hash", "url"],
+                        },
                         "value": {"type": "string"},
                         "source": {"type": "string", "default": "igris_analysis"},
                         "confidence": {"type": "number", "default": 0.5},

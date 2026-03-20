@@ -158,23 +158,21 @@ class NetworkSentinelAgent(MicroProbeAgentMixin, HardenedAgentBase):
         # Build protobuf events
         proto_events = []
 
-        # Collection summary metric
-        proto_events.append(
-            telemetry_pb2.TelemetryEvent(
-                event_id=f"sentinel_collection_{timestamp_ns}",
-                event_type="METRIC",
-                severity="INFO",
-                event_timestamp_ns=timestamp_ns,
-                source_component="network_sentinel_collector",
-                tags=["network_sentinel", "metric"],
-                metric_data=telemetry_pb2.MetricData(
-                    metric_name="sentinel_transactions_scanned",
-                    metric_type="GAUGE",
-                    numeric_value=float(len(http_transactions)),
-                    unit="transactions",
-                ),
-            )
+        # Collection heartbeat — emitted as OBSERVATION so WAL routes it to
+        # observation_events. Proves the agent is alive even when no attacks fire.
+        heartbeat = telemetry_pb2.TelemetryEvent(
+            event_id=f"sentinel_collection_{timestamp_ns}",
+            event_type="OBSERVATION",
+            severity="INFO",
+            event_timestamp_ns=timestamp_ns,
+            source_component="network_sentinel_collector",
+            tags=["network_sentinel", "heartbeat"],
         )
+        heartbeat.attributes["_domain"] = "network_sentinel"
+        heartbeat.attributes["http_transactions"] = str(len(http_transactions))
+        heartbeat.attributes["connections"] = str(len(connections))
+        heartbeat.attributes["detections"] = str(len(events))
+        proto_events.append(heartbeat)
 
         # Severity/risk mapping
         _severity_risk = {

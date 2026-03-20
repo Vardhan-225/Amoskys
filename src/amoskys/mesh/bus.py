@@ -50,7 +50,8 @@ class MeshBus:
     def _init_db(self) -> None:
         """Create mesh_events table if it doesn't exist."""
         conn = sqlite3.connect(self._db_path)
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS mesh_events (
                 event_id TEXT PRIMARY KEY,
                 event_type TEXT NOT NULL,
@@ -66,19 +67,26 @@ class MeshBus:
                 confidence REAL DEFAULT 0.0,
                 processed INTEGER DEFAULT 0
             )
-        """)
-        conn.execute("""
+        """
+        )
+        conn.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_mesh_events_type
             ON mesh_events(event_type)
-        """)
-        conn.execute("""
+        """
+        )
+        conn.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_mesh_events_ts
             ON mesh_events(timestamp_ns)
-        """)
-        conn.execute("""
+        """
+        )
+        conn.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_mesh_events_severity
             ON mesh_events(severity)
-        """)
+        """
+        )
         conn.commit()
         conn.close()
 
@@ -200,9 +208,7 @@ class MeshBus:
             params.append(event_type.value)
         if severity_min:
             severities = [
-                s.value
-                for s in Severity
-                if s.numeric >= severity_min.numeric
+                s.value for s in Severity if s.numeric >= severity_min.numeric
             ]
             query += f" AND severity IN ({','.join('?' * len(severities))})"
             params.extend(severities)
@@ -220,20 +226,22 @@ class MeshBus:
                 payload = json.loads(row["payload"]) if row["payload"] else {}
             except (json.JSONDecodeError, TypeError):
                 pass
-            events.append(SecurityEvent(
-                event_id=row["event_id"],
-                event_type=EventType(row["event_type"]),
-                source_agent=row["source_agent"],
-                severity=Severity(row["severity"]),
-                payload=payload,
-                timestamp_ns=row["timestamp_ns"],
-                related_pid=row["related_pid"],
-                related_ip=row["related_ip"],
-                related_domain=row["related_domain"],
-                related_path=row["related_path"],
-                mitre_technique=row["mitre_technique"],
-                confidence=row["confidence"] or 0.0,
-            ))
+            events.append(
+                SecurityEvent(
+                    event_id=row["event_id"],
+                    event_type=EventType(row["event_type"]),
+                    source_agent=row["source_agent"],
+                    severity=Severity(row["severity"]),
+                    payload=payload,
+                    timestamp_ns=row["timestamp_ns"],
+                    related_pid=row["related_pid"],
+                    related_ip=row["related_ip"],
+                    related_domain=row["related_domain"],
+                    related_path=row["related_path"],
+                    mitre_technique=row["mitre_technique"],
+                    confidence=row["confidence"] or 0.0,
+                )
+            )
         return events
 
     def get_event_counts(self, seconds: int = 300) -> Dict[str, int]:
@@ -257,6 +265,4 @@ class MeshBus:
     def shutdown(self) -> None:
         """Gracefully shut down the bus."""
         self._running = False
-        logger.info(
-            "MeshBus shutdown. Total events dispatched: %d", self._event_count
-        )
+        logger.info("MeshBus shutdown. Total events dispatched: %d", self._event_count)

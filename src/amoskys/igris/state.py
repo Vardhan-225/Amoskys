@@ -133,9 +133,7 @@ class IgrisState:
         # Signal summary
         # active_signal_count = persistent conditions in signal_index,
         # NOT just this-cycle emissions (which would show 0 during cooldown)
-        self._state["active_signal_count"] = len(
-            self._state.get("signal_index", {})
-        )
+        self._state["active_signal_count"] = len(self._state.get("signal_index", {}))
         self._state["signals_emitted_this_cycle"] = len(signals_emitted)
         self._state["signal_count_since_start"] = self._state.get(
             "signal_count_since_start", 0

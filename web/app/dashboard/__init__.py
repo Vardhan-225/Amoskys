@@ -9,6 +9,7 @@ an intelligent neural interface.
 
 import importlib
 import logging
+import sqlite3
 
 logger = logging.getLogger("web.app.dashboard")
 import json
@@ -652,11 +653,7 @@ def live_threats():
 
         source_ip = ""
         if isinstance(indicators, dict):
-            source_ip = (
-                indicators.get("source_ip")
-                or indicators.get("src_ip")
-                or ""
-            )
+            source_ip = indicators.get("source_ip") or indicators.get("src_ip") or ""
             # Extract first remote IP from public_connections if present
             if not indicators.get("dst_ip") and not indicators.get("remote_ip"):
                 conns = indicators.get("public_connections")
@@ -2193,18 +2190,13 @@ def start_entire_pipeline():
                 results["started"] += 1
             else:
                 results["failed"] += 1
-        results["phase"].append(
-            {"name": "infrastructure", "agents": infra_ids}
-        )
+        results["phase"].append({"name": "infrastructure", "agents": infra_ids})
 
         # Brief pause for infra to initialize
         time.sleep(2)
 
         # Phase 2: All security agents
-        security_ids = [
-            aid for aid in AGENT_CATALOG
-            if aid not in infra_ids
-        ]
+        security_ids = [aid for aid in AGENT_CATALOG if aid not in infra_ids]
         for agent_id in security_ids:
             cfg = AGENT_CATALOG[agent_id]
             # Skip agents not for this platform
@@ -2221,9 +2213,7 @@ def start_entire_pipeline():
                 results["started"] += 1
             else:
                 results["failed"] += 1
-        results["phase"].append(
-            {"name": "security_agents", "agents": security_ids}
-        )
+        results["phase"].append({"name": "security_agents", "agents": security_ids})
 
         return jsonify(
             {
@@ -2398,18 +2388,20 @@ def list_incidents():
 
     store = get_telemetry_store()
     if store is None:
-        return jsonify({
-            "status": "success",
-            "incidents": [],
-            "count": 0,
-            "total": 0,
-            "page": 1,
-            "per_page": 20,
-            "total_pages": 0,
-            "status_counts": {},
-            "severity_counts": {},
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "incidents": [],
+                "count": 0,
+                "total": 0,
+                "page": 1,
+                "per_page": 20,
+                "total_pages": 0,
+                "status_counts": {},
+                "severity_counts": {},
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
     status_filter = request.args.get("status") or None
     try:
@@ -2426,11 +2418,10 @@ def list_incidents():
     page = min(page, total_pages)
     offset = (page - 1) * per_page
 
-    incidents = store.get_incidents(
-        status=status_filter, limit=per_page, offset=offset
-    )
+    incidents = store.get_incidents(status=status_filter, limit=per_page, offset=offset)
     status_counts = store.get_incidents_status_counts()
-    severity_counts = store.get_incidents_severity_counts()
+    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    severity_counts.update(store.get_incidents_severity_counts() or {})
 
     return jsonify(
         {
@@ -2731,7 +2722,11 @@ def correlate_events():
                 # Score correlation strength
                 score = 0
                 evt_device = evt.get("device_id", "")
-                evt_indicators = evt.get("indicators", {}) if isinstance(evt.get("indicators"), dict) else {}
+                evt_indicators = (
+                    evt.get("indicators", {})
+                    if isinstance(evt.get("indicators"), dict)
+                    else {}
+                )
                 evt_ip = (
                     evt_indicators.get("source_ip")
                     or evt_indicators.get("src_ip")
@@ -3305,9 +3300,7 @@ def agents_deep_overview():
         broken = sum(1 for p in probe_list if p["status"] == "BROKEN")
         disabled = sum(1 for p in probe_list if p["status"] == "DISABLED")
 
-        total_probes += sum(
-            1 for p in probe_list if p["status"] not in ("SKIPPED",)
-        )
+        total_probes += sum(1 for p in probe_list if p["status"] not in ("SKIPPED",))
         total_events += agent_event_count
         total_mitre.update(agent_mitre)
 
@@ -4576,9 +4569,7 @@ def explain_event(event_id):
     try:
         # Try specified table first, then fall back through all tables
         tables_to_try = [_TABLE_MAP.get(source_table, "security_events")]
-        tables_to_try += [
-            t for t in _TABLE_MAP.values() if t != tables_to_try[0]
-        ]
+        tables_to_try += [t for t in _TABLE_MAP.values() if t != tables_to_try[0]]
 
         row = None
         used_table = None
@@ -5084,6 +5075,7 @@ def _get_igris_chat():
     if _igris_chat_instance is None:
         try:
             from flask import current_app
+
             from amoskys.igris.chat import IgrisChat
 
             action_executor = current_app.config.get("ACTION_EXECUTOR")
@@ -5108,19 +5100,26 @@ def igris_chat():
 
     chat = _get_igris_chat()
     if chat is None:
-        return jsonify({
-            "status": "error",
-            "message": "IGRIS chat unavailable. Check ANTHROPIC_API_KEY.",
-        }), 503
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "IGRIS chat unavailable. Check ANTHROPIC_API_KEY.",
+                }
+            ),
+            503,
+        )
 
     try:
         response = chat.chat(message)
-        return jsonify({
-            "status": "success",
-            "response": response,
-            "history_length": len(chat.get_history()),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "response": response,
+                "history_length": len(chat.get_history()),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
     except Exception as e:
         logger.error("IGRIS chat error: %s", e)
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -5143,18 +5142,25 @@ def igris_proactive_brief():
     """IGRIS proactive security briefing — it tells you what matters."""
     chat = _get_igris_chat()
     if chat is None:
-        return jsonify({
-            "status": "error",
-            "message": "IGRIS unavailable. Check ANTHROPIC_API_KEY.",
-        }), 503
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "IGRIS unavailable. Check ANTHROPIC_API_KEY.",
+                }
+            ),
+            503,
+        )
 
     try:
         response = chat.proactive_brief()
-        return jsonify({
-            "status": "success",
-            "response": response,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "response": response,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
     except Exception as e:
         logger.error("IGRIS proactive brief failed: %s", e)
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -5167,14 +5173,20 @@ def igris_chat_backend():
     import os
 
     claude_ok = bool(os.environ.get("ANTHROPIC_API_KEY", ""))
-    return jsonify({
-        "status": "success",
-        "current": "claude",
-        "model": os.environ.get("IGRIS_MODEL", "claude-sonnet-4-20250514"),
-        "backends": {
-            "claude": {"available": claude_ok, "label": "Claude API", "model": "claude-sonnet-4-20250514"},
-        },
-    })
+    return jsonify(
+        {
+            "status": "success",
+            "current": "claude",
+            "model": os.environ.get("IGRIS_MODEL", "claude-sonnet-4-20250514"),
+            "backends": {
+                "claude": {
+                    "available": claude_ok,
+                    "label": "Claude API",
+                    "model": "claude-sonnet-4-20250514",
+                },
+            },
+        }
+    )
 
 
 @dashboard_bp.route("/api/igris/chat/history")
@@ -5561,6 +5573,157 @@ def _get_store():
         return None
 
 
+def _parse_json_list(raw):
+    """Best-effort parse of a JSON list field."""
+    if raw in (None, "", b""):
+        return []
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, tuple):
+        return list(raw)
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else raw
+    except Exception:
+        return []
+    return value if isinstance(value, list) else []
+
+
+def _normalize_replay_event(row, source="security"):
+    """Flatten an event row into the contract expected by timeline replay."""
+    event = dict(row)
+    indicators = _parse_indicators(event.get("indicators"))
+    event["indicators"] = indicators
+    event["mitre_techniques"] = _parse_mitre(event.get("mitre_techniques"))
+    event["source"] = source
+    event.setdefault("event_type", event.get("event_category") or source)
+    event.setdefault(
+        "agent_id",
+        event.get("collection_agent")
+        or event.get("agent_id")
+        or event.get("device_id"),
+    )
+
+    indicator_aliases = {
+        "source_ip": ("source_ip", "src_ip"),
+        "dest_ip": ("dest_ip", "dst_ip", "remote_ip"),
+        "process_name": ("process_name", "process", "exe"),
+        "file_path": ("file_path", "path", "target_path"),
+    }
+    for target_key, aliases in indicator_aliases.items():
+        if event.get(target_key):
+            continue
+        for alias in aliases:
+            value = indicators.get(alias)
+            if value:
+                event[target_key] = value
+                break
+
+    return event
+
+
+def _expand_signal_event_ids(store, signal_ids):
+    """Resolve signal IDs to contributing numeric security event row IDs."""
+    if not signal_ids:
+        return []
+
+    placeholders = ",".join("?" for _ in signal_ids)
+    try:
+        rows = store.db.execute(
+            f"SELECT contributing_event_ids FROM signals WHERE signal_id IN ({placeholders})",
+            list(signal_ids),
+        ).fetchall()
+    except Exception:
+        return []
+
+    event_ids = []
+    for row in rows:
+        payload = (
+            row[0]
+            if not isinstance(row, sqlite3.Row)
+            else row["contributing_event_ids"]
+        )
+        for event_id in _parse_json_list(payload):
+            if isinstance(event_id, int):
+                event_ids.append(event_id)
+            elif isinstance(event_id, str) and event_id.isdigit():
+                event_ids.append(int(event_id))
+    return event_ids
+
+
+def _load_incident_replay_events(store, incident):
+    """Resolve linked incident evidence into flat replay events."""
+    source_event_ids = _parse_json_list(incident.get("source_event_ids"))
+    signal_ids = _parse_json_list(incident.get("signal_ids"))
+
+    numeric_ids = []
+    string_event_ids = []
+
+    for event_ref in source_event_ids:
+        if isinstance(event_ref, int):
+            numeric_ids.append(event_ref)
+        elif isinstance(event_ref, str):
+            if event_ref.isdigit():
+                numeric_ids.append(int(event_ref))
+            elif event_ref:
+                string_event_ids.append(event_ref)
+
+    numeric_ids.extend(_expand_signal_event_ids(store, signal_ids))
+
+    clauses = []
+    params = []
+    if numeric_ids:
+        unique_numeric_ids = list(dict.fromkeys(numeric_ids))
+        clauses.append(f"id IN ({','.join('?' for _ in unique_numeric_ids)})")
+        params.extend(unique_numeric_ids)
+    if string_event_ids:
+        unique_string_ids = list(dict.fromkeys(string_event_ids))
+        clauses.append(f"event_id IN ({','.join('?' for _ in unique_string_ids)})")
+        params.extend(unique_string_ids)
+
+    if not clauses:
+        return []
+
+    try:
+        cursor = store.db.execute(
+            "SELECT * FROM security_events WHERE "
+            + " OR ".join(clauses)
+            + " ORDER BY timestamp_ns ASC",
+            params,
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+    except Exception:
+        logger.exception("Failed to resolve incident-linked security events")
+        return []
+
+    deduped = []
+    seen = set()
+    for row in rows:
+        key = row.get("id") or row.get("event_id")
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(_normalize_replay_event(row, source="security"))
+    return deduped
+
+
+def _flatten_incident_timeline_entries(entries):
+    """Flatten TelemetryStore incident timeline entries for replay."""
+    flattened = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        data = entry.get("data") if isinstance(entry.get("data"), dict) else {}
+        if data.get("_collapsed"):
+            continue
+        base = dict(data)
+        if "timestamp_ns" not in base and entry.get("ts") is not None:
+            base["timestamp_ns"] = entry.get("ts")
+        flattened.append(
+            _normalize_replay_event(base, source=str(entry.get("source") or "unknown"))
+        )
+    return flattened
+
+
 # ── Device Posture ──
 
 
@@ -5677,6 +5840,11 @@ def incident_timeline(incident_id):
     incident = store.get_incident(incident_id)
     if not incident:
         return jsonify({"status": "error", "message": "Incident not found"}), 404
+
+    evidence_events = _load_incident_replay_events(store, incident)
+    if evidence_events:
+        return jsonify(evidence_events)
+
     device_id = incident.get("device_id") or incident.get("assignee", "")
     # Use incident time window or default to last 24h
     end_ns = int(time.time() * 1e9)
@@ -5719,7 +5887,7 @@ def incident_timeline(incident_id):
     if not device_id:
         return jsonify([])
     timeline = store.build_incident_timeline(device_id, start_ns, end_ns)
-    return jsonify(timeline)
+    return jsonify(_flatten_incident_timeline_entries(timeline))
 
 
 # ── DNS Intelligence ──

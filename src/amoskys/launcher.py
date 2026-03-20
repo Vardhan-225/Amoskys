@@ -915,28 +915,27 @@ def do_install(_args: argparse.Namespace) -> None:
 
     python = sys.executable
     cwd = str(PROJECT_ROOT)
-    src = str(PROJECT_ROOT / "src")
 
     services = [
-        ("com.amoskys.eventbus", [python, "-m", "amoskys.eventbus.server"]),
-        ("com.amoskys.wal-processor", [python, "-m", "amoskys.storage.wal_processor"]),
+        ("com.amoskys.eventbus", ["-m", "amoskys.eventbus.server"]),
+        ("com.amoskys.wal-processor", ["-m", "amoskys.storage.wal_processor"]),
         (
             "com.amoskys.agent-fleet",
-            [
-                python,
-                "-m",
-                "amoskys.launcher",
-                "start",
-                "--agents-only",
-                "--skip-preflight",
-            ],
+            ["-m", "amoskys.launcher", "start", "--agents-only", "--skip-preflight"],
         ),
-        ("com.amoskys.dashboard", [python, "-m", "web.app"]),
+        ("com.amoskys.dashboard", ["-m", "web.app"]),
+        (
+            "com.amoskys.daemon",
+            ["-m", "amoskys.daemon", "--interval", "15", "--respond"],
+        ),
     ]
 
-    for label, prog_args in services:
+    wrapper = str(PROJECT_ROOT / "scripts" / "launchd_wrapper.sh")
+
+    for label, module_args in services:
         plist_path = launch_agents_dir / f"{label}.plist"
-        _write_launchd_plist(plist_path, label, prog_args, cwd, src)
+        prog_args = ["/bin/bash", wrapper, cwd, python] + module_args
+        _write_launchd_plist(plist_path, label, prog_args, cwd)
         print(f"  [OK] {plist_path}")
 
     print("\nLoad with:")
@@ -948,7 +947,6 @@ def _write_launchd_plist(
     label: str,
     prog_args: list,
     cwd: str,
-    src: str,
 ) -> None:
     """Write a single launchd plist file."""
     args_xml = "\n        ".join(f"<string>{a}</string>" for a in prog_args)
@@ -964,17 +962,15 @@ def _write_launchd_plist(
     <array>
         {args_xml}
     </array>
-    <key>WorkingDirectory</key>
-    <string>{cwd}</string>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PYTHONPATH</key>
-        <string>{src}:{cwd}</string>
-    </dict>
     <key>KeepAlive</key>
-    <true/>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
     <key>StandardOutPath</key>
     <string>{cwd}/logs/{log_name}.log</string>
     <key>StandardErrorPath</key>

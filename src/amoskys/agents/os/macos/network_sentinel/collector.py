@@ -72,7 +72,8 @@ class AccessLogCollector:
             self.log_paths = [str(p) for p in log_paths]
         else:
             # Auto-discover AMOSKYS log locations
-            project_root = Path(__file__).resolve().parents[5]
+            # collector.py is 6 levels deep: src/amoskys/agents/os/macos/network_sentinel/
+            project_root = Path(__file__).resolve().parents[6]
             self.log_paths = [
                 str(project_root / "logs" / "amoskys_web.log"),
                 str(project_root / "logs" / "dashboard_attack.log"),

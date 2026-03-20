@@ -102,6 +102,7 @@ class TestThreatEndpoints:
                 timestamp_ns INTEGER,
                 timestamp_dt TEXT,
                 device_id TEXT,
+                collection_agent TEXT,
                 event_category TEXT,
                 event_action TEXT,
                 risk_score REAL,
@@ -129,6 +130,7 @@ class TestThreatEndpoints:
                 1_700_000_000_000_000_000,
                 "2026-03-14T09:28:44.143938+00:00",
                 "flowagent-001",
+                "flowagent-001",
                 "network_anomaly",
                 "detected",
                 0.35,
@@ -144,6 +146,7 @@ class TestThreatEndpoints:
                 1_700_000_000_500_000_000,
                 "2026-03-14T09:28:44.207876+00:00",
                 "flowagent-001",
+                "flowagent-001",
                 "network_anomaly",
                 "detected",
                 0.35,
@@ -156,7 +159,7 @@ class TestThreatEndpoints:
             ),
         ]
         db.executemany(
-            "INSERT INTO security_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO security_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             rows,
         )
 
@@ -176,6 +179,189 @@ class TestThreatEndpoints:
         assert data["seed_event"]["indicators"]["source_ip"] == "192.168.1.100"
         assert data["total_correlated"] == 1
         assert data["correlated_events"][0]["id"] == 37
+
+    def test_incident_timeline_prefers_linked_security_event_ids(
+        self, client, monkeypatch
+    ):
+        """Incident timeline resolves linked security_events by string event_id."""
+        import json
+
+        from app.dashboard import telemetry_bridge
+
+        db = sqlite3.connect(":memory:")
+        db.row_factory = sqlite3.Row
+        db.execute(
+            """CREATE TABLE security_events (
+                id INTEGER PRIMARY KEY,
+                timestamp_ns INTEGER,
+                timestamp_dt TEXT,
+                device_id TEXT,
+                event_category TEXT,
+                event_action TEXT,
+                risk_score REAL,
+                confidence REAL,
+                mitre_techniques TEXT,
+                final_classification TEXT,
+                description TEXT,
+                indicators TEXT,
+                collection_agent TEXT,
+                event_id TEXT
+            )"""
+        )
+        db.execute(
+            """INSERT INTO security_events VALUES (
+                101, 1700000000000000000, '2026-03-17T20:00:00+00:00',
+                'Akashs-MacBook-Air.local', 'credential_access', 'detected',
+                0.95, 0.9, '["T1555"]', 'malicious', 'Credential access detected',
+                '{"source_ip":"198.51.100.10","process_name":"evil"}',
+                'SECURITY', 'evt-credential-1'
+            )"""
+        )
+
+        class FakeStore:
+            def __init__(self, conn):
+                self.db = conn
+
+            def get_incident(self, incident_id):
+                return {
+                    "id": incident_id,
+                    "source_event_ids": json.dumps(["evt-credential-1"]),
+                    "signal_ids": None,
+                    "title": "Incident on Akashs-MacBook-Air.local",
+                    "description": "",
+                    "created_at": "2026-03-17T20:05:00+00:00",
+                }
+
+            def build_incident_timeline(self, device_id, start_ns, end_ns):
+                raise AssertionError("broad timeline fallback should not be used")
+
+        monkeypatch.setattr(
+            telemetry_bridge, "get_telemetry_store", lambda: FakeStore(db)
+        )
+
+        response = client.get("/dashboard/api/incidents/44/timeline")
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["id"] == 101
+        assert data[0]["event_id"] == "evt-credential-1"
+        assert data[0]["event_category"] == "credential_access"
+        assert data[0]["indicators"]["process_name"] == "evil"
+        assert data[0]["source_ip"] == "198.51.100.10"
+        assert "data" not in data[0]
+
+    def test_incident_timeline_expands_linked_signals(self, client, monkeypatch):
+        """Incident timeline expands signal IDs into contributing security events."""
+        import json
+
+        from app.dashboard import telemetry_bridge
+
+        db = sqlite3.connect(":memory:")
+        db.row_factory = sqlite3.Row
+        db.execute(
+            """CREATE TABLE security_events (
+                id INTEGER PRIMARY KEY,
+                timestamp_ns INTEGER,
+                timestamp_dt TEXT,
+                device_id TEXT,
+                event_category TEXT,
+                event_action TEXT,
+                risk_score REAL,
+                confidence REAL,
+                mitre_techniques TEXT,
+                final_classification TEXT,
+                description TEXT,
+                indicators TEXT,
+                collection_agent TEXT,
+                event_id TEXT
+            )"""
+        )
+        db.execute(
+            """CREATE TABLE signals (
+                id INTEGER PRIMARY KEY,
+                signal_id TEXT,
+                contributing_event_ids TEXT
+            )"""
+        )
+        db.execute(
+            """INSERT INTO security_events VALUES (
+                202, 1700000001000000000, '2026-03-17T20:01:00+00:00',
+                'Akashs-MacBook-Air.local', 'kill_chain', 'detected',
+                0.88, 0.8, '["TA0006"]', 'suspicious', 'Kill chain progression',
+                '{}', 'SECURITY', 'evt-kill-chain-1'
+            )"""
+        )
+        db.execute(
+            "INSERT INTO signals VALUES (1, 'SIG-123', ?)",
+            (json.dumps([202]),),
+        )
+
+        class FakeStore:
+            def __init__(self, conn):
+                self.db = conn
+
+            def get_incident(self, incident_id):
+                return {
+                    "id": incident_id,
+                    "source_event_ids": json.dumps([]),
+                    "signal_ids": json.dumps(["SIG-123"]),
+                    "title": "Signal-promoted incident",
+                    "description": "",
+                    "created_at": "2026-03-17T20:05:00+00:00",
+                }
+
+            def build_incident_timeline(self, device_id, start_ns, end_ns):
+                raise AssertionError(
+                    "signal-backed incident should resolve linked evidence"
+                )
+
+        monkeypatch.setattr(
+            telemetry_bridge, "get_telemetry_store", lambda: FakeStore(db)
+        )
+
+        response = client.get("/dashboard/api/incidents/45/timeline")
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert len(data) == 1
+        assert data[0]["id"] == 202
+        assert data[0]["event_category"] == "kill_chain"
+
+    def test_list_incidents_normalizes_missing_severity_buckets(
+        self, client, monkeypatch
+    ):
+        """Incidents API always returns all severity buckets."""
+        from app.dashboard import telemetry_bridge
+
+        class FakeStore:
+            def get_incidents_count(self, status=None):
+                return 1
+
+            def get_incidents(self, status=None, limit=50, offset=0):
+                return [
+                    {"id": 1, "title": "test", "severity": "critical", "status": "open"}
+                ]
+
+            def get_incidents_status_counts(self):
+                return {"open": 1}
+
+            def get_incidents_severity_counts(self):
+                return {"critical": 1, "high": 2}
+
+        monkeypatch.setattr(
+            telemetry_bridge, "get_telemetry_store", lambda: FakeStore()
+        )
+
+        response = client.get("/dashboard/api/incidents")
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["severity_counts"]["critical"] == 1
+        assert data["severity_counts"]["high"] == 2
+        assert data["severity_counts"]["medium"] == 0
+        assert data["severity_counts"]["low"] == 0
 
 
 class TestProbeHealthEndpoint:

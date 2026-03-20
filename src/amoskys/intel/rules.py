@@ -1399,8 +1399,23 @@ def _annotate_incident_weights(
 
     incident.agent_weights = agent_w
 
-    # Compute weighted confidence as average of contributing agent weights
-    if agent_w:
-        incident.weighted_confidence = sum(agent_w.values()) / len(agent_w)
+    # Compute weighted confidence from AMRDR weights + event risk scores
+    # AMRDR weight = agent reliability, risk_score = signal strength
+    amrdr_conf = sum(agent_w.values()) / len(agent_w) if agent_w else 1.0
+
+    # Blend in signal strength from contributing events
+    risk_scores = []
+    for event in events:
+        if event.event_id in incident_event_ids and event.security_event:
+            r = event.security_event.get("risk_score", 0)
+            try:
+                risk_scores.append(float(r))
+            except (TypeError, ValueError):
+                pass
+
+    if risk_scores:
+        avg_risk = sum(risk_scores) / len(risk_scores)
+        # 70% AMRDR reliability + 30% signal strength
+        incident.weighted_confidence = round(0.7 * amrdr_conf + 0.3 * avg_risk, 3)
     else:
-        incident.weighted_confidence = 1.0
+        incident.weighted_confidence = amrdr_conf

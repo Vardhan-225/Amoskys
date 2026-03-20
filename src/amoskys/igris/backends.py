@@ -76,7 +76,9 @@ class ClaudeBackend:
 
     def __init__(self, api_key: str = None, model: str = None):
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
-        self._model = model or os.environ.get("IGRIS_MODEL", "") or _DEFAULT_CLAUDE_MODEL
+        self._model = (
+            model or os.environ.get("IGRIS_MODEL", "") or _DEFAULT_CLAUDE_MODEL
+        )
         self._client = None
 
     def _get_client(self):
@@ -118,11 +120,13 @@ class ClaudeBackend:
             if block.type == "text":
                 text_parts.append(block.text)
             elif block.type == "tool_use":
-                tool_calls.append({
-                    "id": block.id,
-                    "name": block.name,
-                    "input": block.input,
-                })
+                tool_calls.append(
+                    {
+                        "id": block.id,
+                        "name": block.name,
+                        "input": block.input,
+                    }
+                )
 
         return CompletionResult(
             text="\n".join(text_parts),
