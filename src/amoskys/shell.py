@@ -29,6 +29,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from amoskys.igris.shell_commands import handle_igris_command
+
 # ── Paths ────────────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -691,6 +693,13 @@ HELP_TEXT = f"""
 
   {C.CYAN}igris{C.RESET}               IGRIS tactical briefing (what is the minister thinking?)
   {C.CYAN}status{C.RESET}              System status (agents, queues)
+  {C.CYAN}igris{C.RESET}               IGRIS tactical briefing
+  {C.CYAN}igris chain{C.RESET}         Kill chain state and progression
+  {C.CYAN}igris why{C.RESET} [target]   Why a target is being watched
+  {C.CYAN}igris inspect{C.RESET} <a> <t> On-demand investigation
+  {C.CYAN}igris memory{C.RESET}        What IGRIS remembers
+  {C.CYAN}igris novel{C.RESET}         SOMA: novel patterns
+
   {C.CYAN}help{C.RESET}                This help
   {C.CYAN}quit{C.RESET}                Exit shell
 
