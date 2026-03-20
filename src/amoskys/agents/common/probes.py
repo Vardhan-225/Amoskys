@@ -868,6 +868,9 @@ class MicroProbeAgentMixin:
         enabled_count = counts["REAL"] + counts["DEGRADED"]
         return enabled_count > 0
 
+    # Re-validate probe contracts every 30 cycles (~5 min at 10s intervals)
+    _CONTRACT_REVALIDATION_INTERVAL = 30
+
     def scan_all_probes(self) -> List[TelemetryEvent]:
         """Execute all enabled probes and collect events.
 
@@ -876,6 +879,28 @@ class MicroProbeAgentMixin:
         """
         all_events: List[TelemetryEvent] = []
         context = self._create_probe_context()
+
+        # Periodic contract re-validation: catch collectors that start
+        # returning empty/degraded data mid-run (not just at startup)
+        cycle = getattr(self, "_scan_cycle_count", 0) + 1
+        self._scan_cycle_count = cycle
+        if cycle % self._CONTRACT_REVALIDATION_INTERVAL == 0:
+            for probe in self._probes:
+                if probe.enabled:
+                    new_readiness = probe.validate_contract(context)
+                    old_status = (
+                        probe.readiness.status if probe.readiness else "UNKNOWN"
+                    )
+                    if new_readiness.status != old_status:
+                        logger.warning(
+                            "Probe %s contract changed: %s -> %s (fields: %s)",
+                            probe.name,
+                            old_status,
+                            new_readiness.status,
+                            new_readiness.missing_fields
+                            or new_readiness.degraded_fields,
+                        )
+                    probe.readiness = new_readiness
 
         for probe in self._probes:
             if not probe.enabled:

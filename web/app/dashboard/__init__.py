@@ -555,12 +555,46 @@ def health_summary():
         key=lambda t: _THREAT_ORDER.get(t, 0),
     ).upper()
 
+    # ── Data freshness — how stale is the data? ──
+    data_age_seconds = None
+    last_event_time = None
+    try:
+        telemetry_db = project_root / "data" / "telemetry.db"
+        if telemetry_db.exists():
+            conn = sqlite3.connect(str(telemetry_db), timeout=2)
+            row = conn.execute(
+                "SELECT MAX(event_timestamp_ns) FROM security_events"
+            ).fetchone()
+            if row and row[0]:
+                last_event_time = row[0]
+            if not last_event_time:
+                row = conn.execute(
+                    "SELECT MAX(timestamp_ns) FROM observation_events"
+                ).fetchone()
+                if row and row[0]:
+                    last_event_time = row[0]
+            conn.close()
+            if last_event_time:
+                data_age_seconds = round(
+                    time.time() - (last_event_time / 1_000_000_000), 1
+                )
+    except Exception:
+        pass
+
     # ── Health score — operational health (are agents running and collecting?) ──
     infra_ok = agents_online > 0 or events_24h > 0
     agent_score = (agents_online / max(agents_total, 1)) * 40
     infra_score = 40 if infra_ok else 0
     activity_score = 20 if events_24h > 0 else 10
     health_score = int(agent_score + infra_score + activity_score)
+
+    freshness = "live"
+    if data_age_seconds is None:
+        freshness = "no_data"
+    elif data_age_seconds > 300:
+        freshness = "stale"
+    elif data_age_seconds > 60:
+        freshness = "delayed"
 
     return jsonify(
         {
@@ -586,6 +620,15 @@ def health_summary():
                 if health_score >= 70
                 else "degraded" if health_score >= 40 else "critical"
             ),
+            "data_freshness": {
+                "age_seconds": data_age_seconds,
+                "status": freshness,
+                "label": (
+                    f"data as of {int(data_age_seconds)}s ago"
+                    if data_age_seconds is not None
+                    else "no data yet"
+                ),
+            },
         }
     )
 

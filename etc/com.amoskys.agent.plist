@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.amoskys.agent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Volumes/Akash_Lab/Amoskys/scripts/launchd_start.sh</string>
+    </array>
+
+    <!-- Start at login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart on crash (non-zero exit), stay down on clean stop -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- Minimum 10s between restarts (prevents crash loops) -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Volumes/Akash_Lab/Amoskys</string>
+
+    <!-- Environment -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Volumes/Akash_Lab/Amoskys/src</string>
+        <key>PATH</key>
+        <string>/Volumes/Akash_Lab/Amoskys/amoskys-venv/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <!-- Logging -->
+    <key>StandardOutPath</key>
+    <string>/Volumes/Akash_Lab/Amoskys/logs/launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Volumes/Akash_Lab/Amoskys/logs/launchd.err.log</string>
+
+    <!-- File descriptor limit -->
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>4096</integer>
+    </dict>
+
+    <!-- Graceful shutdown timeout -->
+    <key>ExitTimeOut</key>
+    <integer>30</integer>
+
+    <key>ProcessType</key>
+    <string>Standard</string>
+</dict>
+</plist>

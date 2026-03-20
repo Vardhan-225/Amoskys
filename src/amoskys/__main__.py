@@ -30,6 +30,7 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -178,13 +179,40 @@ def cmd_start(args):
         print()
         print("AMOSKYS is running.")
         if not args.no_dashboard:
-            print(
-                f"Dashboard: http://localhost:{dash_env.get('FLASK_PORT', '5003')}/dashboard/cortex"
+            port = (
+                dash_env.get("FLASK_PORT", "5003") if not args.no_dashboard else "N/A"
             )
+            print(f"Dashboard: http://localhost:{port}/dashboard/cortex")
         print(f"Logs: {LOG_DIR}/")
         print()
-        print("Use 'amoskys status' to check health.")
-        print("Use 'amoskys stop' to shut down.")
+
+        if args.foreground:
+            # Foreground mode: block until SIGTERM (for launchd/systemd)
+            print("Running in foreground (SIGTERM to stop)...")
+            stop_event = threading.Event()
+
+            def _handle_term(signum, frame):
+                print("\nReceived SIGTERM — shutting down...")
+                stop_event.set()
+
+            signal.signal(signal.SIGTERM, _handle_term)
+            signal.signal(signal.SIGINT, _handle_term)
+
+            stop_event.wait()
+
+            # Clean shutdown of children
+            for name, proc in processes.items():
+                if proc.poll() is None:
+                    proc.terminate()
+            for name, proc in processes.items():
+                try:
+                    proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+            print("AMOSKYS stopped.")
+        else:
+            print("Use 'amoskys status' to check health.")
+            print("Use 'amoskys stop' to shut down.")
     else:
         print()
         print("Some components failed to start. Check logs:")
@@ -428,6 +456,11 @@ def main():
     start_parser = subparsers.add_parser("start", help="Start the detection engine")
     start_parser.add_argument(
         "--no-dashboard", action="store_true", help="Start without the web dashboard"
+    )
+    start_parser.add_argument(
+        "--foreground",
+        action="store_true",
+        help="Run in foreground (for launchd/systemd — blocks until SIGTERM)",
     )
 
     # stop
