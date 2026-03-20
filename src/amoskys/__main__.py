@@ -439,6 +439,9 @@ def main():
     # collect
     subparsers.add_parser("collect", help="Run one collection cycle")
 
+    # shell
+    subparsers.add_parser("shell", help="Interactive security copilot")
+
     # diagnose
     subparsers.add_parser("diagnose", help="Run 10-layer pipeline diagnostic")
 
@@ -448,14 +451,22 @@ def main():
     args = parser.parse_args()
 
     if not args.command:
-        parser.print_help()
-        return 0
+        # No command = launch interactive shell
+        from amoskys.shell import main as shell_main
+
+        return shell_main()
+
+    def cmd_shell(args):
+        from amoskys.shell import main as shell_main
+
+        return shell_main()
 
     commands = {
         "start": cmd_start,
         "stop": cmd_stop,
         "status": cmd_status,
         "collect": cmd_collect,
+        "shell": cmd_shell,
         "diagnose": cmd_diagnose,
         "version": cmd_version,
     }
