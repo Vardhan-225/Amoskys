@@ -337,8 +337,8 @@ class MITREEnricher:
                 if rule_fn(event):
                     added.append(technique_id)
                     existing.add(technique_id)
-            except Exception:
-                pass  # Rule evaluation failure — skip silently
+            except Exception as e:
+                logger.debug("MITRE rule %s evaluation failed: %s", technique_id, e)
 
         if added:
             techniques = list(event.get("mitre_techniques", []))

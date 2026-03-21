@@ -65,7 +65,9 @@ class SomaBrain:
 
     MIN_EVENTS_FOR_TRAINING = 200
     TRAINING_SAMPLE_SIZE = 50_000
-    HIGH_TRUST_LABEL_SOURCES = frozenset({"incident", "ioc_strong", "manual"})
+    HIGH_TRUST_LABEL_SOURCES = frozenset(
+        {"incident", "ioc_strong", "manual", "sigma", "convergent", "baseline_safe"}
+    )
     # Suspicious tokens for feature extraction (G3)
     _SUSPICIOUS_TOKENS = frozenset(
         {
@@ -228,7 +230,11 @@ class SomaBrain:
         if_metrics = self._train_isolation_forest(X)
         metrics["isolation_forest"] = if_metrics
 
-        # 4. Train GBC (G2: ONLY with high-trust labels)
+        # 4a. Auto-label events and persist labels to DB
+        label_count = self._auto_label_events(df)
+        metrics["auto_labeled"] = label_count
+
+        # 4b. Train GBC (G2: ONLY with high-trust labels)
         y_high_trust = self._get_high_trust_labels(df)
         if y_high_trust is not None and len(y_high_trust) >= 50:
             # Filter X to only rows with high-trust labels
@@ -474,14 +480,15 @@ class SomaBrain:
                 if oc in existing_cols:
                     select_cols.append(oc)
 
+            # Training includes degraded events — a degraded probe that
+            # detected 'curl evil|bash' is still a real detection.  The ML
+            # features handle missing data (default 0) and quality_state is
+            # exposed as a feature so the model can learn to weight it.
+            # Only truly broken events (quality_state='broken') are excluded.
             where_clauses = []
             if "quality_state" in existing_cols:
                 where_clauses.append(
-                    "LOWER(COALESCE(quality_state, 'valid')) = 'valid'"
-                )
-            if "training_exclude" in existing_cols:
-                where_clauses.append(
-                    "COALESCE(CAST(training_exclude AS TEXT), '0') IN ('0', 'false', 'FALSE', 'False')"
+                    "LOWER(COALESCE(quality_state, 'valid')) != 'broken'"
                 )
             where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
@@ -911,6 +918,53 @@ class SomaBrain:
             return 0
         return val.count("/") + val.count("\\")
 
+    # ── Auto-labeling pipeline ─────────────────────────────────────
+
+    def _auto_label_events(self, df) -> int:
+        """Compute and write label_source for unlabeled events in telemetry.db.
+
+        Runs _determine_label_source on each event and writes non-heuristic
+        labels back to the DB so they persist across training cycles.
+        Returns count of newly labeled events.
+        """
+        if "event_id" not in df.columns:
+            return 0
+
+        updates = []
+        for _, row in df.iterrows():
+            existing = row.get("label_source", "")
+            if existing and existing != "heuristic":
+                continue  # Already has a high-trust label
+            source = self._determine_label_source(row)
+            if source != "heuristic":
+                eid = row.get("event_id", "")
+                if eid:
+                    updates.append((source, eid))
+
+        if not updates:
+            return 0
+
+        try:
+            conn = sqlite3.connect(self._db_path, check_same_thread=False)
+            conn.executemany(
+                "UPDATE security_events SET label_source = ? WHERE event_id = ?",
+                updates,
+            )
+            conn.commit()
+            conn.close()
+            logger.info(
+                "SomaBrain: auto-labeled %d events (%s)",
+                len(updates),
+                ", ".join(
+                    f"{src}={sum(1 for s, _ in updates if s == src)}"
+                    for src in sorted({s for s, _ in updates})
+                ),
+            )
+        except Exception:
+            logger.warning("SomaBrain: auto-label write failed", exc_info=True)
+
+        return len(updates)
+
     # ── High-trust label extraction (G2) ─────────────────────────────
 
     def _get_high_trust_labels(self, df):
@@ -962,9 +1016,15 @@ class SomaBrain:
     def _determine_label_source(row) -> str:
         """Determine if an event has a high-trust label source.
 
-        - ioc_strong: has threat intel match with high confidence
-        - incident: was part of an incident (requires_investigation + high risk)
+        Sources (in priority order):
+        - ioc_strong: threat intel match with high confidence
+        - sigma: matched a Sigma detection rule
+        - convergent: multiple independent signals agree (IF anomaly + MITRE + risk)
+        - incident: requires_investigation + high risk
+        - baseline_safe: seen many times, consistently low risk
+        - heuristic: single-score classification (NOT used for training)
         """
+        # 1. IOC match — strongest signal
         indicators = row.get("indicators", "")
         if isinstance(indicators, str) and indicators and indicators != "null":
             try:
@@ -975,10 +1035,38 @@ class SomaBrain:
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        # Events that require investigation with high risk score are
-        # likely incident-confirmed
-        if row.get("requires_investigation") and row.get("risk_score", 0) >= 8.0:
+        # 2. Sigma rule match — detection-as-code, high trust
+        sigma_ids = row.get("sigma_rule_ids", "")
+        if isinstance(sigma_ids, str) and sigma_ids not in ("", "null", "[]"):
+            try:
+                ids = (
+                    json.loads(sigma_ids) if sigma_ids.startswith("[") else [sigma_ids]
+                )
+                if ids:
+                    return "sigma"
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # 3. Multi-signal convergence — independent signals agreeing
+        #    MITRE technique + high risk + requires_investigation = convergent
+        mitre = row.get("mitre_techniques", "")
+        has_mitre = isinstance(mitre, str) and mitre not in ("", "null", "[]")
+        risk = row.get("risk_score", 0) or 0
+        requires_inv = row.get("requires_investigation", 0)
+
+        if has_mitre and risk >= 0.7 and requires_inv:
+            return "convergent"
+
+        # 4. Incident — requires investigation with meaningful risk
+        #    (risk_score is 0.0-1.0 scale, not 0-10)
+        if requires_inv and risk >= 0.8:
             return "incident"
+
+        # 5. Known-safe baseline — seen many times with consistently low risk
+        #    Only available when SOMA observation data is joined
+        seen_count = row.get("seen_count", 0) or 0
+        if seen_count >= 50 and risk < 0.2:
+            return "baseline_safe"
 
         return "heuristic"
 

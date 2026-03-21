@@ -5,6 +5,7 @@ Exposes application metrics in Prometheus format for scraping.
 Runs on a separate port (9102) to avoid auth requirements.
 """
 
+import logging
 import os
 import threading
 import time
@@ -12,6 +13,8 @@ from functools import wraps
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from flask import Blueprint, Response, g, request
+
+logger = logging.getLogger(__name__)
 
 try:
     from prometheus_client import (

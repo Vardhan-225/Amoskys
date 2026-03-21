@@ -9,12 +9,15 @@ IGRIS is calm — same condition does not spam every 60 seconds.
 """
 
 import json
+import logging
 import os
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Resolve project root from this file's location (src/amoskys/igris/state.py)
 _PROJECT_ROOT = str(Path(__file__).resolve().parents[3])
@@ -72,8 +75,8 @@ class IgrisState:
                 loaded = json.load(f)
             if isinstance(loaded, dict):
                 self._state.update(loaded)
-        except (json.JSONDecodeError, OSError):
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("Failed to load IGRIS state from %s: %s", self._state_path, e)
         return self._state
 
     def save(self) -> None:
@@ -85,11 +88,12 @@ class IgrisState:
             with os.fdopen(fd, "w") as f:
                 json.dump(self._state, f, indent=2, default=str)
             os.replace(tmp_path, self._state_path)
-        except OSError:
+        except OSError as e:
+            logger.warning("Failed to save IGRIS state to %s: %s", self._state_path, e)
             try:
                 os.unlink(tmp_path)
             except (OSError, UnboundLocalError):
-                pass
+                pass  # cleanup best-effort
 
     def mark_started(self) -> None:
         """Mark IGRIS as started."""

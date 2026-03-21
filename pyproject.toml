@@ -181,6 +181,13 @@ package-dir = {"" = "src"}
 where = ["src"]
 include = ["amoskys*"]
 
+[tool.setuptools.package-data]
+amoskys = [
+    "proto/*.py",
+    "detection/sigma/**/*.yml",
+    "detection/yara/**/*.yar",
+]
+
 # Development Configuration
 [tool.black]
 line-length = 88

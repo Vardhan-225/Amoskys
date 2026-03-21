@@ -9,9 +9,12 @@ Endpoints:
 """
 
 import json
+import logging
 import os
 
 from flask import Blueprint, jsonify, request
+
+logger = logging.getLogger(__name__)
 
 soma_brain_bp = Blueprint("soma_brain", __name__, url_prefix="/soma/brain")
 
@@ -30,16 +33,16 @@ def brain_status():
         try:
             with open(metrics_path) as f:
                 metrics = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning("Failed to load brain metrics from %s: %s", metrics_path, e)
 
     calibration = {}
     if os.path.exists(cal_path):
         try:
             with open(cal_path) as f:
                 calibration = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning("Failed to load calibration from %s: %s", cal_path, e)
 
     calibrator_adjustments = 0
     if os.path.exists(log_path):
@@ -47,8 +50,8 @@ def brain_status():
             with open(log_path) as f:
                 log = json.load(f)
                 calibrator_adjustments = len(log) if isinstance(log, list) else 0
-        except (json.JSONDecodeError, IOError):
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning("Failed to load calibrator log from %s: %s", log_path, e)
 
     # Check which models exist
     models_available = {
@@ -103,8 +106,8 @@ def brain_features():
             import joblib
 
             all_features = joblib.load(fc_path)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to load feature columns from %s: %s", fc_path, e)
 
     return jsonify(
         {

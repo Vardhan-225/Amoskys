@@ -211,8 +211,8 @@ def main() -> int:
                                                 attributes=dict(ev.attributes),
                                             )
                                         )
-                                    except Exception:
-                                        pass
+                                    except Exception as e:
+                                        logger.warning("Failed to insert security event: %s", e)
 
                             elif ev.event_type == "OBSERVATION":
                                 try:
@@ -231,12 +231,13 @@ def main() -> int:
                                             ),
                                         }
                                     )
-                                except Exception:
-                                    pass
+                                except Exception as e:
+                                    logger.warning("Failed to insert observation event: %s", e)
 
                         processed_ids.append(row_id)
                         total += 1
-                    except Exception:
+                    except Exception as e:
+                        logger.warning("Skipping corrupted queue row %s: %s", row_id, e)
                         processed_ids.append(row_id)  # Skip corrupted
 
                 # Delete processed rows
@@ -248,8 +249,8 @@ def main() -> int:
                     )
                     conn.commit()
                 conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Queue processing failed for %s: %s", qdb, e)
         return total
 
     logger.info("Direct queue reader enabled (single-machine mode)")

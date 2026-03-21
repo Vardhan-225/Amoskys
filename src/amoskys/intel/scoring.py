@@ -824,8 +824,8 @@ class ScoringEngine:
             logger.info(
                 "ModelScorerAdapter initialized (ML scoring available when models trained)"
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("ModelScorerAdapter unavailable: %s", e)
 
     def _load_baselines(self) -> None:
         """Load persisted device baselines from disk."""
@@ -1078,8 +1078,8 @@ class ScoringEngine:
                         "detail": f"SOMA: {soma_result.verdict} (novelty={soma_result.novelty:.2f})",
                     }
                 )
-        except Exception:
-            pass  # SOMA not available — score without it
+        except Exception as e:
+            logger.debug("SOMA scoring unavailable, skipping: %s", e)
 
         # INADS sequence scoring: boost behavioral if attack chain detected
         category = event.get("event_category", "")
