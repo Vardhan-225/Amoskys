@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "amoskys"
-version = "0.9.0-beta.1"
+version = "0.9.1-beta"
 description = "Neural Security Orchestration That Evolves - Real-time security intelligence platform"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -128,6 +128,9 @@ all = [
 ]
 
 [project.scripts]
+# ─── Primary CLI ───
+amoskys = "amoskys.__main__:main"
+
 # ─── macOS Observatory Agents ───
 amoskys-proc = "amoskys.agents.os.macos.process.__main__:main"
 amoskys-auth = "amoskys.agents.os.macos.auth.__main__:main"

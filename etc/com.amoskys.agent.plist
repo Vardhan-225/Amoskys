@@ -9,7 +9,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Volumes/Akash_Lab/Amoskys/scripts/launchd_start.sh</string>
+        <string>/Users/athanneeru/.amoskys/start.sh</string>
     </array>
 
     <!-- Start at login -->
@@ -27,9 +27,9 @@
     <key>ThrottleInterval</key>
     <integer>10</integer>
 
-    <!-- Working directory -->
+    <!-- Working directory — use home (external volume may not be mounted yet) -->
     <key>WorkingDirectory</key>
-    <string>/Volumes/Akash_Lab/Amoskys</string>
+    <string>/Users/athanneeru</string>
 
     <!-- Environment -->
     <key>EnvironmentVariables</key>
@@ -40,11 +40,11 @@
         <string>/Volumes/Akash_Lab/Amoskys/amoskys-venv/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
 
-    <!-- Logging -->
+    <!-- Logging — use home directory (always available, even before volume mounts) -->
     <key>StandardOutPath</key>
-    <string>/Volumes/Akash_Lab/Amoskys/logs/launchd.log</string>
+    <string>/tmp/amoskys-launchd.log</string>
     <key>StandardErrorPath</key>
-    <string>/Volumes/Akash_Lab/Amoskys/logs/launchd.err.log</string>
+    <string>/tmp/amoskys-launchd.err.log</string>
 
     <!-- File descriptor limit -->
     <key>SoftResourceLimits</key>
