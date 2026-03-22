@@ -393,6 +393,9 @@ def main() -> int:
 
         _write_heartbeat(device_id, total_cycles, running, len(agent_threads))
 
+        # Write per-agent heartbeats so IGRIS fleet discovery sees them as alive
+        _write_agent_heartbeats(agent_threads, device_id)
+
         logger.info(
             "Collector: %d/%d agents, %d cycles, posture=%s%s",
             running,
@@ -426,6 +429,32 @@ def _write_heartbeat(device_id: str, total_cycles: int, running: int, total: int
         (heartbeat_dir / "collector.json").write_text(json.dumps(heartbeat))
     except OSError:
         pass
+
+
+def _write_agent_heartbeats(agent_threads: list, device_id: str) -> None:
+    """Write per-agent heartbeat files so IGRIS fleet discovery sees them alive.
+
+    Without this, IGRIS reads stale heartbeats from data/heartbeats/ and
+    reports 16/18 agents as 'offline' even though they're all running
+    inside the collector process.
+    """
+    heartbeat_dir = Path("data/heartbeats")
+    now = time.time()
+    for at in agent_threads:
+        alive = at.thread and at.thread.is_alive()
+        hb = {
+            "agent_name": at.agent_name,
+            "device_id": device_id,
+            "status": "running" if alive else "stopped",
+            "timestamp": now,
+            "pid": os.getpid(),
+            "cycle_count": at.cycle_count,
+            "last_error": at.last_error,
+        }
+        try:
+            (heartbeat_dir / f"{at.agent_name}.json").write_text(json.dumps(hb))
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
