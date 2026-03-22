@@ -827,7 +827,19 @@ class UnifiedLogStreamCollector:
 
     def _parse_log_entry(self, entry: Dict[str, Any]) -> None:
         """Convert a log stream JSON entry to a RealTimeEvent."""
-        now_ns = int(time.time() * 1e9)
+        # Prefer the log entry's own timestamp over collection time
+        event_ts = entry.get("timestamp")
+        if event_ts:
+            try:
+                from datetime import datetime, timezone
+
+                # macOS log stream ndjson: "2026-03-21 10:15:30.123456-0700"
+                dt = datetime.fromisoformat(str(event_ts))
+                now_ns = int(dt.timestamp() * 1e9)
+            except (ValueError, TypeError, OSError):
+                now_ns = int(time.time() * 1e9)
+        else:
+            now_ns = int(time.time() * 1e9)
         subsystem = entry.get("subsystem", "")
         category = entry.get("category", "")
         message = entry.get("eventMessage", "")

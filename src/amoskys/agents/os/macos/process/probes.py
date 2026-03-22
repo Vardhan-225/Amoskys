@@ -233,6 +233,18 @@ class LOLBinProbe(MicroProbe):
         processes = context.shared_data.get("processes", [])
 
         for proc in processes:
+            # Check if this is AMOSKYS's own process
+            amoskys_indicators = {
+                "amoskys",
+                "python3.13",
+                "collect_and_store",
+                "analyzer_main",
+            }
+            cmd_str = str(getattr(proc, "cmdline", "") or "").lower()
+            exe_str = str(getattr(proc, "exe", "") or "").lower()
+            if any(ind in cmd_str or ind in exe_str for ind in amoskys_indicators):
+                continue
+
             name_lower = proc.name.lower()
             if name_lower not in _MACOS_LOLBINS:
                 continue
@@ -670,6 +682,18 @@ class ScriptInterpreterProbe(MicroProbe):
 
         for proc in processes:
             if proc.name not in _SCRIPT_INTERPRETERS:
+                continue
+
+            # Check if this is AMOSKYS's own process
+            amoskys_indicators = {
+                "amoskys",
+                "python3.13",
+                "collect_and_store",
+                "analyzer_main",
+            }
+            cmd_str = str(getattr(proc, "cmdline", "") or "").lower()
+            exe_str = str(getattr(proc, "exe", "") or "").lower()
+            if any(ind in cmd_str or ind in exe_str for ind in amoskys_indicators):
                 continue
 
             # Need cmdline for pattern matching (own-user only)
@@ -1148,6 +1172,18 @@ class SecurityToolDisableProbe(MicroProbe):
         processes = context.shared_data.get("processes", [])
 
         for proc in processes:
+            # Check if this is AMOSKYS's own process
+            amoskys_indicators = {
+                "amoskys",
+                "python3.13",
+                "collect_and_store",
+                "analyzer_main",
+            }
+            cmd_str = str(getattr(proc, "cmdline", "") or "").lower()
+            exe_str = str(getattr(proc, "exe", "") or "").lower()
+            if any(ind in cmd_str or ind in exe_str for ind in amoskys_indicators):
+                continue
+
             cmdline_str = " ".join(proc.cmdline) if proc.cmdline else ""
             if not cmdline_str:
                 continue

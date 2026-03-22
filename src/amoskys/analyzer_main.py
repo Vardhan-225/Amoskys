@@ -99,6 +99,11 @@ def main() -> int:
         logger.warning("KillChainTracker not available: %s", e)
         kill_chain = None
 
+    # ── Event deduplication ──
+    from amoskys.storage.dedup import EventDeduplicator
+
+    dedup = EventDeduplicator(ttl_seconds=600, max_cache=50000)
+
     # ── IGRIS ──
     igris = None
     try:
@@ -220,6 +225,10 @@ def main() -> int:
                                 }
 
                                 # Score the event before storage
+                                if dedup.is_duplicate(event_data):
+                                    continue
+                                dedup.record(event_data)
+
                                 if scorer is not None:
                                     try:
                                         scorer.score_event(event_data)

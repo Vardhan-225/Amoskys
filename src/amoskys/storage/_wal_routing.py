@@ -82,6 +82,21 @@ class RoutingMixin:
                 )
 
             # SecurityEvent sub-message -> security_events table
+            # Skip app_launch events — these are observations, not security alerts
+            if (
+                event.HasField("security_event")
+                and event.security_event.event_category == "app_launch"
+            ):
+                self._route_observation(
+                    event,
+                    device_id,
+                    ts_ns,
+                    timestamp_dt,
+                    collection_agent,
+                    agent_version,
+                )
+                continue
+
             if event.HasField("security_event"):
                 # Extract and enrich attrs ONCE before both consumers
                 enriched_attrs = {k: event.attributes[k] for k in event.attributes}

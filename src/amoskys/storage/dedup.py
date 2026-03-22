@@ -65,6 +65,8 @@ class EventDeduplicator:
             event_dict.get("target_resource", ""),
             event_dict.get("source_ip", ""),
             event_dict.get("collection_agent", ""),
+            str(event_dict.get("exe", ""))[:200],
+            str(event_dict.get("cmdline", ""))[:200],
         ]
         content = "|".join(str(p) for p in parts)
         return hashlib.blake2b(content.encode(), digest_size=16).hexdigest()

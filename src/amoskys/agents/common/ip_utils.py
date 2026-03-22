@@ -41,8 +41,11 @@ PRIVATE_PREFIXES: Tuple[str, ...] = (
 def is_private_ip(ip: str) -> bool:
     """Check if an IP address is in a private/reserved range."""
     if not ip:
-        return False
-    return any(ip.startswith(p) for p in PRIVATE_PREFIXES)
+        return True  # Empty/missing IP is non-routable
+    ip_clean = ip.strip("[]")
+    if ip_clean in ("0.0.0.0", "::", "::1", "127.0.0.1"):
+        return True
+    return any(ip_clean.startswith(p) for p in PRIVATE_PREFIXES)
 
 
 def is_public_ip(ip: str) -> bool:
