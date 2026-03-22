@@ -74,6 +74,7 @@ class FusionEngine:
         window_minutes: int = 30,
         eval_interval: int = 60,
         reliability_tracker: Optional[ReliabilityTracker] = None,
+        inads_engine: Optional[Any] = None,
     ):
         """Initialize fusion engine
 
@@ -82,6 +83,7 @@ class FusionEngine:
             window_minutes: Correlation window size (default: 30 minutes)
             eval_interval: How often to evaluate rules in seconds
             reliability_tracker: AMRDR reliability tracker (defaults to NoOp)
+            inads_engine: Optional INADS multi-perspective scoring engine
         """
         self.db_path = db_path
         self.window_minutes = window_minutes
@@ -91,6 +93,9 @@ class FusionEngine:
         self.reliability_tracker: ReliabilityTracker = (
             reliability_tracker or NoOpReliabilityTracker()
         )
+
+        # INADS: multi-perspective anomaly scoring (None = disabled, backward compatible)
+        self._inads = inads_engine
 
         # Per-device state: event buffers + risk scores
         # events: capped deque prevents unbounded memory growth
@@ -326,6 +331,67 @@ class FusionEngine:
         drift_incidents = self._emit_drift_alerts(device_id)
         incidents.extend(drift_incidents)
 
+        # INADS multi-perspective scoring
+        inads_result = None
+        if self._inads is not None:
+            try:
+                inads_result = self._inads.score_device(device_id)
+                composite = (
+                    inads_result.get("max_composite", 0)
+                    if isinstance(inads_result, dict)
+                    else getattr(inads_result, "composite_score", 0)
+                )
+                threat = (
+                    inads_result.get("threat_level", "low")
+                    if isinstance(inads_result, dict)
+                    else getattr(inads_result, "threat_level", "low")
+                )
+                top = (
+                    inads_result.get("top_events", [{}])[0]
+                    if isinstance(inads_result, dict)
+                    else {}
+                )
+                dominant = top.get(
+                    "dominant_cluster",
+                    (
+                        inads_result.get("dominant_cluster", "unknown")
+                        if isinstance(inads_result, dict)
+                        else getattr(inads_result, "dominant_cluster", "unknown")
+                    ),
+                )
+                if composite > 0.7:
+                    inads_incident = Incident(
+                        incident_id=str(uuid.uuid4()),
+                        device_id=device_id,
+                        severity=(
+                            Severity.HIGH if composite <= 0.9 else Severity.CRITICAL
+                        ),
+                        tactics=[MitreTactic.COLLECTION.value],
+                        techniques=[],
+                        rule_name="INADS_ML_ANOMALY",
+                        summary=(
+                            f"INADS multi-perspective anomaly: "
+                            f"composite={composite:.3f} ({threat}), "
+                            f"dominant={dominant}"
+                        ),
+                        start_ts=datetime.now(),
+                        end_ts=datetime.now(),
+                        event_ids=[],
+                        metadata={
+                            "inads_composite": str(composite),
+                            "inads_threat_level": str(threat),
+                            "inads_dominant_cluster": str(dominant),
+                        },
+                    )
+                    incidents.append(inads_incident)
+                    logger.info(
+                        "INADS anomaly incident for %s: composite=%.3f",
+                        device_id,
+                        composite,
+                    )
+            except Exception:
+                logger.debug("INADS scoring failed for %s", device_id, exc_info=True)
+
         # Fallback: when we have security detections but no rule fired, create a
         # single "High-risk detections" incident so real detections surface on the dashboard
         if not incidents:
@@ -550,6 +616,26 @@ class FusionEngine:
                 )
 
             supporting_events.extend(incident.event_ids)
+
+        # INADS contribution: 0-30 risk points based on composite anomaly score
+        if self._inads is not None:
+            try:
+                inads_result = self._inads.score_device(device_id)
+                composite = (
+                    inads_result.get("max_composite", 0)
+                    if isinstance(inads_result, dict)
+                    else getattr(inads_result, "composite_score", 0)
+                )
+                if composite > 0.0:
+                    # Scale: 0.0 → 0 points, 1.0 → 30 points
+                    inads_points = int(composite * 30)
+                    if inads_points > 0:
+                        score += inads_points
+                        reason_tags.append(
+                            f"inads_anomaly_{inads_result.composite_score:.2f}"
+                        )
+            except Exception:
+                pass  # INADS failure never breaks risk calculation
 
         # Decay: reduce score over time if no recent risky events
         if state["last_eval"]:
