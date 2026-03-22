@@ -617,7 +617,8 @@ class FusionEngine:
 
             supporting_events.extend(incident.event_ids)
 
-        # INADS contribution: 0-30 risk points based on composite anomaly score
+        # INADS contribution: 0-50 points with kill chain amplification
+        # (variable 1.0-1.5x based on progression ratio, gated by cross-cluster)
         if self._inads is not None:
             try:
                 inads_result = self._inads.score_device(device_id)
@@ -627,12 +628,27 @@ class FusionEngine:
                     else getattr(inads_result, "composite_score", 0)
                 )
                 if composite > 0.0:
-                    # Scale: 0.0 → 0 points, 1.0 → 30 points
-                    inads_points = int(composite * 30)
+                    # Scale: 0.0 → 0 points, 1.0 → 50 points (half the 100-pt scale)
+                    inads_points = int(composite * 50)
+
+                    # Kill chain amplification: if INADS sees active kill chain
+                    # progression > 50%, amplify by up to 1.5x
+                    kc_prog = 0.0
+                    if isinstance(inads_result, dict):
+                        top = inads_result.get("top_events", [{}])
+                        if top:
+                            kc_prog = top[0].get("kill_chain_progress", 0.0) or 0.0
+                    else:
+                        kc_prog = getattr(inads_result, "kill_chain_progression", 0.0)
+
+                    if kc_prog > 0.5:
+                        amplifier = 1.0 + (kc_prog - 0.5)  # 1.0 to 1.5
+                        inads_points = int(inads_points * amplifier)
+
                     if inads_points > 0:
                         score += inads_points
                         reason_tags.append(
-                            f"inads_anomaly_{inads_result.composite_score:.2f}"
+                            f"inads_anomaly_{composite:.2f}" f"(+{inads_points}pts)"
                         )
             except Exception:
                 pass  # INADS failure never breaks risk calculation
