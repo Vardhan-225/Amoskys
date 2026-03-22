@@ -31,6 +31,22 @@ from .agent_types import ProtocolEvent, ProtocolType, ThreatCategory
 
 logger = logging.getLogger(__name__)
 
+_PROTOCOL_DETECTION_SOURCE = "protocol_analysis"
+
+
+def _enrich_protocol_event(pe) -> Dict[str, Any]:
+    """Map protocol event fields to mandate-standard CONDITIONAL fields."""
+    enrichment: Dict[str, Any] = {"detection_source": _PROTOCOL_DETECTION_SOURCE}
+    if hasattr(pe, "src_ip") and pe.src_ip:
+        enrichment["remote_ip"] = pe.src_ip
+    if hasattr(pe, "dst_port") and pe.dst_port:
+        enrichment["local_port"] = pe.dst_port
+    if hasattr(pe, "protocol") and pe.protocol:
+        enrichment["protocol"] = (
+            pe.protocol.value if hasattr(pe.protocol, "value") else str(pe.protocol)
+        )
+    return enrichment
+
 
 class HTTPSuspiciousHeadersProbe(MicroProbe):
     """Detect suspicious HTTP headers indicating attacks or C2.
@@ -105,6 +121,7 @@ class HTTPSuspiciousHeadersProbe(MicroProbe):
                         severity=Severity.MEDIUM,
                         probe_name=self.name,
                         data={
+                            **_enrich_protocol_event(pe),
                             "description": f"Suspicious HTTP headers detected: {', '.join(suspicious_indicators)}",
                             "category": ThreatCategory.HTTP_SUSPICIOUS.value,
                             "src_ip": pe.src_ip,
@@ -182,6 +199,7 @@ class TLSSSLAnomalyProbe(MicroProbe):
                         severity=Severity.MEDIUM,
                         probe_name=self.name,
                         data={
+                            **_enrich_protocol_event(pe),
                             "description": f"TLS/SSL anomaly detected: {', '.join(anomalies)}",
                             "category": ThreatCategory.TLS_ANOMALY.value,
                             "src_ip": pe.src_ip,
@@ -256,6 +274,7 @@ class SSHBruteForceProbe(MicroProbe):
                             severity=Severity.HIGH,
                             probe_name=self.name,
                             data={
+                                **_enrich_protocol_event(pe),
                                 "description": f"SSH brute force detected: {recent_failures} failed attempts from {src_ip}",
                                 "category": ThreatCategory.SSH_BRUTE_FORCE.value,
                                 "src_ip": src_ip,
@@ -353,6 +372,7 @@ class DNSTunnelingProbe(MicroProbe):
                         severity=Severity.HIGH,
                         probe_name=self.name,
                         data={
+                            **_enrich_protocol_event(pe),
                             "description": f"DNS tunneling indicators detected: {', '.join(indicators)}",
                             "category": ThreatCategory.DNS_TUNNELING.value,
                             "src_ip": pe.src_ip,
@@ -437,6 +457,7 @@ class SQLInjectionProbe(MicroProbe):
                         severity=Severity.CRITICAL,
                         probe_name=self.name,
                         data={
+                            **_enrich_protocol_event(pe),
                             "description": f"SQL injection attempt detected from {pe.src_ip}",
                             "category": ThreatCategory.SQL_INJECTION.value,
                             "src_ip": pe.src_ip,
@@ -500,6 +521,7 @@ class RDPSuspiciousProbe(MicroProbe):
                         severity=Severity.MEDIUM,
                         probe_name=self.name,
                         data={
+                            **_enrich_protocol_event(pe),
                             "description": f"Suspicious RDP activity: {', '.join(suspicious)}",
                             "category": ThreatCategory.RDP_SUSPICIOUS.value,
                             "src_ip": pe.src_ip,
@@ -547,6 +569,7 @@ class FTPCleartextCredsProbe(MicroProbe):
                     severity=Severity.MEDIUM,
                     probe_name=self.name,
                     data={
+                        **_enrich_protocol_event(pe),
                         "description": f"FTP cleartext traffic detected from {pe.src_ip}",
                         "category": ThreatCategory.FTP_CLEARTEXT.value,
                         "src_ip": pe.src_ip,
@@ -610,6 +633,7 @@ class SMTPSpamPhishProbe(MicroProbe):
                         severity=Severity.MEDIUM,
                         probe_name=self.name,
                         data={
+                            **_enrich_protocol_event(pe),
                             "description": f"Suspicious SMTP traffic: {', '.join(indicators)}",
                             "category": ThreatCategory.SMTP_SPAM_PHISH.value,
                             "src_ip": pe.src_ip,
@@ -659,6 +683,7 @@ class IRCP2PC2Probe(MicroProbe):
                     severity=Severity.HIGH,
                     probe_name=self.name,
                     data={
+                        **_enrich_protocol_event(pe),
                         "description": f"IRC traffic detected from {pe.src_ip} - potential C2",
                         "category": ThreatCategory.IRC_P2P_C2.value,
                         "src_ip": pe.src_ip,
@@ -719,9 +744,9 @@ class ProtocolAnomalyProbe(MicroProbe):
                         severity=Severity.LOW,
                         probe_name=self.name,
                         data={
+                            **_enrich_protocol_event(pe),
                             "description": f"Protocol anomaly: {', '.join(anomalies)}",
                             "category": ThreatCategory.PROTOCOL_ANOMALY.value,
-                            "protocol": pe.protocol.value,
                             "src_ip": pe.src_ip,
                             "dst_ip": pe.dst_ip,
                             "dst_port": pe.dst_port,

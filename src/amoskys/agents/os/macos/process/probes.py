@@ -43,6 +43,24 @@ logger = logging.getLogger(__name__)
 # Shared import — ProcessSnapshot is in collector but we only need its fields
 # via dict access on shared_data, so no hard import needed.
 
+_PROC_DETECTION_SOURCE = "psutil_process_iter"
+
+
+def _proc_mandate_fields(info: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize proc agent fields to mandate-standard names."""
+    fields: Dict[str, Any] = {"detection_source": _PROC_DETECTION_SOURCE}
+    if info.get("name"):
+        fields["process_name"] = info["name"]
+    if info.get("exe"):
+        fields["exe"] = info["exe"]
+    if info.get("username"):
+        fields["username"] = info["username"]
+    if info.get("pid"):
+        fields["pid"] = info["pid"]
+    if info.get("ppid"):
+        fields["ppid"] = info["ppid"]
+    return fields
+
 
 def _mandate_process_context(proc: Any, probe_name: str) -> Dict[str, Any]:
     """Build full process context per Agent Observability Mandate v1.0.
@@ -74,7 +92,7 @@ def _mandate_process_context(proc: Any, probe_name: str) -> Dict[str, Any]:
         "trust_disposition": getattr(proc, "trust_disposition", "unknown"),
         # Attribution (MANDATORY universal)
         "probe_name": probe_name,
-        "detection_source": "psutil",
+        "detection_source": _PROC_DETECTION_SOURCE,
     }
 
 
@@ -601,6 +619,7 @@ class CodeSigningProbe(MicroProbe):
                             event_type="code_signing_failure",
                             severity=Severity.CRITICAL,
                             data={
+                                "detection_source": "codesign_verify",
                                 "binary": binary,
                                 "error": stderr,
                                 "returncode": result.returncode,
@@ -1068,6 +1087,7 @@ class SystemDiscoveryProbe(MicroProbe):
                         event_type="system_discovery_burst",
                         severity=Severity.MEDIUM,
                         data={
+                            "detection_source": _PROC_DETECTION_SOURCE,
                             "parent_pid": ppid,
                             "discovery_commands": commands,
                             "command_count": len(commands),

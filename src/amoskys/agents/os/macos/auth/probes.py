@@ -28,6 +28,18 @@ from amoskys.agents.common.probes import (
 
 logger = logging.getLogger(__name__)
 
+_AUTH_DETECTION_SOURCE = "system_auth_logs"
+
+
+def _enrich_auth_event(auth_ev) -> Dict[str, Any]:
+    """Map auth event fields to mandate-standard CONDITIONAL fields."""
+    enrichment: Dict[str, Any] = {"detection_source": _AUTH_DETECTION_SOURCE}
+    if hasattr(auth_ev, "username") and auth_ev.username:
+        enrichment["username"] = auth_ev.username
+    if hasattr(auth_ev, "source_ip") and auth_ev.source_ip:
+        enrichment["remote_ip"] = auth_ev.source_ip
+    return enrichment
+
 
 # =============================================================================
 # 1. SSHBruteForceProbe
@@ -79,6 +91,8 @@ class SSHBruteForceProbe(MicroProbe):
                     event_type="ssh_brute_force",
                     severity=Severity.HIGH,
                     data={
+                        "detection_source": _AUTH_DETECTION_SOURCE,
+                        "remote_ip": ip,
                         "source_ip": ip,
                         "failure_count": len(failed_events),
                         "threshold": self.FAILURE_THRESHOLD,
@@ -132,6 +146,7 @@ class SudoEscalationProbe(MicroProbe):
                         event_type="sudo_escalation_failure",
                         severity=Severity.HIGH,
                         data={
+                            **_enrich_auth_event(ev),
                             "username": ev.username or "unknown",
                             "message": ev.message[:500],
                             "timestamp": ev.timestamp.isoformat(),
@@ -147,6 +162,7 @@ class SudoEscalationProbe(MicroProbe):
                         event_type="sudo_escalation",
                         severity=Severity.MEDIUM,
                         data={
+                            **_enrich_auth_event(ev),
                             "username": ev.username or "unknown",
                             "message": ev.message[:500],
                             "timestamp": ev.timestamp.isoformat(),
@@ -221,6 +237,7 @@ class OffHoursLoginProbe(MicroProbe):
                     event_type="off_hours_login",
                     severity=Severity.MEDIUM,
                     data={
+                        **_enrich_auth_event(ev),
                         "username": ev.username or "unknown",
                         "category": ev.category,
                         "process": ev.process,
@@ -312,7 +329,9 @@ class ImpossibleTravelProbe(MicroProbe):
                         event_type="impossible_travel",
                         severity=Severity.HIGH,
                         data={
+                            "detection_source": _AUTH_DETECTION_SOURCE,
                             "username": username,
+                            "remote_ip": curr_ip,
                             "ip_1": prev_ip,
                             "ip_2": curr_ip,
                             "time_1": prev_ts.isoformat(),
@@ -385,7 +404,9 @@ class AccountLockoutProbe(MicroProbe):
                     event_type="account_lockout",
                     severity=Severity.HIGH,
                     data={
+                        "detection_source": _AUTH_DETECTION_SOURCE,
                         "username": username,
+                        "remote_ip": sorted(source_ips)[0] if source_ips else None,
                         "failure_count": len(failed_events),
                         "threshold": self.FAILURE_THRESHOLD,
                         "categories": sorted(categories),
@@ -465,6 +486,7 @@ class CredentialAccessProbe(MicroProbe):
                         event_type="credential_access",
                         severity=severity,
                         data={
+                            **_enrich_auth_event(ev),
                             "process": ev.process,
                             "subcommand": subcommand,
                             "username": ev.username or "unknown",
@@ -486,6 +508,7 @@ class CredentialAccessProbe(MicroProbe):
                         event_type="credential_access_indirect",
                         severity=Severity.MEDIUM,
                         data={
+                            **_enrich_auth_event(ev),
                             "process": ev.process,
                             "category": ev.category,
                             "username": ev.username or "unknown",
@@ -583,6 +606,8 @@ class SSHBruteForceRateProbe(MicroProbe):
                     event_type="ssh_brute_force_rate",
                     severity=severity,
                     data={
+                        "detection_source": _AUTH_DETECTION_SOURCE,
+                        "remote_ip": ip,
                         "source_ip": ip,
                         "total_attempts": count,
                         "failures": failures,
@@ -670,6 +695,7 @@ class ValidAccountLoginProbe(MicroProbe):
                             Severity.HIGH if len(reasons) >= 2 else Severity.MEDIUM
                         ),
                         data={
+                            **_enrich_auth_event(login),
                             "username": login.username,
                             "source_ip": login.source_ip,
                             "service": login.process,
@@ -730,10 +756,11 @@ class SSHAgentForwardingProbe(MicroProbe):
                         event_type="ssh_agent_forwarding",
                         severity=Severity.HIGH,
                         data={
+                            "detection_source": _AUTH_DETECTION_SOURCE,
+                            "username": proc.username,
                             "pid": proc.pid,
                             "cmdline": cmdline_str[:200],
                             "parent": proc.parent_name,
-                            "username": proc.username,
                             "inbound_ips": list(inbound_ssh_ips),
                         },
                         confidence=0.8,
@@ -747,6 +774,10 @@ class SSHAgentForwardingProbe(MicroProbe):
                         event_type="ssh_pivot_detected",
                         severity=Severity.HIGH,
                         data={
+                            "detection_source": _AUTH_DETECTION_SOURCE,
+                            "remote_ip": (
+                                list(inbound_ssh_ips)[0] if inbound_ssh_ips else None
+                            ),
                             "pid": proc.pid,
                             "cmdline": cmdline_str[:200],
                             "inbound_from": list(inbound_ssh_ips),
