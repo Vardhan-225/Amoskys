@@ -426,6 +426,10 @@ class XPCAnomalyProbe(MicroProbe):
             if entry.event_type != "xpc":
                 continue
 
+            # Self-exclusion: skip AMOSKYS own log entries
+            if _is_amoskys_log_entry(entry):
+                continue
+
             message_lower = entry.message.lower()
 
             # Skip known-benign macOS XPC operations
@@ -439,6 +443,8 @@ class XPCAnomalyProbe(MicroProbe):
                             event_type=f"xpc_{event_subtype}",
                             severity=severity,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "log_show",
                                 "subsystem": entry.subsystem,
                                 "process": entry.process,
                                 "category": entry.category,
@@ -548,6 +554,10 @@ class TCCEventProbe(MicroProbe):
             if entry.event_type != "tcc":
                 continue
 
+            # Self-exclusion: skip AMOSKYS own log entries
+            if _is_amoskys_log_entry(entry):
+                continue
+
             message_lower = entry.message.lower()
             for pattern, event_subtype, severity in _TCC_PATTERNS:
                 if re.search(pattern, message_lower):
@@ -573,6 +583,8 @@ class TCCEventProbe(MicroProbe):
                             event_type=f"tcc_{event_subtype}",
                             severity=severity,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "log_show",
                                 "subsystem": entry.subsystem,
                                 "process": entry.process,
                                 "category": entry.category,
@@ -664,6 +676,10 @@ class SharingServiceProbe(MicroProbe):
             if entry.event_type != "sharing":
                 continue
 
+            # Self-exclusion: skip AMOSKYS own log entries
+            if _is_amoskys_log_entry(entry):
+                continue
+
             message_lower = entry.message.lower()
             for pattern, event_subtype, severity in _SHARING_PATTERNS:
                 if re.search(pattern, message_lower):
@@ -672,6 +688,8 @@ class SharingServiceProbe(MicroProbe):
                             event_type=f"sharing_{event_subtype}",
                             severity=severity,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "log_show",
                                 "process": entry.process,
                                 "category": entry.category,
                                 "message": entry.message[:500],

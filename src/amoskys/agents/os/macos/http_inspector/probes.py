@@ -163,6 +163,8 @@ class XSSDetectionProbe(MicroProbe):
                         event_type="xss_attempt_detected",
                         severity=Severity.HIGH,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "client_ip": request.client_ip,
                             "method": request.method,
                             "path": request.path[:500],
@@ -258,6 +260,8 @@ class SSRFDetectionProbe(MicroProbe):
                         event_type="ssrf_attempt_detected",
                         severity=Severity.HIGH,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "client_ip": request.client_ip,
                             "method": request.method,
                             "path": request.path[:500],
@@ -365,6 +369,8 @@ class PathTraversalProbe(MicroProbe):
                         event_type="path_traversal_detected",
                         severity=severity,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "client_ip": request.client_ip,
                             "method": request.method,
                             "path": request.path[:500],
@@ -453,6 +459,8 @@ class APIAbuseProbe(MicroProbe):
                         event_type="api_abuse_rate_violation",
                         severity=Severity.HIGH,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "client_ip": client_ip,
                             "request_count": len(timestamps),
                             "window_seconds": self.WINDOW_SECONDS,
@@ -557,6 +565,8 @@ class WebShellUploadProbe(MicroProbe):
                         event_type="webshell_upload_detected",
                         severity=severity,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "client_ip": request.client_ip,
                             "method": request.method,
                             "path": request.path[:500],
@@ -682,6 +692,8 @@ class C2WebChannelProbe(MicroProbe):
                         event_type="http_c2_beacon_detected",
                         severity=severity,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "path": path[:500],
                             "mean_interval_s": round(mean_interval, 2),
                             "jitter_cv": round(cv, 4),
@@ -771,6 +783,8 @@ class DataExfilHTTPProbe(MicroProbe):
                     event_type="http_data_exfil_detected",
                     severity=severity,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "log_show",
                         "client_ip": request.client_ip,
                         "method": request.method,
                         "path": request.path[:500],
@@ -883,6 +897,8 @@ class CookieTheftProbe(MicroProbe):
                         event_type="cookie_theft_detected",
                         severity=Severity.HIGH,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "client_ip": request.client_ip,
                             "method": request.method,
                             "path": request.path[:500],

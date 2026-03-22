@@ -130,6 +130,8 @@ class BulkExtractionProbe(MicroProbe):
                         event_type="bulk_extraction_select_star",
                         severity=Severity.HIGH,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "psutil",
                             "query": query[:500],
                             "db_type": entry.db_type,
                             "user": entry.user,
@@ -149,6 +151,8 @@ class BulkExtractionProbe(MicroProbe):
                             event_type="bulk_extraction_large_limit",
                             severity=Severity.MEDIUM,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "psutil",
                                 "query": query[:500],
                                 "limit_value": limit_val,
                                 "threshold": self.LIMIT_THRESHOLD,
@@ -220,6 +224,8 @@ class SchemaEnumProbe(MicroProbe):
                             event_type="schema_enumeration_detected",
                             severity=Severity.MEDIUM,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "psutil",
                                 "query": query[:500],
                                 "pattern_matched": pattern.pattern,
                                 "db_type": entry.db_type,
@@ -296,6 +302,8 @@ class PrivEscQueryProbe(MicroProbe):
                             event_type="privilege_escalation_query",
                             severity=Severity.CRITICAL,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "psutil",
                                 "query": query[:500],
                                 "pattern_matched": pattern.pattern,
                                 "db_type": entry.db_type,
@@ -378,6 +386,8 @@ class SQLInjectionProbe(MicroProbe):
                         event_type="sql_injection_detected",
                         severity=Severity.CRITICAL,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "psutil",
                             "query": query[:500],
                             "patterns_matched": matched_patterns[:5],
                             "pattern_count": len(matched_patterns),
@@ -484,6 +494,8 @@ class CredentialQueryProbe(MicroProbe):
                         event_type="credential_table_query",
                         severity=severity,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "psutil",
                             "query": query[:500],
                             "table_match": table_match or "",
                             "column_match": column_match or "",
@@ -561,6 +573,8 @@ class DataDestructionProbe(MicroProbe):
                             event_type="data_destruction_detected",
                             severity=severity,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "psutil",
                                 "query": query[:500],
                                 "pattern_matched": pattern.pattern,
                                 "db_type": entry.db_type,
@@ -579,6 +593,8 @@ class DataDestructionProbe(MicroProbe):
                         event_type="delete_without_where",
                         severity=Severity.HIGH,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "psutil",
                             "query": query[:500],
                             "db_type": entry.db_type,
                             "user": entry.user,
@@ -683,6 +699,8 @@ class UnauthorizedAccessProbe(MicroProbe):
                     event_type="auth_failure_burst",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "psutil",
                         "failure_count": len(auth_failures),
                         "threshold": self.AUTH_FAIL_THRESHOLD,
                         "sample_failures": auth_failures[:5],
@@ -699,6 +717,8 @@ class UnauthorizedAccessProbe(MicroProbe):
                         event_type="unknown_db_user_detected",
                         severity=Severity.MEDIUM,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "psutil",
                             "user": user,
                             "known_user_count": len(self._known_users),
                             "cycle": self._cycle_count,
@@ -782,6 +802,8 @@ class ExfilViaDBProbe(MicroProbe):
                             event_type="db_exfiltration_detected",
                             severity=severity,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "psutil",
                                 "query": query[:500],
                                 "pattern_matched": pattern.pattern,
                                 "sensitive_path": has_sensitive_path,

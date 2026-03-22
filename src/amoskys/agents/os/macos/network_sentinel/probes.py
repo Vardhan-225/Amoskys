@@ -118,6 +118,8 @@ class HTTPScanStormProbe(MicroProbe):
                     severity=severity,
                     probe_name=self.name,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "access_log",
                         "attacker_ip": ip,
                         "unique_paths": unique_count,
                         "total_requests": total_reqs,
@@ -205,6 +207,8 @@ class DirectoryBruteForceProbe(MicroProbe):
                     severity=severity,
                     probe_name=self.name,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "access_log",
                         "attacker_ip": ip,
                         "total_requests": total,
                         "not_found_count": not_found,
@@ -314,6 +318,8 @@ class SQLiPayloadProbe(MicroProbe):
                     severity=severity,
                     probe_name=self.name,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "access_log",
                         "attacker_ip": txn.src_ip,
                         "method": txn.method,
                         "path": txn.path,
@@ -418,6 +424,8 @@ class XSSPayloadProbe(MicroProbe):
                     severity=severity,
                     probe_name=self.name,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "access_log",
                         "attacker_ip": txn.src_ip,
                         "method": txn.method,
                         "path": txn.path,
@@ -505,6 +513,8 @@ class PathTraversalProbe(MicroProbe):
                     severity=severity,
                     probe_name=self.name,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "access_log",
                         "attacker_ip": ip,
                         "traversal_attempts": len(paths),
                         "unique_paths": unique_paths[:20],
@@ -610,6 +620,8 @@ class AttackToolFingerprintProbe(MicroProbe):
                     severity=severity,
                     probe_name=self.name,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "access_log",
                         "attacker_ip": ip,
                         "tools_detected": tool_list,
                         "total_requests": ip_request_count[ip],
@@ -686,6 +698,8 @@ class RateAnomalyProbe(MicroProbe):
                     severity=severity,
                     probe_name=self.name,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "access_log",
                         "attacker_ip": ip,
                         "total_requests": count,
                         "requests_per_minute": round(rpm, 1),
@@ -822,6 +836,8 @@ class AdminProbeProbe(MicroProbe):
                     severity=severity,
                     probe_name=self.name,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "access_log",
                         "attacker_ip": ip,
                         "admin_paths_probed": unique[:30],
                         "total_hits": len(paths),
@@ -895,6 +911,8 @@ class CredentialSprayProbe(MicroProbe):
                     severity=severity,
                     probe_name=self.name,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "access_log",
                         "attacker_ip": ip,
                         "auth_failures": fails,
                         "total_requests": total,
@@ -971,6 +989,8 @@ class ConnectionFloodProbe(MicroProbe):
                     severity=severity,
                     probe_name=self.name,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "access_log",
                         "attacker_ip": ip,
                         "active_connections": count,
                         "target_ports": sorted(ip_ports[ip]),

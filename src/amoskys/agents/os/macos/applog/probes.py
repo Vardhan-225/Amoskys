@@ -86,6 +86,8 @@ class WebShellAccessProbe(MicroProbe):
                         event_type="webshell_access_detected",
                         severity=Severity.CRITICAL,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "process": entry.process,
                             "pid": entry.pid,
                             "matched_pattern": match.group(0)[:100],
@@ -171,6 +173,8 @@ class LogTamperingProbe(MicroProbe):
                             event_type="log_timestamp_gap",
                             severity=Severity.HIGH,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "log_show",
                                 "process": process,
                                 "gap_seconds": round(gap, 2),
                                 "before_timestamp": sorted_entries[i - 1].timestamp,
@@ -191,6 +195,8 @@ class LogTamperingProbe(MicroProbe):
                             event_type="log_cross_cycle_gap",
                             severity=Severity.MEDIUM,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "log_show",
                                 "process": process,
                                 "gap_seconds": round(current_first - last_ts, 2),
                                 "last_seen": last_ts,
@@ -210,6 +216,8 @@ class LogTamperingProbe(MicroProbe):
                         event_type="log_tampering_pattern",
                         severity=Severity.CRITICAL,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "process": entry.process,
                             "pid": entry.pid,
                             "matched_pattern": match.group(0)[:100],
@@ -307,6 +315,8 @@ class ErrorSpikeProbe(MicroProbe):
                             event_type="error_spike_new_process",
                             severity=Severity.HIGH,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "log_show",
                                 "process": process,
                                 "error_count": count,
                                 "baseline_avg": 0,
@@ -321,6 +331,8 @@ class ErrorSpikeProbe(MicroProbe):
                         event_type="error_spike_detected",
                         severity=Severity.HIGH,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "process": process,
                             "error_count": count,
                             "baseline_avg": round(baseline_avg, 2),
@@ -397,6 +409,8 @@ class CredentialHarvestProbe(MicroProbe):
                         event_type="credential_in_logs",
                         severity=Severity.HIGH,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "process": entry.process,
                             "pid": entry.pid,
                             "credential_type": self._classify_credential(matched),
@@ -524,6 +538,8 @@ class PrivEscLogProbe(MicroProbe):
                         event_type="privilege_escalation_detected",
                         severity=severity,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "process": entry.process,
                             "pid": entry.pid,
                             "matched_pattern": match.group(0)[:100],
@@ -618,6 +634,8 @@ class SQLInjectionProbe(MicroProbe):
                         event_type="sql_injection_detected",
                         severity=severity,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "process": entry.process,
                             "pid": entry.pid,
                             "matched_pattern": match.group(0)[:100],
@@ -691,6 +709,8 @@ class AuthBypassProbe(MicroProbe):
                         event_type="auth_bypass_detected",
                         severity=Severity.CRITICAL,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "log_show",
                             "process": entry.process,
                             "pid": entry.pid,
                             "matched_pattern": match.group(0)[:100],

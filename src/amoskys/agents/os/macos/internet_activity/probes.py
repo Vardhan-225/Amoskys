@@ -250,6 +250,8 @@ class CloudExfilProbe(MicroProbe):
                     event_type="cloud_exfil_detected",
                     severity=severity,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "cloud_type": cloud_type,
                         "connection_count": len(conns),
                         "unique_pids": sorted(unique_pids),
@@ -320,6 +322,8 @@ class TORVPNUsageProbe(MicroProbe):
                     event_type="tor_connection_detected",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "connection_count": len(tor_connections),
                         "tor_ips": sorted({c.remote_addr for c in tor_connections}),
                         "processes": sorted({c.process_name for c in tor_connections}),
@@ -349,6 +353,8 @@ class TORVPNUsageProbe(MicroProbe):
                         event_type="vpn_port_usage_detected",
                         severity=Severity.MEDIUM,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "lsof",
                             "vpn_port": port,
                             "connection_count": len(conns),
                             "remote_ips": sorted({c.remote_addr for c in conns}),
@@ -436,6 +442,8 @@ class CryptoMiningProbe(MicroProbe):
                         event_type="crypto_mining_detected",
                         severity=severity,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "lsof",
                             "process_name": process,
                             "pids": sorted({c.pid for c in conns}),
                             "mining_ports": sorted(ports_hit),
@@ -627,6 +635,8 @@ class GeoAnomalyProbe(MicroProbe):
                     event_type="geo_anomaly_detected",
                     severity=Severity.MEDIUM,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "unusual_ip_count": len(unusual_ips),
                         "unusual_ips": sorted(unusual_ips)[:20],
                         "connection_count": len(unusual_connections),
@@ -742,6 +752,8 @@ class LongLivedConnProbe(MicroProbe):
                         event_type="long_lived_connection",
                         severity=Severity.HIGH,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "lsof",
                             "process_name": conn.process_name,
                             "pid": conn.pid,
                             "remote_addr": conn.remote_addr,
@@ -860,6 +872,8 @@ class DataExfilTimingProbe(MicroProbe):
                         event_type="late_night_connections",
                         severity=Severity.MEDIUM,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "lsof",
                             "hour": hour,
                             "connection_count": len(suspicious_night),
                             "processes": sorted(
@@ -890,6 +904,8 @@ class DataExfilTimingProbe(MicroProbe):
                             event_type="connection_burst_detected",
                             severity=Severity.HIGH,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "lsof",
                                 "process_name": process,
                                 "connection_count": len(conns),
                                 "unique_remote_ips": len(
@@ -992,6 +1008,8 @@ class ShadowITProbe(MicroProbe):
                     event_type="shadow_it_dropbox",
                     severity=Severity.MEDIUM,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "service": "dropbox",
                         "connection_count": len(dropbox_hits),
                         "processes": sorted({c.process_name for c in dropbox_hits}),
@@ -1011,6 +1029,8 @@ class ShadowITProbe(MicroProbe):
                     event_type="shadow_it_mega",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "service": "mega.nz",
                         "connection_count": len(mega_hits),
                         "processes": sorted({c.process_name for c in mega_hits}),
@@ -1028,6 +1048,8 @@ class ShadowITProbe(MicroProbe):
                     event_type="shadow_it_gdrive",
                     severity=Severity.MEDIUM,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "service": "google_drive_personal",
                         "connection_count": len(gdrive_hits),
                         "processes": sorted({c.process_name for c in gdrive_hits}),
@@ -1141,6 +1163,8 @@ class CDNMasqueradeProbe(MicroProbe):
                         event_type="cdn_masquerade_non_standard_port",
                         severity=Severity.HIGH,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "lsof",
                             "process_name": process,
                             "non_standard_ports": sorted(
                                 {c.remote_port for c in non_web_port_conns}
@@ -1162,6 +1186,8 @@ class CDNMasqueradeProbe(MicroProbe):
                         event_type="cdn_masquerade_high_volume",
                         severity=Severity.MEDIUM,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "lsof",
                             "process_name": process,
                             "connection_count": len(conns),
                             "cumulative_count": self._cdn_process_history[process],
