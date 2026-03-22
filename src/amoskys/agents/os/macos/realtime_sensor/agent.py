@@ -942,6 +942,13 @@ class MacOSRealtimeSensorAgent(HardenedAgentBase, MicroProbeAgentMixin):
         for tech in pe.mitre_techniques or []:
             se.mitre_techniques.append(tech)
 
+        # Promote probe identity fields into attributes for WAL extraction
+        if pe.probe_name:
+            te.attributes["probe_name"] = pe.probe_name
+        te.attributes["detection_source"] = pe.data.get(
+            "detection_source", pe.data.get("source", "realtime_sensor")
+        )
+
         for k, v in pe.data.items():
             te.attributes[k] = str(v)
 
