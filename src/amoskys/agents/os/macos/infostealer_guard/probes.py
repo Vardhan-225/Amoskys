@@ -1,4 +1,4 @@
-"""macOS InfostealerGuard Probes — 10 detection probes for AMOS/Poseidon/Banshee kill chain.
+"""macOS InfostealerGuard Probes — 12 detection probes for AMOS/Poseidon/Banshee kill chain.
 
 Each probe consumes collector data from MacOSInfostealerGuardCollector via
 shared_data keys. Every probe is macOS-only (platforms=["darwin"]).
@@ -24,9 +24,13 @@ Kill chain mapping (AMOS stealer):
 
 from __future__ import annotations
 
+import glob
 import ipaddress
 import logging
+import os
+import subprocess
 from collections import defaultdict
+from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from amoskys.agents.common.probes import (
@@ -910,6 +914,215 @@ class KeychainCLIAbuseProbe(MicroProbe):
         return events
 
 
+# =============================================================================
+# 12. BrowserCacheLocalStorageProbe
+# =============================================================================
+
+# Browser processes that legitimately access their own cache/storage
+_BROWSER_PROCESS_ALLOWLIST: Set[str] = {
+    "Google Chrome",
+    "Google Chrome Helper",
+    "Google Chrome Helper (Renderer)",
+    "Google Chrome Helper (GPU)",
+    "Google Chrome Helper (Plugin)",
+    "com.google.Chrome",
+    "Safari",
+    "com.apple.Safari",
+    "com.apple.WebKit",
+    "WebContent",
+    "firefox",
+    "firefox-bin",
+    "plugin-container",
+}
+
+# Directories containing browser cache and local storage
+_BROWSER_CACHE_DIRS = [
+    "Library/Caches/Google/Chrome/Default/Cache/",
+    "Library/Application Support/Google/Chrome/Default/Local Storage/",
+    "Library/Safari/LocalStorage/",
+]
+
+# Firefox profiles use a wildcard
+_FIREFOX_STORAGE_GLOB = "Library/Application Support/Firefox/Profiles/*/storage/"
+
+# Browser extension directories
+_BROWSER_EXTENSION_DIRS = [
+    "Library/Application Support/Google/Chrome/Default/Extensions/",
+    "Library/Safari/Extensions/",
+]
+
+
+def _parse_lsof_for_paths(
+    target_dirs: List[str],
+) -> List[Dict[str, Any]]:
+    """Run lsof and find non-browser processes accessing target directories.
+
+    Returns a list of dicts with pid, process_name, and file_path for each
+    suspicious access found.
+    """
+    results: List[Dict[str, Any]] = []
+    try:
+        proc = subprocess.run(
+            ["lsof", "-F", "pcn", "+D", *target_dirs],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode != 0:
+            return results
+
+        current_pid = 0
+        current_name = ""
+        for line in proc.stdout.splitlines():
+            if line.startswith("p"):
+                try:
+                    current_pid = int(line[1:])
+                except ValueError:
+                    current_pid = 0
+            elif line.startswith("c"):
+                current_name = line[1:]
+            elif line.startswith("n") and current_pid > 0:
+                file_path = line[1:]
+                if current_name not in _BROWSER_PROCESS_ALLOWLIST:
+                    results.append(
+                        {
+                            "pid": current_pid,
+                            "process_name": current_name,
+                            "file_path": file_path,
+                        }
+                    )
+    except (subprocess.TimeoutExpired, OSError) as e:
+        logger.debug("lsof browser cache scan failed: %s", e)
+
+    return results
+
+
+class BrowserCacheLocalStorageProbe(MicroProbe):
+    """Detects non-browser processes accessing browser cache and local storage.
+
+    Monitors browser cache, local storage, and extension directories for
+    access by non-browser processes. Non-browser processes reading these
+    files indicates credential/session theft or malicious extension
+    installation.
+
+    Also monitors browser extension directories for new extensions added
+    outside of normal browser workflows.
+
+    MITRE: T1185 (Browser Session Hijacking), T1176 (Browser Extensions)
+    """
+
+    name = "macos_infostealer_browser_cache_localstorage"
+    description = (
+        "Detects non-browser processes accessing browser cache and local storage"
+    )
+    platforms = ["darwin"]
+    mitre_techniques = ["T1185", "T1176"]
+    mitre_tactics = ["collection", "persistence"]
+    scan_interval = 20.0
+    requires_fields = ["sensitive_accesses"]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._home = str(Path.home())
+        self._known_extensions: Set[str] = set()
+        self._first_run = True
+
+    def _resolve_target_dirs(self) -> List[str]:
+        """Build absolute paths for browser cache/storage directories."""
+        dirs: List[str] = []
+        for rel in _BROWSER_CACHE_DIRS:
+            full = os.path.join(self._home, rel)
+            if os.path.isdir(full):
+                dirs.append(full)
+        # Firefox profile wildcard
+        ff_glob = os.path.join(self._home, _FIREFOX_STORAGE_GLOB)
+        dirs.extend(d for d in glob.glob(ff_glob) if os.path.isdir(d))
+        return dirs
+
+    def _resolve_extension_dirs(self) -> List[str]:
+        """Build absolute paths for browser extension directories."""
+        dirs: List[str] = []
+        for rel in _BROWSER_EXTENSION_DIRS:
+            full = os.path.join(self._home, rel)
+            if os.path.isdir(full):
+                dirs.append(full)
+        return dirs
+
+    def _scan_cache_access(self) -> List[TelemetryEvent]:
+        """Check for non-browser processes reading cache/storage files."""
+        events: List[TelemetryEvent] = []
+        target_dirs = self._resolve_target_dirs()
+        if not target_dirs:
+            return events
+
+        suspicious = _parse_lsof_for_paths(target_dirs)
+        for access in suspicious:
+            events.append(
+                self._create_event(
+                    event_type="browser_cache_theft",
+                    severity=Severity.HIGH,
+                    data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
+                        "pid": access["pid"],
+                        "process_name": access["process_name"],
+                        "file_path": access["file_path"],
+                        "threat": "non_browser_cache_access",
+                    },
+                    confidence=0.85,
+                )
+            )
+        return events
+
+    def _scan_extensions(self) -> List[TelemetryEvent]:
+        """Check for new browser extensions added since last scan."""
+        events: List[TelemetryEvent] = []
+        ext_dirs = self._resolve_extension_dirs()
+
+        current_extensions: Set[str] = set()
+        for ext_dir in ext_dirs:
+            try:
+                for entry in os.scandir(ext_dir):
+                    if entry.is_dir():
+                        current_extensions.add(entry.path)
+            except OSError:
+                continue
+
+        if self._first_run:
+            self._known_extensions = current_extensions
+            return events
+
+        new_extensions = current_extensions - self._known_extensions
+        for ext_path in new_extensions:
+            ext_name = os.path.basename(ext_path)
+            parent_dir = os.path.basename(os.path.dirname(ext_path))
+            events.append(
+                self._create_event(
+                    event_type="browser_extension_added",
+                    severity=Severity.MEDIUM,
+                    data={
+                        "probe_name": self.name,
+                        "detection_source": "filesystem_monitor",
+                        "extension_path": ext_path,
+                        "extension_id": ext_name,
+                        "browser": parent_dir,
+                        "threat": "new_browser_extension",
+                    },
+                    confidence=0.7,
+                )
+            )
+
+        self._known_extensions = current_extensions
+        return events
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        events.extend(self._scan_cache_access())
+        events.extend(self._scan_extensions())
+        self._first_run = False
+        return events
+
+
 def create_infostealer_guard_probes() -> List[MicroProbe]:
     """Create all macOS InfostealerGuard probes."""
     return [
@@ -924,4 +1137,5 @@ def create_infostealer_guard_probes() -> List[MicroProbe]:
         ScreenCaptureAbuseProbe(),
         SensitiveFileExfilProbe(),
         KeychainCLIAbuseProbe(),
+        BrowserCacheLocalStorageProbe(),
     ]

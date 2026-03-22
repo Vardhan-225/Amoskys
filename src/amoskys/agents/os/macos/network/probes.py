@@ -1,4 +1,4 @@
-"""macOS Network Probes — 8 detection probes for network activity.
+"""macOS Network Probes — 10 detection probes for network activity.
 
 Each probe consumes Connection data from MacOSNetworkCollector via
 shared_data["connections"]. All probes are macOS-only.
@@ -12,8 +12,10 @@ Probes:
     6. NonStandardPortProbe — known services on wrong ports
     7. CloudExfilProbe — cloud storage service connections
     8. NewConnectionProbe — baseline-diff for new external connections
+    9. PortScanDetectionProbe — inbound port scan from single source
+   10. UnexpectedListenerProbe — unexpected listening sockets (backdoor indicator)
 
-MITRE: T1071, T1573, T1572, T1571, T1048, T1570, T1021
+MITRE: T1071, T1573, T1572, T1571, T1048, T1570, T1021, T1090.001
 
 Agent Observability Mandate v1.0 — every event populates mandatory fields
 via _mandate_network_context().  Self-exclusion via self_identity.
@@ -919,6 +921,138 @@ class PortScanDetectionProbe(MicroProbe):
 
 
 # =============================================================================
+# 10. UnexpectedListenerProbe
+# =============================================================================
+
+# Known-safe listening ports: system services and AMOSKYS itself
+_KNOWN_SAFE_LISTENERS: Dict[int, str] = {
+    22: "sshd",
+    631: "CUPS",
+    5000: "AMOSKYS_dashboard",
+    5003: "AMOSKYS_dashboard_alt",
+}
+
+# Known-safe process names that commonly listen on ephemeral ports
+_LISTENER_PROCESS_ALLOWLIST = frozenset(
+    {
+        "launchd",
+        "mDNSResponder",
+        "rapportd",
+        "sharingd",
+        "AirPlayXPCHelper",
+        "ControlCenter",
+        "SystemUIServer",
+        "Finder",
+        "loginwindow",
+        "UserEventAgent",
+        "identityservicesd",
+        "IMDPersistenceAgent",
+        "WiFiAgent",
+        "bluetoothd",
+        "configd",
+        "remoted",
+        "remotepairingd",
+    }
+)
+
+
+class UnexpectedListenerProbe(MicroProbe):
+    """Detects unexpected processes listening on network ports.
+
+    The network agent normally FILTERS OUT LISTEN-state connections from
+    other probes. This probe specifically targets them: any process
+    listening on a port not in the known-safe baseline is flagged.
+
+    Unexpected listeners are strong indicators of:
+        - Backdoor / reverse shell waiting for connections
+        - Lateral movement relay / internal proxy
+        - Unauthorized services (crypto miners, rogue web servers)
+
+    Uses baseline-diff: first scan establishes known listeners,
+    subsequent scans alert on new ones.
+
+    MITRE: T1571 (Non-Standard Port), T1090.001 (Internal Proxy)
+    """
+
+    name = "macos_unexpected_listener"
+    description = "Detects unexpected processes listening on network ports"
+    platforms = ["darwin"]
+    mitre_techniques = ["T1571", "T1090.001"]
+    mitre_tactics = ["command_and_control", "persistence"]
+    scan_interval = 15.0
+    requires_fields = ["connections"]
+
+    def __init__(self) -> None:
+        super().__init__()
+        # "process_name:local_port" -> first-seen timestamp
+        self._known_listeners: Set[str] = set()
+        self._first_run = True
+
+    @staticmethod
+    def _is_known_safe(conn: Any) -> bool:
+        """Check if a listening socket is known-safe."""
+        if conn.local_port in _KNOWN_SAFE_LISTENERS:
+            return True
+        proc_name = (conn.process_name or "").strip()
+        return proc_name in _LISTENER_PROCESS_ALLOWLIST
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        connections = context.shared_data.get("connections", [])
+
+        current_listeners: Set[str] = set()
+
+        for conn in connections:
+            if conn.state != "LISTEN":
+                continue
+            # Self-exclusion (mandate)
+            if _is_self(conn):
+                continue
+            if self._is_known_safe(conn):
+                continue
+
+            key = f"{conn.process_name}:{conn.local_port}"
+            current_listeners.add(key)
+
+            if self._first_run:
+                continue
+
+            if key not in self._known_listeners:
+                resolved = _resolve_process(
+                    conn.pid, fallback_name=conn.process_name or "UNKNOWN"
+                )
+                events.append(
+                    self._create_event(
+                        event_type="unexpected_listener",
+                        severity=Severity.HIGH,
+                        data={
+                            "probe_name": self.name,
+                            "detection_source": "lsof",
+                            "pid": resolved["pid"],
+                            "process_name": resolved["process_name"],
+                            "exe": resolved["exe"],
+                            "local_port": conn.local_port,
+                            "protocol": getattr(conn, "protocol", "TCP"),
+                            "remote_ip": "",
+                            "remote_port": 0,
+                            "connection_state": "LISTEN",
+                            "bytes_in": 0,
+                            "bytes_out": 0,
+                            "connection_count": 1,
+                            "connection_duration_s": 0.0,
+                            "threat": "unexpected_listening_socket",
+                        },
+                        confidence=0.8,
+                        correlation_id=key,
+                    )
+                )
+
+        self._known_listeners = current_listeners
+        self._first_run = False
+        return events
+
+
+# =============================================================================
 # Factory
 # =============================================================================
 
@@ -935,4 +1069,5 @@ def create_network_probes() -> List[MicroProbe]:
         CloudExfilProbe(),
         NewConnectionProbe(),
         PortScanDetectionProbe(),
+        UnexpectedListenerProbe(),
     ]

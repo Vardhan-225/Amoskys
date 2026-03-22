@@ -1,4 +1,4 @@
-"""macOS Peripheral Probes -- 4 detection probes for hardware peripherals.
+"""macOS Peripheral Probes -- 5 detection probes for hardware peripherals.
 
 Each probe consumes PeripheralDevice data from MacOSPeripheralCollector via
 shared_data["usb_devices"], shared_data["bluetooth_devices"], and
@@ -9,6 +9,7 @@ Probes:
     2. BluetoothInventoryProbe -- baseline-diff for BT device changes (T1200)
     3. NewPeripheralProbe -- alerts on any new peripheral device (T1200)
     4. RemovableMediaProbe -- new volume mounts in /Volumes/ (T1200, T1052.001)
+    5. ThunderboltDMAProbe -- baseline-diff for Thunderbolt/DMA devices (T1200, T1052)
 
 Detection pattern: baseline-diff
     First scan establishes the baseline of known devices. Subsequent scans
@@ -16,13 +17,16 @@ Detection pattern: baseline-diff
     false alerts on first run and handles device churn gracefully.
 
 MITRE Coverage:
-    - T1200: Hardware Additions (rogue USB/BT devices)
+    - T1200: Hardware Additions (rogue USB/BT devices, Thunderbolt DMA)
+    - T1052: Exfiltration Over Physical Medium
     - T1052.001: Exfiltration Over USB (data theft via removable media)
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import subprocess
 from typing import Any, Dict, List, Set
 
 from amoskys.agents.common.probes import (
@@ -399,6 +403,178 @@ class RemovableMediaProbe(MicroProbe):
 
 
 # =============================================================================
+# 5. ThunderboltDMAProbe
+# =============================================================================
+
+
+# DMA capability keywords found in system_profiler Thunderbolt data
+_DMA_CAPABILITY_FLAGS = frozenset(
+    {
+        "DMA",
+        "PCIe",
+        "Thunderbolt 3",
+        "Thunderbolt 4",
+        "USB4",
+    }
+)
+
+
+def _thunderbolt_fingerprint(dev: Dict[str, Any]) -> str:
+    """Create a stable fingerprint for a Thunderbolt device.
+
+    Uses device_name + vendor_id + device_id + route_string to create
+    a unique key that survives reconnection (same physical device).
+    """
+    parts = [
+        dev.get("device_name", ""),
+        dev.get("vendor_id", ""),
+        dev.get("device_id", ""),
+        dev.get("route_string", ""),
+    ]
+    return "|".join(parts)
+
+
+def _has_dma_capability(dev: Dict[str, Any]) -> bool:
+    """Check if a Thunderbolt device has DMA capability flags."""
+    raw = json.dumps(dev).lower()
+    return any(flag.lower() in raw for flag in _DMA_CAPABILITY_FLAGS)
+
+
+class ThunderboltDMAProbe(MicroProbe):
+    """Baseline-diff probe for Thunderbolt/DMA device inventory.
+
+    Thunderbolt devices have Direct Memory Access (DMA) capability,
+    making them high-risk attack vectors. A malicious Thunderbolt device
+    can read/write system memory directly, bypassing OS protections
+    (Thunderclap, DMA attacks). This probe tracks known Thunderbolt
+    devices by fingerprint and alerts on new connections.
+
+    Uses system_profiler SPThunderboltDataType for device enumeration.
+    First scan silently establishes the baseline.
+
+    MITRE: T1200 (Hardware Additions), T1052 (Exfiltration Over Physical Medium)
+    """
+
+    name = "macos_thunderbolt_dma"
+    description = "Tracks Thunderbolt/DMA device inventory changes on macOS"
+    platforms = ["darwin"]
+    mitre_techniques = ["T1200", "T1052"]
+    mitre_tactics = ["initial_access", "exfiltration"]
+    scan_interval = 30.0
+    requires_fields = ["usb_devices"]  # runs alongside peripheral collector
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._known: Dict[str, Dict[str, Any]] = {}  # fingerprint -> device dict
+        self._first_run = True
+
+    @staticmethod
+    def _enumerate_thunderbolt_devices() -> List[Dict[str, Any]]:
+        """Run system_profiler SPThunderboltDataType and parse JSON output.
+
+        Returns a flat list of device dicts. Each dict contains device_name,
+        vendor_id, device_id, route_string, link_speed, and receptacle fields.
+        """
+        devices: List[Dict[str, Any]] = []
+        try:
+            result = subprocess.run(
+                ["system_profiler", "SPThunderboltDataType", "-json"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                return devices
+
+            data = json.loads(result.stdout)
+            tb_items = data.get("SPThunderboltDataType", [])
+
+            for bus in tb_items:
+                # Each bus may contain device entries
+                bus_devices = bus.get("device_name_key", [])
+                if isinstance(bus_devices, list):
+                    for dev in bus_devices:
+                        devices.append(dev)
+                # Also check for inline device attributes on the bus itself
+                if bus.get("vendor_id_key") or bus.get("device_id_key"):
+                    devices.append(bus)
+
+        except (subprocess.TimeoutExpired, OSError) as e:
+            logger.debug("system_profiler Thunderbolt enumeration failed: %s", e)
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.debug("Thunderbolt JSON parse error: %s", e)
+
+        return devices
+
+    def _make_added_event(self, dev: Dict[str, Any], fp: str) -> TelemetryEvent:
+        """Create event for a newly connected Thunderbolt device."""
+        dma_capable = _has_dma_capability(dev)
+        severity = Severity.CRITICAL if dma_capable else Severity.HIGH
+        confidence = 0.95 if dma_capable else 0.85
+
+        return self._create_event(
+            event_type="thunderbolt_device_added",
+            severity=severity,
+            data={
+                "probe_name": self.name,
+                "detection_source": "system_profiler",
+                "device_name": dev.get("device_name", "Unknown"),
+                "vendor_id": dev.get("vendor_id_key", ""),
+                "device_id": dev.get("device_id_key", ""),
+                "route_string": dev.get("route_string", ""),
+                "link_speed": dev.get("link_speed", ""),
+                "receptacle": dev.get("receptacle", ""),
+                "dma_capable": dma_capable,
+                "fingerprint": fp,
+            },
+            confidence=confidence,
+            correlation_id=fp,
+        )
+
+    def _make_removed_event(self, dev: Dict[str, Any], fp: str) -> TelemetryEvent:
+        """Create event for a disconnected Thunderbolt device."""
+        return self._create_event(
+            event_type="thunderbolt_device_removed",
+            severity=Severity.INFO,
+            data={
+                "probe_name": self.name,
+                "detection_source": "system_profiler",
+                "device_name": dev.get("device_name", "Unknown"),
+                "vendor_id": dev.get("vendor_id_key", ""),
+                "device_id": dev.get("device_id_key", ""),
+                "fingerprint": fp,
+            },
+            confidence=0.95,
+            correlation_id=fp,
+        )
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+
+        tb_devices = self._enumerate_thunderbolt_devices()
+
+        current: Dict[str, Dict[str, Any]] = {}
+        for dev in tb_devices:
+            fp = _thunderbolt_fingerprint(dev)
+            if not fp.replace("|", ""):
+                continue  # skip empty fingerprints
+            current[fp] = dev
+
+            if not self._first_run and fp not in self._known:
+                events.append(self._make_added_event(dev, fp))
+
+        # Detect removed Thunderbolt devices
+        if not self._first_run:
+            for fp, dev in self._known.items():
+                if fp not in current:
+                    events.append(self._make_removed_event(dev, fp))
+
+        self._known = current
+        self._first_run = False
+        return events
+
+
+# =============================================================================
 # Factory
 # =============================================================================
 
@@ -410,4 +586,5 @@ def create_peripheral_probes() -> List[MicroProbe]:
         BluetoothInventoryProbe(),
         NewPeripheralProbe(),
         RemovableMediaProbe(),
+        ThunderboltDMAProbe(),
     ]

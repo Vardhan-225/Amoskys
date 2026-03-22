@@ -1,4 +1,4 @@
-"""macOS File Observatory Probes — 8 detection probes for filesystem integrity.
+"""macOS File Observatory Probes — 9 detection probes for filesystem integrity.
 
 Each probe consumes FileEntry data from MacOSFileCollector via shared_data.
 Uses baseline-diff pattern: stores previous hashes to detect new, modified,
@@ -13,8 +13,10 @@ Probes:
     6. SipStatusProbe — SIP disabled alert
     7. HiddenFileProbe — new hidden files in sensitive locations
     8. DownloadsMonitorProbe — new files in ~/Downloads
+    9. AirDropFileArrivalProbe — AirDrop-delivered files with quarantine xattr
 
-MITRE: T1565, T1548.001, T1070, T1505.003, T1553.001, T1562.001, T1564.001, T1204
+MITRE: T1565, T1548.001, T1070, T1505.003, T1553.001, T1562.001, T1564.001, T1204,
+       T1105, T1204.002
 """
 
 from __future__ import annotations
@@ -34,6 +36,23 @@ from amoskys.agents.common.probes import (
 from amoskys.agents.common.process_resolver import resolve_file_owner_process
 
 logger = logging.getLogger(__name__)
+
+# Shared constant: executable file extensions used by QuarantineBypassProbe
+# and AirDropFileArrivalProbe to avoid duplication.
+_EXECUTABLE_FILE_EXTENSIONS = frozenset(
+    {
+        ".app",
+        ".dmg",
+        ".pkg",
+        ".command",
+        ".sh",
+        ".py",
+        ".rb",
+        ".pl",
+        ".scpt",
+        ".workflow",
+    }
+)
 
 
 def _attribute_file_change(file_path: str) -> Dict[str, Any]:
@@ -502,18 +521,7 @@ class QuarantineBypassProbe(MicroProbe):
     scan_interval = 60.0
 
     # Extensions commonly checked for quarantine
-    _EXECUTABLE_EXTENSIONS = {
-        ".app",
-        ".dmg",
-        ".pkg",
-        ".command",
-        ".sh",
-        ".py",
-        ".rb",
-        ".pl",
-        ".scpt",
-        ".workflow",
-    }
+    _EXECUTABLE_EXTENSIONS = _EXECUTABLE_FILE_EXTENSIONS
 
     def __init__(self) -> None:
         super().__init__()
@@ -771,25 +779,9 @@ class DownloadsMonitorProbe(MicroProbe):
     requires_fields = ["files"]
     scan_interval = 30.0
 
-    _HIGH_RISK_EXTENSIONS = {
-        ".dmg",
-        ".pkg",
-        ".app",
-        ".command",
-        ".sh",
-        ".py",
-        ".rb",
-        ".pl",
-        ".scpt",
-        ".workflow",
-        ".zip",
-        ".tar",
-        ".gz",
-        ".rar",
-        ".7z",
-        ".iso",
-        ".img",
-    }
+    _HIGH_RISK_EXTENSIONS = _EXECUTABLE_FILE_EXTENSIONS | frozenset(
+        {".zip", ".tar", ".gz", ".rar", ".7z", ".iso", ".img"}
+    )
 
     def __init__(self) -> None:
         super().__init__()
@@ -845,6 +837,212 @@ class DownloadsMonitorProbe(MicroProbe):
 
 
 # =============================================================================
+# 9. AirDropFileArrivalProbe
+# =============================================================================
+
+# AirDrop quarantine agent identifier
+_AIRDROP_AGENT_ID = "com.apple.share.AirDrop.SendFileService"
+
+# Extensions considered executable / high-risk when received via AirDrop
+# Extends the shared _EXECUTABLE_FILE_EXTENSIONS with AirDrop-specific types
+_AIRDROP_EXECUTABLE_EXTENSIONS = _EXECUTABLE_FILE_EXTENSIONS | frozenset(
+    {".terminal", ".action"}
+)
+
+# AirDrop staging directory prefix
+_AIRDROP_STAGING_PREFIX = "/private/var/folders/"
+
+
+def _read_quarantine_xattr(path: str) -> Optional[str]:
+    """Read the com.apple.quarantine xattr value for a file.
+
+    Returns the raw xattr string or None if not present / error.
+    """
+    try:
+        result = subprocess.run(
+            ["xattr", "-p", "com.apple.quarantine", path],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    return None
+
+
+def _is_airdrop_quarantine(quarantine_val: str) -> bool:
+    """Check if a quarantine xattr value indicates AirDrop delivery."""
+    return _AIRDROP_AGENT_ID in quarantine_val or "AirDrop" in quarantine_val
+
+
+class AirDropFileArrivalProbe(MicroProbe):
+    """Detects files received via AirDrop, especially executables.
+
+    Monitors ~/Downloads for new files whose com.apple.quarantine xattr
+    contains the AirDrop agent identifier. Executable files received via
+    AirDrop are high severity — social engineering vector for malware delivery.
+
+    Also monitors /private/var/folders/ for AirDrop staging files that
+    indicate an active transfer.
+
+    MITRE: T1105 (Ingress Tool Transfer), T1204.002 (Malicious File)
+    """
+
+    name = "macos_airdrop_file_arrival"
+    description = "Detects files received via AirDrop on macOS"
+    platforms = ["darwin"]
+    mitre_techniques = ["T1105", "T1204.002"]
+    mitre_tactics = ["command_and_control", "execution"]
+    scan_interval = 15.0
+    requires_fields = ["files"]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._home = str(Path.home())
+        self._seen_airdrop_files: Set[str] = set()
+        self._seen_staging_files: Set[str] = set()
+        self._xattr_available = self._check_xattr()
+
+    @staticmethod
+    def _check_xattr() -> bool:
+        """Verify xattr command is available."""
+        try:
+            subprocess.run(["xattr", "--help"], capture_output=True, timeout=3)
+            return True
+        except Exception:
+            return False
+
+    def _scan_downloads(self, files: list) -> List[TelemetryEvent]:
+        """Scan ~/Downloads for AirDrop-delivered files."""
+        events: List[TelemetryEvent] = []
+        if not self._xattr_available:
+            return events
+
+        downloads_dir = os.path.join(self._home, "Downloads")
+
+        for entry in files:
+            if not entry.path.startswith(downloads_dir + "/"):
+                continue
+            if entry.path in self._seen_airdrop_files:
+                continue
+
+            quarantine_val = _read_quarantine_xattr(entry.path)
+            if not quarantine_val or not _is_airdrop_quarantine(quarantine_val):
+                continue
+
+            self._seen_airdrop_files.add(entry.path)
+
+            _, ext = os.path.splitext(entry.name.lower())
+            is_executable = ext in _AIRDROP_EXECUTABLE_EXTENSIONS
+            severity = Severity.HIGH if is_executable else Severity.MEDIUM
+            confidence = 0.9 if is_executable else 0.7
+
+            events.append(
+                self._create_event(
+                    event_type="airdrop_file_received",
+                    severity=severity,
+                    data={
+                        **_attribute_file_change(entry.path),
+                        "path": entry.path,
+                        "name": entry.name,
+                        "extension": ext,
+                        "sha256": entry.sha256,
+                        "size": entry.size,
+                        "is_executable": is_executable,
+                        "quarantine_value": quarantine_val[:200],
+                        "delivery_method": "AirDrop",
+                    },
+                    confidence=confidence,
+                )
+            )
+
+        return events
+
+    def _scan_staging(self) -> List[TelemetryEvent]:
+        """Scan /private/var/folders/ for AirDrop staging files."""
+        events: List[TelemetryEvent] = []
+        try:
+            # AirDrop stages files in com.apple.AirDrop within var/folders
+            staging_files = subprocess.run(
+                [
+                    "find",
+                    _AIRDROP_STAGING_PREFIX,
+                    "-path",
+                    "*com.apple.AirDrop*",
+                    "-type",
+                    "f",
+                    "-newer",
+                    "/tmp/.amoskys_airdrop_marker",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            # Fallback: just scan for any com.apple.AirDrop entries
+            if staging_files.returncode != 0:
+                staging_files = subprocess.run(
+                    [
+                        "find",
+                        _AIRDROP_STAGING_PREFIX,
+                        "-path",
+                        "*com.apple.AirDrop*",
+                        "-type",
+                        "f",
+                        "-maxdepth",
+                        "6",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+        except (subprocess.TimeoutExpired, OSError):
+            return events
+
+        if not staging_files.stdout.strip():
+            return events
+
+        for line in staging_files.stdout.strip().splitlines():
+            fpath = line.strip()
+            if not fpath or fpath in self._seen_staging_files:
+                continue
+            self._seen_staging_files.add(fpath)
+
+            events.append(
+                self._create_event(
+                    event_type="airdrop_staging_detected",
+                    severity=Severity.MEDIUM,
+                    data={
+                        "probe_name": self.name,
+                        "detection_source": "filesystem_monitor",
+                        "file_name": os.path.basename(fpath),
+                        "file_extension": os.path.splitext(fpath)[1],
+                        "path": fpath,
+                        "staging_location": _AIRDROP_STAGING_PREFIX,
+                        "delivery_method": "AirDrop",
+                    },
+                    confidence=0.65,
+                )
+            )
+
+        # Prune seen-set to avoid unbounded growth
+        if len(self._seen_staging_files) > 500:
+            self._seen_staging_files = set(list(self._seen_staging_files)[-250:])
+
+        return events
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        files = context.shared_data.get("files", [])
+
+        events.extend(self._scan_downloads(files))
+        events.extend(self._scan_staging())
+
+        return events
+
+
+# =============================================================================
 # Factory
 # =============================================================================
 
@@ -860,4 +1058,5 @@ def create_filesystem_probes() -> List[MicroProbe]:
         SipStatusProbe(),
         HiddenFileProbe(),
         DownloadsMonitorProbe(),
+        AirDropFileArrivalProbe(),
     ]

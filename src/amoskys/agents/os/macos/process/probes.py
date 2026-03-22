@@ -1308,6 +1308,305 @@ class ProcessMasqueradeEnhancedProbe(MicroProbe):
         return events
 
 
+# =============================================================================
+# 14. FirmwareIntegrityProbe
+# =============================================================================
+
+
+class FirmwareIntegrityProbe(MicroProbe):
+    """Detects firmware and boot security manipulation attempts.
+
+    Watches for execution of tools that modify SIP, NVRAM boot args,
+    bootloader configuration, or FileVault encryption state. Any
+    invocation of these binaries is CRITICAL — they should only appear
+    during deliberate system updates.
+
+    MITRE:
+        T1562.001 — Impair Defenses: Disable or Modify Tools (csrutil)
+        T1542.001 — Pre-OS Boot: System Firmware (nvram)
+        T1542.003 — Pre-OS Boot: Bootkit (bless)
+        T1490    — Inhibit System Recovery (fdesetup)
+    """
+
+    name = "macos_firmware_integrity"
+    description = "Detects firmware/boot security manipulation (SIP, NVRAM, bootloader, FileVault)"
+    platforms = ["darwin"]
+    mitre_techniques = ["T1562.001", "T1542.001", "T1542.003", "T1490"]
+    mitre_tactics = ["defense_evasion", "persistence", "impact"]
+    scan_interval = 10.0
+    requires_fields = ["processes"]
+
+    # (process_name, description, primary_technique, severity)
+    _FIRMWARE_TOOLS: List[tuple] = [
+        ("csrutil", "SIP manipulation attempt", "T1562.001", Severity.CRITICAL),
+        ("nvram", "NVRAM / boot-args modification", "T1542.001", Severity.CRITICAL),
+        (
+            "bless",
+            "Bootloader / startup disk manipulation",
+            "T1542.003",
+            Severity.CRITICAL,
+        ),
+        ("fdesetup", "FileVault encryption manipulation", "T1490", Severity.HIGH),
+        (
+            "firmwarepasswd",
+            "Firmware password change attempt",
+            "T1542.001",
+            Severity.CRITICAL,
+        ),
+    ]
+
+    _FIRMWARE_TOOL_NAMES: Set[str] = {t[0] for t in _FIRMWARE_TOOLS}
+
+    # Cmdline patterns that escalate severity
+    _CRITICAL_CMDLINE_PATTERNS: List[tuple] = [
+        ("disable", "Security feature disable", Severity.CRITICAL),
+        ("clear", "Configuration cleared", Severity.CRITICAL),
+        ("delete", "Configuration deleted", Severity.CRITICAL),
+        ("boot-args", "Boot arguments modified", Severity.CRITICAL),
+        ("-firmware", "Firmware password changed", Severity.CRITICAL),
+        ("--setBoot", "Boot target changed", Severity.HIGH),
+        ("--mount", "Boot volume mount changed", Severity.HIGH),
+    ]
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        from amoskys.agents.common.self_identity import self_identity
+
+        events: List[TelemetryEvent] = []
+        processes = context.shared_data.get("processes", [])
+
+        for proc in processes:
+            if proc.name not in self._FIRMWARE_TOOL_NAMES:
+                continue
+
+            # Self-exclusion
+            if self_identity.is_self_process(
+                pid=proc.pid,
+                name=proc.name,
+                exe=proc.exe,
+            ):
+                continue
+
+            # Find the matching tool entry
+            tool_desc = "Firmware tool execution"
+            technique = "T1542.001"
+            severity = Severity.HIGH
+            for tool_name, desc, tech, sev in self._FIRMWARE_TOOLS:
+                if proc.name == tool_name:
+                    tool_desc = desc
+                    technique = tech
+                    severity = sev
+                    break
+
+            # Check cmdline for escalating patterns
+            cmdline_str = " ".join(proc.cmdline) if proc.cmdline else ""
+            escalation_reasons: List[str] = []
+            for pattern, reason, pattern_sev in self._CRITICAL_CMDLINE_PATTERNS:
+                if pattern.lower() in cmdline_str.lower():
+                    escalation_reasons.append(reason)
+                    if (
+                        pattern_sev.value > severity.value
+                        if hasattr(severity, "value")
+                        else False
+                    ):
+                        severity = pattern_sev
+
+            ctx = _mandate_process_context(proc, self.name)
+            ctx.update(
+                {
+                    "tool_name": proc.name,
+                    "tool_description": tool_desc,
+                    "mitre_technique": technique,
+                    "command": cmdline_str[:500],
+                    "escalation_reasons": escalation_reasons,
+                    "firmware_tool_category": "boot_security",
+                }
+            )
+
+            events.append(
+                self._create_event(
+                    event_type="firmware_integrity_alert",
+                    severity=severity,
+                    data=ctx,
+                    confidence=0.95,
+                    correlation_id=proc.process_guid,
+                )
+            )
+
+        return events
+
+
+# =============================================================================
+# 15. VirtualMachineProbe
+# =============================================================================
+
+
+class VirtualMachineProbe(MicroProbe):
+    """Detects virtual machine and hypervisor processes on the endpoint.
+
+    Running a VM on an endpoint can indicate:
+    - Sandbox evasion (malware running analysis inside a nested VM)
+    - Unauthorized virtual environments for data exfiltration
+    - Anti-analysis techniques
+
+    Also detects VM tool processes which indicate the host itself
+    may be a virtual machine (relevant for VM-aware malware).
+
+    MITRE:
+        T1497   — Virtualization/Sandbox Evasion
+        T1564.006 — Hide Artifacts: Run Virtual Instance
+    """
+
+    name = "macos_virtual_machine"
+    description = "Detects VM/hypervisor processes and VM-aware evasion techniques"
+    platforms = ["darwin"]
+    mitre_techniques = ["T1497", "T1564.006"]
+    mitre_tactics = ["defense_evasion", "discovery"]
+    scan_interval = 30.0
+    requires_fields = ["processes"]
+
+    # VM hypervisor processes — running a VM on the endpoint
+    _VM_HYPERVISOR_PROCS: Dict[str, str] = {
+        "vmware-vmx": "VMware Fusion",
+        "vmware-usbarbitrator": "VMware Fusion",
+        "prl_client_app": "Parallels Desktop",
+        "prl_vm_app": "Parallels Desktop",
+        "VirtualBoxVM": "VirtualBox",
+        "VBoxHeadless": "VirtualBox",
+        "UTM": "UTM (QEMU)",
+        "QEMU": "QEMU",
+        "vmon": "VMware vmon",
+    }
+
+    # VM tool processes — indicate the host is a VM
+    _VM_TOOL_PROCS: Dict[str, str] = {
+        "vmtoolsd": "VMware Tools",
+        "prl_tools": "Parallels Tools",
+        "open-vm-tools": "Open VM Tools",
+        "VBoxService": "VirtualBox Guest Additions",
+        "VBoxClient": "VirtualBox Guest Additions",
+    }
+
+    # Patterns in cmdline that indicate VM detection / anti-analysis
+    _VM_DETECTION_PATTERNS: List[str] = [
+        "sysctl hw.model",
+        "ioreg -l",
+        "system_profiler SPHardwareDataType",
+        "sysctl machdep.cpu.brand_string",
+        "sysctl kern.hv_",
+    ]
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        from amoskys.agents.common.self_identity import self_identity
+
+        events: List[TelemetryEvent] = []
+        processes = context.shared_data.get("processes", [])
+
+        for proc in processes:
+            # Self-exclusion
+            if self_identity.is_self_process(
+                pid=proc.pid,
+                name=proc.name,
+                exe=proc.exe,
+            ):
+                continue
+
+            proc_name = proc.name or ""
+
+            # Detection 1: VM hypervisor process running
+            if proc_name in self._VM_HYPERVISOR_PROCS:
+                vm_product = self._VM_HYPERVISOR_PROCS[proc_name]
+                ctx = _mandate_process_context(proc, self.name)
+                ctx.update(
+                    {
+                        "vm_product": vm_product,
+                        "vm_process_type": "hypervisor",
+                        "event_category": "virtual_machine_running",
+                    }
+                )
+                events.append(
+                    self._create_event(
+                        event_type="vm_hypervisor_detected",
+                        severity=Severity.MEDIUM,
+                        data=ctx,
+                        confidence=0.95,
+                        correlation_id=proc.process_guid,
+                    )
+                )
+                continue
+
+            # Also match qemu-system-* variants
+            if proc_name.startswith("qemu-system"):
+                ctx = _mandate_process_context(proc, self.name)
+                ctx.update(
+                    {
+                        "vm_product": f"QEMU ({proc_name})",
+                        "vm_process_type": "hypervisor",
+                        "event_category": "virtual_machine_running",
+                    }
+                )
+                events.append(
+                    self._create_event(
+                        event_type="vm_hypervisor_detected",
+                        severity=Severity.MEDIUM,
+                        data=ctx,
+                        confidence=0.95,
+                        correlation_id=proc.process_guid,
+                    )
+                )
+                continue
+
+            # Detection 2: VM tool process (host is a VM)
+            if proc_name in self._VM_TOOL_PROCS:
+                vm_product = self._VM_TOOL_PROCS[proc_name]
+                ctx = _mandate_process_context(proc, self.name)
+                ctx.update(
+                    {
+                        "vm_product": vm_product,
+                        "vm_process_type": "guest_tools",
+                        "event_category": "vm_guest_detected",
+                    }
+                )
+                events.append(
+                    self._create_event(
+                        event_type="vm_guest_tools_detected",
+                        severity=Severity.LOW,
+                        data=ctx,
+                        confidence=0.90,
+                        correlation_id=proc.process_guid,
+                    )
+                )
+                continue
+
+            # Detection 3: Anti-analysis — processes checking for VM indicators
+            cmdline_str = " ".join(proc.cmdline) if proc.cmdline else ""
+            if not cmdline_str:
+                continue
+
+            for pattern in self._VM_DETECTION_PATTERNS:
+                if pattern in cmdline_str:
+                    ctx = _mandate_process_context(proc, self.name)
+                    ctx.update(
+                        {
+                            "command": cmdline_str[:500],
+                            "vm_check_pattern": pattern,
+                            "vm_process_type": "anti_analysis",
+                            "event_category": "vm_detection_attempt",
+                        }
+                    )
+                    events.append(
+                        self._create_event(
+                            event_type="vm_detection_attempt",
+                            severity=Severity.HIGH,
+                            data=ctx,
+                            confidence=0.80,
+                            correlation_id=proc.process_guid,
+                        )
+                    )
+                    break
+
+        return events
+
+
 def create_process_probes() -> List[MicroProbe]:
     """Create all macOS process probes."""
     return [
@@ -1324,4 +1623,6 @@ def create_process_probes() -> List[MicroProbe]:
         SystemDiscoveryProbe(),
         SecurityToolDisableProbe(),
         ProcessMasqueradeEnhancedProbe(),
+        FirmwareIntegrityProbe(),
+        VirtualMachineProbe(),
     ]

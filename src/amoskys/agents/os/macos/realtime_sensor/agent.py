@@ -845,6 +845,432 @@ class AppLifecycleProbe(MicroProbe):
         return events
 
 
+class IMessageFaceTimeProbe(MicroProbe):
+    """Detects exploitation attempts via iMessage/FaceTime subsystems.
+
+    Monitors for:
+    - imagent spawning child processes (exploitation indicator)
+    - High-frequency iMessage processing (DoS or exploitation attempt)
+    - FaceTime call establishment from unknown contacts
+    - iMessage attachment processing by non-standard processes
+
+    MITRE: T1566 (Phishing), T1598.003 (Spearphishing Link), T1203 (Client Execution)
+    """
+
+    name = "rt_imessage_facetime"
+    description = "Real-time iMessage/FaceTime exploitation detection"
+    mitre_techniques = ["T1566", "T1598.003", "T1203"]
+    severity = Severity.HIGH
+    requires_fields = {}
+    requires_event_types = frozenset()
+
+    _WATCHED_PROCESSES = frozenset(
+        {
+            "imagent",
+            "IMDPersistenceAgent",
+            "identityservicesd",
+            "FaceTime",
+        }
+    )
+
+    _WATCHED_SUBSYSTEMS = frozenset(
+        {
+            "com.apple.iMessage",
+            "com.apple.identityservices",
+        }
+    )
+
+    # Attachment-handling processes that are expected
+    _LEGITIMATE_ATTACHMENT_HANDLERS = frozenset(
+        {
+            "imagent",
+            "IMDPersistenceAgent",
+            "IMTransferAgent",
+            "mediaanalysisd",
+            "cloudd",
+        }
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._message_count_window: List[int] = []  # timestamps for rate detection
+        self._RATE_WINDOW_NS = 60_000_000_000  # 60 seconds in nanoseconds
+        self._RATE_THRESHOLD = 50  # messages per minute threshold
+
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
+        device_id = shared_data.get("device_id", "")
+
+        for rt in rt_events:
+            if rt.source != "logstream":
+                continue
+
+            subsystem = rt.details.get("subsystem", "")
+            proc_name = rt.process_name or ""
+            message = rt.details.get("message", "")
+
+            # Skip if not from watched processes or subsystems
+            if (
+                proc_name not in self._WATCHED_PROCESSES
+                and subsystem not in self._WATCHED_SUBSYSTEMS
+            ):
+                continue
+
+            # Detection 1: imagent spawning child processes (exploitation)
+            if proc_name == "imagent" and rt.event_type in (
+                "process_exec",
+                "process_fork",
+            ):
+                events.append(
+                    _te(
+                        event_type="rt_imessage_child_spawn",
+                        severity=Severity.CRITICAL,
+                        probe_name=self.name,
+                        data={
+                            **_enrich_rt_process(rt),
+                            "process_name": proc_name,
+                            "pid": rt.pid,
+                            "message": message[:300],
+                            "subsystem": subsystem,
+                            "detection_source": "logstream_realtime",
+                            "probe_name": self.name,
+                            "event_category": "imessage_exploitation",
+                            "risk_score": 0.95,
+                        },
+                        mitre=["T1203"],
+                        confidence=0.95,
+                        device_id=device_id,
+                        ts_ns=rt.timestamp_ns,
+                    )
+                )
+
+            # Detection 2: High-frequency iMessage processing (DoS / exploitation)
+            if subsystem == "com.apple.iMessage" and "received" in message.lower():
+                now_ns = rt.timestamp_ns
+                cutoff = now_ns - self._RATE_WINDOW_NS
+                self._message_count_window = [
+                    ts for ts in self._message_count_window if ts > cutoff
+                ]
+                self._message_count_window.append(now_ns)
+
+                if len(self._message_count_window) > self._RATE_THRESHOLD:
+                    events.append(
+                        _te(
+                            event_type="rt_imessage_flood",
+                            severity=Severity.HIGH,
+                            probe_name=self.name,
+                            data={
+                                "process_name": proc_name,
+                                "pid": rt.pid,
+                                "message_rate": len(self._message_count_window),
+                                "window_seconds": 60,
+                                "threshold": self._RATE_THRESHOLD,
+                                "subsystem": subsystem,
+                                "detection_source": "logstream_realtime",
+                                "probe_name": self.name,
+                                "event_category": "imessage_dos",
+                                "risk_score": 0.80,
+                            },
+                            mitre=["T1566", "T1498"],
+                            confidence=0.85,
+                            device_id=device_id,
+                            ts_ns=rt.timestamp_ns,
+                        )
+                    )
+                    # Reset window after alert to avoid repeated alerts
+                    self._message_count_window.clear()
+
+            # Detection 3: FaceTime call from unknown / suspicious context
+            if proc_name == "FaceTime" and "call" in message.lower():
+                # Look for crash or error indicators alongside call events
+                is_crash = any(
+                    kw in message.lower()
+                    for kw in ("crash", "abort", "exception", "fault", "overflow")
+                )
+                if is_crash:
+                    events.append(
+                        _te(
+                            event_type="rt_facetime_crash",
+                            severity=Severity.HIGH,
+                            probe_name=self.name,
+                            data={
+                                **_enrich_rt_process(rt),
+                                "process_name": proc_name,
+                                "pid": rt.pid,
+                                "message": message[:300],
+                                "subsystem": subsystem,
+                                "detection_source": "logstream_realtime",
+                                "probe_name": self.name,
+                                "event_category": "facetime_exploitation",
+                                "risk_score": 0.85,
+                            },
+                            mitre=["T1203"],
+                            confidence=0.85,
+                            device_id=device_id,
+                            ts_ns=rt.timestamp_ns,
+                        )
+                    )
+
+            # Detection 4: Attachment processing by non-standard processes
+            if "attachment" in message.lower() and subsystem == "com.apple.iMessage":
+                if proc_name not in self._LEGITIMATE_ATTACHMENT_HANDLERS:
+                    events.append(
+                        _te(
+                            event_type="rt_imessage_attachment_hijack",
+                            severity=Severity.HIGH,
+                            probe_name=self.name,
+                            data={
+                                **_enrich_rt_process(rt),
+                                "process_name": proc_name,
+                                "pid": rt.pid,
+                                "message": message[:300],
+                                "subsystem": subsystem,
+                                "detection_source": "logstream_realtime",
+                                "probe_name": self.name,
+                                "event_category": "imessage_attachment_abuse",
+                                "risk_score": 0.90,
+                            },
+                            mitre=["T1566", "T1598.003"],
+                            confidence=0.90,
+                            device_id=device_id,
+                            ts_ns=rt.timestamp_ns,
+                        )
+                    )
+
+        return events
+
+
+class KeyloggerDetectionProbe(MicroProbe):
+    """Detects keylogging and input capture indicators via real-time events.
+
+    Monitors for:
+    - Unified Log entries from com.apple.accessibility with event tap registration
+    - Processes requesting Accessibility TCC permission (keyboard monitoring)
+    - Known keylogger process names or patterns
+    - IOKit HID device monitoring patterns in process arguments
+
+    MITRE: T1056.001 (Keylogging), T1056 (Input Capture)
+    """
+
+    name = "rt_keylogger_detection"
+    description = "Real-time keylogger and input capture detection"
+    mitre_techniques = ["T1056.001", "T1056"]
+    severity = Severity.CRITICAL
+    requires_fields = {}
+    requires_event_types = frozenset()
+
+    _KEYLOGGER_SUBSYSTEMS = frozenset(
+        {
+            "com.apple.accessibility",
+            "com.apple.HIToolbox",
+            "com.apple.IOKit",
+        }
+    )
+
+    # Known keylogger process names (macOS)
+    _KNOWN_KEYLOGGERS = frozenset(
+        {
+            "keylogger",
+            "klog",
+            "logkeys",
+            "lkl",
+            "maclogger",
+            "spyrix",
+            "aobo",
+            "kidlogger",
+            "elite_keylogger",
+            "refog",
+            "hoverwatch",
+            "cocospy",
+            "mspy",
+            "flexispy",
+        }
+    )
+
+    # Keywords in log messages indicating event tap / input monitoring
+    _EVENT_TAP_KEYWORDS = frozenset(
+        {
+            "CGEventTapCreate",
+            "kCGEventKeyDown",
+            "kCGEventKeyUp",
+            "kCGHIDEventTap",
+            "event tap",
+            "IOHIDManager",
+            "IOHIDDevice",
+            "kIOHIDPrimaryUsageKey",
+            "kHIDUsage_KeyboardOrKeypad",
+            "AXObserverCreate",
+            "AXIsProcessTrusted",
+        }
+    )
+
+    # Legitimate processes that use accessibility / event taps
+    _LEGITIMATE_TAP_USERS = frozenset(
+        {
+            "skhd",
+            "yabai",
+            "Karabiner-Elements",
+            "karabiner_grabber",
+            "karabiner_observer",
+            "BetterTouchTool",
+            "Hammerspoon",
+            "Alfred",
+            "Raycast",
+            "Rectangle",
+            "Magnet",
+            "Spectacle",
+            "Keyboard Maestro",
+            "TextExpander",
+            "Shortcat",
+            "1Password",
+            "Bartender",
+            "iStat Menus",
+        }
+    )
+
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
+        device_id = shared_data.get("device_id", "")
+
+        for rt in rt_events:
+            if rt.source != "logstream":
+                continue
+
+            subsystem = rt.details.get("subsystem", "")
+            proc_name = rt.process_name or ""
+            message = rt.details.get("message", "")
+
+            # Skip AMOSKYS's own processes
+            if proc_name.startswith("amoskys"):
+                continue
+
+            # Detection 1: Known keylogger process names
+            proc_lower = proc_name.lower()
+            if proc_lower in self._KNOWN_KEYLOGGERS or any(
+                kl in proc_lower for kl in self._KNOWN_KEYLOGGERS
+            ):
+                events.append(
+                    _te(
+                        event_type="rt_known_keylogger",
+                        severity=Severity.CRITICAL,
+                        probe_name=self.name,
+                        data={
+                            **_enrich_rt_process(rt),
+                            "process_name": proc_name,
+                            "pid": rt.pid,
+                            "message": message[:300],
+                            "subsystem": subsystem,
+                            "detection_source": "logstream_realtime",
+                            "probe_name": self.name,
+                            "event_category": "known_keylogger",
+                            "risk_score": 0.98,
+                        },
+                        mitre=["T1056.001"],
+                        confidence=0.95,
+                        device_id=device_id,
+                        ts_ns=rt.timestamp_ns,
+                    )
+                )
+                continue
+
+            # Detection 2: Event tap registration from accessibility subsystem
+            if subsystem in self._KEYLOGGER_SUBSYSTEMS:
+                matched_keywords = [
+                    kw
+                    for kw in self._EVENT_TAP_KEYWORDS
+                    if kw.lower() in message.lower()
+                ]
+                if matched_keywords:
+                    # Check if this is a legitimate tap user
+                    is_legitimate = proc_name in self._LEGITIMATE_TAP_USERS
+                    severity = Severity.MEDIUM if is_legitimate else Severity.HIGH
+
+                    events.append(
+                        _te(
+                            event_type="rt_event_tap_registration",
+                            severity=severity,
+                            probe_name=self.name,
+                            data={
+                                **_enrich_rt_process(rt),
+                                "process_name": proc_name,
+                                "pid": rt.pid,
+                                "message": message[:300],
+                                "subsystem": subsystem,
+                                "matched_keywords": matched_keywords,
+                                "is_known_legitimate": is_legitimate,
+                                "detection_source": "logstream_realtime",
+                                "probe_name": self.name,
+                                "event_category": "event_tap_registration",
+                                "risk_score": 0.50 if is_legitimate else 0.85,
+                            },
+                            mitre=["T1056.001"],
+                            confidence=0.70 if is_legitimate else 0.90,
+                            device_id=device_id,
+                            ts_ns=rt.timestamp_ns,
+                        )
+                    )
+
+            # Detection 3: TCC Accessibility permission grant (keyboard monitoring enabler)
+            if (
+                rt.event_type in ("tcc_permission_granted",)
+                and "kTCCServiceAccessibility" in message
+            ):
+                is_legitimate = proc_name in self._LEGITIMATE_TAP_USERS
+                if not is_legitimate:
+                    events.append(
+                        _te(
+                            event_type="rt_accessibility_tcc_grant",
+                            severity=Severity.HIGH,
+                            probe_name=self.name,
+                            data={
+                                **_enrich_rt_process(rt),
+                                "process_name": proc_name,
+                                "pid": rt.pid,
+                                "message": message[:300],
+                                "tcc_service": "kTCCServiceAccessibility",
+                                "detection_source": "logstream_realtime",
+                                "probe_name": self.name,
+                                "event_category": "accessibility_permission_grant",
+                                "risk_score": 0.80,
+                            },
+                            mitre=["T1056.001", "T1056"],
+                            confidence=0.85,
+                            device_id=device_id,
+                            ts_ns=rt.timestamp_ns,
+                        )
+                    )
+
+            # Detection 4: IOKit HID device monitoring patterns
+            if "IOHIDManager" in message or "IOHIDDevice" in message:
+                if proc_name not in self._LEGITIMATE_TAP_USERS:
+                    events.append(
+                        _te(
+                            event_type="rt_hid_monitoring",
+                            severity=Severity.HIGH,
+                            probe_name=self.name,
+                            data={
+                                **_enrich_rt_process(rt),
+                                "process_name": proc_name,
+                                "pid": rt.pid,
+                                "message": message[:300],
+                                "subsystem": subsystem,
+                                "detection_source": "logstream_realtime",
+                                "probe_name": self.name,
+                                "event_category": "hid_monitoring",
+                                "risk_score": 0.80,
+                            },
+                            mitre=["T1056"],
+                            confidence=0.80,
+                            device_id=device_id,
+                            ts_ns=rt.timestamp_ns,
+                        )
+                    )
+
+        return events
+
+
 # ── Agent ────────────────────────────────────────────────────────────────────
 
 
@@ -901,6 +1327,9 @@ class MacOSRealtimeSensorAgent(HardenedAgentBase, MicroProbeAgentMixin):
             DiskMountProbe(),
             GatekeeperRealtimeProbe(),
             AppLifecycleProbe(),
+            # ── Communication / input probes ──
+            IMessageFaceTimeProbe(),
+            KeyloggerDetectionProbe(),
         ]
         MicroProbeAgentMixin.__init__(self, probes=self._probes)
         logger.info(
