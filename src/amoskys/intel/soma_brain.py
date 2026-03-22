@@ -545,7 +545,7 @@ class SomaBrain:
                                    0.0 as temporal_score,
                                    0.0 as behavioral_score,
                                    'unknown' as final_classification,
-                                   COALESCE(attributes, '{{}}') as indicators,
+                                   COALESCE(raw_attributes_json, attributes, '{{}}') as indicators,
                                    '[]' as mitre_techniques,
                                    0 as requires_investigation
                             FROM observation_events
@@ -830,6 +830,52 @@ class SomaBrain:
             )
             .astype(float)
         )
+
+        # === MANDATE FIELD FEATURES (Phase 2.75) ===
+        # These give SOMA visibility into WHAT process and WHERE the
+        # connection goes — the typed columns populated by
+        # _extract_typed_features() from raw_attributes_json.
+        from amoskys.intel.mandate_features import (
+            MANDATE_FEATURE_NAMES,
+            extract_mandate_features,
+        )
+
+        for feat_name in MANDATE_FEATURE_NAMES:
+            features[feat_name] = 0.0
+
+        for _, row in df.iterrows():
+            row_dict = row.to_dict()
+            # For observation rows, mandate fields are in indicators JSON
+            # not in typed columns — parse and promote them
+            indicators = row_dict.get("indicators", "{}")
+            if isinstance(indicators, str) and indicators not in ("", "null"):
+                try:
+                    ind = json.loads(indicators)
+                    if isinstance(ind, dict):
+                        if not row_dict.get("pid"):
+                            row_dict["pid"] = ind.get("pid")
+                        if not row_dict.get("process_name"):
+                            row_dict["process_name"] = ind.get(
+                                "process_name"
+                            ) or ind.get("name")
+                        if not row_dict.get("exe"):
+                            row_dict["exe"] = ind.get("exe")
+                        if not row_dict.get("remote_ip"):
+                            row_dict["remote_ip"] = (
+                                ind.get("remote_ip")
+                                or ind.get("dst_ip")
+                                or ind.get("src_ip")
+                            )
+                        if not row_dict.get("username"):
+                            row_dict["username"] = ind.get("username") or ind.get(
+                                "conn_user"
+                            )
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            mandate_vals = extract_mandate_features(row_dict)
+            for feat_name, val in zip(MANDATE_FEATURE_NAMES, mandate_vals):
+                features.at[row.name, feat_name] = val
 
         # Clean up any remaining NaN/inf
         features = features.fillna(0.0)
