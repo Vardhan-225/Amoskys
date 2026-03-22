@@ -30,8 +30,21 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
+from amoskys.agents.common.process_resolver import resolve_file_owner_process
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_persistence_context(entry: Any) -> Dict[str, Any]:
+    """Resolve process context for a persistence entry's file path."""
+    enrichment: Dict[str, Any] = {"detection_source": "persistence_monitor"}
+    path = getattr(entry, "path", "")
+    if not path:
+        return enrichment
+    snap = resolve_file_owner_process(path)
+    if snap and snap.is_alive:
+        enrichment.update(snap.to_event_fields())
+    return enrichment
 
 
 class _BaselineDiffProbe(MicroProbe):
@@ -98,6 +111,7 @@ class _BaselineDiffProbe(MicroProbe):
                         event_type=f"{self.name}_removed",
                         severity=Severity.MEDIUM,
                         data={
+                            "detection_source": "persistence_monitor",
                             "path": path,
                             "change_type": "removed",
                         },
@@ -115,6 +129,7 @@ class _BaselineDiffProbe(MicroProbe):
     ) -> TelemetryEvent:
         """Create event for a persistence change."""
         data: Dict[str, Any] = {
+            **_resolve_persistence_context(entry),
             "path": entry.path,
             "name": entry.name,
             "category": entry.category,

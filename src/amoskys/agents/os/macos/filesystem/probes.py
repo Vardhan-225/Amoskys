@@ -31,8 +31,22 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
+from amoskys.agents.common.process_resolver import resolve_file_owner_process
 
 logger = logging.getLogger(__name__)
+
+
+def _attribute_file_change(file_path: str) -> Dict[str, Any]:
+    """Resolve process context for a file change and add file metadata."""
+    enrichment: Dict[str, Any] = {"detection_source": "filesystem_monitor"}
+    # File context fields
+    enrichment["file_name"] = os.path.basename(file_path)
+    enrichment["file_extension"] = os.path.splitext(file_path)[1]
+    # Process attribution via lsof
+    snap = resolve_file_owner_process(file_path)
+    if snap and snap.is_alive:
+        enrichment.update(snap.to_event_fields())
+    return enrichment
 
 
 # =============================================================================
@@ -120,6 +134,7 @@ class _BaselineDiffProbe(MicroProbe):
                                 event_type=f"{self.name}_timestomping",
                                 severity=Severity.HIGH,
                                 data={
+                                    **_attribute_file_change(entry.path),
                                     "path": entry.path,
                                     "current_mtime": entry.mtime,
                                     "previous_mtime": prev_mtime,
@@ -139,6 +154,9 @@ class _BaselineDiffProbe(MicroProbe):
                         event_type=f"{self.name}_removed",
                         severity=Severity.MEDIUM,
                         data={
+                            "detection_source": "filesystem_monitor",
+                            "file_name": os.path.basename(path),
+                            "file_extension": os.path.splitext(path)[1],
                             "path": path,
                             "change_type": "removed",
                         },
@@ -157,6 +175,7 @@ class _BaselineDiffProbe(MicroProbe):
     ) -> TelemetryEvent:
         """Create event for a file change."""
         data: Dict[str, Any] = {
+            **_attribute_file_change(entry.path),
             "path": entry.path,
             "name": entry.name,
             "sha256": entry.sha256,
@@ -269,6 +288,7 @@ class SuidChangeProbe(MicroProbe):
                         event_type="macos_suid_new",
                         severity=Severity.CRITICAL,
                         data={
+                            **_attribute_file_change(path),
                             "path": path,
                             "name": entry.name if entry else os.path.basename(path),
                             "sha256": sha,
@@ -286,6 +306,7 @@ class SuidChangeProbe(MicroProbe):
                         event_type="macos_suid_modified",
                         severity=Severity.CRITICAL,
                         data={
+                            **_attribute_file_change(path),
                             "path": path,
                             "sha256": sha,
                             "previous_sha256": self._baseline[path],
@@ -303,6 +324,9 @@ class SuidChangeProbe(MicroProbe):
                         event_type="macos_suid_removed",
                         severity=Severity.MEDIUM,
                         data={
+                            "detection_source": "filesystem_monitor",
+                            "file_name": os.path.basename(path),
+                            "file_extension": os.path.splitext(path)[1],
                             "path": path,
                             "change_type": "removed_suid",
                         },
@@ -439,6 +463,7 @@ class WebshellProbe(MicroProbe):
                     event_type="macos_webshell_detected",
                     severity=Severity.CRITICAL,
                     data={
+                        **_attribute_file_change(path),
                         "path": path,
                         "name": entry.name if entry else os.path.basename(path),
                         "sha256": entry.sha256 if entry else "",
@@ -555,6 +580,7 @@ class QuarantineBypassProbe(MicroProbe):
                         event_type="macos_quarantine_bypass",
                         severity=Severity.HIGH,
                         data={
+                            **_attribute_file_change(entry.path),
                             "path": entry.path,
                             "name": entry.name,
                             "extension": ext,
@@ -603,6 +629,7 @@ class SipStatusProbe(MicroProbe):
                     event_type="macos_sip_disabled",
                     severity=Severity.CRITICAL,
                     data={
+                        "detection_source": "filesystem_monitor",
                         "sip_status": sip_status,
                         "previous_status": self._last_status or "unknown",
                     },
@@ -615,6 +642,7 @@ class SipStatusProbe(MicroProbe):
                     event_type="macos_sip_status_unknown",
                     severity=Severity.MEDIUM,
                     data={
+                        "detection_source": "filesystem_monitor",
                         "sip_status": sip_status,
                         "previous_status": self._last_status,
                     },
@@ -705,6 +733,7 @@ class HiddenFileProbe(MicroProbe):
                     event_type="macos_hidden_file_new",
                     severity=Severity.MEDIUM,
                     data={
+                        **_attribute_file_change(path),
                         "path": path,
                         "name": entry.name if entry else os.path.basename(path),
                         "sha256": entry.sha256 if entry else "",
@@ -799,6 +828,7 @@ class DownloadsMonitorProbe(MicroProbe):
                     event_type="macos_download_new",
                     severity=severity,
                     data={
+                        **_attribute_file_change(path),
                         "path": path,
                         "name": name,
                         "extension": ext,

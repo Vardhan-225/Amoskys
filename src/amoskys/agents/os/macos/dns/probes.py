@@ -65,6 +65,20 @@ def _extract_effective_domain(domain: str) -> str:
 
 from amoskys.agents.common.ip_utils import is_benign_domain as _is_benign_domain
 from amoskys.agents.common.ip_utils import is_private_ip as _is_private_ip
+from amoskys.agents.common.process_resolver import resolver as _resolver
+
+
+def _enrich_dns_process(query: Any) -> Dict[str, Any]:
+    """Resolve process context for a DNS query's source PID."""
+    enrichment: Dict[str, Any] = {"detection_source": "dns_monitor"}
+    pid = getattr(query, "process_pid", 0) or getattr(query, "source_pid", 0)
+    if not pid:
+        return enrichment
+    snap = _resolver.resolve(pid)
+    if snap.is_alive:
+        enrichment.update(snap.to_event_fields())
+    return enrichment
+
 
 # ── Probe 1: DGA Detection ──────────────────────────────────────────────────
 
@@ -133,6 +147,7 @@ class DGADetectionProbe(MicroProbe):
                         event_type="dga_domain_detected",
                         severity=Severity.HIGH,
                         data={
+                            **_enrich_dns_process(query),
                             "domain": domain,
                             "sld": sld,
                             "entropy": round(entropy, 3),
@@ -221,6 +236,7 @@ class DNSTunnelingProbe(MicroProbe):
                             event_type="dns_tunnel_long_label",
                             severity=Severity.HIGH,
                             data={
+                                **_enrich_dns_process(query),
                                 "domain": domain,
                                 "label": label,
                                 "label_length": len(label),
@@ -239,6 +255,7 @@ class DNSTunnelingProbe(MicroProbe):
                         event_type="dns_tunnel_long_domain",
                         severity=Severity.MEDIUM,
                         data={
+                            **_enrich_dns_process(query),
                             "domain": domain,
                             "domain_length": len(domain),
                             "record_type": query.record_type,
@@ -255,6 +272,7 @@ class DNSTunnelingProbe(MicroProbe):
                             event_type="dns_tunnel_encoded_label",
                             severity=Severity.HIGH,
                             data={
+                                **_enrich_dns_process(query),
                                 "domain": domain,
                                 "encoded_label": label,
                                 "record_type": query.record_type,
@@ -274,11 +292,26 @@ class DNSTunnelingProbe(MicroProbe):
                 self._txt_counts.get(effective_domain, 0) + count
             )
             if self._txt_counts[effective_domain] >= self.TXT_FREQUENCY_THRESH:
+                # Pick a representative TXT query for process attribution
+                rep_query = next(
+                    (
+                        q
+                        for q in queries
+                        if _extract_effective_domain(q.domain) == effective_domain
+                        and q.record_type == "TXT"
+                    ),
+                    None,
+                )
                 events.append(
                     self._create_event(
                         event_type="dns_tunnel_txt_flood",
                         severity=Severity.HIGH,
                         data={
+                            **(
+                                _enrich_dns_process(rep_query)
+                                if rep_query
+                                else {"detection_source": "dns_monitor"}
+                            ),
                             "domain": effective_domain,
                             "txt_query_count": self._txt_counts[effective_domain],
                             "threshold": self.TXT_FREQUENCY_THRESH,
@@ -384,11 +417,25 @@ class BeaconingPatternProbe(MicroProbe):
             cv = std_dev / mean_interval  # Coefficient of variation
 
             if cv <= self.MAX_JITTER_CV:
+                # Pick a representative query for process attribution
+                rep_query = next(
+                    (
+                        q
+                        for q in queries
+                        if _extract_effective_domain(q.domain) == domain
+                    ),
+                    None,
+                )
                 events.append(
                     self._create_event(
                         event_type="dns_beaconing_detected",
                         severity=Severity.HIGH,
                         data={
+                            **(
+                                _enrich_dns_process(rep_query)
+                                if rep_query
+                                else {"detection_source": "dns_monitor"}
+                            ),
                             "domain": domain,
                             "mean_interval_s": round(mean_interval, 2),
                             "jitter_cv": round(cv, 4),
@@ -454,6 +501,7 @@ class CachePoisonProbe(MicroProbe):
                             event_type="dns_ttl_anomaly",
                             severity=Severity.MEDIUM,
                             data={
+                                **_enrich_dns_process(query),
                                 "domain": domain,
                                 "current_ttl": query.ttl,
                                 "previous_ttl": prev_ttl,
@@ -474,6 +522,7 @@ class CachePoisonProbe(MicroProbe):
                         event_type="dns_suspicious_low_ttl",
                         severity=Severity.MEDIUM,
                         data={
+                            **_enrich_dns_process(query),
                             "domain": domain,
                             "ttl": query.ttl,
                             "record_type": query.record_type,
@@ -489,6 +538,7 @@ class CachePoisonProbe(MicroProbe):
                         event_type="dns_suspicious_high_ttl",
                         severity=Severity.LOW,
                         data={
+                            **_enrich_dns_process(query),
                             "domain": domain,
                             "ttl": query.ttl,
                             "record_type": query.record_type,
@@ -540,6 +590,7 @@ class DNSOverHTTPSProbe(MicroProbe):
                         event_type="doh_provider_configured",
                         severity=Severity.MEDIUM,
                         data={
+                            "detection_source": "dns_monitor",
                             "server_address": server.address,
                             "server_port": server.port,
                             "interface": server.interface,
@@ -610,11 +661,20 @@ class NewDomainProbe(MicroProbe):
             return events
 
         for domain in new_this_cycle:
+            rep_query = next(
+                (q for q in queries if _extract_effective_domain(q.domain) == domain),
+                None,
+            )
             events.append(
                 self._create_event(
                     event_type="new_domain_first_seen",
                     severity=Severity.LOW,
                     data={
+                        **(
+                            _enrich_dns_process(rep_query)
+                            if rep_query
+                            else {"detection_source": "dns_monitor"}
+                        ),
                         "domain": domain,
                         "baseline_size": len(self._known_domains),
                         "cycle": self._cycle_count,
@@ -694,11 +754,24 @@ class FastFluxProbe(MicroProbe):
                 len(unique_ips) >= self.IP_COUNT_THRESHOLD
                 and domain not in self._alerted
             ):
+                rep_query = next(
+                    (
+                        q
+                        for q in queries
+                        if _extract_effective_domain(q.domain) == domain
+                    ),
+                    None,
+                )
                 events.append(
                     self._create_event(
                         event_type="fast_flux_detected",
                         severity=Severity.HIGH,
                         data={
+                            **(
+                                _enrich_dns_process(rep_query)
+                                if rep_query
+                                else {"detection_source": "dns_monitor"}
+                            ),
                             "domain": domain,
                             "unique_ip_count": len(unique_ips),
                             "ips": sorted(unique_ips)[:10],  # Cap for readability
@@ -750,11 +823,13 @@ class ReverseDNSReconProbe(MicroProbe):
 
         if len(internal_reverse) >= self.PTR_BURST_THRESHOLD:
             queried_domains = [q.domain for q in internal_reverse]
+            rep_query = internal_reverse[0]
             events.append(
                 self._create_event(
                     event_type="reverse_dns_recon",
                     severity=Severity.HIGH,
                     data={
+                        **_enrich_dns_process(rep_query),
                         "ptr_query_count": len(internal_reverse),
                         "total_reverse_queries": len(reverse_queries),
                         "sample_queries": queried_domains[:10],

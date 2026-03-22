@@ -25,6 +25,7 @@ from amoskys.agents.common.probes import (
     Severity,
     TelemetryEvent,
 )
+from amoskys.agents.common.process_resolver import resolver as _resolver
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
 from amoskys.agents.common.self_identity import self_identity
 from amoskys.config import get_config
@@ -32,6 +33,18 @@ from amoskys.config import get_config
 from .collector import RealTimeEvent, RealtimeSensorCollector
 
 logger = logging.getLogger(__name__)
+
+
+def _enrich_rt_process(rt: RealTimeEvent) -> Dict[str, Any]:
+    """Resolve process context for a real-time event's PID."""
+    enrichment: Dict[str, Any] = {}
+    if not rt.pid or rt.pid <= 0:
+        return enrichment
+    snap = _resolver.resolve(rt.pid)
+    if snap.is_alive:
+        enrichment.update(snap.to_event_fields())
+    return enrichment
+
 
 config = get_config()
 CERT_DIR = config.agent.cert_dir
@@ -267,6 +280,7 @@ class ShortLivedProcessProbe(MicroProbe):
                     severity=Severity.LOW,
                     probe_name=self.name,
                     data={
+                        **_enrich_rt_process(rt),
                         "pid": rt.pid,
                         "process_name": rt.process_name,
                         "exit_status": rt.details.get("exit_status", -1),
@@ -315,6 +329,7 @@ class TCCPermissionProbe(MicroProbe):
                     severity=severity,
                     probe_name=self.name,
                     data={
+                        **_enrich_rt_process(rt),
                         "subsystem": rt.details.get("subsystem", ""),
                         "category": rt.details.get("category", ""),
                         "process_name": rt.process_name,
@@ -358,6 +373,7 @@ class XProtectMalwareProbe(MicroProbe):
                         severity=Severity.CRITICAL,
                         probe_name=self.name,
                         data={
+                            **_enrich_rt_process(rt),
                             "process_name": rt.process_name,
                             "pid": rt.pid,
                             "message": rt.details.get("message", "")[:300],
@@ -415,6 +431,7 @@ class AMFICodeSigningProbe(MicroProbe):
                     severity=Severity.HIGH,
                     probe_name=self.name,
                     data={
+                        **_enrich_rt_process(rt),
                         "process_name": rt.process_name,
                         "pid": rt.pid,
                         "message": rt.details.get("message", "")[:300],
@@ -455,6 +472,7 @@ class FirewallProbe(MicroProbe):
                     severity=Severity.MEDIUM,
                     probe_name=self.name,
                     data={
+                        **_enrich_rt_process(rt),
                         "process_name": rt.process_name,
                         "pid": rt.pid,
                         "message": rt.details.get("message", "")[:200],
@@ -496,6 +514,7 @@ class SSHRealtimeProbe(MicroProbe):
                         severity=Severity.HIGH,
                         probe_name=self.name,
                         data={
+                            **_enrich_rt_process(rt),
                             "process_name": rt.process_name,
                             "pid": rt.pid,
                             "message": rt.details.get("message", "")[:200],
@@ -516,6 +535,7 @@ class SSHRealtimeProbe(MicroProbe):
                         severity=Severity.MEDIUM,
                         probe_name=self.name,
                         data={
+                            **_enrich_rt_process(rt),
                             "process_name": rt.process_name,
                             "pid": rt.pid,
                             "message": rt.details.get("message", "")[:200],
@@ -561,6 +581,7 @@ class DiskMountProbe(MicroProbe):
                     severity=Severity.MEDIUM,
                     probe_name=self.name,
                     data={
+                        **_enrich_rt_process(rt),
                         "process_name": rt.process_name,
                         "pid": rt.pid,
                         "message": rt.details.get("message", "")[:200],
@@ -602,6 +623,7 @@ class GatekeeperRealtimeProbe(MicroProbe):
                         severity=Severity.HIGH,
                         probe_name=self.name,
                         data={
+                            **_enrich_rt_process(rt),
                             "process_name": rt.process_name,
                             "pid": rt.pid,
                             "message": rt.details.get("message", "")[:200],
@@ -709,6 +731,7 @@ class LogDestructionProbe(MicroProbe):
                             severity=Severity.CRITICAL,
                             probe_name=self.name,
                             data={
+                                **_enrich_rt_process(rt),
                                 "process_name": rt.process_name,
                                 "pid": rt.pid,
                                 "message": rt.details.get("message", "")[:300],
@@ -806,6 +829,7 @@ class AppLifecycleProbe(MicroProbe):
                     severity=Severity.INFO,
                     probe_name=self.name,
                     data={
+                        **_enrich_rt_process(rt),
                         "process_name": rt.process_name,
                         "pid": rt.pid,
                         "message": rt.details.get("message", "")[:200],
