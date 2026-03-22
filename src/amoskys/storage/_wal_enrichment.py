@@ -1,4 +1,5 @@
 """WAL Processor — fusion/enrichment mixin."""
+
 from __future__ import annotations
 
 import logging
@@ -198,9 +199,7 @@ class EnrichmentMixin:
         except Exception as e:
             logger.debug("Stale process sweep failed: %s", e)
 
-    def _process_device_telemetry(
-        self, dt, ts_ns: int, idem: str
-    ) -> None:
+    def _process_device_telemetry(self, dt, ts_ns: int, idem: str) -> None:
         """Process DeviceTelemetry message"""
         timestamp_dt = datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).isoformat()
 

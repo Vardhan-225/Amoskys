@@ -27,16 +27,16 @@ from amoskys.intel.fusion_engine import FusionEngine
 from amoskys.intel.models import TelemetryEventView
 from amoskys.intel.scoring import ScoringEngine
 from amoskys.proto import universal_telemetry_pb2 as telemetry_pb2
-from amoskys.storage.dedup import EventDeduplicator
-from amoskys.storage.observation_shaper import ObservationShaper
-from amoskys.storage.telemetry_store import TelemetryStore
+from amoskys.storage._wal_enrichment import EnrichmentMixin
+from amoskys.storage._wal_observations import ObservationMixin
 
 # Mixin modules
 from amoskys.storage._wal_quality import QualityMixin
 from amoskys.storage._wal_routing import RoutingMixin
-from amoskys.storage._wal_observations import ObservationMixin
 from amoskys.storage._wal_security import SecurityMixin
-from amoskys.storage._wal_enrichment import EnrichmentMixin
+from amoskys.storage.dedup import EventDeduplicator
+from amoskys.storage.observation_shaper import ObservationShaper
+from amoskys.storage.telemetry_store import TelemetryStore
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"

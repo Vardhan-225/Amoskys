@@ -1,4 +1,5 @@
 """WAL Processor — event contract validation mixin."""
+
 from __future__ import annotations
 
 import logging

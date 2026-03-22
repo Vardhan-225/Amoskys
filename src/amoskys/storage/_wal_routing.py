@@ -1,4 +1,5 @@
 """WAL Processor — event routing mixin."""
+
 from __future__ import annotations
 
 import json

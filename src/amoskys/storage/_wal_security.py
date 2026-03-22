@@ -1,4 +1,5 @@
 """WAL Processor — security event processing mixin."""
+
 from __future__ import annotations
 
 import json

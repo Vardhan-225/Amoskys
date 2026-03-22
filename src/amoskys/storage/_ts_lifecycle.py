@@ -1,4 +1,5 @@
 """Lifecycle, dedup, batch, receipt, genealogy, and cleanup mixin for TelemetryStore."""
+
 from __future__ import annotations
 
 import logging

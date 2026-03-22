@@ -1,4 +1,5 @@
 """Caching and connection pooling helpers for TelemetryStore."""
+
 from __future__ import annotations
 
 import queue
