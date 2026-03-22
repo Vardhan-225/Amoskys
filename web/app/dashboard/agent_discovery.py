@@ -693,8 +693,87 @@ def find_processes_by_patterns(patterns: List[str]) -> List[Dict[str, Any]]:
     return matches
 
 
+def _check_collector_heartbeat(agent_id: str) -> bool:
+    """Check if an agent is alive inside collector_main via heartbeat.
+
+    In the new architecture, agents run as threads inside collector_main,
+    not as separate processes. The collector writes a heartbeat JSON that
+    lists all active agent threads. This is the primary health signal.
+    """
+    import json as _json
+
+    project_root = Path(__file__).resolve().parents[3]
+    heartbeat_dir = project_root / "data" / "heartbeats"
+
+    # Check collector heartbeat (has list of active agents)
+    collector_hb = heartbeat_dir / "collector.json"
+    if collector_hb.exists():
+        try:
+            hb = _json.loads(collector_hb.read_text())
+            # Timestamp may be ISO string or unix float
+            hb_ts = hb.get("timestamp", 0)
+            if isinstance(hb_ts, (int, float)):
+                age = abs(datetime.now(timezone.utc).timestamp() - hb_ts)
+            elif isinstance(hb_ts, str) and hb_ts:
+                hb_dt = datetime.fromisoformat(hb_ts.replace("Z", "+00:00"))
+                age = (datetime.now(timezone.utc) - hb_dt).total_seconds()
+            else:
+                age = 999
+            if age < 60:
+                running = hb.get("agents_running", hb.get("agent_count", 0))
+                if running > 0:
+                    return True
+        except Exception:
+            pass
+
+    # Check individual agent heartbeats (legacy format)
+    # Map agent_id to heartbeat file names
+    hb_names = [
+        agent_id.replace("_agent", ""),
+        agent_id.replace("_", ""),
+        agent_id,
+    ]
+    for name in hb_names:
+        hb_path = heartbeat_dir / f"{name}.json"
+        if hb_path.exists():
+            try:
+                hb = _json.loads(hb_path.read_text())
+                hb_ts = hb.get("timestamp", "")
+                if hb_ts:
+                    hb_dt = datetime.fromisoformat(hb_ts.replace("Z", "+00:00"))
+                    age = (datetime.now(timezone.utc) - hb_dt).total_seconds()
+                    if age < 120:  # 2 min tolerance
+                        return True
+            except Exception:
+                pass
+    return False
+
+
+def _check_pid_file(name: str) -> bool:
+    """Check if a process is alive via PID file (collector/analyzer/dashboard)."""
+    project_root = Path(__file__).resolve().parents[3]
+    pid_file = project_root / "data" / "pids" / f"{name}.pid"
+    if not pid_file.exists():
+        return False
+    try:
+        pid = int(pid_file.read_text().strip())
+        return psutil.pid_exists(pid)
+    except (ValueError, OSError):
+        return False
+
+
 def detect_agent_status(agent_config: Dict) -> Dict[str, Any]:
-    """Detect comprehensive status for an agent"""
+    """Detect comprehensive status for an agent.
+
+    Detection priority:
+      1. Collector heartbeat (new arch: agents as threads in collector_main)
+      2. PID file check (collector/analyzer/dashboard processes)
+      3. Process pattern search (legacy: agents as separate processes)
+
+    This handles both architectures:
+      - Old: each agent = separate python process (detectable by cmdline)
+      - New: all agents = threads inside collector_main (detectable by heartbeat)
+    """
     status = {
         "running": False,
         "health": "stopped",
@@ -704,6 +783,7 @@ def detect_agent_status(agent_config: Dict) -> Dict[str, Any]:
         "blockers": [],
         "warnings": [],
         "last_check": datetime.now(timezone.utc).isoformat(),
+        "detection_method": "none",
     }
 
     # Check platform compatibility
@@ -713,18 +793,43 @@ def detect_agent_status(agent_config: Dict) -> Dict[str, Any]:
         status["blockers"].append(f"Not compatible with {get_platform_name()}")
         return status
 
-    # Check if agent path exists
-    agent_path = Path(agent_config["path"])
-    if not agent_path.exists() and not agent_config["path"].startswith("amoskys-"):
-        status["warnings"].append(f"Agent file not found: {agent_config['path']}")
+    agent_id = agent_config.get("id", "")
 
-    # Find running processes
-    processes = find_processes_by_patterns(agent_config["process_patterns"])
+    # Priority 1: Check collector heartbeat (new architecture)
+    # Agents run as threads inside collector_main — no individual processes
+    if _check_collector_heartbeat(agent_id):
+        status["running"] = True
+        status["instances"] = 1
+        status["health"] = "online"
+        status["detection_method"] = "collector_heartbeat"
+        return status
+
+    # Priority 2: Check PID files for infrastructure processes
+    for pid_name in ["collector", "analyzer", "dashboard"]:
+        if pid_name in agent_id or agent_id in ("eventbus", "wal_processor"):
+            if _check_pid_file(pid_name):
+                status["running"] = True
+                status["instances"] = 1
+                status["health"] = "online"
+                status["detection_method"] = "pid_file"
+                return status
+
+    # Priority 3: Legacy process detection (agents as separate processes)
+    agent_path = Path(agent_config.get("path", ""))
+    if not agent_path.exists() and not agent_config.get("path", "").startswith(
+        "amoskys-"
+    ):
+        status["warnings"].append(
+            f"Agent file not found: {agent_config.get('path', '')}"
+        )
+
+    processes = find_processes_by_patterns(agent_config.get("process_patterns", []))
     if processes:
         status["running"] = True
         status["instances"] = len(processes)
         status["processes"] = processes
         status["health"] = "online"
+        status["detection_method"] = "process_pattern"
 
         # Add warning if multiple instances detected
         if len(processes) > 1:

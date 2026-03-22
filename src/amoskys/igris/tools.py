@@ -740,26 +740,55 @@ class IgrisToolkit:
     # ── 6. Agent Health ──
 
     def _tool_get_agent_health(self) -> Dict:
-        try:
-            import grpc
+        """Get actual running status of all agents.
 
-            grpc.__version__ = "1.78.0"
-            from amoskys.agents import AGENT_REGISTRY
+        Uses unified detection: heartbeat → PID file → process pattern.
+        This correctly handles the new architecture where agents run as
+        threads inside collector_main, not as separate processes.
+        """
+        try:
+            from web.app.dashboard.agent_discovery import (
+                AGENT_CATALOG,
+                detect_agent_status,
+            )
 
             agents = []
-            for aid, meta in AGENT_REGISTRY.items():
+            online = 0
+            for agent_id, config in AGENT_CATALOG.items():
+                status = detect_agent_status(config)
+                health = status["health"]
+                if health == "online":
+                    online += 1
                 agents.append(
+                    {
+                        "agent_id": agent_id,
+                        "name": config.get("name", agent_id),
+                        "health": health,
+                        "detection_method": status.get("detection_method", "unknown"),
+                    }
+                )
+            return {
+                "agents": agents,
+                "total": len(agents),
+                "online": online,
+                "offline": len(agents) - online,
+            }
+        except Exception:
+            # Fallback to static registry if dashboard not importable
+            try:
+                from amoskys.agents import AGENT_REGISTRY
+
+                agents = [
                     {
                         "agent_id": aid,
                         "name": meta.get("name", aid),
-                        "platforms": meta.get("platforms", []),
-                        "probes": meta.get("probes", 0),
-                        "category": meta.get("category", ""),
+                        "health": "unknown",
                     }
-                )
-            return {"agents": agents, "total": len(agents)}
-        except Exception as e:
-            return {"error": str(e)}
+                    for aid, meta in AGENT_REGISTRY.items()
+                ]
+                return {"agents": agents, "total": len(agents)}
+            except Exception as e2:
+                return {"error": str(e2)}
 
     # ── 7. Probes Fired ──
 
