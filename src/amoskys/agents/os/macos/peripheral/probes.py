@@ -100,6 +100,8 @@ class USBInventoryProbe(MicroProbe):
                         event_type="usb_device_added",
                         severity=severity,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "system_profiler",
                             "name": dev.name,
                             "vendor_id": dev.vendor_id,
                             "product_id": dev.product_id,
@@ -124,6 +126,8 @@ class USBInventoryProbe(MicroProbe):
                             event_type="usb_device_removed",
                             severity=Severity.INFO,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "system_profiler",
                                 "name": dev.name,
                                 "vendor_id": dev.vendor_id,
                                 "product_id": dev.product_id,
@@ -187,6 +191,8 @@ class BluetoothInventoryProbe(MicroProbe):
                         event_type="bluetooth_device_added",
                         severity=Severity.MEDIUM,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "system_profiler",
                             "name": dev.name,
                             "address": dev.address,
                             "vendor_id": dev.vendor_id,
@@ -209,6 +215,8 @@ class BluetoothInventoryProbe(MicroProbe):
                             event_type="bluetooth_device_removed",
                             severity=Severity.INFO,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "system_profiler",
                                 "name": dev.name,
                                 "address": dev.address,
                                 "fingerprint": fp,
@@ -281,6 +289,8 @@ class NewPeripheralProbe(MicroProbe):
                         event_type="new_peripheral_detected",
                         severity=severity,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "system_profiler",
                             "device_type": dev.device_type,
                             "name": dev.name,
                             "vendor_id": dev.vendor_id,
@@ -354,6 +364,8 @@ class RemovableMediaProbe(MicroProbe):
                         event_type="removable_media_mounted",
                         severity=Severity.HIGH,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "system_profiler",
                             "volume_name": vol.name,
                             "mount_point": vol.mount_point,
                         },
@@ -372,6 +384,8 @@ class RemovableMediaProbe(MicroProbe):
                             event_type="removable_media_unmounted",
                             severity=Severity.INFO,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "system_profiler",
                                 "volume_name": vol_name,
                             },
                             confidence=0.95,

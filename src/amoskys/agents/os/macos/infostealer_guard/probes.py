@@ -39,6 +39,30 @@ from amoskys.agents.common.probes import (
 logger = logging.getLogger(__name__)
 
 
+# Self-exclusion: AMOSKYS own processes accessing Ed25519 keys are expected
+_AMOSKYS_PROCESS_NAMES = frozenset(
+    {
+        "amoskys",
+        "amoskys-agent",
+        "amoskys-collector",
+        "python",  # when running via python -m amoskys
+    }
+)
+
+_AMOSKYS_KEY_PATTERNS = (
+    "amoskys",
+    "id_ed25519_amoskys",
+)
+
+
+def _is_amoskys_self_access(process_name: str, file_path: str) -> bool:
+    """Return True if this is an AMOSKYS process accessing its own Ed25519 keys."""
+    if process_name.lower() not in _AMOSKYS_PROCESS_NAMES:
+        return False
+    file_lower = file_path.lower()
+    return any(pat in file_lower for pat in _AMOSKYS_KEY_PATTERNS)
+
+
 # =============================================================================
 # 1. KeychainAccessProbe
 # =============================================================================
@@ -70,11 +94,17 @@ class KeychainAccessProbe(MicroProbe):
             if access.access_category != "keychain":
                 continue
 
+            # Self-exclusion: skip AMOSKYS accessing its own keys
+            if _is_amoskys_self_access(access.process_name, access.file_path):
+                continue
+
             events.append(
                 self._create_event(
                     event_type="keychain_access",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "pid": access.pid,
                         "process_name": access.process_name,
                         "file_path": access.file_path,
@@ -128,11 +158,17 @@ class BrowserCredentialTheftProbe(MicroProbe):
             if access.access_category not in _BROWSER_CATEGORIES:
                 continue
 
+            # Self-exclusion: skip AMOSKYS accessing its own keys
+            if _is_amoskys_self_access(access.process_name, access.file_path):
+                continue
+
             events.append(
                 self._create_event(
                     event_type="browser_credential_theft",
                     severity=Severity.CRITICAL,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "pid": access.pid,
                         "process_name": access.process_name,
                         "file_path": access.file_path,
@@ -185,6 +221,10 @@ class CryptoWalletTheftProbe(MicroProbe):
             if access.access_category not in _CRYPTO_CATEGORIES:
                 continue
 
+            # Self-exclusion: skip AMOSKYS accessing its own keys
+            if _is_amoskys_self_access(access.process_name, access.file_path):
+                continue
+
             wallet_name = access.access_category.replace("crypto_", "")
 
             events.append(
@@ -192,6 +232,8 @@ class CryptoWalletTheftProbe(MicroProbe):
                     event_type="crypto_wallet_theft",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "pid": access.pid,
                         "process_name": access.process_name,
                         "file_path": access.file_path,
@@ -250,6 +292,8 @@ class FakePasswordDialogProbe(MicroProbe):
                     event_type="fake_password_dialog",
                     severity=Severity.CRITICAL,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "pid": proc.pid,
                         "name": proc.name,
                         "exe": proc.exe,
@@ -335,6 +379,8 @@ class StealerSequenceProbe(MicroProbe):
                     event_type="stealer_sequence",
                     severity=severity,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "pid": pid,
                         "process_name": info["process_name"],
                         "category_count": cat_count,
@@ -389,6 +435,8 @@ class CredentialArchiveProbe(MicroProbe):
                     event_type="credential_archive",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "pid": proc.pid,
                         "name": proc.name,
                         "exe": proc.exe,
@@ -411,6 +459,8 @@ class CredentialArchiveProbe(MicroProbe):
                     event_type="credential_archive",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "archive_path": archive["path"],
                         "filename": archive["filename"],
                         "size": archive["size"],
@@ -463,11 +513,17 @@ class SessionCookieTheftProbe(MicroProbe):
             if access.access_category != "chrome_cookies":
                 continue
 
+            # Self-exclusion: skip AMOSKYS accessing its own keys
+            if _is_amoskys_self_access(access.process_name, access.file_path):
+                continue
+
             events.append(
                 self._create_event(
                     event_type="session_cookie_theft",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "pid": access.pid,
                         "process_name": access.process_name,
                         "file_path": access.file_path,
@@ -534,6 +590,8 @@ class ClipboardHarvestProbe(MicroProbe):
                     event_type="clipboard_harvest",
                     severity=Severity.MEDIUM,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "pid": proc.get("pid"),
                         "name": name,
                         "exe": proc.get("exe", ""),
@@ -599,6 +657,8 @@ class ScreenCaptureAbuseProbe(MicroProbe):
                     event_type="screen_capture_abuse",
                     severity=Severity.MEDIUM,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "pid": proc.get("pid"),
                         "name": name,
                         "exe": proc.get("exe", ""),
@@ -695,6 +755,8 @@ class SensitiveFileExfilProbe(MicroProbe):
                     event_type="sensitive_file_exfil",
                     severity=Severity.CRITICAL,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "pid": pid,
                         "process_name": info["process_name"],
                         "categories_accessed": sorted(info["categories"]),
@@ -788,6 +850,8 @@ class KeychainCLIAbuseProbe(MicroProbe):
                     event_type="keychain_cli_abuse",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
                         "pid": proc.pid,
                         "process_name": proc.name,
                         "exe": proc.exe,
@@ -830,6 +894,8 @@ class KeychainCLIAbuseProbe(MicroProbe):
                             event_type="keychain_cli_abuse",
                             severity=Severity.HIGH,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "lsof",
                                 "pid": pid,
                                 "process_name": name,
                                 "exe": snap.get("exe", ""),

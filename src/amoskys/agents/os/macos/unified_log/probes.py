@@ -37,6 +37,22 @@ from amoskys.agents.common.probes import (
 logger = logging.getLogger(__name__)
 
 
+# Self-exclusion: filter out AMOSKYS own log entries
+_AMOSKYS_LOG_PROCESSES = frozenset(
+    {
+        "amoskys",
+        "amoskys-agent",
+        "amoskys-collector",
+    }
+)
+
+
+def _is_amoskys_log_entry(entry) -> bool:
+    """Return True if this log entry was produced by AMOSKYS itself."""
+    proc_lower = (entry.process or "").lower()
+    return proc_lower in _AMOSKYS_LOG_PROCESSES or "amoskys" in proc_lower
+
+
 # =============================================================================
 # 1. SecurityFrameworkProbe
 # =============================================================================
@@ -107,6 +123,10 @@ class SecurityFrameworkProbe(MicroProbe):
             if entry.event_type != "security":
                 continue
 
+            # Self-exclusion: skip AMOSKYS own log entries
+            if _is_amoskys_log_entry(entry):
+                continue
+
             message_lower = entry.message.lower()
 
             # Skip known-benign securityd noise (DB ops, OCSP, anchor records)
@@ -120,6 +140,8 @@ class SecurityFrameworkProbe(MicroProbe):
                             event_type=f"security_framework_{event_subtype}",
                             severity=severity,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "log_show",
                                 "subsystem": entry.subsystem,
                                 "process": entry.process,
                                 "category": entry.category,
@@ -202,6 +224,10 @@ class GatekeeperProbe(MicroProbe):
             if entry.event_type != "gatekeeper":
                 continue
 
+            # Self-exclusion: skip AMOSKYS own log entries
+            if _is_amoskys_log_entry(entry):
+                continue
+
             message_lower = entry.message.lower()
             for pattern, event_subtype, severity in _GATEKEEPER_PATTERNS:
                 if re.search(pattern, message_lower):
@@ -210,6 +236,8 @@ class GatekeeperProbe(MicroProbe):
                             event_type=f"gatekeeper_{event_subtype}",
                             severity=severity,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "log_show",
                                 "process": entry.process,
                                 "category": entry.category,
                                 "message": entry.message[:500],
@@ -277,6 +305,10 @@ class InstallerActivityProbe(MicroProbe):
             if entry.event_type != "installer":
                 continue
 
+            # Self-exclusion: skip AMOSKYS own log entries
+            if _is_amoskys_log_entry(entry):
+                continue
+
             message_lower = entry.message.lower()
             for pattern, event_subtype, severity in _INSTALLER_PATTERNS:
                 if re.search(pattern, message_lower):
@@ -293,6 +325,8 @@ class InstallerActivityProbe(MicroProbe):
                             event_type=f"installer_{event_subtype}",
                             severity=severity,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "log_show",
                                 "process": entry.process,
                                 "category": entry.category,
                                 "message": entry.message[:500],

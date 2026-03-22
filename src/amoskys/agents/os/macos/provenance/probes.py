@@ -123,6 +123,8 @@ class MessageToDownloadProbe(MicroProbe):
                 event_type="message_to_download",
                 severity=Severity.HIGH,
                 data={
+                    "probe_name": self.name,
+                    "detection_source": "cross_agent",
                     "active_messaging_apps": messaging_apps,
                     "new_downloads": download_names,
                     "download_paths": download_paths,
@@ -200,6 +202,8 @@ class DownloadToExecuteProbe(MicroProbe):
                             event_type="download_to_execute",
                             severity=Severity.HIGH,
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "cross_agent",
                                 "pid": proc.pid,
                                 "process_name": proc.name,
                                 "exe": proc.exe,
@@ -279,6 +283,8 @@ class ExecuteToExfilProbe(MicroProbe):
                     event_type="execute_to_exfil",
                     severity=Severity.CRITICAL,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "cross_agent",
                         "pid": proc.pid,
                         "process_name": proc.name,
                         "exe": proc.exe,
@@ -422,6 +428,8 @@ class FullKillChainProbe(MicroProbe):
                 event_type="full_kill_chain",
                 severity=severity,
                 data={
+                    "probe_name": self.name,
+                    "detection_source": "cross_agent",
                     "stages_matched": stage_count,
                     "total_score": total_score,
                     "max_possible_score": sum(self._STAGE_WEIGHTS.values()),
@@ -502,6 +510,8 @@ class BrowserToTerminalProbe(MicroProbe):
                     event_type="browser_to_terminal",
                     severity=Severity.CRITICAL,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "cross_agent",
                         "pid": proc.pid,
                         "suspicious_command": proc.name,
                         "exe": proc.exe,
@@ -561,6 +571,8 @@ class RapidAppSwitchProbe(MicroProbe):
                 event_type="rapid_app_switch",
                 severity=Severity.MEDIUM,
                 data={
+                    "probe_name": self.name,
+                    "detection_source": "cross_agent",
                     "active_messaging_apps": messaging,
                     "active_browsers": browsers,
                     "active_terminals": terminals,
@@ -641,6 +653,8 @@ class PIDNetworkAnomalyProbe(MicroProbe):
                     event_type="pid_network_anomaly",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "cross_agent",
                         "pid": proc.pid,
                         "process_name": proc.name,
                         "exe": proc.exe,
@@ -756,6 +770,8 @@ class ProvenanceChainProbe(MicroProbe):
                     event_type="provenance_chain",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "cross_agent",
                         "chain_score": score,
                         "threshold": self.SCORE_THRESHOLD,
                         "chain_length": len(chain),

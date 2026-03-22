@@ -26,6 +26,7 @@ from amoskys.agents.common.probes import (
     TelemetryEvent,
 )
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
+from amoskys.agents.common.self_identity import self_identity
 from amoskys.config import get_config
 
 from .collector import RealTimeEvent, RealtimeSensorCollector
@@ -889,15 +890,59 @@ class MacOSRealtimeSensorAgent(HardenedAgentBase, MicroProbeAgentMixin):
         self._collector.start()
         return True
 
+    # App lifecycle event types routed to OBSERVATION, not SECURITY
+    _LIFECYCLE_EVENTS = frozenset({"rt_app_launched", "rt_app_quit"})
+
+    def _populate_proto_event(self, dt: Any, pe: TelemetryEvent) -> None:
+        """Convert a TelemetryEvent into a protobuf sub-event on *dt*."""
+        te = dt.events.add()
+        te.event_id = f"{pe.probe_name}_{pe.event_type}_{dt.timestamp_ns}"
+        te.event_type = (
+            "OBSERVATION" if pe.event_type in self._LIFECYCLE_EVENTS else "SECURITY"
+        )
+        te.severity = pe.severity.value if hasattr(pe.severity, "value") else "MEDIUM"
+        te.source_component = self.AGENT_NAME
+        te.event_timestamp_ns = dt.timestamp_ns
+        ts = pe.timestamp_ns or dt.timestamp_ns
+        te.attributes["event_timestamp_ns"] = str(ts)
+
+        se = te.security_event
+        se.event_category = pe.data.get("event_category", pe.event_type)
+        se.risk_score = pe.data.get("risk_score", 0.5)
+        te.attributes["confidence"] = str(pe.confidence)
+        te.attributes["description"] = (
+            f"[{self.AGENT_NAME}] {pe.event_type}: "
+            f"{pe.data.get('path', pe.data.get('process_name', ''))}"
+        )
+
+        for tech in pe.mitre_techniques or []:
+            se.mitre_techniques.append(tech)
+
+        for k, v in pe.data.items():
+            te.attributes[k] = str(v)
+
+    @staticmethod
+    def _is_self_event(rt: RealTimeEvent) -> bool:
+        """Return True if this event originates from AMOSKYS itself."""
+        if rt.source in ("logstream", "kqueue") and rt.process_name:
+            return self_identity.is_self_process(pid=rt.pid, name=rt.process_name)
+        if rt.source == "fsevents" and getattr(rt, "path", None):
+            return self_identity.is_self_file_path(rt.path)
+        return False
+
     def collect_data(self):
         if not self._collector._started:
             self._collector.start()
             time.sleep(0.5)
 
-        rt_events = self._collector.collect()
+        rt_events_raw = self._collector.collect()
         device_id = (
             self._device_id if hasattr(self, "_device_id") else socket.gethostname()
         )
+
+        # Self-exclusion: filter out AMOSKYS's own log entries
+        self_identity.refresh()
+        rt_events = [rt for rt in rt_events_raw if not self._is_self_event(rt)]
 
         shared_data = {"realtime_events": rt_events, "device_id": device_id}
 
@@ -930,31 +975,7 @@ class MacOSRealtimeSensorAgent(HardenedAgentBase, MicroProbeAgentMixin):
         dt.agent_version = self.AGENT_VERSION
 
         for pe in probe_events:
-            te = dt.events.add()
-            te.event_id = f"{pe.probe_name}_{pe.event_type}_{dt.timestamp_ns}"
-            te.event_type = "SECURITY"
-            te.severity = (
-                pe.severity.value if hasattr(pe.severity, "value") else "MEDIUM"
-            )
-            te.source_component = self.AGENT_NAME
-            te.event_timestamp_ns = dt.timestamp_ns
-            ts = pe.timestamp_ns or dt.timestamp_ns
-            te.attributes["event_timestamp_ns"] = str(ts)
-
-            se = te.security_event
-            se.event_category = pe.data.get("event_category", pe.event_type)
-            se.risk_score = pe.data.get("risk_score", 0.5)
-            te.attributes["confidence"] = str(pe.confidence)
-            te.attributes["description"] = (
-                f"[{self.AGENT_NAME}] {pe.event_type}: "
-                f"{pe.data.get('path', pe.data.get('process_name', ''))}"
-            )
-
-            for tech in pe.mitre_techniques or []:
-                se.mitre_techniques.append(tech)
-
-            for k, v in pe.data.items():
-                te.attributes[k] = str(v)
+            self._populate_proto_event(dt, pe)
 
         # Always emit a heartbeat OBSERVATION so the agent appears in observation_events
         # even on cycles where no suspicious events fired.

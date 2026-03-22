@@ -533,6 +533,14 @@ class MicroProbe(abc.ABC):
         Returns:
             TelemetryEvent populated with probe metadata
         """
+        # Mandate v1.0: ensure probe_name and detection_source are
+        # in the data dict so they flow through to raw_attributes_json
+        # and get extracted into typed columns by _extract_typed_features.
+        data.setdefault("probe_name", self.name)
+        data.setdefault(
+            "detection_source",
+            getattr(self, "detection_source", "probe"),
+        )
         return TelemetryEvent(
             event_type=event_type,
             severity=severity,

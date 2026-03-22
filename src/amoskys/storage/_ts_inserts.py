@@ -160,26 +160,45 @@ class InsertMixin:
             return
 
         # Map: (typed_column, json_key, converter)
+        _int = lambda v: int(v) if v else None  # noqa: E731
+        _str2k = lambda v: str(v)[:2000]  # noqa: E731
         extractions = [
-            ("exe", "exe", str),
-            ("cmdline", "cmdline", lambda v: str(v)[:2000]),
-            ("parent_name", "parent_name", str),
-            ("ppid", "ppid", lambda v: int(v) if v else None),
+            # Process context
+            ("pid", "pid", _int),
             ("process_name", "process_name", str),
-            ("remote_ip", "remote_ip", str),
-            ("remote_port", "remote_port", lambda v: int(v) if v else None),
-            ("bytes_out", "bytes_out", lambda v: int(v) if v else None),
-            ("bytes_in", "bytes_in", lambda v: int(v) if v else None),
+            ("exe", "exe", str),
+            ("cmdline", "cmdline", _str2k),
+            ("ppid", "ppid", _int),
+            ("parent_name", "parent_name", str),
+            ("username", "username", str),
             ("trust_disposition", "trust_disposition", str),
+            # Network context
+            ("remote_ip", "remote_ip", str),
+            ("remote_port", "remote_port", _int),
+            ("local_port", "local_port", _int),
+            ("protocol", "protocol", str),
+            ("connection_state", "connection_state", str),
+            ("bytes_out", "bytes_out", _int),
+            ("bytes_in", "bytes_in", _int),
             ("domain", "domain", str),
+            # File context
             ("path", "path", str),
+            ("file_name", "name", str),
+            ("file_extension", "extension", str),
             ("sha256", "sha256", str),
+            ("file_mtime", "mtime", lambda v: float(v) if v else None),
+            ("file_owner", "file_owner", str),
+            ("file_permissions", "mode", str),
+            # Chain context
             ("kill_chain_stage", "chain_stage", str),
             (
                 "stages_hit",
                 "stages_hit",
                 lambda v: len(v) if isinstance(v, list) else None,
             ),
+            # Identity/attribution
+            ("probe_name", "probe_name", str),
+            ("detection_source", "detection_source", str),
         ]
 
         for col, key, conv in extractions:
@@ -243,13 +262,20 @@ class InsertMixin:
                     remote_ip, remote_port, bytes_out, bytes_in,
                     trust_disposition, domain, path, sha256,
                     kill_chain_stage, stages_hit, composite_score,
-                    threat_source, threat_severity, label_source
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                          ?, ?, ?, ?, ?, ?, ?, ?,
-                          ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                          ?, ?, ?, ?, ?, ?, ?,
-                          ?, ?, ?)
+                    threat_source, threat_severity, label_source,
+                    pid, username, probe_name, detection_source,
+                    mitre_tactics, local_port, protocol,
+                    connection_state, file_name, file_extension,
+                    file_owner, file_mtime, file_permissions
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
                 """,
                 (
                     event_data.get("timestamp_ns", int(time.time() * 1e9)),
@@ -315,6 +341,20 @@ class InsertMixin:
                     event_data.get("threat_source"),
                     event_data.get("threat_severity"),
                     event_data.get("label_source"),
+                    # Mandate v1.0 columns
+                    event_data.get("pid"),
+                    event_data.get("username"),
+                    event_data.get("probe_name"),
+                    event_data.get("detection_source"),
+                    json.dumps(event_data.get("mitre_tactics", [])),
+                    event_data.get("local_port"),
+                    event_data.get("protocol"),
+                    event_data.get("connection_state"),
+                    event_data.get("file_name"),
+                    event_data.get("file_extension"),
+                    event_data.get("file_owner"),
+                    event_data.get("file_mtime"),
+                    event_data.get("file_permissions"),
                 ),
             )
             self._commit()

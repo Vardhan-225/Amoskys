@@ -256,6 +256,8 @@ class ARPDiscoveryProbe(MicroProbe):
                     event_type="arp_new_host",
                     severity=Severity.MEDIUM,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "arp",
                         "ip": ip,
                         "mac": mac,
                         "interface": iface,
@@ -274,6 +276,8 @@ class ARPDiscoveryProbe(MicroProbe):
                     event_type="arp_mac_changed",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "arp",
                         "ip": ip,
                         "new_mac": new_mac,
                         "old_mac": old_mac,
@@ -374,6 +378,8 @@ class BonjourServiceProbe(MicroProbe):
                     event_type="bonjour_new_service",
                     severity=severity,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "arp",
                         "name": service.name,
                         "service_type": service.service_type,
                         "domain": service.domain,
@@ -458,6 +464,8 @@ class RogueDHCPProbe(MicroProbe):
                         event_type="rogue_dhcp_multiple_gateways",
                         severity=Severity.CRITICAL,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "arp",
                             "interface": iface,
                             "gateways": gws,
                             "gateway_count": len(gws),
@@ -482,6 +490,8 @@ class RogueDHCPProbe(MicroProbe):
                     event_type="rogue_dhcp_new_gateway",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "arp",
                         "gateway": gw,
                         "gateway_mac": gw_mac,
                         "gateway_vendor": (
@@ -562,6 +572,8 @@ class NetworkTopologyProbe(MicroProbe):
                     event_type="topology_new_interface",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "arp",
                         "device": device,
                         "port_name": port_info.name if port_info else "Unknown",
                         "mac": port_info.mac if port_info else "",
@@ -584,6 +596,8 @@ class NetworkTopologyProbe(MicroProbe):
                     event_type="topology_interface_removed",
                     severity=Severity.MEDIUM,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "arp",
                         "device": device,
                         "known_devices": sorted(self._known_devices),
                         "current_devices": sorted(current_devices),
@@ -603,6 +617,8 @@ class NetworkTopologyProbe(MicroProbe):
                     event_type="topology_new_route",
                     severity=Severity.LOW,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "arp",
                         "destination": dest,
                         "gateway": gw,
                         "interface": iface,
@@ -685,6 +701,8 @@ class NewDeviceRiskProbe(MicroProbe):
                                 Severity.HIGH if risk_score >= 0.8 else Severity.MEDIUM
                             ),
                             data={
+                                "probe_name": self.name,
+                                "detection_source": "arp",
                                 "ip": entry.ip,
                                 "mac": mac,
                                 "interface": entry.interface,
@@ -820,6 +838,8 @@ class PortScanDetectorProbe(MicroProbe):
                     event_type="port_scan_host_burst",
                     severity=Severity.HIGH,
                     data={
+                        "probe_name": self.name,
+                        "detection_source": "arp",
                         "new_host_count": len(recent_new),
                         "threshold": self.NEW_HOSTS_BURST_THRESHOLD,
                         "sample_ips": sorted(recent_new)[:15],
@@ -845,6 +865,8 @@ class PortScanDetectorProbe(MicroProbe):
                         event_type="port_scan_subnet_sweep",
                         severity=Severity.CRITICAL,
                         data={
+                            "probe_name": self.name,
+                            "detection_source": "arp",
                             "subnet": subnet,
                             "new_host_count": len(ips),
                             "threshold": self.SUBNET_BURST_THRESHOLD,

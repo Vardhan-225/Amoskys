@@ -266,6 +266,14 @@ class SecurityMixin:
                 except Exception:
                     logger.debug("AutoCalibrator observation failed", exc_info=True)
 
+            # ── WAL Processor Gate (Mandate Level 2) ──
+            # Reject events that violate mandatory field contracts.
+            # Rejected events go to rejected_events table, not discarded.
+            rejection = self._validate_mandate(event_data, collection_agent)
+            if rejection:
+                self._store_rejected_event(event_data, rejection)
+                return
+
             self.store.insert_security_event(event_data)
 
             # Receipt ledger checkpoint 4: persisted to security_events
@@ -284,6 +292,91 @@ class SecurityMixin:
             )
         except Exception as e:
             logger.error("Failed to insert security event: %s", e)
+
+    # ── Mandate Level 2: WAL Processor Gate ─────────────────────────
+
+    @staticmethod
+    def _validate_mandate(event_data: dict, collection_agent: str) -> str | None:
+        """Validate event against Agent Observability Mandate v1.0.
+
+        Returns rejection code string if event fails, None if it passes.
+        Events that fail are routed to rejected_events (not discarded).
+        """
+        # REJECT_NO_AGENT: collection_agent is null or empty
+        if not collection_agent and not event_data.get("collection_agent"):
+            return "REJECT_NO_AGENT"
+
+        # REJECT_NO_CATEGORY: event_category is null or empty
+        if not event_data.get("event_category"):
+            return "REJECT_NO_CATEGORY"
+
+        # REJECT_NO_TIMESTAMP: event_timestamp_ns is null or zero
+        ts = event_data.get("event_timestamp_ns")
+        if not ts or ts == 0:
+            return "REJECT_NO_TIMESTAMP"
+
+        # REJECT_NOISE_ROUTING: app_launch in security_events
+        cat = event_data.get("event_category", "")
+        if cat in ("app_launch", "app_quit", "app_focus_changed"):
+            return "REJECT_NOISE_ROUTING"
+
+        # REJECT_SELF_DETECTION: event from AMOSKYS process
+        from amoskys.agents.common.self_identity import self_identity
+
+        cmdline = event_data.get("cmdline", "")
+        exe = event_data.get("exe", "")
+        pid_val = event_data.get("pid")
+        if pid_val and self_identity.is_self_process(
+            pid=int(pid_val) if pid_val else None,
+            cmdline=str(cmdline),
+            exe=str(exe),
+        ):
+            return "REJECT_SELF_DETECTION"
+
+        # REJECT_LOCAL_IP: remote_ip is link-local/loopback/APIPA
+        remote_ip = event_data.get("remote_ip", "")
+        if remote_ip:
+            ip_lower = str(remote_ip).lower().strip("[]")
+            if (
+                ip_lower.startswith("fe80:")
+                or ip_lower.startswith("169.254.")
+                or ip_lower in ("127.0.0.1", "::1", "0.0.0.0", "::")
+            ):
+                return "REJECT_LOCAL_IP"
+
+        return None  # Passes all checks
+
+    def _store_rejected_event(self, event_data: dict, rejection_code: str) -> None:
+        """Store rejected event in rejected_events table for audit.
+
+        Per mandate: rejected events are NOT discarded. They go to a
+        separate table so we can audit what's being rejected and fix
+        the offending agent.
+        """
+        try:
+            self.store.db.execute(
+                """INSERT OR IGNORE INTO rejected_events
+                   (timestamp_ns, device_id, event_category, collection_agent,
+                    rejection_code, raw_attributes_json)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    event_data.get("timestamp_ns", 0),
+                    event_data.get("device_id", ""),
+                    event_data.get("event_category", ""),
+                    event_data.get("collection_agent", ""),
+                    rejection_code,
+                    event_data.get("raw_attributes_json", ""),
+                ),
+            )
+            self.store._commit()
+            logger.info(
+                "WAL Gate REJECTED: %s — %s from %s",
+                rejection_code,
+                event_data.get("event_category", ""),
+                event_data.get("collection_agent", ""),
+            )
+        except Exception as e:
+            logger.debug("Failed to store rejected event: %s", e)
 
     def _process_peripheral_event(
         self,

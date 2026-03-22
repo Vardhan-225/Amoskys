@@ -44,6 +44,40 @@ logger = logging.getLogger(__name__)
 # via dict access on shared_data, so no hard import needed.
 
 
+def _mandate_process_context(proc: Any, probe_name: str) -> Dict[str, Any]:
+    """Build full process context per Agent Observability Mandate v1.0.
+
+    The Process Agent has psutil access. pid, process_name, exe, cmdline,
+    ppid, parent_name, username, create_time must NEVER be NULL.
+    If psutil raises AccessDenied, set field to 'ACCESS_DENIED' not NULL.
+    NULL means 'not attempted', not 'attempted and failed'.
+    """
+    return {
+        # Identity (MANDATORY)
+        "pid": proc.pid,
+        "process_name": proc.name or "UNKNOWN",
+        "name": proc.name or "UNKNOWN",
+        "exe": proc.exe or "ACCESS_DENIED",
+        "cmdline": proc.cmdline if proc.cmdline else [],
+        "ppid": proc.ppid,
+        "parent_name": proc.parent_name or "UNKNOWN",
+        "username": getattr(proc, "username", "") or "ACCESS_DENIED",
+        "process_guid": getattr(proc, "process_guid", ""),
+        # Resource (MANDATORY per mandate)
+        "create_time": getattr(proc, "create_time", 0.0),
+        "cpu_percent": getattr(proc, "cpu_percent", None) or 0.0,
+        "memory_rss": getattr(proc, "memory_percent", None) or 0.0,
+        "num_threads": getattr(proc, "num_threads", None) or 0,
+        "num_fds": getattr(proc, "num_fds", None) or 0,
+        "status": getattr(proc, "status", "unknown"),
+        # Trust (MANDATORY per mandate)
+        "trust_disposition": getattr(proc, "trust_disposition", "unknown"),
+        # Attribution (MANDATORY universal)
+        "probe_name": probe_name,
+        "detection_source": "psutil",
+    }
+
+
 # =============================================================================
 # 1. ProcessSpawnProbe
 # =============================================================================
@@ -97,21 +131,13 @@ class ProcessSpawnProbe(MicroProbe):
                 allowlist = is_apple_system_process(proc.name, proc.exe)
                 trust_disposition = allowlist.disposition
 
+                ctx = _mandate_process_context(proc, self.name)
+                ctx["trust_disposition"] = trust_disposition
                 events.append(
                     self._create_event(
                         event_type="process_spawned",
                         severity=Severity.INFO,
-                        data={
-                            "pid": pid,
-                            "name": proc.name,
-                            "exe": proc.exe,
-                            "cmdline": proc.cmdline,
-                            "username": proc.username,
-                            "ppid": proc.ppid,
-                            "parent_name": proc.parent_name,
-                            "process_guid": proc.process_guid,
-                            "trust_disposition": trust_disposition,
-                        },
+                        data=ctx,
                         confidence=0.2 if trust_disposition == "apple_system" else 1.0,
                         correlation_id=proc.process_guid,
                     )
@@ -232,17 +258,15 @@ class LOLBinProbe(MicroProbe):
         events: List[TelemetryEvent] = []
         processes = context.shared_data.get("processes", [])
 
+        from amoskys.agents.common.self_identity import self_identity
+
         for proc in processes:
-            # Check if this is AMOSKYS's own process
-            amoskys_indicators = {
-                "amoskys",
-                "python3.13",
-                "collect_and_store",
-                "analyzer_main",
-            }
-            cmd_str = str(getattr(proc, "cmdline", "") or "").lower()
-            exe_str = str(getattr(proc, "exe", "") or "").lower()
-            if any(ind in cmd_str or ind in exe_str for ind in amoskys_indicators):
+            # Skip AMOSKYS's own processes
+            if self_identity.is_self_process(
+                pid=proc.pid,
+                exe=str(getattr(proc, "exe", "")),
+                cmdline=str(getattr(proc, "cmdline", "")),
+            ):
                 continue
 
             name_lower = proc.name.lower()
@@ -269,15 +293,9 @@ class LOLBinProbe(MicroProbe):
                     event_type="lolbin_execution",
                     severity=severity,
                     data={
-                        "pid": proc.pid,
-                        "name": proc.name,
-                        "exe": proc.exe,
-                        "cmdline": proc.cmdline,
+                        **_mandate_process_context(proc, self.name),
                         "category": category,
-                        "parent_name": proc.parent_name,
-                        "ppid": proc.ppid,
-                        "username": proc.username,
-                        "process_guid": proc.process_guid,
+                        "lolbin_name": name_lower,
                     },
                     confidence=0.7,
                     correlation_id=proc.process_guid,
@@ -354,14 +372,9 @@ class ProcessTreeProbe(MicroProbe):
                             event_type="process_tree_anomaly",
                             severity=Severity.HIGH,
                             data={
-                                "pid": proc.pid,
-                                "child_name": child_name,
-                                "child_exe": proc.exe,
-                                "parent_name": parent_name,
-                                "ppid": proc.ppid,
-                                "reason": pattern["reason"],
-                                "cmdline": proc.cmdline,
-                                "process_guid": proc.process_guid,
+                                **_mandate_process_context(proc, self.name),
+                                "expected_parent": list(pattern["parents"]),
+                                "anomaly_reason": pattern["reason"],
                             },
                             confidence=0.85,
                             correlation_id=proc.process_guid,
@@ -416,13 +429,10 @@ class ResourceAbuseProbe(MicroProbe):
                         event_type="high_cpu",
                         severity=Severity.MEDIUM,
                         data={
-                            "pid": proc.pid,
-                            "name": proc.name,
-                            "exe": proc.exe,
-                            "cpu_percent": cpu,
+                            **_mandate_process_context(proc, self.name),
+                            "resource_type": "cpu",
+                            "value": cpu,
                             "threshold": self.CPU_THRESHOLD,
-                            "username": proc.username,
-                            "process_guid": proc.process_guid,
                         },
                         confidence=0.7,
                         correlation_id=proc.process_guid,
@@ -435,13 +445,10 @@ class ResourceAbuseProbe(MicroProbe):
                         event_type="high_memory",
                         severity=Severity.MEDIUM,
                         data={
-                            "pid": proc.pid,
-                            "name": proc.name,
-                            "exe": proc.exe,
-                            "memory_percent": mem,
+                            **_mandate_process_context(proc, self.name),
+                            "resource_type": "memory",
+                            "value": mem,
                             "threshold": self.MEMORY_THRESHOLD,
-                            "username": proc.username,
-                            "process_guid": proc.process_guid,
                         },
                         confidence=0.7,
                         correlation_id=proc.process_guid,
@@ -515,13 +522,9 @@ class DylibInjectionProbe(MicroProbe):
                         event_type="dylib_injection",
                         severity=Severity.CRITICAL,
                         data={
-                            "pid": proc.pid,
-                            "name": proc.name,
-                            "exe": proc.exe,
-                            "dyld_variable": var,
-                            "dyld_value": value,
-                            "username": proc.username,
-                            "process_guid": proc.process_guid,
+                            **_mandate_process_context(proc, self.name),
+                            "dyld_env": var,
+                            "injected_lib": value,
                         },
                         confidence=0.9,
                         correlation_id=proc.process_guid,
@@ -680,20 +683,18 @@ class ScriptInterpreterProbe(MicroProbe):
         events: List[TelemetryEvent] = []
         processes = context.shared_data.get("processes", [])
 
+        from amoskys.agents.common.self_identity import self_identity
+
         for proc in processes:
             if proc.name not in _SCRIPT_INTERPRETERS:
                 continue
 
-            # Check if this is AMOSKYS's own process
-            amoskys_indicators = {
-                "amoskys",
-                "python3.13",
-                "collect_and_store",
-                "analyzer_main",
-            }
-            cmd_str = str(getattr(proc, "cmdline", "") or "").lower()
-            exe_str = str(getattr(proc, "exe", "") or "").lower()
-            if any(ind in cmd_str or ind in exe_str for ind in amoskys_indicators):
+            # Skip AMOSKYS's own processes
+            if self_identity.is_self_process(
+                pid=proc.pid,
+                exe=str(getattr(proc, "exe", "")),
+                cmdline=str(getattr(proc, "cmdline", "")),
+            ):
                 continue
 
             # Need cmdline for pattern matching (own-user only)
@@ -708,14 +709,10 @@ class ScriptInterpreterProbe(MicroProbe):
                             event_type="suspicious_script",
                             severity=Severity.HIGH,
                             data={
-                                "pid": proc.pid,
+                                **_mandate_process_context(proc, self.name),
                                 "interpreter": proc.name,
-                                "exe": proc.exe,
-                                "cmdline": proc.cmdline,
                                 "pattern": reason,
-                                "parent_name": proc.parent_name,
-                                "username": proc.username,
-                                "process_guid": proc.process_guid,
+                                "suspicious_command": cmdline_str[:500],
                             },
                             confidence=0.8,
                             correlation_id=proc.process_guid,
@@ -783,14 +780,8 @@ class BinaryFromTempProbe(MicroProbe):
                         event_type="binary_from_temp",
                         severity=Severity.HIGH,
                         data={
-                            "pid": proc.pid,
-                            "name": proc.name,
-                            "exe": proc.exe,
+                            **_mandate_process_context(proc, self.name),
                             "suspect_path": suspect,
-                            "cmdline": proc.cmdline,
-                            "username": proc.username,
-                            "parent_name": proc.parent_name,
-                            "process_guid": proc.process_guid,
                         },
                         confidence=0.85,
                         correlation_id=proc.process_guid,
@@ -905,12 +896,9 @@ class SuspiciousUserProbe(MicroProbe):
                     event_type="suspicious_user_process",
                     severity=Severity.HIGH,
                     data={
-                        "pid": proc.pid,
-                        "name": proc.name,
-                        "exe": proc.exe,
+                        **_mandate_process_context(proc, self.name),
                         "expected_user": "root/_system",
-                        "actual_user": username,
-                        "process_guid": proc.process_guid,
+                        "running_as": username,
                     },
                     confidence=0.8,
                     correlation_id=proc.process_guid,
@@ -987,14 +975,10 @@ class ProcessMasqueradeProbe(MicroProbe):
                     event_type="process_masquerade",
                     severity=Severity.CRITICAL,
                     data={
-                        "pid": proc.pid,
-                        "name": proc.name,
-                        "exe": proc.exe,
-                        "resolved_path": exe,
+                        **_mandate_process_context(proc, self.name),
+                        "expected_name": proc.name,
+                        "actual_exe": exe,
                         "expected_paths": list(expected),
-                        "username": proc.username,
-                        "parent_name": proc.parent_name,
-                        "process_guid": proc.process_guid,
                         "from_cmdline": not bool(proc.exe),
                     },
                     confidence=confidence,
@@ -1171,17 +1155,15 @@ class SecurityToolDisableProbe(MicroProbe):
         events: List[TelemetryEvent] = []
         processes = context.shared_data.get("processes", [])
 
+        from amoskys.agents.common.self_identity import self_identity
+
         for proc in processes:
-            # Check if this is AMOSKYS's own process
-            amoskys_indicators = {
-                "amoskys",
-                "python3.13",
-                "collect_and_store",
-                "analyzer_main",
-            }
-            cmd_str = str(getattr(proc, "cmdline", "") or "").lower()
-            exe_str = str(getattr(proc, "exe", "") or "").lower()
-            if any(ind in cmd_str or ind in exe_str for ind in amoskys_indicators):
+            # Skip AMOSKYS's own processes
+            if self_identity.is_self_process(
+                pid=proc.pid,
+                exe=str(getattr(proc, "exe", "")),
+                cmdline=str(getattr(proc, "cmdline", "")),
+            ):
                 continue
 
             cmdline_str = " ".join(proc.cmdline) if proc.cmdline else ""
@@ -1196,10 +1178,9 @@ class SecurityToolDisableProbe(MicroProbe):
                             event_type="security_tool_disabled",
                             severity=severity,
                             data={
-                                "pid": proc.pid,
-                                "process_name": proc.name,
-                                "exe": proc.exe,
-                                "cmdline": cmdline_str[:500],
+                                **_mandate_process_context(proc, self.name),
+                                "command": cmdline_str[:500],
+                                "tool_name": pattern.split()[0],
                                 "pattern_matched": pattern,
                                 "security_impact": description,
                             },
@@ -1296,10 +1277,7 @@ class ProcessMasqueradeEnhancedProbe(MicroProbe):
                             Severity.HIGH if len(reasons) >= 2 else Severity.MEDIUM
                         ),
                         data={
-                            "pid": proc.pid,
-                            "ppid": proc.ppid,
-                            "process_name": proc.name,
-                            "exe": proc.exe,
+                            **_mandate_process_context(proc, self.name),
                             "reasons": reasons,
                         },
                         confidence=min(0.95, 0.60 + len(reasons) * 0.15),

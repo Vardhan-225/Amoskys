@@ -839,6 +839,44 @@ class SchemaMixin:
             self._ensure_column("security_events", "threat_severity", "TEXT")
             self._ensure_column("security_events", "label_source", "TEXT")
 
+            # Mandate v1.0: additional mandatory columns
+            self._ensure_column("security_events", "pid", "INTEGER")
+            self._ensure_column("security_events", "username", "TEXT")
+            self._ensure_column("security_events", "probe_name", "TEXT")
+            self._ensure_column("security_events", "detection_source", "TEXT")
+            self._ensure_column("security_events", "mitre_tactics", "TEXT")
+            self._ensure_column("security_events", "local_port", "INTEGER")
+            self._ensure_column("security_events", "protocol", "TEXT")
+            self._ensure_column("security_events", "connection_state", "TEXT")
+            self._ensure_column("security_events", "file_name", "TEXT")
+            self._ensure_column("security_events", "file_extension", "TEXT")
+            self._ensure_column("security_events", "file_owner", "TEXT")
+            self._ensure_column("security_events", "file_mtime", "REAL")
+            self._ensure_column("security_events", "file_permissions", "TEXT")
+            self._ensure_column("security_events", "agent_version", "TEXT")
+
+            # Mandate v1.0: rejected_events table for WAL gate audit
+            self.db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS rejected_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp_ns INTEGER,
+                    device_id TEXT,
+                    event_category TEXT,
+                    collection_agent TEXT,
+                    rejection_code TEXT NOT NULL,
+                    raw_attributes_json TEXT,
+                    created_at TEXT DEFAULT (datetime('now'))
+                )
+            """
+            )
+            self.db.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_rejected_code
+                ON rejected_events(rejection_code)
+            """
+            )
+
             # Domain observation quality lineage + lossless payload
             domain_tables = [
                 "process_events",

@@ -1,33 +1,29 @@
 """AMOSKYS Self-Recognition — prevents the platform from flagging its own activity.
 
-AMOSKYS agents, the dashboard, and IGRIS create network connections, spawn processes,
-and query DNS at regular intervals. Without self-recognition, these activities trigger
-false positives (DNS beaconing from API calls, process spawn alerts for agent workers,
-C2 beacon detection for our own heartbeat intervals).
+Per the Agent Observability Mandate v1.0:
+- Every agent MUST implement self-exclusion
+- AMOSKYS must NEVER detect its own activity as a threat
+- Self-exclusion is NOT optional — it is a correctness requirement
+- An agent that detects itself produces false positives that poison training data
 
-This module maintains a "self-portrait" that probes check before creating events.
+The self-exclusion contract requires every agent to:
+1. Maintain known AMOSKYS process names (refreshed)
+2. Maintain known AMOSKYS PIDs (from data/pids/)
+3. Check BOTH process name AND ancestry (ppid chain)
+4. For log-based agents: filter by process field
+5. For network agents: filter by local PID
+6. For file agents: filter AMOSKYS data directories
 
-Usage:
-    from amoskys.agents.common.self_identity import self_identity
-
-    # During agent startup
-    self_identity.register_agent("dns", pid=12345, interval=30.0)
-
-    # In probe scan()
-    if self_identity.is_self_process(pid=12345, name="python3"):
-        return []  # Don't flag our own processes
-
-    if self_identity.is_self_destination("api.anthropic.com"):
-        return []  # Don't flag our own API calls
-
-    if self_identity.is_self_beacon_interval(29.99):
-        return []  # Don't flag our own collection intervals
+CONTRACT_SELF_DETECTION: 3 self-detection events from same agent
+within one collection cycle triggers AMRDR reliability downgrade.
 """
 
 from __future__ import annotations
 
+import glob
 import logging
 import os
+from pathlib import Path
 from typing import Dict, FrozenSet, Optional, Set
 
 logger = logging.getLogger(__name__)
@@ -52,15 +48,49 @@ class SelfIdentity:
         # PIDs of AMOSKYS processes (updated each cycle)
         self._own_pids: Set[int] = set()
 
-        # Process names that are always "us"
-        self._own_process_names: Set[str] = {
-            "python3",
-            "python3.13",
-            "python3.12",
-            "python3.11",
-            "python",
-            "amoskys",
-        }
+        # Process names that are always "us" (per mandate)
+        self._own_process_names: FrozenSet[str] = frozenset(
+            {
+                "python3",
+                "python3.13",
+                "python3.12",
+                "python3.11",
+                "python",
+                "amoskys",
+                "collect_and_store",
+                "analyzer_main",
+                "collector_main",
+                "wal_processor",
+            }
+        )
+
+        # Cmdline/exe substrings that identify AMOSKYS processes
+        self._own_indicators: FrozenSet[str] = frozenset(
+            {
+                "amoskys",
+                "collect_and_store",
+                "analyzer_main",
+                "collector_main",
+                "wal_processor",
+                "/amoskys/",
+                "amoskys-venv",
+            }
+        )
+
+        # AMOSKYS data directories — file events here are self-activity
+        self._own_data_dirs: FrozenSet[str] = frozenset(
+            {
+                "data/queue/",
+                "data/wal/",
+                "data/telemetry.db",
+                "data/igris/",
+                "data/intel/",
+                "data/heartbeats/",
+                "data/pids/",
+                "/queue/",
+                "/wal/",
+            }
+        )
 
         # Agent collection intervals (agent_id → interval_seconds)
         self._agent_intervals: Dict[str, float] = {}
@@ -78,7 +108,32 @@ class SelfIdentity:
         # Known AMOSKYS destination IPs
         self._own_destination_ips: Set[str] = set()
 
-        # Register our own PID
+        # Register our own PID + parent
+        self._own_pids.add(os.getpid())
+        ppid = os.getppid()
+        if ppid > 1:
+            self._own_pids.add(ppid)
+
+        # Load PIDs from data/pids/ if available
+        self._load_pid_files()
+
+    def _load_pid_files(self) -> None:
+        """Load AMOSKYS PIDs from data/pids/*.pid files."""
+        pid_dir = Path("data/pids")
+        if not pid_dir.exists():
+            return
+        for pid_file in pid_dir.glob("*.pid"):
+            try:
+                pid_text = pid_file.read_text().strip()
+                if pid_text.isdigit():
+                    self._own_pids.add(int(pid_text))
+            except (OSError, ValueError):
+                pass
+
+    def refresh(self) -> None:
+        """Refresh PID set from pid files — call once per collection cycle."""
+        self._load_pid_files()
+        # Also add current process
         self._own_pids.add(os.getpid())
 
     def register_agent(
@@ -92,15 +147,9 @@ class SelfIdentity:
             self._own_pids.add(pid)
         if interval is not None:
             self._agent_intervals[agent_id] = interval
-        logger.debug(
-            "SelfIdentity: registered agent=%s pid=%s interval=%s",
-            agent_id,
-            pid,
-            interval,
-        )
 
     def update_pid(self, pid: int) -> None:
-        """Track a new AMOSKYS process PID (e.g., forked worker)."""
+        """Track a new AMOSKYS process PID."""
         self._own_pids.add(pid)
 
     def add_destination_ip(self, ip: str) -> None:
@@ -112,32 +161,71 @@ class SelfIdentity:
         pid: Optional[int] = None,
         name: Optional[str] = None,
         exe: Optional[str] = None,
+        cmdline: Optional[str] = None,
+        ppid: Optional[int] = None,
     ) -> bool:
         """Check if a process is part of AMOSKYS.
 
-        Uses PID as primary check (most reliable), falls back to name+exe heuristic.
+        Per mandate: check BOTH process name AND ancestry.
+        PID match is authoritative. Then name+exe heuristic.
+        Then cmdline indicator check. Then ppid ancestry.
         """
-        # PID match is authoritative
+        # 1. PID match — authoritative
         if pid is not None and pid in self._own_pids:
             return True
 
-        # Name match — only if exe points to our venv or project
-        if name and exe:
-            name_matches = any(name.startswith(n) for n in self._own_process_names)
-            exe_is_ours = (
-                "amoskys" in exe.lower() or ".venv" in exe or "site-packages" in exe
-            )
-            if name_matches and exe_is_ours:
+        # 2. Cmdline indicator match — catches all AMOSKYS processes
+        if cmdline:
+            cmd_lower = str(cmdline).lower()
+            if any(ind in cmd_lower for ind in self._own_indicators):
+                # Cache the PID so future checks are faster
+                if pid is not None:
+                    self._own_pids.add(pid)
                 return True
 
+        # 3. Exe path indicator match
+        if exe:
+            exe_lower = str(exe).lower()
+            if any(ind in exe_lower for ind in self._own_indicators):
+                if pid is not None:
+                    self._own_pids.add(pid)
+                return True
+
+        # 4. Name match with exe confirmation
+        if name and exe:
+            name_lower = name.lower() if isinstance(name, str) else ""
+            name_matches = name_lower in self._own_process_names
+            exe_lower = str(exe).lower()
+            exe_is_ours = any(ind in exe_lower for ind in self._own_indicators)
+            if name_matches and exe_is_ours:
+                if pid is not None:
+                    self._own_pids.add(pid)
+                return True
+
+        # 5. Parent PID ancestry — if parent is AMOSKYS, child is too
+        if ppid is not None and ppid in self._own_pids:
+            if pid is not None:
+                self._own_pids.add(pid)
+            return True
+
         return False
+
+    def is_self_file_path(self, path: str) -> bool:
+        """Check if a file path is in an AMOSKYS data directory.
+
+        Per mandate: exclude writes to data/queue/, data/telemetry.db,
+        data/igris/, etc.
+        """
+        if not path:
+            return False
+        path_lower = path.lower()
+        return any(d in path_lower for d in self._own_data_dirs)
 
     def is_self_destination(self, domain: str) -> bool:
         """Check if a domain/hostname is an AMOSKYS API destination."""
         if not domain:
             return False
         d = domain.lower().rstrip(".")
-        # Exact match or suffix match
         for own_domain in self._own_destinations:
             if d == own_domain or d.endswith(f".{own_domain}"):
                 return True
@@ -152,13 +240,8 @@ class SelfIdentity:
         interval_seconds: float,
         tolerance: float = 2.0,
     ) -> bool:
-        """Check if a detected beacon interval matches an AMOSKYS collection interval.
-
-        Args:
-            interval_seconds: The detected beacon interval
-            tolerance: Maximum delta (seconds) to consider a match
-        """
-        for agent_id, agent_interval in self._agent_intervals.items():
+        """Check if a detected beacon interval matches an AMOSKYS collection interval."""
+        for _agent_id, agent_interval in self._agent_intervals.items():
             if abs(interval_seconds - agent_interval) <= tolerance:
                 return True
         return False
