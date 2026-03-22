@@ -62,6 +62,16 @@ def main() -> int:
         logger.error("Failed to initialize TelemetryStore: %s", e)
         return 1
 
+    # Enrichment pipeline (GeoIP, ASN, ThreatIntel, MITRE)
+    enrichment = None
+    try:
+        from amoskys.enrichment import EnrichmentPipeline
+
+        enrichment = EnrichmentPipeline()
+        logger.info("EnrichmentPipeline initialized: %s", enrichment.status())
+    except Exception as e:
+        logger.warning("EnrichmentPipeline not available: %s", e)
+
     try:
         from amoskys.intel.scoring import ScoringEngine
 
@@ -162,29 +172,60 @@ def main() -> int:
                                 "security_event"
                             ):
                                 se = ev.security_event
-                                store.insert_security_event(
-                                    {
-                                        "event_id": ev.event_id,
-                                        "device_id": dt.device_id,
-                                        "event_type": ev.event_type,
-                                        "event_category": se.event_category,
-                                        "event_action": se.event_category,
-                                        "event_outcome": "alert",
-                                        "risk_score": se.risk_score,
-                                        "confidence": float(
-                                            ev.attributes.get("confidence", "0.5")
-                                        ),
-                                        "mitre_techniques": json.dumps(
-                                            list(se.mitre_techniques)
-                                        ),
-                                        "source_agent": dt.collection_agent,
-                                        "raw_attributes_json": json.dumps(
-                                            dict(ev.attributes)
-                                        ),
-                                        "event_timestamp_ns": ev.event_timestamp_ns
-                                        or dt.timestamp_ns,
-                                    }
+                                attrs = dict(ev.attributes)
+
+                                # Enrich with GeoIP/ASN/ThreatIntel
+                                if enrichment is not None:
+                                    try:
+                                        enrichment.enrich(attrs)
+                                    except Exception:
+                                        pass
+
+                                # Derive detection_source for agent
+                                # attribution when collection_agent
+                                # is empty
+                                agent = dt.collection_agent or attrs.get(
+                                    "detection_source", ""
                                 )
+
+                                event_data = {
+                                    "event_id": ev.event_id,
+                                    "device_id": dt.device_id,
+                                    "event_type": ev.event_type,
+                                    "event_category": se.event_category,
+                                    "event_action": attrs.get(
+                                        "event_action", se.event_category
+                                    ),
+                                    "event_outcome": "alert",
+                                    "risk_score": se.risk_score,
+                                    "confidence": float(attrs.get("confidence", "0.5")),
+                                    "mitre_techniques": json.dumps(
+                                        list(se.mitre_techniques)
+                                    ),
+                                    "collection_agent": agent,
+                                    "description": attrs.get("description", ""),
+                                    "raw_attributes_json": json.dumps(attrs),
+                                    "event_timestamp_ns": ev.event_timestamp_ns
+                                    or dt.timestamp_ns,
+                                    # Enrichment results
+                                    "geo_src_country": attrs.get("geo_src_country"),
+                                    "asn_src_org": attrs.get("asn_src_org"),
+                                    "asn_src_number": attrs.get("asn_src_number"),
+                                    "threat_intel_match": attrs.get(
+                                        "threat_intel_match", False
+                                    ),
+                                    "enrichment_status": attrs.get(
+                                        "enrichment_status", "raw"
+                                    ),
+                                }
+
+                                # Score the event before storage
+                                if scorer is not None:
+                                    try:
+                                        scorer.score_event(event_data)
+                                    except Exception:
+                                        pass
+                                store.insert_security_event(event_data)
 
                                 # Feed fusion engine
                                 if fusion:
@@ -212,7 +253,9 @@ def main() -> int:
                                             )
                                         )
                                     except Exception as e:
-                                        logger.warning("Failed to insert security event: %s", e)
+                                        logger.warning(
+                                            "Failed to insert security event: %s", e
+                                        )
 
                             elif ev.event_type == "OBSERVATION":
                                 try:
@@ -232,7 +275,9 @@ def main() -> int:
                                         }
                                     )
                                 except Exception as e:
-                                    logger.warning("Failed to insert observation event: %s", e)
+                                    logger.warning(
+                                        "Failed to insert observation event: %s", e
+                                    )
 
                         processed_ids.append(row_id)
                         total += 1
@@ -250,7 +295,7 @@ def main() -> int:
                     conn.commit()
                 conn.close()
             except Exception as e:
-                logger.warning("Queue processing failed for %s: %s", qdb, e)
+                logger.warning("Queue processing failed for %s: %s", qdb_path, e)
         return total
 
     logger.info("Direct queue reader enabled (single-machine mode)")

@@ -699,6 +699,8 @@ HELP_TEXT = f"""
   {C.CYAN}igris inspect{C.RESET} <a> <t> On-demand investigation
   {C.CYAN}igris memory{C.RESET}        What IGRIS remembers
   {C.CYAN}igris novel{C.RESET}         SOMA: novel patterns
+  {C.CYAN}igris chat{C.RESET}          Talk to IGRIS (Claude-powered, 26 tools)
+  {C.CYAN}igris chat{C.RESET} <question>  Ask IGRIS a single question
 
   {C.CYAN}help{C.RESET}                This help
   {C.CYAN}quit{C.RESET}                Exit shell
@@ -773,6 +775,122 @@ def _handle_natural_language(text: str):
     return True
 
 
+# ── IGRIS Chat (Claude-powered) ──────────────────────────────────────────────
+
+_igris_chat_instance = None
+
+
+def _get_igris_chat():
+    """Lazy-init IGRIS chat with Claude backend."""
+    global _igris_chat_instance
+    if _igris_chat_instance is not None:
+        return _igris_chat_instance
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        # Try .env file
+        env_file = PROJECT_ROOT / ".env"
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                if line.strip().startswith("ANTHROPIC_API_KEY"):
+                    _, _, val = line.partition("=")
+                    api_key = val.strip().strip("\"'")
+                    break
+
+    if not api_key:
+        return None
+
+    try:
+        from amoskys.igris.chat import IgrisChat
+
+        _igris_chat_instance = IgrisChat(
+            telemetry_db=str(TELEMETRY_DB),
+            fusion_db=str(FUSION_DB),
+        )
+        return _igris_chat_instance
+    except Exception as e:
+        print(f"  {C.RED}IGRIS chat init failed: {e}{C.RESET}")
+        return None
+
+
+def _igris_chat_one(question: str):
+    """Send a single question to IGRIS and print the response."""
+    chat = _get_igris_chat()
+    if not chat:
+        print(f"  {C.RED}IGRIS chat requires ANTHROPIC_API_KEY{C.RESET}")
+        print(f"  {C.DIM}Set in .env or: export ANTHROPIC_API_KEY=sk-ant-...{C.RESET}")
+        return
+
+    print(f"  {C.DIM}IGRIS is thinking...{C.RESET}")
+    try:
+        response = chat.chat(question)
+        print()
+        print(f"  {C.BOLD}IGRIS:{C.RESET}")
+        # Word-wrap and indent the response
+        for line in response.split("\n"):
+            print(f"  {line}")
+        print()
+    except Exception as e:
+        print(f"  {C.RED}Error: {e}{C.RESET}")
+
+
+def _igris_chat_session():
+    """Start an interactive conversation with IGRIS."""
+    chat = _get_igris_chat()
+    if not chat:
+        print(f"  {C.RED}IGRIS chat requires ANTHROPIC_API_KEY{C.RESET}")
+        print(f"  {C.DIM}Set in .env or: export ANTHROPIC_API_KEY=sk-ant-...{C.RESET}")
+        return
+
+    print()
+    print(
+        f"  {C.BOLD}IGRIS Chat{C.RESET} {C.DIM}(Claude-powered security analyst){C.RESET}"
+    )
+    print(
+        f"  {C.DIM}Type 'exit' to return to shell. IGRIS has 26 tools + 4 sub-agents.{C.RESET}"
+    )
+    print()
+
+    # Proactive briefing on entry
+    print(f"  {C.DIM}IGRIS is assessing the system...{C.RESET}")
+    try:
+        briefing = chat.proactive_brief()
+        print(f"  {C.BOLD}IGRIS:{C.RESET}")
+        for line in briefing.split("\n"):
+            print(f"  {line}")
+        print()
+    except Exception as e:
+        print(f"  {C.YELLOW}Briefing unavailable: {e}{C.RESET}")
+        print()
+
+    # Chat loop
+    while True:
+        try:
+            user_input = input(f"  {C.CYAN}you>{C.RESET} ")
+        except (EOFError, KeyboardInterrupt):
+            break
+
+        user_input = user_input.strip()
+        if not user_input:
+            continue
+        if user_input.lower() in ("exit", "quit", "back", "q"):
+            break
+
+        print(f"  {C.DIM}IGRIS is thinking...{C.RESET}")
+        try:
+            response = chat.chat(user_input)
+            print()
+            print(f"  {C.BOLD}IGRIS:{C.RESET}")
+            for line in response.split("\n"):
+                print(f"  {line}")
+            print()
+        except Exception as e:
+            print(f"  {C.RED}Error: {e}{C.RESET}")
+            print()
+
+    print(f"  {C.DIM}Chat session ended.{C.RESET}")
+
+
 def handle_command(line: str) -> bool:
     """Process a single command. Returns False to exit."""
     parts = line.strip().split(None, 1)
@@ -840,6 +958,12 @@ def handle_command(line: str) -> bool:
         show_search("ssh")
         return True
     if cmd == "igris":
+        if arg == "chat":
+            _igris_chat_session()
+            return True
+        if arg and arg.startswith("chat "):
+            _igris_chat_one(arg[5:].strip())
+            return True
         if arg and arg.startswith("why"):
             show_igris_why(arg[3:].strip())
         else:

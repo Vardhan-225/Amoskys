@@ -490,6 +490,11 @@ class SomaBrain:
                 where_clauses.append(
                     "LOWER(COALESCE(quality_state, 'valid')) != 'broken'"
                 )
+            # Filter app_launch noise — 96.8% of events are app lifecycle
+            # telemetry with no security signal. Training on them drowns
+            # real detections and wastes model capacity.
+            if "event_category" in existing_cols:
+                where_clauses.append("event_category != 'app_launch'")
             where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
             query = f"""

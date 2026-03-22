@@ -105,7 +105,9 @@ class AgentThread:
             try:
                 self.agent.shutdown()
             except Exception as e:
-                logger.warning("Agent %s shutdown failed: %s", getattr(self.agent, 'name', '?'), e)
+                logger.warning(
+                    "Agent %s shutdown failed: %s", getattr(self.agent, "name", "?"), e
+                )
 
 
 # ── Agent Registry ───────────────────────────────────────────────────────────
@@ -361,7 +363,11 @@ def main() -> int:
                                             },
                                         )
                                     except Exception as e:
-                                        logger.debug("Failed to publish directive %s: %s", dtype, e)
+                                        logger.debug(
+                                            "Failed to publish directive %s: %s",
+                                            dtype,
+                                            e,
+                                        )
                                 break  # LocalBus is shared, publish once
         except Exception as e:
             logger.debug("IGRIS directive integration failed: %s", e)

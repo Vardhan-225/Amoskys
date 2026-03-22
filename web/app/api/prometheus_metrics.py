@@ -74,120 +74,131 @@ def _init_metrics():
         METRICS_REGISTRY = REGISTRY
         STARTUP_TIME = time.time()
 
-        try:
-            APP_INFO = Info("amoskys_web", "AMOSKYS Web Application Information")
+        # Each metric is wrapped in try/except ValueError because
+        # prometheus_client raises ValueError if a metric with the same
+        # name is already registered (e.g. during test reloads or
+        # multi-init).  We log once at debug level so it's visible
+        # in diagnostics without spamming production logs.
+
+        def _register(name, factory):
+            """Register a Prometheus metric, returning None on duplicate."""
+            try:
+                return factory()
+            except ValueError:
+                logger.debug("Prometheus metric %s already registered, reusing", name)
+                return None
+
+        APP_INFO = _register(
+            "amoskys_web",
+            lambda: Info("amoskys_web", "AMOSKYS Web Application Information"),
+        )
+        if APP_INFO is not None:
             APP_INFO.info(
                 {
                     "version": os.getenv("APP_VERSION", "1.0.0"),
                     "environment": os.getenv("FLASK_ENV", "development"),
                 }
             )
-        except ValueError:
-            pass
 
-        try:
-            REQUEST_COUNT = Counter(
+        REQUEST_COUNT = _register(
+            "amoskys_http_requests_total",
+            lambda: Counter(
                 "amoskys_http_requests_total",
                 "Total HTTP requests",
                 ["method", "endpoint", "status"],
-            )
-        except ValueError:
-            pass
+            ),
+        )
 
-        try:
-            REQUEST_LATENCY = Histogram(
+        REQUEST_LATENCY = _register(
+            "amoskys_http_request_duration_seconds",
+            lambda: Histogram(
                 "amoskys_http_request_duration_seconds",
                 "HTTP request latency in seconds",
                 ["method", "endpoint"],
                 buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
-            )
-        except ValueError:
-            pass
+            ),
+        )
 
-        try:
-            REQUEST_IN_PROGRESS = Gauge(
+        REQUEST_IN_PROGRESS = _register(
+            "amoskys_http_requests_in_progress",
+            lambda: Gauge(
                 "amoskys_http_requests_in_progress",
                 "Number of HTTP requests currently being processed",
                 ["method", "endpoint"],
-            )
-        except ValueError:
-            pass
+            ),
+        )
 
-        try:
-            ACTIVE_AGENTS = Gauge(
-                "amoskys_active_agents", "Number of currently active agents"
-            )
-        except ValueError:
-            pass
+        ACTIVE_AGENTS = _register(
+            "amoskys_active_agents",
+            lambda: Gauge("amoskys_active_agents", "Number of currently active agents"),
+        )
 
-        try:
-            AGENT_CONNECTIONS = Counter(
+        AGENT_CONNECTIONS = _register(
+            "amoskys_agent_connections_total",
+            lambda: Counter(
                 "amoskys_agent_connections_total",
                 "Total agent connection attempts",
                 ["status"],
-            )
-        except ValueError:
-            pass
+            ),
+        )
 
-        try:
-            DB_QUERY_COUNT = Counter(
+        DB_QUERY_COUNT = _register(
+            "amoskys_db_queries_total",
+            lambda: Counter(
                 "amoskys_db_queries_total",
                 "Total database queries",
                 ["operation", "table"],
-            )
-        except ValueError:
-            pass
+            ),
+        )
 
-        try:
-            DB_QUERY_LATENCY = Histogram(
+        DB_QUERY_LATENCY = _register(
+            "amoskys_db_query_duration_seconds",
+            lambda: Histogram(
                 "amoskys_db_query_duration_seconds",
                 "Database query latency in seconds",
                 ["operation"],
                 buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0],
-            )
-        except ValueError:
-            pass
+            ),
+        )
 
-        try:
-            TELEMETRY_EVENTS = Counter(
+        TELEMETRY_EVENTS = _register(
+            "amoskys_telemetry_events_total",
+            lambda: Counter(
                 "amoskys_telemetry_events_total",
                 "Total telemetry events received",
                 ["event_type"],
-            )
-        except ValueError:
-            pass
+            ),
+        )
 
-        try:
-            TELEMETRY_QUEUE_SIZE = Gauge(
+        TELEMETRY_QUEUE_SIZE = _register(
+            "amoskys_telemetry_queue_size",
+            lambda: Gauge(
                 "amoskys_telemetry_queue_size", "Current telemetry queue size"
-            )
-        except ValueError:
-            pass
+            ),
+        )
 
-        try:
-            AUTH_ATTEMPTS = Counter(
+        AUTH_ATTEMPTS = _register(
+            "amoskys_auth_attempts_total",
+            lambda: Counter(
                 "amoskys_auth_attempts_total",
                 "Total authentication attempts",
                 ["type", "status"],
-            )
-        except ValueError:
-            pass
+            ),
+        )
 
-        try:
-            SECURITY_EVENTS = Counter(
+        SECURITY_EVENTS = _register(
+            "amoskys_security_events_total",
+            lambda: Counter(
                 "amoskys_security_events_total",
                 "Total security events",
                 ["event_type", "severity"],
-            )
-        except ValueError:
-            pass
+            ),
+        )
 
-        try:
-            UPTIME_SECONDS = Gauge(
-                "amoskys_uptime_seconds", "Application uptime in seconds"
-            )
-        except ValueError:
-            pass
+        UPTIME_SECONDS = _register(
+            "amoskys_uptime_seconds",
+            lambda: Gauge("amoskys_uptime_seconds", "Application uptime in seconds"),
+        )
 
 
 def update_uptime():

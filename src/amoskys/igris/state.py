@@ -76,7 +76,9 @@ class IgrisState:
             if isinstance(loaded, dict):
                 self._state.update(loaded)
         except (json.JSONDecodeError, OSError) as e:
-            logger.warning("Failed to load IGRIS state from %s: %s", self._state_path, e)
+            logger.warning(
+                "Failed to load IGRIS state from %s: %s", self._state_path, e
+            )
         return self._state
 
     def save(self) -> None:

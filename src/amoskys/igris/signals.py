@@ -120,7 +120,9 @@ class SignalEmitter:
                     if sig.get("signal_id") == signal_id:
                         return sig
         except (json.JSONDecodeError, OSError) as e:
-            logger.warning("Failed to search signal %s in %s: %s", signal_id, self._signals_path, e)
+            logger.warning(
+                "Failed to search signal %s in %s: %s", signal_id, self._signals_path, e
+            )
         return None
 
     def _rotate_if_needed(self) -> None:
@@ -134,4 +136,6 @@ class SignalEmitter:
                     os.remove(rotated)
                 os.rename(self._signals_path, rotated)
         except OSError as e:
-            logger.warning("Signal log rotation failed for %s: %s", self._signals_path, e)
+            logger.warning(
+                "Signal log rotation failed for %s: %s", self._signals_path, e
+            )

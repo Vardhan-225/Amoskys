@@ -165,7 +165,49 @@ _NOISE_CATEGORIES = {
     "app_terminated",
     "tcc_tcc_permission_request",
     "tcc_tcc_permission_granted",
+    "late_night_connections",  # informational, not actionable
 }
+
+# Paths that are always benign system infrastructure — never WATCH these.
+# These are Apple system binaries and common developer tools that appear
+# in every process list. An attacker would not USE these paths — they'd
+# drop their own binary or hijack a user-space process.
+_BENIGN_SYSTEM_PATHS = frozenset(
+    {
+        "/bin/sleep",
+        "/bin/sh",
+        "/bin/bash",
+        "/bin/zsh",
+        "/usr/bin/log",
+        "/usr/bin/grep",
+        "/usr/bin/awk",
+        "/usr/bin/sed",
+        "/usr/bin/find",
+        "/usr/bin/xargs",
+        "/usr/bin/env",
+        "/usr/bin/caffeinate",
+        "/usr/bin/mdls",
+        "/usr/bin/mdfind",
+        "/usr/sbin/softwareupdate",
+        "/usr/libexec/postfix/master",
+        "/usr/libexec/periodic-wrapper",
+    }
+)
+
+# Process names that are always Apple system processes
+_BENIGN_SYSTEM_PROCS = frozenset(
+    {
+        "sleep",
+        "MailCacheDelete",
+        "com.apple.geod",
+        "com.apple.bird",
+        "trustd",
+        "cfprefsd",
+        "distnoted",
+        "secinitd",
+        "keybagd",
+    }
+)
 
 
 def _is_self_process(
@@ -189,9 +231,25 @@ def _is_self_process(
 
 
 def _is_noise_event(event: dict) -> bool:
-    """Check if an event is infrastructure noise."""
+    """Check if an event is infrastructure noise or benign system activity."""
     cat = event.get("event_category", "")
-    return cat in _NOISE_CATEGORIES
+    if cat in _NOISE_CATEGORIES:
+        return True
+
+    # Check path-based noise (system binaries that aren't threats)
+    raw = event.get("raw_attributes_json", "")
+    if raw:
+        try:
+            attrs = json.loads(raw)
+            path = attrs.get("path", attrs.get("exe", ""))
+            proc = attrs.get("process_name", "")
+            if path in _BENIGN_SYSTEM_PATHS:
+                return True
+            if proc in _BENIGN_SYSTEM_PROCS:
+                return True
+        except Exception:
+            pass
+    return False
 
 
 # ── Tactical Engine ──────────────────────────────────────────────────────────
@@ -879,13 +937,23 @@ class IGRISTacticalEngine:
 
     @staticmethod
     def _first_tech(techs_str: str) -> str:
+        """Extract first MITRE technique from a (possibly double-encoded) JSON string."""
         if not techs_str:
             return ""
         try:
             parsed = json.loads(techs_str)
-            return parsed[0] if parsed else ""
+            # Handle double-encoded: '"[\"T1059\"]"' → '["T1059"]' → ["T1059"]
+            if isinstance(parsed, str):
+                parsed = json.loads(parsed)
+            if isinstance(parsed, list) and parsed:
+                return parsed[0]
+            return ""
         except Exception:
-            return techs_str[:10] if techs_str else ""
+            # Last resort: extract T-number pattern directly
+            import re
+
+            match = re.search(r"T\d{4}(?:\.\d{3})?", techs_str)
+            return match.group(0) if match else ""
 
     def get_briefing(self) -> str:
         """Get a plain-English briefing of IGRIS's current assessment."""
