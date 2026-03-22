@@ -797,6 +797,14 @@ class INADSEngine:
 
         self._trained = False
 
+        # Auto-load persisted models if they exist on disk
+        if self.model_dir.is_dir() and any(self.model_dir.glob("*.joblib")):
+            try:
+                self.load_models()
+                logger.info("INADS: loaded persisted models from %s", self.model_dir)
+            except Exception as e:
+                logger.debug("INADS: auto-load failed (will train fresh): %s", e)
+
     # ── Data Loading ──────────────────────────────────────────────────
 
     def _connect_db(self) -> sqlite3.Connection:
