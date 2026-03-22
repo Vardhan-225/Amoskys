@@ -60,22 +60,25 @@ def _is_non_routable(ip: str) -> bool:
 
 
 def _resolve_process(pid: int, fallback_name: str = "UNKNOWN") -> Dict[str, Any]:
-    """Best-effort exe resolution from PID using psutil."""
-    try:
-        import psutil
+    """Resolve PID to full process context via shared resolver (cached)."""
+    from amoskys.agents.common.process_resolver import resolver
 
-        proc = psutil.Process(pid)
+    snap = resolver.resolve(pid)
+    if snap.is_alive:
         return {
             "pid": pid,
-            "process_name": proc.name() or fallback_name,
-            "exe": proc.exe() or "ACCESS_DENIED",
+            "process_name": snap.process_name or fallback_name,
+            "exe": snap.exe or "ACCESS_DENIED",
+            "cmdline": snap.cmdline,
+            "ppid": snap.ppid,
+            "parent_name": snap.parent_name,
+            "username": snap.username,
         }
-    except Exception:
-        return {
-            "pid": pid,
-            "process_name": fallback_name,
-            "exe": "UNRESOLVED",
-        }
+    return {
+        "pid": pid,
+        "process_name": fallback_name,
+        "exe": "UNRESOLVED",
+    }
 
 
 # ---------------------------------------------------------------------------
