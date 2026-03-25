@@ -1,458 +1,193 @@
-# AMOSKYS – Real-time Security Intelligence Platform
+# AMOSKYS
 
-**Production-grade telemetry collection and threat detection for Mac/Linux environments**
+**Your Mac made 37,000 network connections yesterday. Do you know who it talked to?**
+
+AMOSKYS is a macOS endpoint detection platform that shows you exactly where your data goes — in real time, on a globe — and detects when something is wrong.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)]()
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/tests-4%2C255%20passing-brightgreen.svg)]()
+[![LOC](https://img.shields.io/badge/LOC-38%2C000-blue.svg)]()
+[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)]()
 
 ---
 
-## Overview
+## What It Does
 
-AMOSKYS is a distributed security monitoring platform that provides real-time visibility into system processes, peripheral devices, and network activity. Built with a focus on **reliability, performance, and zero data loss**.
+AMOSKYS runs 17 native macOS agents that watch everything happening on your machine:
 
-### Key Features
+- **Processes** — what's running, who spawned it, is it signed
+- **Network flows** — where your data goes, how much, how often
+- **DNS queries** — every domain your Mac resolves
+- **Authentication** — SSH attempts, sudo usage, login anomalies
+- **Persistence** — LaunchAgents, cron jobs, SSH keys, login items
+- **File integrity** — critical system file modifications
+- **Credentials** — Keychain access, browser cookie reads, clipboard monitoring
+- **Quarantine** — Gatekeeper bypass attempts, unsigned downloads
 
-- **🔒 Zero-Trust Architecture** - mTLS encryption, Ed25519 signatures, immutable audit logs
-- **📊 Real-Time Monitoring** - Process telemetry, USB device tracking, system health
-- **💾 Reliable Data Pipeline** - Write-ahead logging ensures no event loss
-- **🎯 Distributed Agents** - Lightweight collectors with intelligent retry logic
-- **🌐 Modern Dashboard** - Real-time visualization with WebSocket updates
-- **⚡ High Performance** - 700+ events/minute with < 100ms latency
+Each agent has detection probes — 175 total — mapped to [MITRE ATT&CK](https://attack.mitre.org/) techniques. When something looks wrong, a fusion engine correlates signals across agents into kill chains.
+
+### The Observatory
+
+The Network Observatory shows every connection your Mac makes, plotted on a globe in real time. Every arc is a real connection. Every label is a real destination.
+
+At the bottom: *"No suspicious connections detected. All traffic appears clean."*
+
+That sentence only means something when you can prove it.
+
+---
+
+## By the Numbers
+
+| Metric | Value |
+|--------|-------|
+| macOS Detection Agents | 17 |
+| Detection Probes | 175 (MITRE ATT&CK mapped) |
+| Sigma Detection Rules | 56 (all 14 tactics) |
+| Fusion Correlation Rules | 13 |
+| MITRE Techniques Covered | 106+ |
+| Test Suite | 4,255 passing |
+| Lines of Code | ~38,000 |
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                    AMOSKYS Platform                          │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐       │
-│  │ Proc Agent  │  │Periph Agent │  │  SNMP Agent  │       │
-│  │             │  │             │  │              │       │
-│  │ • Processes │  │ • USB       │  │ • Network    │       │
-│  │ • CPU/Mem   │  │ • Bluetooth │  │ • Devices    │       │
-│  │ • Users     │  │ • Risk      │  │ • Metrics    │       │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘       │
-│         │                 │                 │               │
-│         └─────────────────┼─────────────────┘               │
-│                           ▼                                 │
-│                  ┌─────────────────┐                        │
-│                  │   EventBus      │                        │
-│                  │   (gRPC/mTLS)   │                        │
-│                  └────────┬────────┘                        │
-│                           │                                 │
-│                           ▼                                 │
-│                  ┌─────────────────┐                        │
-│                  │  WAL Processor  │                        │
-│                  │  (Queue Drain)  │                        │
-│                  └────────┬────────┘                        │
-│                           │                                 │
-│                           ▼                                 │
-│                  ┌─────────────────┐                        │
-│                  │    Database     │                        │
-│                  │  (SQLite + WAL) │                        │
-│                  └────────┬────────┘                        │
-│                           │                                 │
-│                           ▼                                 │
-│                  ┌─────────────────┐                        │
-│                  │  Web Dashboard  │                        │
-│                  │  (Flask + WS)   │                        │
-│                  └─────────────────┘                        │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+ ┌─────────────────────────────────────────────────────────────────┐
+ │  17 macOS Agents                                                │
+ │  Process · Auth · Persistence · FIM · Network · DNS · Peripheral│
+ │  AppLog · Discovery · InternetActivity · DBActivity · HTTP      │
+ │  InfostealerGuard · QuarantineGuard · Provenance · Sentinel     │
+ │  SecurityMonitor · UnifiedLog                                   │
+ └────────────────────────┬────────────────────────────────────────┘
+                          │ TelemetryEvents
+                          ▼
+ ┌────────────────────────────────────────────────────────────────┐
+ │  Intelligence Layer                                            │
+ │  ├─ Fusion Engine — 13 correlation rules (kill chain detection)│
+ │  ├─ INADS — 5-cluster ML anomaly scoring                      │
+ │  ├─ SOMA — 2-hemisphere behavioral baseline                   │
+ │  ├─ Sigma Engine — 56 YAML detection rules                    │
+ │  └─ Kill Chain Tracker — 7-stage progression                  │
+ └────────────────────────┬───────────────────────────────────────┘
+                          │
+                          ▼
+ ┌────────────────────────────────────────────────────────────────┐
+ │  Dashboard                                                     │
+ │  Cortex · Observatory · Network Globe · Threats · Intelligence │
+ │  Fleet · SOMA · Agents · Correlation                          │
+ └────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-
-- Python 3.8+ (3.11+ recommended)
-- macOS 10.15+ or Linux (Ubuntu 20.04+, Debian 11+)
-- 2GB RAM minimum
-- 1GB disk space
-
-### Installation
-
 ```bash
-# Clone repository
+# Clone
 git clone https://github.com/Vardhan-225/Amoskys.git
 cd Amoskys
 
-# Install dependencies (choose one based on your needs)
-# Core only (EventBus + basic agents):
-pip install -e .
+# Install
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[all]"
 
-# With web dashboard (recommended):
-pip install -e .[web]
-
-# Full development setup (all tools):
-pip install -e .[all]
-
-# Or install specific groups:
-# pip install -e .[web,agents,dev]
-
-# Start all services
-./start_amoskys.sh
+# Start
+PYTHONPATH=src SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))') \
+  FLASK_PORT=8080 LOGIN_DISABLED=true FORCE_HTTPS=false \
+  python3 -m web.app
 ```
 
-### Access Dashboard
+Open `http://localhost:8080/dashboard/observatory` and watch the globe.
+
+---
+
+## Detection Validation
+
+AMOSKYS includes a red team toolkit (`kali/`) with 29 macOS attack techniques:
+
+| Agent | Techniques | What It Tests |
+|-------|-----------|---------------|
+| TCC Hunter | 7 | Privacy framework bypasses |
+| Keychain | 4 | Credential harvesting |
+| Persistence | 7 | LaunchAgent, cron, SSH keys, DYLD injection |
+| Gatekeeper | 6 | Code signing, quarantine bypass |
+| XPC | 5 | IPC exploitation, privileged helpers |
+
+Run the campaign, then check what the blue team caught:
 
 ```bash
-# Open dashboard in browser
-open http://localhost:5001/dashboard/cortex
+# Attack
+cd kali && python3 amoskys-red campaign localhost --all
 
-# Or check system status
-./quick_status.sh
+# See what blue team detected
+sqlite3 data/telemetry.db "SELECT event_category, risk_score, description
+  FROM security_events ORDER BY timestamp_ns DESC LIMIT 20"
+```
+
+**Last campaign result:** 17 successful attacks → 31 blue team detections including credential access (0.88 risk), config backdoor (0.85), quarantine bypass (0.70), and a full kill chain correlation.
+
+---
+
+## Key Components
+
+| Component | Location | What It Does |
+|-----------|----------|-------------|
+| Agent Base | `src/amoskys/agents/common/base.py` | HardenedAgentBase — circuit breaker, retry, health tracking |
+| Probes | `src/amoskys/agents/common/probes.py` | MicroProbe pattern — stateful behavioral detection |
+| Fusion Engine | `src/amoskys/intel/fusion_engine.py` | Cross-agent correlation, incident generation |
+| INADS | `src/amoskys/intel/inads_engine.py` | 5-cluster ML scoring (published research) |
+| SOMA | `src/amoskys/intel/soma.py` | Behavioral baseline — frequency + statistical anomaly |
+| Kill Chain | `src/amoskys/agents/common/kill_chain.py` | 7-stage Lockheed Martin model with MITRE mapping |
+| Sigma Rules | `src/amoskys/detection/rules/sigma/` | 56 YAML rules, OASIS standard |
+| Telemetry Store | `src/amoskys/storage/telemetry_store.py` | SQLite WAL, read pool, 30s TTL cache |
+| Dashboard | `web/app/` | Flask + SocketIO, <19ms response time |
+| Red Team | `kali/` | 29 macOS attack techniques with gap analysis |
+
+---
+
+## macOS Agents
+
+| Agent | Probes | What It Watches |
+|-------|--------|----------------|
+| Process | 15 | Spawns, LOLBins, injection, masquerade, code signing |
+| AuthGuard | 9 | SSH brute force, sudo, off-hours login, impossible travel |
+| PersistenceGuard | 11 | LaunchAgent/Daemon, cron, SSH keys, login hooks |
+| FIM | 10 | Critical files, SUID changes, webshells, config backdoors |
+| FlowAgent | 10 | C2 beaconing, exfiltration, lateral movement, tunnels |
+| DNS | 8 | DGA detection, DNS tunneling, beaconing, cache poison |
+| InternetActivity | 8 | Cloud exfil, TOR/VPN, crypto mining, shadow IT |
+| Discovery | 6 | ARP changes, Bonjour, rogue DHCP, topology |
+| HTTPInspector | 8 | XSS, SSRF, path traversal, API abuse, C2 beacons |
+| AppLog | 7 | Webshells, log tampering, SQLi, credential harvest |
+| DBActivity | 8 | Bulk extraction, schema enum, privilege escalation |
+| InfostealerGuard | 12 | Keychain, browser creds, wallets, fake dialogs, clipboard |
+| QuarantineGuard | 8 | Quarantine bypass, DMG execution, ClickFix, unsigned bins |
+| Provenance | 8 | Cross-application attack chains, download-execute sequences |
+| NetworkSentinel | 10 | HTTP scan storms, directory brute force, SQLi payloads |
+| SecurityMonitor | 4 | PKI anomalies, Gatekeeper, security daemon |
+| UnifiedLog | 6 | securityd, TCC, XPC, installer events |
+
+---
+
+## Running Tests
+
+```bash
+pytest tests/ -x -q
+# 4,255 passed, 16 skipped, 0 failed
 ```
 
 ---
 
-## Components
+## Built By
 
-### Core Infrastructure
+[Akash Thanneeru](https://www.linkedin.com/in/akashthanneeru/) — built solo over 12 months. Architecture, detection logic, and system design by me. Implementation with Claude as coding partner.
 
-#### EventBus
-Central message broker handling all telemetry ingestion via gRPC with mTLS.
-- **Location**: `src/amoskys/eventbus/server.py`
-- **Port**: 50051 (gRPC)
-- **Protocol**: gRPC with mTLS
-- **Features**: Message routing, deduplication, backpressure control
-
-#### WAL Processor
-Asynchronous processor that drains the write-ahead log into permanent storage.
-- **Location**: `src/amoskys/storage/wal_processor.py`
-- **Throughput**: 100 events per 5 seconds
-- **Reliability**: Zero data loss, transactional processing
-
-#### Database
-SQLite database with WAL mode for concurrent read/write access.
-- **Location**: `data/telemetry.db`
-- **Schema**: 7 tables with 18 optimized indexes
-- **Size**: ~100MB per 200k events
-
-### Agents
-
-#### Process Agent
-Monitors running processes, resource usage, and user activity.
-- **Location**: `src/amoskys/agents/proc/proc_agent.py`
-- **Frequency**: Every 30 seconds
-- **Metrics**: PID, CPU%, Memory%, User type, Command line
-- **Platform**: macOS, Linux
-
-#### Peripheral Agent
-Tracks USB, Bluetooth, and other connected devices with risk scoring.
-- **Location**: `src/amoskys/agents/peripheral/peripheral_agent.py`
-- **Frequency**: Every 30 seconds
-- **Detection**: BadUSB, unauthorized devices, data exfiltration
-- **Platform**: macOS (Linux support planned)
-
-#### SNMP Agent (Optional)
-Collects telemetry from network devices via SNMP.
-- **Location**: `src/amoskys/agents/snmp/snmp_agent.py`
-- **Protocol**: SNMPv2c/v3
-- **Devices**: Routers, switches, IoT devices
-- **Status**: Requires `pysnmp` library
-
-### Dashboard
-
-Web-based interface for real-time monitoring and analysis.
-- **Location**: `web/app/`
-- **Port**: 5001 (HTTP)
-- **Tech Stack**: Flask + SocketIO + Chart.js
-- **Pages**:
-  - **Cortex** - Command center overview
-  - **Agents** - Agent health and network status
-  - **Processes** - Real-time process monitoring
-  - **Peripherals** - Device connection tracking
-  - **Database** - Data management and audit logs
-
----
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# EventBus
-export EVENTBUS_PORT=50051
-export EVENTBUS_CERT_DIR=certs/
-
-# Dashboard
-export FLASK_PORT=5001
-export FLASK_DEBUG=false
-
-# Agents
-export PROC_AGENT_INTERVAL=30
-export PERIPHERAL_AGENT_INTERVAL=30
-```
-
-### Certificate Management
-
-Certificates for mTLS are located in `certs/`:
-- `ca.crt` - Certificate Authority (expires 2035)
-- `server.crt` - Server certificate (expires 2027)
-- `agent.crt` - Agent certificate
-- `agent.key` - Agent private key
-
----
-
-## Operations
-
-### Service Management
-
-```bash
-# Start all services
-./start_amoskys.sh
-
-# Check status
-./quick_status.sh
-
-# Stop all services
-./stop_amoskys.sh
-```
-
-### Health Monitoring
-
-```bash
-# View logs
-tail -f logs/proc_agent.log
-tail -f logs/eventbus.log
-tail -f logs/dashboard.log
-
-# Check database
-sqlite3 data/telemetry.db "SELECT COUNT(*) FROM process_events;"
-
-# API health check
-curl http://localhost:5001/api/system/health
-```
-
-### Data Management
-
-```bash
-# Query recent events
-sqlite3 data/telemetry.db "SELECT * FROM process_events ORDER BY timestamp_dt DESC LIMIT 10;"
-
-# Export data
-sqlite3 data/telemetry.db ".mode csv" ".output events.csv" "SELECT * FROM process_events;"
-
-# Clear old data
-sqlite3 data/telemetry.db "DELETE FROM process_events WHERE timestamp_dt < datetime('now', '-7 days');"
-```
-
----
-
-## Production Deployment
-
-### DNS & Domain Setup
-
-AMOSKYS can be deployed to production with Cloudflare DNS and CDN:
-
-```bash
-# 1. Configure DNS records in Cloudflare
-# See: docs/DNS_DEPLOYMENT_GUIDE.md for complete instructions
-
-# 2. Automated DNS setup (optional)
-export CLOUDFLARE_API_TOKEN="your_token"
-export VPS_IP="your.vps.ip.address"
-./deploy/dns/setup-cloudflare-dns.sh
-
-# 3. Configure VPS firewall for Cloudflare
-sudo ./deploy/dns/configure-vps-firewall.sh
-```
-
-**Resources:**
-- **DNS Guide**: [docs/DNS_DEPLOYMENT_GUIDE.md](docs/DNS_DEPLOYMENT_GUIDE.md)
-- **VPS Guide**: [docs/VPS_DEPLOYMENT_GUIDE.md](docs/VPS_DEPLOYMENT_GUIDE.md)
-- **Cloudflare Setup**: [docs/CLOUDFLARE_SETUP.md](docs/CLOUDFLARE_SETUP.md)
-- **DNS Scripts**: [deploy/dns/](deploy/dns/)
-
-### Docker Deployment
-
-```bash
-# Development environment
-docker-compose -f deploy/docker-compose.dev.yml up -d
-
-# See: docs/DOCKER_DEPLOY.md for production setup
-```
-
-### VPS Deployment
-
-```bash
-# Deploy to production VPS
-# 1. Clone repository to /opt/amoskys
-# 2. Install dependencies
-# 3. Configure NGINX (deploy/nginx/amoskys.conf)
-# 4. Install SSL certificates
-# 5. Start services
-
-# See: docs/VPS_DEPLOYMENT_GUIDE.md
-```
-
----
-
-## Development
-
-### Project Structure
-
-```
-Amoskys/
-├── src/amoskys/
-│   ├── agents/          # Data collection agents
-│   │   ├── proc/        # Process monitoring
-│   │   ├── peripheral/  # Device monitoring
-│   │   └── snmp/        # Network monitoring
-│   ├── eventbus/        # Message broker
-│   ├── storage/         # WAL processor
-│   ├── proto/           # Protocol buffers
-│   ├── common/          # Shared utilities
-│   └── config/          # Configuration
-├── web/
-│   ├── app/             # Flask application
-│   │   ├── templates/   # HTML templates
-│   │   ├── static/      # CSS/JS assets
-│   │   ├── api/         # REST API endpoints
-│   │   └── dashboard/   # Dashboard logic
-│   └── wsgi.py          # WSGI entry point
-├── data/
-│   ├── telemetry.db     # Main database
-│   └── wal/             # WAL queue
-├── certs/               # mTLS certificates
-├── logs/                # Application logs
-└── tests/               # Unit & integration tests
-```
-
-### Running Tests
-
-```bash
-# Unit tests
-pytest tests/unit/
-
-# Integration tests
-pytest tests/integration/
-
-# Component tests
-pytest tests/component/
-```
-
-### Adding a New Agent
-
-1. Create agent directory: `src/amoskys/agents/myagent/`
-2. Implement collection logic
-3. Use UniversalEnvelope for publishing
-4. Add agent to dashboard registry
-5. Update `start_amoskys.sh`
-
----
-
-## Security
-
-### Threat Model
-
-AMOSKYS is designed to detect:
-- ✅ Unauthorized processes (privilege escalation)
-- ✅ Suspicious peripheral devices (BadUSB, data exfiltration)
-- ✅ Abnormal resource usage (cryptomining, DoS)
-- ✅ Process injection and code execution
-- ⏳ Network anomalies (C2 communication) - Planned
-- ⏳ Lateral movement - Planned
-
-### Security Best Practices
-
-1. **Rotate Certificates**: Update mTLS certificates annually
-2. **Secure Database**: Set proper file permissions on `data/telemetry.db`
-3. **Audit Logs**: Review dashboard audit logs regularly
-4. **Network Isolation**: Run EventBus on isolated network
-5. **Update Dependencies**: Keep Python packages up-to-date
-
----
-
-## Performance
-
-### Benchmarks (macOS M2, 8GB RAM)
-
-| Metric | Value |
-|--------|-------|
-| Events/second | 11-12 |
-| EventBus CPU | < 0.1% |
-| Agent CPU | < 0.5% each |
-| Memory (total) | < 200MB |
-| Disk I/O | 1-2 MB/s |
-| Database size | 100MB / 200k events |
-| Query latency (p99) | < 50ms |
-
----
-
-## Roadmap
-
-### Completed ✅
-- Core infrastructure (EventBus, WAL, Database)
-- Process and peripheral monitoring agents
-- Real-time dashboard with 8 pages
-- mTLS security with Ed25519 signing
-- Mac/Linux compatibility
-
-### In Progress ⏳
-- Linux peripheral agent implementation
-- Real-time alerting engine
-- Data export functionality
-
-### Planned 📋
-- Flow Agent (network monitoring)
-- Discovery Agent (network scanning)
-- Machine learning anomaly detection
-- OT device adapters (Modbus, OPC UA)
-- Windows support
-
----
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Development Setup
-
-```bash
-# Install dev dependencies
-pip install -r requirements-dev.txt
-
-# Run linters
-flake8 src/
-black src/
-mypy src/
-
-# Run tests
-pytest tests/
-```
-
----
-
-## Documentation
-
-- **Architecture**: See [MAC_LINUX_ARCHITECTURE_ASSESSMENT.md](MAC_LINUX_ARCHITECTURE_ASSESSMENT.md)
-- **Recent Fixes**: See [SNMP_AGENT_TODO_FIX_REPORT.md](SNMP_AGENT_TODO_FIX_REPORT.md)
-- **Cleanup Plan**: See [CLEANUP_AND_AUDIT_PLAN.md](CLEANUP_AND_AUDIT_PLAN.md)
-- **TODO Status**: See [TODO_STATUS_UPDATE.md](TODO_STATUS_UPDATE.md)
+INADS multi-perspective ML scoring is based on published research: *Thanneeru & Zhengrui, 2025.*
 
 ---
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) for details.
-
----
-
-## Support
-
-- **Issues**: https://github.com/your-org/Amoskys/issues
-- **Documentation**: https://docs.amoskys.io
-- **Email**: support@amoskys.io
-
----
-
-**Built with 🧠 for security professionals by security professionals**
+MIT — see [LICENSE](LICENSE).

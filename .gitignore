@@ -203,3 +203,5 @@ profile_default/
 ipython_config.py
 .pybuilder/
 target/
+kali/.env
+certs/*.key
