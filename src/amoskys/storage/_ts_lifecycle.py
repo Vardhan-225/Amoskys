@@ -22,13 +22,40 @@ class LifecycleMixin:
         self._batch_count = 0
 
     def end_batch(self) -> None:
-        """Commit all buffered inserts and leave batch mode."""
+        """Commit all buffered inserts and leave batch mode.
+
+        Retries up to 3 times on transient SQLite lock errors, then
+        explicitly rolls back to leave the connection in a clean state
+        so subsequent batches aren't poisoned.
+        """
+        last_err = None
+        for attempt in range(3):
+            try:
+                self.db.commit()
+                self._batch_mode = False
+                self._batch_count = 0
+                self._cache.invalidate()
+                return
+            except sqlite3.OperationalError as e:
+                last_err = e
+                err_msg = str(e).lower()
+                if "locked" in err_msg or "busy" in err_msg:
+                    time.sleep(0.2 * (attempt + 1))
+                    continue
+                # Non-lock error — break and rollback
+                break
+
+        # Commit failed after retries — rollback to reset connection state
         try:
-            self.db.commit()
-        finally:
-            self._batch_mode = False
-            self._batch_count = 0
-            self._cache.invalidate()
+            self.db.rollback()
+        except Exception:
+            pass  # Already clean or no active transaction
+        self._batch_mode = False
+        self._batch_count = 0
+        self._cache.invalidate()
+        raise sqlite3.OperationalError(
+            f"Batch commit failed after retries: {last_err}"
+        )
 
     def _commit(self) -> None:
         """Commit unless in batch mode."""

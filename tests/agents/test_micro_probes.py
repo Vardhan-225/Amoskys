@@ -222,18 +222,18 @@ class TestProcProbes:
     """Test Process probe implementations."""
 
     def test_proc_probes_exist(self):
-        """Verify all 13 process probes are available."""
+        """Verify all 15 process probes are available."""
         from amoskys.agents.os.macos.process.probes import create_process_probes
 
         probes = create_process_probes()
-        assert len(probes) == 13
+        assert len(probes) == 15
 
     def test_create_proc_probes(self):
         """Test creating process probe instances."""
         from amoskys.agents.os.macos.process.probes import create_process_probes
 
         probes = create_process_probes()
-        assert len(probes) == 13
+        assert len(probes) == 15
 
         names = {p.name for p in probes}
         assert "macos_process_spawn" in names
@@ -372,14 +372,14 @@ class TestPeripheralProbes:
         from amoskys.agents.os.macos.peripheral.probes import create_peripheral_probes
 
         probes = create_peripheral_probes()
-        assert len(probes) == 4
+        assert len(probes) == 5
 
     def test_create_peripheral_probes(self):
         """Test creating peripheral probe instances."""
         from amoskys.agents.os.macos.peripheral.probes import create_peripheral_probes
 
         probes = create_peripheral_probes()
-        assert len(probes) == 4
+        assert len(probes) == 5
 
         names = {p.name for p in probes}
         assert "macos_usb_inventory" in names

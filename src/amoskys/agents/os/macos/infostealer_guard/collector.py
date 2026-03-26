@@ -58,8 +58,9 @@ class SensitiveFileAccess:
     process_name: str
     file_path: str
     access_category: str  # keychain, chrome_creds, chrome_cookies, firefox_creds,
-    # safari, brave_creds, edge_creds, crypto_exodus,
-    # crypto_electrum, crypto_atomic, notes, telegram, discord
+    # safari, safari_cookies, brave_creds, edge_creds,
+    # crypto_exodus, crypto_electrum, crypto_atomic,
+    # ssh_keys, notes, telegram, discord
     process_guid: str  # f"{device_id}:{pid}:{create_time_hash}"
 
 
@@ -115,6 +116,8 @@ _SENSITIVE_DIRS: Dict[str, List[str]] = {
     "crypto_exodus": [os.path.expanduser("~/Library/Application Support/Exodus/")],
     "crypto_electrum": [os.path.expanduser("~/Library/Application Support/Electrum/")],
     "crypto_atomic": [os.path.expanduser("~/Library/Application Support/atomic/")],
+    "ssh_keys": [os.path.expanduser("~/.ssh/")],
+    "safari_cookies": [os.path.expanduser("~/Library/Cookies/")],
     "notes": [os.path.expanduser("~/Library/Group Containers/group.com.apple.notes/")],
     "telegram": [os.path.expanduser("~/Library/Application Support/Telegram Desktop/")],
     "discord": [os.path.expanduser("~/Library/Application Support/discord/")],
@@ -129,6 +132,11 @@ _SENSITIVE_FILES: Dict[str, str] = {
     "key4.db": "firefox_creds",
     "History.db": "safari",
     "Bookmarks.plist": "safari",
+    "Cookies.binarycookies": "safari_cookies",
+    "id_rsa": "ssh_keys",
+    "id_ed25519": "ssh_keys",
+    "id_ecdsa": "ssh_keys",
+    "id_dsa": "ssh_keys",
 }
 
 # Expected benign processes for each category
@@ -172,6 +180,26 @@ _EXPECTED_ACCESSORS: Dict[str, Set[str]] = {
     "crypto_exodus": {"Exodus"},
     "crypto_electrum": {"Electrum"},
     "crypto_atomic": {"atomic"},
+    "ssh_keys": {
+        "ssh",
+        "ssh-agent",
+        "ssh-keygen",
+        "ssh-add",
+        "sshd",
+        "git",
+        "Git",
+        "GitHub Desktop",
+        "com.apple.Terminal",
+        "iTerm2",
+    },
+    "safari_cookies": {
+        "Safari",
+        "SafariServices",
+        "com.apple.Safari",
+        _APPLE_PROC_PREFIX,
+        "nsurlsessiond",
+        "cfprefsd",
+    },
     "notes": {"com.apple.Notes", "Notes"},
     "telegram": {"Telegram", "Telegram Desktop"},
     "discord": {"Discord", "discord"},

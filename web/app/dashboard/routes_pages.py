@@ -246,3 +246,38 @@ def observation_domains():
     """Observation Domains — P3 domain exploration"""
     user = get_current_user()
     return render_template("dashboard/observations.html", user=user)
+
+
+# ── Consolidated Views (v3 Architecture) ──
+
+
+@dashboard_bp.route("/threats")
+@require_login
+def threats_consolidated():
+    """Threats — Consolidated: Feed, MITRE, Hunt, Incidents, Correlation"""
+    user = get_current_user()
+    return render_template("dashboard/threats.html", user=user)
+
+
+@dashboard_bp.route("/observatory")
+@require_login
+def observatory_consolidated():
+    """Observatory — All domain monitoring in one tabbed view"""
+    user = get_current_user()
+    return render_template("dashboard/observatory.html", user=user)
+
+
+@dashboard_bp.route("/intelligence")
+@require_login
+def intelligence_consolidated():
+    """Intelligence — SOMA + INADS + Scoring + Fusion + AMRDR"""
+    user = get_current_user()
+    return render_template("dashboard/intelligence.html", user=user)
+
+
+@dashboard_bp.route("/fleet")
+@require_login
+def fleet_consolidated():
+    """Fleet — Agent management, deploy, reliability"""
+    user = get_current_user()
+    return render_template("dashboard/fleet.html", user=user)

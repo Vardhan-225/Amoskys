@@ -48,12 +48,14 @@ MODEL_DIR = DATA_DIR / "intel" / "inads"
 DB_PATH = DATA_DIR / "telemetry.db"
 
 # Default fusion weights (ProcessTree heaviest — endpoint behavioral is king)
+# ASV (Agent Signature Vector) gets 0.15 — strong signal but needs baseline data
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "process_tree": 0.30,
-    "network_seq": 0.20,
-    "kill_chain": 0.20,
-    "system_anomaly": 0.15,
-    "file_path": 0.15,
+    "process_tree": 0.25,
+    "network_seq": 0.15,
+    "kill_chain": 0.15,
+    "system_anomaly": 0.10,
+    "file_path": 0.10,
+    "agent_signature": 0.25,
 }
 
 # Minimum feature fill ratio to consider a cluster scorable
@@ -466,6 +468,112 @@ def _extract_file_path(evt: dict) -> Dict[str, Optional[float]]:
     }
 
 
+# ── Agent Signature Vector (ASV) — 6th Cluster ──────────────────────────
+#
+# ASV captures the multi-agent activation pattern within a time window.
+# When multiple specialized agents fire simultaneously, the *pattern* of
+# which agents activated is itself a threat classifier.
+#
+# Normal activity: 2-3 agents active (process + network + realtime)
+# Attack pattern:  6-8 agents active (persistence + process + provenance + ...)
+#
+# This is the feature nobody else can build — it requires a multi-agent
+# architecture where each agent is an independent observer.
+
+# Canonical agent names — order defines the vector dimensions
+ASV_AGENTS = [
+    "macos_auth",
+    "macos_discovery",
+    "macos_dns",
+    "macos_filesystem",
+    "macos_infostealer_guard",
+    "macos_internet_activity",
+    "macos_network",
+    "macos_persistence",
+    "macos_process",
+    "macos_provenance",
+    "macos_quarantine_guard",
+    "macos_realtime_sensor",
+    "macos_unified_log",
+    "network_sentinel",
+]
+ASV_DIM = len(ASV_AGENTS)
+_ASV_INDEX = {name: i for i, name in enumerate(ASV_AGENTS)}
+
+
+def _extract_agent_signature(evt: dict) -> Dict[str, Optional[float]]:
+    """AgentSignature cluster: multi-agent activation pattern features.
+
+    Reads '_asv' key from event dict — a list of agent names that fired
+    in the correlation window around this event. Built by the analyzer.
+
+    Features:
+        asv_agent_count: How many agents fired (0-14)
+        asv_agent_ratio: Fraction of agents that fired (0.0-1.0)
+        asv_has_persistence: 1.0 if persistence agent fired
+        asv_has_provenance: 1.0 if provenance engine fired
+        asv_has_auth: 1.0 if auth agent fired
+        asv_breadth_score: Diversity measure — attack campaigns spread across
+                          many agent domains, normal activity stays narrow
+        asv_0 through asv_13: Per-agent binary activation (the raw vector)
+    """
+    asv_agents = evt.get("_asv") or []
+    if isinstance(asv_agents, str):
+        asv_agents = [a.strip() for a in asv_agents.split(",") if a.strip()]
+
+    active_set = set(asv_agents)
+    count = len(active_set & set(ASV_AGENTS))
+
+    if count == 0:
+        # No ASV data — return all None (cluster will get low confidence)
+        features: Dict[str, Optional[float]] = {
+            "asv_agent_count": None,
+            "asv_agent_ratio": None,
+            "asv_has_persistence": None,
+            "asv_has_provenance": None,
+            "asv_has_auth": None,
+            "asv_breadth_score": None,
+        }
+        for i in range(ASV_DIM):
+            features[f"asv_{i}"] = None
+        return features
+
+    ratio = count / ASV_DIM
+
+    # Key domain flags — these agents firing together = strong attack signal
+    has_persistence = 1.0 if "macos_persistence" in active_set else 0.0
+    has_provenance = 1.0 if "macos_provenance" in active_set else 0.0
+    has_auth = 1.0 if "macos_auth" in active_set else 0.0
+
+    # Breadth score: Shannon entropy of activation pattern
+    # More diverse activation = higher entropy = more suspicious
+    if count > 0 and count < ASV_DIM:
+        p_active = count / ASV_DIM
+        p_inactive = 1.0 - p_active
+        entropy = -(
+            p_active * math.log2(p_active) + p_inactive * math.log2(p_inactive)
+        )
+        # Normalize to 0-1 (max entropy at 50% activation)
+        breadth = entropy
+    else:
+        breadth = 0.0
+
+    features = {
+        "asv_agent_count": float(count),
+        "asv_agent_ratio": round(ratio, 4),
+        "asv_has_persistence": has_persistence,
+        "asv_has_provenance": has_provenance,
+        "asv_has_auth": has_auth,
+        "asv_breadth_score": round(breadth, 4),
+    }
+
+    # Per-agent binary activation vector
+    for i, agent_name in enumerate(ASV_AGENTS):
+        features[f"asv_{i}"] = 1.0 if agent_name in active_set else 0.0
+
+    return features
+
+
 # Cluster registry: name -> (extractor_fn, feature_names)
 CLUSTER_REGISTRY: Dict[str, Tuple[Any, List[str]]] = {
     "process_tree": (
@@ -524,6 +632,18 @@ CLUSTER_REGISTRY: Dict[str, Tuple[Any, List[str]]] = {
             "is_downloads_path",
             "file_extension_encoded",
         ],
+    ),
+    "agent_signature": (
+        _extract_agent_signature,
+        [
+            "asv_agent_count",
+            "asv_agent_ratio",
+            "asv_has_persistence",
+            "asv_has_provenance",
+            "asv_has_auth",
+            "asv_breadth_score",
+        ]
+        + [f"asv_{i}" for i in range(ASV_DIM)],
     ),
 }
 

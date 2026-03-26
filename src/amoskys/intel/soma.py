@@ -47,6 +47,24 @@ logger = logging.getLogger("amoskys.soma")
 DATA_DIR = Path("data")
 MEMORY_DB = DATA_DIR / "igris" / "memory.db"
 
+# ── Dual-use process awareness ───────────────────────────────────────────
+# Legitimate system tools that appear in BOTH normal operations and attacks.
+# SOMA must not flag these as ANOMALY based on process name alone —
+# classification must come from event context (what the process was doing).
+DUAL_USE_PROCESSES: frozenset[str] = frozenset({
+    "arp", "curl", "wget", "ssh", "scp", "python3", "python", "bash", "zsh",
+    "sh", "find", "ps", "netstat", "lsof", "osascript", "security", "openssl",
+    "nslookup", "dig", "host", "nc", "ncat", "socat", "perl", "ruby",
+    "system_profiler", "sw_vers", "ifconfig", "networksetup", "dscl",
+})
+
+# Event categories that indicate clearly malicious intent — only these
+# justify marking a dual-use process as ANOMALY.
+MALICIOUS_CATEGORIES: frozenset[str] = frozenset({
+    "exfil", "beacon", "c2_", "reverse_shell", "credential", "keylog",
+    "ransomware", "cryptominer", "backdoor", "rootkit", "trojan",
+})
+
 
 @dataclass
 class SOMAAssessment:
@@ -111,6 +129,8 @@ class UnifiedSOMA:
         self._conn: Optional[sqlite3.Connection] = None
         self._category_stats: Dict[str, Dict[str, float]] = {}
         self._last_stats_refresh: float = 0
+        self._pending_writes: int = 0
+        self._FLUSH_INTERVAL: int = 50  # commit every N observations
         self._ensure_db()
 
     def _ensure_db(self):
@@ -141,6 +161,57 @@ class UnifiedSOMA:
         """
         )
         conn.commit()
+        self._graduate_existing()
+
+    def _graduate_existing(self):
+        """Retroactively classify observations stuck at is_normal = -1."""
+        conn = self._get_conn()
+
+        # ── Dual-use fix: rehabilitate common system tools wrongly flagged ──
+        # These processes are normal when seen frequently in benign contexts.
+        dual_placeholders = ",".join("?" for _ in DUAL_USE_PROCESSES)
+        malicious_clauses = " AND ".join(
+            f"event_category NOT LIKE '%{tag}%'" for tag in MALICIOUS_CATEGORIES
+        )
+        dual_cur = conn.execute(
+            f"UPDATE soma_observations SET is_normal = 1 "
+            f"WHERE process_name IN ({dual_placeholders}) "
+            f"AND seen_count >= 10 AND is_normal != 1 "
+            f"AND {malicious_clauses}",
+            tuple(DUAL_USE_PROCESSES),
+        )
+        if dual_cur.rowcount > 0:
+            logger.info(
+                "SOMA retrograde: rehabilitated %d dual-use process observations as normal",
+                dual_cur.rowcount,
+            )
+
+        # Graduate well-established low-risk patterns as normal
+        normal_cur = conn.execute(
+            "UPDATE soma_observations SET is_normal = 1 "
+            "WHERE is_normal != 1 AND seen_count >= 5 AND risk_score < 0.3"
+        )
+        if normal_cur.rowcount > 0:
+            logger.info(
+                "SOMA retrograde: graduated %d observations as normal",
+                normal_cur.rowcount,
+            )
+
+        # Flag high-risk patterns with enough evidence as anomalies
+        # but NOT dual-use processes (those are context-driven above)
+        anomaly_cur = conn.execute(
+            f"UPDATE soma_observations SET is_normal = 0 "
+            f"WHERE is_normal != 0 AND risk_score > 0.7 AND seen_count >= 3 "
+            f"AND process_name NOT IN ({dual_placeholders})",
+            tuple(DUAL_USE_PROCESSES),
+        )
+        if anomaly_cur.rowcount > 0:
+            logger.info(
+                "SOMA retrograde: graduated %d observations as anomaly",
+                anomaly_cur.rowcount,
+            )
+
+        conn.commit()
 
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
@@ -151,10 +222,17 @@ class UnifiedSOMA:
 
     def close(self):
         if self._conn:
+            self.flush()
             self._conn.close()
             self._conn = None
 
     # ── LEFT HEMISPHERE: Frequency Memory ────────────────────────────────
+
+    @staticmethod
+    def _is_malicious_context(event_category: str) -> bool:
+        """Check if the event category signals clearly malicious intent."""
+        cat_lower = event_category.lower()
+        return any(tag in cat_lower for tag in MALICIOUS_CATEGORIES)
 
     def observe(
         self,
@@ -164,35 +242,97 @@ class UnifiedSOMA:
         domain: str = "",
         risk: float = 0.0,
     ):
-        """Record an observation. Called by IGRIS on every event."""
+        """Record an observation. Called on every event in the analyzer pipeline.
+
+        Uses INSERT OR REPLACE with deferred commits (every 50 writes) to
+        avoid per-event I/O overhead when processing thousands of events/cycle.
+        """
+        if not category:
+            return
+
         conn = self._get_conn()
         now = time.time()
 
         existing = conn.execute(
             "SELECT id, seen_count, risk_score FROM soma_observations "
             "WHERE event_category = ? AND process_name = ? AND path = ?",
-            (category, process, path),
+            (category, process or "", path or ""),
         ).fetchone()
 
         if existing:
-            # Update: increment count, rolling average risk
             new_count = existing["seen_count"] + 1
-            avg_risk = (
-                existing["risk_score"] * existing["seen_count"] + risk
-            ) / new_count
+            old_risk = existing["risk_score"]
+
+            # Risk decay: when pattern is well-established and new risk is low,
+            # use exponential decay so the average converges faster instead of
+            # being poisoned by early high-risk observations.
+            if existing["seen_count"] > 5 and risk < 0.2:
+                avg_risk = old_risk * 0.3 + risk * 0.7
+            else:
+                avg_risk = (old_risk * existing["seen_count"] + risk) / new_count
+
+            # Graduation logic: classify is_normal based on accumulated evidence
+            old_normal = conn.execute(
+                "SELECT is_normal FROM soma_observations WHERE id = ?",
+                (existing["id"],),
+            ).fetchone()["is_normal"]
+            new_normal = old_normal  # default: no change
+
+            proc_base = Path(process).name if process else ""
+            is_dual_use = proc_base in DUAL_USE_PROCESSES
+
+            if is_dual_use:
+                # Dual-use processes: context decides, not risk score alone
+                if self._is_malicious_context(category):
+                    new_normal = 0  # ANOMALY — malicious context confirmed
+                    logger.info(
+                        "SOMA dual-use %s → anomaly (malicious context: %s)",
+                        proc_base, category,
+                    )
+                elif new_count >= 10:
+                    new_normal = 1  # NORMAL — common system tool, benign context
+                    if old_normal != 1:
+                        logger.info(
+                            "SOMA dual-use %s → normal (seen=%d, benign context)",
+                            proc_base, new_count,
+                        )
+            elif new_count >= 5 and avg_risk < 0.3:
+                if old_normal != 1:
+                    new_normal = 1  # NORMAL
+                    logger.info(
+                        "SOMA graduated %s as normal (seen=%d, risk=%.3f)",
+                        process or category, new_count, avg_risk,
+                    )
+            elif risk > 0.7 and old_normal == 1:
+                new_normal = 0  # ANOMALY — something normal went bad
+                logger.info(
+                    "SOMA graduated %s as anomaly (was normal, new risk=%.3f)",
+                    process or category, risk,
+                )
+
             conn.execute(
                 "UPDATE soma_observations SET seen_count = ?, last_seen = ?, "
-                "risk_score = ? WHERE id = ?",
-                (new_count, now, round(avg_risk, 4), existing["id"]),
+                "risk_score = ?, is_normal = ? WHERE id = ?",
+                (new_count, now, round(avg_risk, 4), new_normal, existing["id"]),
             )
         else:
             conn.execute(
-                "INSERT INTO soma_observations "
+                "INSERT OR IGNORE INTO soma_observations "
                 "(event_category, process_name, path, domain, risk_score, "
                 "first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (category, process, path, domain, risk, now, now),
+                (category, process or "", path or "", domain or "", risk, now, now),
             )
-        conn.commit()
+
+        self._pending_writes += 1
+        if self._pending_writes >= self._FLUSH_INTERVAL:
+            conn.commit()
+            self._pending_writes = 0
+
+    def flush(self):
+        """Force commit any pending writes."""
+        if self._pending_writes > 0 and self._conn:
+            self._conn.commit()
+            self._pending_writes = 0
 
     def is_known(self, category: str, process: str = "", path: str = "") -> bool:
         """Quick check: has SOMA seen this pattern enough to consider it normal?"""

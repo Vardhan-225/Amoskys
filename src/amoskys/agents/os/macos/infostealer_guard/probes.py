@@ -1,4 +1,4 @@
-"""macOS InfostealerGuard Probes — 12 detection probes for AMOS/Poseidon/Banshee kill chain.
+"""macOS InfostealerGuard Probes — 14 detection probes for AMOS/Poseidon/Banshee kill chain.
 
 Each probe consumes collector data from MacOSInfostealerGuardCollector via
 shared_data keys. Every probe is macOS-only (platforms=["darwin"]).
@@ -14,10 +14,14 @@ Probes:
     8.  ClipboardHarvestProbe      — pbcopy/pbpaste from script parent (T1115)
     9.  ScreenCaptureAbuseProbe    — screencapture from non-standard   (T1113)
     10. SensitiveFileExfilProbe    — credential PID with outbound conn (T1041)
+    11. KeychainCLIAbuseProbe      — security CLI keychain extraction  (T1555.001)
+    12. BrowserCacheLocalStorageProbe — browser cache/storage theft    (T1185, T1176)
+    13. SSHKeyTheftProbe           — SSH private key file theft        (T1552.004)
+    14. CredentialTheftProbe       — active cmdline + Safari cookie sweep (T1555.001, T1539, T1552.004)
 
 Kill chain mapping (AMOS stealer):
     Delivery → Fake dialog (T1056.002)
-    Collection → Keychain + Browser + Wallet + Cookies (T1555, T1005, T1539)
+    Collection → Keychain + Browser + Wallet + Cookies + SSH keys (T1555, T1005, T1539, T1552.004)
     Staging → Archive credentials (T1560.001)
     Exfil → Network connection from credential-accessing PID (T1041)
 """
@@ -1123,6 +1127,334 @@ class BrowserCacheLocalStorageProbe(MicroProbe):
         return events
 
 
+# =============================================================================
+# 13. SSHKeyTheftProbe
+# =============================================================================
+
+# Processes that legitimately read SSH private keys
+_SSH_KEY_ALLOWLIST: Set[str] = {
+    "ssh",
+    "ssh-agent",
+    "ssh-keygen",
+    "ssh-add",
+    "sshd",
+    "git",
+    "Git",
+    "GitHub Desktop",
+    "com.apple.Terminal",
+    "iTerm2",
+    "gpg-agent",
+    "rsync",
+    "scp",
+    "sftp",
+}
+
+# Private key file basenames — public keys (.pub) are not sensitive
+_SSH_PRIVATE_KEY_NAMES: Set[str] = {
+    "id_rsa",
+    "id_ed25519",
+    "id_ecdsa",
+    "id_dsa",
+    "id_xmss",
+}
+
+
+class SSHKeyTheftProbe(MicroProbe):
+    """Detects non-SSH processes reading SSH private key files.
+
+    SSH private keys grant passwordless access to remote systems. An
+    infostealer or post-exploitation tool reading ~/.ssh/id_rsa or
+    ~/.ssh/id_ed25519 is almost certainly stealing lateral-movement
+    credentials. Only ssh, ssh-agent, git, and a small allowlist of
+    processes should ever read these files.
+
+    Detection strategy:
+        1. Passive: Check collector's sensitive_accesses for ssh_keys category
+        2. Active: Scan process_snapshot for processes with open handles to
+           ~/.ssh/ private key paths (catches processes the collector may miss)
+
+    MITRE: T1552.004 (Unsecured Credentials: Private Keys)
+    """
+
+    name = "macos_infostealer_ssh_key_theft"
+    description = "Detects non-SSH processes reading SSH private key files"
+    platforms = ["darwin"]
+    mitre_techniques = ["T1552.004"]
+    mitre_tactics = ["credential_access"]
+    scan_interval = 15.0
+    requires_fields = ["sensitive_accesses"]
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        accesses = context.shared_data.get("sensitive_accesses", [])
+
+        for access in accesses:
+            if access.access_category != "ssh_keys":
+                continue
+
+            # Self-exclusion: skip AMOSKYS accessing its own Ed25519 keys
+            if _is_amoskys_self_access(access.process_name, access.file_path):
+                continue
+
+            # Skip allowlisted SSH-related processes
+            if access.process_name in _SSH_KEY_ALLOWLIST:
+                continue
+
+            # Only alert on private key files, not known_hosts or config
+            basename = os.path.basename(access.file_path)
+            if basename not in _SSH_PRIVATE_KEY_NAMES and not basename.startswith(
+                "id_"
+            ):
+                continue
+
+            # Public keys (.pub) are not sensitive
+            if access.file_path.endswith(".pub"):
+                continue
+
+            events.append(
+                self._create_event(
+                    event_type="ssh_key_theft",
+                    severity=Severity.CRITICAL,
+                    data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
+                        "pid": access.pid,
+                        "process_name": access.process_name,
+                        "file_path": access.file_path,
+                        "key_type": basename,
+                        "access_category": access.access_category,
+                        "process_guid": access.process_guid,
+                        "impact": "lateral_movement_credential_theft",
+                    },
+                    confidence=0.92,
+                    correlation_id=access.process_guid,
+                )
+            )
+
+        return events
+
+
+# =============================================================================
+# 14. CredentialTheftProbe (Active Process Scanning)
+# =============================================================================
+
+# Commands that directly extract credentials — running these is high-signal
+_CREDENTIAL_THEFT_COMMANDS = {
+    "dump-keychain": {
+        "mitre": "T1555.001",
+        "severity": Severity.HIGH,
+        "description": "Keychain credential dump",
+    },
+    "find-generic-password": {
+        "mitre": "T1555.001",
+        "severity": Severity.HIGH,
+        "description": "Keychain generic password extraction",
+    },
+    "find-internet-password": {
+        "mitre": "T1555.001",
+        "severity": Severity.HIGH,
+        "description": "Keychain internet password extraction",
+    },
+    "export": {
+        "mitre": "T1555.001",
+        "severity": Severity.HIGH,
+        "description": "Keychain certificate/key export",
+    },
+}
+
+# Sensitive file paths that indicate credential theft when accessed by
+# non-standard processes. Maps path fragment -> (mitre, severity, label).
+_SENSITIVE_PATH_INDICATORS = {
+    "Library/Keychains/": ("T1555.001", Severity.HIGH, "keychain_file_access"),
+    "Application Support/Google/Chrome/Default/Login Data": (
+        "T1555.003",
+        Severity.HIGH,
+        "chrome_login_data",
+    ),
+    "Application Support/Google/Chrome/Default/Cookies": (
+        "T1539",
+        Severity.HIGH,
+        "chrome_cookies",
+    ),
+    "Application Support/Firefox/Profiles/": (
+        "T1555.003",
+        Severity.HIGH,
+        "firefox_credential_store",
+    ),
+    "Library/Cookies/Cookies.binarycookies": (
+        "T1539",
+        Severity.HIGH,
+        "safari_cookies",
+    ),
+    ".ssh/id_rsa": ("T1552.004", Severity.CRITICAL, "ssh_rsa_private_key"),
+    ".ssh/id_ed25519": ("T1552.004", Severity.CRITICAL, "ssh_ed25519_private_key"),
+    ".ssh/id_ecdsa": ("T1552.004", Severity.CRITICAL, "ssh_ecdsa_private_key"),
+    ".ssh/id_dsa": ("T1552.004", Severity.CRITICAL, "ssh_dsa_private_key"),
+}
+
+# Processes that legitimately run `security` commands
+_SECURITY_CLI_ALLOWLIST: Set[str] = {
+    "Keychain Access",
+    "SecurityAgent",
+    "securityd",
+    "trustd",
+    "codesign",
+    "xcodebuild",
+    "Xcode",
+    "productbuild",
+    "pkgbuild",
+}
+
+
+class CredentialTheftProbe(MicroProbe):
+    """Active credential theft detection via process-list scanning.
+
+    Complements the passive lsof-based probes by actively scanning the
+    live process list for:
+
+    1. **Keychain CLI abuse** — Processes running `security dump-keychain`,
+       `security find-generic-password`, `security find-internet-password`,
+       or direct keychain file access by non-Apple processes.
+       MITRE: T1555.001 — Severity: HIGH
+
+    2. **Browser credential/cookie theft** — Processes with open file handles
+       to Chrome Login Data, Chrome Cookies, Firefox credentials, or Safari
+       Cookies.binarycookies.
+       MITRE: T1539 / T1555.003 — Severity: HIGH
+
+    3. **SSH private key theft** — Processes reading ~/.ssh/id_rsa,
+       ~/.ssh/id_ed25519, or other private key files.
+       MITRE: T1552.004 — Severity: CRITICAL
+
+    Detection method:
+        - Scan process_snapshot cmdlines for credential theft commands
+        - Cross-reference lsof-derived sensitive_accesses for path-based theft
+        - Deduplicate against KeychainCLIAbuseProbe / SSHKeyTheftProbe
+          by using a distinct event_type
+
+    This probe runs as a sweep detector: it scans all running processes
+    in a single pass rather than waiting for collector-flagged events.
+    """
+
+    name = "macos_credential_theft_sweep"
+    description = (
+        "Active credential theft detection via process-list and file-handle scanning"
+    )
+    platforms = ["darwin"]
+    mitre_techniques = ["T1555.001", "T1539", "T1552.004"]
+    mitre_tactics = ["credential_access"]
+    scan_interval = 10.0
+    requires_fields = ["process_snapshot"]
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        snapshot = context.shared_data.get("process_snapshot", [])
+
+        # --- Strategy 1: Scan process cmdlines for credential theft commands ---
+        events.extend(self._scan_cmdlines(snapshot))
+
+        # --- Strategy 2: Check lsof-derived sensitive accesses for SSH/cookie paths ---
+        accesses = context.shared_data.get("sensitive_accesses", [])
+        events.extend(self._scan_sensitive_paths(accesses))
+
+        return events
+
+    def _scan_cmdlines(self, snapshot: List[Dict[str, Any]]) -> List[TelemetryEvent]:
+        """Scan process cmdlines for credential theft commands."""
+        events: List[TelemetryEvent] = []
+
+        for proc in snapshot:
+            name = proc.get("name", "")
+            cmdline = proc.get("cmdline", [])
+            if not cmdline:
+                continue
+
+            cmdline_str = (
+                " ".join(cmdline) if isinstance(cmdline, list) else str(cmdline)
+            )
+            cmd_lower = cmdline_str.lower()
+
+            # Skip allowlisted processes
+            if name in _SECURITY_CLI_ALLOWLIST:
+                continue
+
+            # Check for `security` CLI credential extraction commands
+            if "security " not in cmd_lower and "/security " not in cmd_lower:
+                continue
+
+            for pattern, info in _CREDENTIAL_THEFT_COMMANDS.items():
+                if pattern in cmd_lower:
+                    events.append(
+                        self._create_event(
+                            event_type="credential_theft_command",
+                            severity=info["severity"],
+                            data={
+                                "probe_name": self.name,
+                                "detection_source": "process_cmdline_scan",
+                                "pid": proc.get("pid"),
+                                "process_name": name,
+                                "exe": proc.get("exe", ""),
+                                "cmdline": cmdline_str[:500],
+                                "ppid": proc.get("ppid"),
+                                "parent_name": proc.get("parent_name", ""),
+                                "matched_pattern": pattern,
+                                "mitre_technique": info["mitre"],
+                                "description": info["description"],
+                                "process_guid": proc.get("process_guid", ""),
+                            },
+                            confidence=0.90,
+                            correlation_id=proc.get("process_guid", ""),
+                        )
+                    )
+                    break  # one event per process
+
+        return events
+
+    def _scan_sensitive_paths(
+        self, accesses: list,
+    ) -> List[TelemetryEvent]:
+        """Check sensitive_accesses for high-value credential file theft.
+
+        Emits events for Safari cookies and SSH keys that the more specific
+        probes may not cover (e.g. non-standard key filenames, Safari cookies).
+        Deduplicates by only firing for safari_cookies access_category here
+        (SSH keys are handled by SSHKeyTheftProbe, browser creds by
+        BrowserCredentialTheftProbe).
+        """
+        events: List[TelemetryEvent] = []
+
+        for access in accesses:
+            if access.access_category != "safari_cookies":
+                continue
+
+            # Self-exclusion
+            if _is_amoskys_self_access(access.process_name, access.file_path):
+                continue
+
+            events.append(
+                self._create_event(
+                    event_type="credential_theft_file_access",
+                    severity=Severity.HIGH,
+                    data={
+                        "probe_name": self.name,
+                        "detection_source": "lsof",
+                        "pid": access.pid,
+                        "process_name": access.process_name,
+                        "file_path": access.file_path,
+                        "access_category": access.access_category,
+                        "process_guid": access.process_guid,
+                        "mitre_technique": "T1539",
+                        "theft_target": "safari_cookies",
+                        "impact": "session_hijacking",
+                    },
+                    confidence=0.85,
+                    correlation_id=access.process_guid,
+                )
+            )
+
+        return events
+
+
 def create_infostealer_guard_probes() -> List[MicroProbe]:
     """Create all macOS InfostealerGuard probes."""
     return [
@@ -1138,4 +1470,6 @@ def create_infostealer_guard_probes() -> List[MicroProbe]:
         SensitiveFileExfilProbe(),
         KeychainCLIAbuseProbe(),
         BrowserCacheLocalStorageProbe(),
+        SSHKeyTheftProbe(),
+        CredentialTheftProbe(),
     ]

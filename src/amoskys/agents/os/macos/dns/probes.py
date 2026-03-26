@@ -45,22 +45,13 @@ def _shannon_entropy(s: str) -> float:
 
 
 def _extract_effective_domain(domain: str) -> str:
-    """Extract the registrable domain (SLD + TLD) from a FQDN.
+    """Return the full queried domain, stripped of trailing dot.
 
-    Simple heuristic — does not use publicsuffix list.
-    'sub.example.co.uk' → 'example.co.uk'
-    'foo.bar.com' → 'bar.com'
+    Preserves subdomain specificity so that 'evil-c2.example.com' stays
+    distinct from 'www.example.com' — collapsing to the registered domain
+    dilutes beaconing and tunneling signals.
     """
-    parts = domain.lower().rstrip(".").split(".")
-    if len(parts) <= 2:
-        return domain.lower()
-    # Common multi-part TLDs
-    multi_tlds = {"co.uk", "com.au", "co.nz", "co.jp", "com.br", "org.uk"}
-    if len(parts) >= 3:
-        potential = f"{parts[-2]}.{parts[-1]}"
-        if potential in multi_tlds:
-            return f"{parts[-3]}.{potential}"
-    return f"{parts[-2]}.{parts[-1]}"
+    return domain.lower().rstrip(".")
 
 
 from amoskys.agents.common.ip_utils import is_benign_domain as _is_benign_domain
@@ -84,13 +75,24 @@ def _enrich_dns_process(query: Any) -> Dict[str, Any]:
 
 
 class DGADetectionProbe(MicroProbe):
-    """Detect Domain Generation Algorithm queries via entropy analysis.
+    """Detect Domain Generation Algorithm queries via multi-signal analysis.
 
     MITRE: T1568.002 — Dynamic Resolution: Domain Generation Algorithms
 
-    DGA domains have high entropy, unusual character distributions, and often
-    resolve to many different IPs. We use Shannon entropy on the SLD (second-
-    level domain) label plus consonant ratio as heuristics.
+    DGA domains have high Shannon entropy, unusual consonant-to-vowel ratios,
+    elevated numeric content, and tend to be longer than legitimate domains.
+    We combine four heuristic signals into a tiered confidence score and
+    escalate severity when multiple DGA-like domains appear in a single
+    collection window (burst detection).
+
+    Scoring tiers:
+        - entropy > 3.5 AND length > 12:               confidence 0.6
+        - entropy > 4.0 AND consonant_ratio > 0.7:     confidence 0.8
+        - 3+ DGA-like domains in one collection window: confidence 0.9
+
+    Severity:
+        - Single DGA domain:  MEDIUM
+        - 3+ in one window:   HIGH (burst)
     """
 
     name = "macos_dns_dga"
@@ -110,60 +112,131 @@ class DGADetectionProbe(MicroProbe):
         "Low-volume DGA with very few queries per domain avoids frequency triggers",
     ]
 
-    ENTROPY_THRESHOLD = 3.5  # Shannon entropy above this → suspicious
+    # ── Thresholds ────────────────────────────────────────────────────────
+    ENTROPY_THRESHOLD = 3.5       # Shannon entropy above this → suspicious
+    ENTROPY_HIGH = 4.0            # Strong entropy signal
     CONSONANT_RATIO_THRESH = 0.7  # Fraction of consonants above this → suspicious
-    MIN_DOMAIN_LEN = 8  # Skip very short domains
+    NUMERIC_RATIO_THRESH = 0.3    # Fraction of digits above this → suspicious
+    MIN_DOMAIN_LEN = 8            # Skip very short SLDs
+    LENGTH_THRESHOLD = 12         # SLD length above this contributes to scoring
+    BURST_THRESHOLD = 3           # DGA-like domains in one window → escalate
 
     _VOWELS = frozenset("aeiou")
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
-        events: List[TelemetryEvent] = []
         queries = context.shared_data.get("dns_queries", [])
 
-        for query in queries:
-            domain = query.domain.lower().rstrip(".")
+        # Collect per-domain DGA candidates in this window for burst detection
+        dga_candidates = [
+            c for q in queries
+            if (c := self._evaluate_query(q)) is not None
+        ]
 
-            if _is_benign_domain(domain):
-                continue
+        # Burst detection: escalate if 3+ DGA-like domains in window
+        is_burst = len(dga_candidates) >= self.BURST_THRESHOLD
 
-            # Extract SLD label for analysis
-            parts = domain.split(".")
-            if len(parts) < 2:
-                continue
-            sld = parts[-2] if len(parts) == 2 else parts[0]
+        return [
+            self._build_event(candidate, is_burst, len(dga_candidates))
+            for candidate in dga_candidates
+        ]
 
-            if len(sld) < self.MIN_DOMAIN_LEN:
-                continue
+    # ── Per-query evaluation (keeps scan() flat) ──────────────────────────
 
-            entropy = _shannon_entropy(sld)
-            consonant_ratio = self._consonant_ratio(sld)
+    def _evaluate_query(self, query: Any) -> Optional[Dict[str, Any]]:
+        """Score a single DNS query for DGA signals. Returns None if benign."""
+        domain = query.domain.lower().rstrip(".")
 
-            if (
-                entropy >= self.ENTROPY_THRESHOLD
-                and consonant_ratio >= self.CONSONANT_RATIO_THRESH
-            ):
-                events.append(
-                    self._create_event(
-                        event_type="dga_domain_detected",
-                        severity=Severity.HIGH,
-                        data={
-                            **_enrich_dns_process(query),
-                            "domain": domain,
-                            "sld": sld,
-                            "entropy": round(entropy, 3),
-                            "consonant_ratio": round(consonant_ratio, 3),
-                            "record_type": query.record_type,
-                            "response_ips": query.response_ips,
-                            "source_process": query.source_process,
-                            "source_pid": query.source_pid,
-                        },
-                        confidence=min(
-                            0.95, 0.5 + (entropy - self.ENTROPY_THRESHOLD) * 0.3
-                        ),
-                    )
-                )
+        if _is_benign_domain(domain):
+            return None
 
-        return events
+        parts = domain.split(".")
+        if len(parts) < 2:
+            return None
+        sld = parts[-2] if len(parts) == 2 else parts[0]
+
+        if len(sld) < self.MIN_DOMAIN_LEN:
+            return None
+
+        entropy = _shannon_entropy(sld)
+        consonant_ratio = self._consonant_ratio(sld)
+        numeric_ratio = self._numeric_ratio(sld)
+        confidence = self._score_dga_confidence(
+            entropy, consonant_ratio, numeric_ratio, len(sld),
+        )
+
+        if confidence <= 0:
+            return None
+
+        return {
+            "query": query,
+            "domain": domain,
+            "sld": sld,
+            "entropy": entropy,
+            "consonant_ratio": consonant_ratio,
+            "numeric_ratio": numeric_ratio,
+            "confidence": confidence,
+        }
+
+    def _score_dga_confidence(
+        self,
+        entropy: float,
+        consonant_ratio: float,
+        numeric_ratio: float,
+        sld_len: int,
+    ) -> float:
+        """Combine four heuristic signals into a tiered confidence score."""
+        confidence = 0.0
+
+        # Tier 1: entropy > 3.5 AND length > 12 → base confidence 0.6
+        if entropy > self.ENTROPY_THRESHOLD and sld_len > self.LENGTH_THRESHOLD:
+            confidence = 0.6
+
+        # Tier 2: entropy > 4.0 AND consonant_ratio > 0.7 → confidence 0.8
+        if entropy > self.ENTROPY_HIGH and consonant_ratio > self.CONSONANT_RATIO_THRESH:
+            confidence = max(confidence, 0.8)
+
+        # Numeric ratio boost: high digit mixing is a DGA tell
+        if numeric_ratio > self.NUMERIC_RATIO_THRESH and confidence > 0:
+            confidence = min(0.95, confidence + 0.1)
+
+        return confidence
+
+    def _build_event(
+        self,
+        candidate: Dict[str, Any],
+        is_burst: bool,
+        burst_count: int,
+    ) -> TelemetryEvent:
+        """Build a TelemetryEvent from a scored DGA candidate."""
+        query = candidate["query"]
+        final_confidence = candidate["confidence"]
+        severity = Severity.MEDIUM
+
+        if is_burst:
+            final_confidence = max(final_confidence, 0.9)
+            severity = Severity.HIGH
+
+        return self._create_event(
+            event_type="dga_domain_detected",
+            severity=severity,
+            data={
+                **_enrich_dns_process(query),
+                "domain": candidate["domain"],
+                "sld": candidate["sld"],
+                "entropy": round(candidate["entropy"], 3),
+                "consonant_ratio": round(candidate["consonant_ratio"], 3),
+                "numeric_ratio": round(candidate["numeric_ratio"], 3),
+                "record_type": query.record_type,
+                "response_ips": query.response_ips,
+                "source_process": query.source_process,
+                "source_pid": query.source_pid,
+                "dga_burst": is_burst,
+                "dga_candidates_in_window": burst_count,
+            },
+            confidence=min(0.95, final_confidence),
+        )
+
+    # ── Helper methods ────────────────────────────────────────────────────
 
     def _consonant_ratio(self, s: str) -> float:
         """Fraction of alphabetic characters that are consonants."""
@@ -172,6 +245,13 @@ class DGADetectionProbe(MicroProbe):
             return 0.0
         consonants = sum(1 for c in alpha if c not in self._VOWELS)
         return consonants / len(alpha)
+
+    def _numeric_ratio(self, s: str) -> float:
+        """Fraction of alphanumeric characters that are digits."""
+        alnum = [c for c in s if c.isalnum()]
+        if not alnum:
+            return 0.0
+        return sum(1 for c in alnum if c.isdigit()) / len(alnum)
 
 
 # ── Probe 2: DNS Tunneling ──────────────────────────────────────────────────
@@ -355,10 +435,11 @@ class BeaconingPatternProbe(MicroProbe):
         "Very long beacon intervals (>1hr) may not accumulate enough samples",
     ]
 
-    MIN_SAMPLES = 5  # Minimum queries to analyze periodicity
-    MAX_JITTER_CV = 0.15  # Coefficient of variation threshold (lower = more periodic)
-    MIN_INTERVAL_S = 2.0  # Minimum interval (ignore sub-second bursts)
+    MIN_SAMPLES = 3  # Minimum queries to analyze periodicity
+    MAX_JITTER_CV = 0.35  # Coefficient of variation threshold (real C2 has 10-30% jitter)
+    MIN_INTERVAL_S = 0.5  # Minimum interval (rapid beaconing is real)
     MAX_INTERVAL_S = 3600.0  # Maximum interval to consider
+    FREQ_FALLBACK_COUNT = 3  # Frequency fallback: flag if >= N queries in one window
 
     def __init__(self) -> None:
         super().__init__()
@@ -369,6 +450,7 @@ class BeaconingPatternProbe(MicroProbe):
         from amoskys.agents.common.self_identity import self_identity
 
         events: List[TelemetryEvent] = []
+        detected_domains: Set[str] = set()
         queries = context.shared_data.get("dns_queries", [])
 
         # Record query timestamps
@@ -426,6 +508,7 @@ class BeaconingPatternProbe(MicroProbe):
                     ),
                     None,
                 )
+                detected_domains.add(domain)
                 events.append(
                     self._create_event(
                         event_type="dns_beaconing_detected",
@@ -443,6 +526,45 @@ class BeaconingPatternProbe(MicroProbe):
                             "interval_count": len(valid_intervals),
                         },
                         confidence=max(0.7, 1.0 - cv * 3),
+                    )
+                )
+
+        # ── Frequency-based fallback ────────────────────────────────────
+        # If a non-benign domain was queried >= FREQ_FALLBACK_COUNT times
+        # in this collection window but wasn't caught by the interval
+        # analysis (e.g., all intervals filtered out), flag it as
+        # suspicious with lower confidence.
+        cycle_counts: Dict[str, int] = collections.defaultdict(int)
+        for query in queries:
+            d = _extract_effective_domain(query.domain)
+            if not _is_benign_domain(d) and not self_identity.is_self_destination(d):
+                cycle_counts[d] += 1
+
+        for domain, count in cycle_counts.items():
+            if count >= self.FREQ_FALLBACK_COUNT and domain not in detected_domains:
+                rep_query = next(
+                    (
+                        q
+                        for q in queries
+                        if _extract_effective_domain(q.domain) == domain
+                    ),
+                    None,
+                )
+                events.append(
+                    self._create_event(
+                        event_type="dns_beaconing_suspected",
+                        severity=Severity.MEDIUM,
+                        data={
+                            **(
+                                _enrich_dns_process(rep_query)
+                                if rep_query
+                                else {"detection_source": "dns_monitor"}
+                            ),
+                            "domain": domain,
+                            "query_count_in_window": count,
+                            "detection_method": "frequency_fallback",
+                        },
+                        confidence=0.6,
                     )
                 )
 

@@ -36,84 +36,63 @@
         margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;
     }
 
-    /* World Map — Leaflet */
+    /* Globe container */
     .map-card {
-        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
-        border-radius: 10px; padding: 1.25rem; position: relative; overflow: hidden;
+        background: #050816; border: 1px solid rgba(0,217,255,0.15);
+        border-radius: 12px; padding: 0; position: relative; overflow: hidden;
     }
     .map-card::before {
-        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-        background: linear-gradient(90deg, var(--neural-primary), var(--neural-secondary));
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+        background: linear-gradient(90deg, transparent, var(--neural-primary), transparent);
+        z-index: 5;
     }
-    #threat-map { width: 100%; height: 480px; border-radius: 8px; background: #0a0e27; z-index: 1; }
-    .leaflet-container { background: #0a0e27 !important; font-family: inherit; }
-    .leaflet-control-zoom a { background: rgba(10,14,39,0.9) !important; color: #00d9ff !important; border-color: rgba(0,217,255,0.3) !important; }
-    .leaflet-control-zoom a:hover { background: rgba(0,217,255,0.15) !important; }
-    .leaflet-control-attribution { background: rgba(10,14,39,0.7) !important; color: #6b7a99 !important; font-size: 0.6rem !important; }
-    .leaflet-control-attribution a { color: #00d9ff !important; }
+    .map-card-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 1rem 1.25rem 0; position: relative; z-index: 5;
+    }
+    .map-card-header .section-title { margin-bottom: 0; }
+    #globe-container {
+        width: 100%; height: 520px; position: relative; cursor: grab;
+        background: radial-gradient(ellipse at center, #0a1028 0%, #050816 70%);
+    }
+    #globe-container:active { cursor: grabbing; }
+    #globe-container canvas { display: block; }
 
-    /* Pulsing destination dots */
-    .pulse-dot {
-        border-radius: 50%; position: relative;
+    /* Globe overlay stats — top-right */
+    .globe-overlay-stats {
+        position: absolute; top: 14px; right: 14px; z-index: 10;
+        background: rgba(5,8,22,0.88); border: 1px solid rgba(0,217,255,0.15);
+        border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.7rem;
+        backdrop-filter: blur(12px);
     }
-    .pulse-dot::before, .pulse-dot::after {
-        content: ''; position: absolute; top: 50%; left: 50%;
-        transform: translate(-50%, -50%); border-radius: 50%;
-        animation: dot-pulse 2.5s ease-out infinite;
-    }
-    .pulse-dot::after { animation-delay: 1.25s; }
-    .pulse-dot.clean { background: #00ff88; box-shadow: 0 0 8px rgba(0,255,136,0.6); }
-    .pulse-dot.clean::before, .pulse-dot.clean::after { border: 2px solid rgba(0,255,136,0.6); }
-    .pulse-dot.threat { background: #ff3366; box-shadow: 0 0 12px rgba(255,51,102,0.8); }
-    .pulse-dot.threat::before, .pulse-dot.threat::after { border: 2px solid rgba(255,51,102,0.7); }
-    @keyframes dot-pulse {
-        0% { width: 100%; height: 100%; opacity: 0.8; }
-        100% { width: 350%; height: 350%; opacity: 0; }
-    }
+    .globe-overlay-stats .mos-row { display: flex; gap: 0.5rem; align-items: center; padding: 0.12rem 0; }
+    .globe-overlay-stats .mos-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .globe-overlay-stats .mos-label { color: #4a5580; font-size: 0.68rem; }
+    .globe-overlay-stats .mos-val { color: #c8d0e0; font-weight: 600; margin-left: auto; min-width: 1.5rem; text-align: right; }
 
-    /* Device origin marker */
-    .device-marker {
-        background: #00d9ff; border-radius: 50%; box-shadow: 0 0 16px rgba(0,217,255,0.8), 0 0 40px rgba(0,217,255,0.3);
-        position: relative;
+    /* Globe controls — bottom-left */
+    .globe-controls {
+        position: absolute; bottom: 14px; left: 14px; z-index: 10;
+        display: flex; gap: 0.35rem; flex-wrap: wrap;
     }
-    .device-marker::before {
-        content: ''; position: absolute; top: 50%; left: 50%;
-        transform: translate(-50%, -50%); border-radius: 50%;
-        border: 2px solid rgba(0,217,255,0.5);
-        animation: device-pulse 3s ease-out infinite;
+    .globe-ctrl-btn {
+        background: rgba(5,8,22,0.88); border: 1px solid rgba(0,217,255,0.15);
+        border-radius: 6px; padding: 0.3rem 0.55rem; color: #4a5580;
+        font-size: 0.68rem; cursor: pointer; backdrop-filter: blur(12px);
+        transition: all 0.2s ease; user-select: none;
     }
-    @keyframes device-pulse {
-        0% { width: 100%; height: 100%; opacity: 0.6; }
-        100% { width: 500%; height: 500%; opacity: 0; }
-    }
+    .globe-ctrl-btn:hover { border-color: rgba(0,217,255,0.4); color: #8899bb; }
+    .globe-ctrl-btn.active { border-color: var(--neural-primary); color: var(--neural-primary); background: rgba(0,217,255,0.06); }
 
-    /* Leaflet tooltip override */
-    .threat-map-tooltip {
-        background: rgba(10,14,39,0.97) !important; border: 1px solid rgba(0,217,255,0.3) !important;
-        border-radius: 8px !important; padding: 0.6rem 0.8rem !important;
-        box-shadow: 0 6px 24px rgba(0,0,0,0.5) !important; color: var(--text-primary) !important;
-        font-size: 0.78rem !important; max-width: 240px !important;
+    /* Globe info — bottom-right, shows connection summary */
+    .globe-info {
+        position: absolute; bottom: 14px; right: 14px; z-index: 10;
+        background: rgba(5,8,22,0.88); border: 1px solid rgba(0,217,255,0.12);
+        border-radius: 8px; padding: 0.5rem 0.75rem; backdrop-filter: blur(12px);
+        font-size: 0.68rem; color: #4a5580; max-width: 200px;
     }
-    .threat-map-tooltip::before { border-top-color: rgba(0,217,255,0.3) !important; }
-    .tip-title { font-weight: 700; color: #00d9ff; margin-bottom: 0.3rem; font-size: 0.85rem; }
-    .tip-row { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.72rem; padding: 0.1rem 0; }
-    .tip-lbl { color: #6b7a99; }
-    .tip-val { color: #e2e8f0; font-weight: 600; }
-
-    /* Map stats overlay */
-    .map-overlay-stats {
-        position: absolute; top: 12px; right: 12px; z-index: 1000;
-        background: rgba(10,14,39,0.85); border: 1px solid rgba(0,217,255,0.2);
-        border-radius: 8px; padding: 0.6rem 0.8rem; font-size: 0.72rem;
-        backdrop-filter: blur(8px);
-    }
-    .map-overlay-stats .mos-row { display: flex; gap: 0.5rem; align-items: center; padding: 0.15rem 0; }
-    .map-overlay-stats .mos-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .map-overlay-stats .mos-label { color: #6b7a99; }
-    .map-overlay-stats .mos-val { color: #e2e8f0; font-weight: 600; margin-left: auto; }
-
-    /* Arc canvas overlay */
-    .arc-canvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 450; }
+    .globe-info-row { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.08rem 0; }
+    .globe-info-val { color: #8899bb; font-weight: 600; }
 
     /* Two-column layout */
     .net-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
@@ -151,9 +130,7 @@
     .asn-unknown { background: rgba(255,255,255,0.06); color: var(--text-muted); }
 
     /* Destinations table */
-    .dst-table-wrap {
-        max-height: 400px; overflow-y: auto;
-    }
+    .dst-table-wrap { max-height: 400px; overflow-y: auto; }
     .dst-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
     .dst-table th {
         position: sticky; top: 0; background: var(--bg-secondary);
@@ -161,9 +138,7 @@
         text-transform: uppercase; padding: 0.5rem; text-align: left;
         border-bottom: 2px solid rgba(0,217,255,0.2);
     }
-    .dst-table td {
-        padding: 0.4rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.04);
-    }
+    .dst-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
     .dst-table tr:hover { background: rgba(0,217,255,0.05); }
     .threat-flag {
         display: inline-block; padding: 0.1rem 0.4rem; border-radius: 6px;
@@ -184,9 +159,7 @@
     .susp-empty { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.9rem; }
 
     /* Search */
-    .net-search-bar {
-        display: flex; gap: 0.75rem; margin-bottom: 1rem; align-items: center;
-    }
+    .net-search-bar { display: flex; gap: 0.75rem; margin-bottom: 1rem; align-items: center; }
     .net-search-input {
         flex: 1; padding: 0.5rem 0.8rem; border-radius: 8px;
         border: 1px solid rgba(0,217,255,0.3); background: var(--bg-tertiary);
@@ -199,7 +172,6 @@
         font-weight: 600; cursor: pointer;
     }
 
-    /* Skeleton overrides for stat cards */
     .net-stat-card .skeleton { height: 2rem; width: 60%; margin: 0 auto 0.3rem auto; }
 
     @media (max-width: 1024px) {
@@ -212,6 +184,15 @@
 </style>
 
 <div class="net-page">
+    <!-- Back to Observatory nav -->
+    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+        <a href="/dashboard/observatory" style="color:var(--text-muted);text-decoration:none;font-size:0.78rem;display:flex;align-items:center;gap:0.3rem;">
+            &#8592; Observatory
+        </a>
+        <span style="color:rgba(255,255,255,0.15);font-size:0.7rem;">/</span>
+        <span style="color:var(--neural-primary);font-size:0.78rem;font-weight:600;">Network Intelligence</span>
+    </div>
+
     <!-- Stats Bar -->
     <div class="net-stats-grid">
         <div class="net-stat-card">
@@ -246,15 +227,32 @@
         <p><span class="skeleton" style="display:inline-block;height:1rem;width:80%;">&nbsp;</span></p>
     </div>
 
-    <!-- GeoIP Threat Map -->
+    <!-- Globe Threat Map -->
     <div class="map-card">
-        <div class="section-title">Live Connection Map</div>
+        <div class="map-card-header">
+            <div class="section-title">Live Connection Globe</div>
+        </div>
         <div style="position:relative;">
-            <div id="threat-map"></div>
-            <div class="map-overlay-stats" id="map-stats-overlay">
+            <div id="globe-container"></div>
+            <!-- Legend — top right -->
+            <div class="globe-overlay-stats">
                 <div class="mos-row"><div class="mos-dot" style="background:#00ff88;"></div><span class="mos-label">Clean</span><span class="mos-val" id="map-clean-count">--</span></div>
-                <div class="mos-row"><div class="mos-dot" style="background:#ff3366;"></div><span class="mos-label">Flagged</span><span class="mos-val" id="map-threat-count">--</span></div>
-                <div class="mos-row"><div class="mos-dot" style="background:#00d9ff;"></div><span class="mos-label">Device</span><span class="mos-val" id="map-total-flows">--</span></div>
+                <div class="mos-row"><div class="mos-dot" style="background:#ff3366;"></div><span class="mos-label">Threat</span><span class="mos-val" id="map-threat-count">--</span></div>
+                <div class="mos-row"><div class="mos-dot" style="background:#00d9ff;"></div><span class="mos-label">Flows</span><span class="mos-val" id="map-total-flows">--</span></div>
+            </div>
+            <!-- Controls — bottom left -->
+            <div class="globe-controls">
+                <button class="globe-ctrl-btn active" data-filter="all" onclick="filterGlobe('all',this)">All</button>
+                <button class="globe-ctrl-btn" data-filter="threats" onclick="filterGlobe('threats',this)">Threats</button>
+                <button class="globe-ctrl-btn" data-filter="top5" onclick="filterGlobe('top5',this)">Top 5</button>
+                <button class="globe-ctrl-btn" id="btn-auto-rotate" onclick="toggleAutoRotate()">Rotate</button>
+                <button class="globe-ctrl-btn" onclick="focusDevice()">Focus</button>
+            </div>
+            <!-- Connection summary — bottom right -->
+            <div class="globe-info" id="globe-info">
+                <div class="globe-info-row"><span>Destinations</span><span class="globe-info-val" id="gi-dests">--</span></div>
+                <div class="globe-info-row"><span>Countries</span><span class="globe-info-val" id="gi-countries">--</span></div>
+                <div class="globe-info-row"><span>Data Out</span><span class="globe-info-val" id="gi-data">--</span></div>
             </div>
         </div>
     </div>
@@ -315,15 +313,9 @@
                     </tr>
                 </thead>
                 <tbody id="dst-table-body">
-                    <tr>
-                        <td colspan="10" style="padding:0.6rem;"><div class="skeleton" style="height:1rem;width:100%;">&nbsp;</div></td>
-                    </tr>
-                    <tr>
-                        <td colspan="10" style="padding:0.6rem;"><div class="skeleton" style="height:1rem;width:100%;">&nbsp;</div></td>
-                    </tr>
-                    <tr>
-                        <td colspan="10" style="padding:0.6rem;"><div class="skeleton" style="height:1rem;width:100%;">&nbsp;</div></td>
-                    </tr>
+                    <tr><td colspan="10" style="padding:0.6rem;"><div class="skeleton" style="height:1rem;width:100%;">&nbsp;</div></td></tr>
+                    <tr><td colspan="10" style="padding:0.6rem;"><div class="skeleton" style="height:1rem;width:100%;">&nbsp;</div></td></tr>
+                    <tr><td colspan="10" style="padding:0.6rem;"><div class="skeleton" style="height:1rem;width:100%;">&nbsp;</div></td></tr>
                 </tbody>
             </table>
         </div>
@@ -340,10 +332,10 @@
     </div>
 </div>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<script>
-/* ── Network Intelligence — Leaflet threat map + DashboardCache + DashboardPoller ── */
+<!-- Globe.gl — single CDN dependency (includes Three.js) -->
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2"></script>
+<script nonce="{{ csp_nonce() }}">
+/* ── Network Intelligence — Globe.gl threat globe + DashboardCache + DashboardPoller ── */
 (function() {
     'use strict';
 
@@ -351,15 +343,11 @@
     let geoPointsCache = [];
     let processLoaded = false;
     let destinationsLoaded = false;
-    let threatMap = null;
-    let markerLayer = null;
-    let arcAnimationId = null;
-    let arcCanvas = null;
-    let arcCtx = null;
-    let activeArcs = [];
-    let deviceLatLng = null;
+    let globe = null;
+    let deviceLat = null, deviceLon = null;
+    let deviceCity = '', deviceOrg = '';
 
-    /* ── Helpers (delegate to dashboard-core.js shared utilities) ── */
+    /* ── Helpers ── */
 
     function escHtml(s) {
         if (!s) return '';
@@ -390,7 +378,22 @@
         }
     }
 
-    /* ── Stats (high priority) ── */
+    /* ── Device location ── */
+
+    fetch('/dashboard/api/network/device-location')
+        .then(r => r.json())
+        .then(d => {
+            if (d.lat && d.lon) {
+                deviceLat = d.lat;
+                deviceLon = d.lon;
+                deviceCity = [d.city, d.region, d.country].filter(Boolean).join(', ');
+                deviceOrg = d.org || '';
+                if (geoPointsCache.length > 0) renderGlobe(geoPointsCache);
+            }
+        })
+        .catch(() => {});
+
+    /* ── Stats ── */
 
     function onStats(d) {
         document.getElementById('stat-flows').textContent = formatNumber(d.total_flows || 0);
@@ -399,11 +402,8 @@
         document.getElementById('stat-bytes').textContent = formatBytes((d.bytes_sent || 0) + (d.bytes_received || 0));
         const threats = d.threat_intel_hits || 0;
         document.getElementById('stat-threats').textContent = formatNumber(threats);
-
         buildNlpSummary(d);
     }
-
-    /* ── NLP Summary (enhanced) ── */
 
     function buildNlpSummary(d) {
         const nlp = document.getElementById('net-nlp');
@@ -412,10 +412,8 @@
         const countries = d.countries_reached || 0;
         const bytes = (d.bytes_sent || 0) + (d.bytes_received || 0);
         const threats = d.threat_intel_hits || 0;
-
         const parts = [];
 
-        // Opening: traffic volume context
         if (flows > 0) {
             parts.push('Over the past 24 hours, this endpoint generated <strong>' +
                 formatNumber(flows) + ' network flows</strong> reaching <strong>' +
@@ -431,12 +429,10 @@
             return;
         }
 
-        // Transfer volume with context
         if (bytes > 0) {
             parts.push(' Total data transferred: <strong>' + formatBytes(bytes) + '</strong>.');
         }
 
-        // Threat assessment
         if (threats > 0) {
             parts.push(' <strong class="warn-text">' + threats +
                 ' connection' + (threats > 1 ? 's' : '') +
@@ -448,7 +444,7 @@
         nlp.innerHTML = '<p>' + parts.join('') + '</p>';
     }
 
-    /* ── Geo / Country bars (low priority) ── */
+    /* ── Geo / Country bars ── */
 
     function onGeo(d) {
         const countries = d.countries || d.top_countries || [];
@@ -470,7 +466,7 @@
         }).join('');
     }
 
-    /* ── ASN bars (low priority) ── */
+    /* ── ASN bars ── */
 
     function onAsn(d) {
         const asns = Array.isArray(d) ? d : (d.asn_breakdown || []);
@@ -492,272 +488,288 @@
         }).join('');
     }
 
-    /* ── Leaflet Threat Map ── */
+    /* ══════════════════════════════════════════════════════════════
+       Globe.gl — 3D Threat Visualization Globe
+       ══════════════════════════════════════════════════════════════ */
 
-    // Resolve device location once on page load
-    (function resolveDeviceLocation() {
-        fetch('/dashboard/api/network/device-location')
-            .then(r => r.json())
-            .then(d => {
-                if (d.lat && d.lon) {
-                    deviceLatLng = L.latLng(d.lat, d.lon);
-                    window._deviceCity = [d.city, d.region, d.country].filter(Boolean).join(', ');
-                    window._deviceOrg = d.org || '';
-                    if (geoPointsCache && geoPointsCache.length > 0) renderThreatMap(geoPointsCache);
-                }
-            })
-            .catch(() => {});
-    })();
+    function initGlobe() {
+        const containerEl = document.getElementById('globe-container');
 
-    function initThreatMap() {
-        threatMap = L.map('threat-map', {
-            center: [25, 0],
-            zoom: 2,
-            minZoom: 2,
-            maxZoom: 12,
-            zoomControl: true,
-            attributionControl: true,
-            preferCanvas: true,
-            worldCopyJump: true
-        });
-
-        // CARTO Dark Matter tiles — free, no API key
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            subdomains: 'abcd',
-            maxZoom: 20,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
-        }).addTo(threatMap);
-
-        // Layer group for destination markers
-        markerLayer = L.layerGroup().addTo(threatMap);
-
-        // Canvas overlay for animated arcs
-        setupArcCanvas();
-        threatMap.on('moveend zoomend resize', repositionArcCanvas);
-    }
-
-    function setupArcCanvas() {
-        const container = threatMap.getContainer();
-        arcCanvas = document.createElement('canvas');
-        arcCanvas.className = 'arc-canvas';
-        arcCanvas.style.width = '100%';
-        arcCanvas.style.height = '100%';
-        container.querySelector('.leaflet-pane.leaflet-overlay-pane').appendChild(arcCanvas);
-        arcCtx = arcCanvas.getContext('2d');
-        repositionArcCanvas();
-    }
-
-    function repositionArcCanvas() {
-        if (!arcCanvas || !threatMap) return;
-        const size = threatMap.getSize();
-        arcCanvas.width = size.x * (window.devicePixelRatio || 1);
-        arcCanvas.height = size.y * (window.devicePixelRatio || 1);
-        arcCanvas.style.width = size.x + 'px';
-        arcCanvas.style.height = size.y + 'px';
-        arcCtx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
-        // Align canvas with map pane offset
-        const pane = threatMap.getPane('overlayPane');
-        const transform = pane.style.transform;
-        arcCanvas.style.transform = transform;
-    }
-
-    /* ── Arc animation engine ── */
-
-    function fireArc(fromLL, toLL, color, duration) {
-        activeArcs.push({
-            from: fromLL,
-            to: toLL,
-            color: color,
-            startTime: performance.now(),
-            duration: duration || 2500
-        });
-        if (!arcAnimationId) animateArcs();
-    }
-
-    function animateArcs() {
-        if (!arcCtx || !threatMap) return;
-        const now = performance.now();
-        const size = threatMap.getSize();
-        arcCtx.clearRect(0, 0, size.x, size.y);
-
-        // Align to map pane transform
-        const origin = threatMap.getPixelOrigin();
-        const panePos = threatMap.getPane('overlayPane')._leaflet_pos || {x: 0, y: 0};
-
-        activeArcs = activeArcs.filter(arc => {
-            const elapsed = now - arc.startTime;
-            const progress = Math.min(elapsed / arc.duration, 1);
-            if (progress >= 1) return false;
-
-            const from = threatMap.latLngToContainerPoint(arc.from);
-            const to = threatMap.latLngToContainerPoint(arc.to);
-
-            // Quadratic Bezier control point — arc upward proportional to distance
-            const midX = (from.x + to.x) / 2;
-            const midY = (from.y + to.y) / 2;
-            const dist = Math.sqrt(Math.pow(to.x - from.x, 2) + Math.pow(to.y - from.y, 2));
-            const cpY = midY - dist * 0.35;
-
-            // Draw partial arc up to progress
-            arcCtx.beginPath();
-            const steps = Math.ceil(progress * 40);
-            for (let i = 0; i <= steps; i++) {
-                const t = (i / 40);
-                const x = (1-t)*(1-t)*from.x + 2*(1-t)*t*midX + t*t*to.x;
-                const y = (1-t)*(1-t)*from.y + 2*(1-t)*t*cpY + t*t*to.y;
-                if (i === 0) arcCtx.moveTo(x, y);
-                else arcCtx.lineTo(x, y);
-            }
-
-            // Fade out in the last 30%
-            const alpha = progress > 0.7 ? 1 - ((progress - 0.7) / 0.3) : 0.8;
-
-            arcCtx.strokeStyle = arc.color;
-            arcCtx.globalAlpha = alpha;
-            arcCtx.lineWidth = 1.5;
-            arcCtx.shadowColor = arc.color;
-            arcCtx.shadowBlur = 6;
-            arcCtx.stroke();
-            arcCtx.globalAlpha = 1;
-            arcCtx.shadowBlur = 0;
-
-            // Bright head dot
-            if (steps > 0) {
-                const ht = steps / 40;
-                const hx = (1-ht)*(1-ht)*from.x + 2*(1-ht)*ht*midX + ht*ht*to.x;
-                const hy = (1-ht)*(1-ht)*from.y + 2*(1-ht)*ht*cpY + ht*ht*to.y;
-                arcCtx.beginPath();
-                arcCtx.arc(hx, hy, 3, 0, Math.PI * 2);
-                arcCtx.fillStyle = arc.color;
-                arcCtx.globalAlpha = alpha;
-                arcCtx.shadowColor = arc.color;
-                arcCtx.shadowBlur = 10;
-                arcCtx.fill();
-                arcCtx.globalAlpha = 1;
-                arcCtx.shadowBlur = 0;
-            }
-
-            return true;
-        });
-
-        if (activeArcs.length > 0) {
-            arcAnimationId = requestAnimationFrame(animateArcs);
-        } else {
-            arcAnimationId = null;
+        // Safari: explicit crossOrigin on WebGL texture loads
+        if (typeof THREE !== 'undefined' && THREE.TextureLoader) {
+            const _origLoad = THREE.TextureLoader.prototype.load;
+            THREE.TextureLoader.prototype.load = function(url, onLoad, onProgress, onError) {
+                this.crossOrigin = 'anonymous';
+                return _origLoad.call(this, url, onLoad, onProgress, onError);
+            };
         }
-    }
 
-    /* ── Staggered arc firing for threat-map effect ── */
+        globe = Globe()(containerEl)
+            .backgroundColor('rgba(0,0,0,0)')
+            .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-dark.jpg')
+            .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png')
+            .backgroundImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png')
+            .showAtmosphere(true)
+            .atmosphereColor('#0099cc')
+            .atmosphereAltitude(0.22)
+            .width(containerEl.clientWidth)
+            .height(520)
 
-    function fireStaggeredArcs(points, deviceLL) {
-        let delay = 0;
-        const sorted = points.slice().sort((a, b) => (b.count || 1) - (a.count || 1));
-        sorted.forEach((pt, i) => {
-            const isThreat = pt.threat_intel_match || pt.threat || false;
-            const color = isThreat ? 'rgba(255,51,102,0.8)' : 'rgba(0,255,136,0.5)';
-            const toLL = L.latLng(pt.lat, pt.lon);
-            const duration = 2000 + Math.random() * 1500;
-            setTimeout(() => fireArc(deviceLL, toLL, color, duration), delay);
-            delay += 80 + Math.random() * 120;  // stagger 80-200ms apart
+            /* ── Arcs — moderate-height with gradient directionality ── */
+            .arcColor(d => d.color)
+            .arcStroke(d => d.stroke)
+            .arcAltitudeAutoScale(0.25)
+            .arcDashLength(0.4)
+            .arcDashGap(0.15)
+            .arcDashAnimateTime(d => d.animTime)
+            .arcLabel(d => `
+                <div style="background:rgba(5,8,22,0.96);border:1px solid ${d.threat?'rgba(255,51,102,0.35)':'rgba(0,217,255,0.25)'};
+                     border-radius:8px;padding:0.65rem 0.9rem;font-size:0.72rem;min-width:180px;
+                     box-shadow:0 8px 32px rgba(0,0,0,0.7);">
+                    <div style="display:flex;align-items:center;gap:0.35rem;margin-bottom:0.4rem;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:0.35rem;">
+                        <span style="width:6px;height:6px;border-radius:50%;background:${d.threat?'#ff3366':'#00ff88'};box-shadow:0 0 4px ${d.threat?'rgba(255,51,102,0.5)':'rgba(0,255,136,0.4)'};"></span>
+                        <span style="font-weight:700;color:${d.threat?'#ff3366':'#e2e8f0'};font-size:0.8rem;">${escHtml(d.asnOrg)}</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:auto 1fr;gap:0.15rem 0.8rem;font-size:0.7rem;">
+                        <span style="color:#6b7a99;">Location</span><span style="color:#e2e8f0;text-align:right;">${escHtml(d.city ? d.city + ', ' + d.country : d.label)}</span>
+                        <span style="color:#6b7a99;">Transferred</span><span style="color:#00d9ff;text-align:right;font-weight:600;">${formatBytes(d.bytes)}</span>
+                        <span style="color:#6b7a99;">Connections</span><span style="color:#b4bcd0;text-align:right;">${formatNumber(d.count)}</span>
+                    </div>
+                </div>
+            `)
+
+            /* ── Points — destination + device markers ── */
+            .pointColor(d => d.color)
+            .pointAltitude(d => d.alt)
+            .pointRadius(d => d.radius)
+            .pointLabel(() => null)
+
+            /* ── Rings — subtle pulse at endpoints ── */
+            .ringsData([])
+            .ringColor(d => t => d.threat
+                ? `rgba(255,51,102,${Math.max(0, 0.5 - t * 0.5)})`
+                : `rgba(0,255,136,${Math.max(0, 0.3 - t * 0.3)})`)
+            .ringMaxRadius(2.5)
+            .ringPropagationSpeed(1.2)
+            .ringRepeatPeriod(d => d.threat ? 1400 : 2800)
+
+            /* ── HTML labels — only threats + top 5 by volume ── */
+            .htmlElementsData([])
+            .htmlElement(d => {
+                const el = document.createElement('div');
+                el.style.cssText = 'pointer-events:none;text-align:center;transform:translateX(-50%);';
+                if (d.isDevice) {
+                    el.innerHTML =
+                        '<div style="font-size:0.62rem;font-weight:700;color:#00d9ff;text-shadow:0 0 8px rgba(0,217,255,0.6),0 1px 3px rgba(0,0,0,1);white-space:nowrap;letter-spacing:0.05em;">YOUR DEVICE</div>' +
+                        '<div style="font-size:0.5rem;color:#6b9abf;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,1);">' + escHtml(deviceCity.split(',')[0] || '') + '</div>';
+                } else {
+                    const nameColor = d.threat ? '#ff6688' : '#c8d8e8';
+                    const locColor = d.threat ? '#cc5577' : '#7a9ab8';
+                    const name = (d.asnOrg || '').split(/[\s,]/)[0];
+                    const loc = d.city || d.country || '';
+                    el.innerHTML =
+                        '<div style="font-size:0.58rem;font-weight:600;color:' + nameColor + ';white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,1),0 1px 3px rgba(0,0,0,1);">' + escHtml(name) + '</div>' +
+                        '<div style="font-size:0.5rem;color:' + locColor + ';white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,1);">' + escHtml(loc) + ' &middot; ' + formatBytes(d.bytes || 0) + '</div>';
+                }
+                return el;
+            })
+            .htmlAltitude(d => d.isDevice ? 0.045 : 0.025)
+
+            /* ── Click-to-zoom on arcs ── */
+            .onArcClick(d => {
+                globe.pointOfView({ lat: d.endLat, lng: d.endLng, altitude: 1.3 }, 1000);
+            });
+
+        // Globe material polish — subtle self-illumination for dark-side visibility
+        globe.onGlobeReady(() => {
+            const mat = globe.globeMaterial();
+            mat.bumpScale = 3;
+            if (typeof THREE !== 'undefined') {
+                mat.emissive = new THREE.Color('#071530');
+                mat.emissiveIntensity = 0.1;
+            }
         });
+
+        // Controls
+        globe.controls().autoRotate = false;
+        globe.controls().autoRotateSpeed = 0.3;
+        globe.controls().enableDamping = true;
+        globe.controls().dampingFactor = 0.12;
+        globe.controls().rotateSpeed = 0.6;
+        globe.controls().zoomSpeed = 0.8;
+        globe.controls().minDistance = 120;
+        globe.controls().maxDistance = 500;
+
+        // Responsive resize
+        const resizeObs = new ResizeObserver(() => {
+            if (globe && containerEl.clientWidth > 0) {
+                globe.width(containerEl.clientWidth);
+            }
+        });
+        resizeObs.observe(containerEl);
+
+        // Initial camera — looking at North America, moderate zoom
+        globe.pointOfView({ lat: 32, lng: -90, altitude: 2.0 }, 0);
     }
 
-    /* ── Render geo points on Leaflet map ── */
+    /* ── Render connections on globe ── */
 
     function onGeoPoints(d) {
         geoPointsCache = Array.isArray(d) ? d : (d.points || []);
-        renderThreatMap(geoPointsCache);
+        renderGlobe(geoPointsCache);
     }
 
-    function renderThreatMap(points) {
-        if (!threatMap) initThreatMap();
-        markerLayer.clearLayers();
+    function renderGlobe(points) {
+        if (!globe) initGlobe();
+        if (!deviceLat) {
+            deviceLat = 38.2542;
+            deviceLon = -85.7594;
+        }
 
         const valid = points.filter(p => (p.lat !== 0 || p.lon !== 0) && p.lat != null && p.lon != null);
-
-        if (valid.length === 0) {
-            document.getElementById('map-clean-count').textContent = '0';
-            document.getElementById('map-threat-count').textContent = '0';
-            document.getElementById('map-total-flows').textContent = '0';
-            return;
-        }
-
-        const maxCount = Math.max(1, Math.max(...valid.map(p => p.count || 1)));
         let cleanCount = 0, threatCount = 0, totalFlows = 0;
 
-        // Device location: resolved via /api/network/device-location or cached
-        if (!deviceLatLng) {
-            // Fallback until async resolution completes
-            deviceLatLng = L.latLng(38.2542, -85.7594);
-        }
+        const maxBytes = Math.max(1, Math.max(...valid.map(p => p.bytes || 1)));
+        const countries = new Set();
+        let totalBytes = 0;
 
-        // Add device marker
-        const deviceIcon = L.divIcon({
-            className: 'device-marker',
-            iconSize: [14, 14],
-            iconAnchor: [7, 7]
-        });
-        L.marker(deviceLatLng, { icon: deviceIcon, zIndexOffset: 1000 })
-            .bindTooltip('<div class="tip-title">YOUR DEVICE</div>' +
-                '<div class="tip-row"><span class="tip-lbl">Origin</span><span class="tip-val">' + (window._deviceCity || 'Local Endpoint') + '</span></div>' +
-                '<div class="tip-row"><span class="tip-lbl">Network</span><span class="tip-val">' + (window._deviceOrg || '') + '</span></div>',
-                { className: 'threat-map-tooltip', direction: 'top', offset: [0, -12] })
-            .addTo(markerLayer);
-
-        // Add destination markers
-        valid.forEach(pt => {
+        /* ── Arcs — gradient colors, volume-proportional width ── */
+        const arcsData = valid.map(pt => {
             const isThreat = pt.threat_intel_match || pt.threat || false;
             const count = pt.count || 1;
+            const bytes = pt.bytes || 0;
             totalFlows += count;
+            totalBytes += bytes;
+            if (pt.country) countries.add(pt.country);
             if (isThreat) threatCount++; else cleanCount++;
 
-            const size = Math.max(6, Math.min(22, 6 + Math.log2(count + 1) * 3));
-            const cls = isThreat ? 'threat' : 'clean';
+            const volRatio = bytes / maxBytes;
+            // Width: 0.3 (tiny) → 2.8 (heaviest)
+            const strokeWidth = 0.3 + volRatio * 2.5;
+            // Speed: heavy traffic animates faster
+            const speed = isThreat ? 900 : Math.round(3500 - volRatio * 2500);
 
-            const icon = L.divIcon({
-                className: 'pulse-dot ' + cls,
-                iconSize: [size, size],
-                iconAnchor: [size / 2, size / 2]
-            });
-
-            const tooltipHtml =
-                '<div class="tip-title">' + escHtml(pt.country || 'Unknown') + (pt.city ? ', ' + escHtml(pt.city) : '') + '</div>' +
-                '<div class="tip-row"><span class="tip-lbl">Connections</span><span class="tip-val">' + formatNumber(count) + '</span></div>' +
-                '<div class="tip-row"><span class="tip-lbl">Bytes</span><span class="tip-val">' + formatBytes(pt.bytes || 0) + '</span></div>' +
-                (pt.asn_org ? '<div class="tip-row"><span class="tip-lbl">ASN</span><span class="tip-val">' + escHtml(pt.asn_org) + '</span></div>' : '') +
-                '<div class="tip-row"><span class="tip-lbl">Status</span><span class="tip-val" style="color:' + (isThreat ? '#ff3366' : '#00ff88') + ';">' + (isThreat ? 'THREAT FLAGGED' : 'Clean') + '</span></div>';
-
-            L.marker([pt.lat, pt.lon], { icon: icon })
-                .bindTooltip(tooltipHtml, { className: 'threat-map-tooltip', direction: 'top', offset: [0, -size / 2 - 4], sticky: false })
-                .addTo(markerLayer);
+            return {
+                startLat: deviceLat,
+                startLng: deviceLon,
+                endLat: pt.lat,
+                endLng: pt.lon,
+                // Gradient: source color → destination color (shows directionality)
+                color: isThreat
+                    ? ['rgba(255,51,102,0.85)', 'rgba(255,51,102,0.35)']
+                    : ['rgba(0,217,255,0.45)', 'rgba(0,255,136,0.20)'],
+                stroke: strokeWidth,
+                animTime: speed,
+                label: (pt.country || 'Unknown') + (pt.city ? ', ' + pt.city : ''),
+                city: pt.city || '',
+                country: pt.country || '',
+                asnOrg: pt.asn_org || 'Unknown',
+                bytes: bytes,
+                count: count,
+                threat: isThreat
+            };
         });
+
+        /* ── Points — destinations + device ── */
+        const pointsData = valid.map(pt => {
+            const isThreat = pt.threat_intel_match || pt.threat || false;
+            const bytes = pt.bytes || 0;
+            const volRatio = bytes / maxBytes;
+            return {
+                lat: pt.lat, lng: pt.lon,
+                color: isThreat ? '#ff3366' : '#00ff88',
+                alt: 0.006,
+                radius: 0.12 + volRatio * 0.45,
+                isDevice: false
+            };
+        });
+        pointsData.push({
+            lat: deviceLat, lng: deviceLon,
+            color: '#00d9ff', alt: 0.01, radius: 0.4,
+            isDevice: true
+        });
+
+        /* ── Rings ── */
+        const ringsData = valid.map(pt => ({
+            lat: pt.lat, lng: pt.lon,
+            threat: pt.threat_intel_match || pt.threat || false
+        }));
+        // Add device ring
+        ringsData.push({ lat: deviceLat, lng: deviceLon, threat: false });
+
+        /* ── HTML labels — threats always + top 5 by volume ── */
+        const sortedByVol = [...valid].sort((a, b) => (b.bytes || 0) - (a.bytes || 0));
+        const top5 = sortedByVol.slice(0, 5);
+        const labelPoints = valid.filter(pt => {
+            const isThreat = pt.threat_intel_match || pt.threat || false;
+            if (isThreat) return true;
+            return top5.includes(pt);
+        });
+        const htmlData = labelPoints.map(pt => ({
+            lat: pt.lat, lng: pt.lon, isDevice: false,
+            asnOrg: pt.asn_org || '',
+            city: pt.city || '',
+            country: pt.country || '',
+            threat: pt.threat_intel_match || pt.threat || false,
+            bytes: pt.bytes || 0
+        }));
+        htmlData.push({ lat: deviceLat, lng: deviceLon, isDevice: true, asnOrg: '', city: '', country: '', threat: false, bytes: 0 });
+
+        // Push all layers
+        globe
+            .arcsData(arcsData)
+            .pointsData(pointsData)
+            .ringsData(ringsData)
+            .htmlElementsData(htmlData);
 
         // Update overlay stats
         document.getElementById('map-clean-count').textContent = cleanCount;
         document.getElementById('map-threat-count').textContent = threatCount;
         document.getElementById('map-total-flows').textContent = formatNumber(totalFlows);
 
-        // Fit map bounds to show all points with padding
-        const allLatLngs = valid.map(p => [p.lat, p.lon]);
-        allLatLngs.push([deviceLatLng.lat, deviceLatLng.lng]);
-        threatMap.fitBounds(L.latLngBounds(allLatLngs), { padding: [40, 40], maxZoom: 6 });
+        // Update connection summary panel
+        document.getElementById('gi-dests').textContent = valid.length;
+        document.getElementById('gi-countries').textContent = countries.size;
+        document.getElementById('gi-data').textContent = formatBytes(totalBytes);
 
-        // Fire staggered animated arcs (threat-map effect)
-        fireStaggeredArcs(valid, deviceLatLng);
-
-        // Set up recurring arc animations every 8 seconds for live feel
-        if (window._arcInterval) clearInterval(window._arcInterval);
-        window._arcInterval = setInterval(() => {
-            if (document.hidden || valid.length === 0) return;
-            // Fire a random subset of arcs
-            const subset = valid.slice().sort(() => Math.random() - 0.5).slice(0, Math.min(8, valid.length));
-            subset.forEach((pt, i) => {
-                const isThreat = pt.threat_intel_match || pt.threat || false;
-                const color = isThreat ? 'rgba(255,51,102,0.7)' : 'rgba(0,255,136,0.4)';
-                setTimeout(() => fireArc(deviceLatLng, L.latLng(pt.lat, pt.lon), color, 2500 + Math.random() * 1500), i * 200);
-            });
-        }, 8000);
+        // Smooth fly-in on first render only
+        if (valid.length > 0 && !window._globeInitialFlyDone) {
+            window._globeInitialFlyDone = true;
+            const avgLat = valid.reduce((s, p) => s + p.lat, 0) / valid.length;
+            const avgLon = valid.reduce((s, p) => s + p.lon, 0) / valid.length;
+            const midLat = (deviceLat + avgLat) / 2;
+            const midLon = (deviceLon + avgLon) / 2;
+            globe.pointOfView({ lat: midLat, lng: midLon, altitude: 2.0 }, 1500);
+        }
     }
+
+    /* ── Globe controls ── */
+
+    window.toggleAutoRotate = function() {
+        const btn = document.getElementById('btn-auto-rotate');
+        const controls = globe.controls();
+        controls.autoRotate = !controls.autoRotate;
+        btn.classList.toggle('active', controls.autoRotate);
+    };
+
+    window.focusDevice = function() {
+        if (deviceLat && globe) {
+            globe.pointOfView({ lat: deviceLat, lng: deviceLon, altitude: 1.5 }, 1000);
+        }
+    };
+
+    window.filterGlobe = function(mode, btnEl) {
+        let filtered = geoPointsCache;
+        if (mode === 'threats') {
+            filtered = geoPointsCache.filter(p => p.threat_intel_match || p.threat);
+        } else if (mode === 'top5') {
+            filtered = [...geoPointsCache].sort((a, b) => (b.bytes || 0) - (a.bytes || 0)).slice(0, 5);
+        }
+        // Update button states
+        document.querySelectorAll('.globe-controls [data-filter]').forEach(b => b.classList.remove('active'));
+        if (btnEl) btnEl.classList.add('active');
+        renderGlobe(filtered);
+    };
 
     /* ── Top Destinations (lazy-loaded) ── */
 
@@ -854,7 +866,7 @@
         }
     }
 
-    /* ── Search / filter (expose to global scope for onclick) ── */
+    /* ── Search / filter ── */
 
     window.filterDestinations = function() {
         const q = document.getElementById('dst-search').value.toLowerCase();
@@ -884,28 +896,24 @@
     /* ── DashboardPoller with priority tiers ── */
 
     const poller = new DashboardPoller([
-        // High priority: stats KPIs (fast, drives NLP summary)
         {
             url: '/dashboard/api/network/stats?hours=24',
             callback: onStats,
             priority: 'high',
             ttl: 25
         },
-        // Low priority: geo country bars
         {
             url: '/dashboard/api/network/geo?hours=24',
             callback: onGeo,
             priority: 'low',
             ttl: 55
         },
-        // Low priority: ASN breakdown
         {
             url: '/dashboard/api/network/asn?hours=24',
             callback: onAsn,
             priority: 'low',
             ttl: 55
         },
-        // Low priority: geo map dots
         {
             url: '/dashboard/api/network/geo-points?hours=24&limit=500',
             callback: onGeoPoints,

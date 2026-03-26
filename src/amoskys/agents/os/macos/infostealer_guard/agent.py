@@ -206,6 +206,7 @@ class MacOSInfostealerGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
             "T1005",  # Crypto wallet / data from local system
             "T1056.002",  # Fake password dialog
             "T1539",  # Session cookie theft
+            "T1552.004",  # SSH private key theft
             "T1560.001",  # Credential archiving
             "T1041",  # Exfiltration over C2
         }

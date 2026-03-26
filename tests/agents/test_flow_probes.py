@@ -38,9 +38,9 @@ class TestFlowProbes:
     """Test suite for FlowAgent probes."""
 
     def test_create_flow_probes(self):
-        """Test probe factory creates all 9 probes."""
+        """Test probe factory creates all 10 probes."""
         probes = create_network_probes()
-        assert len(probes) == 9
+        assert len(probes) == 10
 
         probe_names = [p.name for p in probes]
         assert "macos_c2_beacon" in probe_names

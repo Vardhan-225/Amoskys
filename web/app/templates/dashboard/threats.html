@@ -1,0 +1,1014 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AMOSKYS — Threat Intelligence{% endblock %}
+
+{% block content %}
+<div class="threats-page" style="padding:1.5rem 2rem;">
+
+    <!-- ── Hero Stats Row ─────────────────────────────────────── -->
+    <div class="hero-grid">
+        <!-- Device Risk Gauge — larger -->
+        <div class="neural-card hero-risk-card">
+            <div style="position:relative;width:170px;height:170px;margin:0 auto;">
+                <svg viewBox="0 0 120 120" style="width:100%;height:100%;">
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8"/>
+                    <circle id="risk-arc" cx="60" cy="60" r="50" fill="none" stroke="#666" stroke-width="8"
+                            stroke-dasharray="0 314" stroke-linecap="round"
+                            transform="rotate(-90 60 60)" style="transition:all 1.2s ease;"/>
+                </svg>
+                <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
+                    <div id="risk-score" style="font-size:2.8rem;font-weight:800;line-height:1;color:#666;">--</div>
+                    <div id="risk-level" style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">loading</div>
+                </div>
+            </div>
+            <div style="text-align:center;margin-top:0.5rem;font-size:0.7rem;color:var(--text-muted);">Device Risk Score</div>
+            <div id="risk-tags" style="display:flex;flex-wrap:wrap;gap:0.25rem;justify-content:center;margin-top:0.5rem;"></div>
+        </div>
+
+        <!-- Severity Counters — clickable with latest detection -->
+        <div class="hero-severity-grid">
+            <div class="sev-counter-card sev-counter-critical clickable" id="sev-critical-card" data-severity="CRITICAL">
+                <div class="sev-counter-val" id="cnt-critical">0</div>
+                <div class="sev-counter-label">Critical</div>
+                <div class="sev-latest" id="latest-critical"></div>
+            </div>
+            <div class="sev-counter-card sev-counter-high clickable" id="sev-high-card" data-severity="HIGH">
+                <div class="sev-counter-val" id="cnt-high">0</div>
+                <div class="sev-counter-label">High</div>
+                <div class="sev-latest" id="latest-high"></div>
+            </div>
+            <div class="sev-counter-card sev-counter-medium clickable" id="sev-medium-card" data-severity="MEDIUM">
+                <div class="sev-counter-val" id="cnt-medium">0</div>
+                <div class="sev-counter-label">Medium</div>
+                <div class="sev-latest" id="latest-medium"></div>
+            </div>
+            <div class="sev-counter-card sev-counter-low clickable" id="sev-low-card" data-severity="LOW">
+                <div class="sev-counter-val" id="cnt-low">0</div>
+                <div class="sev-counter-label">Low</div>
+                <div class="sev-latest" id="latest-low"></div>
+            </div>
+        </div>
+
+        <!-- Detection Pipeline — vertical narrowing funnel -->
+        <div class="neural-card hero-funnel-card">
+            <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6rem;">Detection Pipeline</div>
+            <div class="funnel-vertical">
+                <div class="funnel-row funnel-row-1">
+                    <a class="funnel-bar clickable" href="/dashboard/observations" style="background:rgba(100,180,255,0.15);border:1px solid rgba(100,180,255,0.25);">
+                        <span class="funnel-val" id="funnel-events" style="color:#64b4ff;">--</span>
+                        <span class="funnel-label">Events</span>
+                    </a>
+                </div>
+                <div class="funnel-row funnel-row-2">
+                    <a class="funnel-bar clickable" href="/dashboard/probe-explorer" style="background:rgba(255,170,0,0.12);border:1px solid rgba(255,170,0,0.25);">
+                        <span class="funnel-val" id="funnel-suspicious" style="color:#ffaa00;">--</span>
+                        <span class="funnel-label">Detections</span>
+                    </a>
+                </div>
+                <div class="funnel-row funnel-row-3">
+                    <a class="funnel-bar clickable" href="/dashboard/correlation" style="background:rgba(255,102,51,0.12);border:1px solid rgba(255,102,51,0.25);">
+                        <span class="funnel-val" id="funnel-threats" style="color:#ff6633;">--</span>
+                        <span class="funnel-label">Correlated</span>
+                    </a>
+                </div>
+                <div class="funnel-row funnel-row-4">
+                    <a class="funnel-bar clickable" href="#incidents-section" style="background:rgba(255,51,102,0.15);border:1px solid rgba(255,51,102,0.3);">
+                        <span class="funnel-val" id="funnel-incidents" style="color:#ff3366;">--</span>
+                        <span class="funnel-label">Incidents</span>
+                    </a>
+                </div>
+            </div>
+            <div style="font-size:0.6rem;color:var(--text-muted);margin-top:0.4rem;text-align:center;" id="funnel-agents">-- active agents</div>
+        </div>
+    </div>
+
+    <!-- ── MITRE ATT&CK Tactics Coverage ─────────────────────── -->
+    <div class="neural-card" style="margin-bottom:1.25rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+            <h3 class="card-title" style="font-size:0.9rem;margin:0;">MITRE ATT&CK Tactics Coverage</h3>
+            <span style="font-size:0.7rem;color:var(--text-muted);" id="tactics-count">0 tactics detected</span>
+        </div>
+        <div id="tactics-bar" style="display:flex;gap:2px;height:28px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,0.03);"></div>
+        <div id="tactics-legend" style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-top:0.6rem;font-size:0.7rem;"></div>
+    </div>
+
+    <!-- ── Kill Chain Progression ──────────────────────────────── -->
+    <div class="neural-card" style="margin-bottom:1.25rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+            <h3 class="card-title" style="font-size:0.9rem;margin:0;">Kill Chain Progression</h3>
+            <span style="font-size:0.7rem;color:var(--text-muted);" id="chain-summary"></span>
+        </div>
+        <div class="kill-chain-track" id="kill-chain-track"></div>
+    </div>
+
+    <!-- ── Techniques Heatmap ──────────────────────────────────── -->
+    <div class="neural-card" style="margin-bottom:1.25rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+            <h3 class="card-title" style="font-size:0.9rem;margin:0;">Technique Frequency</h3>
+            <span style="font-size:0.7rem;color:var(--text-muted);" id="tech-count">0 techniques</span>
+        </div>
+        <div id="tech-heatmap" style="display:flex;flex-wrap:wrap;gap:0.4rem;"></div>
+    </div>
+
+    <!-- ── Incident Timeline ──────────────────────────────────── -->
+    <div id="incidents-section" style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap;">
+        <h3 style="font-size:0.9rem;margin:0;color:var(--text-primary);">Incidents</h3>
+        <button class="sev-filter active" data-severity="">All <span class="sev-filter-count" id="filter-all-count"></span></button>
+        <button class="sev-filter" data-severity="CRITICAL">Critical <span class="sev-filter-count" id="filter-crit-count"></span></button>
+        <button class="sev-filter" data-severity="HIGH">High <span class="sev-filter-count" id="filter-high-count"></span></button>
+        <button class="sev-filter" data-severity="MEDIUM">Medium <span class="sev-filter-count" id="filter-med-count"></span></button>
+        <button class="sev-filter" data-severity="LOW">Low <span class="sev-filter-count" id="filter-low-count"></span></button>
+        <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);" id="showing-text"></span>
+    </div>
+
+    <div class="neural-card" style="padding:0;overflow:hidden;">
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <table class="incidents-table">
+            <thead>
+                <tr>
+                    <th style="width:90px;">Severity</th>
+                    <th style="width:160px;">Rule</th>
+                    <th>Summary</th>
+                    <th style="width:180px;">Tactics</th>
+                    <th style="width:180px;">Techniques</th>
+                    <th style="width:80px;">Conf.</th>
+                    <th style="width:140px;">Time</th>
+                </tr>
+            </thead>
+            <tbody id="incidents-body">
+                <tr><td colspan="7" class="empty-msg">Loading threat intelligence...</td></tr>
+            </tbody>
+        </table>
+        </div>
+        <div id="pagination" class="pagination-bar" style="display:none;">
+            <button id="page-prev" class="pg-btn" disabled>Prev</button>
+            <span id="page-info" class="pg-info">Page 1</span>
+            <button id="page-next" class="pg-btn">Next</button>
+        </div>
+    </div>
+
+    <!-- ── Contributing Agents (AMRDR) ─────────────────────── -->
+    <div class="neural-card" style="margin-top:1.25rem;">
+        <h3 class="card-title" style="font-size:0.9rem;margin-bottom:0.5rem;">Contributing Agents</h3>
+        <p style="color:var(--text-muted);font-size:0.7rem;margin-bottom:0.75rem;">AMRDR-weighted reliability scores from correlated incident contributions</p>
+        <div id="agent-weights" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.75rem;"></div>
+    </div>
+
+    <!-- ── Incident Detail Panel (expandable) ───────────────── -->
+    <div id="detail-overlay" class="detail-overlay hidden">
+        <div class="detail-panel">
+            <div class="detail-header">
+                <span id="detail-title" style="font-weight:600;"></span>
+                <span id="detail-close" style="cursor:pointer;font-size:1.3rem;color:var(--text-muted);">&times;</span>
+            </div>
+            <div id="detail-content"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ── Layout ─────────────────────────────────────────────────── */
+.threats-page { max-width:1440px; margin:0 auto; }
+
+.hero-grid {
+    display: grid;
+    grid-template-columns: 240px 1fr 260px;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+    align-items: stretch;
+}
+.hero-risk-card { display:flex; flex-direction:column; justify-content:center; }
+.hero-funnel-card { display:flex; flex-direction:column; justify-content:center; padding:1rem 1.2rem !important; }
+
+/* ── Severity Counter Cards ─────────────────────────────────── */
+.hero-severity-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 0.5rem;
+    align-self: stretch;
+}
+.sev-counter-card {
+    padding: 0.7rem 0.5rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+    text-align: center;
+    transition: all 0.3s;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.sev-counter-card:hover { transform: translateY(-2px); }
+.sev-counter-val { font-size: 2.4rem; font-weight: 800; line-height: 1; }
+.sev-counter-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 0.3rem; }
+.sev-latest {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.4rem;
+    line-height: 1.4;
+    min-height: 2.2em;
+    overflow: hidden;
+    opacity: 0.8;
+}
+.sev-latest .sev-latest-summary { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.sev-latest .sev-latest-time { color:rgba(255,255,255,0.35); }
+/* ── Clickable interactive elements ────────────────────────── */
+.clickable { cursor:pointer; transition:all 0.2s ease; }
+.clickable:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,0.3); }
+.clickable:active { transform:translateY(0); }
+a.clickable { text-decoration:none; }
+.sev-counter-card.clickable:hover.sev-counter-critical { border-color:rgba(255,51,102,0.5) !important; background:rgba(255,51,102,0.08); }
+.sev-counter-card.clickable:hover.sev-counter-high { border-color:rgba(255,170,0,0.4) !important; background:rgba(255,170,0,0.06); }
+.sev-counter-card.clickable:hover.sev-counter-medium { border-color:rgba(0,170,255,0.4) !important; background:rgba(0,170,255,0.06); }
+.sev-counter-card.clickable:hover.sev-counter-low { border-color:rgba(0,255,136,0.4) !important; background:rgba(0,255,136,0.06); }
+.funnel-bar.clickable:hover { filter:brightness(1.3); box-shadow:0 2px 12px rgba(0,0,0,0.3); }
+.tactic-segment:hover { filter:brightness(1.4) !important; transform:scaleY(1.15); }
+.tactic-legend-item:hover { background:rgba(255,255,255,0.06) !important; }
+.tech-cell.clickable:hover { transform:translateY(-2px); filter:brightness(1.3); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+
+/* ── Tooltip system — AMOSKYS themed ──────────────────────── */
+[data-tooltip] { position:relative; }
+[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: linear-gradient(135deg, rgba(12,15,22,0.97), rgba(18,22,32,0.97));
+    color: #c8d0e0;
+    padding: 0.5rem 0.85rem;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+    line-height: 1.5;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 200;
+    border: 1px solid rgba(100,180,255,0.15);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
+    backdrop-filter: blur(8px);
+}
+[data-tooltip]:hover::after { opacity:1; transform:translateX(-50%) translateY(0); }
+.kc-stage[data-tooltip]::after { bottom:auto; top:calc(100% + 10px); }
+.tactic-segment[data-tooltip]::after { bottom:calc(100% + 12px); }
+.tech-cell[data-tooltip]::after { bottom:auto; top:calc(100% + 8px); max-width:280px; white-space:normal; text-align:center; }
+
+.sev-counter-critical .sev-counter-val { color: #ff3366; }
+.sev-counter-high .sev-counter-val { color: #ffaa00; }
+.sev-counter-medium .sev-counter-val { color: #00aaff; }
+.sev-counter-low .sev-counter-val { color: #00ff88; }
+
+/* ── Detection Pipeline — vertical narrowing funnel ─────────── */
+.funnel-vertical { display:flex; flex-direction:column; gap:0.3rem; }
+.funnel-row { display:flex; justify-content:center; }
+.funnel-bar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0.35rem 0.75rem; border-radius:6px; transition:all 0.3s;
+}
+.funnel-row-1 .funnel-bar { width:100%; }
+.funnel-row-2 .funnel-bar { width:82%; }
+.funnel-row-3 .funnel-bar { width:62%; }
+.funnel-row-4 .funnel-bar { width:44%; }
+.funnel-val { font-size:1rem; font-weight:700; }
+.funnel-label { font-size:0.6rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.3px; }
+
+/* ── Kill Chain Track ───────────────────────────────────────── */
+.kill-chain-track {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+.kc-stage {
+    text-align: center;
+    padding: 0.6rem 0.3rem;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: all 0.4s;
+    position: relative;
+    overflow: hidden;
+}
+.kc-stage.active {
+    border-color: rgba(255,170,0,0.4);
+    background: rgba(255,170,0,0.06);
+}
+.kc-stage.hot {
+    border-color: rgba(255,51,102,0.5);
+    background: rgba(255,51,102,0.08);
+    animation: kc-pulse 2s ease-in-out infinite;
+}
+@keyframes kc-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,51,102,0); } 50% { box-shadow: 0 0 8px 2px rgba(255,51,102,0.15); } }
+.kc-name { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.kc-count { font-size: 1.1rem; font-weight: 700; margin-top: 0.15rem; color: var(--text-secondary); }
+.kc-stage.active .kc-count { color: #ffaa00; }
+.kc-stage.hot .kc-count { color: #ff3366; }
+.kc-connector { position: absolute; right: -4px; top: 50%; width: 4px; height: 2px; background: rgba(255,255,255,0.1); }
+
+/* ── Technique Heatmap ──────────────────────────────────────── */
+.tech-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.75rem;
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: all 0.2s;
+    cursor: default;
+}
+.tech-cell:hover { transform: scale(1.05); }
+.tech-cell .tech-cnt { font-weight: 700; font-size: 0.7rem; }
+
+/* ── Filter Buttons ─────────────────────────────────────────── */
+.sev-filter {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-muted);
+    padding: 0.3rem 0.7rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+}
+.sev-filter:hover { background: rgba(255,255,255,0.08); }
+.sev-filter.active { background: rgba(0,170,255,0.12); border-color: rgba(0,170,255,0.3); color: #00aaff; }
+.sev-filter-count { opacity: 0.6; font-size: 0.7rem; }
+
+/* ── Incidents Table ────────────────────────────────────────── */
+.incidents-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 900px; }
+.incidents-table thead tr { background: rgba(255,255,255,0.03); }
+.incidents-table th { padding: 0.6rem 0.75rem; color: var(--text-muted); font-weight: 500; text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.incidents-table td { padding: 0.55rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.inc-row { cursor: pointer; transition: background 0.15s; }
+.inc-row:hover { background: rgba(255,255,255,0.03); }
+.inc-row.selected { background: rgba(0,170,255,0.06); }
+.empty-msg { padding: 2rem; text-align: center; color: var(--text-muted); }
+
+/* ── Severity Badges ────────────────────────────────────────── */
+.sev-badge { display:inline-block; padding:0.2rem 0.55rem; border-radius:3px; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; }
+.sev-CRITICAL { background:rgba(255,51,102,0.15); color:#ff3366; border:1px solid rgba(255,51,102,0.25); }
+.sev-HIGH { background:rgba(255,170,0,0.12); color:#ffaa00; border:1px solid rgba(255,170,0,0.2); }
+.sev-MEDIUM { background:rgba(0,170,255,0.12); color:#00aaff; border:1px solid rgba(0,170,255,0.2); }
+.sev-LOW { background:rgba(0,255,136,0.1); color:#00ff88; border:1px solid rgba(0,255,136,0.15); }
+.sev-INFO { background:rgba(255,255,255,0.05); color:var(--text-muted); border:1px solid rgba(255,255,255,0.08); }
+
+/* ── Tags ───────────────────────────────────────────────────── */
+.tactic-tag { display:inline-block; padding:0.12rem 0.35rem; border-radius:3px; font-size:0.65rem; margin:1px; }
+.tech-tag { display:inline-block; padding:0.12rem 0.35rem; border-radius:3px; font-size:0.65rem; font-family:monospace; background:rgba(0,170,255,0.08); color:#00aaff; margin:1px; }
+.risk-tag { display:inline-block; padding:0.1rem 0.35rem; border-radius:3px; font-size:0.6rem; background:rgba(255,255,255,0.05); color:var(--text-muted); margin:0.1rem; }
+
+/* ── Pagination ─────────────────────────────────────────────── */
+.pagination-bar { display:flex; justify-content:center; align-items:center; gap:1rem; padding:0.6rem; border-top:1px solid rgba(255,255,255,0.05); }
+.pg-btn { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:var(--text-secondary); padding:0.3rem 0.7rem; border-radius:4px; cursor:pointer; font-size:0.75rem; }
+.pg-btn:disabled { opacity:0.3; cursor:default; }
+.pg-info { font-size:0.75rem; color:var(--text-muted); }
+
+/* ── Agent Cards ────────────────────────────────────────────── */
+.agent-card {
+    padding: 0.75rem;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.06);
+}
+.agent-bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.04); margin-top: 0.5rem; overflow: hidden; }
+.agent-bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+
+/* ── Detail Overlay ─────────────────────────────────────────── */
+.detail-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7); z-index: 1000;
+    display: flex; justify-content: center; align-items: center;
+}
+.detail-overlay.hidden { display: none; }
+.detail-panel {
+    background: var(--bg-secondary); border: 1px solid rgba(0,170,255,0.2);
+    border-radius: 10px; max-width: 750px; width: 90%; max-height: 80vh;
+    overflow-y: auto; padding: 1.5rem;
+}
+.detail-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid rgba(255,255,255,0.06); }
+.detail-section { margin-bottom:1rem; }
+.detail-section h4 { font-size:0.7rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); margin-bottom:0.4rem; }
+.detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; }
+.detail-kv { font-size:0.8rem; }
+.detail-kv .label { color:var(--text-muted); font-size:0.7rem; }
+.detail-kv .value { color:var(--text-primary); font-weight:500; }
+.detail-narrative { font-size:0.85rem; line-height:1.5; color:var(--text-secondary); padding:0.75rem; background:rgba(255,255,255,0.02); border-radius:6px; border-left:3px solid rgba(0,170,255,0.3); }
+.detail-event-list { font-size:0.75rem; color:var(--text-secondary); max-height:150px; overflow-y:auto; }
+.detail-event-item { padding:0.3rem 0; border-bottom:1px solid rgba(255,255,255,0.03); display:flex; gap:0.5rem; }
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width:1100px) {
+    .hero-grid { grid-template-columns:1fr; }
+    .hero-risk-card { flex-direction:row; align-items:center; gap:1.5rem; }
+}
+@media (max-width:768px) {
+    .threats-page { padding:1rem !important; }
+    .hero-severity-grid { grid-template-columns:repeat(2,1fr); }
+    .kill-chain-track { grid-template-columns:repeat(4,1fr); }
+    .detail-grid { grid-template-columns:1fr; }
+}
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+(function() {
+    // ── Constants ──────────────────────────────────────────────
+    const TACTIC_META = {
+        'TA0043':{ name:'Reconnaissance',     color:'#B0BEC5' },
+        'TA0042':{ name:'Resource Dev.',       color:'#90A4AE' },
+        'TA0001':{ name:'Initial Access',      color:'#FF6B35' },
+        'TA0002':{ name:'Execution',           color:'#4ECDC4' },
+        'TA0003':{ name:'Persistence',         color:'#FCBAD3' },
+        'TA0004':{ name:'Priv. Escalation',    color:'#FFD93D' },
+        'TA0005':{ name:'Defense Evasion',     color:'#AA96DA' },
+        'TA0006':{ name:'Credential Access',   color:'#ff3366' },
+        'TA0007':{ name:'Discovery',           color:'#6BCB77' },
+        'TA0008':{ name:'Lateral Movement',    color:'#F38181' },
+        'TA0009':{ name:'Collection',          color:'#00B4D8' },
+        'TA0010':{ name:'Exfiltration',        color:'#E76F51' },
+        'TA0011':{ name:'Command & Control',   color:'#00aaff' },
+        'TA0040':{ name:'Impact',              color:'#ff0000' }
+    };
+
+    // Lockheed Martin Kill Chain → MITRE ATT&CK tactic mapping
+    const KC_STAGES = [
+        { name: 'Recon',       tactics: ['TA0043'] },                           // Reconnaissance
+        { name: 'Weaponize',   tactics: ['TA0042'] },                           // Resource Development
+        { name: 'Deliver',     tactics: ['TA0001'] },                           // Initial Access
+        { name: 'Exploit',     tactics: ['TA0002','TA0004','TA0006'] },         // Execution + Priv Esc + Cred Access
+        { name: 'Install',     tactics: ['TA0003','TA0005'] },                  // Persistence + Defense Evasion
+        { name: 'Command',     tactics: ['TA0011'] },                           // Command & Control
+        { name: 'Actions',     tactics: ['TA0007','TA0008','TA0009','TA0010','TA0040'] } // Discovery + Lateral + Collection + Exfil + Impact
+    ];
+
+    const TECHNIQUE_NAMES = {
+        'T1105':'Ingress Tool Transfer','T1548':'Abuse Elevation Control','T1071':'Application Layer Protocol',
+        'T1071.004':'DNS C2 Channel','T1204':'User Execution','T1204.001':'Malicious Link',
+        'T1048':'Exfiltration Over Alt Protocol','T1048.003':'Exfil Over Unencrypted Protocol',
+        'T1567':'Exfil Over Web Service','T1543.001':'Launch Agent','T1543.004':'Launch Daemon',
+        'T1053.003':'Cron','T1546.004':'Unix Shell Config Modification',
+        'T1098.004':'SSH Authorized Keys','T1059':'Command & Scripting Interpreter',
+        'T1059.002':'AppleScript','T1059.004':'Unix Shell','T1059.006':'Python',
+        'T1055':'Process Injection','T1003':'OS Credential Dumping','T1547':'Boot/Logon Autostart',
+        'T1218':'System Binary Proxy Execution','T1036':'Masquerading','T1036.005':'Match Legitimate Name',
+        'T1070':'Indicator Removal','T1070.002':'Clear Linux/Mac System Logs',
+        'T1555.001':'Keychain','T1539':'Steal Web Session Cookie','T1552.004':'Private Keys',
+        'T1564.001':'Hidden Files/Directories','T1082':'System Information Discovery',
+        'T1016':'System Network Config Discovery','T1057':'Process Discovery',
+        'T1021.004':'SSH','T1553.001':'Gatekeeper Bypass','T1557.001':'LLMNR/NBT-NS Poisoning',
+        'T1568.002':'Domain Generation Algorithms','T1098':'Account Manipulation',
+        'T1098.004':'SSH Authorized Keys','T1547.001':'Registry Run Keys/Startup Folder'
+    };
+
+    const AGENT_COLORS = {
+        proc:'#4ECDC4',flow:'#F38181',dns:'#AA96DA',auth:'#FF6B35',
+        fim:'#00ff88',persistence:'#FCBAD3',peripheral:'#FF6B9D',
+        kernel_audit:'#FFD93D',device_discovery:'#6BCB77',protocol_collectors:'#00B4D8',
+        macos_process:'#4ECDC4',macos_network:'#F38181',macos_dns:'#AA96DA',
+        macos_auth:'#FF6B35',macos_filesystem:'#00ff88',macos_persistence:'#FCBAD3'
+    };
+
+    let allIncidents = [];
+    let currentFilter = '';
+    let currentPage = 0;
+    const PAGE_SIZE = 25;
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    // ── Data Loading ──────────────────────────────────────────
+    async function loadAll() {
+        await Promise.all([loadRisk(), loadIncidents(), loadFunnel()]);
+    }
+
+    async function loadRisk() {
+        try {
+            const r = await fetch('/dashboard/api/fusion/risk');
+            const d = await r.json();
+            const risk = d.risk || (d.risks && d.risks[0]);
+            if (!risk) return;
+            renderRisk(risk);
+        } catch(e) {}
+    }
+
+    function renderRisk(risk) {
+        const score = risk.score || 0;
+        const level = risk.level || 'LOW';
+        const tags = risk.reason_tags || [];
+        const colors = { LOW:'#00ff88', MEDIUM:'#00aaff', HIGH:'#ffaa00', CRITICAL:'#ff3366' };
+        const color = colors[level] || '#666';
+
+        document.getElementById('risk-score').textContent = score;
+        document.getElementById('risk-score').style.color = color;
+        document.getElementById('risk-level').textContent = level;
+        document.getElementById('risk-level').style.color = color;
+        document.getElementById('risk-arc').setAttribute('stroke', color);
+        document.getElementById('risk-arc').setAttribute('stroke-dasharray', `${(score/100)*314} 314`);
+
+        const tagsEl = document.getElementById('risk-tags');
+        tagsEl.innerHTML = tags.slice(0,5).map(t => `<span class="risk-tag">${esc(t)}</span>`).join('');
+    }
+
+    async function loadFunnel() {
+        try {
+            const r = await fetch('/dashboard/api/nexus/verdict-funnel?hours=8760');
+            const d = await r.json();
+            document.getElementById('funnel-events').textContent = (d.total_events||0).toLocaleString();
+            document.getElementById('funnel-suspicious').textContent = (d.security_events||0).toLocaleString();
+            document.getElementById('funnel-threats').textContent = (d.flows||0).toLocaleString();
+            document.getElementById('funnel-incidents').textContent = (d.incidents||0).toLocaleString();
+            document.getElementById('funnel-agents').textContent = (d.active_agents||0) + ' active agents';
+        } catch(e) {}
+    }
+
+    // Called after incidents are loaded to sync the funnel incident count
+    function syncFunnelIncidents() {
+        document.getElementById('funnel-incidents').textContent = allIncidents.length.toLocaleString();
+    }
+
+    async function loadIncidents() {
+        try {
+            const r = await fetch('/dashboard/api/fusion/incidents?limit=200');
+            const d = await r.json();
+            allIncidents = d.incidents || [];
+            renderSeverityCounts();
+            renderTactics();
+            renderKillChain();
+            renderTechHeatmap();
+            renderIncidents();
+            renderAgentWeights();
+            syncFunnelIncidents();
+        } catch(e) {
+            document.getElementById('incidents-body').innerHTML =
+                '<tr><td colspan="7" class="empty-msg">Fusion engine initializing. Detection data will appear once correlation completes.</td></tr>';
+        }
+    }
+
+    // ── Severity Counters ─────────────────────────────────────
+    function renderSeverityCounts() {
+        const counts = { CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0 };
+        allIncidents.forEach(i => { if (counts[i.severity] !== undefined) counts[i.severity]++; });
+        const total = allIncidents.length || 1;
+
+        document.getElementById('cnt-critical').textContent = counts.CRITICAL;
+        document.getElementById('cnt-high').textContent = counts.HIGH;
+        document.getElementById('cnt-medium').textContent = counts.MEDIUM;
+        document.getElementById('cnt-low').textContent = counts.LOW;
+
+        // Animate cards with count > 0
+        if (counts.CRITICAL > 0) document.getElementById('sev-critical-card').style.borderColor = 'rgba(255,51,102,0.3)';
+        if (counts.HIGH > 0) document.getElementById('sev-high-card').style.borderColor = 'rgba(255,170,0,0.25)';
+
+        // Filter count badges
+        document.getElementById('filter-all-count').textContent = '(' + allIncidents.length + ')';
+        document.getElementById('filter-crit-count').textContent = '(' + counts.CRITICAL + ')';
+        document.getElementById('filter-high-count').textContent = '(' + counts.HIGH + ')';
+        document.getElementById('filter-med-count').textContent = '(' + counts.MEDIUM + ')';
+        document.getElementById('filter-low-count').textContent = '(' + counts.LOW + ')';
+
+        // Show latest detection under each severity card
+        const sevMap = { CRITICAL: 'latest-critical', HIGH: 'latest-high', MEDIUM: 'latest-medium', LOW: 'latest-low' };
+        for (const [sev, elId] of Object.entries(sevMap)) {
+            const el = document.getElementById(elId);
+            const latest = allIncidents.find(i => i.severity === sev);
+            if (latest && el) {
+                const cats = (latest.summary || '').replace(/^\d+ high-risk.*categories:\s*/, '').replace(/\).*/, '').split(',').map(s => s.trim()).filter(Boolean);
+                const shortCat = cats.slice(0, 2).map(c => c.replace(/macos_/g,'').replace(/_/g,' ')).join(', ');
+                const ago = timeAgo(latest.created_at);
+                el.innerHTML = '<span class="sev-latest-summary">' + (shortCat || latest.rule_name || '') + '</span><span class="sev-latest-time">' + ago + '</span>';
+            } else if (el) {
+                el.innerHTML = '<span class="sev-latest-time">no incidents</span>';
+            }
+        }
+    }
+
+    function timeAgo(ts) {
+        if (!ts) return '';
+        const now = Date.now();
+        const t = new Date(ts).getTime();
+        const diff = Math.floor((now - t) / 1000);
+        if (diff < 60) return diff + 's ago';
+        if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+        return Math.floor(diff/86400) + 'd ago';
+    }
+
+    // ── Interactive filters — click to drill down ─────────────
+    let customFilter = null; // for tactic/technique/kill-chain filters
+
+    function filterAndScroll(severity) {
+        customFilter = null;
+        document.querySelectorAll('.sev-filter').forEach(b => {
+            b.classList.toggle('active', b.dataset.severity === severity);
+        });
+        currentFilter = severity;
+        currentPage = 0;
+        renderIncidents();
+        document.getElementById('incidents-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function filterByTactic(tacticId) {
+        const meta = TACTIC_META[tacticId] || { name: tacticId };
+        customFilter = { type: 'tactic', value: tacticId, label: meta.name };
+        currentFilter = '';
+        currentPage = 0;
+        document.querySelectorAll('.sev-filter').forEach(b => b.classList.remove('active'));
+        renderIncidents();
+        document.getElementById('incidents-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function filterByKillChain(tactics, count) {
+        if (count === 0) return;
+        customFilter = { type: 'kill_chain', value: tactics, label: 'Kill Chain Stage' };
+        currentFilter = '';
+        currentPage = 0;
+        document.querySelectorAll('.sev-filter').forEach(b => b.classList.remove('active'));
+        renderIncidents();
+        document.getElementById('incidents-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function filterByTechnique(techId) {
+        const name = TECHNIQUE_NAMES[techId] || techId;
+        customFilter = { type: 'technique', value: techId, label: name };
+        currentFilter = '';
+        currentPage = 0;
+        document.querySelectorAll('.sev-filter').forEach(b => b.classList.remove('active'));
+        renderIncidents();
+        document.getElementById('incidents-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function clearCustomFilter() {
+        customFilter = null;
+        currentFilter = '';
+        currentPage = 0;
+        document.querySelectorAll('.sev-filter').forEach(b => {
+            b.classList.toggle('active', b.dataset.severity === '');
+        });
+        renderIncidents();
+    }
+
+    // ── Event delegation for all interactive elements ──────────
+    // Tactics bar + legend clicks
+    document.getElementById('tactics-bar').addEventListener('click', e => {
+        const seg = e.target.closest('[data-tactic]');
+        if (seg) filterByTactic(seg.dataset.tactic);
+    });
+    document.getElementById('tactics-legend').addEventListener('click', e => {
+        const item = e.target.closest('[data-tactic]');
+        if (item) filterByTactic(item.dataset.tactic);
+    });
+    // Kill chain clicks
+    document.getElementById('kill-chain-track').addEventListener('click', e => {
+        const stage = e.target.closest('[data-kc-tactics]');
+        if (stage && parseInt(stage.dataset.kcCount) > 0) {
+            filterByKillChain(JSON.parse(stage.dataset.kcTactics), parseInt(stage.dataset.kcCount));
+        }
+    });
+    // Technique heatmap clicks
+    document.getElementById('tech-heatmap').addEventListener('click', e => {
+        const cell = e.target.closest('[data-tech]');
+        if (cell) filterByTechnique(cell.dataset.tech);
+    });
+    // Severity card clicks
+    document.querySelectorAll('.sev-counter-card[data-severity]').forEach(card => {
+        card.addEventListener('click', () => filterAndScroll(card.dataset.severity));
+    });
+    // Clear filter badge
+    document.addEventListener('click', e => {
+        if (e.target.classList.contains('clear-filter-btn')) clearCustomFilter();
+    });
+
+    // ── MITRE Tactics Bar ─────────────────────────────────────
+    function renderTactics() {
+        const tacticCounts = {};
+        allIncidents.forEach(i => {
+            (i.tactics||[]).forEach(t => { tacticCounts[t] = (tacticCounts[t]||0)+1; });
+        });
+
+        const bar = document.getElementById('tactics-bar');
+        const legend = document.getElementById('tactics-legend');
+        const total = Object.values(tacticCounts).reduce((a,b)=>a+b,0) || 1;
+        const uniqueCount = Object.keys(tacticCounts).length;
+        document.getElementById('tactics-count').textContent = uniqueCount + ' tactic' + (uniqueCount!==1?'s':'') + ' detected across ' + allIncidents.length + ' incidents';
+
+        if (uniqueCount === 0) {
+            bar.innerHTML = '<div style="width:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.75rem;">Collecting detection data...</div>';
+            legend.innerHTML = '';
+            return;
+        }
+
+        const sorted = Object.entries(tacticCounts).sort((a,b)=>b[1]-a[1]);
+        bar.innerHTML = sorted.map(([t,c]) => {
+            const pct = Math.max(3, (c/total)*100);
+            const meta = TACTIC_META[t] || { color:'#666', name:t };
+            return `<div class="clickable tactic-segment" data-tactic="${t}" data-tooltip="${t} — ${meta.name} (${c} incidents)" style="width:${pct}%;background:${meta.color};min-width:6px;border-radius:2px;cursor:pointer;transition:filter 0.2s;"></div>`;
+        }).join('');
+
+        legend.innerHTML = sorted.map(([t,c]) => {
+            const meta = TACTIC_META[t] || { color:'#666', name:t };
+            return `<span class="clickable tactic-legend-item" data-tactic="${t}" style="display:flex;align-items:center;gap:0.25rem;cursor:pointer;padding:0.15rem 0.4rem;border-radius:4px;transition:background 0.2s;"><span style="width:8px;height:8px;border-radius:2px;background:${meta.color};display:inline-block;flex-shrink:0;"></span><span style="color:var(--text-secondary);">${meta.name}</span><span style="color:var(--text-muted);">(${c})</span></span>`;
+        }).join('');
+    }
+
+    // ── Kill Chain Progression ────────────────────────────────
+    function renderKillChain() {
+        const tacticCounts = {};
+        allIncidents.forEach(i => {
+            (i.tactics||[]).forEach(t => { tacticCounts[t] = (tacticCounts[t]||0)+1; });
+        });
+
+        const track = document.getElementById('kill-chain-track');
+        let activeStages = 0;
+        let maxCount = 0;
+
+        const stageData = KC_STAGES.map(stage => {
+            let count = 0;
+            stage.tactics.forEach(t => { count += (tacticCounts[t]||0); });
+            if (count > maxCount) maxCount = count;
+            if (count > 0) activeStages++;
+            return { ...stage, count };
+        });
+
+        track.innerHTML = stageData.map((s, idx) => {
+            const isActive = s.count > 0;
+            const isHot = s.count >= 10;
+            const cls = isHot ? 'kc-stage hot clickable' : (isActive ? 'kc-stage active clickable' : 'kc-stage');
+            const tacticNames = s.tactics.map(t => (TACTIC_META[t]||{name:t}).name).join(', ');
+            const tip = isActive ? `${s.name}: ${s.count} incidents — ${tacticNames}` : `${s.name}: No activity — ${tacticNames}`;
+            return `<div class="${cls}" data-tooltip="${tip}" data-kc-tactics='${JSON.stringify(s.tactics)}' data-kc-count="${s.count}" style="cursor:${isActive?'pointer':'default'};">
+                <div class="kc-name">${s.name}</div>
+                <div class="kc-count">${s.count}</div>
+                ${idx < stageData.length - 1 ? '<div class="kc-connector"></div>' : ''}
+            </div>`;
+        }).join('');
+
+        document.getElementById('chain-summary').textContent = activeStages + '/7 stages active';
+    }
+
+    // ── Technique Heatmap ─────────────────────────────────────
+    function renderTechHeatmap() {
+        const techCounts = {};
+        allIncidents.forEach(i => {
+            (i.techniques||[]).forEach(t => { techCounts[t] = (techCounts[t]||0)+1; });
+        });
+
+        const el = document.getElementById('tech-heatmap');
+        const sorted = Object.entries(techCounts).sort((a,b)=>b[1]-a[1]);
+        const maxC = sorted.length > 0 ? sorted[0][1] : 1;
+        document.getElementById('tech-count').textContent = sorted.length + ' technique' + (sorted.length!==1?'s':'') + ' observed';
+
+        if (sorted.length === 0) {
+            el.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">No technique data yet</div>';
+            return;
+        }
+
+        el.innerHTML = sorted.map(([tech, cnt]) => {
+            const intensity = Math.max(0.15, cnt / maxC);
+            const name = TECHNIQUE_NAMES[tech] || tech;
+            const r = Math.round(0 + intensity * 255);
+            const g = Math.round(170 - intensity * 170);
+            const b = Math.round(255 - intensity * 100);
+            const bg = `rgba(${r},${g},${b},0.12)`;
+            const fg = `rgb(${Math.min(255,r+50)},${Math.min(255,g+50)},${Math.min(255,b+50)})`;
+            const border = `rgba(${r},${g},${b},0.25)`;
+            return `<div class="tech-cell clickable" data-tooltip="${tech} — ${name} (${cnt} incidents)" data-tech="${tech}" style="background:${bg};color:${fg};border-color:${border};cursor:pointer;">
+                <span>${tech}</span><span class="tech-cnt" style="opacity:0.7;">x${cnt}</span>
+            </div>`;
+        }).join('');
+    }
+
+    // ── Incident Table ────────────────────────────────────────
+    function renderIncidents() {
+        let filtered;
+        let filterBadge = '';
+
+        if (customFilter) {
+            if (customFilter.type === 'tactic') {
+                filtered = allIncidents.filter(i => (i.tactics||[]).includes(customFilter.value));
+            } else if (customFilter.type === 'technique') {
+                filtered = allIncidents.filter(i => (i.techniques||[]).includes(customFilter.value));
+            } else if (customFilter.type === 'kill_chain') {
+                filtered = allIncidents.filter(i => (i.tactics||[]).some(t => customFilter.value.includes(t)));
+            } else {
+                filtered = allIncidents;
+            }
+            filterBadge = `<span style="display:inline-flex;align-items:center;gap:0.3rem;background:rgba(100,180,255,0.15);border:1px solid rgba(100,180,255,0.3);color:#64b4ff;padding:0.2rem 0.6rem;border-radius:12px;font-size:0.7rem;margin-left:0.5rem;">
+                ${customFilter.label} (${filtered.length})
+                <span class="clear-filter-btn" style="cursor:pointer;opacity:0.7;font-size:0.85rem;">&times;</span>
+            </span>`;
+        } else {
+            filtered = currentFilter ? allIncidents.filter(i=>i.severity===currentFilter) : allIncidents;
+        }
+
+        // Show active filter badge next to Incidents header
+        const header = document.querySelector('#incidents-section h3');
+        if (header) {
+            const existing = header.querySelector('.filter-badge');
+            if (existing) existing.remove();
+            if (filterBadge) {
+                const span = document.createElement('span');
+                span.className = 'filter-badge';
+                span.innerHTML = filterBadge;
+                header.appendChild(span);
+            }
+        }
+        const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+        currentPage = Math.min(currentPage, totalPages - 1);
+        const start = currentPage * PAGE_SIZE;
+        const page = filtered.slice(start, start + PAGE_SIZE);
+
+        document.getElementById('showing-text').textContent = `${start+1}-${start+page.length} of ${filtered.length}`;
+
+        const pgBar = document.getElementById('pagination');
+        pgBar.style.display = filtered.length > PAGE_SIZE ? 'flex' : 'none';
+        document.getElementById('page-info').textContent = `Page ${currentPage+1} of ${totalPages}`;
+        document.getElementById('page-prev').disabled = currentPage === 0;
+        document.getElementById('page-next').disabled = currentPage >= totalPages - 1;
+
+        const body = document.getElementById('incidents-body');
+        if (filtered.length === 0) {
+            body.innerHTML = '<tr><td colspan="7" class="empty-msg">' +
+                (allIncidents.length === 0 ? 'No correlated incidents detected yet.' : 'No incidents match this severity filter.') + '</td></tr>';
+            return;
+        }
+
+        body.innerHTML = page.map(inc => {
+            const tactics = (inc.tactics||[]).map(t => {
+                const meta = TACTIC_META[t] || { name:t, color:'#666' };
+                return `<span class="tactic-tag" style="background:${meta.color}15;color:${meta.color};">${meta.name}</span>`;
+            }).join('');
+            const techs = (inc.techniques||[]).slice(0,4).map(t => `<span class="tech-tag">${t}</span>`).join('');
+            const moreT = (inc.techniques||[]).length > 4 ? `<span class="tech-tag" style="opacity:0.5;">+${inc.techniques.length-4}</span>` : '';
+            const conf = inc.weighted_confidence != null ? (inc.weighted_confidence * 100).toFixed(0) + '%' : '--';
+            const confColor = (inc.weighted_confidence||1) >= 0.8 ? '#00ff88' : (inc.weighted_confidence||1) >= 0.5 ? '#ffaa00' : '#ff3366';
+            const ts = inc.created_at ? timeAgo(inc.created_at) : '--';
+            const fullTime = inc.created_at ? new Date(inc.created_at).toLocaleString() : '';
+
+            return `<tr class="inc-row" data-iid="${esc(inc.incident_id||'')}">
+                <td><span class="sev-badge sev-${inc.severity}">${inc.severity}</span></td>
+                <td style="font-family:monospace;font-size:0.75rem;color:var(--text-secondary);">${esc(inc.rule_name||'--')}</td>
+                <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(inc.summary||'')}">${esc(inc.summary||'--')}</td>
+                <td>${tactics||'<span style="color:var(--text-muted);">--</span>'}</td>
+                <td>${techs}${moreT}</td>
+                <td><span style="color:${confColor};font-weight:600;">${conf}</span></td>
+                <td style="font-size:0.75rem;color:var(--text-muted);white-space:nowrap;" title="${fullTime}">${ts}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // ── Agent Weights ─────────────────────────────────────────
+    function renderAgentWeights() {
+        const agentMap = {};
+        allIncidents.forEach(inc => {
+            const agents = inc.contributing_agents || [];
+            const weights = inc.agent_weights || {};
+            agents.forEach(a => {
+                if (!agentMap[a]) agentMap[a] = { count:0, totalWeight:0 };
+                agentMap[a].count++;
+                agentMap[a].totalWeight += (weights[a] || 1.0);
+            });
+        });
+
+        const el = document.getElementById('agent-weights');
+        if (Object.keys(agentMap).length === 0) {
+            el.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">Agent contribution data is collected as incidents are correlated.</div>';
+            return;
+        }
+
+        el.innerHTML = Object.entries(agentMap).sort((a,b)=>b[1].count-a[1].count).map(([agent, data]) => {
+            const avgWeight = data.totalWeight / data.count;
+            const color = AGENT_COLORS[agent] || '#00aaff';
+            const pct = (avgWeight * 100).toFixed(0);
+            return `<div class="agent-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-weight:600;color:${color};font-size:0.85rem;">${esc(agent)}</span>
+                    <span style="font-size:0.7rem;color:var(--text-muted);">${data.count} incidents</span>
+                </div>
+                <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.2rem;">AMRDR weight: ${pct}%</div>
+                <div class="agent-bar"><div class="agent-bar-fill" style="width:${pct}%;background:${color};"></div></div>
+            </div>`;
+        }).join('');
+    }
+
+    // ── Incident Detail ───────────────────────────────────────
+    function showDetail(incidentId) {
+        const inc = allIncidents.find(i => i.incident_id === incidentId);
+        if (!inc) return;
+
+        const overlay = document.getElementById('detail-overlay');
+        const title = document.getElementById('detail-title');
+        const content = document.getElementById('detail-content');
+
+        title.innerHTML = `<span class="sev-badge sev-${inc.severity}" style="margin-right:0.5rem;">${inc.severity}</span>${esc(inc.rule_name||'Incident')}`;
+
+        const tactics = (inc.tactics||[]).map(t => {
+            const meta = TACTIC_META[t] || { name:t, color:'#666' };
+            return `<span class="tactic-tag" style="background:${meta.color}15;color:${meta.color};">${meta.name} (${t})</span>`;
+        }).join(' ');
+
+        const techs = (inc.techniques||[]).map(t => {
+            const name = TECHNIQUE_NAMES[t] || '';
+            return `<span class="tech-tag" style="padding:0.2rem 0.5rem;">${t}${name ? ' - '+name : ''}</span>`;
+        }).join(' ');
+
+        const eventCount = (inc.event_ids||[]).length;
+        const durationStr = inc.duration_seconds != null ?
+            (inc.duration_seconds < 60 ? inc.duration_seconds.toFixed(1)+'s' :
+             inc.duration_seconds < 3600 ? (inc.duration_seconds/60).toFixed(1)+'m' :
+             (inc.duration_seconds/3600).toFixed(1)+'h') : '--';
+
+        // MITRE sequence timeline
+        let seqHtml = '';
+        if (inc.mitre_sequence && inc.mitre_sequence.length > 0) {
+            seqHtml = '<div class="detail-section"><h4>MITRE Technique Sequence</h4><div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">';
+            inc.mitre_sequence.forEach((step, idx) => {
+                const tname = TECHNIQUE_NAMES[step.technique] || step.technique;
+                seqHtml += `<span class="tech-tag" style="padding:0.25rem 0.5rem;">${step.technique}</span>`;
+                if (idx < inc.mitre_sequence.length - 1) seqHtml += '<span style="color:var(--text-muted);">&rarr;</span>';
+            });
+            seqHtml += '</div></div>';
+        }
+
+        content.innerHTML = `
+            <div class="detail-narrative">${esc(inc.summary||'No summary available.')}</div>
+            <div class="detail-grid" style="margin-top:1rem;">
+                <div class="detail-kv"><div class="label">Device</div><div class="value">${esc(inc.device_id||'--')}</div></div>
+                <div class="detail-kv"><div class="label">Confidence</div><div class="value" style="color:${(inc.weighted_confidence||1)>=0.8?'#00ff88':'#ffaa00'};">${((inc.weighted_confidence||1)*100).toFixed(0)}%</div></div>
+                <div class="detail-kv"><div class="label">Duration</div><div class="value">${durationStr}</div></div>
+                <div class="detail-kv"><div class="label">Events</div><div class="value">${eventCount}</div></div>
+                <div class="detail-kv"><div class="label">Created</div><div class="value">${inc.created_at ? new Date(inc.created_at).toLocaleString() : '--'}</div></div>
+                <div class="detail-kv"><div class="label">Time Range</div><div class="value">${inc.start_ts ? new Date(inc.start_ts).toLocaleTimeString() : '--'} - ${inc.end_ts ? new Date(inc.end_ts).toLocaleTimeString() : '--'}</div></div>
+            </div>
+            <div class="detail-section" style="margin-top:1rem;"><h4>Tactics</h4>${tactics||'<span style="color:var(--text-muted);font-size:0.8rem;">None mapped</span>'}</div>
+            <div class="detail-section"><h4>Techniques</h4>${techs||'<span style="color:var(--text-muted);font-size:0.8rem;">None mapped</span>'}</div>
+            ${seqHtml}
+            ${(inc.contributing_agents||[]).length > 0 ? '<div class="detail-section"><h4>Contributing Agents</h4><div style="display:flex;flex-wrap:wrap;gap:0.4rem;">' +
+                inc.contributing_agents.map(a => {
+                    const w = (inc.agent_weights||{})[a];
+                    const wStr = w != null ? ' (w='+w.toFixed(2)+')' : '';
+                    return '<span class="tech-tag" style="background:rgba(0,255,136,0.08);color:#00ff88;">'+esc(a)+wStr+'</span>';
+                }).join('') + '</div></div>' : ''}
+            ${eventCount > 0 ? '<div class="detail-section"><h4>Event IDs (' + eventCount + ')</h4><div class="detail-event-list">' +
+                (inc.event_ids||[]).slice(0,20).map(e => '<div class="detail-event-item"><span style="color:var(--text-muted);font-family:monospace;font-size:0.7rem;">'+esc(e)+'</span></div>').join('') +
+                (eventCount > 20 ? '<div style="color:var(--text-muted);font-size:0.7rem;padding:0.3rem 0;">... and '+(eventCount-20)+' more</div>' : '') +
+                '</div></div>' : ''}
+        `;
+
+        overlay.classList.remove('hidden');
+
+        // Also try to load the explanation from the API
+        fetch('/dashboard/api/explain/incident/' + encodeURIComponent(incidentId))
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (!data || data.status !== 'success' || !data.explanation) return;
+                const ex = data.explanation;
+                const narrativeEl = content.querySelector('.detail-narrative');
+                if (narrativeEl && ex.narrative) {
+                    narrativeEl.textContent = ex.narrative;
+                }
+            }).catch(() => {});
+    }
+
+    // ── Event Handlers ────────────────────────────────────────
+    document.querySelectorAll('.sev-filter').forEach(btn => {
+        btn.addEventListener('click', () => {
+            customFilter = null; // clear tactic/technique filter
+            document.querySelectorAll('.sev-filter').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = btn.dataset.severity || '';
+            currentPage = 0;
+            renderIncidents();
+        });
+    });
+
+    document.getElementById('page-prev').addEventListener('click', () => {
+        if (currentPage > 0) { currentPage--; renderIncidents(); }
+    });
+    document.getElementById('page-next').addEventListener('click', () => {
+        const filtered = currentFilter ? allIncidents.filter(i=>i.severity===currentFilter) : allIncidents;
+        if (currentPage < Math.ceil(filtered.length / PAGE_SIZE) - 1) { currentPage++; renderIncidents(); }
+    });
+
+    document.getElementById('incidents-body').addEventListener('click', (e) => {
+        const row = e.target.closest('.inc-row');
+        if (!row) return;
+        const iid = row.dataset.iid;
+        if (iid) showDetail(iid);
+    });
+
+    document.getElementById('detail-close').addEventListener('click', () => {
+        document.getElementById('detail-overlay').classList.add('hidden');
+    });
+    document.getElementById('detail-overlay').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+    });
+
+    // ── Init ──────────────────────────────────────────────────
+    loadAll();
+    setInterval(loadAll, 30000);
+})();
+</script>
+{% endblock %}

@@ -129,10 +129,12 @@ CSP = {
         "'self'",
         "ws:",
         "wss:",
-        "https://cdn.jsdelivr.net",  # For source maps
+        "blob:",
+        "https://cdn.jsdelivr.net",  # For source maps + Globe.gl textures
         "https://cdn.socket.io",  # For Socket.IO source maps
     ],
-    "frame-ancestors": ["'none'"],
+    "worker-src": ["'self'", "blob:"],
+    "frame-ancestors": ["'self'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
 }
@@ -290,7 +292,7 @@ def init_security(app: Flask) -> None:
         response.headers["X-Content-Type-Options"] = "nosniff"
 
         # Prevent clickjacking
-        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
 
         # Enable browser XSS protection
         response.headers["X-XSS-Protection"] = "1; mode=block"

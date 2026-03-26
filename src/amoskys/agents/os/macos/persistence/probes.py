@@ -22,6 +22,10 @@ MITRE: T1543, T1053, T1546, T1547, T1098
 from __future__ import annotations
 
 import logging
+import os
+import sqlite3
+import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from amoskys.agents.common.probes import (
@@ -33,6 +37,77 @@ from amoskys.agents.common.probes import (
 from amoskys.agents.common.process_resolver import resolve_file_owner_process
 
 logger = logging.getLogger(__name__)
+
+# Default base directory for baseline databases
+_BASELINE_DB_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..", "data", "baselines"
+)
+
+
+class BaselineStore:
+    """SQLite-backed baseline persistence for _BaselineDiffProbe.
+
+    Stores path -> content_hash mappings so baselines survive restarts.
+    Without this, malware planted before a restart is silently absorbed
+    as baseline and goes undetected.
+    """
+
+    _SCHEMA = """
+        CREATE TABLE IF NOT EXISTS baseline (
+            path TEXT PRIMARY KEY,
+            content_hash TEXT NOT NULL,
+            category TEXT NOT NULL,
+            first_seen REAL NOT NULL,
+            last_seen REAL NOT NULL
+        )
+    """
+
+    def __init__(self, db_path: str) -> None:
+        self._db_path = db_path
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self._conn = sqlite3.connect(db_path, timeout=5.0)
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute(self._SCHEMA)
+        self._conn.commit()
+
+    def load(self) -> Dict[str, str]:
+        """Load persisted baseline into memory. Returns path -> content_hash."""
+        rows = self._conn.execute("SELECT path, content_hash FROM baseline").fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def has_baseline(self) -> bool:
+        """Return True if the DB has any baseline rows (not first-ever run)."""
+        row = self._conn.execute("SELECT COUNT(*) FROM baseline").fetchone()
+        return row[0] > 0
+
+    def persist(self, entries: Dict[str, tuple]) -> None:
+        """Persist current baseline to DB.
+
+        Args:
+            entries: Dict of path -> (content_hash, category) tuples.
+        """
+        now = time.time()
+        # Load existing first_seen times so we preserve them
+        existing = {}
+        for row in self._conn.execute("SELECT path, first_seen FROM baseline").fetchall():
+            existing[row[0]] = row[1]
+
+        self._conn.execute("DELETE FROM baseline")
+        for path, (content_hash, category) in entries.items():
+            first_seen = existing.get(path, now)
+            self._conn.execute(
+                "INSERT INTO baseline (path, content_hash, category, first_seen, last_seen) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (path, content_hash, category, first_seen, now),
+            )
+        self._conn.commit()
+
+    def close(self) -> None:
+        """Close the database connection."""
+        try:
+            self._conn.close()
+        except Exception:
+            pass
 
 
 def _resolve_persistence_context(entry: Any) -> Dict[str, Any]:
@@ -54,16 +129,32 @@ class _BaselineDiffProbe(MicroProbe):
         - NEW: path not in baseline
         - MODIFIED: path exists but hash changed
         - REMOVED: path was in baseline but not in current scan
+
+    Baseline is persisted to SQLite so that malware planted before a
+    restart is NOT silently absorbed. Only the very first run (empty DB)
+    absorbs silently.
     """
 
     _target_categories: List[str] = []  # Override in subclass
     platforms = ["darwin"]
     requires_fields = ["entries"]
 
-    def __init__(self) -> None:
+    def __init__(self, baseline_db_path: Optional[str] = None) -> None:
         super().__init__()
-        self._baseline: Dict[str, str] = {}  # path -> content_hash
-        self._first_run = True
+        # Resolve DB path: explicit arg, or derive from probe name
+        if baseline_db_path is None:
+            db_dir = os.path.normpath(_BASELINE_DB_DIR)
+            baseline_db_path = os.path.join(db_dir, f"persistence_{self.name}.db")
+
+        self._store = BaselineStore(baseline_db_path)
+
+        # Load persisted baseline — if DB has rows, this is NOT first run
+        if self._store.has_baseline():
+            self._baseline: Dict[str, str] = self._store.load()
+            self._first_run = False
+        else:
+            self._baseline = {}
+            self._first_run = True
 
     def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
         events: List[TelemetryEvent] = []
@@ -76,9 +167,10 @@ class _BaselineDiffProbe(MicroProbe):
                 current[entry.path] = entry
 
         if self._first_run:
-            # Establish baseline
+            # Truly first-ever run (empty DB) — absorb silently
             self._baseline = {path: e.content_hash for path, e in current.items()}
             self._first_run = False
+            self._persist_baseline(current)
             return events
 
         # Detect NEW entries
@@ -119,10 +211,22 @@ class _BaselineDiffProbe(MicroProbe):
                     )
                 )
 
-        # Update baseline
+        # Update baseline in memory and persist to DB
         self._baseline = {path: e.content_hash for path, e in current.items()}
+        self._persist_baseline(current)
 
         return events
+
+    def _persist_baseline(self, current: Dict[str, Any]) -> None:
+        """Persist current baseline entries to the SQLite store."""
+        try:
+            entries = {
+                path: (entry.content_hash, entry.category)
+                for path, entry in current.items()
+            }
+            self._store.persist(entries)
+        except Exception:
+            logger.warning("%s: failed to persist baseline to DB", self.name, exc_info=True)
 
     def _make_event(
         self, change_type: str, entry: Any, severity: Severity

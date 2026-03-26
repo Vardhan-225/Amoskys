@@ -108,7 +108,8 @@ def create_app():
     # - x_proto: HTTPS detection (X-Forwarded-Proto)
     # - x_host: Original host header (X-Forwarded-Host)
     # - x_prefix: URL prefix (X-Forwarded-Prefix)
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+    if not os.environ.get("AMOSKYS_NO_PROXY_FIX"):
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     # Configure structured logging (P1-004)
     from amoskys.common.logging import configure_logging, init_flask_logging

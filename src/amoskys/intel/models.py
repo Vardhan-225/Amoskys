@@ -236,6 +236,11 @@ class TelemetryEventView:
     attributes: Dict[str, str] = field(default_factory=dict)
     event_timestamp_ns: int = 0  # Raw probe-local detection time (nanoseconds)
 
+    # Probe identity + calibration
+    probe_name: Optional[str] = None  # Which probe originated this event
+    collection_agent: Optional[str] = None  # Which agent collected it
+    probe_precision: float = 1.0  # Probe's calibrated precision weight (0.0-1.0)
+
     # Typed event bodies
     security_event: Optional[Dict] = None  # auth_type, result, user, source_ip, etc.
     audit_event: Optional[Dict] = None  # audit_category, action, object_type, etc.

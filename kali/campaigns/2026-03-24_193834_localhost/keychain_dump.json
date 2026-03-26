@@ -1,0 +1,17 @@
+{
+  "technique_id": "keychain_dump",
+  "technique_name": "Dump Keychain items via 'security' CLI tool",
+  "mitre_id": "T1555.001",
+  "status": "error",
+  "timestamp": "2026-03-24T19:39:08.346505+00:00",
+  "duration_ms": 30003.914332999557,
+  "details": {},
+  "artifacts": [],
+  "cleanup_done": false,
+  "blue_team_probe": "KeychainAccessProbe",
+  "blue_team_agent": "InfostealerGuardAgent",
+  "bounty_eligible": false,
+  "bounty_category": "",
+  "bounty_estimate": "",
+  "error_message": "Command 'security dump-keychain -d 2>&1 | head -50' timed out after 30 seconds"
+}

@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""AMOSKYS Red Team CLI — offensive security validation.
+
+Usage:
+    ./amoskys-red list                                    # List all agents and techniques
+    ./amoskys-red attack <target> --agent <name>          # Run one agent
+    ./amoskys-red campaign <target> --all                 # Run all agents
+    ./amoskys-red campaign <target> --all --dry-run       # Dry run (no execution)
+    ./amoskys-red gaps <campaign_dir>                     # Gap analysis
+    ./amoskys-red report <campaign_dir>                   # Generate bounty report
+
+Options:
+    --dry-run         Simulate without executing (safe mode)
+    --agent <name>    Run specific agent (tcc_hunter, keychain, persistence, gatekeeper, xpc)
+    --all             Run all agents
+    --ssh-user <u>    SSH username for remote target
+    --ssh-key <path>  SSH key for remote target
+
+⚠ AUTHORIZED TESTING ONLY — requires explicit target scope
+"""
+
+import os
+import sys
+
+# Ensure we can import from the kali directory
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import argparse
+import logging
+
+from lib.campaign import Campaign, list_agents, load_all_agents
+from lib.gaps import print_gap_report, generate_bounty_report
+from lib.ai_campaign import AICampaign
+from lib.bounty import BountyHunter
+from lib.red_agents import run_offensive_pipeline
+
+
+def cmd_list(args):
+    """List all available agents and techniques."""
+    print(list_agents())
+
+
+def cmd_attack(args):
+    """Run a single agent against a target."""
+    campaign = Campaign(
+        target=args.target,
+        ssh_user=args.ssh_user or "",
+        ssh_key=args.ssh_key or "",
+    )
+    campaign.run_agent(args.agent, dry_run=args.dry_run)
+    campaign.print_summary()
+    campaign.save()
+
+
+def cmd_campaign(args):
+    """Run a full campaign (all agents or selected ones)."""
+    campaign = Campaign(
+        target=args.target,
+        ssh_user=args.ssh_user or "",
+        ssh_key=args.ssh_key or "",
+    )
+
+    if args.all:
+        campaign.run_all(dry_run=args.dry_run)
+    elif args.agents:
+        for agent_name in args.agents:
+            campaign.run_agent(agent_name, dry_run=args.dry_run)
+    else:
+        print("  ✗ Specify --all or --agents <name1> <name2> ...")
+        return
+
+    campaign.print_summary()
+    campaign.save()
+
+
+def cmd_gaps(args):
+    """Run gap analysis on a campaign."""
+    print_gap_report(args.campaign_dir)
+
+
+def cmd_report(args):
+    """Generate a bounty report from a campaign."""
+    generate_bounty_report(args.campaign_dir)
+
+
+def cmd_hunt(args):
+    """AI-powered autonomous attack — IGRIS thinks like a real attacker."""
+    ai = AICampaign(
+        target=args.target,
+        max_rounds=args.rounds,
+        model=args.model,
+        ssh_user=args.ssh_user or "",
+        ssh_key=args.ssh_key or "",
+    )
+    ai.run()
+
+
+def cmd_bounty(args):
+    """Smart bug bounty hunting — methodical recon + targeted scanning."""
+    hunter = BountyHunter(
+        domain=args.domain,
+        hackerone_user=args.h1_user or "",
+        test_email=args.test_email or "",
+    )
+    hunter.hunt(api_base=args.api_base or "")
+
+
+def cmd_pipeline(args):
+    """Run the full offensive agent pipeline — agents work in harmony."""
+    run_offensive_pipeline(args.target, phases=args.phases)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="AMOSKYS Red Team — Offensive Security Validation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="⚠ AUTHORIZED TESTING ONLY",
+    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+
+    # list
+    subparsers.add_parser("list", help="List all agents and techniques")
+
+    # attack
+    p_attack = subparsers.add_parser("attack", help="Run a single agent")
+    p_attack.add_argument("target", help="Target IP or hostname")
+    p_attack.add_argument("--agent", required=True, help="Agent name")
+    p_attack.add_argument("--dry-run", action="store_true", help="Simulate only")
+    p_attack.add_argument("--ssh-user", help="SSH username")
+    p_attack.add_argument("--ssh-key", help="SSH key path")
+
+    # campaign
+    p_campaign = subparsers.add_parser("campaign", help="Run a full campaign")
+    p_campaign.add_argument("target", help="Target IP or hostname")
+    p_campaign.add_argument("--all", action="store_true", help="Run all agents")
+    p_campaign.add_argument("--agents", nargs="+", help="Specific agents to run")
+    p_campaign.add_argument("--dry-run", action="store_true", help="Simulate only")
+    p_campaign.add_argument("--ssh-user", help="SSH username")
+    p_campaign.add_argument("--ssh-key", help="SSH key path")
+
+    # gaps
+    p_gaps = subparsers.add_parser("gaps", help="Gap analysis on campaign results")
+    p_gaps.add_argument("campaign_dir", help="Path to campaign directory")
+
+    # report
+    p_report = subparsers.add_parser("report", help="Generate bounty report")
+    p_report.add_argument("campaign_dir", help="Path to campaign directory")
+
+    # hunt — AI-powered autonomous attack
+    p_hunt = subparsers.add_parser("hunt", help="AI-powered autonomous attack (IGRIS)")
+    p_hunt.add_argument("target", help="Target IP or hostname")
+    p_hunt.add_argument("--rounds", type=int, default=6, help="Max AI reasoning rounds (default: 6)")
+    p_hunt.add_argument("--model", default="claude-sonnet-4-20250514", help="Claude model to use")
+    p_hunt.add_argument("--ssh-user", help="SSH username for remote target")
+    p_hunt.add_argument("--ssh-key", help="SSH key path for remote target")
+
+    # pipeline — Full offensive agent pipeline
+    p_pipeline = subparsers.add_parser("pipeline", help="Full offensive agent pipeline (6 agents in harmony)")
+    p_pipeline.add_argument("target", help="Target domain")
+    p_pipeline.add_argument("--phases", type=int, default=6, help="Number of phases to run (1-6)")
+
+    # bounty — Smart bug bounty hunting
+    p_bounty = subparsers.add_parser("bounty", help="Smart bug bounty hunting (recon + scan + report)")
+    p_bounty.add_argument("domain", help="Target domain (e.g., bitstamp.net)")
+    p_bounty.add_argument("--h1-user", help="HackerOne username (for request headers)")
+    p_bounty.add_argument("--test-email", help="Test account email (for request headers)")
+    p_bounty.add_argument("--api-base", help="API base URL (e.g., https://www.bitstamp.net/api)")
+
+    args = parser.parse_args()
+
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG, format="%(name)s: %(message)s")
+    else:
+        logging.basicConfig(level=logging.WARNING)
+
+    if args.command is None:
+        parser.print_help()
+        return
+
+    commands = {
+        "list": cmd_list,
+        "attack": cmd_attack,
+        "campaign": cmd_campaign,
+        "gaps": cmd_gaps,
+        "report": cmd_report,
+        "hunt": cmd_hunt,
+        "pipeline": cmd_pipeline,
+        "bounty": cmd_bounty,
+    }
+
+    cmd_func = commands.get(args.command)
+    if cmd_func:
+        cmd_func(args)
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

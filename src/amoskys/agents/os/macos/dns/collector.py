@@ -20,6 +20,7 @@ import re
 import subprocess
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -186,6 +187,7 @@ class MacOSDNSCollector:
         # Try query pattern
         match = self._QUERY_PATTERN.search(line)
         if match:
+            ts = _parse_log_timestamp(match.group(1))
             domain = match.group(2).rstrip(".")
             record_type = match.group(3).upper()
             is_reverse = domain.endswith(".in-addr.arpa") or domain.endswith(
@@ -193,13 +195,13 @@ class MacOSDNSCollector:
             )
 
             return DNSQuery(
-                timestamp=time.time(),
+                timestamp=ts,
                 domain=domain,
                 record_type=record_type,
                 is_reverse=is_reverse,
             )
 
-        # Try response pattern
+        # Try response pattern (no timestamp group — fall back to now)
         match = self._RESPONSE_PATTERN.search(line)
         if match:
             domain = match.group(1).rstrip(".")
@@ -350,6 +352,22 @@ class MacOSDNSCollector:
             caps["dns_config"] = "BLIND"
 
         return caps
+
+
+def _parse_log_timestamp(ts_str: str) -> float:
+    """Convert a Unified Logging timestamp string to epoch seconds.
+
+    Expected format: '2026-03-26 14:05:32.123456'
+    Falls back to time.time() if parsing fails.
+    """
+    try:
+        # Parse the timestamp assuming local time (macOS log show uses local tz)
+        dt = datetime.strptime(ts_str.strip(), "%Y-%m-%d %H:%M:%S.%f")
+        # Attach local timezone then convert to UTC epoch
+        dt = dt.replace(tzinfo=datetime.now(timezone.utc).astimezone().tzinfo)
+        return dt.timestamp()
+    except (ValueError, OSError):
+        return time.time()
 
 
 def _get_hostname() -> str:

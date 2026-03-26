@@ -11,40 +11,50 @@ from typing import Any, Dict, Optional
 
 
 class _ReadPool:
-    """Pool of read-only SQLite connections for parallel dashboard queries.
+    """Per-request read-only SQLite connections for dashboard queries.
 
-    WAL mode supports unlimited concurrent readers.  By giving each request
-    thread its own connection we eliminate the serialisation bottleneck that
-    a single ``_read_lock`` caused (posture endpoint: 1.6 s → <200 ms).
+    Opens a fresh connection per request and closes it immediately after.
+    This prevents WAL reader snapshots from blocking checkpointing — the
+    root cause of the 23GB WAL bloat that locked the pipeline.
+
+    Tradeoff: ~0.5ms overhead per connection open vs unbounded WAL growth.
+    With WAL mode + mmap, connection open is nearly free.
     """
 
     def __init__(self, db_path: str, size: int = 4):
-        self._pool: queue.Queue = queue.Queue()
-        for _ in range(size):
-            conn = sqlite3.connect(db_path, check_same_thread=False, timeout=5.0)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA query_only=ON")
-            conn.execute("PRAGMA cache_size=-16000")  # 16 MB per conn
-            conn.execute("PRAGMA temp_store=MEMORY")
-            conn.execute("PRAGMA mmap_size=268435456")  # 256MB mmap
-            conn.execute("PRAGMA busy_timeout=5000")  # match writer timeout
-            self._pool.put(conn)
+        self._db_path = db_path
+        self._last_checkpoint = time.monotonic()
 
     @contextmanager
     def connection(self):
-        conn = self._pool.get()
+        conn = sqlite3.connect(
+            self._db_path, check_same_thread=False, timeout=5.0
+        )
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA query_only=ON")
+        conn.execute("PRAGMA cache_size=-8000")  # 8 MB
+        conn.execute("PRAGMA temp_store=MEMORY")
+        conn.execute("PRAGMA mmap_size=268435456")  # 256MB mmap
+        conn.execute("PRAGMA busy_timeout=5000")
         try:
             yield conn
         finally:
-            self._pool.put(conn)
+            conn.close()  # Fully release — no WAL snapshot leak
+
+            # Periodic passive checkpoint every 60s
+            now = time.monotonic()
+            if now - self._last_checkpoint > 60:
+                self._last_checkpoint = now
+                try:
+                    ck = sqlite3.connect(self._db_path, timeout=2.0)
+                    ck.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    ck.close()
+                except Exception:
+                    pass
 
     def close(self):
-        while not self._pool.empty():
-            try:
-                self._pool.get_nowait().close()
-            except queue.Empty:
-                break
+        pass  # No persistent connections to close
 
 
 class _TTLCache:

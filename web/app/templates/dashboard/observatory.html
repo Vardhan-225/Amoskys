@@ -1,0 +1,72 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AMOSKYS — Observatory{% endblock %}
+
+{% block content %}
+<div class="consolidated-page">
+    <div class="tab-bar" id="obs-tabs">
+        <button class="tab-item active" data-tab="posture">Posture</button>
+        <button class="tab-item" data-tab="processes">Process</button>
+        <button class="tab-item" data-tab="network">Network</button>
+        <button class="tab-item" data-tab="dns">DNS</button>
+        <button class="tab-item" data-tab="fim">File Integrity</button>
+        <button class="tab-item" data-tab="persistence">Persistence</button>
+        <button class="tab-item" data-tab="auth">Auth</button>
+        <button class="tab-item" data-tab="peripherals">Peripherals</button>
+        <button class="tab-item" data-tab="observations">Observations</button>
+    </div>
+    <div class="tab-viewport">
+        <div class="tab-spinner" id="tab-spinner"><div class="neural-loading"></div></div>
+        <iframe class="tab-frame" id="tab-frame" title="Observatory content"></iframe>
+    </div>
+</div>
+
+<style>
+.consolidated-page { display: flex; flex-direction: column; height: calc(100vh - var(--header-height)); }
+.tab-viewport { flex: 1; position: relative; overflow: hidden; }
+.tab-frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; background: var(--bg-primary); }
+.tab-spinner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; }
+.tab-spinner.hidden { display: none; }
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+(function() {
+    const ROUTES = {
+        posture: '/dashboard/posture?embed=1',
+        processes: '/dashboard/processes?embed=1',
+        network: '/dashboard/network?embed=1',
+        dns: '/dashboard/dns?embed=1',
+        fim: '/dashboard/file-integrity?embed=1',
+        persistence: '/dashboard/persistence?embed=1',
+        auth: '/dashboard/auth?embed=1',
+        peripherals: '/dashboard/peripherals?embed=1',
+        observations: '/dashboard/observations?embed=1',
+    };
+    const frame = document.getElementById('tab-frame');
+    const spinner = document.getElementById('tab-spinner');
+    const tabs = document.querySelectorAll('#obs-tabs .tab-item');
+    let current = '';
+
+    function activate(tab) {
+        if (tab === current) return;
+
+        // Network has Leaflet maps that break inside iframes — navigate directly
+        if (tab === 'network') {
+            window.location.href = '/dashboard/network';
+            return;
+        }
+
+        current = tab;
+        tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+        spinner.classList.remove('hidden');
+        frame.onload = function() { spinner.classList.add('hidden'); };
+        frame.src = ROUTES[tab];
+        history.replaceState(null, '', '/dashboard/observatory#' + tab);
+    }
+
+    tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
+    const hash = window.location.hash.replace('#', '');
+    activate(ROUTES[hash] ? hash : 'posture');
+})();
+</script>
+{% endblock %}

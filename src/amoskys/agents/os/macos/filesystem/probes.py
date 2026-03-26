@@ -1,4 +1,4 @@
-"""macOS File Observatory Probes — 9 detection probes for filesystem integrity.
+"""macOS File Observatory Probes — 10 detection probes for filesystem integrity.
 
 Each probe consumes FileEntry data from MacOSFileCollector via shared_data.
 Uses baseline-diff pattern: stores previous hashes to detect new, modified,
@@ -14,18 +14,23 @@ Probes:
     7. HiddenFileProbe — new hidden files in sensitive locations
     8. DownloadsMonitorProbe — new files in ~/Downloads
     9. AirDropFileArrivalProbe — AirDrop-delivered files with quarantine xattr
+   10. LogTamperingProbe — log truncation, deletion, and permission changes
 
-MITRE: T1565, T1548.001, T1070, T1505.003, T1553.001, T1562.001, T1564.001, T1204,
-       T1105, T1204.002
+MITRE: T1565, T1548.001, T1070, T1070.002, T1505.003, T1553.001, T1562.001,
+       T1564.001, T1204, T1105, T1204.002
 """
 
 from __future__ import annotations
 
+import glob as _glob
 import logging
 import os
+import sqlite3
+import stat
 import subprocess
+import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from amoskys.agents.common.probes import (
     MicroProbe,
@@ -36,6 +41,77 @@ from amoskys.agents.common.probes import (
 from amoskys.agents.common.process_resolver import resolve_file_owner_process
 
 logger = logging.getLogger(__name__)
+
+# Default base directory for baseline databases
+_BASELINE_DB_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..", "data", "baselines"
+)
+
+
+class BaselineStore:
+    """SQLite-backed baseline persistence for _BaselineDiffProbe.
+
+    Stores path -> content_hash mappings so baselines survive restarts.
+    Without this, malware planted before a restart is silently absorbed
+    as baseline and goes undetected.
+    """
+
+    _SCHEMA = """
+        CREATE TABLE IF NOT EXISTS baseline (
+            path TEXT PRIMARY KEY,
+            content_hash TEXT NOT NULL,
+            category TEXT NOT NULL,
+            first_seen REAL NOT NULL,
+            last_seen REAL NOT NULL
+        )
+    """
+
+    def __init__(self, db_path: str) -> None:
+        self._db_path = db_path
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self._conn = sqlite3.connect(db_path, timeout=5.0)
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute(self._SCHEMA)
+        self._conn.commit()
+
+    def load(self) -> Dict[str, str]:
+        """Load persisted baseline into memory. Returns path -> content_hash."""
+        rows = self._conn.execute("SELECT path, content_hash FROM baseline").fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def has_baseline(self) -> bool:
+        """Return True if the DB has any baseline rows (not first-ever run)."""
+        row = self._conn.execute("SELECT COUNT(*) FROM baseline").fetchone()
+        return row[0] > 0
+
+    def persist(self, entries: Dict[str, tuple]) -> None:
+        """Persist current baseline to DB.
+
+        Args:
+            entries: Dict of path -> (content_hash, category) tuples.
+        """
+        now = time.time()
+        # Load existing first_seen times so we preserve them
+        existing = {}
+        for row in self._conn.execute("SELECT path, first_seen FROM baseline").fetchall():
+            existing[row[0]] = row[1]
+
+        self._conn.execute("DELETE FROM baseline")
+        for path, (content_hash, category) in entries.items():
+            first_seen = existing.get(path, now)
+            self._conn.execute(
+                "INSERT INTO baseline (path, content_hash, category, first_seen, last_seen) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (path, content_hash, category, first_seen, now),
+            )
+        self._conn.commit()
+
+    def close(self) -> None:
+        """Close the database connection."""
+        try:
+            self._conn.close()
+        except Exception:
+            pass
 
 # Shared constant: executable file extensions used by QuarantineBypassProbe
 # and AirDropFileArrivalProbe to avoid duplication.
@@ -80,6 +156,10 @@ class _BaselineDiffProbe(MicroProbe):
         - NEW: path not in baseline
         - MODIFIED: path exists but hash changed
         - REMOVED: path was in baseline but not in current scan
+
+    Baseline is persisted to SQLite so that malware planted before a
+    restart is NOT silently absorbed. Only the very first run (empty DB)
+    absorbs silently.
     """
 
     _target_paths: List[str] = []  # Override: specific paths to watch
@@ -87,13 +167,26 @@ class _BaselineDiffProbe(MicroProbe):
     platforms = ["darwin"]
     requires_fields = ["files"]
 
-    def __init__(self) -> None:
+    def __init__(self, baseline_db_path: Optional[str] = None) -> None:
         super().__init__()
-        self._baseline: Dict[str, str] = {}  # path -> sha256
+        # Resolve DB path: explicit arg, or derive from probe name
+        if baseline_db_path is None:
+            db_dir = os.path.normpath(_BASELINE_DB_DIR)
+            baseline_db_path = os.path.join(db_dir, f"filesystem_{self.name}.db")
+
+        self._store = BaselineStore(baseline_db_path)
+
+        # Load persisted baseline — if DB has rows, this is NOT first run
+        if self._store.has_baseline():
+            self._baseline: Dict[str, str] = self._store.load()
+            self._first_run = False
+        else:
+            self._baseline = {}
+            self._first_run = True
+
         self._baseline_mtime: Dict[str, float] = (
             {}
-        )  # path -> mtime (timestomping detection)
-        self._first_run = True
+        )  # path -> mtime (timestomping detection, memory-only)
 
     def _matches(self, entry: Any) -> bool:
         """Check if a FileEntry matches this probe's target scope."""
@@ -116,9 +209,11 @@ class _BaselineDiffProbe(MicroProbe):
                 current[entry.path] = entry
 
         if self._first_run:
+            # Truly first-ever run (empty DB) — absorb silently
             self._baseline = {path: e.sha256 for path, e in current.items()}
             self._baseline_mtime = {path: e.mtime for path, e in current.items()}
             self._first_run = False
+            self._persist_baseline(current)
             return events
 
         # Detect NEW files
@@ -183,11 +278,24 @@ class _BaselineDiffProbe(MicroProbe):
                     )
                 )
 
-        # Update baseline (hash + mtime for timestomping detection)
+        # Update baseline in memory and persist to DB
         self._baseline = {path: e.sha256 for path, e in current.items()}
         self._baseline_mtime = {path: e.mtime for path, e in current.items()}
+        self._persist_baseline(current)
 
         return events
+
+    def _persist_baseline(self, current: Dict[str, Any]) -> None:
+        """Persist current baseline entries to the SQLite store."""
+        try:
+            # Use "filesystem" as category since file entries don't have a category field
+            entries = {
+                path: (entry.sha256, getattr(entry, "category", "file"))
+                for path, entry in current.items()
+            }
+            self._store.persist(entries)
+        except Exception:
+            logger.warning("%s: failed to persist baseline to DB", self.name, exc_info=True)
 
     def _make_file_event(
         self, change_type: str, entry: Any, severity: Severity
@@ -249,7 +357,24 @@ class CriticalFileProbe(_BaselineDiffProbe):
         "/etc/fstab",
         "/etc/newsyslog.conf",
         "/etc/syslog.conf",
+        # System-wide shell profiles
+        "/etc/profile",
+        "/etc/zshrc",
+        "/etc/zshenv",
+        "/etc/bashrc",
     ]
+
+    def __init__(self, baseline_db_path: Optional[str] = None) -> None:
+        # Expand user-home shell profile paths before calling super
+        home = str(Path.home())
+        self._target_paths = list(self.__class__._target_paths) + [
+            os.path.join(home, ".zshrc"),
+            os.path.join(home, ".bashrc"),
+            os.path.join(home, ".bash_profile"),
+            os.path.join(home, ".zprofile"),
+            os.path.join(home, ".zshenv"),
+        ]
+        super().__init__(baseline_db_path)
 
     def _make_file_event(
         self, change_type: str, entry: Any, severity: Severity
@@ -1043,6 +1168,307 @@ class AirDropFileArrivalProbe(MicroProbe):
 
 
 # =============================================================================
+# 10. LogTamperingProbe
+# =============================================================================
+
+
+class _LogBaselineStore:
+    """SQLite-backed state store for LogTamperingProbe.
+
+    Tracks per-file size, mtime, and permissions so that truncation,
+    deletion, and permission changes survive agent restarts.
+    """
+
+    _SCHEMA = """
+        CREATE TABLE IF NOT EXISTS log_baseline (
+            path TEXT PRIMARY KEY,
+            size INTEGER NOT NULL,
+            mtime REAL NOT NULL,
+            permissions TEXT NOT NULL,
+            first_seen REAL NOT NULL,
+            last_seen REAL NOT NULL
+        )
+    """
+
+    def __init__(self, db_path: str) -> None:
+        self._db_path = db_path
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self._conn = sqlite3.connect(db_path, timeout=5.0)
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute(self._SCHEMA)
+        self._conn.commit()
+
+    def load(self) -> Dict[str, Tuple[int, float, str]]:
+        """Return path -> (size, mtime, permissions) for all tracked files."""
+        rows = self._conn.execute(
+            "SELECT path, size, mtime, permissions FROM log_baseline"
+        ).fetchall()
+        return {row[0]: (row[1], row[2], row[3]) for row in rows}
+
+    def has_baseline(self) -> bool:
+        row = self._conn.execute("SELECT COUNT(*) FROM log_baseline").fetchone()
+        return row[0] > 0
+
+    def persist(self, entries: Dict[str, Tuple[int, float, str]]) -> None:
+        """Persist current snapshot. entries: path -> (size, mtime, perms)."""
+        now = time.time()
+        existing_first: Dict[str, float] = {}
+        for row in self._conn.execute("SELECT path, first_seen FROM log_baseline").fetchall():
+            existing_first[row[0]] = row[1]
+
+        self._conn.execute("DELETE FROM log_baseline")
+        for path, (size, mtime, perms) in entries.items():
+            first_seen = existing_first.get(path, now)
+            self._conn.execute(
+                "INSERT INTO log_baseline (path, size, mtime, permissions, first_seen, last_seen) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (path, size, mtime, perms, first_seen, now),
+            )
+        self._conn.commit()
+
+    def close(self) -> None:
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+
+
+class LogTamperingProbe(MicroProbe):
+    """Detects log file tampering — truncation, deletion, and permission changes.
+
+    Monitors critical macOS log files and directories for signs of an attacker
+    covering their tracks. On each scan cycle the probe records file size,
+    mtime, and permissions. On subsequent scans it compares against the
+    previous state and flags:
+
+        - Size decrease  → log truncation (HIGH)
+        - File gone      → log deletion   (HIGH)
+        - Perms changed  → suspicious     (MEDIUM)
+
+    State is persisted to SQLite via _LogBaselineStore so that detection
+    survives agent restarts.
+
+    MITRE: T1070.002 (Indicator Removal: Clear Linux or Mac System Logs)
+    """
+
+    name = "macos_log_tampering"
+    description = "Detects log file truncation, deletion, and permission changes"
+    mitre_techniques = ["T1070.002"]
+    mitre_tactics = ["defense-evasion"]
+    platforms = ["darwin"]
+    scan_interval = 30.0
+
+    # Static monitored paths (files)
+    _WATCHED_FILES = [
+        "/var/log/system.log",
+        "/var/log/install.log",
+        "/var/log/wifi.log",
+    ]
+
+    # Directories whose *.log children are monitored
+    _WATCHED_LOG_DIRS = [
+        "/var/log",
+    ]
+
+    # Directories monitored recursively
+    _WATCHED_RECURSIVE_DIRS = [
+        "/private/var/log/asl",
+    ]
+
+    # Does not require shared_data["files"] — the probe stats the
+    # filesystem directly so it works regardless of collector scope.
+    requires_fields: List[str] = []
+
+    def __init__(self, baseline_db_path: Optional[str] = None) -> None:
+        super().__init__()
+        if baseline_db_path is None:
+            db_dir = os.path.normpath(_BASELINE_DB_DIR)
+            baseline_db_path = os.path.join(db_dir, f"filesystem_{self.name}.db")
+
+        self._store = _LogBaselineStore(baseline_db_path)
+
+        if self._store.has_baseline():
+            self._baseline: Dict[str, Tuple[int, float, str]] = self._store.load()
+            self._first_run = False
+        else:
+            self._baseline = {}
+            self._first_run = True
+
+        # Expand ~/Library/Logs at init time
+        self._user_logs_dir = os.path.join(str(Path.home()), "Library", "Logs")
+
+    # ------------------------------------------------------------------
+    # Path enumeration
+    # ------------------------------------------------------------------
+
+    def _enumerate_log_paths(self) -> Set[str]:
+        """Return the current set of log file paths to monitor."""
+        paths: Set[str] = set(self._WATCHED_FILES)
+        self._collect_glob_dirs(paths, self._WATCHED_LOG_DIRS)
+        self._collect_recursive_dirs(paths, self._WATCHED_RECURSIVE_DIRS)
+        self._collect_glob_dirs(paths, [self._user_logs_dir])
+        return paths
+
+    @staticmethod
+    def _collect_glob_dirs(paths: Set[str], dirs: List[str]) -> None:
+        """Add *.log files from each directory (non-recursive)."""
+        for d in dirs:
+            if os.path.isdir(d):
+                paths.update(_glob.glob(os.path.join(d, "*.log")))
+
+    @staticmethod
+    def _collect_recursive_dirs(paths: Set[str], dirs: List[str]) -> None:
+        """Add all files from each directory (recursive)."""
+        for d in dirs:
+            if os.path.isdir(d):
+                for root, _dirs, files in os.walk(d):
+                    for f in files:
+                        paths.add(os.path.join(root, f))
+
+    # ------------------------------------------------------------------
+    # File stat helper
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _stat_file(path: str) -> Optional[Tuple[int, float, str]]:
+        """Return (size, mtime, octal_permissions) or None if inaccessible."""
+        try:
+            st = os.stat(path)
+            perms = oct(stat.S_IMODE(st.st_mode))
+            return (st.st_size, st.st_mtime, perms)
+        except OSError:
+            return None
+
+    # ------------------------------------------------------------------
+    # Event builders
+    # ------------------------------------------------------------------
+
+    def _make_truncation_event(
+        self, path: str, prev_size: int, cur_size: int
+    ) -> TelemetryEvent:
+        return self._create_event(
+            event_type="log_tampering_detected",
+            severity=Severity.HIGH,
+            data={
+                "detection_source": "filesystem_monitor",
+                "category": "log_tampering_detected",
+                "path": path,
+                "file_name": os.path.basename(path),
+                "file_extension": os.path.splitext(path)[1],
+                "change_type": "truncation",
+                "previous_size": prev_size,
+                "current_size": cur_size,
+                "size_delta": cur_size - prev_size,
+                "detail": (
+                    f"Log file shrank from {prev_size} to "
+                    f"{cur_size} bytes ({prev_size - cur_size} bytes removed)"
+                ),
+            },
+            confidence=0.92,
+        )
+
+    def _make_permission_event(
+        self, path: str, prev_perms: str, cur_perms: str
+    ) -> TelemetryEvent:
+        return self._create_event(
+            event_type="log_tampering_detected",
+            severity=Severity.MEDIUM,
+            data={
+                "detection_source": "filesystem_monitor",
+                "category": "log_tampering_detected",
+                "path": path,
+                "file_name": os.path.basename(path),
+                "file_extension": os.path.splitext(path)[1],
+                "change_type": "permission_change",
+                "previous_permissions": prev_perms,
+                "current_permissions": cur_perms,
+                "detail": (
+                    f"Log file permissions changed from "
+                    f"{prev_perms} to {cur_perms}"
+                ),
+            },
+            confidence=0.80,
+        )
+
+    def _make_deletion_event(self, path: str, prev_size: int) -> TelemetryEvent:
+        return self._create_event(
+            event_type="log_tampering_detected",
+            severity=Severity.HIGH,
+            data={
+                "detection_source": "filesystem_monitor",
+                "category": "log_tampering_detected",
+                "path": path,
+                "file_name": os.path.basename(path),
+                "file_extension": os.path.splitext(path)[1],
+                "change_type": "deletion",
+                "previous_size": prev_size,
+                "detail": f"Log file deleted: {path}",
+            },
+            confidence=0.95,
+        )
+
+    # ------------------------------------------------------------------
+    # Core scan
+    # ------------------------------------------------------------------
+
+    def _snapshot_current(self) -> Dict[str, Tuple[int, float, str]]:
+        """Stat all monitored log paths, return those that exist."""
+        current: Dict[str, Tuple[int, float, str]] = {}
+        for path in self._enumerate_log_paths():
+            info = self._stat_file(path)
+            if info is not None:
+                current[path] = info
+        return current
+
+    def scan(self, context: ProbeContext) -> List[TelemetryEvent]:
+        events: List[TelemetryEvent] = []
+        current = self._snapshot_current()
+
+        # First-ever run — absorb silently, persist, return
+        if self._first_run:
+            self._baseline = dict(current)
+            self._first_run = False
+            self._persist(current)
+            return events
+
+        # Detect TRUNCATION and PERMISSION CHANGE on existing files
+        for path, (cur_size, _cur_mtime, cur_perms) in current.items():
+            if path not in self._baseline:
+                continue
+            prev_size, _prev_mtime, prev_perms = self._baseline[path]
+            if cur_size < prev_size:
+                events.append(self._make_truncation_event(path, prev_size, cur_size))
+            if cur_perms != prev_perms:
+                events.append(self._make_permission_event(path, prev_perms, cur_perms))
+
+        # Detect DELETION (was in baseline, now gone)
+        for path in self._baseline:
+            if path not in current and not os.path.exists(path):
+                prev_size = self._baseline[path][0]
+                events.append(self._make_deletion_event(path, prev_size))
+
+        # Update baseline
+        self._baseline = dict(current)
+        self._persist(current)
+
+        return events
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def _persist(self, current: Dict[str, Tuple[int, float, str]]) -> None:
+        try:
+            self._store.persist(current)
+        except Exception:
+            logger.warning(
+                "%s: failed to persist log baseline to DB",
+                self.name,
+                exc_info=True,
+            )
+
+
+# =============================================================================
 # Factory
 # =============================================================================
 
@@ -1059,4 +1485,5 @@ def create_filesystem_probes() -> List[MicroProbe]:
         HiddenFileProbe(),
         DownloadsMonitorProbe(),
         AirDropFileArrivalProbe(),
+        LogTamperingProbe(),
     ]

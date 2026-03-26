@@ -646,7 +646,7 @@ class TimelineReplay {
                 indicatorHtml +
                 mitreHtml +
                 '<div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid rgba(0,217,255,0.15);display:flex;gap:0.5rem;flex-wrap:wrap;">' +
-                    (event.id ? '<a href="/dashboard/evidence-chain?event_id=' + event.id + '" style="color:#00ff88;font-size:0.78rem;text-decoration:none;padding:0.3rem 0.6rem;border:1px solid rgba(0,255,136,0.3);border-radius:6px;">Evidence Chain</a>' : '') +
+                    (event.id ? '<a href="/dashboard/threats#correlation" style="color:#00ff88;font-size:0.78rem;text-decoration:none;padding:0.3rem 0.6rem;border:1px solid rgba(0,255,136,0.3);border-radius:6px;">Correlate</a>' : '') +
                     (event.id ? '<a href="/dashboard/hunt?event_id=' + event.id + '" style="color:var(--neural-primary);font-size:0.78rem;text-decoration:none;padding:0.3rem 0.6rem;border:1px solid rgba(0,217,255,0.3);border-radius:6px;">Hunt Related</a>' : '') +
                     '<button class="neural-button" style="font-size:0.72rem;padding:0.3rem 0.6rem;cursor:pointer;" data-action="create-incident-from-timeline" data-event-idx="' + index + '">Create Incident</button>' +
                 '</div>' +

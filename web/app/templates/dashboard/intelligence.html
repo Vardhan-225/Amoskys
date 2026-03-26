@@ -1,0 +1,1404 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AMOSKYS — Intelligence{% endblock %}
+
+{% block content %}
+<div class="intel-page" style="padding:1.5rem 2rem;">
+
+    <!-- ── Tab Navigation ─────────────────────────────────── -->
+    <div class="tab-bar" id="intel-tabs" style="margin:-1.5rem -2rem 1.25rem -2rem;">
+        <button class="tab-item active" data-tab="soma">SOMA Brain</button>
+        <button class="tab-item" data-tab="reliability">Agent Reliability</button>
+        <button class="tab-item" data-tab="calibration">Probe Calibration</button>
+        <button class="tab-item" data-tab="inads">INADS &amp; MeshBus</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB 1: SOMA Brain
+         ═══════════════════════════════════════════════════════ -->
+    <div class="tab-panel active" id="panel-soma">
+
+        <!-- Brain Status Hero -->
+        <div class="soma-hero-grid">
+            <!-- Brain Status Card -->
+            <div class="neural-card soma-status-card">
+                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+                    <div class="brain-icon" id="brain-icon">&#x1F9E0;</div>
+                    <div>
+                        <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Brain Status</div>
+                        <div id="brain-status" style="font-size:1.3rem;font-weight:800;color:var(--text-muted);">Loading...</div>
+                    </div>
+                </div>
+                <div style="font-size:0.75rem;color:var(--text-muted);">
+                    <div style="margin-bottom:0.3rem;">Last Training: <span id="brain-last-train" style="color:var(--text-secondary);">--</span></div>
+                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+                        <span class="model-badge" id="badge-if">IF: --</span>
+                        <span class="model-badge" id="badge-gbc">GBC: --</span>
+                        <span class="model-badge" id="badge-emb">Embedder: --</span>
+                    </div>
+                </div>
+                <button class="neural-button" id="train-btn" style="margin-top:1rem;width:100%;">
+                    <span style="font-size:0.85rem;">&#x26A1;</span> Train Now
+                </button>
+            </div>
+
+            <!-- Observation Donut -->
+            <div class="neural-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5rem;">Observation Breakdown</div>
+                <div style="position:relative;width:180px;height:180px;">
+                    <svg viewBox="0 0 120 120" style="width:100%;height:100%;transform:rotate(-90deg);">
+                        <circle cx="60" cy="60" r="48" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="14"/>
+                        <circle id="donut-normal" cx="60" cy="60" r="48" fill="none" stroke="#00ff88" stroke-width="14"
+                                stroke-dasharray="0 301.6" stroke-linecap="butt" style="transition:stroke-dasharray 1.2s ease;"/>
+                        <circle id="donut-anomaly" cx="60" cy="60" r="48" fill="none" stroke="#ff3366" stroke-width="14"
+                                stroke-dasharray="0 301.6" stroke-linecap="butt" style="transition:stroke-dasharray 1.2s ease;"/>
+                        <circle id="donut-learning" cx="60" cy="60" r="48" fill="none" stroke="#ffaa00" stroke-width="14"
+                                stroke-dasharray="0 301.6" stroke-linecap="butt" style="transition:stroke-dasharray 1.2s ease;"/>
+                    </svg>
+                    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
+                        <div id="donut-total" style="font-size:2rem;font-weight:800;color:var(--text-primary);line-height:1;">--</div>
+                        <div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">total</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:1rem;margin-top:0.75rem;font-size:0.75rem;">
+                    <div style="display:flex;align-items:center;gap:0.3rem;">
+                        <span style="width:8px;height:8px;border-radius:50%;background:#00ff88;display:inline-block;"></span>
+                        Normal <span id="obs-normal-count" style="color:var(--text-muted);font-weight:600;">0</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.3rem;">
+                        <span style="width:8px;height:8px;border-radius:50%;background:#ff3366;display:inline-block;"></span>
+                        Anomaly <span id="obs-anomaly-count" style="color:var(--text-muted);font-weight:600;">0</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.3rem;">
+                        <span style="width:8px;height:8px;border-radius:50%;background:#ffaa00;display:inline-block;"></span>
+                        Learning <span id="obs-learning-count" style="color:var(--text-muted);font-weight:600;">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Training Metrics -->
+            <div class="neural-card">
+                <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.75rem;">Training Metrics</div>
+                <div class="train-metric-grid">
+                    <div class="train-metric">
+                        <div class="train-metric-label">IF Contamination</div>
+                        <div class="train-metric-val" id="tm-if-contam">--</div>
+                    </div>
+                    <div class="train-metric">
+                        <div class="train-metric-label">IF Samples</div>
+                        <div class="train-metric-val" id="tm-if-samples">--</div>
+                    </div>
+                    <div class="train-metric">
+                        <div class="train-metric-label">GBC Accuracy</div>
+                        <div class="train-metric-val" id="tm-gbc-acc">--</div>
+                    </div>
+                    <div class="train-metric">
+                        <div class="train-metric-label">GBC Status</div>
+                        <div class="train-metric-val" id="tm-gbc-status">--</div>
+                    </div>
+                    <div class="train-metric">
+                        <div class="train-metric-label">Anomaly Rate</div>
+                        <div class="train-metric-val" id="tm-anomaly-rate">--</div>
+                    </div>
+                    <div class="train-metric">
+                        <div class="train-metric-label">Calibrator Adj.</div>
+                        <div class="train-metric-val" id="tm-cal-adj">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Anomalies & Normal Tables -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem;">
+            <!-- Top 10 Anomalies -->
+            <div class="neural-card" style="padding:0;overflow:hidden;">
+                <div style="padding:0.75rem 1rem;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;">
+                    <h3 style="font-size:0.85rem;margin:0;color:#ff3366;">Top 10 Anomalies</h3>
+                    <span style="font-size:0.65rem;color:var(--text-muted);">by risk score</span>
+                </div>
+                <div style="overflow-x:auto;">
+                <table class="intel-table">
+                    <thead>
+                        <tr>
+                            <th>Process</th>
+                            <th>Category</th>
+                            <th style="width:70px;">Risk</th>
+                            <th style="width:60px;">Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="anomalies-body">
+                        <tr><td colspan="4" class="empty-msg">Loading...</td></tr>
+                    </tbody>
+                </table>
+                </div>
+            </div>
+
+            <!-- Top 10 Normal -->
+            <div class="neural-card" style="padding:0;overflow:hidden;">
+                <div style="padding:0.75rem 1rem;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;">
+                    <h3 style="font-size:0.85rem;margin:0;color:#00ff88;">Top 10 Normal Patterns</h3>
+                    <span style="font-size:0.65rem;color:var(--text-muted);">by frequency</span>
+                </div>
+                <div style="overflow-x:auto;">
+                <table class="intel-table">
+                    <thead>
+                        <tr>
+                            <th>Process</th>
+                            <th>Category</th>
+                            <th style="width:70px;">Risk</th>
+                            <th style="width:60px;">Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="normal-body">
+                        <tr><td colspan="4" class="empty-msg">Loading...</td></tr>
+                    </tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB 2: Agent Reliability
+         ═══════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-reliability">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <div>
+                <h2 style="font-size:1.1rem;margin:0;color:var(--text-primary);">Agent Reliability Scores</h2>
+                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem;">Bayesian reliability tracking via Beta-Binomial model (alpha / (alpha + beta))</p>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;">Total Observations</div>
+                <div id="rel-total-obs" style="font-size:1.8rem;font-weight:800;color:var(--neural-primary);">--</div>
+            </div>
+        </div>
+
+        <div id="agent-reliability-grid" class="agent-reliability-grid">
+            <div class="neural-card" style="grid-column:1/-1;text-align:center;padding:2rem;">
+                <div class="neural-loading"></div>
+                <div style="color:var(--text-muted);font-size:0.8rem;margin-top:0.5rem;">Loading agent reliability data...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB 3: Probe Calibration
+         ═══════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-calibration">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <div>
+                <h2 style="font-size:1.1rem;margin:0;color:var(--text-primary);">Probe Calibration Matrix</h2>
+                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem;">All probes with Bayesian precision scores — grouped by owning agent</p>
+            </div>
+            <div style="display:flex;gap:0.75rem;align-items:center;">
+                <button class="sort-btn active" data-sort="agent" id="sort-agent">Group by Agent</button>
+                <button class="sort-btn" data-sort="reliability" id="sort-reliability">Sort by Reliability</button>
+                <button class="sort-btn" data-sort="observations" id="sort-observations">Sort by Observations</button>
+            </div>
+        </div>
+
+        <!-- Probe Summary Stats -->
+        <div class="probe-summary-row">
+            <div class="probe-summary-stat">
+                <div class="probe-summary-val" id="ps-total">--</div>
+                <div class="probe-summary-label">Total Probes</div>
+            </div>
+            <div class="probe-summary-stat">
+                <div class="probe-summary-val" id="ps-trusted" style="color:#00ff88;">--</div>
+                <div class="probe-summary-label">Trusted</div>
+            </div>
+            <div class="probe-summary-stat">
+                <div class="probe-summary-val" id="ps-learning" style="color:#ffaa00;">--</div>
+                <div class="probe-summary-label">Learning</div>
+            </div>
+            <div class="probe-summary-stat">
+                <div class="probe-summary-val" id="ps-noisy" style="color:#ff3366;">--</div>
+                <div class="probe-summary-label">Noisy</div>
+            </div>
+        </div>
+
+        <div id="probe-calibration-container">
+            <div class="neural-card" style="text-align:center;padding:2rem;">
+                <div class="neural-loading"></div>
+                <div style="color:var(--text-muted);font-size:0.8rem;margin-top:0.5rem;">Loading probe calibration data...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TAB 4: INADS & MeshBus
+         ═══════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-inads">
+
+        <!-- ── Section 1: Engine Status ────────────────────────── -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <div>
+                <h2 id="inads-title" style="font-size:1.1rem;margin:0;color:var(--text-primary);">INADS — Intrusion &amp; Anomaly Detection System v3.0</h2>
+                <p id="inads-subtitle" style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem;">6 detection clusters, multi-perspective ML scoring engine</p>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;">Engine Status</div>
+                <div id="inads-engine-badge" style="font-size:1rem;font-weight:700;color:var(--text-muted);">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Cluster Cards 3x2 Grid -->
+        <div id="inads-cluster-grid" class="inads-cluster-grid">
+            <div class="neural-card" style="grid-column:1/-1;text-align:center;padding:2rem;">
+                <div class="neural-loading"></div>
+                <div style="color:var(--text-muted);font-size:0.8rem;margin-top:0.5rem;">Loading cluster data...</div>
+            </div>
+        </div>
+
+        <!-- Cluster Summary -->
+        <div id="inads-cluster-summary" style="margin-top:0.5rem;padding:0.5rem 0.75rem;border-radius:6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);font-size:0.78rem;color:var(--text-muted);display:none;">
+        </div>
+
+        <!-- ── Section 2: Device Risk Assessment ───────────────── -->
+        <div class="inads-risk-section" style="margin-top:1.5rem;">
+            <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.75rem;">Device Risk Assessment</div>
+            <div class="inads-risk-hero">
+                <!-- Risk Gauge -->
+                <div class="neural-card inads-risk-card">
+                    <div style="position:relative;width:180px;height:180px;margin:0 auto;">
+                        <svg viewBox="0 0 120 120" style="width:100%;height:100%;">
+                            <!-- Background arc (270 degrees, gap at bottom) -->
+                            <path d="M 60 110 A 50 50 0 1 1 60 10 A 50 50 0 0 1 97.98 85"
+                                  fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8" stroke-linecap="round"/>
+                            <!-- Score arc -->
+                            <circle id="inads-arc" cx="60" cy="60" r="50" fill="none" stroke="#666" stroke-width="8"
+                                    stroke-dasharray="0 314" stroke-linecap="round"
+                                    transform="rotate(-90 60 60)" style="transition:all 1.2s ease;"/>
+                        </svg>
+                        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
+                            <div id="inads-score" style="font-size:2.8rem;font-weight:800;line-height:1;color:#666;">--</div>
+                            <div id="inads-level" style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">loading</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risk Details -->
+                <div class="neural-card" style="flex:1;">
+                    <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.75rem;">Risk Breakdown</div>
+                    <div id="inads-details">
+                        <div style="color:var(--text-muted);font-size:0.8rem;">Loading risk data...</div>
+                    </div>
+                </div>
+
+                <!-- Reason Tags -->
+                <div class="neural-card" style="flex:1;">
+                    <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.75rem;">Why This Score?</div>
+                    <div id="inads-tags">
+                        <div style="color:var(--text-muted);font-size:0.8rem;">Loading reason tags...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Section 3: MeshBus Activity ─────────────────────── -->
+        <div class="neural-card" style="margin-top:1.5rem;padding:0;overflow:hidden;">
+            <div style="padding:0.75rem 1rem;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h3 style="font-size:0.85rem;margin:0;color:var(--neural-primary);">MeshBus Activity</h3>
+                    <span style="font-size:0.65rem;color:var(--text-muted);">Inter-agent actions and responses</span>
+                </div>
+                <span id="mesh-count" style="font-size:0.7rem;color:var(--text-muted);">0 events</span>
+            </div>
+            <div id="mesh-timeline" style="padding:0.75rem 1rem;">
+                <div style="color:var(--text-muted);font-size:0.8rem;text-align:center;padding:1rem;">Loading MeshBus events...</div>
+            </div>
+        </div>
+
+        <!-- ── Section 4: Platform Stats ───────────────────────── -->
+        <div style="margin-top:1.5rem;">
+            <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.75rem;">Platform Overview</div>
+            <div class="inads-stats-row">
+                <div class="neural-card" style="text-align:center;flex:0 0 140px;">
+                    <div id="stat-total-probes" style="font-size:2.2rem;font-weight:800;color:var(--neural-primary);">--</div>
+                    <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;">Total Probes</div>
+                </div>
+                <div class="neural-card" style="text-align:center;flex:0 0 140px;">
+                    <div id="stat-total-agents" style="font-size:2.2rem;font-weight:800;color:var(--neural-primary);">--</div>
+                    <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;">Total Agents</div>
+                </div>
+                <div class="neural-card" style="flex:1;">
+                    <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5rem;">Agent Fleet</div>
+                    <div id="stat-agent-list" style="display:flex;flex-wrap:wrap;gap:0.3rem;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     STYLES
+     ═══════════════════════════════════════════════════════════════ -->
+<style>
+/* ── Page Layout ────────────────────────────────────────── */
+.intel-page { max-width:1440px; margin:0 auto; }
+
+/* ── SOMA Hero Grid ─────────────────────────────────────── */
+.soma-hero-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr 1fr;
+    gap: 1rem;
+    align-items: stretch;
+}
+@media (max-width: 1100px) { .soma-hero-grid { grid-template-columns: 1fr; } }
+
+.soma-status-card { display:flex; flex-direction:column; }
+
+.brain-icon {
+    width: 48px; height: 48px; border-radius: 12px;
+    background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+    transition: all 0.3s;
+}
+.brain-icon.trained { background:rgba(0,255,136,0.1); border-color:rgba(0,255,136,0.3); }
+.brain-icon.untrained { background:rgba(255,170,0,0.1); border-color:rgba(255,170,0,0.3); }
+
+.model-badge {
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-muted);
+    font-family: monospace;
+}
+.model-badge.available { background:rgba(0,255,136,0.08); border-color:rgba(0,255,136,0.2); color:#00ff88; }
+.model-badge.missing { background:rgba(255,51,102,0.08); border-color:rgba(255,51,102,0.15); color:#ff3366; }
+
+/* ── Training Metrics ───────────────────────────────────── */
+.train-metric-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+}
+.train-metric {
+    padding: 0.6rem;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+}
+.train-metric-label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.train-metric-val {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-top: 0.15rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Intel Tables (shared) ──────────────────────────────── */
+.intel-table { width:100%; border-collapse:collapse; font-size:0.8rem; }
+.intel-table thead tr { background:rgba(255,255,255,0.03); }
+.intel-table th {
+    padding:0.5rem 0.75rem; color:var(--text-muted); font-weight:500;
+    text-align:left; font-size:0.7rem; text-transform:uppercase;
+    letter-spacing:0.5px; white-space:nowrap;
+}
+.intel-table td {
+    padding:0.45rem 0.75rem; border-bottom:1px solid rgba(255,255,255,0.03);
+    max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.intel-table tbody tr { transition:background 0.15s; }
+.intel-table tbody tr:hover { background:rgba(255,255,255,0.03); }
+.empty-msg { padding:1.5rem; text-align:center; color:var(--text-muted); }
+
+/* ── Risk Score Bars (inline) ───────────────────────────── */
+.risk-bar-wrap {
+    display: flex; align-items: center; gap: 0.4rem;
+}
+.risk-bar-track {
+    flex: 1; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,0.04);
+}
+.risk-bar-fill {
+    height: 100%; border-radius: 2px;
+    transition: width 0.6s ease;
+}
+.risk-val { font-size:0.75rem; font-weight:600; min-width:32px; text-align:right; font-variant-numeric:tabular-nums; }
+
+/* ── Agent Reliability Grid ─────────────────────────────── */
+.agent-reliability-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+}
+.agent-rel-card {
+    padding: 1rem;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: all 0.3s;
+    cursor: default;
+}
+.agent-rel-card:hover { border-color:rgba(0,217,255,0.2); transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,0.25); }
+.agent-rel-card.green { border-left: 3px solid #00ff88; }
+.agent-rel-card.yellow { border-left: 3px solid #ffaa00; }
+.agent-rel-card.red { border-left: 3px solid #ff3366; }
+
+.agent-rel-name { font-size:0.85rem; font-weight:600; color:var(--text-primary); margin-bottom:0.25rem; }
+.agent-rel-sub { font-size:0.7rem; color:var(--text-muted); }
+.agent-rel-score { font-size:1.8rem; font-weight:800; line-height:1; }
+.agent-rel-bar { height:5px; border-radius:3px; background:rgba(255,255,255,0.04); margin-top:0.6rem; overflow:hidden; }
+.agent-rel-bar-fill { height:100%; border-radius:3px; transition:width 0.8s ease; }
+
+/* ── Sort Buttons ───────────────────────────────────────── */
+.sort-btn {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-muted);
+    padding: 0.3rem 0.65rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.73rem;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+.sort-btn:hover { background:rgba(255,255,255,0.08); }
+.sort-btn.active { background:rgba(0,170,255,0.12); border-color:rgba(0,170,255,0.3); color:#00aaff; }
+
+/* ── Probe Summary Row ──────────────────────────────────── */
+.probe-summary-row {
+    display: flex; gap: 1rem; margin-bottom: 1rem;
+}
+.probe-summary-stat {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    text-align: center;
+}
+.probe-summary-val { font-size:1.6rem; font-weight:800; color:var(--neural-primary); }
+.probe-summary-label { font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.3px; margin-top:0.15rem; }
+
+/* ── Probe Group Cards ──────────────────────────────────── */
+.probe-group {
+    margin-bottom: 0.75rem;
+}
+.probe-group-header {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.78rem; font-weight: 600;
+    color: var(--neural-primary);
+    background: rgba(0,217,255,0.04);
+    border-radius: 6px 6px 0 0;
+    border: 1px solid rgba(0,217,255,0.1);
+    border-bottom: none;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.probe-group-header:hover { background:rgba(0,217,255,0.08); }
+.probe-group-header .probe-group-count {
+    font-size:0.65rem; padding:0.1rem 0.4rem; border-radius:8px;
+    background:rgba(255,255,255,0.06); color:var(--text-muted); font-weight:500;
+}
+
+.probe-row {
+    display: grid;
+    grid-template-columns: 1fr 120px 100px 90px;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid rgba(255,255,255,0.04);
+    border-top: none;
+    font-size: 0.8rem;
+    transition: background 0.15s;
+}
+.probe-row:hover { background:rgba(255,255,255,0.03); }
+.probe-row:last-child { border-radius:0 0 6px 6px; }
+
+.probe-name { font-weight:500; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.probe-reliability-bar { height:6px; border-radius:3px; background:rgba(255,255,255,0.04); overflow:hidden; }
+.probe-reliability-fill { height:100%; border-radius:3px; transition:width 0.6s ease; }
+.probe-obs { font-size:0.75rem; color:var(--text-muted); text-align:right; font-variant-numeric:tabular-nums; }
+.probe-status-badge {
+    display:inline-block; padding:0.15rem 0.4rem; border-radius:3px;
+    font-size:0.65rem; font-weight:600; text-transform:uppercase; text-align:center;
+}
+.probe-status-trusted { background:rgba(0,255,136,0.1); color:#00ff88; border:1px solid rgba(0,255,136,0.15); }
+.probe-status-learning { background:rgba(255,170,0,0.1); color:#ffaa00; border:1px solid rgba(255,170,0,0.15); }
+.probe-status-noisy { background:rgba(255,51,102,0.1); color:#ff3366; border:1px solid rgba(255,51,102,0.15); }
+
+/* ── INADS Cluster Grid ─────────────────────────────────── */
+.inads-cluster-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+}
+@media (max-width: 1100px) { .inads-cluster-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 700px) { .inads-cluster-grid { grid-template-columns: 1fr; } }
+
+.inads-cluster-card {
+    padding: 1rem;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: all 0.3s;
+}
+.inads-cluster-card:hover { border-color:rgba(0,217,255,0.2); transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,0.25); }
+.inads-cluster-card.trained { border-left:3px solid #00ff88; }
+.inads-cluster-card.untrained { border-left:3px solid rgba(255,255,255,0.1); }
+
+.inads-cluster-name { font-size:0.85rem; font-weight:600; color:var(--text-primary); margin-bottom:0.15rem; }
+.inads-cluster-desc { font-size:0.7rem; color:var(--text-muted); margin-bottom:0.6rem; }
+.inads-cluster-meta { display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; }
+
+.inads-weight-track { flex:1; height:6px; border-radius:3px; background:rgba(255,255,255,0.04); margin:0 0.5rem; overflow:hidden; }
+.inads-weight-fill { height:100%; border-radius:3px; transition:width 0.8s ease; }
+
+/* ── INADS Risk Section ────────────────────────────────── */
+.inads-risk-hero {
+    display: flex;
+    gap: 1rem;
+    align-items: stretch;
+}
+@media (max-width: 1100px) { .inads-risk-hero { flex-direction:column; } }
+
+.inads-risk-card { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:0 0 220px; }
+
+.inads-detail-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.8rem;
+}
+.inads-detail-row:last-child { border-bottom:none; }
+.inads-detail-label { color:var(--text-muted); }
+.inads-detail-val { color:var(--text-primary); font-weight:600; }
+
+/* ── Reason Tag Pills ──────────────────────────────────── */
+.reason-pill {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin: 0.2rem;
+    transition: all 0.2s;
+}
+.reason-pill.critical { background:rgba(255,51,102,0.1); color:#ff3366; border:1px solid rgba(255,51,102,0.2); }
+.reason-pill.high { background:rgba(255,170,0,0.08); color:#ffaa00; border:1px solid rgba(255,170,0,0.15); }
+.reason-pill.medium { background:rgba(0,170,255,0.08); color:#00aaff; border:1px solid rgba(0,170,255,0.15); }
+.reason-pill.low { background:rgba(0,255,136,0.06); color:#00ff88; border:1px solid rgba(0,255,136,0.12); }
+.reason-pill .pill-icon { font-size:0.8rem; }
+.reason-pill .pill-label { font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.3px; }
+.reason-pill .pill-value { font-weight:600; }
+
+/* ── MeshBus Timeline ──────────────────────────────────── */
+.mesh-event-item {
+    display: flex; align-items: flex-start; gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.mesh-event-item:last-child { border-bottom:none; }
+.mesh-event-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; flex-shrink: 0;
+}
+.mesh-event-icon.failed { background:rgba(255,51,102,0.1); border:1px solid rgba(255,51,102,0.2); }
+.mesh-event-icon.success { background:rgba(0,255,136,0.1); border:1px solid rgba(0,255,136,0.2); }
+.mesh-event-body { flex:1; min-width:0; }
+.mesh-event-title { font-size:0.82rem; font-weight:500; color:var(--text-primary); }
+.mesh-event-sub { font-size:0.72rem; color:var(--text-muted); margin-top:0.15rem; }
+.mesh-event-time { font-size:0.7rem; color:var(--text-muted); white-space:nowrap; flex-shrink:0; }
+
+/* ── Platform Stats Row ────────────────────────────────── */
+.inads-stats-row {
+    display: flex;
+    gap: 1rem;
+    align-items: stretch;
+}
+@media (max-width: 900px) { .inads-stats-row { flex-direction:column; } }
+
+.agent-fleet-tag {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    background: rgba(0,217,255,0.06);
+    border: 1px solid rgba(0,217,255,0.12);
+    color: var(--neural-primary);
+    font-family: monospace;
+}
+
+/* ── Risk Tags (shared with threats.html) ───────────────── */
+.risk-tag {
+    display:inline-block; padding:0.12rem 0.4rem; border-radius:3px;
+    font-size:0.65rem; background:rgba(255,255,255,0.05); color:var(--text-muted);
+    margin:0.1rem; transition:all 0.2s;
+}
+.risk-tag:hover { background:rgba(255,255,255,0.1); }
+.risk-tag.critical { background:rgba(255,51,102,0.12); color:#ff3366; border:1px solid rgba(255,51,102,0.2); }
+.risk-tag.high { background:rgba(255,170,0,0.1); color:#ffaa00; border:1px solid rgba(255,170,0,0.15); }
+
+/* ── Severity Badges ────────────────────────────────────── */
+.sev-badge { display:inline-block; padding:0.2rem 0.55rem; border-radius:3px; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; }
+.sev-CRITICAL { background:rgba(255,51,102,0.15); color:#ff3366; border:1px solid rgba(255,51,102,0.25); }
+.sev-HIGH { background:rgba(255,170,0,0.12); color:#ffaa00; border:1px solid rgba(255,170,0,0.2); }
+.sev-MEDIUM { background:rgba(0,170,255,0.12); color:#00aaff; border:1px solid rgba(0,170,255,0.2); }
+.sev-LOW { background:rgba(0,255,136,0.1); color:#00ff88; border:1px solid rgba(0,255,136,0.15); }
+
+/* ── Tooltip system ─────────────────────────────────────── */
+[data-tooltip] { position:relative; }
+[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute; bottom: calc(100% + 10px); left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: linear-gradient(135deg, rgba(12,15,22,0.97), rgba(18,22,32,0.97));
+    color: #c8d0e0; padding: 0.5rem 0.85rem; border-radius: 8px;
+    font-size: 0.72rem; font-weight: 500; letter-spacing: 0.2px; line-height: 1.5;
+    white-space: nowrap; pointer-events: none; opacity: 0;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 200; border: 1px solid rgba(100,180,255,0.15);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+}
+[data-tooltip]:hover::after { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ── Clickable ──────────────────────────────────────────── */
+.clickable { cursor:pointer; transition:all 0.2s ease; }
+.clickable:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,0.3); }
+
+/* ── Train button states ────────────────────────────────── */
+.neural-button.training {
+    background: linear-gradient(135deg, #ffaa00, #ff8800);
+    pointer-events: none;
+    animation: pulse-train 1.5s ease-in-out infinite;
+}
+@keyframes pulse-train { 0%,100% { opacity:0.8; } 50% { opacity:1; } }
+.neural-button.success { background:linear-gradient(135deg, #00ff88, #00cc66); }
+.neural-button.error { background:linear-gradient(135deg, #ff3366, #cc0033); color:#fff; }
+
+/* ── Responsive tables ──────────────────────────────────── */
+@media (max-width: 900px) {
+    .soma-hero-grid { grid-template-columns:1fr; }
+    .probe-row { grid-template-columns:1fr 80px 70px 70px; font-size:0.75rem; }
+    .probe-summary-row { flex-wrap:wrap; }
+    .probe-summary-stat { min-width:120px; }
+}
+</style>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ═══════════════════════════════════════════════════════════════ -->
+<script nonce="{{ csp_nonce() }}">
+(function() {
+    'use strict';
+
+    // ── Tab Switching (CSS-only panels, no iframes) ─────────────
+    const tabs = document.querySelectorAll('#intel-tabs .tab-item');
+    const panels = document.querySelectorAll('.tab-panel');
+    const loaded = {};
+
+    function activateTab(tabName) {
+        tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+        panels.forEach(p => p.classList.toggle('active', p.id === 'panel-' + tabName));
+        history.replaceState(null, '', '/dashboard/intelligence#' + tabName);
+
+        // Lazy-load data on first tab visit
+        if (!loaded[tabName]) {
+            loaded[tabName] = true;
+            switch (tabName) {
+                case 'soma': loadSomaBrain(); break;
+                case 'reliability': loadAgentReliability(); break;
+                case 'calibration': loadProbeCalibration(); break;
+                case 'inads': loadINADS(); break;
+            }
+        }
+    }
+
+    tabs.forEach(t => t.addEventListener('click', () => activateTab(t.dataset.tab)));
+
+    // Detect initial tab from URL hash
+    const hash = window.location.hash.replace('#', '');
+    const validTabs = ['soma', 'reliability', 'calibration', 'inads'];
+    activateTab(validTabs.includes(hash) ? hash : 'soma');
+
+
+    // ── Helpers ──────────────────────────────────────────────────
+    function fmt(n) {
+        if (n == null || isNaN(n)) return '--';
+        return Number(n).toLocaleString();
+    }
+    function pct(n) {
+        if (n == null || isNaN(n)) return '--';
+        return (n * 100).toFixed(1) + '%';
+    }
+    function riskColor(score) {
+        if (score >= 0.7) return '#ff3366';
+        if (score >= 0.4) return '#ffaa00';
+        if (score >= 0.2) return '#00aaff';
+        return '#00ff88';
+    }
+    function reliabilityColor(r) {
+        if (r >= 0.8) return '#00ff88';
+        if (r >= 0.5) return '#ffaa00';
+        return '#ff3366';
+    }
+    function reliabilityClass(r) {
+        if (r >= 0.8) return 'green';
+        if (r >= 0.5) return 'yellow';
+        return 'red';
+    }
+    function probeStatus(precision, updates) {
+        if (updates < 10) return {label: 'Learning', cls: 'probe-status-learning'};
+        if (precision >= 0.8) return {label: 'Trusted', cls: 'probe-status-trusted'};
+        if (precision >= 0.5) return {label: 'Learning', cls: 'probe-status-learning'};
+        return {label: 'Noisy', cls: 'probe-status-noisy'};
+    }
+    function timeAgo(ts) {
+        if (!ts) return '--';
+        var d;
+        if (typeof ts === 'number') d = new Date(ts * 1000);
+        else d = new Date(ts);
+        if (isNaN(d.getTime())) return ts;
+        var s = Math.floor((Date.now() - d.getTime()) / 1000);
+        if (s < 60) return s + 's ago';
+        if (s < 3600) return Math.floor(s/60) + 'm ago';
+        if (s < 86400) return Math.floor(s/3600) + 'h ago';
+        return Math.floor(s/86400) + 'd ago';
+    }
+    function escHtml(str) {
+        if (!str) return '';
+        var d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+    function truncate(s, n) {
+        if (!s) return '';
+        return s.length > n ? s.slice(0, n) + '...' : s;
+    }
+
+
+    // ═══════════════════════════════════════════════════════════
+    // TAB 1: SOMA Brain
+    // ═══════════════════════════════════════════════════════════
+    function loadSomaBrain() {
+        fetch('/api/soma/brain')
+            .then(r => r.json())
+            .then(data => {
+                if (data.status !== 'success' || !data.brain) return;
+                var b = data.brain;
+
+                // Brain status
+                var status = b.model_status || 'unknown';
+                var statusEl = document.getElementById('brain-status');
+                statusEl.textContent = status.toUpperCase();
+                statusEl.style.color = status === 'trained' ? '#00ff88' : '#ffaa00';
+
+                var icon = document.getElementById('brain-icon');
+                icon.classList.toggle('trained', status === 'trained');
+                icon.classList.toggle('untrained', status !== 'trained');
+
+                // Last training time
+                document.getElementById('brain-last-train').textContent = b.last_training_time ? timeAgo(b.last_training_time) : 'Never';
+
+                // Model badges
+                var ma = b.models_available || {};
+                ['isolation_forest', 'gradient_boost', 'event_embedder'].forEach(function(key, i) {
+                    var ids = ['badge-if', 'badge-gbc', 'badge-emb'];
+                    var labels = ['IF', 'GBC', 'Embedder'];
+                    var el = document.getElementById(ids[i]);
+                    var avail = ma[key];
+                    el.textContent = labels[i] + ': ' + (avail ? 'Ready' : 'Missing');
+                    el.classList.toggle('available', !!avail);
+                    el.classList.toggle('missing', !avail);
+                });
+
+                // Observation donut
+                var obs = b.observations || {};
+                var total = obs.total_observations || 0;
+                var normal = obs.normal_count || 0;
+                var anomaly = obs.anomaly_count || 0;
+                var unknown = obs.unknown_count || 0;
+
+                document.getElementById('donut-total').textContent = fmt(total);
+                document.getElementById('obs-normal-count').textContent = fmt(normal);
+                document.getElementById('obs-anomaly-count').textContent = fmt(anomaly);
+                document.getElementById('obs-learning-count').textContent = fmt(unknown);
+
+                var circ = 2 * Math.PI * 48;  // ~301.6
+                if (total > 0) {
+                    var nFrac = normal / total;
+                    var aFrac = anomaly / total;
+                    var uFrac = unknown / total;
+
+                    var nLen = nFrac * circ;
+                    var aLen = aFrac * circ;
+                    var uLen = uFrac * circ;
+
+                    // Stack: normal, then anomaly offset, then learning offset
+                    document.getElementById('donut-normal').setAttribute('stroke-dasharray', nLen + ' ' + (circ - nLen));
+
+                    var anomalyEl = document.getElementById('donut-anomaly');
+                    anomalyEl.setAttribute('stroke-dasharray', aLen + ' ' + (circ - aLen));
+                    anomalyEl.setAttribute('stroke-dashoffset', -nLen);
+
+                    var learningEl = document.getElementById('donut-learning');
+                    learningEl.setAttribute('stroke-dasharray', uLen + ' ' + (circ - uLen));
+                    learningEl.setAttribute('stroke-dashoffset', -(nLen + aLen));
+                }
+
+                // Training metrics
+                var met = b.latest_metrics || {};
+                var ifMet = met.isolation_forest || {};
+                var gbcMet = met.gradient_boost || {};
+
+                document.getElementById('tm-if-contam').textContent = ifMet.contamination != null ? (ifMet.contamination * 100).toFixed(1) + '%' : '--';
+                document.getElementById('tm-if-samples').textContent = fmt(ifMet.training_samples || met.training_samples);
+                document.getElementById('tm-gbc-acc').textContent = gbcMet.accuracy != null ? (gbcMet.accuracy * 100).toFixed(1) + '%' : '--';
+                document.getElementById('tm-gbc-status').textContent = gbcMet.status || '--';
+                document.getElementById('tm-anomaly-rate').textContent = obs.anomaly_rate != null ? (obs.anomaly_rate * 100).toFixed(2) + '%' : '--';
+                document.getElementById('tm-cal-adj').textContent = fmt(b.calibrator_adjustments);
+
+                // Top anomalies table
+                renderPatternTable('anomalies-body', b.top_anomalies || [], '#ff3366');
+                // Top normal table
+                renderPatternTable('normal-body', b.top_normal || [], '#00ff88');
+            })
+            .catch(function(err) {
+                console.warn('SOMA brain fetch failed:', err);
+            });
+    }
+
+    function renderPatternTable(tbodyId, rows, color) {
+        var tbody = document.getElementById(tbodyId);
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-msg">No data available</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(function(r) {
+            var risk = r.risk_score != null ? r.risk_score : 0;
+            var rColor = riskColor(risk);
+            return '<tr>' +
+                '<td title="' + escHtml(r.path || '') + '">' + escHtml(truncate(r.process_name || '--', 25)) + '</td>' +
+                '<td>' + escHtml(r.event_category || '--') + '</td>' +
+                '<td><div class="risk-bar-wrap">' +
+                    '<div class="risk-bar-track"><div class="risk-bar-fill" style="width:' + (risk * 100) + '%;background:' + rColor + ';"></div></div>' +
+                    '<span class="risk-val" style="color:' + rColor + ';">' + risk.toFixed(2) + '</span>' +
+                '</div></td>' +
+                '<td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--text-muted);">' + fmt(r.seen_count) + '</td>' +
+            '</tr>';
+        }).join('');
+    }
+
+    // Train Now button
+    document.getElementById('train-btn').addEventListener('click', function() {
+        var btn = this;
+        btn.classList.add('training');
+        btn.innerHTML = '<span class="neural-loading" style="width:14px;height:14px;border-width:2px;"></span> Training...';
+
+        fetch('/api/soma/brain/train', {method:'POST', headers:{'Content-Type':'application/json'}})
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 'success') {
+                    btn.classList.remove('training');
+                    btn.classList.add('success');
+                    btn.innerHTML = 'Training Complete';
+                    setTimeout(function() {
+                        btn.classList.remove('success');
+                        btn.innerHTML = '<span style="font-size:0.85rem;">&#x26A1;</span> Train Now';
+                        loaded['soma'] = false;
+                        loadSomaBrain();
+                    }, 2500);
+                } else {
+                    throw new Error(data.message || 'Training failed');
+                }
+            })
+            .catch(function(err) {
+                btn.classList.remove('training');
+                btn.classList.add('error');
+                btn.innerHTML = 'Error: ' + err.message;
+                setTimeout(function() {
+                    btn.classList.remove('error');
+                    btn.innerHTML = '<span style="font-size:0.85rem;">&#x26A1;</span> Train Now';
+                }, 3000);
+            });
+    });
+
+
+    // ═══════════════════════════════════════════════════════════
+    // TAB 2: Agent Reliability
+    // ═══════════════════════════════════════════════════════════
+    function loadAgentReliability() {
+        fetch('/dashboard/api/nexus/probe-calibration')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var probes = data.probes || [];
+                if (!probes.length) {
+                    document.getElementById('agent-reliability-grid').innerHTML =
+                        '<div class="neural-card" style="grid-column:1/-1;text-align:center;padding:2rem;color:var(--text-muted);">No probe calibration data available yet. Run the collector to generate observations.</div>';
+                    return;
+                }
+
+                // Group probes by agent prefix
+                var agentMap = {};
+                var totalObs = 0;
+                probes.forEach(function(p) {
+                    var parts = p.name.split('_');
+                    // Derive agent from probe name: macos_process_spawn -> process
+                    var agentName = 'unknown';
+                    if (parts.length >= 2) {
+                        // Skip "macos" prefix, take next segment as agent
+                        if (parts[0] === 'macos' && parts.length >= 3) {
+                            agentName = parts[1];
+                        } else {
+                            agentName = parts[0];
+                        }
+                    }
+                    if (!agentMap[agentName]) {
+                        agentMap[agentName] = {probes: [], totalUpdates: 0, totalPrecision: 0};
+                    }
+                    agentMap[agentName].probes.push(p);
+                    agentMap[agentName].totalUpdates += (p.updates || 0);
+                    agentMap[agentName].totalPrecision += (p.precision || 0);
+                    totalObs += (p.updates || 0);
+                });
+
+                document.getElementById('rel-total-obs').textContent = fmt(totalObs);
+
+                var grid = document.getElementById('agent-reliability-grid');
+                var html = '';
+
+                Object.keys(agentMap).sort().forEach(function(agentName) {
+                    var ag = agentMap[agentName];
+                    var avgPrecision = ag.probes.length > 0 ? ag.totalPrecision / ag.probes.length : 0;
+                    var color = reliabilityColor(avgPrecision);
+                    var cls = reliabilityClass(avgPrecision);
+                    var probeCount = ag.probes.length;
+
+                    html += '<div class="agent-rel-card ' + cls + '" data-tooltip="' + probeCount + ' probes, ' + fmt(ag.totalUpdates) + ' total observations">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+                            '<div>' +
+                                '<div class="agent-rel-name">' + escHtml(agentName) + '</div>' +
+                                '<div class="agent-rel-sub">' + probeCount + ' probe' + (probeCount !== 1 ? 's' : '') + ' &middot; ' + fmt(ag.totalUpdates) + ' obs</div>' +
+                            '</div>' +
+                            '<div class="agent-rel-score" style="color:' + color + ';">' + (avgPrecision * 100).toFixed(0) + '<span style="font-size:0.7rem;font-weight:400;">%</span></div>' +
+                        '</div>' +
+                        '<div class="agent-rel-bar"><div class="agent-rel-bar-fill" style="width:' + (avgPrecision * 100) + '%;background:' + color + ';"></div></div>' +
+                        '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.25rem;">';
+
+                    ag.probes.forEach(function(p) {
+                        var pColor = reliabilityColor(p.precision || 0);
+                        var shortName = (p.name || '').replace('macos_', '').replace(agentName + '_', '').replace(/_/g, ' ');
+                        html += '<span class="risk-tag" style="border:1px solid ' + pColor + '33;color:' + pColor + ';" data-tooltip="' + (p.precision * 100).toFixed(1) + '% reliability, ' + fmt(p.updates) + ' obs">' + escHtml(shortName || p.name) + '</span>';
+                    });
+
+                    html += '</div></div>';
+                });
+
+                grid.innerHTML = html;
+            })
+            .catch(function(err) {
+                console.warn('Agent reliability fetch failed:', err);
+                document.getElementById('agent-reliability-grid').innerHTML =
+                    '<div class="neural-card" style="grid-column:1/-1;text-align:center;padding:2rem;color:#ff3366;">Failed to load agent reliability data</div>';
+            });
+    }
+
+
+    // ═══════════════════════════════════════════════════════════
+    // TAB 3: Probe Calibration
+    // ═══════════════════════════════════════════════════════════
+    var allProbeData = [];
+    var currentSort = 'agent';
+
+    function loadProbeCalibration() {
+        fetch('/dashboard/api/nexus/probe-calibration')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                allProbeData = data.probes || [];
+                renderProbeCalibration();
+            })
+            .catch(function(err) {
+                console.warn('Probe calibration fetch failed:', err);
+                document.getElementById('probe-calibration-container').innerHTML =
+                    '<div class="neural-card" style="text-align:center;padding:2rem;color:#ff3366;">Failed to load probe calibration data</div>';
+            });
+    }
+
+    function renderProbeCalibration() {
+        var probes = allProbeData.slice();
+        if (!probes.length) {
+            document.getElementById('probe-calibration-container').innerHTML =
+                '<div class="neural-card" style="text-align:center;padding:2rem;color:var(--text-muted);">No probe calibration data available.</div>';
+            return;
+        }
+
+        // Summary stats
+        var trusted = 0, learning = 0, noisy = 0;
+        probes.forEach(function(p) {
+            var st = probeStatus(p.precision, p.updates);
+            if (st.label === 'Trusted') trusted++;
+            else if (st.label === 'Learning') learning++;
+            else noisy++;
+        });
+
+        document.getElementById('ps-total').textContent = probes.length;
+        document.getElementById('ps-trusted').textContent = trusted;
+        document.getElementById('ps-learning').textContent = learning;
+        document.getElementById('ps-noisy').textContent = noisy;
+
+        var container = document.getElementById('probe-calibration-container');
+
+        if (currentSort === 'agent') {
+            // Group by agent
+            var groups = {};
+            probes.forEach(function(p) {
+                var parts = (p.name || '').split('_');
+                var agent = 'unknown';
+                if (parts[0] === 'macos' && parts.length >= 3) agent = parts[1];
+                else if (parts.length >= 2) agent = parts[0];
+                if (!groups[agent]) groups[agent] = [];
+                groups[agent].push(p);
+            });
+
+            var html = '';
+            Object.keys(groups).sort().forEach(function(agent) {
+                var gProbes = groups[agent];
+                gProbes.sort(function(a, b) { return (b.precision || 0) - (a.precision || 0); });
+
+                html += '<div class="probe-group">';
+                html += '<div class="probe-group-header">' +
+                    escHtml(agent) +
+                    ' <span class="probe-group-count">' + gProbes.length + '</span>' +
+                '</div>';
+
+                gProbes.forEach(function(p) {
+                    html += renderProbeRow(p, agent);
+                });
+                html += '</div>';
+            });
+            container.innerHTML = html;
+
+        } else {
+            // Flat sorted list
+            if (currentSort === 'reliability') {
+                probes.sort(function(a, b) { return (b.precision || 0) - (a.precision || 0); });
+            } else if (currentSort === 'observations') {
+                probes.sort(function(a, b) { return (b.updates || 0) - (a.updates || 0); });
+            }
+
+            var html = '<div class="probe-group">';
+            html += '<div class="probe-group-header">All Probes <span class="probe-group-count">' + probes.length + '</span></div>';
+            probes.forEach(function(p) { html += renderProbeRow(p, null); });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+    }
+
+    function renderProbeRow(p, agentPrefix) {
+        var precision = p.precision || 0;
+        var updates = p.updates || 0;
+        var st = probeStatus(precision, updates);
+        var color = reliabilityColor(precision);
+        var shortName = (p.name || '').replace('macos_', '');
+        if (agentPrefix) shortName = shortName.replace(agentPrefix + '_', '');
+        shortName = shortName.replace(/_/g, ' ');
+
+        return '<div class="probe-row" data-tooltip="alpha=' + (p.alpha || 0) + ' beta=' + (p.beta || 0) + '">' +
+            '<div class="probe-name" style="color:' + color + ';">' + escHtml(shortName || p.name) + '</div>' +
+            '<div>' +
+                '<div class="probe-reliability-bar"><div class="probe-reliability-fill" style="width:' + (precision * 100) + '%;background:' + color + ';"></div></div>' +
+                '<div style="font-size:0.65rem;color:' + color + ';margin-top:2px;">' + (precision * 100).toFixed(1) + '%</div>' +
+            '</div>' +
+            '<div class="probe-obs">' + fmt(updates) + ' obs</div>' +
+            '<div><span class="probe-status-badge ' + st.cls + '">' + st.label + '</span></div>' +
+        '</div>';
+    }
+
+    // Sort button handlers
+    document.querySelectorAll('.sort-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.sort-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            currentSort = btn.dataset.sort;
+            renderProbeCalibration();
+        });
+    });
+
+
+    // ═══════════════════════════════════════════════════════════
+    // TAB 4: INADS & MeshBus
+    // ═══════════════════════════════════════════════════════════
+
+    // Agent fleet — canonical list for display
+    var FLEET_AGENTS = [
+        'macos_auth', 'macos_discovery', 'macos_dns', 'macos_filesystem',
+        'macos_infostealer_guard', 'macos_internet_activity', 'macos_network',
+        'macos_persistence', 'macos_process', 'macos_provenance',
+        'macos_quarantine_guard', 'macos_realtime_sensor',
+        'macos_unified_log', 'network_sentinel',
+        'macos_app_log', 'macos_db_activity', 'macos_http_inspector',
+        'correlation'
+    ];
+
+    function loadINADS() {
+        fetch('/dashboard/api/nexus/inads-status')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                renderClusterGrid(data);
+                renderDeviceRisk(data.device_risk);
+                renderMeshTimeline(data.mesh_events || []);
+                renderPlatformStats(data);
+            })
+            .catch(function(err) {
+                console.warn('INADS status fetch failed:', err);
+                document.getElementById('inads-engine-badge').textContent = 'ERROR';
+                document.getElementById('inads-engine-badge').style.color = '#ff3366';
+            });
+    }
+
+    function renderClusterGrid(data) {
+        var clusters = data.clusters || {};
+        var trained = data.trained || false;
+
+        // Engine badge
+        var badgeEl = document.getElementById('inads-engine-badge');
+        badgeEl.textContent = trained ? 'TRAINED' : 'UNTRAINED';
+        badgeEl.style.color = trained ? '#00ff88' : '#ffaa00';
+
+        var clusterNames = Object.keys(clusters);
+        if (!clusterNames.length) {
+            document.getElementById('inads-cluster-grid').innerHTML =
+                '<div class="neural-card" style="grid-column:1/-1;text-align:center;padding:2rem;color:var(--text-muted);">No cluster data available</div>';
+            return;
+        }
+
+        var totalFeatures = 0;
+        var trainedCount = 0;
+        var html = '';
+
+        clusterNames.forEach(function(name) {
+            var c = clusters[name];
+            var isTrained = c.trained || false;
+            var nFeatures = c.n_features || 0;
+            var weight = c.weight || 0;
+            var desc = c.description || name;
+            var weightPct = Math.round(weight * 100);
+
+            totalFeatures += nFeatures;
+            if (isTrained) trainedCount++;
+
+            var displayName = name.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
+            var weightColor = isTrained ? '#00d9ff' : 'rgba(255,255,255,0.15)';
+
+            html += '<div class="inads-cluster-card ' + (isTrained ? 'trained' : 'untrained') + '">' +
+                '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.4rem;">' +
+                    '<div class="inads-cluster-name">' + escHtml(displayName) + '</div>' +
+                    '<span class="probe-status-badge ' + (isTrained ? 'probe-status-trusted' : 'probe-status-learning') + '">' +
+                        (isTrained ? 'Trained' : 'Untrained') +
+                    '</span>' +
+                '</div>' +
+                '<div class="inads-cluster-desc">' + escHtml(desc) + '</div>' +
+                '<div class="inads-cluster-meta">' +
+                    '<span style="color:var(--text-muted);">' + nFeatures + ' features</span>' +
+                    '<div style="display:flex;align-items:center;gap:0.4rem;flex:1;margin-left:0.75rem;">' +
+                        '<div class="inads-weight-track">' +
+                            '<div class="inads-weight-fill" style="width:' + weightPct + '%;background:' + weightColor + ';"></div>' +
+                        '</div>' +
+                        '<span style="font-size:0.75rem;font-weight:600;color:' + weightColor + ';min-width:30px;text-align:right;">' + weightPct + '%</span>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        });
+
+        document.getElementById('inads-cluster-grid').innerHTML = html;
+
+        // Summary
+        var summaryEl = document.getElementById('inads-cluster-summary');
+        summaryEl.style.display = 'block';
+        summaryEl.innerHTML = '<span style="color:var(--text-primary);font-weight:600;">' +
+            clusterNames.length + ' clusters</span>, ' +
+            '<span style="color:var(--neural-primary);font-weight:600;">' + totalFeatures + ' features</span>, ' +
+            '<span style="color:' + (trainedCount === clusterNames.length ? '#00ff88' : '#ffaa00') + ';font-weight:600;">' +
+            trainedCount + '/' + clusterNames.length + ' trained</span>';
+    }
+
+    function humanizeReasonTag(tag) {
+        // Parse reason tags into human-readable labels
+        if (!tag) return {icon: '', label: '', value: tag || '', severity: 'medium'};
+
+        // temporal_burst_1000_in_10s
+        var burstMatch = tag.match(/temporal_burst_(\d+)_in_(\d+)s/);
+        if (burstMatch) return {icon: '&#x26A1;', label: 'Temporal Burst', value: burstMatch[1] + ' events in ' + burstMatch[2] + 's', severity: 'critical'};
+
+        // rapid_incident_2s
+        var rapidMatch = tag.match(/rapid_incident_(\d+)s/);
+        if (rapidMatch) return {icon: '&#x23F1;', label: 'Rapid Incident', value: rapidMatch[1] + 's between incidents', severity: 'high'};
+
+        // incident_critical_high_risk_detections(w=0.65)
+        var incidentMatch = tag.match(/incident_(\w+)_(.+?)(?:\(w=([\d.]+)\))?$/);
+        if (incidentMatch) {
+            var sevLevel = incidentMatch[1].charAt(0).toUpperCase() + incidentMatch[1].slice(1);
+            var detail = incidentMatch[2].replace(/_/g, ' ');
+            var weight = incidentMatch[3] ? ' (weight ' + incidentMatch[3] + ')' : '';
+            return {icon: '&#x1F6A8;', label: sevLevel + ' Detection', value: detail + weight, severity: incidentMatch[1] === 'critical' ? 'critical' : 'high'};
+        }
+
+        // kill_chain_* patterns
+        if (tag.indexOf('kill_chain') === 0) {
+            var stage = tag.replace('kill_chain_', '').replace(/_/g, ' ');
+            return {icon: '&#x1F517;', label: 'Kill Chain', value: stage, severity: 'high'};
+        }
+
+        // cluster_* anomaly patterns
+        if (tag.indexOf('cluster_') === 0) {
+            var cName = tag.replace('cluster_', '').replace(/_anomaly/, '').replace(/_/g, ' ');
+            return {icon: '&#x1F50D;', label: 'Cluster Anomaly', value: cName, severity: 'medium'};
+        }
+
+        // Generic fallback: clean up underscores
+        var cleaned = tag.replace(/_/g, ' ').replace(/\(.*\)/, '');
+        return {icon: '&#x2139;', label: 'Signal', value: cleaned, severity: 'low'};
+    }
+
+    function renderDeviceRisk(risk) {
+        if (!risk) {
+            document.getElementById('inads-score').textContent = '0';
+            document.getElementById('inads-level').textContent = 'NO DATA';
+            document.getElementById('inads-level').style.color = 'var(--text-muted)';
+            document.getElementById('inads-details').innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">No device risk assessment available. Run the collector to generate data.</div>';
+            document.getElementById('inads-tags').innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">No reason tags</div>';
+            return;
+        }
+
+        var score = risk.score || 0;
+        var level = (risk.level || 'UNKNOWN').toUpperCase();
+        var tags = risk.reason_tags || [];
+
+        // Score gauge
+        var scoreEl = document.getElementById('inads-score');
+        scoreEl.textContent = Math.round(score);
+        var arcEl = document.getElementById('inads-arc');
+        var circumference = 2 * Math.PI * 50;  // ~314
+        var arcLen = (score / 100) * circumference;
+        arcEl.setAttribute('stroke-dasharray', arcLen + ' ' + (circumference - arcLen));
+
+        // Color by level
+        var levelColors = {
+            'CRITICAL': '#ff3366', 'HIGH': '#ffaa00', 'ELEVATED': '#ffaa00',
+            'MEDIUM': '#00aaff', 'LOW': '#00ff88', 'CLEAN': '#00ff88'
+        };
+        var lc = levelColors[level] || '#666';
+        scoreEl.style.color = lc;
+        arcEl.setAttribute('stroke', lc);
+
+        var levelEl = document.getElementById('inads-level');
+        levelEl.textContent = level;
+        levelEl.style.color = lc;
+
+        // Risk details
+        var detailsHtml = '';
+        detailsHtml += '<div class="inads-detail-row"><span class="inads-detail-label">Device ID</span><span class="inads-detail-val" style="font-family:monospace;font-size:0.75rem;">' + escHtml(truncate(risk.device_id || '--', 24)) + '</span></div>';
+        detailsHtml += '<div class="inads-detail-row"><span class="inads-detail-label">Risk Score</span><span class="inads-detail-val" style="color:' + lc + ';">' + score + ' / 100</span></div>';
+        detailsHtml += '<div class="inads-detail-row"><span class="inads-detail-label">Risk Level</span><span class="sev-badge sev-' + level + '">' + level + '</span></div>';
+        detailsHtml += '<div class="inads-detail-row"><span class="inads-detail-label">Reason Tags</span><span class="inads-detail-val">' + tags.length + ' signal' + (tags.length !== 1 ? 's' : '') + '</span></div>';
+        detailsHtml += '<div class="inads-detail-row"><span class="inads-detail-label">Last Updated</span><span class="inads-detail-val">' + timeAgo(risk.updated_at) + '</span></div>';
+        document.getElementById('inads-details').innerHTML = detailsHtml;
+
+        // Reason tags as human-readable pills
+        var tagsEl = document.getElementById('inads-tags');
+        if (!tags.length) {
+            tagsEl.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;">No active signals</div>';
+            return;
+        }
+        tagsEl.innerHTML = tags.map(function(t) {
+            var parsed = humanizeReasonTag(t);
+            return '<div class="reason-pill ' + parsed.severity + '" title="' + escHtml(t) + '">' +
+                '<span class="pill-icon">' + parsed.icon + '</span>' +
+                '<div>' +
+                    '<div class="pill-label">' + escHtml(parsed.label) + '</div>' +
+                    '<div class="pill-value">' + escHtml(parsed.value) + '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    function renderMeshTimeline(events) {
+        var container = document.getElementById('mesh-timeline');
+        var countEl = document.getElementById('mesh-count');
+
+        if (!events || !events.length) {
+            container.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;text-align:center;padding:1.5rem;">No MeshBus events recorded</div>';
+            countEl.textContent = '0 events';
+            return;
+        }
+
+        countEl.textContent = events.length + ' event' + (events.length !== 1 ? 's' : '');
+
+        container.innerHTML = events.map(function(evt) {
+            var evtType = evt.event_type || evt.type || 'unknown';
+            var source = evt.source_agent || evt.source || 'unknown';
+            var payload = evt.payload || {};
+            var result = evt.result || {};
+            var ts = evt.timestamp || evt.created_at || '';
+
+            // Determine action and result for display
+            var action = payload.action || evtType;
+            var target = payload.target || payload.ip || payload.indicator || '';
+            var success = result.success !== undefined ? result.success : null;
+            var resultMsg = result.message || result.error || '';
+            var iconCls = success === false ? 'failed' : (success === true ? 'success' : 'failed');
+            var iconChar = success === false ? '&#x2716;' : (success === true ? '&#x2714;' : '&#x2753;');
+
+            // Build human-readable description
+            var description = '';
+            var sourceDisplay = source.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
+
+            if (action === 'block_ip' && target) {
+                description = sourceDisplay + ' attempted to block IP ' + escHtml(target);
+            } else if (action === 'add_threat_indicator' && target) {
+                description = sourceDisplay + ' attempted to add threat indicator for ' + escHtml(target);
+            } else {
+                description = sourceDisplay + ' — ' + escHtml(action);
+                if (target) description += ' on ' + escHtml(target);
+            }
+
+            if (resultMsg) {
+                description += ' — <span style="color:' + (success === false ? '#ff3366' : '#00ff88') + ';">' + escHtml(resultMsg) + '</span>';
+            }
+
+            return '<div class="mesh-event-item">' +
+                '<div class="mesh-event-icon ' + iconCls + '">' + iconChar + '</div>' +
+                '<div class="mesh-event-body">' +
+                    '<div class="mesh-event-title">' + description + '</div>' +
+                    '<div class="mesh-event-sub">' + escHtml(evtType) + ' from <span style="font-family:monospace;">' + escHtml(source) + '</span></div>' +
+                '</div>' +
+                '<div class="mesh-event-time">' + timeAgo(ts) + '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    function renderPlatformStats(data) {
+        var totalProbes = data.total_probes || 0;
+        var totalAgents = data.total_agents || 0;
+
+        document.getElementById('stat-total-probes').textContent = totalProbes;
+        document.getElementById('stat-total-agents').textContent = totalAgents;
+
+        // Agent fleet tags
+        var listEl = document.getElementById('stat-agent-list');
+        listEl.innerHTML = FLEET_AGENTS.map(function(name) {
+            var display = name.replace('macos_', '').replace(/_/g, ' ');
+            return '<span class="agent-fleet-tag">' + escHtml(display) + '</span>';
+        }).join('');
+    }
+
+})();
+</script>
+{% endblock %}

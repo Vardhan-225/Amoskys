@@ -81,11 +81,55 @@ def main() -> int:
         logger.warning("ScoringEngine not available: %s", e)
         scorer = None
 
+    # ── SOMA frequency memory (baseline learning) ──
+    soma = None
+    try:
+        from amoskys.intel.soma import UnifiedSOMA
+
+        soma = UnifiedSOMA()
+        logger.info("SOMA frequency memory initialized — baseline learning active")
+    except Exception as e:
+        logger.warning("SOMA not available: %s", e)
+
+    # ── Probe self-calibration (Beta-Binomial precision tracking) ──
+    probe_cal = None
+    try:
+        from amoskys.intel.probe_calibration import ProbeCalibrator
+
+        probe_cal = ProbeCalibrator()
+        logger.info("ProbeCalibrator initialized — probe self-calibration active")
+    except Exception as e:
+        logger.warning("ProbeCalibrator not available: %s", e)
+
+    # ── Agent Signature Vector (ASV) — sliding window of active agents ──
+    # Tracks which agents fired security events in the last 60 seconds.
+    # Injected into events as '_asv' for INADS 6th cluster scoring.
+    from collections import defaultdict
+
+    _asv_window: Dict[str, float] = {}  # agent_name → last_fire_epoch
+    _ASV_WINDOW_SEC = 60.0
+
+    def _update_asv(agent_name: str) -> list:
+        """Record agent activation and return current ASV (agents active in window)."""
+        now = time.time()
+        _asv_window[agent_name] = now
+        # Expire stale entries
+        cutoff = now - _ASV_WINDOW_SEC
+        stale = [k for k, v in _asv_window.items() if v < cutoff]
+        for k in stale:
+            del _asv_window[k]
+        return list(_asv_window.keys())
+
+    logger.info("ASV tracker initialized — 60s sliding window for agent signatures")
+
     try:
         from amoskys.intel.fusion_engine import FusionEngine
 
-        fusion = FusionEngine(db_path=str(FUSION_DB))
-        logger.info("FusionEngine initialized: %s", FUSION_DB)
+        fusion = FusionEngine(
+            db_path=str(FUSION_DB),
+            probe_calibrator=probe_cal,
+        )
+        logger.info("FusionEngine initialized: %s (probe calibrator wired)", FUSION_DB)
     except Exception as e:
         logger.warning("FusionEngine not available: %s", e)
         fusion = None
@@ -229,6 +273,51 @@ def main() -> int:
                                     continue
                                 dedup.record(event_data)
 
+                                # SOMA: record observation + get verdict for probe calibration
+                                soma_verdict = None
+                                if soma is not None:
+                                    try:
+                                        soma.observe(
+                                            category=se.event_category,
+                                            process=attrs.get("process_name", ""),
+                                            path=attrs.get("exe", attrs.get("path", "")),
+                                            domain=agent,
+                                            risk=se.risk_score,
+                                        )
+                                    except Exception as _obs_err:
+                                        logger.debug("SOMA observe failed: %s", _obs_err)
+                                    try:
+                                        soma_result = soma.assess(
+                                            category=se.event_category,
+                                            process=attrs.get("process_name", ""),
+                                            path=attrs.get("exe", attrs.get("path", "")),
+                                            risk=se.risk_score,
+                                        )
+                                        soma_verdict = soma_result.verdict
+                                    except Exception as _assess_err:
+                                        logger.debug("SOMA assess failed: %s", _assess_err)
+
+                                # Probe calibration: feed SOMA verdict back
+                                if probe_cal is not None and soma_verdict:
+                                    try:
+                                        probe_name = attrs.get(
+                                            "probe_name",
+                                            ev.source_component or se.event_category,
+                                        )
+                                        weight = probe_cal.update(probe_name, soma_verdict)
+                                        # Apply precision weight to risk score
+                                        if weight < 0.95:
+                                            event_data["risk_score"] = round(
+                                                event_data["risk_score"] * weight, 4
+                                            )
+                                            event_data["probe_precision"] = round(weight, 4)
+                                    except Exception as _cal_err:
+                                        logger.warning("Probe calibration failed: %s", _cal_err)
+
+                                # ASV: update agent activation window and inject into event
+                                asv_list = _update_asv(agent)
+                                event_data["_asv"] = asv_list
+
                                 if scorer is not None:
                                     try:
                                         scorer.score_event(event_data)
@@ -243,6 +332,15 @@ def main() -> int:
                                     from amoskys.intel.models import TelemetryEventView
 
                                     try:
+                                        _probe_nm = attrs.get(
+                                            "probe_name",
+                                            ev.source_component or se.event_category,
+                                        )
+                                        _probe_w = (
+                                            probe_cal.get_weight(_probe_nm)
+                                            if probe_cal
+                                            else 1.0
+                                        )
                                         fusion.add_event(
                                             TelemetryEventView(
                                                 event_id=ev.event_id,
@@ -250,6 +348,9 @@ def main() -> int:
                                                 device_id=dt.device_id,
                                                 severity=ev.severity or "MEDIUM",
                                                 timestamp=datetime.now(),
+                                                probe_name=_probe_nm,
+                                                collection_agent=ev.source_component or "",
+                                                probe_precision=_probe_w,
                                                 security_event={
                                                     "event_category": se.event_category,
                                                     "event_action": se.event_category,
@@ -267,26 +368,97 @@ def main() -> int:
                                         )
 
                             elif ev.event_type == "OBSERVATION":
-                                try:
-                                    store.insert_observation_event(
-                                        {
-                                            "event_id": ev.event_id,
-                                            "device_id": dt.device_id,
-                                            "domain": ev.attributes.get(
-                                                "_domain",
-                                                dt.collection_agent,
-                                            ),
-                                            "event_timestamp_ns": ev.event_timestamp_ns
-                                            or dt.timestamp_ns,
-                                            "raw_attributes_json": json.dumps(
-                                                dict(ev.attributes)
-                                            ),
-                                        }
-                                    )
-                                except Exception as e:
-                                    logger.warning(
-                                        "Failed to insert observation event: %s", e
-                                    )
+                                attrs = dict(ev.attributes)
+                                domain = attrs.get(
+                                    "_domain", dt.collection_agent
+                                )
+                                ts_ns = (
+                                    ev.event_timestamp_ns
+                                    or dt.timestamp_ns
+                                )
+
+                                # SOMA: record observation for baseline
+                                if soma is not None:
+                                    try:
+                                        soma.observe(
+                                            category=domain,
+                                            process=attrs.get("process_name", ""),
+                                            path=attrs.get("exe", attrs.get("path", attrs.get("dst_ip", ""))),
+                                            domain=domain,
+                                            risk=float(attrs.get("risk_score", 0) or 0),
+                                        )
+                                    except Exception:
+                                        pass
+
+                                # Route flow observations to flow_events
+                                # with enrichment (GeoIP, ASN, threat intel)
+                                if domain == "flow":
+                                    try:
+                                        if enrichment is not None:
+                                            try:
+                                                enrichment.enrich(attrs)
+                                            except Exception:
+                                                pass
+
+                                        store.insert_flow_event(
+                                            {
+                                                "timestamp_ns": ts_ns,
+                                                "device_id": dt.device_id,
+                                                "src_ip": attrs.get("src_ip"),
+                                                "dst_ip": attrs.get("dst_ip"),
+                                                "src_port": attrs.get("src_port"),
+                                                "dst_port": attrs.get("dst_port"),
+                                                "protocol": attrs.get("protocol"),
+                                                "bytes_tx": int(attrs.get("bytes_tx", 0) or 0),
+                                                "bytes_rx": int(attrs.get("bytes_rx", 0) or 0),
+                                                "pid": attrs.get("pid"),
+                                                "process_name": attrs.get("process_name"),
+                                                "conn_user": attrs.get("conn_user"),
+                                                "state": attrs.get("state"),
+                                                "collection_agent": dt.collection_agent,
+                                                "agent_version": dt.agent_version,
+                                                "event_source": "observation",
+                                                # Enrichment results
+                                                "geo_dst_country": attrs.get("geo_dst_country"),
+                                                "geo_dst_city": attrs.get("geo_dst_city"),
+                                                "geo_dst_latitude": attrs.get("geo_dst_latitude"),
+                                                "geo_dst_longitude": attrs.get("geo_dst_longitude"),
+                                                "geo_src_country": attrs.get("geo_src_country"),
+                                                "geo_src_city": attrs.get("geo_src_city"),
+                                                "geo_src_latitude": attrs.get("geo_src_latitude"),
+                                                "geo_src_longitude": attrs.get("geo_src_longitude"),
+                                                "asn_dst_number": attrs.get("asn_dst_number"),
+                                                "asn_dst_org": attrs.get("asn_dst_org"),
+                                                "asn_dst_network_type": attrs.get("asn_dst_network_type"),
+                                                "asn_src_number": attrs.get("asn_src_number"),
+                                                "asn_src_org": attrs.get("asn_src_org"),
+                                                "asn_src_network_type": attrs.get("asn_src_network_type"),
+                                                "threat_intel_match": attrs.get("threat_intel_match", False),
+                                                "threat_source": attrs.get("threat_source"),
+                                                "threat_severity": attrs.get("threat_severity"),
+                                            }
+                                        )
+                                    except Exception as e:
+                                        logger.warning(
+                                            "Failed to insert flow event: %s", e
+                                        )
+                                else:
+                                    try:
+                                        store.insert_observation_event(
+                                            {
+                                                "event_id": ev.event_id,
+                                                "device_id": dt.device_id,
+                                                "domain": domain,
+                                                "event_timestamp_ns": ts_ns,
+                                                "raw_attributes_json": json.dumps(
+                                                    attrs
+                                                ),
+                                            }
+                                        )
+                                    except Exception as e:
+                                        logger.warning(
+                                            "Failed to insert observation event: %s", e
+                                        )
 
                         processed_ids.append(row_id)
                         total += 1

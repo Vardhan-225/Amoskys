@@ -40,9 +40,9 @@ class TestFIMProbes:
     """Test suite for FIM probes."""
 
     def test_create_fim_probes(self):
-        """Test probe factory creates all 8 probes."""
+        """Test probe factory creates all 10 probes (including shell profile + log tampering)."""
         probes = create_filesystem_probes()
-        assert len(probes) == 8
+        assert len(probes) == 10
 
         probe_names = [p.name for p in probes]
         assert "macos_critical_file" in probe_names

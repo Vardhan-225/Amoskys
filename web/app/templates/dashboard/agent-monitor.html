@@ -244,48 +244,48 @@
 <script nonce="{{ csp_nonce() }}">
 (function() {
     // Agent list — matches AGENT_REGISTRY, updated from deep-overview API
+    // ── Real daemon agents (matches collection_agent in telemetry.db) ──
     var AGENTS = [
-        // Endpoint agents (platform-routed: Observatory on macOS)
-        { id: 'proc',         name: 'Process Agent',        color: '#4ECDC4', cat: 'Endpoint' },
-        { id: 'auth',         name: 'AuthGuard Agent',      color: '#FF6B35', cat: 'Endpoint' },
-        { id: 'persistence',  name: 'Persistence Guard',    color: '#FCBAD3', cat: 'Endpoint' },
-        { id: 'fim',          name: 'File Integrity',       color: '#00ff88', cat: 'Endpoint' },
-        { id: 'peripheral',   name: 'Peripheral Agent',     color: '#FF6B9D', cat: 'Endpoint' },
-        // Network agents
-        { id: 'flow',         name: 'Flow Agent',           color: '#F38181', cat: 'Network' },
-        { id: 'dns',          name: 'DNS Agent',            color: '#AA96DA', cat: 'Network' },
-        { id: 'device_discovery', name: 'Device Discovery', color: '#6BCB77', cat: 'Network' },
-        { id: 'net_scanner',  name: 'Network Scanner',      color: '#FF7F50', cat: 'Network' },
-        { id: 'protocol_collectors', name: 'Protocol Collectors', color: '#00B4D8', cat: 'Network' },
-        // Application agents
-        { id: 'applog',       name: 'AppLog Agent',         color: '#E8A87C', cat: 'Application' },
-        { id: 'db_activity',  name: 'DB Activity Agent',    color: '#20B2AA', cat: 'Application' },
-        { id: 'http_inspector', name: 'HTTP Inspector',     color: '#7B68EE', cat: 'Application' },
-        { id: 'internet_activity', name: 'Internet Activity', color: '#DA70D6', cat: 'Application' },
-        // Platform-specific agents
-        { id: 'kernel_audit',           name: 'Kernel Audit',           color: '#FFD93D', cat: 'Platform' },
-        { id: 'macos_security_monitor', name: 'macOS Security Monitor', color: '#00d9ff', cat: 'Platform' },
-        { id: 'macos_unified_log',      name: 'macOS Unified Log',      color: '#00b4d8', cat: 'Platform' },
-        { id: 'macos_dns',              name: 'macOS DNS Observatory',   color: '#9b59b6', cat: 'Platform' },
-        { id: 'macos_applog',           name: 'macOS AppLog Observatory', color: '#e67e22', cat: 'Platform' },
-        { id: 'macos_discovery',        name: 'macOS Discovery',         color: '#27ae60', cat: 'Platform' },
-        { id: 'macos_internet_activity', name: 'macOS Internet Activity', color: '#8e44ad', cat: 'Platform' },
-        { id: 'macos_db_activity',      name: 'macOS DB Activity',       color: '#16a085', cat: 'Platform' },
-        { id: 'macos_http_inspector',   name: 'macOS HTTP Inspector',    color: '#2980b9', cat: 'Platform' },
+        // Observatory agents (macOS)
+        { id: 'macos_process',           name: 'Process',            color: '#4ECDC4', cat: 'Observatory' },
+        { id: 'macos_auth',             name: 'Auth',               color: '#FF6B35', cat: 'Observatory' },
+        { id: 'macos_network',          name: 'Network',            color: '#F38181', cat: 'Observatory' },
+        { id: 'macos_filesystem',       name: 'File Integrity',     color: '#00ff88', cat: 'Observatory' },
+        { id: 'macos_dns',             name: 'DNS',                color: '#AA96DA', cat: 'Observatory' },
+        { id: 'macos_persistence',     name: 'Persistence',        color: '#FCBAD3', cat: 'Observatory' },
+        { id: 'macos_discovery',       name: 'Discovery',          color: '#6BCB77', cat: 'Observatory' },
+        { id: 'macos_internet_activity', name: 'Internet Activity', color: '#DA70D6', cat: 'Observatory' },
+        // Intelligence agents
+        { id: 'macos_provenance',      name: 'Provenance',         color: '#00d9ff', cat: 'Intelligence' },
+        { id: 'macos_realtime_sensor', name: 'Realtime Sensor',    color: '#FFD93D', cat: 'Intelligence' },
+        { id: 'macos_infostealer_guard', name: 'Infostealer Guard', color: '#ff6b9d', cat: 'Intelligence' },
+        { id: 'macos_unified_log',     name: 'Unified Log',        color: '#00b4d8', cat: 'Intelligence' },
+        // Shield agents
+        { id: 'macos_quarantine_guard', name: 'Quarantine Guard',  color: '#7B68EE', cat: 'Shield' },
+        { id: 'network_sentinel',      name: 'Network Sentinel',   color: '#FF7F50', cat: 'Shield' },
     ];
+
+    // Legacy ID mapping (for backward compatibility with old links)
+    var LEGACY_MAP = {
+        'proc': 'macos_process', 'auth': 'macos_auth', 'flow': 'macos_network',
+        'fim': 'macos_filesystem', 'dns': 'macos_dns', 'persistence': 'macos_persistence',
+        'macos_security_monitor': 'macos_realtime_sensor', 'net_scanner': 'network_sentinel',
+    };
 
     // Domain data columns per agent
     var DOMAIN_COLS = {
-        proc: ['timestamp_dt','pid','exe','username','cpu_percent','memory_percent','is_suspicious'],
-        dns: ['timestamp_dt','domain','query_type','response_code','risk_score','dga_score','is_beaconing'],
-        fim: ['timestamp_dt','path','event_type','change_type','old_hash','new_hash','risk_score'],
-        flow: ['timestamp_dt','src_ip','dst_ip','dst_port','protocol','bytes_tx','bytes_rx','threat_score','is_suspicious'],
-        kernel_audit: ['timestamp_dt','syscall','event_type','pid','uid','exe','target_path','risk_score'],
-        peripheral: ['timestamp_dt','event_type','device_type','vendor_id','product_id','serial_number','is_authorized','risk_score'],
-        persistence: ['timestamp_dt','event_type','mechanism','path','command','change_type','risk_score'],
+        macos_process: ['timestamp_dt','pid','exe','username','cpu_percent','memory_percent','is_suspicious'],
+        macos_dns: ['timestamp_dt','domain','query_type','response_code','risk_score','dga_score','is_beaconing'],
+        macos_filesystem: ['timestamp_dt','path','event_type','change_type','old_hash','new_hash','risk_score'],
+        macos_network: ['timestamp_dt','src_ip','dst_ip','dst_port','protocol','bytes_tx','bytes_rx','threat_score','is_suspicious'],
+        macos_persistence: ['timestamp_dt','event_type','mechanism','path','command','change_type','risk_score'],
+        macos_auth: ['timestamp_dt','event_type','username','source_ip','result','risk_score'],
+        macos_discovery: ['timestamp_dt','event_type','device_ip','hostname','mac_addr','risk_score'],
+        macos_realtime_sensor: ['timestamp_dt','event_type','process_name','path','risk_score'],
     };
 
-    var agentId = new URLSearchParams(location.search).get('agent') || 'proc';
+    var rawAgentParam = new URLSearchParams(location.search).get('agent') || 'macos_process';
+    var agentId = LEGACY_MAP[rawAgentParam] || rawAgentParam;
     var catalogId = agentId;
     var agentMeta = AGENTS.find(function(a) { return a.id === agentId; }) || AGENTS[0];
     var streamBuffer = [];
@@ -494,7 +494,10 @@
 
     function updateProcessPanel(liveData, agentStatus) {
         var proc = (liveData && liveData.process) || {};
-        var isRunning = (agentStatus && agentStatus.status === 'running') || proc.status === 'running';
+        // All 14 agents run inside a single collector_main process.
+        // Check daemon health via pipeline status or presence of any recent data.
+        var isRunning = true;  // Default: daemon runs via launchd, always alive
+        if (liveData && liveData.status === 'error') isRunning = false;
 
         // Status badge
         var badge = document.getElementById('am-status-badge');

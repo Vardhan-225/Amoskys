@@ -525,7 +525,7 @@
      Uses DashboardCache, DashboardPoller, LazyLoader, formatNumber,
      riskColor from dashboard-core.js (loaded via base.html).
      ═══════════════════════════════════════════════════════════════════════ -->
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
     'use strict';
 

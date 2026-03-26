@@ -69,8 +69,8 @@ class TelemetryStore(
             "PRAGMA wal_autocheckpoint=1000"
         )  # checkpoint every 1000 pages (~4MB); prevents unbounded WAL growth and mid-write corruption on concurrent writers
         self.db.execute(
-            "PRAGMA busy_timeout=5000"
-        )  # 5s retry on locked DB instead of immediate SQLITE_BUSY error
+            "PRAGMA busy_timeout=15000"
+        )  # 15s retry on locked DB instead of immediate SQLITE_BUSY error
         self.db.execute("PRAGMA optimize")  # update query planner statistics
 
         # Create schema

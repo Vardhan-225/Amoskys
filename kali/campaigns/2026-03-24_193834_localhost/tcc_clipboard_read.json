@@ -1,0 +1,21 @@
+{
+  "technique_id": "tcc_clipboard_read",
+  "technique_name": "Read pasteboard contents to test clipboard TCC enforcement",
+  "mitre_id": "T1115",
+  "status": "blocked",
+  "timestamp": "2026-03-24T19:38:35.061814+00:00",
+  "duration_ms": 12.047791002260055,
+  "details": {
+    "clipboard_accessible": false,
+    "content_length": 0,
+    "content_preview": "empty"
+  },
+  "artifacts": [],
+  "cleanup_done": false,
+  "blue_team_probe": "ClipboardProbe",
+  "blue_team_agent": "InfostealerGuardAgent",
+  "bounty_eligible": true,
+  "bounty_category": "Unauthorized access to sensitive data",
+  "bounty_estimate": "$25,000-$50,000",
+  "error_message": ""
+}

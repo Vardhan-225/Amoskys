@@ -249,6 +249,11 @@ async function loadProbeData() {
         document.getElementById('pe-mitre').textContent = totalMitre.size;
         document.getElementById('pe-badge').textContent = s.total_probes + ' Probes';
 
+        // Auto-filter if ?probe= param is present (from constellation deep link)
+        var probeParam = new URLSearchParams(location.search).get('probe');
+        if (probeParam) {
+            document.getElementById('pe-search').value = probeParam.replace(/macos_|rt_/g, '').replace(/_/g, ' ');
+        }
         filterProbes();
     } catch (err) {
         console.error('Probe data load failed:', err);

@@ -198,7 +198,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 // ── Constants ────────────────────────────────────────────────────
 const POSTURE_API   = '/dashboard/api/posture/summary?hours=24';
 const TIMELINE_API  = '/dashboard/api/posture/timeline?hours=24&limit=50';

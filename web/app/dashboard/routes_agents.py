@@ -1547,24 +1547,21 @@ def agent_live_data(agent_id):
     except Exception:
         pass
 
-    # 2) Recent events — query BOTH security_events AND domain-specific tables
+    # 2) Recent events — query by collection_agent (direct match)
     recent_events = []
-    cat_prefixes = _AGENT_EVENT_CATEGORIES.get(agent_id, [])
 
-    # 2a) Security events (high-level detections)
-    if store and cat_prefixes:
+    # 2a) Security events by collection_agent
+    if store:
         try:
-            placeholders = " OR ".join([f"event_category LIKE ?" for _ in cat_prefixes])
-            params = [f"{p}%" for p in cat_prefixes]
             query = (
-                f"SELECT id, timestamp_dt, device_id, event_category, "
-                f"event_action, risk_score, confidence, description, "
-                f"mitre_techniques, final_classification, indicators "
-                f"FROM security_events WHERE ({placeholders}) "
-                f"ORDER BY id DESC LIMIT ?"
+                "SELECT id, timestamp_dt, device_id, event_category, "
+                "event_action, risk_score, confidence, description, "
+                "mitre_techniques, final_classification, indicators, "
+                "collection_agent "
+                "FROM security_events WHERE collection_agent = ? "
+                "ORDER BY id DESC LIMIT ?"
             )
-            params.append(limit)
-            cursor = store.db.execute(query, params)
+            cursor = store.db.execute(query, (agent_id, limit))
             cols = [d[0] for d in cursor.description]
             for row in cursor.fetchall():
                 evt = dict(zip(cols, row))
@@ -1580,6 +1577,37 @@ def agent_live_data(agent_id):
                 recent_events.append(evt)
         except Exception:
             pass
+
+    # 2a-fallback) If no results by collection_agent, try category prefix matching
+    if not recent_events and store:
+        cat_prefixes = _AGENT_EVENT_CATEGORIES.get(agent_id, [])
+        if cat_prefixes:
+            try:
+                placeholders = " OR ".join([f"event_category LIKE ?" for _ in cat_prefixes])
+                params = [f"{p}%" for p in cat_prefixes]
+                query = (
+                    f"SELECT id, timestamp_dt, device_id, event_category, "
+                    f"event_action, risk_score, confidence, description, "
+                    f"mitre_techniques, final_classification, indicators "
+                    f"FROM security_events WHERE ({placeholders}) "
+                    f"ORDER BY id DESC LIMIT ?"
+                )
+                params.append(limit)
+                cursor = store.db.execute(query, params)
+                cols = [d[0] for d in cursor.description]
+                for row in cursor.fetchall():
+                    evt = dict(zip(cols, row))
+                    evt["source_table"] = "security_events"
+                    mt = evt.get("mitre_techniques", "")
+                    if isinstance(mt, str) and mt.startswith("["):
+                        try:
+                            import json as _json
+                            evt["mitre_techniques"] = _json.loads(mt)
+                        except Exception:
+                            evt["mitre_techniques"] = []
+                    recent_events.append(evt)
+            except Exception:
+                pass
 
     # 2b) Domain-specific events (raw observables from the agent's own table)
     _AGENT_DOMAIN_QUERIES = {
@@ -1822,19 +1850,17 @@ def agent_live_data(agent_id):
             pass
 
     # 6) Event timeline stats (hourly distribution over last 24h)
-    #    Query BOTH security_events AND the agent's domain table
+    #    Query by collection_agent first, fallback to category prefix
     hourly_buckets = {}  # hour_str -> count
 
-    # 6a) security_events hourly
-    if store and cat_prefixes:
+    # 6a) security_events hourly — by collection_agent
+    if store:
         try:
-            placeholders = " OR ".join([f"event_category LIKE ?" for _ in cat_prefixes])
-            params = [f"{p}%" for p in cat_prefixes]
             cursor = store.db.execute(
-                f"SELECT substr(timestamp_dt, 1, 13) as hour, COUNT(*) as cnt "
-                f"FROM security_events WHERE ({placeholders}) "
-                f"GROUP BY hour ORDER BY hour DESC LIMIT 24",
-                params,
+                "SELECT substr(timestamp_dt, 1, 13) as hour, COUNT(*) as cnt "
+                "FROM security_events WHERE collection_agent = ? "
+                "GROUP BY hour ORDER BY hour DESC LIMIT 24",
+                (agent_id,),
             )
             for row in cursor.fetchall():
                 hourly_buckets[row[0]] = hourly_buckets.get(row[0], 0) + row[1]

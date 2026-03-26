@@ -12,12 +12,15 @@
     <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='images/favicon-192x192.png') }}">
     <link rel="apple-touch-icon" sizes="512x512" href="{{ url_for('static', filename='images/favicon-512x512.png') }}">
 
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <!-- Neural Security Styling -->
     <style>
+        /* ═══════════════════════════════════════════════════════════════════
+           AMOSKYS v3 — Restructured Dashboard Theme
+           7-view architecture: Cortex | Threats | Observatory | Intel | Fleet | IGRIS | C2
+           ═══════════════════════════════════════════════════════════════════ */
+
         :root {
-            /* Defense Room Colors - Match Landing Page */
             --neural-primary: #00d9ff;
             --neural-secondary: #00b8d4;
             --neural-warning: #f0ad4e;
@@ -25,7 +28,6 @@
             --neural-critical: #d9534f;
             --neural-success: #00ff88;
 
-            /* Navy Theme Backgrounds */
             --bg-primary: #0a0e27;
             --bg-secondary: #1a1f3a;
             --bg-tertiary: #242942;
@@ -33,30 +35,24 @@
             --text-secondary: #b4bcd0;
             --text-muted: #6b7a99;
 
-            /* Severity colors (industry standard) */
             --severity-critical: #dc2626;
             --severity-high: #ea580c;
             --severity-medium: #ca8a04;
             --severity-low: #2563eb;
             --severity-info: #6b7280;
 
-            /* Status colors */
             --status-healthy: #16a34a;
             --status-degraded: #ca8a04;
             --status-down: #dc2626;
 
-            /* Gradients */
             --gradient-neural: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
             --gradient-threat: linear-gradient(135deg, #330011 0%, #660022 50%, #440011 100%);
-            --gradient-success: linear-gradient(135deg, #003311 0%, #006622 50%, #004411 100%);
+
+            --header-height: 52px;
         }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg-primary);
@@ -68,11 +64,7 @@
         /* Neural Grid Background */
         body::before {
             content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-image:
                 linear-gradient(rgba(0, 217, 255, 0.05) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(0, 217, 255, 0.05) 1px, transparent 1px);
@@ -80,1161 +72,496 @@
             z-index: -1;
             animation: neural-pulse 10s ease-in-out infinite;
         }
-        
-        @keyframes neural-pulse {
-            0%, 100% { opacity: 0.1; }
-            50% { opacity: 0.3; }
-        }
-        
-        /* Header */
-        .neural-header {
-            background: linear-gradient(180deg, rgba(10, 14, 39, 0.98) 0%, rgba(26, 31, 58, 0.95) 100%);
-            padding: 0.75rem 2rem;
-            border-bottom: 1px solid rgba(0, 217, 255, 0.25);
-            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-        }
-        
-        .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        .neural-logo {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            text-decoration: none;
-            transition: all 0.3s ease;
+        @keyframes neural-pulse { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.3; } }
+
+        /* ── TOP HEADER ─────────────────────────────────────────────── */
+        .amoskys-header {
+            position: sticky; top: 0; z-index: 1000;
+            height: var(--header-height);
+            background: linear-gradient(180deg, rgba(10,14,39,0.98) 0%, rgba(26,31,58,0.96) 100%);
+            border-bottom: 1px solid rgba(0,217,255,0.2);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.4);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            display: flex; align-items: center; padding: 0 1.25rem;
         }
 
-        .neural-logo:hover {
-            transform: translateY(-2px);
+        /* Logo */
+        .hdr-logo {
+            display: flex; align-items: center; gap: 0.6rem;
+            text-decoration: none; flex-shrink: 0; margin-right: 0.5rem;
+        }
+        .hdr-logo img { width: 28px; height: 28px; filter: drop-shadow(0 0 6px rgba(0,217,255,0.5)); }
+        .hdr-logo-text {
+            font-size: 1.1rem; font-weight: 800; color: var(--neural-primary);
+            letter-spacing: 0.5px; text-shadow: 0 0 8px rgba(0,217,255,0.3);
         }
 
-        .neural-logo-image {
-            width: 40px;
-            height: 40px;
-            filter: drop-shadow(0 0 10px rgba(0, 217, 255, 0.5));
+        /* ── PRIMARY NAV ─────────────────────────────────────────────── */
+        .hdr-nav {
+            display: flex; align-items: center; gap: 0; margin-left: 1rem; flex: 1;
         }
-
-        .neural-logo h1 {
+        .hdr-nav-link {
+            position: relative;
+            display: flex; align-items: center; gap: 0.35rem;
+            padding: 0 0.85rem; height: var(--header-height);
+            color: var(--text-muted); text-decoration: none;
+            font-size: 0.78rem; font-weight: 600; letter-spacing: 0.2px;
+            transition: color 0.2s, background 0.2s;
+            white-space: nowrap;
+        }
+        .hdr-nav-link:hover {
+            color: var(--text-primary);
+            background: rgba(0,217,255,0.05);
+        }
+        .hdr-nav-link.active {
             color: var(--neural-primary);
-            font-size: 1.4rem;
-            font-weight: 700;
-            text-shadow: 0 0 10px rgba(0, 217, 255, 0.4);
-            letter-spacing: 0.5px;
+        }
+        .hdr-nav-link.active::after {
+            content: '';
+            position: absolute; bottom: 0; left: 0.85rem; right: 0.85rem;
+            height: 2px; background: var(--neural-primary);
+            border-radius: 2px 2px 0 0;
+            box-shadow: 0 0 8px rgba(0,217,255,0.4);
+        }
+        .hdr-nav-icon { font-size: 0.9rem; }
+
+        /* Nav separator */
+        .hdr-nav-sep {
+            width: 1px; height: 20px; background: rgba(255,255,255,0.08);
+            margin: 0 0.25rem; flex-shrink: 0;
         }
 
-        .neural-status {
-            display: flex;
-            align-items: center;
-            gap: 2rem;
+        /* ── RIGHT STATUS AREA ────────────────────────────────────────── */
+        .hdr-right {
+            display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; margin-left: auto;
+        }
+        .hdr-search-trigger {
+            display: flex; align-items: center; gap: 0.4rem;
+            padding: 0.3rem 0.75rem; border-radius: 6px;
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+            color: var(--text-muted); font-size: 0.75rem; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .hdr-search-trigger:hover { border-color: rgba(0,217,255,0.3); color: var(--text-secondary); }
+        .hdr-search-kbd {
+            font-size: 0.6rem; padding: 0.05rem 0.3rem; border-radius: 3px;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+            font-family: monospace;
         }
 
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.35rem 0.75rem;
-            background: rgba(255, 255, 255, 0.06);
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            font-size: 0.8rem;
+        .hdr-status-pill {
+            display: flex; align-items: center; gap: 0.35rem;
+            padding: 0.25rem 0.6rem; border-radius: 12px;
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+            font-size: 0.7rem; color: var(--text-muted);
         }
-        
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
+        .hdr-status-dot {
+            width: 7px; height: 7px; border-radius: 50%;
             animation: pulse 2s ease-in-out infinite;
         }
-        
-        .status-online { background: var(--neural-primary); }
-        .status-warning { background: var(--neural-warning); }
-        .status-critical { background: var(--neural-danger); }
-        
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.7; }
-        }
-        
-        /* Hamburger Menu */
-        .hamburger-btn {
-            display: block;
-            background: none;
-            border: none;
-            color: var(--neural-primary);
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 0.5rem;
-            transition: all 0.3s ease;
-        }
+        .hdr-dot-online { background: var(--neural-success); box-shadow: 0 0 6px rgba(0,255,136,0.5); }
+        .hdr-dot-warning { background: var(--neural-warning); }
+        .hdr-dot-critical { background: var(--neural-danger); animation: pulse-critical 1.5s ease-in-out infinite; }
+        @keyframes pulse { 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.2); opacity:0.7; } }
+        @keyframes pulse-critical { 0%,100%{ transform:scale(1); box-shadow:0 0 0 0 rgba(255,51,102,0.6); } 50%{ transform:scale(1.1); box-shadow:0 0 0 4px rgba(255,51,102,0); } }
 
-        .hamburger-btn:hover {
-            color: var(--neural-success);
-            transform: scale(1.1);
+        .hdr-hostname {
+            font-size: 0.7rem; font-weight: 700; color: var(--neural-primary);
         }
+        .hdr-clock {
+            font-size: 0.7rem; color: var(--text-muted); font-variant-numeric: tabular-nums;
+        }
+        .hdr-user-btn {
+            width: 30px; height: 30px; border-radius: 50%;
+            background: rgba(0,217,255,0.12); border: 1px solid rgba(0,217,255,0.25);
+            color: var(--neural-primary); font-size: 0.75rem; font-weight: 700;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s; position: relative;
+        }
+        .hdr-user-btn:hover { background: rgba(0,217,255,0.2); border-color: rgba(0,217,255,0.4); }
 
-        .sidebar-nav {
-            position: fixed;
-            left: -280px;
-            top: 0;
-            width: 280px;
-            height: 100vh;
-            background: linear-gradient(180deg, var(--bg-secondary) 0%, #0f1433 100%);
-            border-right: 1px solid rgba(0, 217, 255, 0.2);
+        /* User dropdown */
+        .hdr-user-dropdown {
+            display: none; position: absolute; top: 100%; right: 0; margin-top: 0.5rem;
+            background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
+            border-radius: 8px; min-width: 180px; padding: 0.4rem 0;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
             z-index: 2000;
-            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            overflow-y: auto;
-            box-shadow: 4px 0 30px rgba(0, 0, 0, 0.6);
         }
+        .hdr-user-dropdown.open { display: block; }
+        .hdr-dropdown-item {
+            display: flex; align-items: center; gap: 0.6rem;
+            padding: 0.5rem 1rem; color: var(--text-secondary); text-decoration: none;
+            font-size: 0.8rem; transition: all 0.15s; cursor: pointer;
+            border: none; background: none; width: 100%; text-align: left; font-family: inherit;
+        }
+        .hdr-dropdown-item:hover { background: rgba(0,217,255,0.08); color: var(--text-primary); }
+        .hdr-dropdown-item.danger { color: var(--neural-danger); }
+        .hdr-dropdown-item.danger:hover { background: rgba(255,51,102,0.1); }
+        .hdr-dropdown-sep { height: 1px; background: rgba(255,255,255,0.06); margin: 0.3rem 0; }
 
-        .sidebar-nav.open {
-            left: 0;
-        }
-
-        /* Push content when sidebar is open */
-        body.sidebar-open .dashboard-header,
-        body.sidebar-open .dashboard-main {
-            margin-left: 280px;
-            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .sidebar-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1999;
-            display: none;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .sidebar-overlay.active,
-        .sidebar-overlay.show {
-            display: block;
-            opacity: 1;
-        }
-
-        .sidebar-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid rgba(0, 217, 255, 0.3);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .sidebar-title {
-            color: var(--neural-primary);
-            font-size: 1.2rem;
-            font-weight: 700;
-        }
-
-        .sidebar-close {
-            background: none;
-            border: none;
-            color: var(--neural-primary);
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 0.5rem;
-            transition: all 0.3s ease;
-        }
-
-        .sidebar-close:hover {
-            color: var(--neural-danger);
-            transform: rotate(90deg);
-        }
-
-        .sidebar-menu {
-            padding: 0.5rem 0;
-        }
-
-        .sidebar-section-label {
-            font-size: 0.65rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-            color: var(--text-muted);
-            padding: 1rem 1.5rem 0.4rem;
-            user-select: none;
-        }
-
-        .sidebar-link {
-            display: flex;
-            align-items: center;
-            gap: 0.85rem;
-            padding: 0.65rem 1.5rem;
-            color: var(--text-secondary);
-            text-decoration: none;
-            transition: all 0.2s ease;
-            border-left: 3px solid transparent;
-            font-size: 0.9rem;
-            position: relative;
-        }
-
-        .sidebar-link:hover {
-            background: rgba(0, 217, 255, 0.08);
-            color: var(--neural-primary);
-            border-left-color: var(--neural-primary);
-        }
-
-        .sidebar-link.active {
-            background: rgba(0, 217, 255, 0.12);
-            color: var(--neural-primary);
-            border-left-color: var(--neural-primary);
-            font-weight: 600;
-        }
-
-        .sidebar-link.active::after {
-            content: '';
-            position: absolute;
-            right: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 3px;
-            height: 60%;
-            background: var(--neural-primary);
-            border-radius: 2px;
-        }
-
-        .sidebar-link-icon {
-            font-size: 1rem;
-            width: 1.25rem;
-            text-align: center;
-            flex-shrink: 0;
-        }
-
-        .sidebar-link-admin {
-            color: var(--neural-danger);
-        }
-
-        .sidebar-link-admin:hover {
-            background: rgba(255, 51, 102, 0.1);
-            color: var(--neural-danger);
-            border-left-color: var(--neural-danger);
-        }
-
-        .sidebar-divider {
-            height: 1px;
-            background: rgba(0, 217, 255, 0.1);
-            margin: 0.25rem 1.5rem;
-        }
-
-        .sidebar-footer {
-            padding: 1rem 1.5rem;
-            border-top: 1px solid rgba(0, 217, 255, 0.1);
-            margin-top: auto;
-        }
-
-        .sidebar-version {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            text-align: center;
-            padding: 0.5rem 0 0;
-            letter-spacing: 0.5px;
-        }
-
-        .logout-btn {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 1rem 1.5rem;
-            color: var(--neural-danger);
-            text-decoration: none;
-            transition: all 0.3s ease;
-            border-left: 3px solid transparent;
-            cursor: pointer;
-            background: none;
-            border: none;
-            width: 100%;
-            text-align: left;
-            font-size: 1rem;
-            font-family: inherit;
-        }
-
-        .logout-btn:hover {
-            background: rgba(255, 51, 102, 0.1);
-            border-left-color: var(--neural-danger);
-        }
-
-        /* Mobile responsive */
-        @media (max-width: 768px) {
-            .hamburger-btn {
-                display: block;
-            }
-        }
-        
-        /* Main Content */
+        /* ── MAIN CONTENT ─────────────────────────────────────────────── */
         .dashboard-main {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
-            padding: 2rem;
-            min-height: calc(100vh - 140px);
+            padding: 0;
+            min-height: calc(100vh - var(--header-height));
+            animation: page-fade-in 0.3s ease-out;
         }
-        
-        /* Cards */
+        @keyframes page-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ── SHARED CARD SYSTEM ───────────────────────────────────────── */
         .neural-card {
             background: var(--bg-secondary);
-            border: 1px solid rgba(0, 217, 255, 0.3);
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
+            border: 1px solid rgba(0,217,255,0.12);
+            border-radius: 10px; padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+            position: relative; overflow: hidden;
         }
-
         .neural-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, var(--neural-primary), var(--neural-secondary));
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(0,217,255,0.2), transparent);
+            opacity: 0; transition: opacity 0.3s;
         }
-
-        .neural-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 217, 255, 0.2);
-            border-color: var(--neural-primary);
-        }
+        .neural-card:hover::before { opacity: 1; }
 
         .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid rgba(0, 217, 255, 0.2);
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 1rem; padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(0,217,255,0.1);
         }
-        
-        .card-title {
-            color: var(--neural-primary);
-            font-size: 1.2rem;
-            font-weight: 600;
-        }
-        
+        .card-title { color: var(--neural-primary); font-size: 1rem; font-weight: 600; }
         .card-badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
+            padding: 0.2rem 0.6rem; border-radius: 12px;
+            font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
         }
-        
-        .badge-success { background: var(--neural-primary); color: var(--bg-primary); }
-        .badge-warning { background: var(--neural-warning); color: var(--bg-primary); }
-        .badge-danger { background: var(--neural-danger); color: white; }
+        .badge-success { background: rgba(0,255,136,0.15); color: var(--neural-success); }
+        .badge-warning { background: rgba(255,170,0,0.15); color: var(--neural-warning); }
+        .badge-danger { background: rgba(255,51,102,0.15); color: var(--neural-danger); }
+        .badge-critical { background: rgba(220,38,38,0.2); color: #ef4444; }
+        .badge-high { background: rgba(234,88,12,0.2); color: #f97316; }
+        .badge-medium { background: rgba(202,138,4,0.2); color: #eab308; }
+        .badge-low { background: rgba(37,99,235,0.2); color: #3b82f6; }
+        .badge-info { background: rgba(107,114,128,0.2); color: #9ca3af; }
 
-        /* Severity badges */
-        .badge-critical { background: var(--severity-critical); color: white; }
-        .badge-high { background: var(--severity-high); color: white; }
-        .badge-medium { background: var(--severity-medium); color: var(--bg-primary); }
-        .badge-low { background: var(--severity-low); color: white; }
-        .badge-info { background: var(--severity-info); color: white; }
-
-        /* Risk indicators */
         .risk-critical { color: var(--severity-critical); }
         .risk-high { color: var(--severity-high); }
         .risk-medium { color: var(--severity-medium); }
         .risk-low { color: var(--severity-low); }
         .risk-healthy { color: var(--status-healthy); }
 
-        /* Animated loading skeleton */
-        .skeleton {
-            background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
-            background-size: 200% 100%;
-            animation: skeleton-pulse 1.5s infinite;
-            border-radius: 4px;
-        }
-        @keyframes skeleton-pulse {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-        
-        /* Metrics */
+        /* Metrics grid */
         .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem; margin-bottom: 1.5rem;
         }
-        
         .metric-card {
-            background: var(--gradient-neural);
-            padding: 1.5rem;
-            border-radius: 10px;
-            border: 1px solid rgba(0, 217, 255, 0.3);
-            text-align: center;
-            transition: all 0.3s ease;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            min-height: 160px;
+            background: var(--gradient-neural); padding: 1.25rem;
+            border-radius: 10px; border: 1px solid rgba(0,217,255,0.15);
+            text-align: center; transition: all 0.3s;
+        }
+        .metric-card:hover { transform: scale(1.02); box-shadow: 0 6px 20px rgba(0,217,255,0.15); }
+        .metric-value {
+            font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700;
+            color: var(--neural-primary); transition: all 0.3s;
+        }
+        .metric-value.updating { animation: metric-pulse 0.5s ease-in-out; text-shadow: 0 0 8px rgba(0,217,255,0.4); }
+        @keyframes metric-pulse { 50% { transform: scale(1.02); } }
+        .metric-label {
+            color: var(--text-secondary); font-size: 0.8rem;
+            text-transform: uppercase; letter-spacing: 0.5px;
         }
 
-        .metric-card:hover {
-            transform: scale(1.02);
-            box-shadow: 0 8px 20px rgba(0, 217, 255, 0.3);
-        }
-        
-        .metric-value {
-            font-size: clamp(1.8rem, 5vw, 2.5rem);
-            font-weight: 700;
-            color: var(--neural-primary);
-            margin-bottom: 0.5rem;
-            word-break: break-word;
-            overflow-wrap: break-word;
-            white-space: normal;
-        }
-        
-        .metric-label {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            overflow-wrap: break-word;
-        }
-        
         /* Buttons */
         .neural-button {
             background: linear-gradient(135deg, var(--neural-primary), var(--neural-secondary));
-            color: var(--bg-primary);
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 25px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
+            color: var(--bg-primary); border: none;
+            padding: 0.6rem 1.25rem; border-radius: 8px;
+            font-weight: 600; cursor: pointer; transition: all 0.3s;
+            text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;
+            font-size: 0.82rem;
         }
-        
-        .neural-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 217, 255, 0.4);
-        }
+        .neural-button:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,217,255,0.3); }
+        .neural-button:active { transform: translateY(0); }
 
-        /* Loading Animation */
+        /* Skeleton loader */
+        .skeleton {
+            background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
+            background-size: 200% 100%; animation: skeleton-pulse 1.5s infinite; border-radius: 4px;
+        }
+        @keyframes skeleton-pulse { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        /* Loading spinner */
         .neural-loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(0, 217, 255, 0.3);
-            border-radius: 50%;
-            border-top: 3px solid var(--neural-primary);
-            animation: spin 1s linear infinite;
+            display: inline-block; width: 18px; height: 18px;
+            border: 2px solid rgba(0,217,255,0.2); border-radius: 50%;
+            border-top-color: var(--neural-primary);
+            animation: spin 0.8s linear infinite;
         }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Phase 9: Enhanced Animations and Polish */
-        
-        /* Metric Value Transition Animation */
-        @keyframes metric-pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.02); }
-            100% { transform: scale(1); }
-        }
-        
-        .metric-value {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .metric-value.updating {
-            animation: metric-pulse 0.5s ease-in-out;
-            color: var(--neural-primary);
-            text-shadow: 0 0 8px rgba(0, 217, 255, 0.4);
-        }
-        
-        /* Card Slide-In Animation */
-        @keyframes slide-in-up {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .neural-card {
-            animation: slide-in-up 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        /* Staggered Card Animation */
-        .neural-card:nth-child(1) { animation-delay: 0.05s; }
-        .neural-card:nth-child(2) { animation-delay: 0.1s; }
-        .neural-card:nth-child(3) { animation-delay: 0.15s; }
-        .neural-card:nth-child(4) { animation-delay: 0.2s; }
-        .neural-card:nth-child(n+5) { animation-delay: 0.25s; }
-        
-        /* Status Indicator Animation */
-        @keyframes status-glow {
-            0%, 100% {
-                box-shadow: 0 0 10px rgba(0, 217, 255, 0.4);
-            }
-            50% {
-                box-shadow: 0 0 20px rgba(0, 217, 255, 0.8);
-            }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        .status-indicator {
-            animation: status-glow 2s ease-in-out infinite;
+        /* ── TAB SYSTEM (for consolidated pages) ────────────────────── */
+        .tab-bar {
+            display: flex; align-items: center; gap: 0;
+            padding: 0 1.5rem;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            overflow-x: auto; -webkit-overflow-scrolling: touch;
         }
-        
-        /* Toast Notification */
-        @keyframes toast-slide-in {
-            from {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-        
-        @keyframes toast-slide-out {
-            from {
-                transform: translateX(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-        }
-        
-        .toast-notification {
-            animation: toast-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .toast-notification.dismissing {
-            animation: toast-slide-out 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        /* Chart Data Update Animation */
-        @keyframes chart-update {
-            0% {
-                opacity: 0.5;
-                transform: scale(0.98);
-            }
-            100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-        
-        .chart-updating {
-            animation: chart-update 0.4s ease-in-out;
-        }
-        
-        /* Alert Notification Badge */
-        @keyframes alert-pulse {
-            0% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(255, 51, 102, 0.7);
-            }
-            50% {
-                transform: scale(1.05);
-            }
-            100% {
-                transform: scale(1);
-                box-shadow: 0 0 0 10px rgba(255, 51, 102, 0);
-            }
-        }
-        
-        .alert-badge {
-            animation: alert-pulse 2s infinite;
-        }
-        
-        /* Smooth Value Transitions */
-        .metric-value,
-        .metric-label,
-        .card-title,
-        .neural-button {
-            transition: all 0.2s ease;
-        }
-        
-        /* Hover Effects Enhancement */
-        .neural-card {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .neural-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 35px rgba(0, 217, 255, 0.25);
-        }
-
-        .neural-button:active {
-            transform: translateY(0px);
-        }
-
-        /* Loading Skeleton */
-        @keyframes skeleton-loading {
-            0% {
-                background-position: -1000px 0;
-            }
-            100% {
-                background-position: 1000px 0;
-            }
-        }
-
-        .skeleton-loader {
-            background: linear-gradient(
-                90deg,
-                rgba(0, 217, 255, 0.1) 25%,
-                rgba(0, 217, 255, 0.2) 50%,
-                rgba(0, 217, 255, 0.1) 75%
-            );
-            background-size: 1000px 100%;
-            animation: skeleton-loading 2s infinite;
-        }
-        
-        /* Responsive Touch Improvements */
-        @media (hover: none) {
-            .neural-button {
-                padding: 0.7rem 1.2rem;
-            }
-            
-            .neural-card {
-                border-radius: 12px;
-            }
-        }
-        
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .header-content {
-                flex-direction: column;
-                gap: 1rem;
-            }
-            
-            .neural-status {
-                flex-wrap: wrap;
-                gap: 1rem;
-            }
-            
-            .nav-content {
-                flex-wrap: wrap;
-                gap: 0.5rem;
-            }
-            
-            .dashboard-main {
-                padding: 1rem;
-            }
-            
-            .metrics-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-        
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: var(--bg-secondary);
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: var(--neural-primary);
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--neural-secondary);
-        }
-
-        /* Global Search */
-        .global-search {
+        .tab-bar::-webkit-scrollbar { height: 0; }
+        .tab-item {
             position: relative;
-            display: flex;
-            align-items: center;
-            margin-right: 1rem;
+            display: flex; align-items: center; gap: 0.35rem;
+            padding: 0.7rem 1rem; white-space: nowrap;
+            color: var(--text-muted); font-size: 0.78rem; font-weight: 600;
+            cursor: pointer; transition: color 0.2s;
+            border: none; background: none; font-family: inherit;
+        }
+        .tab-item:hover { color: var(--text-secondary); }
+        .tab-item.active { color: var(--neural-primary); }
+        .tab-item.active::after {
+            content: ''; position: absolute; bottom: 0; left: 0.5rem; right: 0.5rem;
+            height: 2px; background: var(--neural-primary); border-radius: 2px 2px 0 0;
+        }
+        .tab-count {
+            font-size: 0.6rem; padding: 0.05rem 0.35rem; border-radius: 8px;
+            background: rgba(255,255,255,0.06); color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* ── SCROLLBAR ─────────────────────────────────────────────── */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,217,255,0.2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0,217,255,0.35); }
+
+        /* ── MOBILE NAV ───────────────────────────────────────────── */
+        .mobile-menu-btn {
+            display: none; background: none; border: none;
+            color: var(--neural-primary); font-size: 1.3rem; cursor: pointer; padding: 0.3rem;
+        }
+        .mobile-nav-drawer {
+            display: none; position: fixed; top: var(--header-height); left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); z-index: 999;
+        }
+        .mobile-nav-drawer.open { display: block; }
+        .mobile-nav-panel {
+            background: var(--bg-secondary); border-bottom: 1px solid rgba(0,217,255,0.2);
+            padding: 0.5rem 0; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        .mobile-nav-link {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.75rem 1.5rem; color: var(--text-secondary); text-decoration: none;
+            font-size: 0.9rem; font-weight: 500; transition: all 0.15s;
+        }
+        .mobile-nav-link:hover, .mobile-nav-link.active { background: rgba(0,217,255,0.08); color: var(--neural-primary); }
+        .mobile-nav-link .hdr-nav-icon { font-size: 1.1rem; width: 1.5rem; text-align: center; }
+
+        @media (max-width: 900px) {
+            .hdr-nav { display: none; }
+            .mobile-menu-btn { display: flex; }
+            .hdr-search-trigger { display: none; }
+            .hdr-status-pill:not(.hdr-status-pill-live) { display: none; }
+            .dashboard-main { padding: 0; }
         }
 
-        .global-search-input {
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(0, 217, 255, 0.3);
-            border-radius: 8px;
-            padding: 0.5rem 1rem 0.5rem 2.5rem;
-            color: var(--text-primary);
-            font-size: 0.9rem;
-            width: 250px;
-            transition: all 0.3s ease;
+        /* ── RESPONSIVE ───────────────────────────────────────────── */
+        @media (max-width: 768px) {
+            .metrics-grid { grid-template-columns: 1fr; }
+            .tab-bar { padding: 0 0.75rem; }
         }
 
-        .global-search-input:focus {
-            outline: none;
-            border-color: var(--neural-primary);
-            box-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
-            width: 300px;
+        /* ── TOAST NOTIFICATIONS ──────────────────────────────────── */
+        .toast-container {
+            position: fixed; top: calc(var(--header-height) + 0.75rem); right: 1rem; z-index: 3000;
+            display: flex; flex-direction: column; gap: 0.4rem; pointer-events: none;
         }
-
-        .global-search-input::placeholder {
-            color: var(--text-muted);
+        .toast-msg {
+            padding: 0.6rem 1rem; border-radius: 8px; font-size: 0.8rem; font-weight: 600;
+            background: rgba(10,14,39,0.95); border: 1px solid rgba(255,51,102,0.4);
+            color: #ff3366; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            animation: toast-in 0.3s ease; pointer-events: auto; max-width: 340px;
         }
-
-        .global-search-icon {
-            position: absolute;
-            left: 0.75rem;
-            color: var(--text-muted);
-            pointer-events: none;
-        }
-
-        .global-search-shortcut {
-            position: absolute;
-            right: 0.75rem;
-            background: rgba(0, 217, 255, 0.1);
-            border: 1px solid rgba(0, 217, 255, 0.3);
-            border-radius: 4px;
-            padding: 0.1rem 0.4rem;
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            pointer-events: none;
-        }
-
-        /* Command Palette */
-        .command-palette-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 10000;
-            display: none;
-            justify-content: center;
-            padding-top: 15vh;
-        }
-
-        .command-palette-overlay.open {
-            display: flex;
-        }
-
-        .command-palette {
-            background: var(--bg-secondary);
-            border: 1px solid var(--neural-primary);
-            border-radius: 12px;
-            width: 600px;
-            max-width: 90vw;
-            max-height: 500px;
-            box-shadow: 0 20px 60px rgba(0, 217, 255, 0.3);
-            overflow: hidden;
-            animation: paletteSlideIn 0.2s ease;
-        }
-
-        @keyframes paletteSlideIn {
-            from { transform: translateY(-20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-
-        .command-palette-input {
-            width: 100%;
-            padding: 1.25rem 1rem;
-            background: var(--bg-primary);
-            border: none;
-            border-bottom: 1px solid rgba(0, 217, 255, 0.3);
-            color: var(--text-primary);
-            font-size: 1.1rem;
-            outline: none;
-        }
-
-        .command-palette-input::placeholder {
-            color: var(--text-muted);
-        }
-
-        .command-palette-results {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .command-palette-section {
-            padding: 0.5rem 0;
-        }
-
-        .command-palette-section-title {
-            padding: 0.5rem 1rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .command-palette-item {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 0.75rem 1rem;
-            cursor: pointer;
-            transition: background 0.15s ease;
-        }
-
-        .command-palette-item:hover,
-        .command-palette-item.selected {
-            background: rgba(0, 217, 255, 0.1);
-        }
-
-        .command-palette-item-icon {
-            font-size: 1.2rem;
-            width: 2rem;
-            text-align: center;
-        }
-
-        .command-palette-item-content {
-            flex: 1;
-        }
-
-        .command-palette-item-title {
-            color: var(--text-primary);
-            font-weight: 500;
-        }
-
-        .command-palette-item-description {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-        }
-
-        .command-palette-item-shortcut {
-            background: rgba(0, 217, 255, 0.1);
-            border: 1px solid rgba(0, 217, 255, 0.3);
-            border-radius: 4px;
-            padding: 0.2rem 0.5rem;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-
-        .command-palette-empty {
-            padding: 2rem;
-            text-align: center;
-            color: var(--text-muted);
-        }
-
-        /* Sidebar Search */
-        .sidebar-search {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid rgba(0, 217, 255, 0.2);
-        }
-
-        .sidebar-search-input {
-            width: 100%;
-            padding: 0.5rem 0.75rem;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(0, 217, 255, 0.3);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-size: 0.85rem;
-        }
-
-        .sidebar-search-input:focus {
-            outline: none;
-            border-color: var(--neural-primary);
-        }
-
-        .sidebar-search-input::placeholder {
-            color: var(--text-muted);
-        }
-
-        .sidebar-link.hidden {
-            display: none;
-        }
-
-        /* Page transition fade-in */
-        .dashboard-main {
-            animation: page-fade-in 0.35s ease-out;
-        }
-        @keyframes page-fade-in {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Breadcrumb navigation */
-        .breadcrumb-bar {
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.4rem 0;
-            margin-bottom: 0.5rem;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-        .breadcrumb-bar a {
-            color: var(--text-muted);
-            text-decoration: none;
-            transition: color 0.15s;
-        }
-        .breadcrumb-bar a:hover {
-            color: var(--neural-primary);
-        }
-        .breadcrumb-bar .bc-sep { opacity: 0.4; }
-        .breadcrumb-bar .bc-current { color: var(--text-secondary); font-weight: 600; }
+        .toast-msg.info { border-color: rgba(0,217,255,0.4); color: var(--neural-primary); }
+        .toast-msg.success { border-color: rgba(0,255,136,0.4); color: #00ff88; }
+        @keyframes toast-in { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:translateX(0); } }
     </style>
-    
-    <!-- Chart.js for Visualizations -->
+
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <!-- Socket.IO for Real-time Updates -->
+    <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-
-    <!-- Dashboard Core — shared cache, polling, formatters, Chart.js theme -->
+    <!-- Dashboard Core -->
     <script src="{{ url_for('static', filename='js/dashboard-core.js') }}"></script>
-
-    <!-- Mobile Responsive Enhancements -->
+    <!-- Mobile Responsive -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-responsive.css') }}">
 
     {% block extra_head %}{% endblock %}
+
+    {% set is_embed = request.args.get('embed') == '1' %}
+    {% if is_embed %}
+    <style>
+        .amoskys-header, .mobile-nav-drawer, .igris-widget, .toast-container,
+        .command-palette-overlay { display: none !important; }
+        .dashboard-main { min-height: auto; padding: 0; }
+        body::before { display: none; }
+    </style>
+    {% endif %}
 </head>
 <body>
-    <!-- Command Palette Overlay -->
-    <div class="command-palette-overlay" id="commandPalette" role="dialog" aria-modal="true" aria-label="Command palette">
-        <div class="command-palette">
-            <input type="text" class="command-palette-input" id="commandPaletteInput" placeholder="Type a command or search..." autocomplete="off">
-            <div class="command-palette-results" id="commandPaletteResults">
-                <!-- Results populated by JS -->
-            </div>
+
+    {% if not is_embed %}
+    <!-- ═══ COMMAND PALETTE ═══ -->
+    <div class="command-palette-overlay" id="commandPalette" role="dialog" aria-modal="true" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:10000;display:none;justify-content:center;padding-top:15vh;">
+        <div style="background:var(--bg-secondary);border:1px solid var(--neural-primary);border-radius:12px;width:600px;max-width:90vw;max-height:500px;box-shadow:0 20px 60px rgba(0,217,255,0.3);overflow:hidden;animation:paletteIn 0.2s ease;">
+            <input type="text" id="commandPaletteInput" placeholder="Search pages, actions..." autocomplete="off"
+                   style="width:100%;padding:1.1rem 1rem;background:var(--bg-primary);border:none;border-bottom:1px solid rgba(0,217,255,0.2);color:var(--text-primary);font-size:1rem;outline:none;font-family:inherit;">
+            <div id="commandPaletteResults" style="max-height:400px;overflow-y:auto;"></div>
+        </div>
+    </div>
+    <style>
+        .command-palette-overlay.open { display: flex !important; }
+        @keyframes paletteIn { from { transform:translateY(-20px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+        .cp-section { padding: 0.4rem 0; }
+        .cp-section-title { padding: 0.4rem 1rem; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .cp-item {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.6rem 1rem; cursor: pointer; transition: background 0.12s;
+        }
+        .cp-item:hover, .cp-item.selected { background: rgba(0,217,255,0.08); }
+        .cp-item-icon { font-size: 1rem; width: 1.5rem; text-align: center; }
+        .cp-item-title { color: var(--text-primary); font-weight: 500; font-size: 0.88rem; }
+        .cp-item-desc { font-size: 0.75rem; color: var(--text-muted); }
+        .cp-empty { padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; }
+    </style>
+
+    <!-- ═══ MOBILE NAV DRAWER ═══ -->
+    <div class="mobile-nav-drawer" id="mobileDrawer">
+        <div class="mobile-nav-panel">
+            <a href="/dashboard/cortex" class="mobile-nav-link"><span class="hdr-nav-icon">&#x2B22;</span> Cortex</a>
+            <a href="/dashboard/threats" class="mobile-nav-link"><span class="hdr-nav-icon">&#x26A0;</span> Threats</a>
+            <a href="/dashboard/observatory" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F52D;</span> Observatory</a>
+            <a href="/dashboard/intelligence" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F9E0;</span> Intelligence</a>
+            <a href="/dashboard/fleet" class="mobile-nav-link"><span class="hdr-nav-icon">&#x2699;</span> Fleet</a>
+            <a href="/dashboard/igris" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F441;</span> IGRIS</a>
+            <a href="/dashboard/guardian" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F5A5;</span> Guardian C2</a>
+            {% if user and user.role.value == 'admin' %}
+            <a href="/admin" class="mobile-nav-link" style="color:var(--neural-danger);"><span class="hdr-nav-icon">&#x1F512;</span> Admin</a>
+            {% endif %}
         </div>
     </div>
 
-    <!-- Sidebar Overlay -->
-    <div class="sidebar-overlay" id="sidebarOverlay" role="button" tabindex="0" aria-label="Close sidebar"></div>
+    <!-- ═══ HEADER ═══ -->
+    <header class="amoskys-header">
+        <!-- Logo -->
+        <a href="/dashboard/cortex" class="hdr-logo">
+            <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS">
+            <span class="hdr-logo-text">AMOSKYS</span>
+        </a>
 
-    <!-- Sidebar Navigation -->
-    <nav class="sidebar-nav" id="sidebarNav">
-        <div class="sidebar-header">
-            <a href="/dashboard/cortex" style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit;">
-                <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS" style="width: 30px; height: 30px;">
-                <span class="sidebar-title">AMOSKYS</span>
+        <!-- Primary Nav (7 views) -->
+        <nav class="hdr-nav" id="primaryNav">
+            <a href="/dashboard/cortex" class="hdr-nav-link" data-nav="cortex">
+                <span class="hdr-nav-icon">&#x2B22;</span> Cortex
             </a>
-            <button class="sidebar-close" id="sidebarCloseBtn" aria-label="Close sidebar">✕</button>
-        </div>
-        <div class="sidebar-search">
-            <input type="text" class="sidebar-search-input" id="sidebarSearch" placeholder="Filter navigation..." aria-label="Filter navigation">
-        </div>
-        <div class="sidebar-menu" style="display:flex;flex-direction:column;min-height:calc(100vh - 140px);">
-            <div>
-                <div class="sidebar-section-label">Command Center</div>
-                <a href="/dashboard/cortex" class="sidebar-link">
-                    <span class="sidebar-link-icon">🧠</span>
-                    <span>Cortex</span>
-                </a>
-                <a href="/dashboard/agents" class="sidebar-link">
-                    <span class="sidebar-link-icon">🤖</span>
-                    <span>Agent Network</span>
-                </a>
-                <a href="/dashboard/igris" class="sidebar-link">
-                    <span class="sidebar-link-icon">👁️</span>
-                    <span>IGRIS</span>
-                </a>
-                <a href="/dashboard/guardian" class="sidebar-link">
-                    <span class="sidebar-link-icon">🖥️</span>
-                    <span>Guardian C2</span>
-                </a>
+            <a href="/dashboard/threats" class="hdr-nav-link" data-nav="threats">
+                <span class="hdr-nav-icon">&#x26A0;</span> Threats
+            </a>
+            <a href="/dashboard/observatory" class="hdr-nav-link" data-nav="observatory">
+                <span class="hdr-nav-icon">&#x1F52D;</span> Observatory
+            </a>
+            <a href="/dashboard/intelligence" class="hdr-nav-link" data-nav="intelligence">
+                <span class="hdr-nav-icon">&#x1F9E0;</span> Intelligence
+            </a>
+            <a href="/dashboard/fleet" class="hdr-nav-link" data-nav="fleet">
+                <span class="hdr-nav-icon">&#x2699;</span> Fleet
+            </a>
 
-                <div class="sidebar-section-label">Threat Intelligence</div>
-                <a href="/dashboard/threat-feed" class="sidebar-link">
-                    <span class="sidebar-link-icon">🚨</span>
-                    <span>Live Threat Feed</span>
-                </a>
-                <a href="/dashboard/mitre" class="sidebar-link">
-                    <span class="sidebar-link-icon">🎯</span>
-                    <span>MITRE ATT&CK</span>
-                </a>
-                <a href="/dashboard/hunt" class="sidebar-link">
-                    <span class="sidebar-link-icon">🔍</span>
-                    <span>Threat Hunting</span>
-                </a>
-                <a href="/dashboard/incidents" class="sidebar-link">
-                    <span class="sidebar-link-icon">🚨</span>
-                    <span>Incidents</span>
-                </a>
-                <a href="/dashboard/correlation" class="sidebar-link">
-                    <span class="sidebar-link-icon">🔗</span>
-                    <span>Correlation</span>
-                </a>
-                <a href="/dashboard/soma" class="sidebar-link">
-                    <span class="sidebar-link-icon">🔮</span>
-                    <span>SOMA Intelligence</span>
-                </a>
+            <div class="hdr-nav-sep"></div>
 
-                <div class="sidebar-section-label">Observatory</div>
-                <a href="/dashboard/posture" class="sidebar-link">
-                    <span class="sidebar-link-icon">🛡️</span>
-                    <span>Device Posture</span>
-                </a>
-                <a href="/dashboard/processes" class="sidebar-link">
-                    <span class="sidebar-link-icon">⚙️</span>
-                    <span>Process Telemetry</span>
-                </a>
-                <a href="/dashboard/network" class="sidebar-link">
-                    <span class="sidebar-link-icon">🌐</span>
-                    <span>Network Intelligence</span>
-                </a>
-                <a href="/dashboard/dns" class="sidebar-link">
-                    <span class="sidebar-link-icon">🔍</span>
-                    <span>DNS Intelligence</span>
-                </a>
-                <a href="/dashboard/file-integrity" class="sidebar-link">
-                    <span class="sidebar-link-icon">📁</span>
-                    <span>File Integrity</span>
-                </a>
-                <a href="/dashboard/persistence" class="sidebar-link">
-                    <span class="sidebar-link-icon">🔗</span>
-                    <span>Persistence</span>
-                </a>
-                <a href="/dashboard/auth" class="sidebar-link">
-                    <span class="sidebar-link-icon">🔑</span>
-                    <span>Auth &amp; Access</span>
-                </a>
-                <a href="/dashboard/peripherals" class="sidebar-link">
-                    <span class="sidebar-link-icon">🔌</span>
-                    <span>Peripherals</span>
-                </a>
-                <a href="/dashboard/observations" class="sidebar-link">
-                    <span class="sidebar-link-icon">📋</span>
-                    <span>Observation Domains</span>
-                </a>
+            <a href="/dashboard/igris" class="hdr-nav-link" data-nav="igris">
+                <span class="hdr-nav-icon">&#x1F441;</span> IGRIS
+            </a>
+            <a href="/dashboard/guardian" class="hdr-nav-link" data-nav="guardian">
+                <span class="hdr-nav-icon">&#x1F5A5;</span> C2
+            </a>
+        </nav>
 
-                <div class="sidebar-section-label">Monitoring</div>
-                <a href="/dashboard/agent-monitor" class="sidebar-link">
-                    <span class="sidebar-link-icon">📡</span>
-                    <span>Agent Monitor</span>
-                </a>
-                <a href="/dashboard/event-stream" class="sidebar-link">
-                    <span class="sidebar-link-icon">⚡</span>
-                    <span>Event Stream</span>
-                </a>
-                <a href="/dashboard/probe-explorer" class="sidebar-link">
-                    <span class="sidebar-link-icon">🔬</span>
-                    <span>Probe Explorer</span>
-                </a>
-                <a href="/dashboard/system" class="sidebar-link">
-                    <span class="sidebar-link-icon">📊</span>
-                    <span>System Health</span>
-                </a>
+        <!-- Mobile menu button -->
+        <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Menu">&#9776;</button>
 
-                <div class="sidebar-section-label">Deployment</div>
-                <a href="/dashboard/deploy" class="sidebar-link">
-                    <span class="sidebar-link-icon">🚀</span>
-                    <span>Deploy Agent</span>
-                </a>
-                <a href="/dashboard/my-agents" class="sidebar-link">
-                    <span class="sidebar-link-icon">💻</span>
-                    <span>My Agents</span>
-                </a>
+        <!-- Right status area -->
+        <div class="hdr-right">
+            <!-- Search trigger -->
+            <button class="hdr-search-trigger" id="searchTrigger">
+                &#x1F50D; Search <span class="hdr-search-kbd">&#x2318;K</span>
+            </button>
 
-                <div class="sidebar-section-label">Trust &amp; Data</div>
-                <a href="/dashboard/reliability" class="sidebar-link">
-                    <span class="sidebar-link-icon">⚖️</span>
-                    <span>Agent Reliability</span>
-                </a>
-                <a href="/dashboard/database" class="sidebar-link">
-                    <span class="sidebar-link-icon">🗄️</span>
-                    <span>Database</span>
-                </a>
+            <!-- Device hostname -->
+            <span class="hdr-hostname" id="header-hostname">--</span>
 
-                {% if user and user.role.value == 'admin' %}
-                <div class="sidebar-divider"></div>
-                <a href="/admin" class="sidebar-link sidebar-link-admin">
-                    <span class="sidebar-link-icon">🔐</span>
-                    <span>Admin Panel</span>
-                </a>
-                {% endif %}
+            <!-- System status -->
+            <div class="hdr-status-pill">
+                <div class="hdr-status-dot hdr-dot-online" id="system-status"></div>
+                <span>System</span>
             </div>
 
-            <div class="sidebar-footer">
-                <button class="logout-btn" id="logoutBtn">
-                    <span class="sidebar-link-icon">🚪</span>
-                    <span>Logout</span>
-                </button>
-                <div class="sidebar-version">AMOSKYS v2.4 &middot; Neural Security</div>
+            <!-- Threat status -->
+            <div class="hdr-status-pill hdr-status-pill-live">
+                <div class="hdr-status-dot hdr-dot-online" id="threat-status"></div>
+                <span>Threat</span>
             </div>
-        </div>
-    </nav>
 
-    <!-- Neural Header -->
-    <header class="neural-header">
-        <div class="header-content">
-            <div style="display: flex; align-items: center; gap: 1rem;">
-                <button class="hamburger-btn" id="hamburgerBtn">☰</button>
-                <a href="/dashboard/cortex" class="neural-logo">
-                    <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS Logo" class="neural-logo-image">
-                    <h1>AMOSKYS</h1>
-                    <span style="color: var(--text-secondary); font-size: 0.9rem;">Intelligence-First Security</span>
-                </a>
-            </div>
-            <div class="global-search">
-                <span class="global-search-icon">🔍</span>
-                <input type="text" class="global-search-input" placeholder="Search..." aria-label="Global search">
-                <span class="global-search-shortcut">⌘K</span>
-            </div>
-            <div class="neural-status">
-                <div class="status-indicator" id="header-device-info" style="gap:0.4rem;padding-right:0.8rem;border-right:1px solid rgba(255,255,255,0.08);" title="Monitored device">
-                    <span style="font-size:0.7rem;color:var(--neural-primary);font-weight:700;" id="header-hostname">--</span>
-                    <span style="font-size:0.6rem;color:var(--text-muted);font-family:monospace;" id="header-os-info">--</span>
-                </div>
-                <div class="status-indicator">
-                    <span style="color: var(--text-secondary); font-size: 0.85rem; margin-right: 0.5rem;">System</span>
-                    <div class="status-dot status-online" id="system-status"></div>
-                </div>
-                <div class="status-indicator">
-                    <span style="color: var(--text-secondary); font-size: 0.85rem; margin-right: 0.5rem;">Threat</span>
-                    <div class="status-dot status-online" id="threat-status"></div>
-                </div>
-                <div class="status-indicator" style="font-size:0.72rem;color:var(--text-muted);gap:0.3rem;" id="header-clock" title="Last dashboard refresh">
-                    <span id="header-time">--:--:--</span>
+            <!-- Clock -->
+            <span class="hdr-clock" id="header-time">--:--:--</span>
+
+            <!-- User menu -->
+            <div style="position:relative;">
+                <button class="hdr-user-btn" id="userMenuBtn" title="Account">A</button>
+                <div class="hdr-user-dropdown" id="userDropdown">
+                    {% if user and user.role.value == 'admin' %}
+                    <a href="/admin" class="hdr-dropdown-item">&#x1F512; Admin Panel</a>
+                    <div class="hdr-dropdown-sep"></div>
+                    {% endif %}
+                    <button class="hdr-dropdown-item danger" id="logoutBtn">&#x1F6AA; Logout</button>
                 </div>
             </div>
         </div>
     </header>
-    
-    <!-- Main Dashboard Content -->
+
+    <!-- ═══ TOAST CONTAINER ═══ -->
+    <div class="toast-container" id="toast-container"></div>
+    {% endif %}
+
+    <!-- ═══ MAIN CONTENT ═══ -->
     <main class="dashboard-main">
-        <div class="breadcrumb-bar" id="breadcrumb"></div>
         {% block content %}{% endblock %}
     </main>
-    
-    <!-- Real-time Update Script -->
-    <script nonce="{{ csp_nonce() }}">
-        /**
-         * Visibility-aware setInterval — pauses when tab is hidden.
-         * Usage: const id = visInterval(fn, ms);  clearInterval(id) to stop.
-         */
-        function visInterval(fn, ms) {
-            let id = setInterval(() => { if (!document.hidden) fn(); }, ms);
-            return id;
-        }
 
-        // Real-time dashboard updates
+    <!-- ═══ CORE SCRIPTS ═══ -->
+    <script nonce="{{ csp_nonce() }}">
+        /* ── Visibility-aware interval (always available) ── */
+        function visInterval(fn, ms) {
+            return setInterval(() => { if (!document.hidden) fn(); }, ms);
+        }
+    </script>
+
+    {% if request.args.get('embed') != '1' %}
+    <script nonce="{{ csp_nonce() }}">
+
+        /* ── NeuralDashboard (header updates) ── */
         class NeuralDashboard {
             constructor() {
-                this.updateInterval = 5000; // 5 seconds
+                this.updateInterval = 5000;
                 this.init();
             }
-            
+
             init() {
                 this.updateActiveNav();
-                this.buildBreadcrumb();
                 this.loadDeviceInfo();
                 this.startRealTimeUpdates();
                 this.updateTime();
@@ -1247,144 +574,85 @@
                     const d = await r.json();
                     if (d.status === 'success' && d.system) {
                         const el = document.getElementById('header-hostname');
-                        const osEl = document.getElementById('header-os-info');
-                        if (el) el.textContent = d.system.hostname || '--';
-                        if (osEl) {
-                            const sys = d.system.system || '';
-                            const osName = sys === 'Darwin' ? 'macOS' : sys;
-                            const rel = d.system.release || '';
-                            const arch = (d.system.architecture || [])[0] || '';
-                            osEl.textContent = osName + (rel ? ' ' + rel : '') + (arch ? ' · ' + arch : '');
+                        if (el) {
+                            const sys = d.system.system === 'Darwin' ? 'macOS' : (d.system.system || '');
+                            el.textContent = (d.system.hostname || '--') + ' · ' + sys;
                         }
                     }
-                } catch (e) { /* device info unavailable */ }
+                } catch (e) { /* silent */ }
             }
 
-            buildBreadcrumb() {
-                const el = document.getElementById('breadcrumb');
-                if (!el) return;
-                const PAGE_NAMES = {
-                    '/dashboard': 'Cortex', '/dashboard/': 'Cortex', '/dashboard/cortex': 'Cortex',
-                    '/dashboard/agents': 'Agent Network',
-                    '/dashboard/mitre': 'MITRE ATT&CK', '/dashboard/hunt': 'Threat Hunting',
-                    '/dashboard/incidents': 'Incidents', '/dashboard/network': 'Network Intelligence',
-                    '/dashboard/probe-explorer': 'Probe Explorer', '/dashboard/processes': 'Process Telemetry',
-                    '/dashboard/peripherals': 'Peripherals', '/dashboard/system': 'System Health',
-                    '/dashboard/deploy': 'Deploy Agent',
-                    '/dashboard/my-agents': 'My Agents', '/dashboard/database': 'Database',
-                    '/dashboard/threat-feed': 'Live Threat Feed',
-                    '/dashboard/reliability': 'Agent Reliability',
-                    '/dashboard/agent-monitor': 'Agent Monitor',
-                    '/dashboard/igris': 'IGRIS Supervisor',
-                    '/dashboard/guardian': 'Guardian C2',
-                    '/dashboard/event-stream': 'Event Stream',
-                    '/dashboard/correlation': 'Correlation',
-                    '/dashboard/soma': 'SOMA Intelligence',
-                    '/dashboard/posture': 'Device Posture',
-                    '/dashboard/dns': 'DNS Intelligence',
-                    '/dashboard/file-integrity': 'File Integrity',
-                    '/dashboard/persistence': 'Persistence Landscape',
-                    '/dashboard/auth': 'Auth & Access',
-                    '/dashboard/observations': 'Observation Domains',
-                };
-                const path = window.location.pathname.replace(/\/$/, '') || '/dashboard';
-                const pageName = PAGE_NAMES[path] || path.split('/').pop().replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                el.innerHTML = '<a href="/dashboard/cortex">Dashboard</a><span class="bc-sep">/</span><span class="bc-current">' + pageName + '</span>';
-            }
-            
             updateActiveNav() {
-                const currentPath = window.location.pathname;
-                const navLinks = document.querySelectorAll('.sidebar-link');
-
-                navLinks.forEach(link => {
-                    if (link.getAttribute('href') === currentPath) {
-                        link.classList.add('active');
-                    } else {
-                        link.classList.remove('active');
-                    }
+                const path = window.location.pathname;
+                /* Map old routes to nav items */
+                const NAV_MAP = {
+                    cortex: ['cortex', '/dashboard', '/dashboard/'],
+                    threats: ['threats', 'threat-feed', 'mitre', 'hunt', 'incidents', 'correlation', 'timeline-replay', 'event-stream'],
+                    observatory: ['observatory', 'posture', 'processes', 'network', 'dns', 'file-integrity', 'persistence', 'auth', 'peripherals', 'observations'],
+                    intelligence: ['intelligence', 'soma', 'reliability'],
+                    fleet: ['fleet', 'agents', 'agent-monitor', 'deploy', 'my-agents', 'agent-control-panel', 'probe-explorer', 'system', 'database'],
+                    igris: ['igris'],
+                    guardian: ['guardian'],
+                };
+                const segment = path.split('/').filter(Boolean).pop() || 'cortex';
+                let activeNav = 'cortex';
+                for (const [nav, segments] of Object.entries(NAV_MAP)) {
+                    if (segments.includes(segment)) { activeNav = nav; break; }
+                }
+                document.querySelectorAll('.hdr-nav-link').forEach(link => {
+                    link.classList.toggle('active', link.dataset.nav === activeNav);
+                });
+                document.querySelectorAll('.mobile-nav-link').forEach(link => {
+                    const href = link.getAttribute('href');
+                    link.classList.toggle('active', href && href.includes(activeNav));
                 });
             }
-            
+
             async startRealTimeUpdates() {
                 try {
-                    await this.updateSystemStatus();
-                    await this.updateThreatLevel();
-                } catch (error) {
-                    console.error('Dashboard update error:', error);
-                }
-                
-                // Schedule next update
+                    await Promise.allSettled([this.updateSystemStatus(), this.updateThreatLevel()]);
+                } catch (e) { /* silent */ }
                 setTimeout(() => this.startRealTimeUpdates(), this.updateInterval);
             }
-            
+
             async updateSystemStatus() {
                 try {
-                    const response = await fetch('/dashboard/api/live/metrics');
-                    const data = await response.json();
-
-                    if (data.status === 'success') {
-                        const statusDot = document.getElementById('system-status');
-
-                        const cpu = data.metrics.cpu.percent;
-                        const memory = data.metrics.memory.percent;
-
-                        if (cpu > 85 || memory > 90) {
-                            statusDot.className = 'status-dot status-critical';
-                        } else if (cpu > 70 || memory > 75) {
-                            statusDot.className = 'status-dot status-warning';
-                        } else {
-                            statusDot.className = 'status-dot status-online';
-                        }
+                    const r = await fetch('/dashboard/api/live/metrics');
+                    const d = await r.json();
+                    if (d.status === 'success') {
+                        const dot = document.getElementById('system-status');
+                        const cpu = d.metrics.cpu.percent, mem = d.metrics.memory.percent;
+                        if (cpu > 85 || mem > 90) dot.className = 'hdr-status-dot hdr-dot-critical';
+                        else if (cpu > 70 || mem > 75) dot.className = 'hdr-status-dot hdr-dot-warning';
+                        else dot.className = 'hdr-status-dot hdr-dot-online';
                     }
-                } catch (error) {
-                    console.error('System status update failed:', error);
-                }
+                } catch (e) { /* silent */ }
             }
-            
+
             async updateThreatLevel() {
                 try {
-                    const response = await fetch('/dashboard/api/live/threat-score');
-                    const data = await response.json();
-
-                    if (data.status === 'success') {
-                        const threatDot = document.getElementById('threat-status');
-
-                        const level = data.threat_level;
-
-                        if (level === 'CRITICAL') {
-                            threatDot.className = 'status-dot status-critical';
-                        } else if (level === 'HIGH' || level === 'MEDIUM') {
-                            threatDot.className = 'status-dot status-warning';
-                        } else {
-                            threatDot.className = 'status-dot status-online';
-                        }
+                    const r = await fetch('/dashboard/api/live/threat-score');
+                    const d = await r.json();
+                    if (d.status === 'success') {
+                        const dot = document.getElementById('threat-status');
+                        const level = d.threat_level;
+                        if (level === 'CRITICAL') dot.className = 'hdr-status-dot hdr-dot-critical';
+                        else if (level === 'HIGH' || level === 'MEDIUM') dot.className = 'hdr-status-dot hdr-dot-warning';
+                        else dot.className = 'hdr-status-dot hdr-dot-online';
                     }
-                } catch (error) {
-                    console.error('Threat level update failed:', error);
-                }
+                } catch (e) { /* silent */ }
             }
-            
+
             updateTime() {
-                const now = new Date();
-                const timeString = now.toLocaleTimeString() + ' UTC';
-                const timeEl = document.getElementById('current-time');
-                if (timeEl) {
-                    timeEl.textContent = timeString;
-                }
-                const headerTime = document.getElementById('header-time');
-                if (headerTime) {
-                    headerTime.textContent = now.toLocaleTimeString();
-                }
+                const el = document.getElementById('header-time');
+                if (el) el.textContent = new Date().toLocaleTimeString();
             }
         }
-        
-        // Initialize dashboard
-        document.addEventListener('DOMContentLoaded', () => {
-            new NeuralDashboard();
-        });
+
+        document.addEventListener('DOMContentLoaded', () => { new NeuralDashboard(); });
     </script>
-    
-    <!-- Real-time WebSocket Connection -->
+
+    <!-- ═══ WEBSOCKET ═══ -->
     <script nonce="{{ csp_nonce() }}">
         class RealTimeConnection {
             constructor() {
@@ -1395,501 +663,185 @@
                 this.connected = false;
                 this.initConnection();
             }
-            
+
             initConnection() {
                 try {
                     this.socket = io('/dashboard');
                     this.setupEventHandlers();
-                } catch (error) {
-                    console.error('Failed to initialize socket connection:', error);
-                    this.scheduleReconnect();
-                }
+                } catch (e) { this.scheduleReconnect(); }
             }
-            
+
             setupEventHandlers() {
                 this.socket.on('connect', () => {
-                    console.log('📡 Real-time connection established');
-                    this.connected = true;
-                    this.reconnectAttempts = 0;
-                    this.updateConnectionStatus(true);
-                    
-                    // Join current dashboard room
-                    const dashboardType = this.getCurrentDashboard();
-                    this.socket.emit('join_dashboard', { dashboard: dashboardType });
+                    this.connected = true; this.reconnectAttempts = 0;
+                    const dash = window.location.pathname.includes('/cortex') ? 'cortex' :
+                                 window.location.pathname.includes('/agents') ? 'agents' : 'cortex';
+                    this.socket.emit('join_dashboard', { dashboard: dash });
                 });
-                
-                this.socket.on('disconnect', () => {
-                    console.log('📡 Real-time connection lost');
-                    this.connected = false;
-                    this.updateConnectionStatus(false);
-                    this.scheduleReconnect();
-                });
-                
-                this.socket.on('initial_data', (data) => {
-                    console.log('📊 Initial dashboard data received');
-                    this.handleDataUpdate(data);
-                });
-                
-                this.socket.on('dashboard_update', (data) => {
-                    console.log('🔄 Dashboard update received');
-                    this.handleDataUpdate(data);
-                });
-
-                this.socket.on('agent_health_update', (data) => {
-                    window.dispatchEvent(new CustomEvent('ws:agent_health', {
-                        detail: data
-                    }));
-                });
-
-                this.socket.on('agent_alert_signal', (data) => {
-                    window.dispatchEvent(new CustomEvent('ws:agent_alert', {
-                        detail: data
-                    }));
-                });
-                
-                this.socket.on('error', (error) => {
-                    console.error('WebSocket error:', error);
-                });
-                
-                this.socket.on('connect_error', (error) => {
-                    console.error('Connection error:', error);
-                    this.scheduleReconnect();
-                });
+                this.socket.on('disconnect', () => { this.connected = false; this.scheduleReconnect(); });
+                this.socket.on('initial_data', (d) => this.handleDataUpdate(d));
+                this.socket.on('dashboard_update', (d) => this.handleDataUpdate(d));
+                this.socket.on('agent_health_update', (d) => window.dispatchEvent(new CustomEvent('ws:agent_health', { detail: d })));
+                this.socket.on('agent_alert_signal', (d) => window.dispatchEvent(new CustomEvent('ws:agent_alert', { detail: d })));
+                this.socket.on('connect_error', () => this.scheduleReconnect());
             }
-            
-            getCurrentDashboard() {
-                const path = window.location.pathname;
-                if (path.includes('/cortex')) return 'cortex';
-                if (path.includes('/soc')) return 'soc';
-                if (path.includes('/agents') || path.includes('/agent-monitor')) return 'agents';
-                if (path.includes('/system')) return 'system';
-                if (path.includes('/neural')) return 'cortex';
-                return 'cortex';
-            }
-            
+
             handleDataUpdate(data) {
-                // Dispatch combined event for backward compatibility
-                window.dispatchEvent(new CustomEvent('dashboardUpdate', {
-                    detail: data
-                }));
-                // Dispatch granular events per data category so pages can subscribe
-                var categories = ['threats', 'agents', 'metrics', 'threat_score', 'events', 'neural', 'posture', 'signals'];
-                for (var i = 0; i < categories.length; i++) {
-                    var key = categories[i];
-                    if (data[key]) {
-                        window.dispatchEvent(new CustomEvent('ws:' + key, { detail: data[key] }));
-                    }
-                }
-                // Update last update time
-                if (data.timestamp) {
-                    var updateTime = new Date(data.timestamp * 1000);
-                    var elements = document.querySelectorAll('.last-update');
-                    elements.forEach(function(el) {
-                        el.textContent = 'Last updated: ' + updateTime.toLocaleTimeString();
-                    });
-                }
+                window.dispatchEvent(new CustomEvent('dashboardUpdate', { detail: data }));
+                ['threats','agents','metrics','threat_score','events','neural','posture','signals'].forEach(key => {
+                    if (data[key]) window.dispatchEvent(new CustomEvent('ws:' + key, { detail: data[key] }));
+                });
             }
-            
-            updateConnectionStatus(connected) {
-                const connectionDot = document.getElementById('connection-status');
 
-                if (connectionDot) {
-                    if (connected) {
-                        connectionDot.className = 'status-dot status-online';
-                    } else {
-                        connectionDot.className = 'status-dot status-critical';
-                    }
-                }
-            }
-            
             scheduleReconnect() {
                 if (this.reconnectAttempts < this.maxReconnectAttempts) {
                     this.reconnectAttempts++;
-                    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-                    
-                    console.log(`🔄 Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
-                    
-                    setTimeout(() => {
-                        if (!this.connected) {
-                            this.initConnection();
-                        }
-                    }, delay);
-                } else {
-                    // Silently give up after max attempts - dashboard will still work with polling
-                    console.warn('⚠️ Real-time updates unavailable. Dashboard will use polling instead.');
-                    this.updateConnectionStatus(false);
+                    setTimeout(() => { if (!this.connected) this.initConnection(); },
+                               this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1));
                 }
             }
-            
-            requestUpdate(dashboardType = null) {
+
+            requestUpdate(dashboardType) {
                 if (this.connected && this.socket) {
-                    this.socket.emit('request_update', { 
-                        dashboard: dashboardType || this.getCurrentDashboard() 
-                    });
+                    this.socket.emit('request_update', { dashboard: dashboardType || 'cortex' });
                 }
             }
         }
-        
-        // Global real-time connection
+
         window.realTimeConnection = null;
-        
+        document.addEventListener('DOMContentLoaded', () => { window.realTimeConnection = new RealTimeConnection(); });
+    </script>
+
+    <!-- ═══ HEADER INTERACTIONS ═══ -->
+    <script nonce="{{ csp_nonce() }}">
         document.addEventListener('DOMContentLoaded', () => {
-            window.realTimeConnection = new RealTimeConnection();
+            /* User dropdown */
+            const userBtn = document.getElementById('userMenuBtn');
+            const dropdown = document.getElementById('userDropdown');
+            if (userBtn && dropdown) {
+                userBtn.addEventListener('click', (e) => { e.stopPropagation(); dropdown.classList.toggle('open'); });
+                document.addEventListener('click', () => dropdown.classList.remove('open'));
+            }
+
+            /* Logout */
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', async () => {
+                    try {
+                        await fetch('/api/user/auth/logout', { method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin' });
+                    } catch (e) { /* proceed */ }
+                    localStorage.clear(); sessionStorage.clear();
+                    window.location.href = '/auth/login';
+                });
+            }
+
+            /* Mobile menu */
+            const mobileBtn = document.getElementById('mobileMenuBtn');
+            const mobileDrawer = document.getElementById('mobileDrawer');
+            if (mobileBtn && mobileDrawer) {
+                mobileBtn.addEventListener('click', () => mobileDrawer.classList.toggle('open'));
+                mobileDrawer.addEventListener('click', (e) => { if (e.target === mobileDrawer) mobileDrawer.classList.remove('open'); });
+            }
+
+            /* Search trigger → command palette */
+            const searchTrigger = document.getElementById('searchTrigger');
+            if (searchTrigger) {
+                searchTrigger.addEventListener('click', () => window.commandPalette && window.commandPalette.open());
+            }
         });
     </script>
-    
-    <!-- Hamburger Navigation Functions -->
+
+    <!-- ═══ COMMAND PALETTE ═══ -->
     <script nonce="{{ csp_nonce() }}">
-        /**
-         * Toggle sidebar navigation menu
-         */
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebarNav');
-            const overlay = document.getElementById('sidebarOverlay');
-
-            const isOpen = sidebar.classList.contains('open');
-
-            if (isOpen) {
-                sidebar.classList.remove('open');
-                overlay.classList.remove('active');
-                document.body.classList.remove('sidebar-open');
-                document.body.style.overflow = '';
-            } else {
-                sidebar.classList.add('open');
-                overlay.classList.add('active');
-                document.body.classList.add('sidebar-open');
-                document.body.style.overflow = 'hidden';
-            }
-        }
-
-        /**
-         * Handle user logout
-         */
-        async function logout() {
-            try {
-                const response = await fetch('/api/user/auth/logout', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    credentials: 'same-origin',
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    // Clear any local storage/session storage
-                    localStorage.clear();
-                    sessionStorage.clear();
-
-                    // Redirect to login page
-                    window.location.href = '/auth/login';
-                } else {
-                    console.error('Logout failed:', data.error);
-                    // Force redirect anyway
-                    window.location.href = '/auth/login';
-                }
-            } catch (error) {
-                console.error('Logout error:', error);
-                // Force redirect on error
-                window.location.href = '/auth/login';
-            }
-        }
-
-        // Close sidebar when pressing ESC key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                const sidebar = document.getElementById('sidebarNav');
-                if (sidebar && sidebar.classList.contains('open')) {
-                    toggleSidebar();
-                }
-            }
-        });
-
-        // Update active link in sidebar based on current page
-        document.addEventListener('DOMContentLoaded', () => {
-            const currentPath = window.location.pathname;
-            const sidebarLinks = document.querySelectorAll('.sidebar-link');
-
-            sidebarLinks.forEach(link => {
-                if (link.getAttribute('href') === currentPath) {
-                    link.classList.add('active');
-                }
-            });
-
-            // Attach event listeners for sidebar toggle (CSP compliant - no inline handlers)
-            const hamburgerBtn = document.getElementById('hamburgerBtn');
-            const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
-            const sidebarOverlay = document.getElementById('sidebarOverlay');
-            const logoutBtn = document.getElementById('logoutBtn');
-
-            if (hamburgerBtn) {
-                hamburgerBtn.addEventListener('click', toggleSidebar);
-            }
-            if (sidebarCloseBtn) {
-                sidebarCloseBtn.addEventListener('click', toggleSidebar);
-            }
-            if (sidebarOverlay) {
-                sidebarOverlay.addEventListener('click', toggleSidebar);
-                sidebarOverlay.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        toggleSidebar();
-                    }
-                });
-            }
-            if (logoutBtn) {
-                logoutBtn.addEventListener('click', logout);
-            }
-        });
-
-        /**
-         * Command Palette / Global Search System
-         */
         class CommandPalette {
             constructor() {
                 this.overlay = document.getElementById('commandPalette');
                 this.input = document.getElementById('commandPaletteInput');
                 this.results = document.getElementById('commandPaletteResults');
                 this.selectedIndex = -1;
-                this.items = [];
-                
                 this.commands = [
-                    // Navigation commands
-                    { type: 'navigation', icon: '🧠', title: 'Cortex Command Center', description: 'Central security command center', url: '/dashboard/cortex', keywords: ['cortex', 'command', 'center', 'home', 'overview'] },
-                    { type: 'navigation', icon: '🤖', title: 'Agent Network', description: 'Manage deployed agents', url: '/dashboard/agents', keywords: ['agents', 'network', 'deploy'] },
-                    { type: 'navigation', icon: '🔬', title: 'Process Telemetry', description: 'Monitor process activity', url: '/dashboard/processes', keywords: ['process', 'telemetry', 'monitor'] },
-                    { type: 'navigation', icon: '📊', title: 'System Health', description: 'System metrics and health', url: '/dashboard/system', keywords: ['system', 'health', 'metrics'] },
-                    { type: 'navigation', icon: '🛡️', title: 'Device Posture', description: 'Cross-domain device health overview', url: '/dashboard/posture', keywords: ['posture', 'health', 'device', 'overview'] },
-                    { type: 'navigation', icon: '🌐', title: 'Network Intelligence', description: 'GeoIP network flow analysis', url: '/dashboard/network', keywords: ['network', 'geo', 'flow', 'traffic', 'ip'] },
-                    { type: 'navigation', icon: '🔍', title: 'DNS Intelligence', description: 'DGA detection and beaconing analysis', url: '/dashboard/dns', keywords: ['dns', 'dga', 'beaconing', 'domain', 'query'] },
-                    { type: 'navigation', icon: '📁', title: 'File Integrity', description: 'File change monitoring with risk scoring', url: '/dashboard/file-integrity', keywords: ['file', 'integrity', 'fim', 'change', 'hash'] },
-                    { type: 'navigation', icon: '🔗', title: 'Persistence Landscape', description: 'Autostart mechanism monitoring', url: '/dashboard/persistence', keywords: ['persistence', 'autostart', 'daemon', 'cron', 'launch'] },
-                    { type: 'navigation', icon: '🔑', title: 'Auth & Access', description: 'Login patterns and privilege escalation', url: '/dashboard/auth', keywords: ['auth', 'login', 'access', 'privilege', 'sudo'] },
-                    { type: 'navigation', icon: '📋', title: 'Observation Domains', description: 'Explore raw observation data across domains', url: '/dashboard/observations', keywords: ['observation', 'domain', 'unified', 'log', 'raw'] },
-                    { type: 'navigation', icon: '⚖', title: 'Agent Reliability', description: 'AMRDR drift detection and trust weights', url: '/dashboard/reliability', keywords: ['reliability', 'amrdr', 'drift', 'trust', 'weight', 'bayesian'] },
-                    { type: 'navigation', icon: '📡', title: 'Agent Monitor', description: 'Deep single-agent telemetry viewer', url: '/dashboard/agent-monitor', keywords: ['agent', 'monitor', 'telemetry', 'stream', 'live', 'events'] },
-
-                    // Actions
-                    { type: 'action', icon: '🔄', title: 'Refresh Dashboard', description: 'Reload current dashboard data', action: () => location.reload(), keywords: ['refresh', 'reload'] },
-                    { type: 'action', icon: '🚪', title: 'Logout', description: 'Sign out of AMOSKYS', action: () => logout(), keywords: ['logout', 'signout', 'exit'] },
-                    { type: 'action', icon: '☰', title: 'Toggle Sidebar', description: 'Open/close navigation sidebar', action: () => toggleSidebar(), keywords: ['sidebar', 'menu', 'nav'] },
-                    { type: 'action', icon: '🌙', title: 'Toggle Dark Mode', description: 'Switch color theme', action: () => this.toggleTheme(), keywords: ['dark', 'light', 'theme'] },
+                    { icon:'&#x2B22;', title:'Cortex', desc:'Command center', url:'/dashboard/cortex', kw:['cortex','home','overview','command'] },
+                    { icon:'&#x26A0;', title:'Threats — Live Feed', desc:'Real-time threat events', url:'/dashboard/threats', kw:['threats','feed','live','events'] },
+                    { icon:'&#x1F3AF;', title:'Threats — MITRE ATT&CK', desc:'Technique coverage matrix', url:'/dashboard/threats#mitre', kw:['mitre','attack','technique','coverage'] },
+                    { icon:'&#x1F50D;', title:'Threats — Hunt', desc:'Cross-table threat hunting', url:'/dashboard/threats#hunt', kw:['hunt','search','query','log'] },
+                    { icon:'&#x1F6A8;', title:'Threats — Incidents', desc:'Incident management', url:'/dashboard/threats#incidents', kw:['incidents','sla','triage'] },
+                    { icon:'&#x1F517;', title:'Threats — Correlation', desc:'Fusion engine incidents', url:'/dashboard/threats#correlation', kw:['correlation','fusion','rules'] },
+                    { icon:'&#x1F52D;', title:'Observatory', desc:'All domain monitoring', url:'/dashboard/observatory', kw:['observatory','domains','posture'] },
+                    { icon:'&#x2699;', title:'Observatory — Processes', desc:'Process telemetry', url:'/dashboard/observatory#processes', kw:['process','pid','executable'] },
+                    { icon:'&#x1F310;', title:'Observatory — Network', desc:'GeoIP flow analysis', url:'/dashboard/observatory#network', kw:['network','flow','geo','ip','traffic'] },
+                    { icon:'&#x1F50D;', title:'Observatory — DNS', desc:'DGA and beaconing', url:'/dashboard/observatory#dns', kw:['dns','dga','beacon','domain'] },
+                    { icon:'&#x1F4C1;', title:'Observatory — File Integrity', desc:'FIM change tracking', url:'/dashboard/observatory#fim', kw:['file','integrity','fim','hash'] },
+                    { icon:'&#x1F517;', title:'Observatory — Persistence', desc:'Autostart mechanisms', url:'/dashboard/observatory#persistence', kw:['persistence','launchd','cron','autostart'] },
+                    { icon:'&#x1F511;', title:'Observatory — Auth', desc:'Login & privilege tracking', url:'/dashboard/observatory#auth', kw:['auth','login','sudo','ssh'] },
+                    { icon:'&#x1F50C;', title:'Observatory — Peripherals', desc:'USB & Bluetooth devices', url:'/dashboard/observatory#peripherals', kw:['peripheral','usb','bluetooth','device'] },
+                    { icon:'&#x1F9E0;', title:'Intelligence', desc:'SOMA + INADS + Scoring', url:'/dashboard/intelligence', kw:['intelligence','soma','inads','ml','scoring','brain'] },
+                    { icon:'&#x2699;', title:'Fleet', desc:'Agent management & deploy', url:'/dashboard/fleet', kw:['fleet','agents','deploy','reliability'] },
+                    { icon:'&#x1F441;', title:'IGRIS', desc:'AI security analyst', url:'/dashboard/igris', kw:['igris','chat','ask','analyst'] },
+                    { icon:'&#x1F5A5;', title:'Guardian C2', desc:'Command & control terminal', url:'/dashboard/guardian', kw:['guardian','c2','terminal','command'] },
                 ];
-                
                 this.init();
             }
-            
+
             init() {
-                // Global search input click opens palette
-                const globalSearchInput = document.querySelector('.global-search-input');
-                if (globalSearchInput) {
-                    globalSearchInput.addEventListener('focus', () => this.open());
-                }
-                
-                // Keyboard shortcuts
-                document.addEventListener('keydown', (e) => this.handleGlobalKeydown(e));
-                
-                // Input handling
+                document.addEventListener('keydown', (e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); this.toggle(); }
+                    if (e.key === 'Escape' && this.isOpen()) this.close();
+                });
                 if (this.input) {
                     this.input.addEventListener('input', () => this.search(this.input.value));
-                    this.input.addEventListener('keydown', (e) => this.handlePaletteKeydown(e));
+                    this.input.addEventListener('keydown', (e) => this.handleKey(e));
                 }
-                
-                // Close on overlay click
                 if (this.overlay) {
-                    this.overlay.addEventListener('click', (e) => {
-                        if (e.target === this.overlay) this.close();
-                    });
-                }
-                
-                // Sidebar search
-                const sidebarSearch = document.getElementById('sidebarSearch');
-                if (sidebarSearch) {
-                    sidebarSearch.addEventListener('input', (e) => this.filterSidebar(e.target.value));
+                    this.overlay.addEventListener('click', (e) => { if (e.target === this.overlay) this.close(); });
                 }
             }
-            
-            handleGlobalKeydown(e) {
-                // Cmd/Ctrl + K to open palette
-                if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-                    e.preventDefault();
-                    this.toggle();
-                }
-                
-                // Escape to close
-                if (e.key === 'Escape' && this.isOpen()) {
-                    this.close();
-                }
+
+            handleKey(e) {
+                const items = this.results.querySelectorAll('.cp-item');
+                if (e.key === 'ArrowDown') { e.preventDefault(); this.selectedIndex = Math.min(this.selectedIndex + 1, items.length - 1); this.highlight(items); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); this.selectedIndex = Math.max(this.selectedIndex - 1, 0); this.highlight(items); }
+                else if (e.key === 'Enter') { e.preventDefault(); if (items[this.selectedIndex]) items[this.selectedIndex].click(); }
             }
-            
-            handlePaletteKeydown(e) {
-                const items = this.results.querySelectorAll('.command-palette-item');
-                
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    this.selectedIndex = Math.min(this.selectedIndex + 1, items.length - 1);
-                    this.updateSelection(items);
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
-                    this.updateSelection(items);
-                } else if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (this.selectedIndex >= 0 && items[this.selectedIndex]) {
-                        items[this.selectedIndex].click();
-                    }
-                }
-            }
-            
-            updateSelection(items) {
-                items.forEach((item, i) => {
-                    item.classList.toggle('selected', i === this.selectedIndex);
-                });
-                if (items[this.selectedIndex]) {
-                    items[this.selectedIndex].scrollIntoView({ block: 'nearest' });
-                }
-            }
-            
-            isOpen() {
-                return this.overlay && this.overlay.classList.contains('open');
-            }
-            
-            toggle() {
-                this.isOpen() ? this.close() : this.open();
-            }
-            
-            open() {
-                if (this.overlay) {
-                    this.overlay.classList.add('open');
-                    this.input.value = '';
-                    this.selectedIndex = -1;
-                    this.search('');
-                    setTimeout(() => this.input.focus(), 50);
-                }
-            }
-            
-            close() {
-                if (this.overlay) {
-                    this.overlay.classList.remove('open');
-                }
-            }
-            
-            search(query) {
-                const lowerQuery = query.toLowerCase().trim();
-                
+
+            highlight(items) { items.forEach((el, i) => el.classList.toggle('selected', i === this.selectedIndex)); }
+            isOpen() { return this.overlay && this.overlay.classList.contains('open'); }
+            toggle() { this.isOpen() ? this.close() : this.open(); }
+            open() { if (this.overlay) { this.overlay.classList.add('open'); this.input.value = ''; this.selectedIndex = 0; this.search(''); setTimeout(() => this.input.focus(), 50); } }
+            close() { if (this.overlay) this.overlay.classList.remove('open'); }
+
+            search(q) {
+                const lq = q.toLowerCase().trim();
                 let filtered = this.commands;
-                if (lowerQuery) {
-                    filtered = this.commands.filter(cmd => {
-                        const searchText = [cmd.title, cmd.description, ...cmd.keywords].join(' ').toLowerCase();
-                        return searchText.includes(lowerQuery);
-                    });
-                }
-                
-                this.renderResults(filtered, lowerQuery);
-            }
-            
-            renderResults(items, query) {
-                if (items.length === 0) {
-                    this.results.innerHTML = `
-                        <div class="command-palette-empty">
-                            <p>No results found for "${query}"</p>
-                        </div>
-                    `;
+                if (lq) filtered = this.commands.filter(c => [c.title, c.desc, ...c.kw].join(' ').toLowerCase().includes(lq));
+
+                if (!filtered.length) {
+                    this.results.innerHTML = '<div class="cp-empty">No results for "' + q + '"</div>';
                     return;
                 }
-                
-                // Group by type
-                const groups = {};
-                items.forEach(item => {
-                    const type = item.type || 'other';
-                    if (!groups[type]) groups[type] = [];
-                    groups[type].push(item);
-                });
-                
-                const typeLabels = {
-                    navigation: 'Navigation',
-                    action: 'Actions',
-                    other: 'Other'
-                };
-                
-                let html = '';
-                Object.entries(groups).forEach(([type, typeItems]) => {
-                    html += `
-                        <div class="command-palette-section">
-                            <div class="command-palette-section-title">${typeLabels[type] || type}</div>
-                            ${typeItems.map((item, i) => `
-                                <div class="command-palette-item" data-index="${i}" data-type="${type}" data-url="${item.url || ''}" data-action="${item.action ? 'true' : 'false'}">
-                                    <span class="command-palette-item-icon">${item.icon}</span>
-                                    <div class="command-palette-item-content">
-                                        <div class="command-palette-item-title">${this.highlight(item.title, query)}</div>
-                                        <div class="command-palette-item-description">${item.description}</div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    `;
-                });
-                
-                this.results.innerHTML = html;
+                this.results.innerHTML = filtered.map((c, i) =>
+                    '<div class="cp-item' + (i === 0 ? ' selected' : '') + '" data-url="' + c.url + '">' +
+                    '<span class="cp-item-icon">' + c.icon + '</span>' +
+                    '<div><div class="cp-item-title">' + c.title + '</div><div class="cp-item-desc">' + c.desc + '</div></div></div>'
+                ).join('');
                 this.selectedIndex = 0;
-                
-                // Add click handlers
-                const resultItems = this.results.querySelectorAll('.command-palette-item');
-                resultItems.forEach((el, i) => {
-                    el.addEventListener('click', () => this.executeItem(items[i]));
+                this.results.querySelectorAll('.cp-item').forEach(el => {
+                    el.addEventListener('click', () => { this.close(); window.location.href = el.dataset.url; });
                 });
-                
-                this.updateSelection(resultItems);
-            }
-            
-            highlight(text, query) {
-                if (!query) return text;
-                const regex = new RegExp(`(${query})`, 'gi');
-                return text.replace(regex, '<mark style="background: var(--neural-primary); color: var(--bg-primary); padding: 0 2px; border-radius: 2px;">$1</mark>');
-            }
-            
-            executeItem(item) {
-                this.close();
-                
-                if (item.url) {
-                    window.location.href = item.url;
-                } else if (item.action) {
-                    item.action();
-                }
-            }
-            
-            filterSidebar(query) {
-                const links = document.querySelectorAll('.sidebar-link');
-                const lowerQuery = query.toLowerCase().trim();
-                
-                links.forEach(link => {
-                    const text = link.textContent.toLowerCase();
-                    const visible = !lowerQuery || text.includes(lowerQuery);
-                    link.classList.toggle('hidden', !visible);
-                });
-            }
-            
-            toggleTheme() {
-                // Placeholder for theme toggle
-                document.body.classList.toggle('light-mode');
             }
         }
-        
-        // Initialize command palette
-        document.addEventListener('DOMContentLoaded', () => {
-            window.commandPalette = new CommandPalette();
-        });
+        document.addEventListener('DOMContentLoaded', () => { window.commandPalette = new CommandPalette(); });
     </script>
 
-    <!-- Phase 9: Notification System -->
+    <!-- Notifications -->
     <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+    {% endif %}{# end embed guard for core scripts #}
 
     {% block extra_scripts %}{% endblock %}
 
+{% if not is_embed %}
 <!-- ═══ IGRIS Floating Chat Widget ═══ -->
 <div id="igris-chat-widget" class="igris-widget">
-    <!-- Collapsed: floating icon -->
-    <button id="igris-chat-toggle" class="igris-toggle" title="Ask IGRIS">
+    <button id="igris-chat-toggle" class="igris-toggle" title="Ask IGRIS (Ctrl+I)">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/>
             <line x1="10" y1="22" x2="14" y2="22"/>
@@ -1899,23 +851,21 @@
         </svg>
         <span class="igris-badge" id="igris-badge" style="display:none;"></span>
     </button>
-
-    <!-- Expanded: chat panel -->
     <div id="igris-chat-panel" class="igris-panel" style="display:none;">
         <div class="igris-header">
             <div class="igris-header-left">
                 <div class="igris-avatar">I</div>
                 <div>
                     <div class="igris-title">IGRIS</div>
-                    <div class="igris-subtitle" id="igris-status-dot">Security Analyst</div>
+                    <div class="igris-subtitle">Security Analyst</div>
                 </div>
             </div>
             <div class="igris-header-actions">
-                <span class="igris-backend-label" style="font-size:10px;color:rgba(0,217,255,0.6);padding:2px 6px;">Claude API</span>
-                <button class="igris-hdr-btn" onclick="igrisReset()" title="New conversation">
+                <span style="font-size:10px;color:rgba(0,217,255,0.6);padding:2px 6px;">Claude API</span>
+                <button class="igris-hdr-btn" id="igrisResetBtn" title="New conversation">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                 </button>
-                <button class="igris-hdr-btn" onclick="igrisToggle()" title="Close">
+                <button class="igris-hdr-btn" id="igrisCloseBtn" title="Close">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
@@ -1927,7 +877,7 @@
         </div>
         <div class="igris-input-wrap">
             <input type="text" id="igris-input" class="igris-input" placeholder="Ask IGRIS..." autocomplete="off" />
-            <button id="igris-send" class="igris-send" onclick="igrisSend()">
+            <button id="igris-send" class="igris-send">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
             </button>
         </div>
@@ -1937,55 +887,45 @@
 <style>
 .igris-widget { position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9999; font-family: 'Inter', sans-serif; }
 .igris-toggle {
-    width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--neural-primary);
-    background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+    width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--neural-primary);
+    background: linear-gradient(135deg, #0a0e27, #1a1f3a);
     color: var(--neural-primary); cursor: pointer; display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 20px rgba(0,217,255,0.3), 0 0 40px rgba(0,217,255,0.1);
-    transition: all 0.3s ease; position: relative;
+    box-shadow: 0 4px 20px rgba(0,217,255,0.3); transition: all 0.3s; position: relative;
 }
 .igris-toggle:hover { transform: scale(1.1); box-shadow: 0 4px 30px rgba(0,217,255,0.5); }
 .igris-badge {
-    position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px;
-    background: var(--neural-danger); color: #fff; font-size: 0.65rem; font-weight: 700;
-    border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 4px;
+    position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px;
+    background: var(--neural-danger); color: #fff; font-size: 0.6rem; font-weight: 700;
+    border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 3px;
 }
 .igris-panel {
     width: 400px; max-height: 560px; background: #0d1230; border: 1px solid rgba(0,217,255,0.25);
-    border-radius: 14px; box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 60px rgba(0,217,255,0.08);
+    border-radius: 14px; box-shadow: 0 8px 40px rgba(0,0,0,0.6);
     display: flex; flex-direction: column; overflow: hidden;
-    animation: igrisSlideUp 0.25s ease-out;
+    animation: igrisUp 0.25s ease-out;
 }
-@keyframes igrisSlideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes igrisUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
 .igris-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0.75rem 1rem; background: rgba(0,217,255,0.06);
+    padding: 0.7rem 1rem; background: rgba(0,217,255,0.06);
     border-bottom: 1px solid rgba(0,217,255,0.15);
 }
 .igris-header-left { display: flex; align-items: center; gap: 0.6rem; }
 .igris-avatar {
-    width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--neural-primary), #0066ff);
-    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; color: #fff;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--neural-primary), #0066ff);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.8rem; color: #fff;
 }
-.igris-title { font-weight: 600; font-size: 0.9rem; color: #fff; }
-.igris-subtitle { font-size: 0.7rem; color: var(--neural-primary); opacity: 0.8; }
-.igris-header-actions { display: flex; gap: 0.35rem; }
+.igris-title { font-weight: 600; font-size: 0.85rem; color: #fff; }
+.igris-subtitle { font-size: 0.65rem; color: var(--neural-primary); opacity: 0.8; }
+.igris-header-actions { display: flex; gap: 0.3rem; }
 .igris-hdr-btn {
-    width: 28px; height: 28px; border-radius: 6px; border: none;
+    width: 26px; height: 26px; border-radius: 5px; border: none;
     background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5);
     cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 .igris-hdr-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
-.igris-backend-select {
-    background: rgba(0,217,255,0.08); border: 1px solid rgba(0,217,255,0.2);
-    color: var(--neural-primary); border-radius: 6px; padding: 0.2rem 0.4rem;
-    font-size: 0.65rem; font-family: inherit; cursor: pointer; outline: none;
-    appearance: none; -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2300d9ff' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 0.35rem center; padding-right: 1.2rem;
-}
-.igris-backend-select:hover { border-color: rgba(0,217,255,0.4); background-color: rgba(0,217,255,0.12); }
-.igris-backend-select option { background: #0d1230; color: #fff; }
-.igris-backend-switching { opacity: 0.5; pointer-events: none; }
 .igris-messages {
     flex: 1; overflow-y: auto; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem;
     max-height: 400px; min-height: 200px;
@@ -2008,10 +948,7 @@
     color: #fff; border-bottom-right-radius: 4px;
 }
 .igris-msg-content strong { color: var(--neural-primary); }
-.igris-msg-content code {
-    background: rgba(0,0,0,0.3); padding: 0.1rem 0.35rem; border-radius: 4px;
-    font-size: 0.78rem; color: #00ff88;
-}
+.igris-msg-content code { background: rgba(0,0,0,0.3); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.78rem; color: #00ff88; }
 .igris-typing { display: flex; gap: 4px; padding: 0.6rem 0.85rem; }
 .igris-typing span {
     width: 6px; height: 6px; border-radius: 50%; background: var(--neural-primary); opacity: 0.4;
@@ -2019,65 +956,61 @@
 }
 .igris-typing span:nth-child(2) { animation-delay: 0.2s; }
 .igris-typing span:nth-child(3) { animation-delay: 0.4s; }
-@keyframes igrisDot { 0%,80%,100% { opacity: 0.4; transform: scale(1); } 40% { opacity: 1; transform: scale(1.3); } }
+@keyframes igrisDot { 0%,80%,100% { opacity:0.4; transform:scale(1); } 40% { opacity:1; transform:scale(1.3); } }
 .igris-input-wrap {
     display: flex; align-items: center; gap: 0.5rem;
-    padding: 0.65rem 0.75rem; border-top: 1px solid rgba(0,217,255,0.12);
+    padding: 0.6rem 0.75rem; border-top: 1px solid rgba(0,217,255,0.12);
     background: rgba(0,0,0,0.2);
 }
 .igris-input {
     flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 8px; padding: 0.55rem 0.75rem; color: #fff; font-size: 0.82rem;
+    border-radius: 8px; padding: 0.5rem 0.75rem; color: #fff; font-size: 0.82rem;
     outline: none; font-family: inherit;
 }
 .igris-input:focus { border-color: var(--neural-primary); box-shadow: 0 0 8px rgba(0,217,255,0.15); }
 .igris-input::placeholder { color: rgba(255,255,255,0.3); }
 .igris-send {
-    width: 34px; height: 34px; border-radius: 8px; border: none;
+    width: 32px; height: 32px; border-radius: 8px; border: none;
     background: var(--neural-primary); color: #0a0e27; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.2s;
+    display: flex; align-items: center; justify-content: center; transition: background 0.2s;
 }
 .igris-send:hover { background: #33e5ff; }
 .igris-send:disabled { opacity: 0.4; cursor: not-allowed; }
-@media (max-width: 500px) {
-    .igris-panel { width: calc(100vw - 2rem); right: 0; bottom: 0; max-height: 80vh; border-radius: 14px 14px 0 0; }
-}
+@media (max-width: 500px) { .igris-panel { width: calc(100vw - 2rem); max-height: 80vh; border-radius: 14px 14px 0 0; } }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function() {
     var panel = document.getElementById('igris-chat-panel');
     var toggle = document.getElementById('igris-chat-toggle');
     var input = document.getElementById('igris-input');
     var messages = document.getElementById('igris-messages');
     var sendBtn = document.getElementById('igris-send');
-    var isOpen = false;
-    var isSending = false;
+    var isOpen = false, isSending = false;
 
-    window.igrisToggle = function() {
+    function igrisToggle() {
         isOpen = !isOpen;
         panel.style.display = isOpen ? 'flex' : 'none';
         toggle.style.display = isOpen ? 'none' : 'flex';
-        if (isOpen) { setTimeout(function() { input.focus(); }, 100); }
-    };
+        if (isOpen) setTimeout(function() { input.focus(); }, 100);
+    }
 
-    window.igrisReset = function() {
+    function igrisReset() {
         fetch('/dashboard/api/igris/chat/reset', { method: 'POST' });
         messages.innerHTML = '<div class="igris-msg igris-msg-bot"><div class="igris-msg-content">Conversation reset. How can I help?</div></div>';
-    };
+    }
 
     toggle.addEventListener('click', igrisToggle);
+    document.getElementById('igrisCloseBtn').addEventListener('click', igrisToggle);
+    document.getElementById('igrisResetBtn').addEventListener('click', igrisReset);
 
     function addMsg(role, text) {
         var div = document.createElement('div');
         div.className = 'igris-msg igris-msg-' + role;
-        // Simple markdown: **bold**, `code`, newlines
-        var html = text
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/\n/g, '<br>');
+        var html = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+            .replace(/`([^`]+)`/g,'<code>$1</code>')
+            .replace(/\n/g,'<br>');
         div.innerHTML = '<div class="igris-msg-content">' + html + '</div>';
         messages.appendChild(div);
         messages.scrollTop = messages.scrollHeight;
@@ -2085,58 +1018,35 @@
 
     function showTyping() {
         var div = document.createElement('div');
-        div.className = 'igris-msg igris-msg-bot';
-        div.id = 'igris-typing';
+        div.className = 'igris-msg igris-msg-bot'; div.id = 'igris-typing';
         div.innerHTML = '<div class="igris-typing"><span></span><span></span><span></span></div>';
-        messages.appendChild(div);
-        messages.scrollTop = messages.scrollHeight;
+        messages.appendChild(div); messages.scrollTop = messages.scrollHeight;
     }
 
-    function hideTyping() {
-        var el = document.getElementById('igris-typing');
-        if (el) el.remove();
-    }
+    function hideTyping() { var el = document.getElementById('igris-typing'); if (el) el.remove(); }
 
-    window.igrisSend = async function() {
+    async function igrisSend() {
         var text = input.value.trim();
         if (!text || isSending) return;
-        isSending = true;
-        sendBtn.disabled = true;
-        input.value = '';
-        addMsg('user', text);
-        showTyping();
-
+        isSending = true; sendBtn.disabled = true; input.value = '';
+        addMsg('user', text); showTyping();
         try {
             var resp = await fetch('/dashboard/api/igris/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({ message: text }),
             });
-            var data = await resp.json();
-            hideTyping();
-            if (data.status === 'success') {
-                addMsg('bot', data.response);
-            } else {
-                addMsg('bot', '**Error:** ' + (data.message || 'Unknown error'));
-            }
-        } catch (err) {
-            hideTyping();
-            addMsg('bot', '**Connection error:** ' + err.message);
-        }
-        isSending = false;
-        sendBtn.disabled = false;
-        input.focus();
-    };
+            var data = await resp.json(); hideTyping();
+            addMsg('bot', data.status === 'success' ? data.response : '**Error:** ' + (data.message || 'Unknown'));
+        } catch (err) { hideTyping(); addMsg('bot', '**Connection error:** ' + err.message); }
+        isSending = false; sendBtn.disabled = false; input.focus();
+    }
 
-    input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); igrisSend(); }
-    });
-
-    // Keyboard shortcut: Ctrl+I to toggle
-    document.addEventListener('keydown', function(e) {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'i') { e.preventDefault(); igrisToggle(); }
-    });
+    sendBtn.addEventListener('click', igrisSend);
+    input.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); igrisSend(); } });
+    document.addEventListener('keydown', function(e) { if ((e.ctrlKey || e.metaKey) && e.key === 'i') { e.preventDefault(); igrisToggle(); } });
 })();
 </script>
+{% endif %}
+
 </body>
 </html>

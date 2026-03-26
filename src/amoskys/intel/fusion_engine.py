@@ -75,6 +75,7 @@ class FusionEngine:
         eval_interval: int = 60,
         reliability_tracker: Optional[ReliabilityTracker] = None,
         inads_engine: Optional[Any] = None,
+        probe_calibrator: Optional[Any] = None,
     ):
         """Initialize fusion engine
 
@@ -84,6 +85,7 @@ class FusionEngine:
             eval_interval: How often to evaluate rules in seconds
             reliability_tracker: AMRDR reliability tracker (defaults to NoOp)
             inads_engine: Optional INADS multi-perspective scoring engine
+            probe_calibrator: Optional ProbeCalibrator for per-probe precision weights
         """
         self.db_path = db_path
         self.window_minutes = window_minutes
@@ -96,6 +98,9 @@ class FusionEngine:
 
         # INADS: multi-perspective anomaly scoring (None = disabled, backward compatible)
         self._inads = inads_engine
+
+        # Probe calibrator: per-probe precision weights for risk suppression
+        self._probe_cal = probe_calibrator
 
         # Per-device state: event buffers + risk scores
         # events: capped deque prevents unbounded memory growth
@@ -453,6 +458,7 @@ class FusionEngine:
         """
         state = self.device_state[device_id]
         score = state["risk_score"]  # Start from current score
+        state["_prev_score"] = score  # Snapshot for probe suppression
         reason_tags = []
         supporting_events = []
 
@@ -616,6 +622,32 @@ class FusionEngine:
                 )
 
             supporting_events.extend(incident.event_ids)
+
+        # ── Probe precision suppression ──
+        # Scale event-driven score increase by the precision weight of contributing probes.
+        # Low-precision probes (process_spawn at 0.06) suppress their contribution by ~94%.
+        # High-precision probes (dns_beaconing at 0.95) pass through near-fully.
+        base_score = state.get("_prev_score", 10)
+        event_driven_increase = score - base_score
+        if event_driven_increase > 0 and self._probe_cal is not None:
+            # Collect precision weights from events that had supporting evidence
+            probe_weights = []
+            for event in events:
+                pn = event.probe_name or (
+                    event.security_event.get("event_category", "") if event.security_event else ""
+                )
+                if pn:
+                    w = self._probe_cal.get_weight(pn)
+                    probe_weights.append(w)
+            if probe_weights:
+                avg_probe_weight = sum(probe_weights) / len(probe_weights)
+                suppressed_increase = event_driven_increase * avg_probe_weight
+                score = base_score + suppressed_increase
+                if avg_probe_weight < 0.9:
+                    reason_tags.append(
+                        f"probe_suppression(avg_w={avg_probe_weight:.2f},"
+                        f"raw={event_driven_increase:.0f}→{suppressed_increase:.0f})"
+                    )
 
         # INADS contribution: 0-50 points with kill chain amplification
         # (variable 1.0-1.5x based on progression ratio, gated by cross-cluster)

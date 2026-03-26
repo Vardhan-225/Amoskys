@@ -177,7 +177,7 @@
 }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 const TACTIC_NAMES = {
     'TA0001':'Initial Access','TA0002':'Execution','TA0003':'Persistence',
     'TA0004':'Privilege Escalation','TA0005':'Defense Evasion','TA0006':'Credential Access',

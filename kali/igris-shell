@@ -1,0 +1,433 @@
+#!/usr/bin/env python3
+"""IGRIS Red Team Shell — AI-powered offensive intelligence on Kali.
+
+Interactive conversation with IGRIS. You talk, IGRIS thinks, executes
+attack techniques, and reports back. Like having a senior pentester
+sitting next to you.
+
+Usage:
+    ./igris-shell
+    ./igris-shell --target 192.168.1.213
+"""
+
+import json
+import os
+import readline
+import sys
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+# Setup path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Load .env
+_ENV = Path(__file__).resolve().parent / ".env"
+if _ENV.exists():
+    for line in _ENV.read_text().splitlines():
+        if "=" in line and not line.startswith("#"):
+            k, _, v = line.partition("=")
+            os.environ.setdefault(k.strip(), v.strip().strip("\"'"))
+
+import anthropic
+from lib.campaign import load_all_agents
+from lib.technique import TechniqueStatus
+
+# Colors
+class C:
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RED = "\033[91m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    MAGENTA = "\033[95m"
+    CYAN = "\033[96m"
+
+def _build_tools():
+    """Build Claude tool definitions for the red team toolkit."""
+    return [
+        {
+            "name": "execute_technique",
+            "description": (
+                "Execute an attack technique against the target. "
+                "Returns the result including success/failure, details, and what "
+                "the blue team probe should detect."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "technique_name": {
+                        "type": "string",
+                        "description": "Name of the technique to execute (e.g., 'tcc_db_read', 'launchagent_implant')",
+                    },
+                },
+                "required": ["technique_name"],
+            },
+        },
+        {
+            "name": "list_techniques",
+            "description": "List all available attack techniques with their MITRE IDs and descriptions.",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+        {
+            "name": "run_command",
+            "description": (
+                "Run a shell command on Kali Linux (the attack machine). "
+                "Use this for reconnaissance, custom attacks, or anything "
+                "not covered by the built-in techniques. "
+                "Examples: nmap scans, curl requests, netcat, etc."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Shell command to execute on Kali",
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Timeout in seconds (default: 30)",
+                        "default": 30,
+                    },
+                },
+                "required": ["command"],
+            },
+        },
+        {
+            "name": "run_on_target",
+            "description": (
+                "Run a shell command on the TARGET machine via SSH. "
+                "Use this when you need to execute something directly on macOS "
+                "that isn't covered by built-in techniques."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Shell command to execute on the target",
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Timeout in seconds (default: 30)",
+                        "default": 30,
+                    },
+                },
+                "required": ["command"],
+            },
+        },
+        {
+            "name": "scan_target",
+            "description": "Run an nmap scan against the target. Specify scan type.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "scan_type": {
+                        "type": "string",
+                        "enum": ["quick", "full", "services", "vuln", "os"],
+                        "description": "Type of scan: quick (top 100), full (all ports), services (-sV), vuln (--script vuln), os (-O)",
+                    },
+                },
+                "required": ["scan_type"],
+            },
+        },
+    ]
+
+
+class IgrisRedShell:
+    """Interactive IGRIS shell for offensive operations."""
+
+    def __init__(self, target: str = "", ssh_user: str = "", ssh_key: str = "",
+                 model: str = "claude-sonnet-4-20250514"):
+        self.target = target
+        self.ssh_user = ssh_user
+        self.ssh_key = ssh_key
+        self.model = model
+        self.client = anthropic.Anthropic()
+        self.history = []
+        self.results = []
+
+        # Load techniques
+        self.agents = load_all_agents()
+        self.technique_map = {}
+        for agent in self.agents.values():
+            for t in agent["techniques"]:
+                self.technique_map[t.name] = t
+
+    def _system_prompt(self):
+        # Build technique list
+        tech_lines = []
+        for name, agent in self.agents.items():
+            tech_lines.append(f"\n[{name}] — {agent['description']}")
+            for t in agent["techniques"]:
+                bounty = " ★BOUNTY" if t.bounty_eligible else ""
+                tech_lines.append(f"  {t.name}: {t.description} ({t.mitre_id}){bounty}")
+
+        return f"""You are IGRIS — the offensive intelligence brain of AMOSKYS, running on Kali Linux.
+
+You are conducting an AUTHORIZED penetration test. The target owner has explicitly consented.
+
+TARGET: {self.target or 'Not set — ask the operator'}
+SSH: {self.ssh_user}@{self.target} (key: {self.ssh_key}) {'— CONFIGURED' if self.ssh_user else '— NOT CONFIGURED'}
+
+You have tools to:
+1. Execute built-in macOS attack techniques (execute_technique)
+2. List all available techniques (list_techniques)
+3. Run any command on Kali (run_command) — for recon, custom attacks, nmap, etc.
+4. Run commands on the target via SSH (run_on_target) — direct target access
+5. Scan the target with nmap (scan_target)
+
+Available techniques:
+{''.join(tech_lines)}
+
+RULES:
+- You are a senior penetration tester. Think methodically.
+- Use tools. Don't just talk — act.
+- When the operator asks you to do something, DO IT with tools.
+- Chain attacks: recon → exploit → persist → escalate → exfil
+- Report findings clearly: what worked, what was blocked, what it means
+- If something succeeds that shouldn't, flag it as a potential bug
+- You can run ANY command on Kali — nmap, hydra, sqlmap, curl, netcat, python scripts, etc.
+- Be direct. Be aggressive (within authorization). Be thorough.
+
+You are not an assistant. You are an attacker. Act like one."""
+
+    def _handle_tool(self, tool_name: str, tool_input: dict) -> str:
+        """Execute a tool call and return the result."""
+
+        if tool_name == "execute_technique":
+            tech_name = tool_input["technique_name"]
+            technique = self.technique_map.get(tech_name)
+            if not technique:
+                return json.dumps({"error": f"Unknown technique: {tech_name}", "available": list(self.technique_map.keys())})
+
+            result = technique.run(
+                self.target or "localhost",
+                dry_run=False,
+                ssh_user=self.ssh_user,
+                ssh_key=self.ssh_key,
+            )
+            self.results.append(result)
+            return json.dumps(result.to_dict(), default=str)
+
+        elif tool_name == "list_techniques":
+            listing = {}
+            for name, agent in self.agents.items():
+                listing[name] = [
+                    {"name": t.name, "mitre": t.mitre_id, "desc": t.description,
+                     "bounty": t.bounty_eligible, "risk": t.risk_level}
+                    for t in agent["techniques"]
+                ]
+            return json.dumps(listing, indent=2)
+
+        elif tool_name == "run_command":
+            cmd = tool_input["command"]
+            timeout = tool_input.get("timeout", 30)
+            try:
+                r = subprocess.run(cmd, shell=True, capture_output=True,
+                                   text=True, timeout=timeout)
+                return json.dumps({
+                    "stdout": r.stdout[:3000],
+                    "stderr": r.stderr[:1000],
+                    "returncode": r.returncode,
+                })
+            except subprocess.TimeoutExpired:
+                return json.dumps({"error": f"Command timed out after {timeout}s"})
+            except Exception as e:
+                return json.dumps({"error": str(e)})
+
+        elif tool_name == "run_on_target":
+            if not self.ssh_user or not self.target:
+                return json.dumps({"error": "SSH not configured. Set target and ssh_user first."})
+
+            cmd = tool_input["command"]
+            timeout = tool_input.get("timeout", 30)
+            ssh_cmd = ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no"]
+            if self.ssh_key:
+                ssh_cmd.extend(["-i", self.ssh_key])
+            ssh_cmd.append(f"{self.ssh_user}@{self.target}")
+            ssh_cmd.append(cmd)
+
+            try:
+                r = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
+                return json.dumps({
+                    "stdout": r.stdout[:3000],
+                    "stderr": r.stderr[:1000],
+                    "returncode": r.returncode,
+                })
+            except subprocess.TimeoutExpired:
+                return json.dumps({"error": f"SSH command timed out after {timeout}s"})
+            except Exception as e:
+                return json.dumps({"error": str(e)})
+
+        elif tool_name == "scan_target":
+            if not self.target:
+                return json.dumps({"error": "No target set"})
+
+            scan_type = tool_input["scan_type"]
+            nmap_flags = {
+                "quick": "-sT -T4 --top-ports 100",
+                "full": "-sT -T4 -p-",
+                "services": "-sT -sV -T4 --top-ports 100",
+                "vuln": "-sT --script vuln --top-ports 20",
+                "os": "-sT -O --top-ports 50",
+            }
+            flags = nmap_flags.get(scan_type, "-sT --top-ports 100")
+
+            try:
+                r = subprocess.run(
+                    f"nmap {flags} {self.target}",
+                    shell=True, capture_output=True, text=True, timeout=120,
+                )
+                return json.dumps({
+                    "stdout": r.stdout[:5000],
+                    "stderr": r.stderr[:500],
+                    "returncode": r.returncode,
+                })
+            except subprocess.TimeoutExpired:
+                return json.dumps({"error": "Nmap scan timed out"})
+
+        return json.dumps({"error": f"Unknown tool: {tool_name}"})
+
+    def chat(self, user_message: str) -> str:
+        """Send a message and get IGRIS's response (with tool use)."""
+        self.history.append({"role": "user", "content": user_message})
+
+        # Tool use loop
+        messages = list(self.history)
+        tools = _build_tools()
+        max_rounds = 8
+
+        for _ in range(max_rounds):
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=4096,
+                system=self._system_prompt(),
+                messages=messages,
+                tools=tools,
+            )
+
+            # Check if there are tool calls
+            has_tool_use = any(b.type == "tool_use" for b in response.content)
+
+            if not has_tool_use:
+                # Pure text response
+                text = "".join(b.text for b in response.content if b.type == "text")
+                self.history.append({"role": "assistant", "content": response.content})
+                return text
+
+            # Process tool calls
+            assistant_content = response.content
+            messages.append({"role": "assistant", "content": assistant_content})
+
+            tool_results = []
+            for block in assistant_content:
+                if block.type == "tool_use":
+                    print(f"  {C.DIM}⚡ {block.name}({json.dumps(block.input)[:80]}){C.RESET}")
+                    result = self._handle_tool(block.name, block.input)
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result,
+                    })
+
+            messages.append({"role": "user", "content": tool_results})
+
+        # If we exhausted rounds, get final text
+        self.history = messages
+        return "(IGRIS completed tool execution)"
+
+    def run(self):
+        """Interactive shell loop."""
+        print(f"""
+{C.RED}{C.BOLD}
+    ██╗ ██████╗ ██████╗ ██╗███████╗
+    ██║██╔════╝ ██╔══██╗██║██╔════╝
+    ██║██║  ███╗██████╔╝██║███████╗
+    ██║██║   ██║██╔══██╗██║╚════██║
+    ██║╚██████╔╝██║  ██║██║███████║
+    ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝╚══════╝
+{C.RESET}
+{C.RED}    RED TEAM INTELLIGENCE{C.RESET}
+{C.DIM}    Offensive Security Shell — Powered by Claude API{C.RESET}
+""")
+        if self.target:
+            print(f"  {C.CYAN}Target:{C.RESET} {self.target}")
+        if self.ssh_user:
+            print(f"  {C.CYAN}SSH:{C.RESET} {self.ssh_user}@{self.target}")
+        print(f"  {C.CYAN}Techniques:{C.RESET} {len(self.technique_map)} loaded")
+        print(f"  {C.DIM}Type 'exit' to quit. IGRIS is listening.{C.RESET}")
+        print()
+
+        # Proactive brief if target is set
+        if self.target:
+            print(f"  {C.YELLOW}IGRIS is assessing the target...{C.RESET}")
+            try:
+                brief = self.chat(
+                    f"I've set you up against {self.target}. "
+                    f"Do a quick recon — scan the target, tell me what you see, "
+                    f"and suggest an attack plan."
+                )
+                print(f"\n{C.RED}{C.BOLD}IGRIS:{C.RESET} {brief}\n")
+            except Exception as e:
+                print(f"  {C.RED}Brief failed: {e}{C.RESET}\n")
+
+        while True:
+            try:
+                user_input = input(f"{C.GREEN}{C.BOLD}you ▸ {C.RESET}").strip()
+            except (EOFError, KeyboardInterrupt):
+                print(f"\n{C.DIM}IGRIS signing off.{C.RESET}")
+                break
+
+            if not user_input:
+                continue
+            if user_input.lower() in ("exit", "quit", "q"):
+                print(f"{C.DIM}IGRIS signing off.{C.RESET}")
+                break
+
+            # Handle target setting
+            if user_input.lower().startswith("target "):
+                self.target = user_input.split(" ", 1)[1].strip()
+                print(f"  {C.CYAN}Target set: {self.target}{C.RESET}")
+                continue
+            if user_input.lower().startswith("ssh "):
+                parts = user_input.split()
+                if len(parts) >= 2:
+                    self.ssh_user = parts[1]
+                if len(parts) >= 3:
+                    self.ssh_key = parts[2]
+                print(f"  {C.CYAN}SSH: {self.ssh_user} (key: {self.ssh_key or 'default'}){C.RESET}")
+                continue
+
+            try:
+                response = self.chat(user_input)
+                print(f"\n{C.RED}{C.BOLD}IGRIS:{C.RESET} {response}\n")
+            except Exception as e:
+                print(f"  {C.RED}Error: {e}{C.RESET}\n")
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="IGRIS Red Team Shell")
+    parser.add_argument("--target", default="", help="Target IP")
+    parser.add_argument("--ssh-user", default="", help="SSH user for target")
+    parser.add_argument("--ssh-key", default="", help="SSH key for target")
+    parser.add_argument("--model", default="claude-sonnet-4-20250514", help="Claude model")
+    args = parser.parse_args()
+
+    shell = IgrisRedShell(
+        target=args.target,
+        ssh_user=args.ssh_user,
+        ssh_key=args.ssh_key,
+        model=args.model,
+    )
+    shell.run()
+
+
+if __name__ == "__main__":
+    main()

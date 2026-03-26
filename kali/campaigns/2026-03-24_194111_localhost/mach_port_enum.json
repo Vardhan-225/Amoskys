@@ -1,0 +1,20 @@
+{
+  "technique_id": "mach_port_enum",
+  "technique_name": "Enumerate Mach ports for IPC attack surface mapping",
+  "mitre_id": "T1559",
+  "status": "success",
+  "timestamp": "2026-03-24T19:42:16.610883+00:00",
+  "duration_ms": 13.870707996829879,
+  "details": {
+    "mach_info": "\tdeath port = 0x1903\n\t\t       0   (pe) \tcom.apple.ReportSystemMemory\n\t\t       0      - \tcom.apple.diagnosticextensions.osx.timemachine.helper\n\t\t       0      - \tcom.apple.swiftuitracingsupport.xpc\n\t\t       0      0 \tcom.apple.gkreport\n\t\t       0   (pe) \tcom.apple.endpointsecurity.endpointsecurityd\n\t\t     512      - \tcom.apple.airportd\n\t\t       0      0 \tcom.apple.signpost.signpost_reporter\n\t\t   32093   (pe) \tcom.apple.ReportCrash.Root\n\t\t    1810      - \tcom.apple.CrashReporterSupportHelper\n\t\t   ",
+    "apple_services": "\t\tcom.apple.launchd.service-stats-default (4096 records)\n\tauxiliary bootstrapper = com.apple.xpc.smd (complete)\n\t\t       0      - \tcom.apple.lskdd\n\t\t       0   (pe) \tcom.apple.kernelmanager_helper\n\t\t     416      - \tcom.apple.runningboardd\n\t\t       0      - \tcom.apple.installcoordination_proxy\n\t\t       0      1 \tcom.apple.wifiFirmwareLoader\n\t\t       0      - \tcom.apple.uninstalld\n\t\t       0      - \tcom.apple.diagnosticextensions.osx.spotlight.helper\n\t\t       0      - \tcom.apple.tzlinkd\n\t\t       "
+  },
+  "artifacts": [],
+  "cleanup_done": false,
+  "blue_team_probe": "XPCProbe",
+  "blue_team_agent": "UnifiedLogAgent",
+  "bounty_eligible": false,
+  "bounty_category": "",
+  "bounty_estimate": "",
+  "error_message": ""
+}
