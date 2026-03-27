@@ -3,7 +3,7 @@
 # Phase 2.4 - Dashboard Integration with Real-time Updates
 
 flask==3.0.0
-gunicorn==21.2.0
+gunicorn==22.0.0
 Werkzeug==3.0.1
 
 # Real-time communication (Phase 2.4)
