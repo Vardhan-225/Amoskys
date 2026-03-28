@@ -2,7 +2,7 @@
 # Production-ready stack for NGINX + Gunicorn deployment
 # Phase 2.4 - Dashboard Integration with Real-time Updates
 
-flask==3.0.0
+flask==3.1.3
 gunicorn==21.2.0
 Werkzeug==3.0.1
 
