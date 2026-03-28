@@ -196,7 +196,7 @@ jobs:
 
       - name: Build and push web image
         id: build-web
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: deploy/Dockerfile.web
@@ -209,7 +209,7 @@ jobs:
 
       - name: Build and push agent image
         id: build-agent
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: deploy/Dockerfile.agent
