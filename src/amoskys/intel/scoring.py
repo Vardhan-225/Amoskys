@@ -1044,6 +1044,19 @@ class ScoringEngine:
         # DETECTION mode — full scoring with baseline awareness
         known_factor = device_bl.is_known_pattern(event)
 
+        # Continue learning in DETECTION mode — baselines evolve with the system.
+        # New legitimate patterns get absorbed; the known_factor for familiar
+        # events grows over time, naturally suppressing repeat benign activity.
+        device_bl.record_learning(event)
+
+        # Periodic save: persist baseline every 25 events so it survives restarts.
+        # The analyzer may be force-killed (SIGKILL) so we can't rely on close().
+        if device_bl._total_learned % 25 == 0 and device_bl._total_learned > 0:
+            os.makedirs(self._baseline_dir, exist_ok=True)
+            device_bl.save(
+                os.path.join(self._baseline_dir, f"{device_id}.json")
+            )
+
         # Compute three dimensions
         geo_score, geo_factors = self._geo.score(event)
         temp_score, temp_factors = self._temp.score(event)

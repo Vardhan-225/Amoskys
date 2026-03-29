@@ -772,12 +772,23 @@ def main() -> int:
 
         shutdown_event.wait(timeout=2.0)
 
-    # ── Shutdown ──
+    # ── Shutdown: persist state so baselines survive restarts ──
     logger.info(
-        "Analyzer shutting down after %d cycles, %d total events",
+        "Analyzer shutting down after %d cycles, %d total events — persisting state",
         cycle,
         total_events_processed,
     )
+    if scorer is not None:
+        try:
+            scorer.close()
+            logger.info("ScoringEngine state persisted (baselines, calibration, thresholds)")
+        except Exception as e:
+            logger.warning("ScoringEngine close failed: %s", e)
+    if soma is not None:
+        try:
+            soma.close()
+        except Exception:
+            pass
     return 0
 
 
