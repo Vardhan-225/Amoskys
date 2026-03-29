@@ -253,6 +253,58 @@ class SecurityMixin:
                         "Scoring failed for event — continuing", exc_info=True
                     )
 
+            # Sigma detection-as-code: evaluate against stateless rules
+            try:
+                from amoskys.detection.sigma_engine import SigmaEngine
+
+                if not hasattr(self, "_sigma"):
+                    self._sigma = SigmaEngine()
+                    self._sigma_aliases = {
+                        "macos_launchagent_new": "new_launch_agent",
+                        "macos_launchagent_modified": "new_launch_agent",
+                        "macos_cron_new": "cron_modification",
+                        "macos_cron_modified": "cron_modification",
+                        "macos_quarantine_bypass": "quarantine_bypass",
+                        "macos_hidden_file_new": "hidden_file_created",
+                        "log_tampering_detected": "log_timestamp_gap",
+                        "suspicious_script": "suspicious_spawn",
+                        "binary_from_temp": "suspicious_spawn",
+                        "browser_to_terminal": "browser_to_terminal",
+                        "browser_credential_theft": "credential_harvest",
+                        "session_cookie_theft": "session_cookie_theft",
+                        "keychain_cli_abuse": "credential_harvest",
+                        "exfil_spike": "data_exfil_http",
+                        "cloud_exfil_detected": "cloud_storage_connection",
+                        "c2_beacon_suspect": "c2_web_beacon",
+                        "connection_burst_detected": "c2_web_beacon",
+                        "cleartext_protocol": "data_exfil_http",
+                        "lateral_ssh": "outbound_ssh",
+                        "fake_password_dialog": "fake_password_dialog",
+                        "port_scan_detected": "schema_enumeration",
+                        "long_lived_connection": "long_lived_connection",
+                    }
+                sigma_input = dict(event_data)
+                cat = sigma_input.get("event_category", "")
+                sigma_input["event_type"] = self._sigma_aliases.get(cat, cat)
+                sigma_matches = self._sigma.evaluate(sigma_input)
+                if sigma_matches:
+                    best = max(
+                        sigma_matches,
+                        key=lambda m: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(m.level, 0),
+                    )
+                    event_data["detection_source"] = (
+                        event_data.get("detection_source", "") + "|sigma"
+                    )
+                    ind = event_data.get("indicators", {})
+                    if isinstance(ind, str):
+                        ind = json.loads(ind)
+                    ind["sigma_rule_id"] = best.rule_id
+                    ind["sigma_rule_title"] = best.rule_title
+                    ind["sigma_level"] = best.level
+                    event_data["indicators"] = ind
+            except Exception:
+                logger.debug("Sigma evaluation failed", exc_info=True)
+
             # Extract sequence match score from scoring factors into indicators
             # so SOMA Brain can use it as a training feature (Step 4)
             score_factors = event_data.get("score_factors", [])

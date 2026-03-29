@@ -81,6 +81,20 @@ def main() -> int:
         logger.warning("ScoringEngine not available: %s", e)
         scorer = None
 
+    # ── Sigma detection-as-code engine (56 stateless rules) ──
+    sigma = None
+    try:
+        from amoskys.detection.sigma_engine import SigmaEngine
+
+        sigma = SigmaEngine()
+        logger.info(
+            "SigmaEngine initialized — %d rules loaded, %d techniques covered",
+            sigma.rule_count,
+            len(sigma.get_coverage().technique_to_rules),
+        )
+    except Exception as e:
+        logger.warning("SigmaEngine not available: %s", e)
+
     # ── Forensic context enricher (cross-agent attribution) ──
     forensic = None
     try:
@@ -388,6 +402,100 @@ def main() -> int:
                                         scorer.score_event(event_data)
                                     except Exception:
                                         pass
+
+                                # Sigma detection-as-code: evaluate against 56 rules
+                                if sigma is not None:
+                                    try:
+                                        # Sigma rules match on event_type; probes
+                                        # use event_category with different naming.
+                                        # Map probe categories to sigma conventions.
+                                        _SIGMA_ALIASES = {
+                                            "macos_launchagent_new": "new_launch_agent",
+                                            "macos_launchagent_modified": "new_launch_agent",
+                                            "macos_cron_new": "cron_modification",
+                                            "macos_cron_modified": "cron_modification",
+                                            "macos_quarantine_bypass": "quarantine_bypass",
+                                            "macos_hidden_file_new": "hidden_file_created",
+                                            "log_tampering_detected": "log_timestamp_gap",
+                                            "suspicious_script": "suspicious_spawn",
+                                            "binary_from_temp": "suspicious_spawn",
+                                            "browser_to_terminal": "browser_to_terminal",
+                                            "browser_credential_theft": "credential_harvest",
+                                            "session_cookie_theft": "session_cookie_theft",
+                                            "keychain_cli_abuse": "credential_harvest",
+                                            "exfil_spike": "data_exfil_http",
+                                            "cloud_exfil_detected": "cloud_storage_connection",
+                                            "cloud_sync_active": "cloud_storage_connection",
+                                            "c2_beacon_suspect": "c2_web_beacon",
+                                            "connection_burst_detected": "c2_web_beacon",
+                                            "cleartext_protocol": "data_exfil_http",
+                                            "lateral_ssh": "outbound_ssh",
+                                            "high_cpu": "crypto_mining_detected",
+                                            "fake_password_dialog": "fake_password_dialog",
+                                            "port_scan_detected": "schema_enumeration",
+                                            "long_lived_connection": "long_lived_connection",
+                                        }
+                                        sigma_input = dict(event_data)
+                                        cat = sigma_input.get("event_category", "")
+                                        sigma_input["event_type"] = (
+                                            _SIGMA_ALIASES.get(cat, cat)
+                                        )
+                                        sigma_matches = sigma.evaluate(sigma_input)
+                                        if sigma_matches:
+                                            best = max(
+                                                sigma_matches,
+                                                key=lambda m: {
+                                                    "critical": 4,
+                                                    "high": 3,
+                                                    "medium": 2,
+                                                    "low": 1,
+                                                }.get(m.level, 0),
+                                            )
+                                            event_data["detection_source"] = (
+                                                event_data.get(
+                                                    "detection_source", ""
+                                                )
+                                                + "|sigma"
+                                            )
+                                            ind = event_data.get("indicators", {})
+                                            if isinstance(ind, str):
+                                                ind = json.loads(ind)
+                                            ind["sigma_rule_id"] = best.rule_id
+                                            ind["sigma_rule_title"] = (
+                                                best.rule_title
+                                            )
+                                            ind["sigma_level"] = best.level
+                                            event_data["indicators"] = ind
+                                            # Promote MITRE from sigma if richer
+                                            if best.mitre_techniques:
+                                                existing = set(
+                                                    json.loads(
+                                                        event_data.get(
+                                                            "mitre_techniques",
+                                                            "[]",
+                                                        )
+                                                    )
+                                                    if isinstance(
+                                                        event_data.get(
+                                                            "mitre_techniques"
+                                                        ),
+                                                        str,
+                                                    )
+                                                    else event_data.get(
+                                                        "mitre_techniques", []
+                                                    )
+                                                )
+                                                for t in best.mitre_techniques:
+                                                    existing.add(t)
+                                                event_data["mitre_techniques"] = (
+                                                    json.dumps(list(existing))
+                                                )
+                                    except Exception:
+                                        logger.debug(
+                                            "Sigma evaluation failed",
+                                            exc_info=True,
+                                        )
+
                                 store.insert_security_event(event_data)
 
                                 # Feed fusion engine
