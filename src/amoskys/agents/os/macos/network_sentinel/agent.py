@@ -29,6 +29,7 @@ import socket
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
 from amoskys.agents.common.base import HardenedAgentBase, ValidationResult
@@ -59,6 +60,9 @@ class NetworkSentinelAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
     COLOR = "#FF4444"  # Red — this agent is the alarm
 
+    QUEUE_PATH = "data/queue/network_sentinel.db"
+    CERT_DIR = "certs"
+
     def __init__(
         self,
         collection_interval: float = 10.0,
@@ -66,12 +70,24 @@ class NetworkSentinelAgent(MicroProbeAgentMixin, HardenedAgentBase):
     ):
         device_id = socket.gethostname()
 
+        # Create local queue — no agent should ever run without one
+        Path(self.QUEUE_PATH).parent.mkdir(parents=True, exist_ok=True)
+        from amoskys.agents.common.queue_adapter import LocalQueueAdapter
+
+        queue_adapter = LocalQueueAdapter(
+            queue_path=self.QUEUE_PATH,
+            agent_name="network_sentinel",
+            device_id=device_id,
+            max_bytes=50 * 1024 * 1024,
+            max_retries=10,
+            signing_key_path=f"{self.CERT_DIR}/agent.ed25519",
+        )
+
         super().__init__(
             agent_name="network_sentinel",
             device_id=device_id,
             collection_interval=collection_interval,
-            eventbus_publisher=None,
-            local_queue=None,
+            queue_adapter=queue_adapter,
         )
 
         self.access_log_collector = AccessLogCollector(log_paths=log_paths)

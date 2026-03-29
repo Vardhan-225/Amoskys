@@ -1583,7 +1583,9 @@ def agent_live_data(agent_id):
         cat_prefixes = _AGENT_EVENT_CATEGORIES.get(agent_id, [])
         if cat_prefixes:
             try:
-                placeholders = " OR ".join([f"event_category LIKE ?" for _ in cat_prefixes])
+                placeholders = " OR ".join(
+                    [f"event_category LIKE ?" for _ in cat_prefixes]
+                )
                 params = [f"{p}%" for p in cat_prefixes]
                 query = (
                     f"SELECT id, timestamp_dt, device_id, event_category, "
@@ -1602,6 +1604,7 @@ def agent_live_data(agent_id):
                     if isinstance(mt, str) and mt.startswith("["):
                         try:
                             import json as _json
+
                             evt["mitre_techniques"] = _json.loads(mt)
                         except Exception:
                             evt["mitre_techniques"] = []

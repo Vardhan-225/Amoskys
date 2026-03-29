@@ -230,6 +230,15 @@ class HardenedAgentBase(abc.ABC):
         self.queue_adapter = queue_adapter
         self.agent_bus = agent_bus
 
+        # Safety gate: no agent should run without a queue or publisher.
+        # Events with no delivery path are permanently lost.
+        if not eventbus_publisher and not local_queue and not queue_adapter:
+            logger.error(
+                "STARTUP_RISK: Agent %s initialized without queue or publisher. "
+                "Events WILL be lost. Add a LocalQueueAdapter to prevent data loss.",
+                agent_name,
+            )
+
         self.circuit_breaker = CircuitBreaker(
             _on_transition=self._on_circuit_breaker_transition,
         )

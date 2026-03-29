@@ -51,19 +51,58 @@ MEMORY_DB = DATA_DIR / "igris" / "memory.db"
 # Legitimate system tools that appear in BOTH normal operations and attacks.
 # SOMA must not flag these as ANOMALY based on process name alone —
 # classification must come from event context (what the process was doing).
-DUAL_USE_PROCESSES: frozenset[str] = frozenset({
-    "arp", "curl", "wget", "ssh", "scp", "python3", "python", "bash", "zsh",
-    "sh", "find", "ps", "netstat", "lsof", "osascript", "security", "openssl",
-    "nslookup", "dig", "host", "nc", "ncat", "socat", "perl", "ruby",
-    "system_profiler", "sw_vers", "ifconfig", "networksetup", "dscl",
-})
+DUAL_USE_PROCESSES: frozenset[str] = frozenset(
+    {
+        "arp",
+        "curl",
+        "wget",
+        "ssh",
+        "scp",
+        "python3",
+        "python",
+        "bash",
+        "zsh",
+        "sh",
+        "find",
+        "ps",
+        "netstat",
+        "lsof",
+        "osascript",
+        "security",
+        "openssl",
+        "nslookup",
+        "dig",
+        "host",
+        "nc",
+        "ncat",
+        "socat",
+        "perl",
+        "ruby",
+        "system_profiler",
+        "sw_vers",
+        "ifconfig",
+        "networksetup",
+        "dscl",
+    }
+)
 
 # Event categories that indicate clearly malicious intent — only these
 # justify marking a dual-use process as ANOMALY.
-MALICIOUS_CATEGORIES: frozenset[str] = frozenset({
-    "exfil", "beacon", "c2_", "reverse_shell", "credential", "keylog",
-    "ransomware", "cryptominer", "backdoor", "rootkit", "trojan",
-})
+MALICIOUS_CATEGORIES: frozenset[str] = frozenset(
+    {
+        "exfil",
+        "beacon",
+        "c2_",
+        "reverse_shell",
+        "credential",
+        "keylog",
+        "ransomware",
+        "cryptominer",
+        "backdoor",
+        "rootkit",
+        "trojan",
+    }
+)
 
 
 @dataclass
@@ -287,27 +326,32 @@ class UnifiedSOMA:
                     new_normal = 0  # ANOMALY — malicious context confirmed
                     logger.info(
                         "SOMA dual-use %s → anomaly (malicious context: %s)",
-                        proc_base, category,
+                        proc_base,
+                        category,
                     )
                 elif new_count >= 10:
                     new_normal = 1  # NORMAL — common system tool, benign context
                     if old_normal != 1:
                         logger.info(
                             "SOMA dual-use %s → normal (seen=%d, benign context)",
-                            proc_base, new_count,
+                            proc_base,
+                            new_count,
                         )
             elif new_count >= 5 and avg_risk < 0.3:
                 if old_normal != 1:
                     new_normal = 1  # NORMAL
                     logger.info(
                         "SOMA graduated %s as normal (seen=%d, risk=%.3f)",
-                        process or category, new_count, avg_risk,
+                        process or category,
+                        new_count,
+                        avg_risk,
                     )
             elif risk > 0.7 and old_normal == 1:
                 new_normal = 0  # ANOMALY — something normal went bad
                 logger.info(
                     "SOMA graduated %s as anomaly (was normal, new risk=%.3f)",
-                    process or category, risk,
+                    process or category,
+                    risk,
                 )
 
             conn.execute(

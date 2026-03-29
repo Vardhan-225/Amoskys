@@ -283,6 +283,109 @@ class TelemetryEventView:
                 "requires_investigation": se.requires_investigation,
             }
 
+            # ── Promote SECURITY events into typed views for fusion rules ──
+            # Agent probes emit everything as SECURITY events with category
+            # labels. Fusion rules expect typed AUDIT/PROCESS/FLOW dicts.
+            # Promote based on event_category and probe attributes so
+            # correlation rules can match without schema mismatch.
+            cat = (se.event_category or "").lower()
+
+            # Persistence categories → audit_event
+            _PERSIST_CATS = (
+                "macos_launchagent", "macos_launchdaemon", "macos_cron",
+                "macos_ssh_key", "macos_shell_profile", "macos_login_item",
+                "macos_auth_plugin", "macos_folder_action", "macos_periodic",
+                "macos_system_extension", "persistence_creation",
+                "macos_config_backdoor",
+            )
+            if any(cat.startswith(p) for p in _PERSIST_CATS):
+                # Determine action from category suffix
+                action = "MODIFIED"
+                if "_new" in cat or "_created" in cat:
+                    action = "CREATED"
+                elif "_removed" in cat or "_deleted" in cat:
+                    action = "DELETED"
+                elif "_modified" in cat or "_changed" in cat:
+                    action = "MODIFIED"
+
+                # Map category to object_type
+                obj_type = "UNKNOWN"
+                if "launchagent" in cat:
+                    obj_type = "LAUNCH_AGENT"
+                elif "launchdaemon" in cat:
+                    obj_type = "LAUNCH_DAEMON"
+                elif "cron" in cat:
+                    obj_type = "CRON"
+                elif "ssh_key" in cat:
+                    obj_type = "SSH_KEYS"
+                elif "shell_profile" in cat:
+                    obj_type = "SHELL_PROFILE"
+                elif "login_item" in cat:
+                    obj_type = "LOGIN_ITEM"
+                elif "config_backdoor" in cat:
+                    obj_type = "CONFIG_FILE"
+
+                audit_event = {
+                    "audit_category": "persistence",
+                    "action_performed": action,
+                    "object_type": obj_type,
+                    "object_id": attributes.get("path", ""),
+                    "before_value": "",
+                    "after_value": attributes.get("sha256", ""),
+                }
+
+            # Process categories → process_event
+            _PROC_CATS = (
+                "process_spawned", "binary_from_temp", "suspicious_script",
+                "lolbin_execution", "process_exit", "high_cpu",
+            )
+            if any(cat.startswith(p) for p in _PROC_CATS):
+                process_event = {
+                    "process_name": attributes.get("process_name", ""),
+                    "pid": int(attributes.get("pid", 0) or 0),
+                    "ppid": int(attributes.get("ppid", 0) or 0),
+                    "uid": int(attributes.get("uid", 0) or 0),
+                    "command_line": attributes.get("cmdline", ""),
+                    "executable_path": attributes.get("exe", ""),
+                }
+
+            # Network categories → flow_event
+            _FLOW_CATS = (
+                "exfil_spike", "c2_beacon", "cloud_sync", "cloud_exfil",
+                "lateral_ssh", "cleartext_protocol", "tunnel_detect",
+                "non_standard_port", "new_external_connection",
+                "port_scan", "unexpected_listener", "connection_burst",
+                "long_lived_connection", "dns_beaconing",
+            )
+            if any(cat.startswith(p) for p in _FLOW_CATS):
+                flow_event = {
+                    "src_ip": attributes.get("local_ip", ""),
+                    "src_port": int(attributes.get("local_port", 0) or 0),
+                    "dst_ip": attributes.get("remote_ip", ""),
+                    "dst_port": int(attributes.get("remote_port", 0) or 0),
+                    "protocol": attributes.get("protocol", ""),
+                    "bytes_sent": int(attributes.get("bytes_out", 0) or 0),
+                    "bytes_received": int(attributes.get("bytes_in", 0) or 0),
+                }
+
+            # Auth categories → enrich security_event for auth matching
+            _AUTH_CATS = (
+                "ssh_brute", "sudo_escalation", "account_lockout",
+                "off_hours_login", "impossible_travel", "credential_access",
+                "valid_account", "ssh_agent_forwarding",
+            )
+            if any(cat.startswith(p) for p in _AUTH_CATS):
+                # Fusion rules check event_action for "SSH" or "SUDO"
+                if "ssh" in cat:
+                    security_event["event_action"] = "SSH"
+                elif "sudo" in cat:
+                    security_event["event_action"] = "SUDO"
+                # Fusion rules check event_outcome for "SUCCESS"/"FAILURE"
+                if "success" in cat or "login" in cat:
+                    security_event["event_outcome"] = "SUCCESS"
+                elif "failure" in cat or "brute" in cat or "lockout" in cat:
+                    security_event["event_outcome"] = "FAILURE"
+
         elif pb_event.event_type == "AUDIT" and pb_event.HasField("audit_event"):
             ae = pb_event.audit_event
             audit_event = {

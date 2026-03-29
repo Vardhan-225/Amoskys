@@ -634,7 +634,9 @@ class FusionEngine:
             probe_weights = []
             for event in events:
                 pn = event.probe_name or (
-                    event.security_event.get("event_category", "") if event.security_event else ""
+                    event.security_event.get("event_category", "")
+                    if event.security_event
+                    else ""
                 )
                 if pn:
                     w = self._probe_cal.get_weight(pn)

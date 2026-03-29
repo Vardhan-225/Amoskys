@@ -73,27 +73,47 @@ class QualityMixin:
                 missing_required.append(f"_domain:{domain or 'missing'}")
                 violation_code = "CONTRACT_UNKNOWN_OBSERVATION_DOMAIN"
 
-        probe_name = event.probe_class or event.source_component
-        if probe_name:
-            try:
-                from amoskys.observability.probe_registry import (
-                    get_probe_contract_registry,
-                )
+        # Probe contract validation: requires_fields and degraded_without
+        # describe the probe's INPUT context (shared_data keys like "processes",
+        # "connections", "files"), NOT required OUTPUT event attributes.
+        #
+        # A probe fires on input data and emits a detection signal. The output
+        # event carries the detection (category, confidence, MITRE), not the
+        # full raw data it scanned. Checking input-context fields against
+        # output event attributes structurally fails every probe event.
+        #
+        # For SECURITY events (probe detections), validate detection-quality
+        # fields instead: the event must carry meaningful detection metadata.
+        # For OBSERVATION events (raw data), the domain router handles schema.
+        is_security_event = (event.HasField("security_event")
+                             if hasattr(event, "HasField") else False)
 
-                registry = get_probe_contract_registry()
-                contract = registry.get_contract(probe_name)
-                if contract is not None:
-                    # NOTE: requires_fields describes probe *input* context
-                    # (shared_data keys), not required *output* event attributes.
-                    # Treat all probe contract fields as degraded, not invalid.
-                    all_contract_fields = set(contract.requires_fields) | set(
-                        contract.degraded_without
+        if is_security_event:
+            # Detection events: validate that the probe produced useful output
+            se = event.security_event
+            if not se.event_category:
+                missing_degraded.append("security:event_category")
+            if not se.risk_score and se.risk_score != 0:
+                missing_degraded.append("security:risk_score")
+            if not se.mitre_techniques:
+                missing_degraded.append("security:mitre_techniques")
+        else:
+            # Non-security events: check probe contracts for observation quality
+            probe_name = event.probe_class or event.source_component
+            if probe_name:
+                try:
+                    from amoskys.observability.probe_registry import (
+                        get_probe_contract_registry,
                     )
-                    for field_name in sorted(all_contract_fields):
-                        if field_name not in attrs:
-                            missing_degraded.append(f"probe:{field_name}")
-            except Exception:
-                logger.debug("Probe contract check failed", exc_info=True)
+
+                    registry = get_probe_contract_registry()
+                    contract = registry.get_contract(probe_name)
+                    if contract is not None:
+                        for field_name in sorted(contract.degraded_without):
+                            if field_name not in attrs:
+                                missing_degraded.append(f"probe:{field_name}")
+                except Exception:
+                    logger.debug("Probe contract check failed", exc_info=True)
 
         existing_quality = (attrs.get("quality_state", "valid") or "valid").lower()
         existing_violation = attrs.get("contract_violation_code", "NONE")

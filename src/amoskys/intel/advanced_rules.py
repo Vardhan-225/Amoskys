@@ -106,7 +106,7 @@ def rule_apt_initial_access_chain(
 
     # Step 2: Find discovery commands within 10 min of auth
     process_events = [
-        e for e in events if e.event_type == "PROCESS" and e.process_event
+        e for e in events if e.process_event
     ]
 
     for auth_event in auth_events:
@@ -201,10 +201,10 @@ def rule_fileless_attack(
     Fileless attacks avoid writing to disk, making them harder to detect.
     """
     process_events = [
-        e for e in events if e.event_type == "PROCESS" and e.process_event
+        e for e in events if e.process_event
     ]
 
-    flow_events = [e for e in events if e.event_type == "FLOW" and e.flow_event]
+    flow_events = [e for e in events if e.flow_event]
 
     for proc_event in process_events:
         cmdline = proc_event.process_event.get("cmdline", "")
@@ -313,10 +313,10 @@ def rule_log_tampering(
     import re
 
     process_events = [
-        e for e in events if e.event_type == "PROCESS" and e.process_event
+        e for e in events if e.process_event
     ]
 
-    audit_events = [e for e in events if e.event_type == "AUDIT" and e.audit_event]
+    audit_events = [e for e in events if e.audit_event]
 
     detected_tampering = []
 
@@ -427,7 +427,7 @@ def rule_security_tool_disable(
     import re
 
     process_events = [
-        e for e in events if e.event_type == "PROCESS" and e.process_event
+        e for e in events if e.process_event
     ]
 
     for proc_event in process_events:
@@ -494,10 +494,10 @@ def rule_credential_dumping_chain(
     import re
 
     process_events = [
-        e for e in events if e.event_type == "PROCESS" and e.process_event
+        e for e in events if e.process_event
     ]
 
-    audit_events = [e for e in events if e.event_type == "AUDIT" and e.audit_event]
+    audit_events = [e for e in events if e.audit_event]
 
     cred_events = []
 
@@ -600,9 +600,9 @@ def rule_ssh_key_theft_and_pivot(
 
     This indicates an attacker is using stolen keys to pivot.
     """
-    audit_events = [e for e in events if e.event_type == "AUDIT" and e.audit_event]
+    audit_events = [e for e in events if e.audit_event]
 
-    flow_events = [e for e in events if e.event_type == "FLOW" and e.flow_event]
+    flow_events = [e for e in events if e.flow_event]
 
     # Find SSH key access
     key_access_events = []
@@ -689,10 +689,10 @@ def rule_internal_reconnaissance(
 
     This indicates an attacker mapping the internal network.
     """
-    flow_events = [e for e in events if e.event_type == "FLOW" and e.flow_event]
+    flow_events = [e for e in events if e.flow_event]
 
     process_events = [
-        e for e in events if e.event_type == "PROCESS" and e.process_event
+        e for e in events if e.process_event
     ]
 
     # Check for reconnaissance commands
@@ -803,10 +803,10 @@ def rule_staged_exfiltration(
     This is a classic data theft pattern.
     """
     process_events = [
-        e for e in events if e.event_type == "PROCESS" and e.process_event
+        e for e in events if e.process_event
     ]
 
-    flow_events = [e for e in events if e.event_type == "FLOW" and e.flow_event]
+    flow_events = [e for e in events if e.flow_event]
 
     # Find staging commands (archive creation)
     staging_patterns = [
@@ -950,7 +950,7 @@ def rule_dns_exfiltration(
 
     DNS exfil is often used to bypass firewalls.
     """
-    flow_events = [e for e in events if e.event_type == "FLOW" and e.flow_event]
+    flow_events = [e for e in events if e.flow_event]
 
     # DNS flows (port 53)
     dns_flows = [f for f in flow_events if f.flow_event.get("dst_port") == 53]

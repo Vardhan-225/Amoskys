@@ -1411,7 +1411,8 @@ class CredentialTheftProbe(MicroProbe):
         return events
 
     def _scan_sensitive_paths(
-        self, accesses: list,
+        self,
+        accesses: list,
     ) -> List[TelemetryEvent]:
         """Check sensitive_accesses for high-value credential file theft.
 

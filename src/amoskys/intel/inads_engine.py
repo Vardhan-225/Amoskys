@@ -550,9 +550,7 @@ def _extract_agent_signature(evt: dict) -> Dict[str, Optional[float]]:
     if count > 0 and count < ASV_DIM:
         p_active = count / ASV_DIM
         p_inactive = 1.0 - p_active
-        entropy = -(
-            p_active * math.log2(p_active) + p_inactive * math.log2(p_inactive)
-        )
+        entropy = -(p_active * math.log2(p_active) + p_inactive * math.log2(p_inactive))
         # Normalize to 0-1 (max entropy at 50% activation)
         breadth = entropy
     else:

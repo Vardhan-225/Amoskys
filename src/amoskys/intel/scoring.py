@@ -255,17 +255,22 @@ class GeometricScorer:
         factors = []
         total = 0.0
 
-        source_ip = (
-            event.get("source_ip", "")
-            or event.get("indicators", {}).get("source_ip", "")
-            if isinstance(event.get("indicators"), dict)
-            else ""
-        )
-        # Try to extract from indicators string
+        # Resolve source IP from multiple possible field names:
+        # Probes use remote_ip, enrichment promotes to dst_ip, protobuf has source_ip
+        source_ip = ""
+        for ip_field in ("remote_ip", "source_ip", "dst_ip"):
+            source_ip = event.get(ip_field, "") or ""
+            if source_ip:
+                break
+        if not source_ip and isinstance(event.get("indicators"), dict):
+            for ip_field in ("remote_ip", "source_ip", "dst_ip"):
+                source_ip = event["indicators"].get(ip_field, "") or ""
+                if source_ip:
+                    break
         if not source_ip and isinstance(event.get("indicators"), str):
             try:
                 ind = json.loads(event["indicators"])
-                source_ip = ind.get("source_ip", "")
+                source_ip = ind.get("remote_ip", "") or ind.get("source_ip", "")
             except (json.JSONDecodeError, TypeError):
                 pass
 
@@ -297,9 +302,18 @@ class GeometricScorer:
             )
 
         # Factor 3: Country anomaly (non-US/expected country for a US device)
-        country = event.get("country_code") or event.get("geo_country", "")
-        if isinstance(event.get("indicators"), dict):
-            country = country or event["indicators"].get("country_code", "")
+        # Enrichment writes geo_src_country / geo_dst_country
+        country = (
+            event.get("geo_src_country", "")
+            or event.get("geo_dst_country", "")
+            or event.get("country_code", "")
+        )
+        if not country and isinstance(event.get("indicators"), dict):
+            country = (
+                event["indicators"].get("geo_src_country", "")
+                or event["indicators"].get("geo_dst_country", "")
+                or event["indicators"].get("country_code", "")
+            )
         if country and country not in ("US", "CA", "GB", "DE", "AU", "JP", ""):
             contrib = 0.15
             total += contrib
@@ -312,9 +326,18 @@ class GeometricScorer:
             )
 
         # Factor 4: ASN reputation
-        asn_name = event.get("asn_name", "")
-        if isinstance(event.get("indicators"), dict):
-            asn_name = asn_name or event["indicators"].get("asn_name", "")
+        # Enrichment writes asn_src_org / asn_dst_org
+        asn_name = (
+            event.get("asn_src_org", "")
+            or event.get("asn_dst_org", "")
+            or event.get("asn_name", "")
+        )
+        if not asn_name and isinstance(event.get("indicators"), dict):
+            asn_name = (
+                event["indicators"].get("asn_src_org", "")
+                or event["indicators"].get("asn_dst_org", "")
+                or event["indicators"].get("asn_name", "")
+            )
         risky_asns = {
             "bulletproof",
             "hosting",

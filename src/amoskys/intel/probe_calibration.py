@@ -71,15 +71,17 @@ PRIOR_BETA = 1.0
 # These detect attacks where repetition IS the attack pattern (credential
 # harvesting, persistence, C2 beaconing). Frequent firing = real threat,
 # not false positive. SOMA's "familiar" verdict must not suppress them.
-CRITICAL_PROBES = frozenset({
-    "macos_infostealer_fake_dialog",   # T1056.002 — fake password prompts
-    "macos_infostealer_browser_cred_theft",  # T1555.003 — browser credential theft
-    "macos_config_backdoor",           # T1543 — persistence mechanism modification
-    "macos_c2_beacon",                 # T1071 — C2 callback beaconing
-    "macos_dns_beaconing",             # T1071.004 — DNS-based C2
-    "macos_quarantine_bypass",         # T1553.001 — gatekeeper bypass
-    "macos_credential_access",         # T1555 — credential harvesting
-})
+CRITICAL_PROBES = frozenset(
+    {
+        "macos_infostealer_fake_dialog",  # T1056.002 — fake password prompts
+        "macos_infostealer_browser_cred_theft",  # T1555.003 — browser credential theft
+        "macos_config_backdoor",  # T1543 — persistence mechanism modification
+        "macos_c2_beacon",  # T1071 — C2 callback beaconing
+        "macos_dns_beaconing",  # T1071.004 — DNS-based C2
+        "macos_quarantine_bypass",  # T1553.001 — gatekeeper bypass
+        "macos_credential_access",  # T1555 — credential harvesting
+    }
+)
 
 
 @dataclass
@@ -134,7 +136,8 @@ class ProbeCalibrator:
 
     def _ensure_schema(self):
         conn = self._get_conn()
-        conn.executescript("""
+        conn.executescript(
+            """
             CREATE TABLE IF NOT EXISTS probe_calibration (
                 probe_name  TEXT PRIMARY KEY,
                 alpha       REAL NOT NULL DEFAULT 2.0,
@@ -143,7 +146,8 @@ class ProbeCalibrator:
                 last_update REAL NOT NULL,
                 last_decay  REAL NOT NULL
             );
-        """)
+        """
+        )
         conn.commit()
 
     def update(self, probe_name: str, soma_verdict: str) -> float:
@@ -193,7 +197,7 @@ class ProbeCalibrator:
         # Apply decay if >24h since last decay
         if now - last_decay > 86400:
             days = (now - last_decay) / 86400
-            decay = DECAY_FACTOR ** days
+            decay = DECAY_FACTOR**days
             # Decay both α and β toward the prior (shrink toward 50%)
             alpha = PRIOR_ALPHA + (alpha - PRIOR_ALPHA) * decay
             beta = PRIOR_BETA + (beta - PRIOR_BETA) * decay
@@ -215,8 +219,19 @@ class ProbeCalibrator:
                VALUES (?, ?, ?, ?, ?, ?)
                ON CONFLICT(probe_name) DO UPDATE SET
                alpha=?, beta=?, total_updates=?, last_update=?, last_decay=?""",
-            (probe_name, alpha, beta, total, now, last_decay,
-             alpha, beta, total, now, last_decay),
+            (
+                probe_name,
+                alpha,
+                beta,
+                total,
+                now,
+                last_decay,
+                alpha,
+                beta,
+                total,
+                now,
+                last_decay,
+            ),
         )
 
         self._pending += 1
@@ -227,9 +242,11 @@ class ProbeCalibrator:
         # Update cache
         cal = ProbeCalibration(
             probe_name=probe_name,
-            alpha=alpha, beta=beta,
+            alpha=alpha,
+            beta=beta,
             total_updates=total,
-            last_update=now, last_decay=last_decay,
+            last_update=now,
+            last_decay=last_decay,
         )
         self._cache[probe_name] = cal
 
@@ -287,7 +304,8 @@ class ProbeCalibrator:
         for r in rows:
             cal = ProbeCalibration(
                 probe_name=r["probe_name"],
-                alpha=r["alpha"], beta=r["beta"],
+                alpha=r["alpha"],
+                beta=r["beta"],
                 total_updates=r["total_updates"],
                 last_update=r["last_update"],
                 last_decay=r["last_decay"],

@@ -113,13 +113,13 @@ class DGADetectionProbe(MicroProbe):
     ]
 
     # ── Thresholds ────────────────────────────────────────────────────────
-    ENTROPY_THRESHOLD = 3.5       # Shannon entropy above this → suspicious
-    ENTROPY_HIGH = 4.0            # Strong entropy signal
+    ENTROPY_THRESHOLD = 3.5  # Shannon entropy above this → suspicious
+    ENTROPY_HIGH = 4.0  # Strong entropy signal
     CONSONANT_RATIO_THRESH = 0.7  # Fraction of consonants above this → suspicious
-    NUMERIC_RATIO_THRESH = 0.3    # Fraction of digits above this → suspicious
-    MIN_DOMAIN_LEN = 8            # Skip very short SLDs
-    LENGTH_THRESHOLD = 12         # SLD length above this contributes to scoring
-    BURST_THRESHOLD = 3           # DGA-like domains in one window → escalate
+    NUMERIC_RATIO_THRESH = 0.3  # Fraction of digits above this → suspicious
+    MIN_DOMAIN_LEN = 8  # Skip very short SLDs
+    LENGTH_THRESHOLD = 12  # SLD length above this contributes to scoring
+    BURST_THRESHOLD = 3  # DGA-like domains in one window → escalate
 
     _VOWELS = frozenset("aeiou")
 
@@ -128,8 +128,7 @@ class DGADetectionProbe(MicroProbe):
 
         # Collect per-domain DGA candidates in this window for burst detection
         dga_candidates = [
-            c for q in queries
-            if (c := self._evaluate_query(q)) is not None
+            c for q in queries if (c := self._evaluate_query(q)) is not None
         ]
 
         # Burst detection: escalate if 3+ DGA-like domains in window
@@ -161,7 +160,10 @@ class DGADetectionProbe(MicroProbe):
         consonant_ratio = self._consonant_ratio(sld)
         numeric_ratio = self._numeric_ratio(sld)
         confidence = self._score_dga_confidence(
-            entropy, consonant_ratio, numeric_ratio, len(sld),
+            entropy,
+            consonant_ratio,
+            numeric_ratio,
+            len(sld),
         )
 
         if confidence <= 0:
@@ -192,7 +194,10 @@ class DGADetectionProbe(MicroProbe):
             confidence = 0.6
 
         # Tier 2: entropy > 4.0 AND consonant_ratio > 0.7 → confidence 0.8
-        if entropy > self.ENTROPY_HIGH and consonant_ratio > self.CONSONANT_RATIO_THRESH:
+        if (
+            entropy > self.ENTROPY_HIGH
+            and consonant_ratio > self.CONSONANT_RATIO_THRESH
+        ):
             confidence = max(confidence, 0.8)
 
         # Numeric ratio boost: high digit mixing is a DGA tell
@@ -436,7 +441,9 @@ class BeaconingPatternProbe(MicroProbe):
     ]
 
     MIN_SAMPLES = 3  # Minimum queries to analyze periodicity
-    MAX_JITTER_CV = 0.35  # Coefficient of variation threshold (real C2 has 10-30% jitter)
+    MAX_JITTER_CV = (
+        0.35  # Coefficient of variation threshold (real C2 has 10-30% jitter)
+    )
     MIN_INTERVAL_S = 0.5  # Minimum interval (rapid beaconing is real)
     MAX_INTERVAL_S = 3600.0  # Maximum interval to consider
     FREQ_FALLBACK_COUNT = 3  # Frequency fallback: flag if >= N queries in one window

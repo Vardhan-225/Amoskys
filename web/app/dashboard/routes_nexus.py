@@ -29,14 +29,13 @@ MESH_DB = Path("data/mesh_events.db")
 
 def _ro_conn(db_path: Path) -> sqlite3.Connection:
     """Open a read-only SQLite connection."""
-    conn = sqlite3.connect(
-        f"file:{db_path}?mode=ro", uri=True, timeout=5
-    )
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 # ── Verdict Funnel ──────────────────────────────────────────────────────
+
 
 @dashboard_bp.route("/api/nexus/verdict-funnel")
 @require_login
@@ -83,12 +82,13 @@ def nexus_verdict_funnel():
 
         # Total security events
         total = conn.execute(
-            "SELECT COUNT(*) FROM security_events "
-            "WHERE event_timestamp_ns > ?", (cutoff_ns,)
+            "SELECT COUNT(*) FROM security_events " "WHERE event_timestamp_ns > ?",
+            (cutoff_ns,),
         ).fetchone()[0]
 
         # By risk tier — thresholds adjusted by probe confidence
-        tiers = conn.execute("""
+        tiers = conn.execute(
+            """
             SELECT
                 COUNT(CASE WHEN risk_score < ? THEN 1 END) as noise,
                 COUNT(CASE WHEN risk_score >= ? AND risk_score < ? THEN 1 END) as baseline,
@@ -96,7 +96,9 @@ def nexus_verdict_funnel():
                 COUNT(CASE WHEN risk_score >= ? THEN 1 END) as threats
             FROM security_events
             WHERE event_timestamp_ns > ?
-        """, (t_noise, t_noise, t_base, t_base, t_susp, t_susp, cutoff_ns)).fetchone()
+        """,
+            (t_noise, t_noise, t_base, t_base, t_susp, t_susp, cutoff_ns),
+        ).fetchone()
 
         # Incident count
         incidents = 0
@@ -104,7 +106,7 @@ def nexus_verdict_funnel():
             incidents = conn.execute(
                 "SELECT COUNT(*) FROM incidents "
                 "WHERE created_at > datetime('now', ?)",
-                (f"-{hours} hours",)
+                (f"-{hours} hours",),
             ).fetchone()[0]
         except Exception:
             pass
@@ -112,15 +114,16 @@ def nexus_verdict_funnel():
         # Active agents count
         active_agents = conn.execute(
             "SELECT COUNT(DISTINCT collection_agent) FROM security_events "
-            "WHERE event_timestamp_ns > ?", (cutoff_ns,)
+            "WHERE event_timestamp_ns > ?",
+            (cutoff_ns,),
         ).fetchone()[0]
 
         # Total observation events
         total_observations = 0
         try:
             total_observations = conn.execute(
-                "SELECT COUNT(*) FROM observation_events "
-                "WHERE timestamp_ns > ?", (cutoff_ns,)
+                "SELECT COUNT(*) FROM observation_events " "WHERE timestamp_ns > ?",
+                (cutoff_ns,),
             ).fetchone()[0]
         except Exception:
             pass
@@ -129,34 +132,37 @@ def nexus_verdict_funnel():
         total_flows = 0
         try:
             total_flows = conn.execute(
-                "SELECT COUNT(*) FROM flow_events "
-                "WHERE timestamp_ns > ?", (cutoff_ns,)
+                "SELECT COUNT(*) FROM flow_events " "WHERE timestamp_ns > ?",
+                (cutoff_ns,),
             ).fetchone()[0]
         except Exception:
             pass
 
         conn.close()
 
-        return jsonify({
-            "total_events": total + total_observations + total_flows,
-            "security_events": total,
-            "observations": total_observations,
-            "flows": total_flows,
-            "noise": tiers["noise"],
-            "baseline": tiers["baseline"],
-            "suspicious": tiers["suspicious"],
-            "threats": tiers["threats"],
-            "incidents": incidents,
-            "active_agents": active_agents,
-            "probe_confidence": round(probe_conf, 4),
-            "hours": hours,
-        })
+        return jsonify(
+            {
+                "total_events": total + total_observations + total_flows,
+                "security_events": total,
+                "observations": total_observations,
+                "flows": total_flows,
+                "noise": tiers["noise"],
+                "baseline": tiers["baseline"],
+                "suspicious": tiers["suspicious"],
+                "threats": tiers["threats"],
+                "incidents": incidents,
+                "active_agents": active_agents,
+                "probe_confidence": round(probe_conf, 4),
+                "hours": hours,
+            }
+        )
     except Exception as e:
         logger.warning("Verdict funnel failed: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
 # ── Probe Calibration ───────────────────────────────────────────────────
+
 
 @dashboard_bp.route("/api/nexus/probe-calibration")
 @require_login
@@ -167,7 +173,8 @@ def nexus_probe_calibration():
 
     try:
         conn = _ro_conn(PROBE_CAL_DB)
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT probe_name,
                    ROUND(alpha / (alpha + beta), 4) as precision,
                    ROUND(alpha, 2) as alpha,
@@ -176,7 +183,8 @@ def nexus_probe_calibration():
                    CASE WHEN total_updates >= 10 THEN 'active' ELSE 'learning' END as status
             FROM probe_calibration
             ORDER BY alpha / (alpha + beta) ASC
-        """).fetchall()
+        """
+        ).fetchall()
         conn.close()
 
         probes = [
@@ -191,11 +199,13 @@ def nexus_probe_calibration():
             for r in rows
         ]
 
-        return jsonify({
-            "probes": probes,
-            "total": len(probes),
-            "active_count": sum(1 for p in probes if p["status"] == "active"),
-        })
+        return jsonify(
+            {
+                "probes": probes,
+                "total": len(probes),
+                "active_count": sum(1 for p in probes if p["status"] == "active"),
+            }
+        )
     except Exception as e:
         logger.warning("Probe calibration API failed: %s", e)
         return jsonify({"probes": [], "total": 0, "error": str(e)})
@@ -203,22 +213,30 @@ def nexus_probe_calibration():
 
 # ── SOMA Stats ──────────────────────────────────────────────────────────
 
+
 @dashboard_bp.route("/api/nexus/soma-stats")
 @require_login
 def nexus_soma_stats():
     """Return SOMA baseline maturity and top suppressors."""
     if not SOMA_DB.exists():
-        return jsonify({
-            "total_patterns": 0, "total_observations": 0,
-            "known": 0, "learning": 0, "novel": 0,
-            "maturity_pct": 0, "maturity_label": "cold_start",
-            "top_suppressors": [],
-        })
+        return jsonify(
+            {
+                "total_patterns": 0,
+                "total_observations": 0,
+                "known": 0,
+                "learning": 0,
+                "novel": 0,
+                "maturity_pct": 0,
+                "maturity_label": "cold_start",
+                "top_suppressors": [],
+            }
+        )
 
     try:
         conn = _ro_conn(SOMA_DB)
 
-        stats = conn.execute("""
+        stats = conn.execute(
+            """
             SELECT
                 COUNT(*) as total_patterns,
                 COALESCE(SUM(seen_count), 0) as total_observations,
@@ -226,7 +244,8 @@ def nexus_soma_stats():
                 COUNT(CASE WHEN seen_count > 1 AND seen_count < 5 THEN 1 END) as learning,
                 COUNT(CASE WHEN seen_count = 1 THEN 1 END) as novel
             FROM soma_observations
-        """).fetchone()
+        """
+        ).fetchone()
 
         total = stats["total_patterns"] or 1
         known = stats["known"]
@@ -242,41 +261,46 @@ def nexus_soma_stats():
             maturity_label = "cold_start"
 
         # Top suppressors — patterns that fire most often
-        top_rows = conn.execute("""
+        top_rows = conn.execute(
+            """
             SELECT event_category, process_name, seen_count,
                    ROUND(risk_score, 3) as avg_risk
             FROM soma_observations
             WHERE seen_count >= 10
             ORDER BY seen_count DESC
             LIMIT 8
-        """).fetchall()
+        """
+        ).fetchall()
 
         conn.close()
 
-        return jsonify({
-            "total_patterns": stats["total_patterns"],
-            "total_observations": stats["total_observations"],
-            "known": known,
-            "learning": stats["learning"],
-            "novel": stats["novel"],
-            "maturity_pct": maturity_pct,
-            "maturity_label": maturity_label,
-            "top_suppressors": [
-                {
-                    "category": r["event_category"],
-                    "process": r["process_name"],
-                    "seen_count": r["seen_count"],
-                    "avg_risk": r["avg_risk"],
-                }
-                for r in top_rows
-            ],
-        })
+        return jsonify(
+            {
+                "total_patterns": stats["total_patterns"],
+                "total_observations": stats["total_observations"],
+                "known": known,
+                "learning": stats["learning"],
+                "novel": stats["novel"],
+                "maturity_pct": maturity_pct,
+                "maturity_label": maturity_label,
+                "top_suppressors": [
+                    {
+                        "category": r["event_category"],
+                        "process": r["process_name"],
+                        "seen_count": r["seen_count"],
+                        "avg_risk": r["avg_risk"],
+                    }
+                    for r in top_rows
+                ],
+            }
+        )
     except Exception as e:
         logger.warning("SOMA stats API failed: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
 # ── ASV Status ──────────────────────────────────────────────────────────
+
 
 @dashboard_bp.route("/api/nexus/asv-status")
 @require_login
@@ -287,11 +311,20 @@ def nexus_asv_status():
 
     # Canonical agent list (must match inads_engine.py ASV_AGENTS)
     asv_agents = [
-        "macos_auth", "macos_discovery", "macos_dns", "macos_filesystem",
-        "macos_infostealer_guard", "macos_internet_activity", "macos_network",
-        "macos_persistence", "macos_process", "macos_provenance",
-        "macos_quarantine_guard", "macos_realtime_sensor",
-        "macos_unified_log", "network_sentinel",
+        "macos_auth",
+        "macos_discovery",
+        "macos_dns",
+        "macos_filesystem",
+        "macos_infostealer_guard",
+        "macos_internet_activity",
+        "macos_network",
+        "macos_persistence",
+        "macos_process",
+        "macos_provenance",
+        "macos_quarantine_guard",
+        "macos_realtime_sensor",
+        "macos_unified_log",
+        "network_sentinel",
     ]
 
     try:
@@ -312,29 +345,34 @@ def nexus_asv_status():
 
         agents = []
         for name in asv_agents:
-            agents.append({
-                "name": name,
-                "short": name.replace("macos_", "").replace("_", " "),
-                "active": name in active_agents,
-                "event_count": active_agents.get(name, 0),
-            })
+            agents.append(
+                {
+                    "name": name,
+                    "short": name.replace("macos_", "").replace("_", " "),
+                    "active": name in active_agents,
+                    "event_count": active_agents.get(name, 0),
+                }
+            )
 
         active_count = sum(1 for a in agents if a["active"])
         ratio = round(active_count / len(asv_agents), 4) if asv_agents else 0
 
-        return jsonify({
-            "agents": agents,
-            "active_count": active_count,
-            "total_agents": len(asv_agents),
-            "ratio": ratio,
-            "window_hours": hours,
-        })
+        return jsonify(
+            {
+                "agents": agents,
+                "active_count": active_count,
+                "total_agents": len(asv_agents),
+                "ratio": ratio,
+                "window_hours": hours,
+            }
+        )
     except Exception as e:
         logger.warning("ASV status API failed: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
 # ── Agent Constellation ────────────────────────────────────────────────
+
 
 @dashboard_bp.route("/api/nexus/constellation")
 @require_login
@@ -352,11 +390,20 @@ def nexus_constellation():
     min_strength = max(5, int(hours * 1.5))
 
     asv_agents = [
-        "macos_auth", "macos_discovery", "macos_dns", "macos_filesystem",
-        "macos_infostealer_guard", "macos_internet_activity", "macos_network",
-        "macos_persistence", "macos_process", "macos_provenance",
-        "macos_quarantine_guard", "macos_realtime_sensor",
-        "macos_unified_log", "network_sentinel",
+        "macos_auth",
+        "macos_discovery",
+        "macos_dns",
+        "macos_filesystem",
+        "macos_infostealer_guard",
+        "macos_internet_activity",
+        "macos_network",
+        "macos_persistence",
+        "macos_process",
+        "macos_provenance",
+        "macos_quarantine_guard",
+        "macos_realtime_sensor",
+        "macos_unified_log",
+        "network_sentinel",
     ]
 
     try:
@@ -390,7 +437,8 @@ def nexus_constellation():
 
         # Co-firing: self-join security_events within 30s windows.
         # Tight window so quiet machines show 5-8 arcs, attacks show 30+.
-        cofiring = conn.execute("""
+        cofiring = conn.execute(
+            """
             SELECT a.agent AS a1, b.agent AS b1, COUNT(*) AS strength,
                    MAX(a.max_risk + b.max_risk) AS combined_risk
             FROM (
@@ -413,7 +461,9 @@ def nexus_constellation():
             HAVING strength >= ?
             ORDER BY combined_risk DESC, strength DESC
             LIMIT 20
-        """, (cutoff_ns, cutoff_ns, min_strength)).fetchall()
+        """,
+            (cutoff_ns, cutoff_ns, min_strength),
+        ).fetchall()
 
         # Recent probe detections (last 1h) — drives probe visibility/intensity
         # Map event_category → probe_name (they use different naming)
@@ -460,9 +510,13 @@ def nexus_constellation():
             for dr in det_rows:
                 probe_name = EVENT_TO_PROBE.get(dr["event_category"])
                 if probe_name:
-                    existing = probe_detections.get(probe_name, {"count": 0, "max_risk": 0})
+                    existing = probe_detections.get(
+                        probe_name, {"count": 0, "max_risk": 0}
+                    )
                     existing["count"] += dr["cnt"]
-                    existing["max_risk"] = max(existing["max_risk"], dr["max_risk"] or 0)
+                    existing["max_risk"] = max(
+                        existing["max_risk"], dr["max_risk"] or 0
+                    )
                     probe_detections[probe_name] = existing
         except Exception:
             pass
@@ -518,15 +572,20 @@ def nexus_constellation():
                     probes_by_agent[agent_id] = []
                 # Match probe to recent detections by category
                 det = probe_detections.get(pr["probe_name"], {})
-                probes_by_agent[agent_id].append({
-                    "name": pr["probe_name"].replace("macos_", "").replace("_", " "),
-                    "id": pr["probe_name"],
-                    "precision": pr["precision"],
-                    "updates": pr["total_updates"],
-                    "detections": det.get("count", 0),
-                    "det_risk": round(det.get("max_risk", 0), 3),
-                    "active": det.get("count", 0) > 0,  # only "active" if it fired recently
-                })
+                probes_by_agent[agent_id].append(
+                    {
+                        "name": pr["probe_name"]
+                        .replace("macos_", "")
+                        .replace("_", " "),
+                        "id": pr["probe_name"],
+                        "precision": pr["precision"],
+                        "updates": pr["total_updates"],
+                        "detections": det.get("count", 0),
+                        "det_risk": round(det.get("max_risk", 0), 3),
+                        "active": det.get("count", 0)
+                        > 0,  # only "active" if it fired recently
+                    }
+                )
         except Exception:
             pass
 
@@ -534,40 +593,47 @@ def nexus_constellation():
         nodes = []
         for name in asv_agents:
             stats = agent_stats.get(name, {})
-            nodes.append({
-                "id": name,
-                "short": name.replace("macos_", "").replace("_", " "),
-                "events": stats.get("cnt", 0),
-                "max_risk": round(stats.get("max_risk", 0) or 0, 3),
-                "avg_risk": round(stats.get("avg_risk", 0) or 0, 3),
-                "active": name in agent_stats,
-                "probes": probes_by_agent.get(name, []),
-            })
+            nodes.append(
+                {
+                    "id": name,
+                    "short": name.replace("macos_", "").replace("_", " "),
+                    "events": stats.get("cnt", 0),
+                    "max_risk": round(stats.get("max_risk", 0) or 0, 3),
+                    "avg_risk": round(stats.get("avg_risk", 0) or 0, 3),
+                    "active": name in agent_stats,
+                    "probes": probes_by_agent.get(name, []),
+                }
+            )
 
         # Build edges
         edges = []
         for row in cofiring:
-            edges.append({
-                "source": row["a1"],
-                "target": row["b1"],
-                "strength": row["strength"],
-                "risk": round(row["combined_risk"] or 0, 3),
-            })
+            edges.append(
+                {
+                    "source": row["a1"],
+                    "target": row["b1"],
+                    "strength": row["strength"],
+                    "risk": round(row["combined_risk"] or 0, 3),
+                }
+            )
 
-        return jsonify({
-            "nodes": nodes,
-            "edges": edges,
-            "total_agents": len(asv_agents),
-            "active_count": sum(1 for n in nodes if n["active"]),
-            "total_probes": sum(len(n["probes"]) for n in nodes),
-            "hours": hours,
-        })
+        return jsonify(
+            {
+                "nodes": nodes,
+                "edges": edges,
+                "total_agents": len(asv_agents),
+                "active_count": sum(1 for n in nodes if n["active"]),
+                "total_probes": sum(len(n["probes"]) for n in nodes),
+                "hours": hours,
+            }
+        )
     except Exception as e:
         logger.warning("Constellation API failed: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
 # ── INADS Status ───────────────────────────────────────────────────
+
 
 @dashboard_bp.route("/api/nexus/inads-status")
 @require_login
@@ -598,6 +664,7 @@ def nexus_inads_status():
     }
     try:
         from amoskys.intel.inads_engine import INADSEngine
+
         inads = INADSEngine()
         raw = inads.status()
         engine_status["trained"] = raw.get("trained", False)
@@ -647,6 +714,7 @@ def nexus_inads_status():
     try:
         if MESH_DB.exists():
             import sqlite3 as _sq
+
             conn = _sq.connect(str(MESH_DB), timeout=2)
             conn.row_factory = _sq.Row
             rows = conn.execute(
@@ -665,13 +733,15 @@ def nexus_inads_status():
     except Exception as e:
         logger.info("Mesh events query failed: %s", e)
 
-    return jsonify({
-        "engine": engine_status["engine"],
-        "version": engine_status["version"],
-        "trained": engine_status["trained"],
-        "clusters": engine_status["clusters"],
-        "device_risk": device_risk,
-        "mesh_events": mesh_events,
-        "total_probes": 109,
-        "total_agents": 18,
-    })
+    return jsonify(
+        {
+            "engine": engine_status["engine"],
+            "version": engine_status["version"],
+            "trained": engine_status["trained"],
+            "clusters": engine_status["clusters"],
+            "device_risk": device_risk,
+            "mesh_events": mesh_events,
+            "total_probes": 109,
+            "total_agents": 18,
+        }
+    )

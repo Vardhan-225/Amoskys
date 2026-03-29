@@ -40,7 +40,14 @@ logger = logging.getLogger(__name__)
 
 # Default base directory for baseline databases
 _BASELINE_DB_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..", "data", "baselines"
+    os.path.dirname(os.path.abspath(__file__)),
+    "..",
+    "..",
+    "..",
+    "..",
+    "..",
+    "data",
+    "baselines",
 )
 
 
@@ -89,7 +96,9 @@ class BaselineStore:
         now = time.time()
         # Load existing first_seen times so we preserve them
         existing = {}
-        for row in self._conn.execute("SELECT path, first_seen FROM baseline").fetchall():
+        for row in self._conn.execute(
+            "SELECT path, first_seen FROM baseline"
+        ).fetchall():
             existing[row[0]] = row[1]
 
         self._conn.execute("DELETE FROM baseline")
@@ -226,7 +235,9 @@ class _BaselineDiffProbe(MicroProbe):
             }
             self._store.persist(entries)
         except Exception:
-            logger.warning("%s: failed to persist baseline to DB", self.name, exc_info=True)
+            logger.warning(
+                "%s: failed to persist baseline to DB", self.name, exc_info=True
+            )
 
     def _make_event(
         self, change_type: str, entry: Any, severity: Severity

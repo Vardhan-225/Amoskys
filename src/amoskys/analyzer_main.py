@@ -81,6 +81,16 @@ def main() -> int:
         logger.warning("ScoringEngine not available: %s", e)
         scorer = None
 
+    # ── Forensic context enricher (cross-agent attribution) ──
+    forensic = None
+    try:
+        from amoskys.enrichment.forensic_context import ForensicContextEnricher
+
+        forensic = ForensicContextEnricher()
+        logger.info("ForensicContextEnricher initialized — cross-agent attribution active")
+    except Exception as e:
+        logger.warning("ForensicContextEnricher not available: %s", e)
+
     # ── SOMA frequency memory (baseline learning) ──
     soma = None
     try:
@@ -256,15 +266,45 @@ def main() -> int:
                                     "raw_attributes_json": json.dumps(attrs),
                                     "event_timestamp_ns": ev.event_timestamp_ns
                                     or dt.timestamp_ns,
-                                    # Enrichment results
-                                    "geo_src_country": attrs.get("geo_src_country"),
-                                    "asn_src_org": attrs.get("asn_src_org"),
-                                    "asn_src_number": attrs.get("asn_src_number"),
+                                    # Enrichment results (enricher writes geo_dst_*/asn_dst_*
+                                    # because IP is promoted from remote_ip → dst_ip)
+                                    "geo_src_country": attrs.get("geo_src_country")
+                                    or attrs.get("geo_dst_country"),
+                                    "geo_src_city": attrs.get("geo_src_city")
+                                    or attrs.get("geo_dst_city"),
+                                    "geo_src_latitude": attrs.get("geo_src_latitude")
+                                    or attrs.get("geo_dst_latitude"),
+                                    "geo_src_longitude": attrs.get("geo_src_longitude")
+                                    or attrs.get("geo_dst_longitude"),
+                                    "asn_src_org": attrs.get("asn_src_org")
+                                    or attrs.get("asn_dst_org"),
+                                    "asn_src_number": attrs.get("asn_src_number")
+                                    or attrs.get("asn_dst_number"),
+                                    "asn_src_network_type": attrs.get(
+                                        "asn_src_network_type"
+                                    )
+                                    or attrs.get("asn_dst_network_type"),
                                     "threat_intel_match": attrs.get(
                                         "threat_intel_match", False
                                     ),
                                     "enrichment_status": attrs.get(
                                         "enrichment_status", "raw"
+                                    ),
+                                    # Typed columns from probe attributes
+                                    "remote_ip": attrs.get("remote_ip"),
+                                    "remote_port": attrs.get("remote_port"),
+                                    "process_name": attrs.get("process_name"),
+                                    "pid": attrs.get("pid"),
+                                    "exe": attrs.get("exe"),
+                                    "cmdline": attrs.get("cmdline"),
+                                    "username": attrs.get("username"),
+                                    "protocol": attrs.get("protocol"),
+                                    "domain": attrs.get("domain"),
+                                    "path": attrs.get("path"),
+                                    "sha256": attrs.get("sha256"),
+                                    "probe_name": attrs.get("probe_name"),
+                                    "detection_source": attrs.get(
+                                        "detection_source"
                                     ),
                                 }
 
@@ -280,22 +320,30 @@ def main() -> int:
                                         soma.observe(
                                             category=se.event_category,
                                             process=attrs.get("process_name", ""),
-                                            path=attrs.get("exe", attrs.get("path", "")),
+                                            path=attrs.get(
+                                                "exe", attrs.get("path", "")
+                                            ),
                                             domain=agent,
                                             risk=se.risk_score,
                                         )
                                     except Exception as _obs_err:
-                                        logger.debug("SOMA observe failed: %s", _obs_err)
+                                        logger.debug(
+                                            "SOMA observe failed: %s", _obs_err
+                                        )
                                     try:
                                         soma_result = soma.assess(
                                             category=se.event_category,
                                             process=attrs.get("process_name", ""),
-                                            path=attrs.get("exe", attrs.get("path", "")),
+                                            path=attrs.get(
+                                                "exe", attrs.get("path", "")
+                                            ),
                                             risk=se.risk_score,
                                         )
                                         soma_verdict = soma_result.verdict
                                     except Exception as _assess_err:
-                                        logger.debug("SOMA assess failed: %s", _assess_err)
+                                        logger.debug(
+                                            "SOMA assess failed: %s", _assess_err
+                                        )
 
                                 # Probe calibration: feed SOMA verdict back
                                 if probe_cal is not None and soma_verdict:
@@ -304,19 +352,36 @@ def main() -> int:
                                             "probe_name",
                                             ev.source_component or se.event_category,
                                         )
-                                        weight = probe_cal.update(probe_name, soma_verdict)
+                                        weight = probe_cal.update(
+                                            probe_name, soma_verdict
+                                        )
                                         # Apply precision weight to risk score
                                         if weight < 0.95:
                                             event_data["risk_score"] = round(
                                                 event_data["risk_score"] * weight, 4
                                             )
-                                            event_data["probe_precision"] = round(weight, 4)
+                                            event_data["probe_precision"] = round(
+                                                weight, 4
+                                            )
                                     except Exception as _cal_err:
-                                        logger.warning("Probe calibration failed: %s", _cal_err)
+                                        logger.warning(
+                                            "Probe calibration failed: %s", _cal_err
+                                        )
 
                                 # ASV: update agent activation window and inject into event
                                 asv_list = _update_asv(agent)
                                 event_data["_asv"] = asv_list
+
+                                # Forensic context: fill WHO/HOW/CHAIN from
+                                # cross-agent data (process cache, file stat, MITRE)
+                                if forensic is not None:
+                                    try:
+                                        forensic.enrich_event(event_data)
+                                    except Exception:
+                                        logger.debug(
+                                            "Forensic enrichment failed",
+                                            exc_info=True,
+                                        )
 
                                 if scorer is not None:
                                     try:
@@ -349,7 +414,8 @@ def main() -> int:
                                                 severity=ev.severity or "MEDIUM",
                                                 timestamp=datetime.now(),
                                                 probe_name=_probe_nm,
-                                                collection_agent=ev.source_component or "",
+                                                collection_agent=ev.source_component
+                                                or "",
                                                 probe_precision=_probe_w,
                                                 security_event={
                                                     "event_category": se.event_category,
@@ -369,13 +435,8 @@ def main() -> int:
 
                             elif ev.event_type == "OBSERVATION":
                                 attrs = dict(ev.attributes)
-                                domain = attrs.get(
-                                    "_domain", dt.collection_agent
-                                )
-                                ts_ns = (
-                                    ev.event_timestamp_ns
-                                    or dt.timestamp_ns
-                                )
+                                domain = attrs.get("_domain", dt.collection_agent)
+                                ts_ns = ev.event_timestamp_ns or dt.timestamp_ns
 
                                 # SOMA: record observation for baseline
                                 if soma is not None:
@@ -383,7 +444,12 @@ def main() -> int:
                                         soma.observe(
                                             category=domain,
                                             process=attrs.get("process_name", ""),
-                                            path=attrs.get("exe", attrs.get("path", attrs.get("dst_ip", ""))),
+                                            path=attrs.get(
+                                                "exe",
+                                                attrs.get(
+                                                    "path", attrs.get("dst_ip", "")
+                                                ),
+                                            ),
                                             domain=domain,
                                             risk=float(attrs.get("risk_score", 0) or 0),
                                         )
@@ -409,33 +475,69 @@ def main() -> int:
                                                 "src_port": attrs.get("src_port"),
                                                 "dst_port": attrs.get("dst_port"),
                                                 "protocol": attrs.get("protocol"),
-                                                "bytes_tx": int(attrs.get("bytes_tx", 0) or 0),
-                                                "bytes_rx": int(attrs.get("bytes_rx", 0) or 0),
+                                                "bytes_tx": int(
+                                                    attrs.get("bytes_tx", 0) or 0
+                                                ),
+                                                "bytes_rx": int(
+                                                    attrs.get("bytes_rx", 0) or 0
+                                                ),
                                                 "pid": attrs.get("pid"),
-                                                "process_name": attrs.get("process_name"),
+                                                "process_name": attrs.get(
+                                                    "process_name"
+                                                ),
                                                 "conn_user": attrs.get("conn_user"),
                                                 "state": attrs.get("state"),
                                                 "collection_agent": dt.collection_agent,
                                                 "agent_version": dt.agent_version,
                                                 "event_source": "observation",
                                                 # Enrichment results
-                                                "geo_dst_country": attrs.get("geo_dst_country"),
-                                                "geo_dst_city": attrs.get("geo_dst_city"),
-                                                "geo_dst_latitude": attrs.get("geo_dst_latitude"),
-                                                "geo_dst_longitude": attrs.get("geo_dst_longitude"),
-                                                "geo_src_country": attrs.get("geo_src_country"),
-                                                "geo_src_city": attrs.get("geo_src_city"),
-                                                "geo_src_latitude": attrs.get("geo_src_latitude"),
-                                                "geo_src_longitude": attrs.get("geo_src_longitude"),
-                                                "asn_dst_number": attrs.get("asn_dst_number"),
+                                                "geo_dst_country": attrs.get(
+                                                    "geo_dst_country"
+                                                ),
+                                                "geo_dst_city": attrs.get(
+                                                    "geo_dst_city"
+                                                ),
+                                                "geo_dst_latitude": attrs.get(
+                                                    "geo_dst_latitude"
+                                                ),
+                                                "geo_dst_longitude": attrs.get(
+                                                    "geo_dst_longitude"
+                                                ),
+                                                "geo_src_country": attrs.get(
+                                                    "geo_src_country"
+                                                ),
+                                                "geo_src_city": attrs.get(
+                                                    "geo_src_city"
+                                                ),
+                                                "geo_src_latitude": attrs.get(
+                                                    "geo_src_latitude"
+                                                ),
+                                                "geo_src_longitude": attrs.get(
+                                                    "geo_src_longitude"
+                                                ),
+                                                "asn_dst_number": attrs.get(
+                                                    "asn_dst_number"
+                                                ),
                                                 "asn_dst_org": attrs.get("asn_dst_org"),
-                                                "asn_dst_network_type": attrs.get("asn_dst_network_type"),
-                                                "asn_src_number": attrs.get("asn_src_number"),
+                                                "asn_dst_network_type": attrs.get(
+                                                    "asn_dst_network_type"
+                                                ),
+                                                "asn_src_number": attrs.get(
+                                                    "asn_src_number"
+                                                ),
                                                 "asn_src_org": attrs.get("asn_src_org"),
-                                                "asn_src_network_type": attrs.get("asn_src_network_type"),
-                                                "threat_intel_match": attrs.get("threat_intel_match", False),
-                                                "threat_source": attrs.get("threat_source"),
-                                                "threat_severity": attrs.get("threat_severity"),
+                                                "asn_src_network_type": attrs.get(
+                                                    "asn_src_network_type"
+                                                ),
+                                                "threat_intel_match": attrs.get(
+                                                    "threat_intel_match", False
+                                                ),
+                                                "threat_source": attrs.get(
+                                                    "threat_source"
+                                                ),
+                                                "threat_severity": attrs.get(
+                                                    "threat_severity"
+                                                ),
                                             }
                                         )
                                     except Exception as e:

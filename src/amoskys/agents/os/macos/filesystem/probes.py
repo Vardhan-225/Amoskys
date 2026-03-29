@@ -44,7 +44,14 @@ logger = logging.getLogger(__name__)
 
 # Default base directory for baseline databases
 _BASELINE_DB_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..", "data", "baselines"
+    os.path.dirname(os.path.abspath(__file__)),
+    "..",
+    "..",
+    "..",
+    "..",
+    "..",
+    "data",
+    "baselines",
 )
 
 
@@ -93,7 +100,9 @@ class BaselineStore:
         now = time.time()
         # Load existing first_seen times so we preserve them
         existing = {}
-        for row in self._conn.execute("SELECT path, first_seen FROM baseline").fetchall():
+        for row in self._conn.execute(
+            "SELECT path, first_seen FROM baseline"
+        ).fetchall():
             existing[row[0]] = row[1]
 
         self._conn.execute("DELETE FROM baseline")
@@ -112,6 +121,7 @@ class BaselineStore:
             self._conn.close()
         except Exception:
             pass
+
 
 # Shared constant: executable file extensions used by QuarantineBypassProbe
 # and AirDropFileArrivalProbe to avoid duplication.
@@ -295,7 +305,9 @@ class _BaselineDiffProbe(MicroProbe):
             }
             self._store.persist(entries)
         except Exception:
-            logger.warning("%s: failed to persist baseline to DB", self.name, exc_info=True)
+            logger.warning(
+                "%s: failed to persist baseline to DB", self.name, exc_info=True
+            )
 
     def _make_file_event(
         self, change_type: str, entry: Any, severity: Severity
@@ -1213,7 +1225,9 @@ class _LogBaselineStore:
         """Persist current snapshot. entries: path -> (size, mtime, perms)."""
         now = time.time()
         existing_first: Dict[str, float] = {}
-        for row in self._conn.execute("SELECT path, first_seen FROM log_baseline").fetchall():
+        for row in self._conn.execute(
+            "SELECT path, first_seen FROM log_baseline"
+        ).fetchall():
             existing_first[row[0]] = row[1]
 
         self._conn.execute("DELETE FROM log_baseline")
@@ -1383,8 +1397,7 @@ class LogTamperingProbe(MicroProbe):
                 "previous_permissions": prev_perms,
                 "current_permissions": cur_perms,
                 "detail": (
-                    f"Log file permissions changed from "
-                    f"{prev_perms} to {cur_perms}"
+                    f"Log file permissions changed from " f"{prev_perms} to {cur_perms}"
                 ),
             },
             confidence=0.80,

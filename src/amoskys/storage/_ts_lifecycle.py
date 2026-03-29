@@ -53,9 +53,7 @@ class LifecycleMixin:
         self._batch_mode = False
         self._batch_count = 0
         self._cache.invalidate()
-        raise sqlite3.OperationalError(
-            f"Batch commit failed after retries: {last_err}"
-        )
+        raise sqlite3.OperationalError(f"Batch commit failed after retries: {last_err}")
 
     def _commit(self) -> None:
         """Commit unless in batch mode."""

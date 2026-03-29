@@ -31,8 +31,8 @@ from . import routes_deploy  # noqa: E402, F401
 from . import routes_health  # noqa: E402, F401
 from . import routes_igris  # noqa: E402, F401
 from . import routes_live  # noqa: E402, F401
+from . import routes_nexus  # noqa: E402, F401
 from . import routes_observatory  # noqa: E402, F401
 from . import routes_pages  # noqa: E402, F401
 from . import routes_soma  # noqa: E402, F401
-from . import routes_nexus  # noqa: E402, F401
 from . import routes_threats  # noqa: E402, F401

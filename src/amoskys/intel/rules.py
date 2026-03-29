@@ -149,8 +149,7 @@ def rule_persistence_after_auth(
     persistence_events = [
         e
         for e in events
-        if e.event_type == "AUDIT"
-        and e.audit_event
+        if e.audit_event
         and e.audit_event.get("action_performed") == "CREATED"
         and e.audit_event.get("object_type")
         in ["LAUNCH_AGENT", "LAUNCH_DAEMON", "CRON", "SSH_KEYS"]
@@ -301,15 +300,14 @@ def rule_multi_tactic_attack(
         Incident if pattern detected, None otherwise
     """
     # Extract flow events (outbound connections)
-    flow_events = [e for e in events if e.event_type == "FLOW" and e.flow_event]
+    flow_events = [e for e in events if e.flow_event]
 
     # Extract process events with suspicious paths
     suspicious_paths = ["/tmp/", "/var/tmp/", "Downloads/", ".Trash/"]
     process_events = [
         e
         for e in events
-        if e.event_type == "PROCESS"
-        and e.process_event
+        if e.process_event
         and any(
             path in e.process_event.get("executable_path", "")
             for path in suspicious_paths
@@ -320,8 +318,7 @@ def rule_multi_tactic_attack(
     persistence_events = [
         e
         for e in events
-        if e.event_type == "AUDIT"
-        and e.audit_event
+        if e.audit_event
         and e.audit_event.get("action_performed") == "CREATED"
         and e.audit_event.get("object_type")
         in ["LAUNCH_AGENT", "LAUNCH_DAEMON", "SSH_KEYS"]
@@ -582,7 +579,7 @@ def rule_suspicious_process_tree(
         Incident if pattern detected, None otherwise
     """
     process_events = [
-        e for e in events if e.event_type == "PROCESS" and e.process_event
+        e for e in events if e.process_event
     ]
 
     if not process_events:
@@ -627,7 +624,7 @@ def rule_suspicious_process_tree(
             network_dest = None
 
             for flow_event in [
-                e for e in events if e.event_type == "FLOW" and e.flow_event
+                e for e in events if e.flow_event
             ]:
                 time_diff = abs(
                     (flow_event.timestamp - event.timestamp).total_seconds()

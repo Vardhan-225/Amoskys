@@ -234,6 +234,16 @@ class SecurityMixin:
                 return
             self._dedup.record(event_data)
 
+            # Forensic context: fill WHO/HOW/CHAIN from cross-agent data
+            try:
+                from amoskys.enrichment.forensic_context import ForensicContextEnricher
+
+                if not hasattr(self, "_forensic"):
+                    self._forensic = ForensicContextEnricher()
+                self._forensic.enrich_event(event_data)
+            except Exception:
+                logger.debug("Forensic enrichment failed", exc_info=True)
+
             # Score event for signal/noise classification
             if self._scorer is not None and not training_exclude:
                 try:
