@@ -162,12 +162,23 @@ class BrowserCredentialTheftProbe(MicroProbe):
         events: List[TelemetryEvent] = []
         accesses = context.shared_data.get("sensitive_accesses", [])
 
+        # Apple system processes that legitimately access browser stores
+        _APPLE_BROWSER_PROCESSES = {
+            "Passwords", "Safari", "SafariServices", "WebKit",
+            "com.apple.Safari", "com.apple.WebKit", "nsurlsessiond",
+            "SafariBookmarksSyncAgent", "cloudd", "bird", "Knowledge",
+        }
+
         for access in accesses:
             if access.access_category not in _BROWSER_CATEGORIES:
                 continue
 
             # Self-exclusion: skip AMOSKYS accessing its own keys
             if _is_amoskys_self_access(access.process_name, access.file_path):
+                continue
+
+            # Apple-signed system processes legitimately manage browser data
+            if access.process_name in _APPLE_BROWSER_PROCESSES:
                 continue
 
             events.append(

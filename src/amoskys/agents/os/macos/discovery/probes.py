@@ -451,11 +451,23 @@ class RogueDHCPProbe(MicroProbe):
         arp_entries = context.shared_data.get("arp_entries", [])
 
         # Find default gateways (destination = "default" or "0.0.0.0")
+        # Validate that gateway values are actual IP addresses —
+        # macOS route table can contain interface names (link#23) and
+        # MAC addresses that are not gateways.
+        import ipaddress as _ipaddr
+
         default_gateways: list[tuple[str, str]] = []  # (gateway_ip, interface)
         for route in routes:
             if route.destination in ("default", "0.0.0.0", "0/0"):
-                if route.gateway and route.gateway != "*":
-                    default_gateways.append((route.gateway, route.interface))
+                gw = route.gateway
+                if not gw or gw == "*":
+                    continue
+                # Validate it's a real IP, not an interface name or MAC address
+                try:
+                    _ipaddr.ip_address(gw.split("%")[0])  # strip %interface suffix
+                except ValueError:
+                    continue
+                default_gateways.append((gw, route.interface))
 
         current_gateway_ips = {gw for gw, _ in default_gateways}
 

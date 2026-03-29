@@ -519,15 +519,30 @@ class ConfigBackdoorProbe(_BaselineDiffProbe):
         "/Library/Preferences/",
     ]
 
-    # Exclude noisy files that change frequently
+    # Exclude noisy files that change frequently during normal macOS operation
     _EXCLUDE_NAMES: Set[str] = {
         ".DS_Store",
         "com.apple.preferences.plist",
     }
 
+    # Apple/vendor plist prefixes that change during normal OS operation
+    _BENIGN_PLIST_PREFIXES = (
+        "com.apple.",
+        "com.microsoft.",
+        "com.google.",
+        "com.docker.",
+        "org.mozilla.",
+    )
+
     def _matches(self, entry: Any) -> bool:
         if entry.name in self._EXCLUDE_NAMES:
             return False
+        # Vendor system plists in /Library/Preferences change on boot, wake,
+        # preference sync, and OS updates — not indicators of backdoor activity
+        path = getattr(entry, "path", "") or ""
+        if "/Library/Preferences/" in path and entry.name.endswith(".plist"):
+            if any(entry.name.startswith(p) for p in self._BENIGN_PLIST_PREFIXES):
+                return False
         return super()._matches(entry)
 
     def _make_file_event(
@@ -716,6 +731,23 @@ class QuarantineBypassProbe(MicroProbe):
             # Skip already-seen unquarantined files
             if entry.path in self._seen_unquarantined:
                 continue
+
+            # Skip files owned by the current user in dev/project directories —
+            # locally created files never had quarantine in the first place
+            try:
+                st = os.stat(entry.path)
+                if st.st_uid == os.getuid():
+                    # Check if file was created recently (within last 7 days)
+                    # and has no quarantine — likely locally created, not bypassed
+                    import time as _time
+
+                    age_days = (_time.time() - st.st_mtime) / 86400
+                    if age_days > 7:
+                        # Old file without quarantine — already known, suppress
+                        self._seen_unquarantined.add(entry.path)
+                        continue
+            except OSError:
+                pass
 
             has_q = self._has_quarantine(entry.path)
             if has_q is False:

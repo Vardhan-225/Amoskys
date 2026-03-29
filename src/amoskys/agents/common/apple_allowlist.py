@@ -294,6 +294,23 @@ def is_apple_system_process(
     """
     profile = APPLE_SYSTEM_PROCESSES.get(process_name)
     if profile is None:
+        # Path-based fallback: Apple ships hundreds of system daemons that
+        # can't all be enumerated by name. Any binary in Apple-owned system
+        # directories is considered Apple system by default.
+        _APPLE_SYSTEM_DIRS = (
+            "/usr/libexec/",
+            "/usr/sbin/",
+            "/usr/bin/",
+            "/System/Library/",
+            "/Library/Apple/",
+            "/sbin/",
+        )
+        if exe_path and any(exe_path.startswith(d) for d in _APPLE_SYSTEM_DIRS):
+            return AllowlistResult(
+                is_expected=True,
+                disposition="apple_system",
+                reason=f"System binary in {exe_path.rsplit('/', 1)[0]}/",
+            )
         return AllowlistResult(
             is_expected=False,
             disposition="unknown",
