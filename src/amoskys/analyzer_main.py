@@ -629,15 +629,23 @@ def main() -> int:
                                         })
 
                                     elif domain in ("fim", "filesystem"):
+                                        _name = attrs.get("name", "")
+                                        _ext = ""
+                                        if _name and "." in _name:
+                                            _ext = "." + _name.rsplit(".", 1)[-1]
                                         store.insert_fim_event({
                                             **_base,
-                                            "file_path": attrs.get("path"),
-                                            "file_name": attrs.get("name"),
-                                            "file_extension": attrs.get("extension"),
-                                            "change_type": attrs.get("change_type"),
-                                            "sha256": attrs.get("sha256"),
-                                            "file_size": int(attrs.get("size", 0) or 0),
+                                            "path": attrs.get("path"),
+                                            "file_extension": attrs.get("extension", _ext),
+                                            "change_type": attrs.get("change_type", "snapshot"),
+                                            "new_hash": attrs.get("sha256", ""),
+                                            "owner_uid": int(attrs.get("uid", 0) or 0),
+                                            "is_suid": attrs.get("is_suid", False),
+                                            "mtime": attrs.get("mtime"),
+                                            "size": int(attrs.get("size", 0) or 0),
                                             "risk_score": float(attrs.get("risk_score", 0) or 0),
+                                            "event_type": "file_snapshot",
+                                            "raw_attributes_json": json.dumps(attrs),
                                         })
 
                                     elif domain == "persistence":
