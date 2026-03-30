@@ -232,6 +232,13 @@ class User(TimestampMixin, Base):
     )
     locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
+    # Organization membership
+    org_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="SET NULL"),
+        index=True,
+    )
+
     # Onboarding
     account_type: Mapped[Optional[str]] = mapped_column(
         String(20),

@@ -179,11 +179,13 @@ def init_web_db() -> None:
     # Import models to register them with Base
     from amoskys.agents import models as agent_models  # noqa: F401
     from amoskys.auth import models as auth_models  # noqa: F401
+    from amoskys.auth import organization as org_models  # noqa: F401
 
     Base.metadata.create_all(bind=get_web_engine())
 
     # Lightweight schema migration for columns added after initial deployment
     _migrate_user_onboarding_columns(get_web_engine())
+    _migrate_user_org_column(get_web_engine())
 
 
 def _migrate_user_onboarding_columns(engine) -> None:
@@ -209,6 +211,25 @@ def _migrate_user_onboarding_columns(engine) -> None:
                         f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"
                     )
                 )
+
+
+def _migrate_user_org_column(engine) -> None:
+    """Add org_id column to existing users table if missing."""
+    import sqlalchemy
+
+    inspector = sqlalchemy.inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+
+    existing = {c["name"] for c in inspector.get_columns("users")}
+    if "org_id" not in existing:
+        with engine.begin() as conn:
+            conn.execute(
+                sqlalchemy.text(
+                    "ALTER TABLE users ADD COLUMN org_id VARCHAR(36) "
+                    "REFERENCES organizations(id) ON DELETE SET NULL"
+                )
+            )
 
 
 def reset_web_engine() -> None:

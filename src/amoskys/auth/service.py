@@ -288,6 +288,9 @@ class AuthService:
         self.db.add(user)
         self.db.flush()  # Get user ID without committing
 
+        # Auto-create or join organization based on email domain
+        self._assign_organization(user, email_normalized, full_name)
+
         # Create email verification token
         verification_token = None
         if self.config.require_email_verification:
@@ -1170,6 +1173,117 @@ class AuthService:
         )
 
         return AuthResult(success=True)
+
+    # =========================================================================
+    # Organization Assignment
+    # =========================================================================
+
+    def _assign_organization(
+        self,
+        user: User,
+        email_normalized: str,
+        full_name: Optional[str] = None,
+    ) -> None:
+        """Auto-create or join an organization based on email domain.
+
+        Rules:
+            - Personal domain (gmail, outlook, etc.) → new INDIVIDUAL org
+            - Enterprise domain (@company.com):
+                - First user with this domain → creates ENTERPRISE org (OWNER)
+                - Subsequent users → join existing org (VIEWER, admin approves)
+        """
+        from amoskys.auth.organization import (
+            OrgMembership,
+            OrgRole,
+            OrgTier,
+            OrgType,
+            Organization,
+            classify_email_domain,
+            generate_org_slug,
+        )
+
+        domain, org_type = classify_email_domain(email_normalized)
+
+        if org_type == OrgType.INDIVIDUAL:
+            # Personal email — create a private org for this user
+            display_name = full_name or email_normalized.split("@")[0]
+            org = Organization(
+                name=f"{display_name}'s Devices",
+                slug=generate_org_slug(display_name),
+                type=OrgType.INDIVIDUAL,
+                domain=None,  # No domain grouping for individuals
+                tier=OrgTier.FREE,
+                max_devices=3,
+            )
+            self.db.add(org)
+            self.db.flush()
+
+            membership = OrgMembership(
+                user_id=user.id,
+                org_id=org.id,
+                role=OrgRole.OWNER,
+            )
+            self.db.add(membership)
+            user.org_id = org.id
+
+            logger.info(
+                "org_created_individual",
+                user_id=str(user.id),
+                org_id=str(org.id),
+            )
+
+        else:
+            # Enterprise domain — find or create org for this domain
+            existing_org = (
+                self.db.query(Organization)
+                .filter(Organization.domain == domain)
+                .first()
+            )
+
+            if existing_org:
+                # Join existing org as VIEWER (admin can promote later)
+                membership = OrgMembership(
+                    user_id=user.id,
+                    org_id=existing_org.id,
+                    role=OrgRole.VIEWER,
+                )
+                self.db.add(membership)
+                user.org_id = existing_org.id
+
+                logger.info(
+                    "org_joined_enterprise",
+                    user_id=str(user.id),
+                    org_id=str(existing_org.id),
+                    domain=domain,
+                )
+            else:
+                # First user with this domain — create enterprise org
+                org_name = domain.split(".")[0].capitalize()
+                org = Organization(
+                    name=org_name,
+                    slug=generate_org_slug(org_name, domain),
+                    type=OrgType.ENTERPRISE,
+                    domain=domain,
+                    tier=OrgTier.FREE,
+                    max_devices=10,  # Enterprise starts with more
+                )
+                self.db.add(org)
+                self.db.flush()
+
+                membership = OrgMembership(
+                    user_id=user.id,
+                    org_id=org.id,
+                    role=OrgRole.OWNER,
+                )
+                self.db.add(membership)
+                user.org_id = org.id
+
+                logger.info(
+                    "org_created_enterprise",
+                    user_id=str(user.id),
+                    org_id=str(org.id),
+                    domain=domain,
+                )
 
     # =========================================================================
     # Audit Logging
