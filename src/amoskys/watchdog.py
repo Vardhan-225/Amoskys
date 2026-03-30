@@ -45,8 +45,8 @@ logger = logging.getLogger("amoskys.watchdog")
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 
-COLLECTOR_RSS_LIMIT_MB = 100
-ANALYZER_RSS_LIMIT_MB = 150
+COLLECTOR_RSS_LIMIT_MB = 200
+ANALYZER_RSS_LIMIT_MB = 400
 CPU_SUSTAINED_LIMIT = 0.25  # 25% of one core
 HEARTBEAT_TIMEOUT_S = 120
 MAX_RESTART_BACKOFF_S = 60

@@ -68,6 +68,7 @@ class MetricCollector:
         self._collect_amrdr(metrics)
         self._collect_soma(metrics)
         self._collect_enrichment(metrics)
+        self._collect_detection_quality(metrics)
         self._collect_evidence(metrics)
         self._collect_integrity(metrics)
 
@@ -387,6 +388,73 @@ class MetricCollector:
             for stage in ("geoip", "asn", "threat_intel", "mitre"):
                 m[f"enrichment.{stage}_available"] = None
             m["enrichment.available_count"] = None
+
+    # ── Detection Quality (what we had to discover manually) ──────
+
+    def _collect_detection_quality(self, m: dict) -> None:
+        """Detection quality metrics — catches silent degradation."""
+        try:
+            import sqlite3
+
+            db = sqlite3.connect("data/telemetry.db", timeout=3.0)
+            # Events in last 5 minutes
+            total = db.execute(
+                "SELECT COUNT(*) FROM security_events "
+                "WHERE timestamp_dt > datetime('now', '-5 minutes')"
+            ).fetchone()[0]
+
+            if total > 0:
+                # Quality distribution
+                valid = db.execute(
+                    "SELECT COUNT(*) FROM security_events "
+                    "WHERE timestamp_dt > datetime('now', '-5 minutes') "
+                    "AND quality_state = 'valid'"
+                ).fetchone()[0]
+                m["quality.valid_pct"] = round(valid / total * 100, 1)
+
+                # Scoring health (should be > 0 on scored events)
+                behav = db.execute(
+                    "SELECT COUNT(*) FROM security_events "
+                    "WHERE timestamp_dt > datetime('now', '-5 minutes') "
+                    "AND behavioral_score > 0"
+                ).fetchone()[0]
+                m["quality.behavioral_pct"] = round(behav / total * 100, 1)
+
+                temp = db.execute(
+                    "SELECT COUNT(*) FROM security_events "
+                    "WHERE timestamp_dt > datetime('now', '-5 minutes') "
+                    "AND temporal_score > 0"
+                ).fetchone()[0]
+                m["quality.temporal_pct"] = round(temp / total * 100, 1)
+
+                # High-risk on idle (false positive indicator)
+                high = db.execute(
+                    "SELECT COUNT(*) FROM security_events "
+                    "WHERE timestamp_dt > datetime('now', '-5 minutes') "
+                    "AND risk_score >= 0.7"
+                ).fetchone()[0]
+                m["quality.high_risk_pct"] = round(high / total * 100, 1)
+
+                # Sigma detection rate
+                sigma = db.execute(
+                    "SELECT COUNT(*) FROM security_events "
+                    "WHERE timestamp_dt > datetime('now', '-5 minutes') "
+                    "AND detection_source LIKE '%sigma%'"
+                ).fetchone()[0]
+                m["quality.sigma_pct"] = round(sigma / total * 100, 1)
+
+                # Kill chain coverage
+                kc = db.execute(
+                    "SELECT COUNT(*) FROM security_events "
+                    "WHERE timestamp_dt > datetime('now', '-5 minutes') "
+                    "AND kill_chain_stage IS NOT NULL AND kill_chain_stage != ''"
+                ).fetchone()[0]
+                m["quality.kill_chain_pct"] = round(kc / total * 100, 1)
+
+            m["quality.events_5min"] = total
+            db.close()
+        except Exception as e:
+            logger.debug("Detection quality collection failed: %s", e)
 
     # ── Integrity (via Auditor) ───────────────────────────────────
 

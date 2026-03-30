@@ -58,6 +58,42 @@ class TelemetryStore(
         # Create parent directory
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
+        # ── Boot integrity check: detect and recover corrupted DB ──
+        if Path(db_path).exists():
+            try:
+                _check_db = sqlite3.connect(db_path, timeout=5.0)
+                result = _check_db.execute("PRAGMA integrity_check(1)").fetchone()
+                _check_db.close()
+                if result[0] != "ok":
+                    logger.error(
+                        "DATABASE CORRUPTED: %s — %s. "
+                        "Backing up and creating fresh DB.",
+                        db_path, result[0],
+                    )
+                    import shutil
+                    backup = f"{db_path}.corrupted.{int(time.time())}"
+                    shutil.move(db_path, backup)
+                    logger.info("Corrupted DB backed up to %s", backup)
+                    # Remove WAL/SHM files too
+                    for suffix in ("-wal", "-shm"):
+                        wal_path = Path(f"{db_path}{suffix}")
+                        if wal_path.exists():
+                            wal_path.unlink()
+            except Exception as e:
+                logger.warning(
+                    "Integrity check failed (%s) — attempting fresh DB", e
+                )
+                try:
+                    import shutil
+                    backup = f"{db_path}.corrupted.{int(time.time())}"
+                    shutil.move(db_path, backup)
+                    for suffix in ("-wal", "-shm"):
+                        wal_path = Path(f"{db_path}{suffix}")
+                        if wal_path.exists():
+                            wal_path.unlink()
+                except Exception:
+                    pass
+
         # Initialize database
         self.db = sqlite3.connect(db_path, check_same_thread=False, timeout=10.0)
         self.db.row_factory = sqlite3.Row

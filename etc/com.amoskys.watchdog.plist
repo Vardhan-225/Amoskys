@@ -8,7 +8,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Volumes/Akash_Lab/Amoskys/amoskys-venv/bin/python</string>
+        <string>/Volumes/Akash_Lab/Amoskys/.venv/bin/python3</string>
         <string>-m</string>
         <string>amoskys.watchdog</string>
     </array>
@@ -38,7 +38,9 @@
         <key>PYTHONPATH</key>
         <string>/Volumes/Akash_Lab/Amoskys/src</string>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>/Volumes/Akash_Lab/Amoskys/.venv/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>LOGIN_DISABLED</key>
+        <string>true</string>
     </dict>
 
     <!-- Logging -->
@@ -58,7 +60,6 @@
     <key>ExitTimeOut</key>
     <integer>30</integer>
 
-    <!-- Process priority -->
     <key>ProcessType</key>
     <string>Standard</string>
 </dict>

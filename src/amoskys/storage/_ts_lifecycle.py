@@ -294,16 +294,49 @@ class LifecycleMixin:
             except sqlite3.Error:
                 deleted[table] = 0
 
+        # Observation events: shorter retention (7 days default, configurable)
+        obs_age_days = min(max_age_days, 7)
+        obs_cutoff_ns = int((time.time() - obs_age_days * 86400) * 1e9)
+        try:
+            cursor = self.db.execute(
+                "DELETE FROM observation_events WHERE timestamp_ns < ?",
+                (obs_cutoff_ns,),
+            )
+            deleted["observation_events"] = cursor.rowcount
+        except sqlite3.Error:
+            deleted["observation_events"] = 0
+
+        # Snapshot baselines and rollups: clean stale entries
+        for table in ["_snapshot_baseline", "dashboard_rollups", "observation_rollups"]:
+            try:
+                cursor = self.db.execute(
+                    f"DELETE FROM [{table}] WHERE timestamp_ns < ?",
+                    (cutoff_ns,),
+                )
+                deleted[table] = cursor.rowcount
+            except sqlite3.Error:
+                deleted[table] = 0
+
         self.db.commit()
 
         total = sum(deleted.values())
         if total > 0:
             logger.info(
-                "Retention cleanup: deleted %d rows across %d tables (age > %dd)",
+                "Retention cleanup: deleted %d rows across %d tables (age > %dd, obs > %dd)",
                 total,
                 sum(1 for v in deleted.values() if v > 0),
                 max_age_days,
+                obs_age_days,
             )
+
+        # Auto-vacuum to reclaim space after large deletes
+        if total > 10000:
+            try:
+                self.db.execute("PRAGMA incremental_vacuum(1000)")
+                logger.info("Incremental vacuum: reclaimed space after %d deletes", total)
+            except sqlite3.Error:
+                pass
+
         return deleted
 
     # ── Directive 4: AMRDR Agent Trust Cross-Validation ─────────────────
