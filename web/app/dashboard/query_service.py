@@ -384,6 +384,35 @@ class DashboardQueryService:
             proc["exe_basename"] = (
                 proc.get("exe", "").split("/")[-1] if proc.get("exe") else "unknown"
             )
+            # Derive user_type from username
+            uname = proc.get("username", "")
+            if uname == "root" or uname == "_root":
+                proc["user_type"] = "root"
+            elif uname and uname.startswith("_"):
+                proc["user_type"] = "system"
+            elif uname:
+                proc["user_type"] = "user"
+            else:
+                proc["user_type"] = "unknown"
+            # Derive process_class from exe path
+            exe = proc.get("exe", "")
+            if not exe:
+                proc["process_class"] = "unknown"
+            elif exe.startswith(("/System/", "/usr/libexec/", "/usr/sbin/", "/sbin/")):
+                proc["process_class"] = "system"
+            elif exe.startswith("/Applications/"):
+                proc["process_class"] = "application"
+            elif exe.startswith(("/usr/bin/", "/bin/")):
+                proc["process_class"] = "builtin"
+            elif exe.startswith(("/Users/", "/tmp/", "/var/tmp/")):
+                proc["process_class"] = "user"
+            else:
+                proc["process_class"] = "other"
+            # Compute age from create_time
+            ct = proc.get("create_time")
+            if ct:
+                import time as _time
+                proc["age_seconds"] = round(_time.time() - float(ct))
         return rows
 
     def process_stats(self) -> Dict[str, Any]:
@@ -400,19 +429,37 @@ class DashboardQueryService:
                 "SELECT COUNT(DISTINCT exe) AS count FROM process_events WHERE exe IS NOT NULL"
             ).fetchone()["count"]
 
+            # Derive user_type from username (the column that's actually populated)
             user_rows = conn.execute(
                 """
-                SELECT user_type, COUNT(*) AS count
+                SELECT
+                    CASE
+                        WHEN username = 'root' OR username = '_root' THEN 'root'
+                        WHEN username LIKE '_%' AND username NOT LIKE '%@%' THEN 'system'
+                        WHEN username IS NULL OR username = '' THEN 'unknown'
+                        ELSE 'user'
+                    END AS user_type,
+                    COUNT(*) AS count
                 FROM process_events
-                WHERE user_type IS NOT NULL
                 GROUP BY user_type
                 """
             ).fetchall()
+            # Derive process_category from exe path
             class_rows = conn.execute(
                 """
-                SELECT process_category, COUNT(*) AS count
+                SELECT
+                    CASE
+                        WHEN exe LIKE '/System/%' OR exe LIKE '/usr/libexec/%'
+                             OR exe LIKE '/usr/sbin/%' OR exe LIKE '/sbin/%' THEN 'system'
+                        WHEN exe LIKE '/Applications/%' THEN 'application'
+                        WHEN exe LIKE '/usr/bin/%' OR exe LIKE '/bin/%' THEN 'builtin'
+                        WHEN exe LIKE '/Users/%' OR exe LIKE '/tmp/%'
+                             OR exe LIKE '/var/tmp/%' THEN 'user'
+                        WHEN exe IS NULL OR exe = '' THEN 'unknown'
+                        ELSE 'other'
+                    END AS process_category,
+                    COUNT(*) AS count
                 FROM process_events
-                WHERE process_category IS NOT NULL
                 GROUP BY process_category
                 """
             ).fetchall()
@@ -500,11 +547,21 @@ class DashboardQueryService:
             query += " AND exe LIKE ? ESCAPE '\\'"
             params.append(f"%{_escape_like(exe_filter)}%")
         if user_type:
-            query += " AND user_type = ?"
-            params.append(user_type)
+            # Derive user_type from username at query time
+            if user_type == "root":
+                query += " AND (username = 'root' OR username = '_root')"
+            elif user_type == "system":
+                query += " AND username LIKE '_%' AND username NOT LIKE '%@%' AND username != 'root'"
+            elif user_type == "user":
+                query += " AND username IS NOT NULL AND username != '' AND username NOT LIKE '_%'"
         if category:
-            query += " AND process_category = ?"
-            params.append(category)
+            # Derive from exe path
+            if category == "system":
+                query += " AND (exe LIKE '/System/%' OR exe LIKE '/usr/libexec/%' OR exe LIKE '/usr/sbin/%' OR exe LIKE '/sbin/%')"
+            elif category == "application":
+                query += " AND exe LIKE '/Applications/%'"
+            elif category == "user":
+                query += " AND (exe LIKE '/Users/%' OR exe LIKE '/tmp/%')"
         query += " ORDER BY timestamp_ns DESC LIMIT ?"
         params.append(limit)
         with self._read_conn() as conn:
