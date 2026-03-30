@@ -45,8 +45,8 @@ logger = logging.getLogger("amoskys.watchdog")
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 
-COLLECTOR_RSS_LIMIT_MB = 200
-ANALYZER_RSS_LIMIT_MB = 400
+COLLECTOR_RSS_LIMIT_MB = 350
+ANALYZER_RSS_LIMIT_MB = 500
 CPU_SUSTAINED_LIMIT = 0.25  # 25% of one core
 HEARTBEAT_TIMEOUT_S = 120
 MAX_RESTART_BACKOFF_S = 60
@@ -62,13 +62,17 @@ LOG_DIR = PROJECT_ROOT / "logs"
 # ── Child Process Descriptor ─────────────────────────────────────────────────
 
 
+DASHBOARD_RSS_LIMIT_MB = 300
+
+
 class ChildProcess:
     """Tracks a child process managed by the watchdog."""
 
-    def __init__(self, name: str, entry_module: str, rss_limit_mb: int):
+    def __init__(self, name: str, entry_module: str, rss_limit_mb: int, env: dict = None):
         self.name = name
         self.entry_module = entry_module
         self.rss_limit_mb = rss_limit_mb
+        self.env: dict = env or {}
         self.pid: Optional[int] = None
         self.restart_count = 0
         self.last_start_time = 0.0
@@ -119,7 +123,10 @@ class AMOSKYSWatchdog:
         self,
         collector_rss: int = COLLECTOR_RSS_LIMIT_MB,
         analyzer_rss: int = ANALYZER_RSS_LIMIT_MB,
+        dashboard_rss: int = DASHBOARD_RSS_LIMIT_MB,
     ):
+        import secrets
+
         self.collector = ChildProcess(
             name="collector",
             entry_module="amoskys.collector_main",
@@ -130,7 +137,18 @@ class AMOSKYSWatchdog:
             entry_module="amoskys.analyzer_main",
             rss_limit_mb=analyzer_rss,
         )
-        self.children = [self.collector, self.analyzer]
+        self.dashboard = ChildProcess(
+            name="dashboard",
+            entry_module="web.app",
+            rss_limit_mb=dashboard_rss,
+            env={
+                "SECRET_KEY": secrets.token_hex(32),
+                "LOGIN_DISABLED": "true",
+                "FLASK_PORT": "5003",
+                "FORCE_HTTPS": "false",
+            },
+        )
+        self.children = [self.collector, self.analyzer, self.dashboard]
         self._running = True
         self._setup_signals()
 
@@ -178,6 +196,9 @@ class AMOSKYSWatchdog:
             # Set resource limits hint via env
             os.environ["AMOSKYS_RSS_LIMIT_MB"] = str(child.rss_limit_mb)
             os.environ["AMOSKYS_ROLE"] = child.name
+            # Apply child-specific environment variables
+            for k, v in child.env.items():
+                os.environ[k] = v
 
             # Replace process with the child module
             try:
@@ -286,22 +307,21 @@ class AMOSKYSWatchdog:
 
     def run(self) -> int:
         """Main watchdog loop."""
-        logger.info("AMOSKYS Watchdog starting")
-        logger.info(
-            "  Collector: module=%s, rss_limit=%dMB",
-            self.collector.entry_module,
-            self.collector.rss_limit_mb,
-        )
-        logger.info(
-            "  Analyzer:  module=%s, rss_limit=%dMB",
-            self.analyzer.entry_module,
-            self.analyzer.rss_limit_mb,
+        logger.info("AMOSKYS Watchdog starting (3-tier)")
+        for child in self.children:
+            logger.info(
+                "  %s: module=%s, rss_limit=%dMB",
+                child.name,
+                child.entry_module,
+                child.rss_limit_mb,
         )
 
-        # Start children
+        # Start children (staggered: collector → analyzer → dashboard)
         self.start_child(self.collector)
-        time.sleep(1)  # Stagger startup
+        time.sleep(1)
         self.start_child(self.analyzer)
+        time.sleep(2)
+        self.start_child(self.dashboard)
 
         # Supervision loop
         while self._running:
