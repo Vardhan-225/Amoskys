@@ -269,3 +269,68 @@ def cc_device_events(device_id):
         if db:
             db.close()
         return jsonify({"events": [], "message": str(e)})
+
+
+@dashboard_bp.route("/api/command-center/live-feed")
+@require_login
+def cc_live_feed():
+    """Live event feed — most recent events across all devices."""
+    db = _get_fleet_db()
+    if db is None:
+        return jsonify({"events": []})
+
+    try:
+        limit = min(request.args.get("limit", 30, type=int), 100)
+        after_id = request.args.get("after", 0, type=int)
+
+        query = """SELECT se.id, se.timestamp_dt, se.event_category, se.risk_score,
+                          se.collection_agent, se.process_name, se.mitre_techniques,
+                          se.description, d.hostname, d.device_id
+                   FROM security_events se
+                   JOIN devices d ON se.device_id = d.device_id
+                   WHERE se.risk_score > 0"""
+        params: list = []
+
+        if after_id > 0:
+            query += " AND se.id > ?"
+            params.append(after_id)
+
+        query += " ORDER BY se.id DESC LIMIT ?"
+        params.append(limit)
+
+        rows = db.execute(query, params).fetchall()
+
+        events = []
+        for r in rows:
+            mitre = []
+            try:
+                raw = r["mitre_techniques"]
+                if raw:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, str):
+                        parsed = json.loads(parsed)
+                    mitre = [t for t in parsed if isinstance(t, str) and t.startswith("T")]
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            events.append({
+                "id": r["id"],
+                "timestamp": r["timestamp_dt"],
+                "category": r["event_category"],
+                "risk_score": r["risk_score"],
+                "agent": r["collection_agent"],
+                "process": r["process_name"],
+                "mitre": mitre,
+                "description": r["description"],
+                "hostname": r["hostname"] or r["device_id"][:12],
+                "device_id": r["device_id"],
+            })
+
+        db.close()
+        return jsonify({"events": events})
+
+    except Exception as e:
+        logger.error("Live feed query failed: %s", e)
+        if db:
+            db.close()
+        return jsonify({"events": []})

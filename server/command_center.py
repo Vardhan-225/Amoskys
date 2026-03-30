@@ -77,6 +77,9 @@ CREATE TABLE IF NOT EXISTS devices (
     arch TEXT,
     agent_version TEXT,
     api_key TEXT NOT NULL,
+    org_id TEXT,
+    user_id TEXT,
+    deploy_token_hash TEXT,
     first_seen REAL NOT NULL,
     last_seen REAL NOT NULL,
     status TEXT DEFAULT 'online',
@@ -84,12 +87,14 @@ CREATE TABLE IF NOT EXISTS devices (
 );
 CREATE INDEX IF NOT EXISTS idx_devices_status ON devices(status);
 CREATE INDEX IF NOT EXISTS idx_devices_last_seen ON devices(last_seen);
+CREATE INDEX IF NOT EXISTS idx_devices_org ON devices(org_id);
 
 -- Security events (from all devices)
 CREATE TABLE IF NOT EXISTS security_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_id INTEGER,
     device_id TEXT NOT NULL,
+    org_id TEXT,
     timestamp_ns INTEGER,
     timestamp_dt TEXT,
     event_category TEXT,
@@ -132,6 +137,7 @@ CREATE TABLE IF NOT EXISTS process_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_id INTEGER,
     device_id TEXT NOT NULL,
+    org_id TEXT,
     timestamp_ns INTEGER,
     timestamp_dt TEXT,
     pid TEXT,
@@ -155,6 +161,7 @@ CREATE TABLE IF NOT EXISTS flow_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_id INTEGER,
     device_id TEXT NOT NULL,
+    org_id TEXT,
     timestamp_ns INTEGER,
     timestamp_dt TEXT,
     src_ip TEXT,
@@ -180,6 +187,7 @@ CREATE TABLE IF NOT EXISTS dns_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_id INTEGER,
     device_id TEXT NOT NULL,
+    org_id TEXT,
     timestamp_ns INTEGER,
     timestamp_dt TEXT,
     domain TEXT,
@@ -197,6 +205,7 @@ CREATE TABLE IF NOT EXISTS persistence_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_id INTEGER,
     device_id TEXT NOT NULL,
+    org_id TEXT,
     timestamp_ns INTEGER,
     timestamp_dt TEXT,
     mechanism TEXT,
@@ -298,24 +307,28 @@ def require_device_auth(f):
 def register_device():
     """Register a device and return an API key.
 
-    If the device is already registered, updates its info and returns
-    the existing API key. New devices get a fresh key.
+    Supports two flows:
+    1. With deploy_token: validates token, links device to user's org
+    2. Without token: anonymous registration (Global view only)
+
+    If the device is already registered, updates its info (heartbeat).
     """
     data = request.get_json()
     if not data or "device_id" not in data:
         return jsonify({"error": "device_id required"}), 400
 
     device_id = data["device_id"]
+    deploy_token = data.get("deploy_token", "")
     db = get_db()
     now = time.time()
 
     # Check if already registered
     existing = db.execute(
-        "SELECT api_key FROM devices WHERE device_id = ?", (device_id,)
+        "SELECT api_key, org_id FROM devices WHERE device_id = ?", (device_id,)
     ).fetchone()
 
     if existing:
-        # Update device info
+        # Heartbeat — update device info
         db.execute(
             """UPDATE devices SET
                 hostname = ?, os = ?, os_version = ?, arch = ?,
@@ -332,42 +345,124 @@ def register_device():
             ),
         )
         db.commit()
-        api_key = existing["api_key"]
-        logger.info("Device re-registered: %s (%s)", device_id[:8], data.get("hostname"))
-    else:
-        # New device — generate API key
-        api_key = secrets.token_hex(32)
-        db.execute(
-            """INSERT INTO devices
-                (device_id, hostname, os, os_version, arch, agent_version,
-                 api_key, first_seen, last_seen, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'online')""",
-            (
-                device_id,
-                data.get("hostname"),
-                data.get("os"),
-                data.get("os_version"),
-                data.get("arch"),
-                data.get("agent_version"),
-                api_key,
-                now,
-                now,
-            ),
-        )
-        db.commit()
-        logger.info(
-            "NEW device registered: %s (%s, %s %s)",
-            device_id[:8],
+        logger.debug("Heartbeat: %s (%s)", device_id[:8], data.get("hostname"))
+        return jsonify({
+            "status": "registered",
+            "device_id": device_id,
+            # Don't re-send api_key on heartbeat
+        })
+
+    # New device — resolve org from deployment token
+    org_id = None
+    user_id = None
+    token_hash = None
+
+    if deploy_token:
+        # Hash the token and look it up in the web DB
+        # The web DB (amoskys.com) stores agent_tokens with SHA-256 hashes
+        token_hash = hashlib.sha256(deploy_token.encode()).hexdigest()
+        org_id, user_id = _resolve_token_org(token_hash)
+        if org_id:
+            logger.info(
+                "Token validated: device=%s org=%s user=%s",
+                device_id[:8], org_id[:8], (user_id or "")[:8],
+            )
+
+    # Generate API key
+    api_key = secrets.token_hex(32)
+    db.execute(
+        """INSERT INTO devices
+            (device_id, hostname, os, os_version, arch, agent_version,
+             api_key, org_id, user_id, deploy_token_hash,
+             first_seen, last_seen, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'online')""",
+        (
+            device_id,
             data.get("hostname"),
             data.get("os"),
+            data.get("os_version"),
             data.get("arch"),
-        )
+            data.get("agent_version"),
+            api_key,
+            org_id,
+            user_id,
+            token_hash,
+            now,
+            now,
+        ),
+    )
+    db.commit()
+    logger.info(
+        "NEW device: %s (%s, %s %s) org=%s",
+        device_id[:8],
+        data.get("hostname"),
+        data.get("os"),
+        data.get("arch"),
+        (org_id or "global")[:8],
+    )
 
     return jsonify({
         "status": "registered",
         "device_id": device_id,
         "api_key": api_key,
     })
+
+
+def _resolve_token_org(token_hash: str) -> tuple[str | None, str | None]:
+    """Look up org_id and user_id from a deployment token hash.
+
+    Checks the web database (amoskys.com) for the token.
+    Returns (org_id, user_id) or (None, None) if not found.
+    """
+    # Try to connect to web DB for token validation
+    web_db_candidates = [
+        os.getenv("AMOSKYS_WEB_DB_PATH", ""),
+        "web/data/amoskys_web.db",
+        "/opt/amoskys/web/data/amoskys_web.db",
+    ]
+
+    for path in web_db_candidates:
+        if not path or not os.path.exists(path):
+            continue
+        try:
+            web_db = sqlite3.connect(path, timeout=5.0)
+            web_db.row_factory = sqlite3.Row
+
+            # Look up token → user_id
+            row = web_db.execute(
+                """SELECT user_id FROM agent_tokens
+                   WHERE token_hash = ? AND is_consumed = 0
+                   AND (expires_at IS NULL OR expires_at > datetime('now'))""",
+                (token_hash,),
+            ).fetchone()
+
+            if not row:
+                web_db.close()
+                continue
+
+            user_id = row["user_id"]
+
+            # Mark token as consumed
+            web_db.execute(
+                "UPDATE agent_tokens SET is_consumed = 1, consumed_at = datetime('now') WHERE token_hash = ?",
+                (token_hash,),
+            )
+            web_db.commit()
+
+            # Look up user → org_id
+            user_row = web_db.execute(
+                "SELECT org_id FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+
+            web_db.close()
+
+            org_id = user_row["org_id"] if user_row else None
+            return org_id, user_id
+
+        except Exception as e:
+            logger.debug("Token lookup failed in %s: %s", path, e)
+
+    return None, None
 
 
 @app.route("/api/v1/telemetry", methods=["POST"])
@@ -401,10 +496,17 @@ def receive_telemetry():
     now = time.time()
     stored = 0
 
+    # Look up org_id for this device (cached per request)
+    device_row = db.execute(
+        "SELECT org_id FROM devices WHERE device_id = ?", (device_id,)
+    ).fetchone()
+    org_id = device_row["org_id"] if device_row else None
+
     for event in events:
         try:
-            # Force device_id from auth context (prevent spoofing)
+            # Force device_id and org_id from server context (prevent spoofing)
             event["device_id"] = device_id
+            event["org_id"] = org_id
             event["received_at"] = now
             source_id = event.pop("id", None)
             event["source_id"] = source_id
@@ -436,7 +538,7 @@ def receive_telemetry():
 # Allowed columns per table (whitelist for INSERT safety)
 ALLOWED_TABLES = {
     "security_events": {
-        "source_id", "device_id", "timestamp_ns", "timestamp_dt",
+        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
         "event_category", "event_action", "event_outcome",
         "risk_score", "confidence", "mitre_techniques",
         "geometric_score", "temporal_score", "behavioral_score",
@@ -448,25 +550,25 @@ ALLOWED_TABLES = {
         "probe_name", "detection_source", "received_at",
     },
     "process_events": {
-        "source_id", "device_id", "timestamp_ns", "timestamp_dt",
+        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
         "pid", "exe", "cmdline", "ppid", "username", "name",
         "parent_name", "status", "cpu_percent", "memory_percent",
         "collection_agent", "received_at",
     },
     "flow_events": {
-        "source_id", "device_id", "timestamp_ns", "timestamp_dt",
+        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
         "src_ip", "dst_ip", "src_port", "dst_port", "protocol",
         "bytes_tx", "bytes_rx", "pid", "process_name",
         "geo_dst_country", "asn_dst_org", "threat_intel_match",
         "collection_agent", "received_at",
     },
     "dns_events": {
-        "source_id", "device_id", "timestamp_ns", "timestamp_dt",
+        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
         "domain", "record_type", "response_code", "risk_score",
         "process_name", "collection_agent", "received_at",
     },
     "persistence_events": {
-        "source_id", "device_id", "timestamp_ns", "timestamp_dt",
+        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
         "mechanism", "path", "change_type", "label",
         "sha256", "risk_score", "collection_agent", "received_at",
     },

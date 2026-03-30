@@ -13,14 +13,20 @@
         <button class="tab-item" data-tab="system">System</button>
     </div>
     <div class="tab-viewport">
-        <div class="tab-spinner" id="tab-spinner"><div class="neural-loading"></div></div>
-        <iframe class="tab-frame" id="tab-frame" title="Fleet content"></iframe>
+        <div class="tab-spinner hidden" id="tab-spinner"><div class="neural-loading"></div></div>
+        <!-- Command Center inlined (no iframe) -->
+        <div class="tab-inline" id="tab-inline">
+            {% include "dashboard/command-center-inline.html" %}
+        </div>
+        <!-- Iframe for other tabs (lazy loaded on click) -->
+        <iframe class="tab-frame" id="tab-frame" title="Fleet content" style="display:none;"></iframe>
     </div>
 </div>
 
 <style>
 .consolidated-page { display: flex; flex-direction: column; height: calc(100vh - var(--header-height)); }
 .tab-viewport { flex: 1; position: relative; overflow: hidden; }
+.tab-inline { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow-y: auto; }
 .tab-frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; background: var(--bg-primary); }
 .tab-spinner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; }
 .tab-spinner.hidden { display: none; }
@@ -29,7 +35,6 @@
 <script nonce="{{ csp_nonce() }}">
 (function() {
     const ROUTES = {
-        'command-center': '/dashboard/command-center?embed=1',
         agents: '/dashboard/agents?embed=1',
         deploy: '/dashboard/deploy?embed=1',
         monitor: '/dashboard/agent-monitor?embed=1',
@@ -37,6 +42,7 @@
         system: '/dashboard/system?embed=1',
     };
     const frame = document.getElementById('tab-frame');
+    const inline = document.getElementById('tab-inline');
     const spinner = document.getElementById('tab-spinner');
     const tabs = document.querySelectorAll('#fleet-tabs .tab-item');
     let current = '';
@@ -44,22 +50,41 @@
     function activate(tab, params) {
         current = tab;
         tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-        spinner.classList.remove('hidden');
-        frame.onload = function() { spinner.classList.add('hidden'); };
-        // Pass query params through to iframe (e.g. ?agent=macos_dns)
-        var url = ROUTES[tab];
-        if (params) url += '&' + params;
-        frame.src = url;
+
+        if (tab === 'command-center') {
+            // Show inlined command center, hide iframe
+            inline.style.display = 'block';
+            frame.style.display = 'none';
+            spinner.classList.add('hidden');
+        } else {
+            // Show iframe, hide inline
+            inline.style.display = 'none';
+            frame.style.display = 'block';
+            spinner.classList.remove('hidden');
+            frame.onload = function() { spinner.classList.add('hidden'); };
+            var url = ROUTES[tab];
+            if (params) url += '&' + params;
+            frame.src = url;
+        }
         history.replaceState(null, '', '/dashboard/fleet#' + tab + (params ? '?' + params : ''));
     }
 
     tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
 
-    // Parse hash: #monitor?agent=macos_dns or #probes?probe=rt_tcc_permission
+    // Parse hash
     var hashParts = window.location.hash.replace('#', '').split('?');
     var tabName = hashParts[0] || 'command-center';
     var queryParams = hashParts[1] || '';
-    activate(ROUTES[tabName] ? tabName : 'agents', queryParams);
+
+    if (tabName === 'command-center') {
+        // Already shown via include — just mark active
+        spinner.classList.add('hidden');
+        history.replaceState(null, '', '/dashboard/fleet#command-center');
+    } else if (ROUTES[tabName]) {
+        activate(tabName, queryParams);
+    } else {
+        spinner.classList.add('hidden');
+    }
 })();
 </script>
 {% endblock %}

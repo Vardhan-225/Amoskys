@@ -5,7 +5,7 @@ Flask Routes and Views
 
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, current_app, jsonify, render_template, send_from_directory
 
 main_bp = Blueprint("main", __name__)
 
@@ -80,3 +80,44 @@ def status():
 def health():
     """Health check endpoint for load balancer"""
     return jsonify({"status": "healthy"}), 200
+
+
+@main_bp.route("/robots.txt")
+def robots():
+    """Serve robots.txt from static directory"""
+    return send_from_directory(current_app.static_folder, "robots.txt")
+
+
+@main_bp.route("/favicon.ico")
+def favicon():
+    """Serve favicon from static images"""
+    return send_from_directory(
+        current_app.static_folder + "/images",
+        "favicon-32x32.png",
+        mimetype="image/png",
+    )
+
+
+@main_bp.route("/deploy/install.sh", methods=["GET"])
+def deploy_install_script():
+    """Serve AMOSKYS install script (public, no auth).
+
+    Usage: curl -fsSL https://amoskys.com/deploy/install.sh | sudo bash -s -- --token=... --server=...
+    """
+    from pathlib import Path
+
+    from flask import Response
+
+    # Look for install.sh relative to project root (2 levels up from web/app/)
+    project_root = Path(__file__).parent.parent.parent
+    script_candidates = [
+        project_root / "deploy" / "macos" / "install.sh",
+        Path("/opt/amoskys/deploy/macos/install.sh"),
+        Path("/Library/Amoskys/deploy/install.sh"),
+    ]
+
+    for path in script_candidates:
+        if path.exists():
+            return Response(path.read_text(), mimetype="text/x-shellscript")
+
+    return Response("# Install script not found\nexit 1", mimetype="text/x-shellscript", status=404)

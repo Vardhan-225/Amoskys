@@ -56,17 +56,20 @@ READ_TIMEOUT_S = 30
 @dataclass
 class ShipperConfig:
     """Shipper configuration, loaded from environment."""
-    server_url: str = ""           # e.g. https://command.amoskys.com
+    server_url: str = ""           # e.g. https://ops.amoskys.com
     api_key: str = ""              # Device API key (assigned on registration)
+    deploy_token: str = ""         # One-time deployment token (used on first register)
     device_id: str = ""            # Unique device identifier
     telemetry_db: str = "data/telemetry.db"
     cursor_db: str = "data/shipper_cursor.db"
+    config_file: str = ""          # Path to amoskys.env (for persisting API key)
     enabled: bool = False
 
     @classmethod
     def from_env(cls) -> ShipperConfig:
         server = os.getenv("AMOSKYS_SERVER", "").rstrip("/")
         api_key = os.getenv("AMOSKYS_API_KEY", "")
+        deploy_token = os.getenv("AMOSKYS_DEPLOY_TOKEN", "")
         device_id = os.getenv("AMOSKYS_DEVICE_ID", "")
 
         # Auto-generate device_id from hardware if not set
@@ -77,12 +80,18 @@ class ShipperConfig:
         telemetry_db = os.path.join(data_dir, "telemetry.db")
         cursor_db = os.path.join(data_dir, "shipper_cursor.db")
 
+        # Config file for persisting API key after first registration
+        amoskys_home = os.getenv("AMOSKYS_HOME", "")
+        config_file = os.path.join(amoskys_home, "config", "amoskys.env") if amoskys_home else ""
+
         return cls(
             server_url=server,
             api_key=api_key,
+            deploy_token=deploy_token,
             device_id=device_id,
             telemetry_db=telemetry_db,
             cursor_db=cursor_db,
+            config_file=config_file,
             enabled=bool(server),
         )
 
@@ -280,7 +289,12 @@ class TelemetryShipper:
             self._shutdown.wait(timeout=SHIP_INTERVAL_S)
 
     def _register(self):
-        """Register this device with the Command Center."""
+        """Register this device with the Command Center.
+
+        First registration includes the deployment token (one-time use).
+        The server validates the token, links the device to the user's org,
+        and returns an API key. Subsequent calls are heartbeats.
+        """
         try:
             payload = {
                 "device_id": self.config.device_id,
@@ -291,6 +305,11 @@ class TelemetryShipper:
                 "agent_version": "0.9.1-beta",
                 "python_version": platform.python_version(),
             }
+
+            # Include deployment token on first registration
+            if self.config.deploy_token and not self.config.api_key:
+                payload["deploy_token"] = self.config.deploy_token
+
             resp = self._session.post(
                 f"{self.config.server_url}/api/v1/register",
                 json=payload,
@@ -299,13 +318,18 @@ class TelemetryShipper:
 
             if resp.status_code == 200:
                 data = resp.json()
-                # Server may assign an API key on first registration
+                # Server assigns API key on first registration
                 if "api_key" in data and not self.config.api_key:
                     self.config.api_key = data["api_key"]
                     self._session.headers["Authorization"] = f"Bearer {data['api_key']}"
-                    logger.info("Received API key from server")
+                    # Persist API key to config file so it survives restarts
+                    self._persist_api_key(data["api_key"])
+                    # Clear deploy token — it's consumed, no longer needed
+                    self.config.deploy_token = ""
+                    logger.info("Registered with API key (device=%s)", self.config.device_id[:8])
                 self._registered = True
-                logger.info("Registered with Command Center (device=%s)", self.config.device_id[:8])
+                if not data.get("api_key"):
+                    logger.debug("Heartbeat OK (device=%s)", self.config.device_id[:8])
             else:
                 logger.warning("Registration failed: %d %s", resp.status_code, resp.text[:200])
 
@@ -313,6 +337,19 @@ class TelemetryShipper:
             logger.debug("Command Center unreachable — will retry")
         except Exception as e:
             logger.warning("Registration error: %s", e)
+
+    def _persist_api_key(self, api_key: str):
+        """Write API key to config file so it survives agent restarts."""
+        config_file = self.config.config_file
+        if not config_file:
+            return
+        try:
+            # Append to existing config
+            with open(config_file, "a") as f:
+                f.write(f"\nAMOSKYS_API_KEY={api_key}\n")
+            logger.info("API key persisted to %s", config_file)
+        except OSError as e:
+            logger.warning("Could not persist API key: %s", e)
 
     def _ship_all_tables(self):
         """Ship new events from all tracked tables."""

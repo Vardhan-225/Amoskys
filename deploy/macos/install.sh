@@ -39,6 +39,8 @@ DAEMON_LABEL="com.amoskys.agent"
 VERSION="0.9.1-beta"
 SILENT=false
 UNINSTALL=false
+DEPLOY_TOKEN=""
+AMOSKYS_SERVER=""
 
 # ── Colors ──
 RED='\033[91m'
@@ -57,6 +59,8 @@ for arg in "$@"; do
     case "$arg" in
         --silent) SILENT=true ;;
         --uninstall) UNINSTALL=true ;;
+        --token=*) DEPLOY_TOKEN="${arg#--token=}" ;;
+        --server=*) AMOSKYS_SERVER="${arg#--server=}" ;;
     esac
 done
 
@@ -196,6 +200,16 @@ LOGIN_DISABLED=true
 FLASK_PORT=5003
 FORCE_HTTPS=false
 ENVEOF
+
+# Append server + token if provided (enables fleet shipping)
+if [[ -n "$AMOSKYS_SERVER" ]]; then
+    echo "AMOSKYS_SERVER=$AMOSKYS_SERVER" >> "$CONFIG_DIR/amoskys.env"
+    log "Fleet shipping enabled → $AMOSKYS_SERVER"
+fi
+if [[ -n "$DEPLOY_TOKEN" ]]; then
+    echo "AMOSKYS_DEPLOY_TOKEN=$DEPLOY_TOKEN" >> "$CONFIG_DIR/amoskys.env"
+    log "Deployment token configured"
+fi
 
 # ── Create Wrapper Script ──
 cat > "$INSTALL_DIR/bin/amoskys-watchdog" << 'WDEOF'

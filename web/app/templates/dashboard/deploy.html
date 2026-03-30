@@ -91,6 +91,7 @@
 <script nonce="{{ csp_nonce() }}">
 let deployPlatform = null;
 let generatedToken = null;
+let generatedInstallCmd = '';
 
 (function() {
     const ua = navigator.platform.toLowerCase();
@@ -125,7 +126,8 @@ async function generateToken() {
     btn.disabled = true;
     btn.textContent = 'Generating...';
     try {
-        var resp = await fetch('/dashboard/api/agents/deploy/token', {
+        // Use quick deploy — generates token + install command in one step
+        var resp = await fetch('/dashboard/api/agents/deploy/quick', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({label: label, platform: deployPlatform}),
@@ -133,6 +135,7 @@ async function generateToken() {
         var data = await resp.json();
         if (data.status === 'success' && data.token) {
             generatedToken = data.token;
+            generatedInstallCmd = data.install_command || '';
             document.getElementById('token-value').textContent = data.token;
             document.getElementById('token-display').style.display = 'block';
             document.getElementById('step2-num').style.background = 'linear-gradient(135deg, var(--neural-primary), var(--neural-secondary))';
@@ -202,34 +205,38 @@ function copyCmd(elId) {
 function updateInstallInstructions() {
     var el = document.getElementById('install-instructions');
     if (!deployPlatform) return;
-    var tokenPlaceholder = generatedToken || 'YOUR_TOKEN';
     var html = '';
 
-    if (deployPlatform === 'macos') {
-        html += cmdBlock('pip3 install amoskys[web,agents]', 'Step 1 — Install AMOSKYS with all agent capabilities');
-        html += cmdBlock('amoskys-dashboard --token ' + tokenPlaceholder, 'Step 2 — Start the dashboard with your deployment token');
-        html += '<div style="padding:0.6rem;background:rgba(0,217,255,0.05);border:1px solid rgba(0,217,255,0.1);border-radius:6px;margin-top:0.5rem;">'
-            + '<div style="font-size:0.7rem;font-weight:700;color:var(--neural-primary);margin-bottom:0.3rem;">Verify Installation</div>'
-            + '<div style="font-size:0.72rem;color:var(--text-secondary);line-height:1.6;">'
-            + 'After starting, your agent will appear on the <a href="/dashboard/my-agents" style="color:var(--neural-primary);">My Agents</a> page within 30 seconds. '
-            + 'Look for a heartbeat status of <span style="color:#00ff88;font-weight:700;">ONLINE</span>.</div></div>';
-    } else if (deployPlatform === 'linux') {
-        html += cmdBlock('sudo pip3 install amoskys[web,agents]', 'Step 1 — Install AMOSKYS (requires sudo for system-level monitoring)');
-        html += cmdBlock('sudo amoskys-dashboard --token ' + tokenPlaceholder, 'Step 2 — Start the dashboard');
-        html += cmdBlock('sudo systemctl enable --now amoskys', 'Step 3 — (Optional) Enable as systemd service for auto-start');
-        html += '<div style="padding:0.6rem;background:rgba(0,217,255,0.05);border:1px solid rgba(0,217,255,0.1);border-radius:6px;margin-top:0.5rem;">'
-            + '<div style="font-size:0.7rem;font-weight:700;color:var(--neural-primary);margin-bottom:0.3rem;">Verify Installation</div>'
-            + '<div style="font-size:0.72rem;color:var(--text-secondary);line-height:1.6;">'
-            + 'Check service status: <code style="color:#00ff88;background:rgba(0,0,0,0.3);padding:0.1rem 0.3rem;border-radius:3px;font-size:0.7rem;">systemctl status amoskys</code>. '
-            + 'Your agent should appear on <a href="/dashboard/my-agents" style="color:var(--neural-primary);">My Agents</a> within 30 seconds.</div></div>';
-    } else {
-        html += cmdBlock('pip install amoskys[web,agents]', 'Step 1 — Install AMOSKYS');
-        html += cmdBlock('amoskys-dashboard --token ' + tokenPlaceholder, 'Step 2 — Start the dashboard with your deployment token');
-        html += '<div style="padding:0.6rem;background:rgba(0,217,255,0.05);border:1px solid rgba(0,217,255,0.1);border-radius:6px;margin-top:0.5rem;">'
-            + '<div style="font-size:0.7rem;font-weight:700;color:var(--neural-primary);margin-bottom:0.3rem;">Verify Installation</div>'
-            + '<div style="font-size:0.72rem;color:var(--text-secondary);line-height:1.6;">'
-            + 'Your agent should appear on the <a href="/dashboard/my-agents" style="color:var(--neural-primary);">My Agents</a> page within 30 seconds.</div></div>';
+    if (!generatedToken) {
+        html = '<p style="color:var(--text-muted);">Generate a deployment token above to get your install command.</p>';
+        el.innerHTML = html;
+        return;
     }
+
+    // Show the one-liner install command
+    if (generatedInstallCmd) {
+        html += '<div style="margin-bottom:1rem;">'
+            + '<div style="font-size:0.75rem;font-weight:700;color:#00ff88;margin-bottom:0.4rem;">One-Line Install</div>'
+            + '<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.5rem;">Open Terminal and paste this command:</div>'
+            + '</div>';
+        html += cmdBlock(generatedInstallCmd, 'Install AMOSKYS agent');
+    }
+
+    // What happens next
+    html += '<div style="padding:0.8rem;background:rgba(0,217,255,0.05);border:1px solid rgba(0,217,255,0.1);border-radius:6px;margin-top:0.8rem;">'
+        + '<div style="font-size:0.72rem;font-weight:700;color:var(--neural-primary);margin-bottom:0.4rem;">What happens</div>'
+        + '<div style="font-size:0.72rem;color:var(--text-secondary);line-height:1.7;">'
+        + '1. Installs AMOSKYS to <code style="color:#00ff88;background:rgba(0,0,0,0.3);padding:0.1rem 0.3rem;border-radius:3px;font-size:0.68rem;">/Library/Amoskys/</code><br>'
+        + '2. Creates Python venv + installs dependencies<br>'
+        + '3. Registers with your account using the deployment token<br>'
+        + '4. Starts the security agent as a system service<br>'
+        + '5. Device appears in <a href="/dashboard/fleet#command-center" style="color:var(--neural-primary);">Fleet &rarr; Command Center</a> within 30 seconds'
+        + '</div></div>';
+
+    // Requirements
+    html += '<div style="margin-top:0.6rem;font-size:0.7rem;color:var(--text-muted);">'
+        + 'Requires: macOS 13+ (Ventura or later), Python 3.11+, sudo access'
+        + '</div>';
 
     el.innerHTML = html;
     document.getElementById('step3-num').style.background = 'linear-gradient(135deg, var(--neural-primary), var(--neural-secondary))';

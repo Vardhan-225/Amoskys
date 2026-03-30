@@ -1,0 +1,359 @@
+{# Command Center — inline fragment for fleet.html (no <html>/<body>) #}
+
+<div class="cc-container" id="command-center">
+    <div class="cc-loading" id="cc-loading">
+        <div class="neural-loading"></div>
+        <p>Connecting to Command Center...</p>
+    </div>
+
+    <!-- No Fleet DB message -->
+    <div class="cc-empty" id="cc-empty" style="display:none;">
+        <div class="cc-empty-icon">&#x1F6F0;</div>
+        <h2>Command Center Offline</h2>
+        <p id="cc-empty-msg">No fleet database found.</p>
+        <div class="cc-setup-steps">
+            <h3>Quick Setup</h3>
+            <div class="cc-step">
+                <span class="cc-step-num">1</span>
+                <div>
+                    <strong>Start the Command Center server</strong>
+                    <code>python3 server/command_center.py</code>
+                </div>
+            </div>
+            <div class="cc-step">
+                <span class="cc-step-num">2</span>
+                <div>
+                    <strong>Point agents at the server</strong>
+                    <code>export AMOSKYS_SERVER=http://your-server:8443</code>
+                </div>
+            </div>
+            <div class="cc-step">
+                <span class="cc-step-num">3</span>
+                <div>
+                    <strong>Agents ship automatically</strong>
+                    <span class="cc-step-detail">The shipper runs inside the analyzer, shipping events every 10 seconds.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fleet Dashboard -->
+    <div class="cc-fleet" id="cc-fleet" style="display:none;">
+        <!-- Summary Cards -->
+        <div class="cc-cards" id="cc-cards"></div>
+
+        <!-- Fleet Map + Live Feed (side by side) -->
+        <div class="cc-two-col">
+            <div class="cc-section">
+                <h3 class="cc-section-title">Fleet Map</h3>
+                <div class="cc-fleet-map" id="cc-fleet-map"></div>
+            </div>
+            <div class="cc-section">
+                <h3 class="cc-section-title">
+                    Live Feed
+                    <span class="cc-feed-indicator" id="cc-feed-pulse"></span>
+                </h3>
+                <div class="cc-live-feed" id="cc-live-feed">
+                    <div class="cc-feed-empty">Waiting for events...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Threat Heatmap + MITRE Coverage (side by side) -->
+        <div class="cc-two-col">
+            <div class="cc-section">
+                <h3 class="cc-section-title">Threat Heatmap (24h)</h3>
+                <div id="cc-heatmap"></div>
+            </div>
+            <div class="cc-section">
+                <h3 class="cc-section-title">MITRE ATT&CK Coverage</h3>
+                <div id="cc-mitre-bars"></div>
+            </div>
+        </div>
+
+        <!-- Device Drill-Down -->
+        <div class="cc-section" id="cc-drilldown" style="display:none;">
+            <h3 class="cc-section-title">
+                <span id="cc-drill-title">Device Events</span>
+                <button class="cc-close-btn" id="cc-drill-close">&times;</button>
+            </h3>
+            <table class="cc-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Category</th>
+                        <th>Risk</th>
+                        <th>Agent</th>
+                        <th>Process</th>
+                        <th>MITRE</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody id="cc-events-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+.cc-container { padding: 20px; max-width: 1400px; margin: 0 auto; color: #e0e0e0; }
+.cc-loading { text-align: center; padding: 80px 20px; color: #6b7a99; }
+.cc-loading p { margin-top: 15px; }
+.cc-empty { text-align: center; padding: 60px 20px; max-width: 600px; margin: 0 auto; }
+.cc-empty-icon { font-size: 4em; margin-bottom: 15px; }
+.cc-empty h2 { color: #00d9ff; margin-bottom: 10px; }
+.cc-empty p { color: #6b7a99; margin-bottom: 30px; }
+.cc-setup-steps { text-align: left; background: #12151f; border: 1px solid #1e2235; border-radius: 12px; padding: 25px; }
+.cc-setup-steps h3 { color: #00d9ff; margin-bottom: 20px; font-size: 0.95em; text-transform: uppercase; letter-spacing: 1px; }
+.cc-step { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 18px; }
+.cc-step-num { background: #00d9ff; color: #0a0e27; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85em; flex-shrink: 0; }
+.cc-step strong { display: block; margin-bottom: 4px; }
+.cc-step code { display: inline-block; background: #0a0e27; border: 1px solid #1e2235; padding: 4px 10px; border-radius: 4px; font-size: 0.85em; color: #00ff88; font-family: 'SF Mono', 'Fira Code', monospace; }
+.cc-step-detail { color: #6b7a99; font-size: 0.9em; }
+.cc-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.cc-card { background: #12151f; border: 1px solid #1e2235; border-radius: 10px; padding: 14px 16px; transition: border-color 0.2s; }
+.cc-card:hover { border-color: #00d9ff33; }
+.cc-card-label { font-size: 0.7em; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.5px; }
+.cc-card-value { font-size: 1.8em; font-weight: 700; margin-top: 2px; line-height: 1.1; }
+.cc-val-green { color: #00ff88; } .cc-val-red { color: #ff3366; } .cc-val-yellow { color: #f0ad4e; } .cc-val-blue { color: #00d9ff; } .cc-val-white { color: #fff; }
+.cc-section { background: #12151f; border: 1px solid #1e2235; border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+.cc-section-title { font-size: 0.8em; color: #00d9ff; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+.cc-table { width: 100%; border-collapse: collapse; }
+.cc-table th { font-size: 0.72em; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; border-bottom: 1px solid #1e2235; text-align: left; }
+.cc-table td { padding: 10px; border-bottom: 1px solid #0f1220; font-size: 0.88em; vertical-align: top; }
+.cc-table tr:hover { background: #161b30; }
+.cc-fleet-map { max-height: 360px; overflow-y: auto; }
+.cc-device-row { display: flex; align-items: center; padding: 8px 10px; border-bottom: 1px solid #0f1220; cursor: pointer; transition: background 0.15s; gap: 10px; }
+.cc-device-row:hover { background: #1a2040; }
+.cc-device-row:last-child { border-bottom: none; }
+.cc-device-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.cc-dot-safe { background: #00ff88; box-shadow: 0 0 6px #00ff8866; }
+.cc-dot-warning { background: #f0ad4e; box-shadow: 0 0 6px #f0ad4e66; }
+.cc-dot-danger { background: #ff3366; box-shadow: 0 0 6px #ff336666; }
+.cc-dot-offline { background: #444; }
+.cc-device-name { flex: 1; font-size: 0.88em; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-device-tag { font-size: 0.75em; padding: 2px 8px; border-radius: 4px; font-weight: 600; white-space: nowrap; }
+.cc-tag-ok { background: #16a34a22; color: #00ff88; } .cc-tag-high { background: #ea580c22; color: #ff8844; } .cc-tag-critical { background: #dc262622; color: #ff4444; } .cc-tag-offline { background: #33333344; color: #666; }
+.cc-live-feed { max-height: 360px; overflow-y: auto; font-size: 0.85em; }
+.cc-feed-empty { text-align: center; color: #6b7a99; padding: 40px 20px; }
+.cc-feed-row { display: flex; gap: 8px; padding: 6px 8px; border-bottom: 1px solid #0f1220; align-items: baseline; animation: cc-feed-in 0.3s ease-out; }
+.cc-feed-row:hover { background: #161b30; }
+@keyframes cc-feed-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.cc-feed-time { color: #6b7a99; font-size: 0.85em; white-space: nowrap; min-width: 42px; font-family: 'SF Mono', 'Fira Code', monospace; }
+.cc-feed-cat { font-weight: 600; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.cc-feed-device { color: #6b7a99; font-size: 0.85em; white-space: nowrap; margin-left: auto; }
+.cc-feed-risk-critical .cc-feed-cat { color: #ff4444; } .cc-feed-risk-high .cc-feed-cat { color: #ff8844; } .cc-feed-risk-medium .cc-feed-cat { color: #ffcc44; } .cc-feed-risk-low .cc-feed-cat { color: #88cc88; }
+.cc-feed-indicator { width: 8px; height: 8px; border-radius: 50%; background: #00ff88; display: inline-block; animation: cc-pulse 2s ease-in-out infinite; }
+@keyframes cc-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.cc-heatmap-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+.cc-heatmap-label { font-size: 0.82em; min-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-heatmap-bar-bg { flex: 1; height: 18px; background: #0a0e27; border-radius: 3px; overflow: hidden; }
+.cc-heatmap-bar { height: 100%; border-radius: 3px; transition: width 0.5s ease-out; }
+.cc-heatmap-count { font-size: 0.8em; color: #6b7a99; min-width: 40px; text-align: right; }
+.cc-mitre-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.cc-mitre-id { font-size: 0.8em; color: #00d9ff; font-family: 'SF Mono', 'Fira Code', monospace; min-width: 60px; }
+.cc-mitre-bar-bg { flex: 1; height: 16px; background: #0a0e27; border-radius: 3px; overflow: hidden; }
+.cc-mitre-bar { height: 100%; background: linear-gradient(90deg, #00d9ff44, #00d9ff); border-radius: 3px; transition: width 0.5s ease-out; }
+.cc-mitre-count { font-size: 0.78em; color: #6b7a99; min-width: 50px; text-align: right; }
+.cc-risk { padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85em; }
+.cc-risk-critical { background: #dc262633; color: #ff4444; } .cc-risk-high { background: #ea580c33; color: #ff8844; } .cc-risk-medium { background: #ca8a0433; color: #ffcc44; } .cc-risk-low { background: #16a34a33; color: #44ff88; }
+.cc-mitre-tag { display: inline-block; background: #1e2235; border: 1px solid #2a3050; padding: 1px 6px; border-radius: 3px; font-size: 0.8em; color: #00d9ff; margin: 1px; }
+.cc-close-btn { background: none; border: 1px solid #333; color: #888; width: 28px; height: 28px; border-radius: 4px; cursor: pointer; font-size: 1.2em; line-height: 1; }
+.cc-close-btn:hover { background: #1e2235; color: #fff; }
+.cc-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+@media (max-width: 900px) { .cc-two-col { grid-template-columns: 1fr; } }
+.cc-desc { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #6b7a99; }
+.cc-live-feed::-webkit-scrollbar, .cc-fleet-map::-webkit-scrollbar { width: 4px; }
+.cc-live-feed::-webkit-scrollbar-thumb, .cc-fleet-map::-webkit-scrollbar-thumb { background: #1e2235; border-radius: 2px; }
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+(function() {
+    const API = '/dashboard/api/command-center';
+    let lastFeedId = 0;
+    let _ccStatusCache = null;
+    let _ccCacheTime = 0;
+
+    async function load() {
+        try {
+            // Cache status for 10s to avoid hammering
+            const now = Date.now();
+            if (_ccStatusCache && (now - _ccCacheTime) < 10000) {
+                render(_ccStatusCache);
+                return;
+            }
+
+            const resp = await fetch(API + '/status');
+            const data = await resp.json();
+            _ccStatusCache = data;
+            _ccCacheTime = now;
+            render(data);
+        } catch (e) {
+            document.getElementById('cc-loading').style.display = 'none';
+            document.getElementById('cc-empty').style.display = 'block';
+            document.getElementById('cc-empty-msg').textContent = 'Failed to connect: ' + e.message;
+        }
+    }
+
+    function render(data) {
+        document.getElementById('cc-loading').style.display = 'none';
+
+        if (!data.available) {
+            document.getElementById('cc-empty').style.display = 'block';
+            document.getElementById('cc-empty-msg').textContent = data.message || 'No fleet data available.';
+            return;
+        }
+
+        document.getElementById('cc-fleet').style.display = 'block';
+        renderCards(data);
+        renderFleetMap(data.devices);
+        renderHeatmap(data.top_categories);
+        renderMitreBars(data.top_mitre_techniques);
+    }
+
+    function renderCards(data) {
+        const f = data.fleet;
+        const e = data.last_24h;
+        const mitre_count = (data.top_mitre_techniques || []).length;
+        const html = [
+            card('Online', f.online, f.online > 0 ? 'green' : 'white'),
+            card('Safe', f.online - (data.devices || []).filter(d => d.status === 'online' && d.max_risk >= 0.6).length, 'green'),
+            card('Offline', f.offline, f.offline > 0 ? 'red' : 'green'),
+            card('Events (24h)', e.total_events, 'blue'),
+            card('Critical', e.critical, e.critical > 0 ? 'red' : 'green'),
+            card('MITRE', mitre_count, 'blue'),
+        ];
+        document.getElementById('cc-cards').innerHTML = html.join('');
+    }
+
+    function card(label, value, color) {
+        return '<div class="cc-card"><div class="cc-card-label">' + label + '</div><div class="cc-card-value cc-val-' + color + '">' + value + '</div></div>';
+    }
+
+    function renderFleetMap(devices) {
+        const container = document.getElementById('cc-fleet-map');
+        if (!devices || devices.length === 0) {
+            container.innerHTML = '<div style="text-align:center;color:#6b7a99;padding:30px;">No devices registered yet</div>';
+            return;
+        }
+        container.innerHTML = devices.map(function(d) {
+            var dotClass, tagClass, tagText;
+            if (d.status === 'offline') { dotClass = 'cc-dot-offline'; tagClass = 'cc-tag-offline'; tagText = 'OFFLINE'; }
+            else if (d.max_risk >= 0.8) { dotClass = 'cc-dot-danger'; tagClass = 'cc-tag-critical'; tagText = 'CRITICAL'; }
+            else if (d.max_risk >= 0.6) { dotClass = 'cc-dot-warning'; tagClass = 'cc-tag-high'; tagText = 'HIGH'; }
+            else { dotClass = 'cc-dot-safe'; tagClass = 'cc-tag-ok'; tagText = 'OK'; }
+            return '<div class="cc-device-row" onclick="window._ccDrill(\'' + d.device_id + '\', \'' + esc(d.hostname) + '\')">'
+                + '<span class="cc-device-dot ' + dotClass + '"></span>'
+                + '<span class="cc-device-name">' + esc(d.hostname) + '</span>'
+                + '<span class="cc-device-tag ' + tagClass + '">' + tagText + '</span>'
+                + '</div>';
+        }).join('');
+    }
+
+    function renderHeatmap(categories) {
+        var container = document.getElementById('cc-heatmap');
+        if (!categories || categories.length === 0) { container.innerHTML = '<div style="color:#6b7a99;text-align:center;padding:20px;">No threats detected</div>'; return; }
+        var maxCount = Math.max.apply(null, categories.map(function(c) { return c.count; }));
+        container.innerHTML = categories.map(function(c) {
+            var pct = Math.max(4, (c.count / maxCount) * 100);
+            var color = c.avg_risk >= 0.7 ? '#ff3366' : c.avg_risk >= 0.4 ? '#f0ad4e' : '#00d9ff';
+            return '<div class="cc-heatmap-row"><span class="cc-heatmap-label">' + esc(c.category) + '</span><div class="cc-heatmap-bar-bg"><div class="cc-heatmap-bar" style="width:' + pct + '%;background:' + color + ';"></div></div><span class="cc-heatmap-count">' + c.count + '</span></div>';
+        }).join('');
+    }
+
+    function renderMitreBars(techniques) {
+        var container = document.getElementById('cc-mitre-bars');
+        if (!techniques || techniques.length === 0) { container.innerHTML = '<div style="color:#6b7a99;text-align:center;padding:20px;">No MITRE hits yet</div>'; return; }
+        var maxCount = Math.max.apply(null, techniques.map(function(t) { return t.count; }));
+        container.innerHTML = techniques.map(function(t) {
+            var pct = Math.max(4, (t.count / maxCount) * 100);
+            return '<div class="cc-mitre-row"><span class="cc-mitre-id">' + esc(t.technique) + '</span><div class="cc-mitre-bar-bg"><div class="cc-mitre-bar" style="width:' + pct + '%;"></div></div><span class="cc-mitre-count">' + t.count.toLocaleString() + '</span></div>';
+        }).join('');
+    }
+
+    // Live Feed — polls every 5s, only fetches new events
+    async function pollFeed() {
+        try {
+            var url = lastFeedId > 0 ? API + '/live-feed?limit=15&after=' + lastFeedId : API + '/live-feed?limit=30';
+            var resp = await fetch(url);
+            var data = await resp.json();
+            var events = data.events || [];
+            if (events.length === 0) return;
+
+            var feed = document.getElementById('cc-live-feed');
+            var isEmpty = feed.querySelector('.cc-feed-empty');
+            if (isEmpty) feed.innerHTML = '';
+
+            var newHtml = events.map(function(e) {
+                var riskLevel = e.risk_score >= 0.8 ? 'critical' : e.risk_score >= 0.6 ? 'high' : e.risk_score >= 0.3 ? 'medium' : 'low';
+                var time = (e.timestamp || '').slice(11, 16);
+                return '<div class="cc-feed-row cc-feed-risk-' + riskLevel + '" data-id="' + e.id + '">'
+                    + '<span class="cc-feed-time">' + time + '</span>'
+                    + '<span class="cc-feed-cat">' + esc(e.category) + '</span>'
+                    + '<span class="cc-feed-device">' + esc(e.hostname) + '</span>'
+                    + '</div>';
+            }).join('');
+
+            feed.insertAdjacentHTML('afterbegin', newHtml);
+            if (events.length > 0) lastFeedId = Math.max.apply(null, [lastFeedId].concat(events.map(function(e) { return e.id; })));
+
+            // Cap at 60 rows
+            var rows = feed.querySelectorAll('.cc-feed-row');
+            for (var i = 60; i < rows.length; i++) rows[i].remove();
+        } catch (e) { /* silent */ }
+    }
+
+    // Device drill-down
+    window._ccDrill = async function(deviceId, hostname) {
+        var section = document.getElementById('cc-drilldown');
+        var title = document.getElementById('cc-drill-title');
+        var tbody = document.getElementById('cc-events-tbody');
+
+        title.textContent = hostname + ' — Recent Events';
+        section.style.display = 'block';
+        tbody.innerHTML = '<tr><td colspan="7" style="color:#6b7a99;text-align:center;">Loading...</td></tr>';
+        section.scrollIntoView({ behavior: 'smooth' });
+
+        try {
+            var resp = await fetch(API + '/device/' + deviceId + '/events?limit=50&min_risk=0.01');
+            var data = await resp.json();
+            if (!data.events || data.events.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="color:#6b7a99;text-align:center;">No events found</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.events.map(function(e) {
+                var riskClass = e.risk_score >= 0.8 ? 'critical' : e.risk_score >= 0.6 ? 'high' : e.risk_score >= 0.3 ? 'medium' : 'low';
+                var mitre = (e.mitre || []).map(function(t) { return '<span class="cc-mitre-tag">' + t + '</span>'; }).join(' ');
+                return '<tr>'
+                    + '<td style="white-space:nowrap;">' + esc(e.timestamp || '').replace('T', ' ').slice(0, 19) + '</td>'
+                    + '<td>' + esc(e.category || '') + '</td>'
+                    + '<td><span class="cc-risk cc-risk-' + riskClass + '">' + (e.risk_score ? e.risk_score.toFixed(2) : '-') + '</span></td>'
+                    + '<td>' + esc(e.agent || '') + '</td>'
+                    + '<td>' + esc(e.process || '') + '</td>'
+                    + '<td>' + (mitre || '-') + '</td>'
+                    + '<td class="cc-desc">' + esc(e.description || '') + '</td>'
+                    + '</tr>';
+            }).join('');
+        } catch (err) {
+            tbody.innerHTML = '<tr><td colspan="7" style="color:#ff3366;">Error: ' + err.message + '</td></tr>';
+        }
+    };
+
+    document.getElementById('cc-drill-close').addEventListener('click', function() {
+        document.getElementById('cc-drilldown').style.display = 'none';
+    });
+
+    function esc(s) {
+        if (!s) return '';
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    // Boot
+    load();
+    pollFeed();
+    setInterval(load, 15000);
+    setInterval(pollFeed, 5000);
+})();
+</script>
