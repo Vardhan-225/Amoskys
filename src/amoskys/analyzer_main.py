@@ -550,110 +550,153 @@ def main() -> int:
                                     except Exception:
                                         pass
 
-                                # Route flow observations to flow_events
-                                # with enrichment (GeoIP, ASN, threat intel)
-                                if domain == "flow":
+                                # Route observations to domain-specific tables
+                                # Enrichment for network events
+                                if domain == "flow" and enrichment is not None:
                                     try:
-                                        if enrichment is not None:
-                                            try:
-                                                enrichment.enrich(attrs)
-                                            except Exception:
-                                                pass
+                                        enrichment.enrich(attrs)
+                                    except Exception:
+                                        pass
 
-                                        store.insert_flow_event(
-                                            {
-                                                "timestamp_ns": ts_ns,
-                                                "device_id": dt.device_id,
-                                                "src_ip": attrs.get("src_ip"),
-                                                "dst_ip": attrs.get("dst_ip"),
-                                                "src_port": attrs.get("src_port"),
-                                                "dst_port": attrs.get("dst_port"),
-                                                "protocol": attrs.get("protocol"),
-                                                "bytes_tx": int(
-                                                    attrs.get("bytes_tx", 0) or 0
-                                                ),
-                                                "bytes_rx": int(
-                                                    attrs.get("bytes_rx", 0) or 0
-                                                ),
-                                                "pid": attrs.get("pid"),
-                                                "process_name": attrs.get(
-                                                    "process_name"
-                                                ),
-                                                "conn_user": attrs.get("conn_user"),
-                                                "state": attrs.get("state"),
-                                                "collection_agent": dt.collection_agent,
-                                                "agent_version": dt.agent_version,
-                                                "event_source": "observation",
-                                                # Enrichment results
-                                                "geo_dst_country": attrs.get(
-                                                    "geo_dst_country"
-                                                ),
-                                                "geo_dst_city": attrs.get(
-                                                    "geo_dst_city"
-                                                ),
-                                                "geo_dst_latitude": attrs.get(
-                                                    "geo_dst_latitude"
-                                                ),
-                                                "geo_dst_longitude": attrs.get(
-                                                    "geo_dst_longitude"
-                                                ),
-                                                "geo_src_country": attrs.get(
-                                                    "geo_src_country"
-                                                ),
-                                                "geo_src_city": attrs.get(
-                                                    "geo_src_city"
-                                                ),
-                                                "geo_src_latitude": attrs.get(
-                                                    "geo_src_latitude"
-                                                ),
-                                                "geo_src_longitude": attrs.get(
-                                                    "geo_src_longitude"
-                                                ),
-                                                "asn_dst_number": attrs.get(
-                                                    "asn_dst_number"
-                                                ),
-                                                "asn_dst_org": attrs.get("asn_dst_org"),
-                                                "asn_dst_network_type": attrs.get(
-                                                    "asn_dst_network_type"
-                                                ),
-                                                "asn_src_number": attrs.get(
-                                                    "asn_src_number"
-                                                ),
-                                                "asn_src_org": attrs.get("asn_src_org"),
-                                                "asn_src_network_type": attrs.get(
-                                                    "asn_src_network_type"
-                                                ),
-                                                "threat_intel_match": attrs.get(
-                                                    "threat_intel_match", False
-                                                ),
-                                                "threat_source": attrs.get(
-                                                    "threat_source"
-                                                ),
-                                                "threat_severity": attrs.get(
-                                                    "threat_severity"
-                                                ),
-                                            }
-                                        )
-                                    except Exception as e:
-                                        logger.warning(
-                                            "Failed to insert flow event: %s", e
-                                        )
-                                else:
+                                # Build common fields
+                                from datetime import datetime as _dt_cls
+                                from datetime import timezone as _tz_cls
+
+                                _ts_dt = _dt_cls.fromtimestamp(
+                                    ts_ns / 1e9, tz=_tz_cls.utc
+                                ).isoformat()
+                                _base = {
+                                    "timestamp_ns": ts_ns,
+                                    "timestamp_dt": _ts_dt,
+                                    "device_id": dt.device_id,
+                                    "collection_agent": dt.collection_agent,
+                                    "agent_version": dt.agent_version,
+                                    "event_source": "observation",
+                                }
+
+                                try:
+                                    if domain == "process":
+                                        store.insert_process_event({
+                                            **_base,
+                                            "pid": attrs.get("pid"),
+                                            "exe": attrs.get("exe"),
+                                            "cmdline": attrs.get("cmdline"),
+                                            "ppid": attrs.get("ppid"),
+                                            "username": attrs.get("username"),
+                                            "name": attrs.get("name", attrs.get("process_name")),
+                                            "parent_name": attrs.get("parent_name"),
+                                            "status": attrs.get("status"),
+                                            "cpu_percent": attrs.get("cpu_percent"),
+                                            "memory_percent": attrs.get("memory_percent"),
+                                            "create_time": attrs.get("create_time"),
+                                            "process_guid": attrs.get("process_guid"),
+                                        })
+
+                                    elif domain == "flow":
+                                        store.insert_flow_event({
+                                            **_base,
+                                            "src_ip": attrs.get("src_ip"),
+                                            "dst_ip": attrs.get("dst_ip"),
+                                            "src_port": attrs.get("src_port"),
+                                            "dst_port": attrs.get("dst_port"),
+                                            "protocol": attrs.get("protocol"),
+                                            "bytes_tx": int(attrs.get("bytes_tx", 0) or 0),
+                                            "bytes_rx": int(attrs.get("bytes_rx", 0) or 0),
+                                            "pid": attrs.get("pid"),
+                                            "process_name": attrs.get("process_name"),
+                                            "conn_user": attrs.get("conn_user"),
+                                            "state": attrs.get("state"),
+                                            "geo_dst_country": attrs.get("geo_dst_country"),
+                                            "geo_dst_city": attrs.get("geo_dst_city"),
+                                            "geo_dst_latitude": attrs.get("geo_dst_latitude"),
+                                            "geo_dst_longitude": attrs.get("geo_dst_longitude"),
+                                            "asn_dst_org": attrs.get("asn_dst_org"),
+                                            "asn_dst_number": attrs.get("asn_dst_number"),
+                                            "asn_dst_network_type": attrs.get("asn_dst_network_type"),
+                                            "threat_intel_match": attrs.get("threat_intel_match", False),
+                                        })
+
+                                    elif domain == "dns":
+                                        store.insert_dns_event({
+                                            **_base,
+                                            "domain": attrs.get("domain"),
+                                            "record_type": attrs.get("record_type"),
+                                            "response_code": attrs.get("response_code"),
+                                            "risk_score": float(attrs.get("risk_score", 0) or 0),
+                                            "event_type": attrs.get("event_type", "query"),
+                                            "process_name": attrs.get("process_name"),
+                                            "pid": attrs.get("pid"),
+                                        })
+
+                                    elif domain in ("fim", "filesystem"):
+                                        store.insert_fim_event({
+                                            **_base,
+                                            "file_path": attrs.get("path"),
+                                            "file_name": attrs.get("name"),
+                                            "file_extension": attrs.get("extension"),
+                                            "change_type": attrs.get("change_type"),
+                                            "sha256": attrs.get("sha256"),
+                                            "file_size": int(attrs.get("size", 0) or 0),
+                                            "risk_score": float(attrs.get("risk_score", 0) or 0),
+                                        })
+
+                                    elif domain == "persistence":
+                                        store.insert_persistence_event({
+                                            **_base,
+                                            "mechanism": attrs.get("mechanism", attrs.get("category", "")),
+                                            "path": attrs.get("path"),
+                                            "change_type": attrs.get("change_type"),
+                                            "label": attrs.get("label", attrs.get("name", "")),
+                                            "sha256": attrs.get("sha256"),
+                                            "risk_score": float(attrs.get("risk_score", 0) or 0),
+                                        })
+
+                                    elif domain == "peripheral":
+                                        store.insert_peripheral_event({
+                                            **_base,
+                                            "peripheral_device_id": attrs.get("device_id", ""),
+                                            "event_type": attrs.get("event_type", "DETECTED"),
+                                            "device_name": attrs.get("device_name"),
+                                            "device_type": attrs.get("device_type"),
+                                            "vendor_id": attrs.get("vendor_id"),
+                                            "risk_score": float(attrs.get("risk_score", 0) or 0),
+                                        })
+
+                                    elif domain == "auth":
+                                        store.insert_audit_event({
+                                            **_base,
+                                            "event_type": attrs.get("event_type", "auth"),
+                                            "pid": attrs.get("pid"),
+                                            "ppid": attrs.get("ppid"),
+                                            "uid": attrs.get("uid"),
+                                            "username": attrs.get("username"),
+                                            "risk_score": float(attrs.get("risk_score", 0) or 0),
+                                        })
+
+                                    else:
+                                        # Unknown domain → generic observation table
+                                        store.insert_observation_event({
+                                            "event_id": ev.event_id,
+                                            "device_id": dt.device_id,
+                                            "domain": domain,
+                                            "event_timestamp_ns": ts_ns,
+                                            "raw_attributes_json": json.dumps(attrs),
+                                        })
+
+                                except Exception as e:
+                                    # Fallback: store in generic observations
                                     try:
-                                        store.insert_observation_event(
-                                            {
-                                                "event_id": ev.event_id,
-                                                "device_id": dt.device_id,
-                                                "domain": domain,
-                                                "event_timestamp_ns": ts_ns,
-                                                "raw_attributes_json": json.dumps(
-                                                    attrs
-                                                ),
-                                            }
-                                        )
-                                    except Exception as e:
-                                        logger.warning(
-                                            "Failed to insert observation event: %s", e
+                                        store.insert_observation_event({
+                                            "event_id": ev.event_id,
+                                            "device_id": dt.device_id,
+                                            "domain": domain,
+                                            "event_timestamp_ns": ts_ns,
+                                            "raw_attributes_json": json.dumps(attrs),
+                                        })
+                                    except Exception:
+                                        logger.debug(
+                                            "Failed to store %s observation: %s",
+                                            domain, e,
                                         )
 
                         processed_ids.append(row_id)
