@@ -62,7 +62,7 @@ LOG_DIR = PROJECT_ROOT / "logs"
 # ── Child Process Descriptor ─────────────────────────────────────────────────
 
 
-DASHBOARD_RSS_LIMIT_MB = 300
+DASHBOARD_RSS_LIMIT_MB = 500
 
 
 class ChildProcess:
