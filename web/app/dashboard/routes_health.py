@@ -13,6 +13,9 @@ from ..middleware import require_login
 from . import dashboard_bp
 from .agent_discovery import AGENT_CATALOG, detect_agent_status, get_platform_name
 
+# ── Agent status cache (process detection is expensive: ~50ms × 20 agents) ──
+_agent_status_cache = {"data": None, "expires": 0.0}
+
 
 # ── Dashboard-authenticated health summary (avoids health API auth issues) ──
 @dashboard_bp.route("/api/health-summary")
@@ -27,54 +30,73 @@ def health_summary():
     now = datetime.now(timezone.utc)
     project_root = Path(__file__).parent.parent.parent.parent
 
-    # ── Agent counts (process detection + heartbeat fallback) ──
-    agents_status = {}
-    agents_details = []
-    heartbeat_dir = project_root / "data" / "heartbeats"
+    # ── Agent counts (cached — process detection is expensive) ──
+    _now_ts = time.time()
+    if _agent_status_cache["data"] and _now_ts < _agent_status_cache["expires"]:
+        agents_status = _agent_status_cache["data"]["agents_status"]
+        agents_details = _agent_status_cache["data"]["agents_details"]
+        agents_online = _agent_status_cache["data"]["agents_online"]
+        agents_total = _agent_status_cache["data"]["agents_total"]
+    else:
+        agents_status = {}
+        agents_details = []
+        heartbeat_dir = project_root / "data" / "heartbeats"
 
-    for agent_id, agent_config in AGENT_CATALOG.items():
-        status = detect_agent_status(agent_config)
-        if status["health"] == "online":
-            agents_status[agent_id] = "running"
-        elif status["health"] == "incompatible":
-            agents_status[agent_id] = "incompatible"
-        else:
-            # Fallback: check heartbeat file (agent may not be a visible process)
-            hb_name = agent_id.replace("_agent", "").replace("_", "")
-            hb_candidates = [
-                heartbeat_dir / f"{agent_id.replace('_agent', '')}.json",
-                heartbeat_dir / f"{hb_name}.json",
-                heartbeat_dir / f"{agent_id}.json",
-            ]
-            for hb_path in hb_candidates:
-                if hb_path.exists():
-                    try:
-                        hb = _json.loads(hb_path.read_text())
-                        hb_ts = hb.get("timestamp", "")
-                        if hb_ts:
-                            hb_dt = datetime.fromisoformat(hb_ts.replace("Z", "+00:00"))
-                            age = (now - hb_dt).total_seconds()
-                            if age < 600:  # Heartbeat within 10 minutes
-                                agents_status[agent_id] = "running"
-                                break
-                    except Exception:
-                        pass
-            if agent_id not in agents_status:
-                agents_status[agent_id] = "stopped"
+        for agent_id, agent_config in AGENT_CATALOG.items():
+            status = detect_agent_status(agent_config)
+            if status["health"] == "online":
+                agents_status[agent_id] = "running"
+            elif status["health"] == "incompatible":
+                agents_status[agent_id] = "incompatible"
+            else:
+                hb_name = agent_id.replace("_agent", "").replace("_", "")
+                hb_candidates = [
+                    heartbeat_dir / f"{agent_id.replace('_agent', '')}.json",
+                    heartbeat_dir / f"{hb_name}.json",
+                    heartbeat_dir / f"{agent_id}.json",
+                ]
+                for hb_path in hb_candidates:
+                    if hb_path.exists():
+                        try:
+                            hb = _json.loads(hb_path.read_text())
+                            hb_ts = hb.get("timestamp", "")
+                            if hb_ts:
+                                hb_dt = datetime.fromisoformat(
+                                    hb_ts.replace("Z", "+00:00")
+                                )
+                                age = (now - hb_dt).total_seconds()
+                                if age < 600:
+                                    agents_status[agent_id] = "running"
+                                    break
+                        except Exception:
+                            pass
+                if agent_id not in agents_status:
+                    agents_status[agent_id] = "stopped"
 
-        agents_details.append(
-            {
-                "id": agent_id,
-                "name": agent_config["name"],
-                "type": agent_config["type"],
-                "status": agents_status[agent_id],
-                "critical": agent_config.get("critical", False),
-                "color": agent_config.get("color", "#00ff88"),
-            }
+            agents_details.append(
+                {
+                    "id": agent_id,
+                    "name": agent_config["name"],
+                    "type": agent_config["type"],
+                    "status": agents_status[agent_id],
+                    "critical": agent_config.get("critical", False),
+                    "color": agent_config.get("color", "#00ff88"),
+                }
+            )
+
+        agents_online = sum(1 for s in agents_status.values() if s == "running")
+        agents_total = len(
+            [a for a in agents_status.values() if a != "incompatible"]
         )
 
-    agents_online = sum(1 for s in agents_status.values() if s == "running")
-    agents_total = len([a for a in agents_status.values() if a != "incompatible"])
+        # Cache for 10 seconds
+        _agent_status_cache["data"] = {
+            "agents_status": agents_status,
+            "agents_details": agents_details,
+            "agents_online": agents_online,
+            "agents_total": agents_total,
+        }
+        _agent_status_cache["expires"] = _now_ts + 10.0
 
     # ── Event count (prefer pre-computed rollups, fall back to raw COUNT) ──
     events_24h = 0
