@@ -290,3 +290,91 @@ def serve_install_script():
             return Response(content, mimetype="text/x-shellscript")
 
     return Response("# Install script not found\nexit 1", mimetype="text/x-shellscript", status=404)
+
+
+@dashboard_bp.route("/api/agents/deploy/download", methods=["POST"])
+@require_login
+@require_rate_limit(max_requests=5, window_seconds=60)
+def deploy_download_pkg():
+    """Generate a personalized .zip with the .pkg + user's config.
+
+    Creates a .zip on the fly containing:
+      - AMOSKYS.pkg (universal installer)
+      - .amoskys-config (token + server URL, unique per download)
+
+    The .pkg postinstall script auto-discovers .amoskys-config in ~/Downloads.
+    User downloads, double-clicks, done. No terminal, no tokens visible.
+    """
+    import io
+    import zipfile
+    from pathlib import Path
+
+    from amoskys.agents.distribution import AgentDistributionService
+    from amoskys.db.web_db import get_web_session_context
+
+    user = get_current_user()
+    data = request.get_json(silent=True) or {}
+    label = data.get("label", "My Mac")
+    platform = data.get("platform", "macos")
+
+    # Find the .pkg file
+    pkg_candidates = [
+        Path(__file__).parent.parent.parent.parent / "dist" / "AMOSKYS-0.9.1-beta.pkg",
+        Path("/opt/amoskys/dist/AMOSKYS-0.9.1-beta.pkg"),
+        Path("/opt/amoskys/deploy/AMOSKYS.pkg"),
+    ]
+    pkg_path = None
+    for p in pkg_candidates:
+        if p.exists():
+            pkg_path = p
+            break
+
+    if not pkg_path:
+        return jsonify({"status": "error", "message": "Installer package not found on server"}), 500
+
+    # Generate deployment token
+    try:
+        with get_web_session_context() as db:
+            service = AgentDistributionService(db)
+            result = service.create_deployment_token(
+                user_id=user.id,
+                label=label,
+                platform=platform,
+            )
+            if not result.success:
+                return jsonify({"status": "error", "message": result.error}), 400
+            token = result.token
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    # Build .amoskys-config content
+    config_content = f"token={token}\nserver={OPS_SERVER_URL}\n"
+
+    # Create .zip in memory: .pkg + .amoskys-config
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Add the .pkg (stored, not deflated — it's already compressed)
+        zf.write(pkg_path, "AMOSKYS-Install/AMOSKYS.pkg", compress_type=zipfile.ZIP_STORED)
+        # Add the config file
+        zf.writestr("AMOSKYS-Install/.amoskys-config", config_content)
+        # Add a README
+        zf.writestr("AMOSKYS-Install/README.txt",
+            "AMOSKYS Security Agent\n"
+            "======================\n\n"
+            "1. Double-click AMOSKYS.pkg to install\n"
+            "2. Follow the installer prompts\n"
+            "3. Your device will appear in the dashboard within 30 seconds\n\n"
+            "Requirements: macOS 13+ (Ventura), Python 3.11+\n"
+            "Uninstall: sudo /Library/Amoskys/deploy/install-from-pkg.sh --uninstall\n"
+        )
+
+    zip_buffer.seek(0)
+
+    return Response(
+        zip_buffer.getvalue(),
+        mimetype="application/zip",
+        headers={
+            "Content-Disposition": "attachment; filename=AMOSKYS-Install.zip",
+            "Content-Length": str(zip_buffer.tell() or len(zip_buffer.getvalue())),
+        },
+    )

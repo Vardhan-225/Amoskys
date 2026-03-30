@@ -1,339 +1,855 @@
 {% extends "dashboard/base.html" %}
 
-{% block title %}Deploy Agent - AMOSKYS{% endblock %}
+{% block title %}Install AMOSKYS{% endblock %}
 
 {% block content %}
-<div style="padding: 2rem;">
-    <!-- Header -->
-    <div class="neural-card">
-        <div class="card-header">
-            <h2 class="card-title">Agent Deployment</h2>
-            <a href="/dashboard/my-agents" class="neural-button" style="padding: 0.4rem 1rem; font-size: 0.8rem; text-decoration: none;">My Agents &rarr;</a>
-        </div>
-        <p style="color: var(--text-secondary);">
-            Deploy AMOSKYS security agents to your devices. Generate a deployment token, install the agent, and start monitoring.
-        </p>
-    </div>
+<div class="deploy-page">
 
-    <!-- Deployment Steps -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin: 1.5rem 0;">
-
-        <!-- Step 1: Platform Detection -->
-        <div class="neural-card" id="deploy-step-1">
-            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--neural-primary), var(--neural-secondary)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; color: var(--bg-primary);">1</div>
-                <h3 style="margin: 0; font-size: 1rem;">Select Platform</h3>
+    <!-- ═══ HERO ═══ -->
+    <div class="deploy-hero">
+        <div class="deploy-hero-glow"></div>
+        <div class="deploy-hero-content">
+            <div class="deploy-shield-icon">
+                <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                    <path d="M32 4L8 16v16c0 14.4 10.24 27.84 24 32 13.76-4.16 24-17.6 24-32V16L32 4z" fill="url(#shield-grad)" stroke="#00d9ff" stroke-width="1.5"/>
+                    <path d="M28 33l-4-4m0 0l8 8 12-14" stroke="#00ff88" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <defs><linearGradient id="shield-grad" x1="8" y1="4" x2="56" y2="52"><stop stop-color="#0a1628"/><stop offset="1" stop-color="#0d2847"/></linearGradient></defs>
+                </svg>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
-                <div class="deploy-plat-card" data-platform="macos" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
-                    <div style="font-size: 2rem;">&#127822;</div>
-                    <div style="font-size: 0.8rem; font-weight: 600; margin-top: 0.3rem;">macOS</div>
-                </div>
-                <div class="deploy-plat-card" data-platform="linux" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
-                    <div style="font-size: 2rem;">&#128039;</div>
-                    <div style="font-size: 0.8rem; font-weight: 600; margin-top: 0.3rem;">Linux</div>
-                </div>
-                <div class="deploy-plat-card" data-platform="windows" style="padding: 1rem; text-align: center; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.08); transition: all 0.2s;">
-                    <div style="font-size: 2rem;">&#128187;</div>
-                    <div style="font-size: 0.8rem; font-weight: 600; margin-top: 0.3rem;">Windows</div>
-                </div>
-            </div>
-            <div id="detected-os-badge" style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-muted);"></div>
-        </div>
-
-        <!-- Step 2: Generate Token -->
-        <div class="neural-card" id="deploy-step-2">
-            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem;" id="step2-num">2</div>
-                <h3 style="margin: 0; font-size: 1rem;">Generate Token</h3>
-            </div>
-            <div style="margin-bottom: 1rem;">
-                <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.3rem;">Label (e.g., "Production Server 1")</label>
-                <input type="text" id="token-label" placeholder="My Device" style="width: 100%; padding: 0.5rem 0.8rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; font-size: 0.85rem;">
-            </div>
-            <button class="neural-button" id="btn-gen-token" style="width: 100%; padding: 0.6rem; cursor: pointer;">Generate Deployment Token</button>
-
-            <div id="token-display" style="display: none; margin-top: 1rem;">
-                <div style="background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.25); border-radius: 8px; padding: 1rem;">
-                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.3rem;">Your deployment token (shown once):</div>
-                    <div style="font-family: 'Courier New', monospace; font-size: 0.8rem; color: #00ff88; word-break: break-all; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 4px;" id="token-value"></div>
-                    <button style="margin-top: 0.5rem; padding: 0.3rem 0.8rem; background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); border-radius: 4px; cursor: pointer; font-size: 0.75rem;" id="btn-copy">Copy Token</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 3: Install -->
-        <div class="neural-card" id="deploy-step-3">
-            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem;" id="step3-num">3</div>
-                <h3 style="margin: 0; font-size: 1rem;">Install Agent</h3>
-            </div>
-            <div id="install-instructions" style="font-size: 0.8rem; color: var(--text-secondary);">
-                <p>Select a platform and generate a token first.</p>
-            </div>
+            <h1 class="deploy-title">Protect this Mac</h1>
+            <p class="deploy-subtitle">Install the AMOSKYS security agent. It runs silently in the background, monitoring for threats and reporting to your dashboard.</p>
         </div>
     </div>
 
-    <!-- Active Tokens -->
-    <div class="neural-card" style="margin-top: 1.5rem;">
-        <div class="card-header">
-            <h3 class="card-title" style="font-size: 1rem;">Active Deployment Tokens</h3>
-            <button class="neural-button" id="refresh-tokens-btn" style="padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer;">Refresh</button>
+    <!-- ═══ INSTALL ACTION ═══ -->
+    <div class="deploy-action-card" id="deploy-action">
+        <!-- Loading state -->
+        <div id="deploy-loading" class="deploy-action-loading">
+            <div class="neural-loading"></div>
+            <p>Preparing your installer...</p>
         </div>
-        <div id="tokens-list" style="margin-top: 1rem;">
-            <div style="color: var(--text-muted); text-align: center; padding: 1.5rem; font-size: 0.85rem;">Loading tokens...</div>
+
+        <!-- Ready state -->
+        <div id="deploy-ready" style="display:none;">
+            <!-- Primary: Download .pkg -->
+            <button class="deploy-install-btn" id="btn-download">
+                <span class="deploy-btn-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2"/></svg>
+                </span>
+                <span class="deploy-btn-text">
+                    <span class="deploy-btn-main" id="btn-download-text">Download for macOS</span>
+                    <span class="deploy-btn-sub">37 MB — Double-click to install. That's it.</span>
+                </span>
+            </button>
+
+            <!-- Download progress -->
+            <div class="deploy-progress" id="deploy-progress" style="display:none;">
+                <div class="deploy-progress-bar"><div class="deploy-progress-fill" id="deploy-progress-fill"></div></div>
+                <p class="deploy-progress-text" id="deploy-progress-text">Preparing your installer...</p>
+            </div>
+
+            <!-- Post-download instructions -->
+            <div class="deploy-post-download" id="deploy-post-download" style="display:none;">
+                <div class="deploy-copied">
+                    <span class="deploy-copied-check">&#x2713;</span>
+                    Downloaded! Open <strong>AMOSKYS-Install.zip</strong> in Downloads, then double-click <strong>AMOSKYS.pkg</strong>.
+                </div>
+            </div>
+
+            <!-- Alternative: Terminal command -->
+            <details class="deploy-alt-method" id="deploy-alt">
+                <summary>Advanced: install via Terminal</summary>
+                <div class="deploy-terminal">
+                    <div class="deploy-terminal-bar">
+                        <span class="deploy-terminal-dot" style="background:#ff5f57;"></span>
+                        <span class="deploy-terminal-dot" style="background:#febc2e;"></span>
+                        <span class="deploy-terminal-dot" style="background:#28c840;"></span>
+                        <span class="deploy-terminal-title">Terminal</span>
+                    </div>
+                    <div class="deploy-terminal-body">
+                        <span class="deploy-terminal-prompt">$</span>
+                        <code class="deploy-terminal-cmd" id="install-cmd">Loading...</code>
+                    </div>
+                    <button class="deploy-terminal-copy" id="btn-copy-cmd" title="Copy command">Copy</button>
+                </div>
+            </details>
+
+            <!-- Platform switch -->
+            <div class="deploy-platform-switch">
+                <span class="deploy-platform-label">Platform:</span>
+                <button class="deploy-plat-btn active" data-platform="macos">macOS</button>
+                <button class="deploy-plat-btn" data-platform="linux">Linux</button>
+                <button class="deploy-plat-btn disabled" data-platform="windows" disabled title="Coming soon">Windows</button>
+            </div>
+        </div>
+
+        <!-- Error state -->
+        <div id="deploy-error" style="display:none;">
+            <p class="deploy-error-text" id="deploy-error-msg">Something went wrong.</p>
+            <button class="deploy-retry-btn" id="btn-retry">Try Again</button>
         </div>
     </div>
+
+    <!-- ═══ WHAT GETS INSTALLED ═══ -->
+    <div class="deploy-info-grid">
+        <div class="deploy-info-card">
+            <div class="deploy-info-icon">&#x1F50D;</div>
+            <h3>17 Security Agents</h3>
+            <p>Process monitoring, network flows, DNS analysis, file integrity, persistence detection, authentication guard, and more.</p>
+        </div>
+        <div class="deploy-info-card">
+            <div class="deploy-info-icon">&#x1F6E1;</div>
+            <h3>56 Detection Rules</h3>
+            <p>Sigma rules covering 53 MITRE ATT&CK techniques across 12 tactics. Behavioral scoring, kill chain tracking.</p>
+        </div>
+        <div class="deploy-info-card">
+            <div class="deploy-info-icon">&#x26A1;</div>
+            <h3>Silent &amp; Lightweight</h3>
+            <p>Runs as a system service. Under 2% CPU, 150MB RAM. No popups, no interruptions. Just protection.</p>
+        </div>
+        <div class="deploy-info-card">
+            <div class="deploy-info-icon">&#x1F310;</div>
+            <h3>Cloud Dashboard</h3>
+            <p>See your device in the Fleet dashboard within 30 seconds. Real-time threat visibility from anywhere.</p>
+        </div>
+    </div>
+
+    <!-- ═══ HOW IT WORKS ═══ -->
+    <div class="deploy-steps-section">
+        <h2 class="deploy-section-title">How it works</h2>
+        <div class="deploy-steps">
+            <div class="deploy-step">
+                <div class="deploy-step-num">1</div>
+                <div class="deploy-step-content">
+                    <h4>Copy &amp; paste</h4>
+                    <p>Click the install button above. It copies a single command to your clipboard.</p>
+                </div>
+            </div>
+            <div class="deploy-step-line"></div>
+            <div class="deploy-step">
+                <div class="deploy-step-num">2</div>
+                <div class="deploy-step-content">
+                    <h4>Run in Terminal</h4>
+                    <p>Open Terminal (&#8984;Space, type "Terminal"). Paste and press Enter. Enter your password when prompted.</p>
+                </div>
+            </div>
+            <div class="deploy-step-line"></div>
+            <div class="deploy-step">
+                <div class="deploy-step-num">3</div>
+                <div class="deploy-step-content">
+                    <h4>You're protected</h4>
+                    <p>AMOSKYS installs, starts monitoring, and appears in your <a href="/dashboard/fleet#command-center">Fleet dashboard</a> within 30 seconds.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ YOUR DEVICES ═══ -->
+    <div class="deploy-devices-section">
+        <h2 class="deploy-section-title">Your Devices</h2>
+        <div id="deploy-devices" class="deploy-devices-list">
+            <div class="deploy-devices-empty">
+                <div class="deploy-devices-empty-icon">&#x1F4BB;</div>
+                <p>No devices yet. Install the agent above to get started.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ FAQ ═══ -->
+    <div class="deploy-faq-section">
+        <h2 class="deploy-section-title">Questions</h2>
+        <div class="deploy-faq">
+            <details class="deploy-faq-item">
+                <summary>What does AMOSKYS monitor?</summary>
+                <p>Process execution, network connections, DNS queries, file changes, login attempts, USB devices, persistence mechanisms (LaunchAgents, cron jobs), and more. All mapped to MITRE ATT&CK.</p>
+            </details>
+            <details class="deploy-faq-item">
+                <summary>Will it slow down my Mac?</summary>
+                <p>No. AMOSKYS uses under 2% CPU and 150MB RAM. It runs as a background service with no UI, no popups, no interruptions.</p>
+            </details>
+            <details class="deploy-faq-item">
+                <summary>What data is collected?</summary>
+                <p>Security telemetry only: process trees, network flows, file hashes, authentication events. No personal files, no browsing history, no keystrokes, no screenshots.</p>
+            </details>
+            <details class="deploy-faq-item">
+                <summary>How do I uninstall?</summary>
+                <p>Run: <code>sudo /Library/Amoskys/deploy/install-from-pkg.sh --uninstall</code></p>
+            </details>
+            <details class="deploy-faq-item">
+                <summary>What are the requirements?</summary>
+                <p>macOS 13 (Ventura) or later, Python 3.11+, and admin access (sudo). The installer checks all requirements automatically.</p>
+            </details>
+        </div>
+    </div>
+
 </div>
+
+<style>
+/* ═══ DEPLOY PAGE ═══ */
+.deploy-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 20px 60px;
+}
+
+/* ── Hero ── */
+.deploy-hero {
+    text-align: center;
+    padding: 50px 20px 30px;
+    position: relative;
+}
+.deploy-hero-glow {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 400px;
+    height: 200px;
+    background: radial-gradient(ellipse, rgba(0,217,255,0.08) 0%, transparent 70%);
+    pointer-events: none;
+}
+.deploy-hero-content { position: relative; }
+.deploy-shield-icon { margin-bottom: 20px; }
+.deploy-title {
+    font-size: 2.2em;
+    font-weight: 800;
+    background: linear-gradient(135deg, #fff 0%, #00d9ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+}
+.deploy-subtitle {
+    font-size: 1.05em;
+    color: #8899bb;
+    max-width: 500px;
+    margin: 0 auto;
+    line-height: 1.6;
+}
+
+/* ── Action Card ── */
+.deploy-action-card {
+    background: linear-gradient(135deg, #0f1628 0%, #141d35 100%);
+    border: 1px solid #1e2a45;
+    border-radius: 16px;
+    padding: 32px;
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+}
+.deploy-action-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #00d9ff, transparent);
+}
+.deploy-action-loading {
+    text-align: center;
+    padding: 30px;
+    color: #6b7a99;
+}
+
+/* Install button */
+.deploy-install-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 24px;
+    background: linear-gradient(135deg, #00b894 0%, #00d9ff 100%);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+}
+.deploy-install-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0,217,255,0.25);
+}
+.deploy-install-btn:active { transform: translateY(0); }
+.deploy-btn-icon { color: #0a0e27; flex-shrink: 0; }
+.deploy-btn-main {
+    display: block;
+    font-size: 1.15em;
+    font-weight: 700;
+    color: #0a0e27;
+}
+.deploy-btn-sub {
+    display: block;
+    font-size: 0.8em;
+    color: #0a0e27aa;
+    margin-top: 2px;
+}
+
+/* Copied flash */
+.deploy-copied {
+    text-align: center;
+    padding: 14px;
+    background: rgba(0,255,136,0.1);
+    border: 1px solid rgba(0,255,136,0.25);
+    border-radius: 10px;
+    color: #00ff88;
+    font-size: 0.9em;
+    margin-top: 16px;
+    animation: deploy-flash-in 0.3s ease-out;
+}
+@keyframes deploy-flash-in {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.deploy-copied-check { font-size: 1.2em; margin-right: 6px; }
+
+/* Terminal preview */
+.deploy-terminal {
+    margin-top: 20px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #1e2a45;
+    position: relative;
+}
+.deploy-terminal-bar {
+    background: #1a1f35;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.deploy-terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+.deploy-terminal-title {
+    color: #555;
+    font-size: 0.75em;
+    margin-left: 8px;
+}
+.deploy-terminal-body {
+    background: #0a0e1a;
+    padding: 16px;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.82em;
+    line-height: 1.6;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+.deploy-terminal-prompt {
+    color: #00ff88;
+    margin-right: 8px;
+    user-select: none;
+}
+.deploy-terminal-cmd { color: #c8d6e5; }
+.deploy-terminal-copy {
+    position: absolute;
+    top: 40px;
+    right: 10px;
+    padding: 4px 12px;
+    background: rgba(0,217,255,0.1);
+    color: #00d9ff;
+    border: 1px solid rgba(0,217,255,0.2);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.75em;
+    font-weight: 600;
+    transition: all 0.15s;
+}
+.deploy-terminal-copy:hover { background: rgba(0,217,255,0.2); }
+
+/* Platform switch */
+.deploy-platform-switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+}
+.deploy-platform-label {
+    font-size: 0.8em;
+    color: #6b7a99;
+    margin-right: 4px;
+}
+.deploy-plat-btn {
+    padding: 5px 14px;
+    background: transparent;
+    color: #6b7a99;
+    border: 1px solid #1e2a45;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8em;
+    transition: all 0.15s;
+}
+.deploy-plat-btn:hover { border-color: #00d9ff44; color: #aab; }
+.deploy-plat-btn.active {
+    background: rgba(0,217,255,0.1);
+    border-color: #00d9ff;
+    color: #00d9ff;
+    font-weight: 600;
+}
+.deploy-plat-btn.disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+/* Progress bar */
+.deploy-progress {
+    margin-top: 16px;
+    text-align: center;
+}
+.deploy-progress-bar {
+    height: 4px;
+    background: #1e2a45;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+.deploy-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00b894, #00d9ff);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.3s;
+    animation: deploy-progress-pulse 1.5s ease-in-out infinite;
+}
+@keyframes deploy-progress-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+.deploy-progress-text {
+    font-size: 0.82em;
+    color: #6b7a99;
+}
+
+/* Post-download */
+.deploy-post-download { margin-top: 16px; }
+
+/* Alternative method */
+.deploy-alt-method {
+    margin-top: 16px;
+    border: 1px solid #1e2a45;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.deploy-alt-method summary {
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 0.82em;
+    color: #6b7a99;
+    list-style: none;
+}
+.deploy-alt-method summary::-webkit-details-marker { display: none; }
+.deploy-alt-method summary::before {
+    content: '+ ';
+    color: #00d9ff;
+    font-weight: 700;
+}
+.deploy-alt-method[open] summary::before { content: '- '; }
+.deploy-alt-method .deploy-terminal { margin: 0; border: none; border-top: 1px solid #1e2a45; border-radius: 0; }
+
+/* Error/retry */
+.deploy-error-text { color: #ff5555; text-align: center; margin-bottom: 12px; }
+.deploy-retry-btn {
+    display: block;
+    margin: 0 auto;
+    padding: 8px 24px;
+    background: rgba(255,85,85,0.15);
+    color: #ff5555;
+    border: 1px solid rgba(255,85,85,0.3);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* ── Info Grid ── */
+.deploy-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-bottom: 40px;
+}
+@media (max-width: 600px) { .deploy-info-grid { grid-template-columns: 1fr; } }
+.deploy-info-card {
+    background: #0f1628;
+    border: 1px solid #1e2a45;
+    border-radius: 12px;
+    padding: 20px;
+    transition: border-color 0.2s;
+}
+.deploy-info-card:hover { border-color: #00d9ff33; }
+.deploy-info-icon { font-size: 1.6em; margin-bottom: 8px; }
+.deploy-info-card h3 {
+    font-size: 0.95em;
+    font-weight: 700;
+    color: #e0e8f0;
+    margin-bottom: 6px;
+}
+.deploy-info-card p {
+    font-size: 0.82em;
+    color: #6b7a99;
+    line-height: 1.5;
+}
+
+/* ── Section titles ── */
+.deploy-section-title {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: #00d9ff;
+    margin-bottom: 16px;
+}
+
+/* ── Steps ── */
+.deploy-steps-section { margin-bottom: 40px; }
+.deploy-steps {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+}
+.deploy-step {
+    flex: 1;
+    text-align: center;
+    padding: 0 12px;
+}
+.deploy-step-num {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00b894, #00d9ff);
+    color: #0a0e27;
+    font-weight: 800;
+    font-size: 1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 12px;
+}
+.deploy-step-content h4 {
+    font-size: 0.9em;
+    font-weight: 700;
+    color: #e0e8f0;
+    margin-bottom: 4px;
+}
+.deploy-step-content p {
+    font-size: 0.78em;
+    color: #6b7a99;
+    line-height: 1.5;
+}
+.deploy-step-content a { color: #00d9ff; }
+.deploy-step-line {
+    width: 60px;
+    height: 2px;
+    background: linear-gradient(90deg, #00d9ff44, #00d9ff, #00d9ff44);
+    margin-top: 18px;
+    flex-shrink: 0;
+}
+@media (max-width: 600px) {
+    .deploy-steps { flex-direction: column; align-items: stretch; }
+    .deploy-step { text-align: left; display: flex; gap: 12px; padding: 8px 0; }
+    .deploy-step-num { margin: 0; flex-shrink: 0; }
+    .deploy-step-line { width: 2px; height: 20px; margin: 0 0 0 17px; }
+}
+
+/* ── Devices ── */
+.deploy-devices-section { margin-bottom: 40px; }
+.deploy-devices-empty {
+    text-align: center;
+    padding: 40px 20px;
+    background: #0f1628;
+    border: 1px dashed #1e2a45;
+    border-radius: 12px;
+}
+.deploy-devices-empty-icon { font-size: 2.5em; margin-bottom: 10px; opacity: 0.4; }
+.deploy-devices-empty p { color: #6b7a99; font-size: 0.9em; }
+.deploy-device-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #0f1628;
+    border: 1px solid #1e2a45;
+    border-radius: 10px;
+    margin-bottom: 8px;
+}
+.deploy-device-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.deploy-device-dot.online { background: #00ff88; box-shadow: 0 0 8px #00ff8866; }
+.deploy-device-dot.offline { background: #555; }
+.deploy-device-name { font-weight: 600; font-size: 0.9em; flex: 1; }
+.deploy-device-meta { font-size: 0.78em; color: #6b7a99; }
+
+/* ── FAQ ── */
+.deploy-faq-section { margin-bottom: 40px; }
+.deploy-faq-item {
+    background: #0f1628;
+    border: 1px solid #1e2a45;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+.deploy-faq-item summary {
+    padding: 14px 18px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9em;
+    color: #c8d6e5;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.deploy-faq-item summary::before {
+    content: '+';
+    color: #00d9ff;
+    font-size: 1.2em;
+    font-weight: 700;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.deploy-faq-item[open] summary::before { content: '-'; }
+.deploy-faq-item summary::-webkit-details-marker { display: none; }
+.deploy-faq-item p {
+    padding: 0 18px 14px 48px;
+    font-size: 0.82em;
+    color: #6b7a99;
+    line-height: 1.6;
+}
+.deploy-faq-item code {
+    background: rgba(0,0,0,0.3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #00ff88;
+}
+</style>
 {% endblock %}
 
 {% block extra_scripts %}
 <script nonce="{{ csp_nonce() }}">
-let deployPlatform = null;
-let generatedToken = null;
-let generatedInstallCmd = '';
-
 (function() {
-    const ua = navigator.platform.toLowerCase();
-    let detected = null;
-    if (ua.includes('mac')) detected = 'macos';
-    else if (ua.includes('linux')) detected = 'linux';
-    else if (ua.includes('win')) detected = 'windows';
-    if (detected) {
-        selectDeployPlatform(detected);
-        document.getElementById('detected-os-badge').textContent = 'Auto-detected: ' + detected;
+    var platform = 'macos';
+    var installCmd = '';
+    var downloading = false;
+
+    // Auto-detect platform
+    var ua = (navigator.platform || navigator.userAgent || '').toLowerCase();
+    if (ua.includes('linux')) platform = 'linux';
+
+    // Prepare terminal command on page load (no download yet — that happens on click)
+    prepareCommand();
+    loadDevices();
+
+    // Update button text for platform
+    updateButtonText();
+
+    async function prepareCommand() {
+        // Get the terminal install command (for the advanced section)
+        document.querySelectorAll('.deploy-plat-btn').forEach(function(btn) {
+            btn.classList.toggle('active', btn.dataset.platform === platform);
+        });
+
+        try {
+            var resp = await fetch('/dashboard/api/agents/deploy/quick', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({label: detectLabel(), platform: platform}),
+            });
+            var data = await resp.json();
+
+            if (data.status === 'success') {
+                installCmd = data.install_command;
+                showReady();
+            } else {
+                showError(data.message || 'Failed to prepare installer');
+            }
+        } catch(e) {
+            showError('Could not connect: ' + e.message);
+        }
+    }
+
+    function detectLabel() {
+        return 'My ' + (platform === 'macos' ? 'Mac' : platform === 'linux' ? 'Linux' : 'Device');
+    }
+
+    function updateButtonText() {
+        var text = platform === 'macos' ? 'Download for macOS' : platform === 'linux' ? 'Download for Linux' : 'Download';
+        document.getElementById('btn-download-text').textContent = text;
+    }
+
+    function showReady() {
+        document.getElementById('deploy-loading').style.display = 'none';
+        document.getElementById('deploy-ready').style.display = 'block';
+        document.getElementById('deploy-error').style.display = 'none';
+        document.getElementById('install-cmd').textContent = installCmd;
+    }
+
+    function showError(msg) {
+        document.getElementById('deploy-loading').style.display = 'none';
+        document.getElementById('deploy-ready').style.display = 'none';
+        document.getElementById('deploy-error').style.display = 'block';
+        document.getElementById('deploy-error-msg').textContent = msg;
+    }
+
+    // ── Download button ──
+    document.getElementById('btn-download').addEventListener('click', async function() {
+        if (downloading) return;
+        downloading = true;
+
+        var btn = this;
+        var progress = document.getElementById('deploy-progress');
+        var progressFill = document.getElementById('deploy-progress-fill');
+        var progressText = document.getElementById('deploy-progress-text');
+        var postDownload = document.getElementById('deploy-post-download');
+
+        // Show progress
+        btn.style.opacity = '0.6';
+        btn.style.pointerEvents = 'none';
+        progress.style.display = 'block';
+        progressFill.style.width = '30%';
+        progressText.textContent = 'Generating your personalized installer...';
+
+        try {
+            var resp = await fetch('/dashboard/api/agents/deploy/download', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({label: detectLabel(), platform: platform}),
+            });
+
+            progressFill.style.width = '70%';
+            progressText.textContent = 'Packaging...';
+
+            if (!resp.ok) {
+                var err = await resp.json();
+                throw new Error(err.message || 'Download failed');
+            }
+
+            progressFill.style.width = '90%';
+
+            // Trigger browser download
+            var blob = await resp.blob();
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'AMOSKYS-Install.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            progressFill.style.width = '100%';
+            progressText.textContent = 'Downloaded!';
+
+            // Show post-download instructions
+            setTimeout(function() {
+                progress.style.display = 'none';
+                postDownload.style.display = 'block';
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+                downloading = false;
+            }, 1000);
+
+        } catch(e) {
+            progress.style.display = 'none';
+            btn.style.opacity = '1';
+            btn.style.pointerEvents = 'auto';
+            downloading = false;
+            alert('Download failed: ' + e.message);
+        }
+    });
+
+    // ── Terminal copy button ──
+    document.getElementById('btn-copy-cmd').addEventListener('click', function() {
+        if (!installCmd) return;
+        var btn = this;
+        copyToClipboard(installCmd, function() {
+            btn.textContent = 'Copied!';
+            btn.style.color = '#00ff88';
+            btn.style.borderColor = '#00ff88';
+            setTimeout(function() {
+                btn.textContent = 'Copy';
+                btn.style.color = '#00d9ff';
+                btn.style.borderColor = 'rgba(0,217,255,0.2)';
+            }, 3000);
+        });
+    });
+
+    // ── Platform switch ──
+    document.querySelectorAll('.deploy-plat-btn:not(.disabled)').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            platform = btn.dataset.platform;
+            updateButtonText();
+            document.getElementById('deploy-loading').style.display = 'block';
+            document.getElementById('deploy-ready').style.display = 'none';
+            document.getElementById('deploy-post-download').style.display = 'none';
+            document.querySelectorAll('.deploy-plat-btn').forEach(function(b) {
+                b.classList.toggle('active', b.dataset.platform === platform);
+            });
+            prepareCommand();
+        });
+    });
+
+    // ── Retry ──
+    document.getElementById('btn-retry').addEventListener('click', function() {
+        document.getElementById('deploy-error').style.display = 'none';
+        document.getElementById('deploy-loading').style.display = 'block';
+        prepareCommand();
+    });
+
+    // ── Helpers ──
+    function copyToClipboard(text, onSuccess) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(onSuccess).catch(function() {
+                fallbackCopy(text, onSuccess);
+            });
+        } else {
+            fallbackCopy(text, onSuccess);
+        }
+    }
+
+    function fallbackCopy(text, onSuccess) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); if (onSuccess) onSuccess(); }
+        catch(e) { /* ignore */ }
+        document.body.removeChild(ta);
+    }
+
+    async function loadDevices() {
+        try {
+            var resp = await fetch('/dashboard/api/agents/deploy/agents');
+            var data = await resp.json();
+            var el = document.getElementById('deploy-devices');
+
+            if (data.status !== 'success' || !data.agents || data.agents.length === 0) return;
+
+            var html = '';
+            for (var i = 0; i < data.agents.length; i++) {
+                var a = data.agents[i];
+                var statusClass = a.status === 'online' ? 'online' : 'offline';
+                html += '<div class="deploy-device-row">'
+                    + '<div class="deploy-device-dot ' + statusClass + '"></div>'
+                    + '<div class="deploy-device-name">' + esc(a.hostname || 'Unknown') + '</div>'
+                    + '<div class="deploy-device-meta">' + esc(a.platform || '') + ' &middot; ' + esc(a.version || '') + ' &middot; ' + esc(a.status || '') + '</div>'
+                    + '</div>';
+            }
+            el.innerHTML = html;
+        } catch(e) { /* empty state is fine */ }
+    }
+
+    function esc(s) {
+        if (!s) return '';
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
     }
 })();
-
-function selectDeployPlatform(platform) {
-    deployPlatform = platform;
-    document.querySelectorAll('.deploy-plat-card').forEach(function(c) {
-        c.style.borderColor = 'rgba(255,255,255,0.08)';
-        c.style.background = 'rgba(255,255,255,0.03)';
-    });
-    var card = document.querySelector('.deploy-plat-card[data-platform="' + platform + '"]');
-    if (card) {
-        card.style.borderColor = '#00ff88';
-        card.style.background = 'rgba(0,255,136,0.08)';
-    }
-    updateInstallInstructions();
-}
-
-async function generateToken() {
-    if (!deployPlatform) { alert('Please select a platform first.'); return; }
-    var label = document.getElementById('token-label').value || 'My Device';
-    var btn = document.getElementById('btn-gen-token');
-    btn.disabled = true;
-    btn.textContent = 'Generating...';
-    try {
-        // Use quick deploy — generates token + install command in one step
-        var resp = await fetch('/dashboard/api/agents/deploy/quick', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({label: label, platform: deployPlatform}),
-        });
-        var data = await resp.json();
-        if (data.status === 'success' && data.token) {
-            generatedToken = data.token;
-            generatedInstallCmd = data.install_command || '';
-            document.getElementById('token-value').textContent = data.token;
-            document.getElementById('token-display').style.display = 'block';
-            document.getElementById('step2-num').style.background = 'linear-gradient(135deg, var(--neural-primary), var(--neural-secondary))';
-            document.getElementById('step2-num').style.color = 'var(--bg-primary)';
-            updateInstallInstructions();
-            loadTokens();
-        } else {
-            alert(data.message || 'Failed to generate token');
-        }
-    } catch(e) {
-        alert('Failed to generate token: ' + e.message);
-    } finally {
-        btn.disabled = false;
-        btn.textContent = 'Generate Deployment Token';
-    }
-}
-
-function copyToken() {
-    if (!generatedToken) return;
-    var btn = document.getElementById('btn-copy');
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(generatedToken).then(function() {
-            btn.textContent = 'Copied!';
-            setTimeout(function() { btn.textContent = 'Copy Token'; }, 2000);
-        }, function() {
-            fallbackCopy(generatedToken, btn);
-        });
-    } else {
-        fallbackCopy(generatedToken, btn);
-    }
-}
-function fallbackCopy(text, btn) {
-    var ta = document.createElement('textarea');
-    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); btn.textContent = 'Copied!'; }
-    catch(e) { btn.textContent = 'Copy failed'; }
-    document.body.removeChild(ta);
-    setTimeout(function() { btn.textContent = 'Copy Token'; }, 2000);
-}
-
-function cmdBlock(cmd, label) {
-    var id = 'cmd-' + Math.random().toString(36).substring(2, 8);
-    return '<div style="margin-bottom:0.6rem;">'
-        + '<div style="font-size:0.7rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.2rem;">' + label + '</div>'
-        + '<div style="display:flex;align-items:center;gap:0.4rem;">'
-        + '<code id="' + id + '" style="flex:1;display:block;padding:0.5rem 0.7rem;background:rgba(0,0,0,0.35);border-radius:6px;font-size:0.78rem;color:#00ff88;font-family:monospace;word-break:break-all;border:1px solid rgba(0,255,136,0.1);">' + escapeHtml(cmd) + '</code>'
-        + '<button data-action="copy-cmd" data-cmd-id="' + id + '" style="flex-shrink:0;padding:0.35rem 0.6rem;background:rgba(0,255,136,0.1);color:#00ff88;border:1px solid rgba(0,255,136,0.2);border-radius:5px;cursor:pointer;font-size:0.65rem;font-weight:700;white-space:nowrap;transition:all 0.15s;" title="Copy command">Copy</button>'
-        + '</div></div>';
-}
-
-function copyCmd(elId) {
-    var el = document.getElementById(elId);
-    if (!el) return;
-    var text = el.textContent;
-    var btn = el.parentNode.querySelector('button');
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function() {
-            btn.textContent = 'Copied!'; btn.style.borderColor = '#00ff88';
-            setTimeout(function() { btn.textContent = 'Copy'; btn.style.borderColor = 'rgba(0,255,136,0.2)'; }, 2000);
-        });
-    } else {
-        fallbackCopy(text, btn);
-    }
-}
-
-function updateInstallInstructions() {
-    var el = document.getElementById('install-instructions');
-    if (!deployPlatform) return;
-    var html = '';
-
-    if (!generatedToken) {
-        html = '<p style="color:var(--text-muted);">Generate a deployment token above to get your install command.</p>';
-        el.innerHTML = html;
-        return;
-    }
-
-    // Show the one-liner install command
-    if (generatedInstallCmd) {
-        html += '<div style="margin-bottom:1rem;">'
-            + '<div style="font-size:0.75rem;font-weight:700;color:#00ff88;margin-bottom:0.4rem;">One-Line Install</div>'
-            + '<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.5rem;">Open Terminal and paste this command:</div>'
-            + '</div>';
-        html += cmdBlock(generatedInstallCmd, 'Install AMOSKYS agent');
-    }
-
-    // What happens next
-    html += '<div style="padding:0.8rem;background:rgba(0,217,255,0.05);border:1px solid rgba(0,217,255,0.1);border-radius:6px;margin-top:0.8rem;">'
-        + '<div style="font-size:0.72rem;font-weight:700;color:var(--neural-primary);margin-bottom:0.4rem;">What happens</div>'
-        + '<div style="font-size:0.72rem;color:var(--text-secondary);line-height:1.7;">'
-        + '1. Installs AMOSKYS to <code style="color:#00ff88;background:rgba(0,0,0,0.3);padding:0.1rem 0.3rem;border-radius:3px;font-size:0.68rem;">/Library/Amoskys/</code><br>'
-        + '2. Creates Python venv + installs dependencies<br>'
-        + '3. Registers with your account using the deployment token<br>'
-        + '4. Starts the security agent as a system service<br>'
-        + '5. Device appears in <a href="/dashboard/fleet#command-center" style="color:var(--neural-primary);">Fleet &rarr; Command Center</a> within 30 seconds'
-        + '</div></div>';
-
-    // Requirements
-    html += '<div style="margin-top:0.6rem;font-size:0.7rem;color:var(--text-muted);">'
-        + 'Requires: macOS 13+ (Ventura or later), Python 3.11+, sudo access'
-        + '</div>';
-
-    el.innerHTML = html;
-    document.getElementById('step3-num').style.background = 'linear-gradient(135deg, var(--neural-primary), var(--neural-secondary))';
-    document.getElementById('step3-num').style.color = 'var(--bg-primary)';
-}
-
-async function loadTokens() {
-    var el = document.getElementById('tokens-list');
-    try {
-        var resp = await fetch('/dashboard/api/agents/deploy/tokens');
-        var data = await resp.json();
-        if (data.status === 'success' && data.tokens) {
-            if (data.tokens.length === 0) {
-                el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem;">No deployment tokens yet. Generate one above.</div>';
-                return;
-            }
-            var html = '<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">'
-                + '<tr style="border-bottom:1px solid rgba(255,255,255,0.08);">'
-                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Label</th>'
-                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Platform</th>'
-                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Status</th>'
-                + '<th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-weight:600;">Created</th>'
-                + '<th style="text-align:right;padding:0.5rem;color:var(--text-muted);font-weight:600;">Action</th></tr>';
-            for (var i = 0; i < data.tokens.length; i++) {
-                var t = data.tokens[i];
-                var statusColor = t.is_consumed ? '#999' : '#00ff88';
-                var statusText = t.is_consumed ? 'Used' : 'Active';
-                var created = new Date(t.created_at).toLocaleDateString();
-                html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
-                    + '<td style="padding:0.5rem;color:var(--text-primary);">' + escapeHtml(t.label) + '</td>'
-                    + '<td style="padding:0.5rem;">' + escapeHtml(t.platform) + '</td>'
-                    + '<td style="padding:0.5rem;"><span style="color:' + statusColor + ';font-weight:600;">' + statusText + '</span></td>'
-                    + '<td style="padding:0.5rem;color:var(--text-muted);">' + created + '</td>'
-                    + '<td style="padding:0.5rem;text-align:right;">';
-                if (!t.is_consumed) {
-                    html += '<button data-action="revoke-token" data-token-id="' + t.id + '" style="padding:0.2rem 0.5rem;background:rgba(255,51,102,0.15);color:#ff3366;border:1px solid rgba(255,51,102,0.3);border-radius:4px;cursor:pointer;font-size:0.7rem;">Revoke</button>';
-                }
-                html += '</td></tr>';
-            }
-            html += '</table>';
-            el.innerHTML = html;
-        } else {
-            el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem;">No tokens found.</div>';
-        }
-    } catch(e) {
-        el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem;">Failed to load tokens.</div>';
-    }
-}
-
-async function revokeToken(tokenId) {
-    if (!confirm('Revoke this token? This cannot be undone.')) return;
-    try {
-        var resp = await fetch('/dashboard/api/agents/deploy/tokens/' + encodeURIComponent(tokenId) + '/revoke', {method: 'POST'});
-        if (!resp.ok) alert('Failed to revoke token');
-        loadTokens();
-    } catch(e) {
-        alert('Failed to revoke token: ' + e.message);
-    }
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    var div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    loadTokens();
-
-    // Platform selection cards
-    document.querySelectorAll('.deploy-plat-card[data-platform]').forEach(function(card) {
-        card.addEventListener('click', function() {
-            selectDeployPlatform(card.dataset.platform);
-        });
-    });
-
-    // Generate token button
-    document.getElementById('btn-gen-token').addEventListener('click', generateToken);
-
-    // Copy token button
-    document.getElementById('btn-copy').addEventListener('click', copyToken);
-
-    // Refresh tokens button
-    document.getElementById('refresh-tokens-btn').addEventListener('click', loadTokens);
-
-    // Event delegation on install instructions (dynamic copy-cmd buttons)
-    document.getElementById('install-instructions').addEventListener('click', function(e) {
-        var btn = e.target.closest('[data-action="copy-cmd"]');
-        if (btn) copyCmd(btn.dataset.cmdId);
-    });
-
-    // Event delegation on tokens list (dynamic revoke-token buttons)
-    document.getElementById('tokens-list').addEventListener('click', function(e) {
-        var btn = e.target.closest('[data-action="revoke-token"]');
-        if (btn) revokeToken(btn.dataset.tokenId);
-    });
-});
 </script>
 {% endblock %}

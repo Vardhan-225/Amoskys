@@ -64,6 +64,36 @@ for arg in "$@"; do
     esac
 done
 
+# ── Auto-discover .amoskys-config (from .pkg download) ──
+# When downloaded as a .zip, the config file sits next to the .pkg in ~/Downloads.
+# The macOS installer runs postinstall as root, so we check the invoking user's Downloads.
+if [[ -z "$DEPLOY_TOKEN" || -z "$AMOSKYS_SERVER" ]]; then
+    # Find the real user (not root) who ran the installer
+    REAL_USER="${SUDO_USER:-$(stat -f '%Su' /dev/console 2>/dev/null || echo '')}"
+    REAL_HOME=$(eval echo "~${REAL_USER}" 2>/dev/null || echo "")
+
+    # Search for .amoskys-config in likely locations
+    for config_path in \
+        "${REAL_HOME}/Downloads/.amoskys-config" \
+        "${REAL_HOME}/Desktop/.amoskys-config" \
+        "/tmp/.amoskys-config" \
+        "${REAL_HOME}/.amoskys-config"; do
+        if [[ -f "$config_path" ]]; then
+            log "Found config: $config_path"
+            # Read token and server from config (simple KEY=VALUE format)
+            while IFS='=' read -r key value; do
+                case "$key" in
+                    token) [[ -z "$DEPLOY_TOKEN" ]] && DEPLOY_TOKEN="$value" ;;
+                    server) [[ -z "$AMOSKYS_SERVER" ]] && AMOSKYS_SERVER="$value" ;;
+                esac
+            done < "$config_path"
+            # Clean up the config file (one-time use)
+            rm -f "$config_path"
+            break
+        fi
+    done
+fi
+
 # ── Root Check ──
 if [[ $EUID -ne 0 ]]; then
     err "This installer must be run as root (sudo)."
