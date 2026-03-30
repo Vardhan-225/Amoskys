@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AMOSKYS — Command Center</title>
+</head>
+<body style="margin:0;background:#0a0e27;">
+
+<div class="cc-container" id="command-center">
+    <div class="cc-loading" id="cc-loading">
+        <div class="neural-loading"></div>
+        <p>Connecting to Command Center...</p>
+    </div>
+
+    <!-- No Fleet DB message -->
+    <div class="cc-empty" id="cc-empty" style="display:none;">
+        <div class="cc-empty-icon">&#x1F6F0;</div>
+        <h2>Command Center Offline</h2>
+        <p id="cc-empty-msg">No fleet database found.</p>
+        <div class="cc-setup-steps">
+            <h3>Quick Setup</h3>
+            <div class="cc-step">
+                <span class="cc-step-num">1</span>
+                <div>
+                    <strong>Start the Command Center server</strong>
+                    <code>python3 server/command_center.py</code>
+                </div>
+            </div>
+            <div class="cc-step">
+                <span class="cc-step-num">2</span>
+                <div>
+                    <strong>Point agents at the server</strong>
+                    <code>export AMOSKYS_SERVER=http://your-server:8443</code>
+                </div>
+            </div>
+            <div class="cc-step">
+                <span class="cc-step-num">3</span>
+                <div>
+                    <strong>Agents ship automatically</strong>
+                    <span class="cc-step-detail">The shipper runs inside the analyzer, shipping events every 10 seconds.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fleet Dashboard -->
+    <div class="cc-fleet" id="cc-fleet" style="display:none;">
+        <!-- Summary Cards -->
+        <div class="cc-cards" id="cc-cards"></div>
+
+        <!-- Device Table -->
+        <div class="cc-section">
+            <h3 class="cc-section-title">Fleet Devices</h3>
+            <table class="cc-table" id="cc-device-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Hostname</th>
+                        <th>OS</th>
+                        <th>Agent</th>
+                        <th>Events (24h)</th>
+                        <th>Critical</th>
+                        <th>Max Risk</th>
+                        <th>Last Seen</th>
+                    </tr>
+                </thead>
+                <tbody id="cc-device-tbody"></tbody>
+            </table>
+        </div>
+
+        <!-- Two-column: Categories + MITRE -->
+        <div class="cc-two-col">
+            <div class="cc-section">
+                <h3 class="cc-section-title">Top Threat Categories (24h)</h3>
+                <table class="cc-table cc-table-compact" id="cc-categories">
+                    <thead><tr><th>Category</th><th>Count</th><th>Avg Risk</th></tr></thead>
+                    <tbody id="cc-cat-tbody"></tbody>
+                </table>
+            </div>
+            <div class="cc-section">
+                <h3 class="cc-section-title">MITRE ATT&CK Coverage</h3>
+                <table class="cc-table cc-table-compact" id="cc-mitre">
+                    <thead><tr><th>Technique</th><th>Hits</th></tr></thead>
+                    <tbody id="cc-mitre-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Device Drill-Down -->
+        <div class="cc-section" id="cc-drilldown" style="display:none;">
+            <h3 class="cc-section-title">
+                <span id="cc-drill-title">Device Events</span>
+                <button class="cc-close-btn" id="cc-drill-close">&times;</button>
+            </h3>
+            <table class="cc-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Category</th>
+                        <th>Risk</th>
+                        <th>Agent</th>
+                        <th>Process</th>
+                        <th>MITRE</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody id="cc-events-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+.cc-container {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: #e0e0e0;
+}
+
+/* Loading */
+.cc-loading {
+    text-align: center;
+    padding: 80px 20px;
+    color: #6b7a99;
+}
+.cc-loading p { margin-top: 15px; }
+
+/* Empty state */
+.cc-empty {
+    text-align: center;
+    padding: 60px 20px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+.cc-empty-icon { font-size: 4em; margin-bottom: 15px; }
+.cc-empty h2 { color: #00d9ff; margin-bottom: 10px; }
+.cc-empty p { color: #6b7a99; margin-bottom: 30px; }
+.cc-setup-steps {
+    text-align: left;
+    background: #12151f;
+    border: 1px solid #1e2235;
+    border-radius: 12px;
+    padding: 25px;
+}
+.cc-setup-steps h3 { color: #00d9ff; margin-bottom: 20px; font-size: 0.95em; text-transform: uppercase; letter-spacing: 1px; }
+.cc-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+    margin-bottom: 18px;
+}
+.cc-step-num {
+    background: #00d9ff;
+    color: #0a0e27;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+.cc-step strong { display: block; margin-bottom: 4px; }
+.cc-step code {
+    display: inline-block;
+    background: #0a0e27;
+    border: 1px solid #1e2235;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #00ff88;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.cc-step-detail { color: #6b7a99; font-size: 0.9em; }
+
+/* Cards */
+.cc-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+}
+.cc-card {
+    background: #12151f;
+    border: 1px solid #1e2235;
+    border-radius: 10px;
+    padding: 16px;
+    transition: border-color 0.2s;
+}
+.cc-card:hover { border-color: #00d9ff33; }
+.cc-card-label {
+    font-size: 0.75em;
+    color: #6b7a99;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.cc-card-value {
+    font-size: 2em;
+    font-weight: 700;
+    margin-top: 4px;
+    line-height: 1.1;
+}
+.cc-val-green { color: #00ff88; }
+.cc-val-red { color: #ff3366; }
+.cc-val-yellow { color: #f0ad4e; }
+.cc-val-blue { color: #00d9ff; }
+.cc-val-white { color: #fff; }
+
+/* Sections */
+.cc-section {
+    background: #12151f;
+    border: 1px solid #1e2235;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+.cc-section-title {
+    font-size: 0.85em;
+    color: #00d9ff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Tables */
+.cc-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.cc-table th {
+    font-size: 0.72em;
+    color: #6b7a99;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 10px;
+    border-bottom: 1px solid #1e2235;
+    text-align: left;
+}
+.cc-table td {
+    padding: 10px;
+    border-bottom: 1px solid #0f1220;
+    font-size: 0.88em;
+    vertical-align: top;
+}
+.cc-table tr:hover { background: #161b30; }
+.cc-table-compact td { padding: 6px 10px; font-size: 0.85em; }
+
+/* Status indicators */
+.cc-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.cc-status-online { background: #00ff88; box-shadow: 0 0 6px #00ff88aa; }
+.cc-status-offline { background: #ff3366; }
+
+/* Risk badges */
+.cc-risk {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.85em;
+}
+.cc-risk-critical { background: #dc262633; color: #ff4444; }
+.cc-risk-high { background: #ea580c33; color: #ff8844; }
+.cc-risk-medium { background: #ca8a0433; color: #ffcc44; }
+.cc-risk-low { background: #16a34a33; color: #44ff88; }
+
+/* MITRE badges */
+.cc-mitre-tag {
+    display: inline-block;
+    background: #1e2235;
+    border: 1px solid #2a3050;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    color: #00d9ff;
+    margin: 1px;
+}
+
+/* Clickable rows */
+.cc-clickable { cursor: pointer; }
+.cc-clickable:hover { background: #1a2040 !important; }
+
+/* Close button */
+.cc-close-btn {
+    background: none;
+    border: 1px solid #333;
+    color: #888;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1.2em;
+    line-height: 1;
+}
+.cc-close-btn:hover { background: #1e2235; color: #fff; }
+
+/* Two column layout */
+.cc-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+@media (max-width: 900px) {
+    .cc-two-col { grid-template-columns: 1fr; }
+}
+
+/* Description column */
+.cc-desc {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #6b7a99;
+}
+</style>
+
+<script>
+(function() {
+    const API = '/dashboard/api/command-center';
+
+    async function load() {
+        try {
+            const resp = await fetch(API + '/status');
+            const data = await resp.json();
+
+            document.getElementById('cc-loading').style.display = 'none';
+
+            if (!data.available) {
+                document.getElementById('cc-empty').style.display = 'block';
+                document.getElementById('cc-empty-msg').textContent = data.message || 'No fleet data available.';
+                return;
+            }
+
+            document.getElementById('cc-fleet').style.display = 'block';
+            renderCards(data);
+            renderDevices(data.devices);
+            renderCategories(data.top_categories);
+            renderMitre(data.top_mitre_techniques);
+        } catch (e) {
+            document.getElementById('cc-loading').style.display = 'none';
+            document.getElementById('cc-empty').style.display = 'block';
+            document.getElementById('cc-empty-msg').textContent = 'Failed to connect: ' + e.message;
+        }
+    }
+
+    function renderCards(data) {
+        const f = data.fleet;
+        const e = data.last_24h;
+        const html = [
+            card('Devices Online', f.online, f.online > 0 ? 'green' : 'white'),
+            card('Devices Offline', f.offline, f.offline > 0 ? 'red' : 'green'),
+            card('Total Devices', f.total_devices, 'blue'),
+            card('Events (24h)', e.total_events, 'blue'),
+            card('Critical', e.critical, e.critical > 0 ? 'red' : 'green'),
+            card('High Risk', e.high, e.high > 0 ? 'yellow' : 'green'),
+        ];
+        document.getElementById('cc-cards').innerHTML = html.join('');
+    }
+
+    function card(label, value, color) {
+        return `<div class="cc-card">
+            <div class="cc-card-label">${label}</div>
+            <div class="cc-card-value cc-val-${color}">${value}</div>
+        </div>`;
+    }
+
+    function renderDevices(devices) {
+        const tbody = document.getElementById('cc-device-tbody');
+        if (!devices || devices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#6b7a99;padding:30px;">No devices registered yet</td></tr>';
+            return;
+        }
+        tbody.innerHTML = devices.map(d => {
+            const riskClass = d.max_risk >= 0.8 ? 'critical' : d.max_risk >= 0.6 ? 'high' : d.max_risk >= 0.3 ? 'medium' : 'low';
+            return `<tr class="cc-clickable" onclick="window._ccDrill('${d.device_id}', '${esc(d.hostname)}')">
+                <td><span class="cc-status cc-status-${d.status}"></span></td>
+                <td><strong>${esc(d.hostname)}</strong></td>
+                <td>${esc(d.os || '')} ${esc(d.arch || '')}</td>
+                <td>${esc(d.agent_version || '')}</td>
+                <td>${d.event_count}</td>
+                <td>${d.critical_count > 0 ? '<span class="cc-risk cc-risk-critical">' + d.critical_count + '</span>' : '-'}</td>
+                <td><span class="cc-risk cc-risk-${riskClass}">${d.max_risk.toFixed(2)}</span></td>
+                <td>${timeAgo(d.last_seen)}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function renderCategories(cats) {
+        const tbody = document.getElementById('cc-cat-tbody');
+        if (!cats || cats.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="color:#6b7a99">No events yet</td></tr>';
+            return;
+        }
+        tbody.innerHTML = cats.map(c => {
+            const riskClass = c.avg_risk >= 0.6 ? 'cc-risk-high' : c.avg_risk >= 0.3 ? 'cc-risk-medium' : '';
+            return `<tr>
+                <td>${esc(c.category)}</td>
+                <td>${c.count}</td>
+                <td class="${riskClass}">${c.avg_risk.toFixed(3)}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function renderMitre(techniques) {
+        const tbody = document.getElementById('cc-mitre-tbody');
+        if (!techniques || techniques.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="2" style="color:#6b7a99">No MITRE hits yet</td></tr>';
+            return;
+        }
+        tbody.innerHTML = techniques.map(t =>
+            `<tr><td><span class="cc-mitre-tag">${esc(t.technique)}</span></td><td>${t.count}</td></tr>`
+        ).join('');
+    }
+
+    // Device drill-down
+    window._ccDrill = async function(deviceId, hostname) {
+        const section = document.getElementById('cc-drilldown');
+        const title = document.getElementById('cc-drill-title');
+        const tbody = document.getElementById('cc-events-tbody');
+
+        title.textContent = hostname + ' — Recent Events';
+        section.style.display = 'block';
+        tbody.innerHTML = '<tr><td colspan="7" style="color:#6b7a99;text-align:center;">Loading...</td></tr>';
+        section.scrollIntoView({ behavior: 'smooth' });
+
+        try {
+            const resp = await fetch(API + '/device/' + deviceId + '/events?limit=50&min_risk=0.01');
+            const data = await resp.json();
+
+            if (!data.events || data.events.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="color:#6b7a99;text-align:center;">No events found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.events.map(e => {
+                const riskClass = e.risk_score >= 0.8 ? 'critical' : e.risk_score >= 0.6 ? 'high' : e.risk_score >= 0.3 ? 'medium' : 'low';
+                const mitre = (e.mitre || []).map(t => `<span class="cc-mitre-tag">${t}</span>`).join(' ');
+                return `<tr>
+                    <td style="white-space:nowrap;">${esc(e.timestamp || '').replace('T', ' ').slice(0, 19)}</td>
+                    <td>${esc(e.category || '')}</td>
+                    <td><span class="cc-risk cc-risk-${riskClass}">${e.risk_score ? e.risk_score.toFixed(2) : '-'}</span></td>
+                    <td>${esc(e.agent || '')}</td>
+                    <td>${esc(e.process || '')}</td>
+                    <td>${mitre || '-'}</td>
+                    <td class="cc-desc">${esc(e.description || '')}</td>
+                </tr>`;
+            }).join('');
+        } catch (err) {
+            tbody.innerHTML = '<tr><td colspan="7" style="color:#ff3366;">Error: ' + err.message + '</td></tr>';
+        }
+    };
+
+    document.getElementById('cc-drill-close').addEventListener('click', function() {
+        document.getElementById('cc-drilldown').style.display = 'none';
+    });
+
+    function timeAgo(epoch) {
+        if (!epoch) return 'never';
+        const seconds = Math.floor(Date.now() / 1000 - epoch);
+        if (seconds < 0) return 'just now';
+        if (seconds < 60) return seconds + 's ago';
+        if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+        if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+        return Math.floor(seconds / 86400) + 'd ago';
+    }
+
+    function esc(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    load();
+    setInterval(load, 15000);
+})();
+</script>
+
+</body>
+</html>

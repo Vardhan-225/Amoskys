@@ -5,7 +5,8 @@
 {% block content %}
 <div class="consolidated-page">
     <div class="tab-bar" id="fleet-tabs">
-        <button class="tab-item active" data-tab="agents">Agents</button>
+        <button class="tab-item active" data-tab="command-center">Command Center</button>
+        <button class="tab-item" data-tab="agents">Agents</button>
         <button class="tab-item" data-tab="deploy">Deploy</button>
         <button class="tab-item" data-tab="monitor">Monitor</button>
         <button class="tab-item" data-tab="probes">Probes</button>
@@ -28,6 +29,7 @@
 <script nonce="{{ csp_nonce() }}">
 (function() {
     const ROUTES = {
+        'command-center': '/dashboard/command-center?embed=1',
         agents: '/dashboard/agents?embed=1',
         deploy: '/dashboard/deploy?embed=1',
         monitor: '/dashboard/agent-monitor?embed=1',
@@ -55,7 +57,7 @@
 
     // Parse hash: #monitor?agent=macos_dns or #probes?probe=rt_tcc_permission
     var hashParts = window.location.hash.replace('#', '').split('?');
-    var tabName = hashParts[0] || 'agents';
+    var tabName = hashParts[0] || 'command-center';
     var queryParams = hashParts[1] || '';
     activate(ROUTES[tabName] ? tabName : 'agents', queryParams);
 })();

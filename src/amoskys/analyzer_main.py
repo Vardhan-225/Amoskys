@@ -125,6 +125,24 @@ def main() -> int:
     except Exception as e:
         logger.warning("ProbeCalibrator not available: %s", e)
 
+    # ── Telemetry Shipper (fleet mode — ships events to Command Center) ──
+    shipper = None
+    try:
+        from amoskys.shipper import ShipperConfig, TelemetryShipper
+
+        shipper_config = ShipperConfig.from_env()
+        if shipper_config.enabled:
+            shipper = TelemetryShipper(shipper_config)
+            shipper.start()
+            logger.info(
+                "Telemetry shipper started — server=%s",
+                shipper_config.server_url,
+            )
+        else:
+            logger.info("Telemetry shipper disabled (set AMOSKYS_SERVER to enable)")
+    except Exception as e:
+        logger.warning("Telemetry shipper not available: %s", e)
+
     # ── Agent Signature Vector (ASV) — sliding window of active agents ──
     # Tracks which agents fired security events in the last 60 seconds.
     # Injected into events as '_asv' for INADS 6th cluster scoring.
@@ -836,6 +854,12 @@ def main() -> int:
     if soma is not None:
         try:
             soma.close()
+        except Exception:
+            pass
+    if shipper is not None:
+        try:
+            shipper.stop()
+            logger.info("Telemetry shipper stopped")
         except Exception:
             pass
     return 0
