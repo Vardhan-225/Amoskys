@@ -68,41 +68,63 @@ class PostureMixin:
 
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
 
-        posture_query = """
-            SELECT 'process' as label, COUNT(*), MAX(timestamp_ns),
-                   COALESCE(MAX(anomaly_score), 0), COALESCE(AVG(anomaly_score), 0)
+        # Domain table volumes (observation counts from raw collector data)
+        volume_query = """
+            SELECT 'process' as label, COUNT(*), MAX(timestamp_ns)
             FROM process_events WHERE timestamp_ns > ?1
             UNION ALL
-            SELECT 'network', COUNT(*), MAX(timestamp_ns),
-                   COALESCE(MAX(threat_score), 0), COALESCE(AVG(threat_score), 0)
+            SELECT 'network', COUNT(*), MAX(timestamp_ns)
             FROM flow_events WHERE timestamp_ns > ?1
             UNION ALL
-            SELECT 'dns', COUNT(*), MAX(timestamp_ns),
-                   COALESCE(MAX(risk_score), 0), COALESCE(AVG(risk_score), 0)
+            SELECT 'dns', COUNT(*), MAX(timestamp_ns)
             FROM dns_events WHERE timestamp_ns > ?1
             UNION ALL
-            SELECT 'auth', COUNT(*), MAX(timestamp_ns),
-                   COALESCE(MAX(risk_score), 0), COALESCE(AVG(risk_score), 0)
+            SELECT 'auth', COUNT(*), MAX(timestamp_ns)
             FROM audit_events WHERE timestamp_ns > ?1
             UNION ALL
-            SELECT 'files', COUNT(*), MAX(timestamp_ns),
-                   COALESCE(MAX(risk_score), 0), COALESCE(AVG(risk_score), 0)
+            SELECT 'files', COUNT(*), MAX(timestamp_ns)
             FROM fim_events WHERE timestamp_ns > ?1
             UNION ALL
-            SELECT 'persistence', COUNT(*), MAX(timestamp_ns),
-                   COALESCE(MAX(risk_score), 0), COALESCE(AVG(risk_score), 0)
+            SELECT 'persistence', COUNT(*), MAX(timestamp_ns)
             FROM persistence_events WHERE timestamp_ns > ?1
             UNION ALL
-            SELECT 'peripherals', COUNT(*), MAX(timestamp_ns),
-                   COALESCE(MAX(risk_score), 0), COALESCE(AVG(risk_score), 0)
+            SELECT 'peripherals', COUNT(*), MAX(timestamp_ns)
             FROM peripheral_events WHERE timestamp_ns > ?1
             UNION ALL
-            SELECT 'observations', COUNT(*), MAX(timestamp_ns),
-                   COALESCE(MAX(risk_score), 0), COALESCE(AVG(risk_score), 0)
+            SELECT 'observations', COUNT(*), MAX(timestamp_ns)
             FROM observation_events WHERE timestamp_ns > ?1
             UNION ALL
-            SELECT '_security_count', COUNT(*), 0, 0, 0
+            SELECT '_security_count', COUNT(*), 0
             FROM security_events WHERE timestamp_ns > ?1
+        """
+
+        # Risk scores from security_events (probes detect threats, not observations).
+        # Query per agent, then map to domains in Python — avoids SQLite CASE+GROUP BY
+        # quirk in WAL read-only connections.
+        _AGENT_TO_DOMAIN = {
+            "macos_process": "process",
+            "macos_realtime_sensor": "process",
+            "macos_network": "network",
+            "network_sentinel": "network",
+            "macos_dns": "dns",
+            "macos_auth": "auth",
+            "macos_unified_log": "auth",
+            "macos_filesystem": "files",
+            "macos_quarantine_guard": "files",
+            "macos_persistence": "persistence",
+            "macos_peripheral": "peripherals",
+            "macos_infostealer_guard": "observations",
+            "macos_provenance": "observations",
+            "macos_internet_activity": "observations",
+            "macos_discovery": "observations",
+        }
+        risk_query = """
+            SELECT collection_agent,
+                   COALESCE(MAX(risk_score), 0),
+                   COALESCE(AVG(risk_score), 0)
+            FROM security_events
+            WHERE timestamp_ns > ?1
+            GROUP BY collection_agent
         """
         result: Dict[str, Any] = {
             "domains": {},
@@ -110,25 +132,42 @@ class PostureMixin:
             "threat_level": "clear",
         }
         max_risk = 0.0
+        # Per-domain risk from security_events (probe detections)
+        domain_risks: Dict[str, Dict] = {}
+
         with self._read_pool.connection() as rdb:
             try:
-                rows = rdb.execute(posture_query, (cutoff_ns,)).fetchall()
+                # 1. Get risk per agent, map to domains in Python
+                risk_rows = rdb.execute(risk_query, (cutoff_ns,)).fetchall()
+                for r in risk_rows:
+                    agent = r[0] or ""
+                    domain = _AGENT_TO_DOMAIN.get(agent, "observations")
+                    agent_max = r[1] or 0.0
+                    agent_avg = r[2] or 0.0
+                    existing = domain_risks.get(domain, {"max_risk": 0.0, "avg_risk": 0.0})
+                    domain_risks[domain] = {
+                        "max_risk": round(max(existing["max_risk"], agent_max), 3),
+                        "avg_risk": round(max(existing["avg_risk"], agent_avg), 3),
+                    }
+
+                # 2. Get volume counts from domain tables
+                rows = rdb.execute(volume_query, (cutoff_ns,)).fetchall()
                 for r in rows:
-                    label, count, latest, domain_max, avg_risk = (
-                        r[0],
-                        r[1] or 0,
-                        r[2] or 0,
-                        r[3] or 0.0,
-                        r[4] or 0.0,
-                    )
+                    label, count, latest = r[0], r[1] or 0, r[2] or 0
                     if label == "_security_count":
                         result["security_detections"] = count
                         continue
+
+                    # Merge risk from security_events with volume from domain table
+                    risk_data = domain_risks.get(label, {})
+                    domain_max = risk_data.get("max_risk", 0.0)
+                    avg_risk = risk_data.get("avg_risk", 0.0)
+
                     result["domains"][label] = {
                         "count": count,
                         "latest_ns": latest,
-                        "max_risk": round(domain_max, 3),
-                        "avg_risk": round(avg_risk, 3),
+                        "max_risk": domain_max,
+                        "avg_risk": avg_risk,
                         "status": self._risk_to_status(domain_max, count),
                     }
                     result["total_events"] += count
