@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  AMOSKYS MDM Configuration Profile
+  ==================================
+
+  Deploy via Jamf Pro, Intune, Kandji, or Mosyle to pre-approve
+  AMOSKYS agent permissions (TCC, Full Disk Access, notifications).
+
+  Without this profile, macOS will prompt the user for each permission
+  or silently deny access to protected directories.
+
+  Usage:
+    1. Upload to your MDM solution
+    2. Assign to target devices/groups
+    3. Deploy the AMOSKYS .pkg installer
+
+  The profile grants:
+    - Full Disk Access (read-only: /Users/*/Library/, Keychains, etc.)
+    - System Extensions approval
+    - Notifications
+-->
+<plist version="1.0">
+<dict>
+    <!-- Profile metadata -->
+    <key>PayloadDisplayName</key>
+    <string>AMOSKYS Security Agent</string>
+    <key>PayloadIdentifier</key>
+    <string>com.amoskys.mdm-profile</string>
+    <key>PayloadOrganization</key>
+    <string>AMOSKYS Security</string>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>A4D8F5E1-2B3C-4D5E-6F7A-8B9C0D1E2F3A</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+    <key>PayloadScope</key>
+    <string>System</string>
+    <key>PayloadDescription</key>
+    <string>Grants AMOSKYS security agent permissions for endpoint monitoring. Enables Full Disk Access for file integrity monitoring, process visibility, and threat detection.</string>
+
+    <key>PayloadContent</key>
+    <array>
+        <!-- TCC / Privacy Preferences Policy Control -->
+        <dict>
+            <key>PayloadType</key>
+            <string>com.apple.TCC.configuration-profile-policy</string>
+            <key>PayloadDisplayName</key>
+            <string>AMOSKYS Privacy Permissions</string>
+            <key>PayloadIdentifier</key>
+            <string>com.amoskys.tcc</string>
+            <key>PayloadUUID</key>
+            <string>B5E9F6A2-3C4D-5E6F-7A8B-9C0D1E2F3A4B</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+
+            <key>Services</key>
+            <dict>
+                <!-- Full Disk Access — required for FIM, persistence, keychain monitoring -->
+                <key>SystemPolicyAllFiles</key>
+                <array>
+                    <dict>
+                        <key>Identifier</key>
+                        <string>/Library/Amoskys/venv/bin/python3</string>
+                        <key>IdentifierType</key>
+                        <string>path</string>
+                        <key>Allowed</key>
+                        <true/>
+                        <key>Comment</key>
+                        <string>AMOSKYS agent — file integrity and persistence monitoring</string>
+                    </dict>
+                </array>
+
+                <!-- Accessibility — required for process monitoring -->
+                <key>Accessibility</key>
+                <array>
+                    <dict>
+                        <key>Identifier</key>
+                        <string>/Library/Amoskys/venv/bin/python3</string>
+                        <key>IdentifierType</key>
+                        <string>path</string>
+                        <key>Allowed</key>
+                        <true/>
+                        <key>Comment</key>
+                        <string>AMOSKYS agent — process tree visibility</string>
+                    </dict>
+                </array>
+            </dict>
+        </dict>
+
+        <!-- Notifications -->
+        <dict>
+            <key>PayloadType</key>
+            <string>com.apple.notificationsettings</string>
+            <key>PayloadDisplayName</key>
+            <string>AMOSKYS Notifications</string>
+            <key>PayloadIdentifier</key>
+            <string>com.amoskys.notifications</string>
+            <key>PayloadUUID</key>
+            <string>C6F0A7B3-4D5E-6F7A-8B9C-0D1E2F3A4B5C</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+
+            <key>NotificationSettings</key>
+            <array>
+                <dict>
+                    <key>BundleIdentifier</key>
+                    <string>com.amoskys.agent</string>
+                    <key>NotificationsEnabled</key>
+                    <true/>
+                    <key>AlertType</key>
+                    <integer>2</integer>
+                    <key>ShowInNotificationCenter</key>
+                    <true/>
+                    <key>ShowInLockScreen</key>
+                    <true/>
+                    <key>SoundsEnabled</key>
+                    <true/>
+                    <key>BadgesEnabled</key>
+                    <true/>
+                </dict>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>
