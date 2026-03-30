@@ -498,47 +498,33 @@ def main() -> int:
 
                                 store.insert_security_event(event_data)
 
-                                # Feed fusion engine
+                                # Feed fusion engine — use from_protobuf() which
+                                # promotes SecurityEvent into typed audit/process/flow
+                                # views that fusion rules can match against
                                 if fusion:
-                                    from datetime import datetime
-
                                     from amoskys.intel.models import TelemetryEventView
 
                                     try:
+                                        view = TelemetryEventView.from_protobuf(
+                                            ev, dt.device_id
+                                        )
                                         _probe_nm = attrs.get(
                                             "probe_name",
                                             ev.source_component or se.event_category,
                                         )
-                                        _probe_w = (
+                                        view.probe_name = _probe_nm
+                                        view.collection_agent = (
+                                            ev.source_component or ""
+                                        )
+                                        view.probe_precision = (
                                             probe_cal.get_weight(_probe_nm)
                                             if probe_cal
                                             else 1.0
                                         )
-                                        fusion.add_event(
-                                            TelemetryEventView(
-                                                event_id=ev.event_id,
-                                                event_type=ev.event_type,
-                                                device_id=dt.device_id,
-                                                severity=ev.severity or "MEDIUM",
-                                                timestamp=datetime.now(),
-                                                probe_name=_probe_nm,
-                                                collection_agent=ev.source_component
-                                                or "",
-                                                probe_precision=_probe_w,
-                                                security_event={
-                                                    "event_category": se.event_category,
-                                                    "event_action": se.event_category,
-                                                    "risk_score": se.risk_score,
-                                                    "mitre_techniques": list(
-                                                        se.mitre_techniques
-                                                    ),
-                                                },
-                                                attributes=dict(ev.attributes),
-                                            )
-                                        )
+                                        fusion.add_event(view)
                                     except Exception as e:
                                         logger.warning(
-                                            "Failed to insert security event: %s", e
+                                            "Failed to feed fusion: %s", e
                                         )
 
                             elif ev.event_type == "OBSERVATION":

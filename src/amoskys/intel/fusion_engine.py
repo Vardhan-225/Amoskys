@@ -257,6 +257,14 @@ class FusionEngine:
         except Exception as e:
             logger.error(f"Failed to ingest from {telemetry_db_path}: {e}")
 
+    def get_active_devices(self) -> list:
+        """Return device IDs that have events in their buffer."""
+        return [
+            device_id
+            for device_id, state in self.device_state.items()
+            if state.get("events")
+        ]
+
     def add_event(self, event: TelemetryEventView):
         """Add event to device buffer and trim old events
 
