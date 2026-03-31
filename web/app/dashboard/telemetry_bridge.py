@@ -36,6 +36,20 @@ _CACHE_DB_PATH = _DATA_DIR / "fleet_cache.db"
 _OPS_SERVER = os.getenv("AMOSKYS_OPS_SERVER", "").rstrip("/")
 
 
+def _auto_start_fleet_sync():
+    """Start fleet sync at import time if ops server is configured."""
+    global _sync_started
+    if _OPS_SERVER and not _sync_started:
+        _sync_started = True
+        _start_fleet_sync()
+        logger.info("Fleet sync auto-started for %s", _OPS_SERVER)
+
+
+# Auto-start on import (runs when dashboard blueprint loads)
+import threading as _t
+_t.Timer(5.0, _auto_start_fleet_sync).start()
+
+
 def get_telemetry_store() -> Optional["TelemetryStore"]:
     """Get or create a TelemetryStore instance.
 
