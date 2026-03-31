@@ -2,20 +2,19 @@
 {% block title %}AMOSKYS — Device{% endblock %}
 {% block content %}
 <div class="dd">
-    <!-- Device sub-navigation (back arrow merged into tab bar) -->
+    <!-- Device sub-navigation -->
     <div class="dd-subnav" id="dd-subnav">
         <a href="/dashboard/" class="dd-subnav-link dd-subnav-back">&larr; Devices</a>
         <div class="dd-subnav-sep"></div>
         <a href="#" class="dd-subnav-link active" data-tab="overview">Overview</a>
-        <a href="/dashboard/cortex" class="dd-subnav-link">Cortex</a>
-        <a href="/dashboard/observatory" class="dd-subnav-link">Observatory</a>
-        <a href="/dashboard/intelligence" class="dd-subnav-link">Intelligence</a>
-        <a href="/dashboard/threats" class="dd-subnav-link">Threats</a>
-        <a href="/dashboard/igris" class="dd-subnav-link">IGRIS</a>
-        <a href="/dashboard/guardian" class="dd-subnav-link">C2</a>
+        <a href="#" class="dd-subnav-link" data-tab="agents">Agents</a>
+        <a href="#" class="dd-subnav-link" data-tab="threats">Threats</a>
+        <a href="#" class="dd-subnav-link" data-tab="network">Network</a>
+        <a href="#" class="dd-subnav-link" data-tab="processes">Processes</a>
+        <a href="#" class="dd-subnav-link" data-tab="events">All Events</a>
     </div>
 
-    <!-- Overview (main device telemetry) -->
+    <!-- Tab content -->
     <div id="dd-root"><div class="dd-loading"><div class="neural-loading"></div></div></div>
 </div>
 
@@ -150,6 +149,19 @@
 (function() {
     var deviceId = '{{ device_id }}';
     var root = document.getElementById('dd-root');
+    var currentTab = 'overview';
+    var telemetryData = null;
+
+    // Tab switching
+    document.querySelectorAll('.dd-subnav-link[data-tab]').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentTab = link.dataset.tab;
+            document.querySelectorAll('.dd-subnav-link[data-tab]').forEach(function(l) { l.classList.remove('active'); });
+            link.classList.add('active');
+            if (telemetryData) renderTab(telemetryData);
+        });
+    });
 
     load();
     setInterval(load, 15000);
@@ -159,16 +171,28 @@
             var resp = await fetch('/dashboard/api/command-center/device/' + deviceId + '/telemetry');
             var data = await resp.json();
             if (!data.device) { root.innerHTML = '<p style="color:#ff5555;padding:40px;">Device not found</p>'; return; }
-            // Show device name in header
             var ctxEl = document.getElementById('hdr-device-ctx');
             if (ctxEl) ctxEl.textContent = data.device.hostname || deviceId;
-            render(data);
+            telemetryData = data;
+            renderTab(data);
         } catch(e) {
             root.innerHTML = '<p style="color:#ff5555;padding:40px;">Error: ' + e.message + '</p>';
         }
     }
 
-    function render(d) {
+    function renderTab(d) {
+        switch(currentTab) {
+            case 'overview': renderOverview(d); break;
+            case 'agents': renderAgents(d); break;
+            case 'threats': renderThreats(d); break;
+            case 'network': renderNetwork(d); break;
+            case 'processes': renderProcesses(d); break;
+            case 'events': renderAllEvents(d); break;
+            default: renderOverview(d);
+        }
+    }
+
+    function renderOverview(d) {
         var dev = d.device;
         var p = d.posture;
         var s = d.summary;
@@ -317,6 +341,167 @@
         html += '</div>';
 
         root.innerHTML = html;
+    }
+
+    // ═══ AGENTS TAB ═══
+    function renderAgents(d) {
+        var html = deviceHeader(d);
+        html += '<div class="dd-sec"><div class="dd-sec-t">Active Security Agents (' + (d.agents||[]).length + ')</div>';
+        if (d.agents && d.agents.length > 0) {
+            for (var i = 0; i < d.agents.length; i++) {
+                var a = d.agents[i];
+                html += '<div class="dd-agent-row" style="padding:10px 0;">'
+                    + '<div class="dd-agent-dot"></div>'
+                    + '<span class="dd-agent-name" style="font-size:0.9em;">' + esc(a.name) + '</span>'
+                    + '<span class="dd-agent-cnt" style="font-size:0.85em;">' + a.event_count + ' events</span>'
+                    + '</div>';
+            }
+        } else { html += '<div class="dd-empty">No agent data available</div>'; }
+        html += '</div>';
+
+        // MITRE coverage
+        html += '<div class="dd-sec"><div class="dd-sec-t">MITRE ATT&CK Coverage</div>';
+        if (d.mitre_techniques && d.mitre_techniques.length > 0) {
+            var maxM = d.mitre_techniques[0].count;
+            for (var i = 0; i < d.mitre_techniques.length; i++) {
+                var m = d.mitre_techniques[i];
+                var pct = Math.max(4, (m.count / maxM) * 100);
+                html += '<div class="dd-bar-row"><span class="dd-bar-label" style="font-family:monospace;color:#00d9ff;">' + esc(m.technique) + '</span>'
+                    + '<div class="dd-bar-bg"><div class="dd-bar-fill" style="width:' + pct + '%;background:linear-gradient(90deg,#00d9ff44,#00d9ff);"></div></div>'
+                    + '<span class="dd-bar-count">' + m.count + '</span></div>';
+            }
+        } else { html += '<div class="dd-empty">No MITRE hits</div>'; }
+        html += '</div>';
+        root.innerHTML = html;
+    }
+
+    // ═══ THREATS TAB ═══
+    function renderThreats(d) {
+        var html = deviceHeader(d);
+        // Filter to high/critical only
+        var threats = (d.recent_events || []).filter(function(e) { return (e.risk_score || 0) >= 0.6; });
+        html += '<div class="dd-sec"><div class="dd-sec-t">High & Critical Threats (' + threats.length + ')</div>';
+        if (threats.length > 0) {
+            html += eventsTable(threats);
+        } else {
+            html += '<div class="dd-empty" style="padding:40px;"><div style="font-size:2em;margin-bottom:10px;">&#x2705;</div>No high-risk threats detected in the last 24 hours</div>';
+        }
+        html += '</div>';
+
+        // Categories sorted by risk
+        var cats = (d.categories || []).slice().sort(function(a,b) { return (b.max_risk||0) - (a.max_risk||0); });
+        html += '<div class="dd-sec"><div class="dd-sec-t">Categories by Risk</div>';
+        if (cats.length > 0) {
+            for (var i = 0; i < cats.length; i++) {
+                var c = cats[i];
+                var clr = c.avg_risk >= 0.7 ? '#ff3366' : c.avg_risk >= 0.4 ? '#f0ad4e' : '#00d9ff';
+                html += '<div class="dd-bar-row"><span class="dd-bar-label">' + esc(c.category) + '</span>'
+                    + '<div class="dd-bar-bg"><div class="dd-bar-fill" style="width:' + Math.max(4,(c.count/(cats[0].count||1))*100) + '%;background:' + clr + ';"></div></div>'
+                    + '<span class="dd-bar-count" style="color:' + clr + ';">' + c.count + '</span></div>';
+            }
+        }
+        html += '</div>';
+        root.innerHTML = html;
+    }
+
+    // ═══ NETWORK TAB ═══
+    function renderNetwork(d) {
+        var html = deviceHeader(d);
+
+        // Connections
+        html += '<div class="dd-sec"><div class="dd-sec-t">Network Connections (' + (d.connections||[]).length + ')</div>';
+        if (d.connections && d.connections.length > 0) {
+            html += '<div class="dd-ev-row dd-ev-hdr" style="grid-template-columns:150px 60px 100px 1fr 80px 80px;"><span>Destination</span><span>Port</span><span>Process</span><span>Location</span><span>Sent</span><span>Received</span></div>';
+            for (var i = 0; i < d.connections.length; i++) {
+                var cn = d.connections[i];
+                html += '<div class="dd-ev-row" style="grid-template-columns:150px 60px 100px 1fr 80px 80px;">'
+                    + '<span style="font-family:monospace;color:#c8d6e5;">' + esc(cn.dst_ip) + '</span>'
+                    + '<span style="color:#6b7a99;">' + (cn.dst_port||'') + '</span>'
+                    + '<span style="color:#8899bb;">' + esc(cn.process||'') + '</span>'
+                    + '<span style="color:#6b7a99;">' + esc(cn.country||'') + ' ' + esc(cn.asn||'') + '</span>'
+                    + '<span style="color:#f0ad4e;">' + fmtBytes(cn.bytes_tx) + '</span>'
+                    + '<span style="color:#00d9ff;">' + fmtBytes(cn.bytes_rx) + '</span>'
+                    + '</div>';
+            }
+        } else { html += '<div class="dd-empty">No connection data</div>'; }
+        html += '</div>';
+
+        // DNS
+        html += '<div class="dd-sec"><div class="dd-sec-t">DNS Queries (' + (d.dns||[]).length + ')</div>';
+        if (d.dns && d.dns.length > 0) {
+            var maxDns = d.dns[0].count;
+            for (var i = 0; i < d.dns.length; i++) {
+                var dn = d.dns[i];
+                var pct = Math.max(4, (dn.count / maxDns) * 100);
+                var clr = dn.avg_risk >= 0.5 ? '#ff3366' : dn.avg_risk >= 0.2 ? '#f0ad4e' : '#00d9ff';
+                html += '<div class="dd-bar-row"><span class="dd-bar-label">' + esc(dn.domain) + '</span>'
+                    + '<div class="dd-bar-bg"><div class="dd-bar-fill" style="width:' + pct + '%;background:' + clr + ';"></div></div>'
+                    + '<span class="dd-bar-count">' + dn.count + '</span></div>';
+            }
+        } else { html += '<div class="dd-empty">No DNS data</div>'; }
+        html += '</div>';
+        root.innerHTML = html;
+    }
+
+    // ═══ PROCESSES TAB ═══
+    function renderProcesses(d) {
+        var html = deviceHeader(d);
+        html += '<div class="dd-sec"><div class="dd-sec-t">Top Processes (' + (d.processes||[]).length + ')</div>';
+        if (d.processes && d.processes.length > 0) {
+            html += '<div class="dd-ev-row dd-ev-hdr" style="grid-template-columns:1fr 200px 100px 60px;"><span>Process</span><span>Executable</span><span>User</span><span>Count</span></div>';
+            for (var i = 0; i < d.processes.length; i++) {
+                var pr = d.processes[i];
+                html += '<div class="dd-ev-row" style="grid-template-columns:1fr 200px 100px 60px;">'
+                    + '<span style="font-weight:600;">' + esc(pr.name) + '</span>'
+                    + '<span style="color:#6b7a99;font-size:0.85em;overflow:hidden;text-overflow:ellipsis;">' + esc(pr.exe||'') + '</span>'
+                    + '<span style="color:#8899bb;">' + esc(pr.username||'') + '</span>'
+                    + '<span style="color:#00d9ff;font-weight:700;">' + pr.count + '</span>'
+                    + '</div>';
+            }
+        } else { html += '<div class="dd-empty">No process data</div>'; }
+        html += '</div>';
+        root.innerHTML = html;
+    }
+
+    // ═══ ALL EVENTS TAB ═══
+    function renderAllEvents(d) {
+        var html = deviceHeader(d);
+        var events = d.recent_events || [];
+        html += '<div class="dd-sec"><div class="dd-sec-t">All Security Events (' + events.length + ')</div>';
+        if (events.length > 0) {
+            html += eventsTable(events);
+        } else { html += '<div class="dd-empty">No events</div>'; }
+        html += '</div>';
+        root.innerHTML = html;
+    }
+
+    // ═══ SHARED HELPERS ═══
+
+    function deviceHeader(d) {
+        var dev = d.device;
+        var p = d.posture;
+        var sc = dev.status === 'online' ? 'online' : 'offline';
+        var pc = p.level === 'safe' ? '#00ff88' : p.level === 'guarded' ? '#f0ad4e' : '#ff3366';
+        return '<div class="dd-hdr"><div class="dd-dot ' + sc + '"></div><div><div class="dd-name">' + esc(dev.hostname) + '</div>'
+            + '<div class="dd-tags"><span class="dd-tag">' + esc(dev.os) + ' ' + esc(dev.arch) + '</span>'
+            + '<span class="dd-tag">v' + esc(dev.agent_version) + '</span>'
+            + '<span class="dd-tag" style="color:' + pc + ';">Posture: ' + Math.round(p.score*100) + '</span></div>'
+            + '</div><span class="dd-badge ' + sc + '">' + sc + '</span></div>';
+    }
+
+    function eventsTable(events) {
+        var html = '<div class="dd-ev-row dd-ev-hdr"><span>Time</span><span>Category</span><span>Risk</span><span>Agent</span><span>Detail</span></div>';
+        for (var i = 0; i < events.length; i++) {
+            var e = events[i];
+            var risk = e.risk_score || 0;
+            var rc = risk >= 0.8 ? 'c' : risk >= 0.6 ? 'h' : risk >= 0.3 ? 'm' : 'l';
+            html += '<div class="dd-ev-row"><span class="dd-ev-time">' + (esc(e.timestamp_dt)||'').replace('T',' ').slice(11,19) + '</span>'
+                + '<span class="dd-ev-cat">' + esc(e.event_category) + '</span>'
+                + '<span class="dd-ev-risk dd-risk-' + rc + '">' + risk.toFixed(2) + '</span>'
+                + '<span class="dd-ev-agent">' + esc(e.collection_agent) + '</span>'
+                + '<span class="dd-ev-detail">' + esc(e.process_name || e.description || '') + '</span></div>';
+        }
+        return html;
     }
 
     function card(l, v, c) { return '<div class="dd-card"><div class="dd-card-l">' + l + '</div><div class="dd-card-v" style="color:' + c + ';">' + v + '</div></div>'; }
