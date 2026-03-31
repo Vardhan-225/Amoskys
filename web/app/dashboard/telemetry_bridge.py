@@ -107,19 +107,23 @@ def _start_fleet_sync():
                 _sync_from_ops()
             except Exception as e:
                 logger.warning("Fleet sync error: %s", e)
-            time.sleep(30)  # Sync every 30 seconds
+            time.sleep(60)  # Sync every 60 seconds
 
     t = threading.Thread(target=sync_loop, name="fleet-sync", daemon=True)
     t.start()
 
 
 def _sync_from_ops():
-    """Fetch ALL event tables from ops server and populate local cache DB."""
+    """Fetch event tables from ops server and REPLACE local cache.
+
+    Uses truncate-and-replace strategy to prevent unbounded growth.
+    Each sync replaces the cache with the latest 1000 rows per table.
+    """
     import requests
 
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Fetch bulk export from ops server
+    # Fetch bulk export from ops server (latest 1000 per table)
     try:
         resp = requests.get(
             f"{_OPS_SERVER}/api/v1/bulk-export",
@@ -147,13 +151,26 @@ def _sync_from_ops():
         # Fallback: create minimal tables
         _create_minimal_schema(db)
 
-    # Insert each table's data
+    # Truncate and replace each table (prevents unbounded growth)
     total = 0
     for table_name, rows in bulk.items():
         if not rows:
             continue
+        try:
+            db.execute(f"DELETE FROM {table_name}")
+        except Exception:
+            pass
         inserted = _upsert_rows(db, table_name, rows)
         total += inserted
+
+    # Compact the database periodically
+    try:
+        page_count = db.execute("PRAGMA page_count").fetchone()[0]
+        free_pages = db.execute("PRAGMA freelist_count").fetchone()[0]
+        if free_pages > page_count * 0.3:  # >30% free space
+            db.execute("VACUUM")
+    except Exception:
+        pass
 
     db.commit()
     db.close()

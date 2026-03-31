@@ -215,8 +215,17 @@ def create_app():
 
     socketio = init_socketio(app)
 
+    # Fleet mode: skip heavy local services (EventBus, IGRIS, Mesh)
+    # These only run on devices with local agents, not the presentation server
+    is_fleet_mode = bool(os.environ.get("AMOSKYS_OPS_SERVER"))
+    if is_fleet_mode:
+        logging.info(
+            "Fleet mode active (AMOSKYS_OPS_SERVER=%s) — skipping local agent services",
+            os.environ.get("AMOSKYS_OPS_SERVER", "")[:30],
+        )
+
     # Start coordination bus bridge for cross-process health/alert signals
-    if not is_testing:
+    if not is_testing and not is_fleet_mode:
         try:
             from .control_bus import init_control_bus
 
@@ -226,7 +235,7 @@ def create_app():
             logging.warning("Dashboard coordination bus failed to start: %s", e)
 
     # Start EventBus gRPC server (infrastructure — must be up before agents)
-    if not is_testing:
+    if not is_testing and not is_fleet_mode:
         try:
             import socket
             import subprocess
@@ -262,7 +271,7 @@ def create_app():
             logging.warning("EventBus auto-start failed: %s", e)
 
     # Start Agent Mesh + IGRIS orchestrator (singleton, idempotent)
-    if not is_testing:
+    if not is_testing and not is_fleet_mode:
         try:
             from amoskys.igris.orchestrator import IGRISOrchestrator
             from amoskys.mesh import ActionExecutor, MeshBus, MeshMixin, MeshStore
@@ -292,7 +301,7 @@ def create_app():
             logging.warning("Agent Mesh failed to start: %s", e)
 
     # Start IGRIS supervisory daemon (singleton, idempotent)
-    if not is_testing:
+    if not is_testing and not is_fleet_mode:
         try:
             from amoskys.igris import start_igris
 

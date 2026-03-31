@@ -26,7 +26,10 @@ logger = logging.getLogger(__name__)
 _DEFAULT_DB_PATHS = [
     "/usr/share/GeoIP/GeoLite2-City.mmdb",
     "/var/lib/GeoIP/GeoLite2-City.mmdb",
+    "/var/lib/amoskys/geoip/GeoLite2-City.mmdb",
+    "/Library/Amoskys/data/geoip/GeoLite2-City.mmdb",
     "data/geoip/GeoLite2-City.mmdb",
+    "geoip/GeoLite2-City.mmdb",
 ]
 
 # Private / reserved ranges that should never be geo-looked up

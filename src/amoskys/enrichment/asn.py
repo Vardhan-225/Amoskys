@@ -23,7 +23,10 @@ logger = logging.getLogger(__name__)
 _DEFAULT_DB_PATHS = [
     "/usr/share/GeoIP/GeoLite2-ASN.mmdb",
     "/var/lib/GeoIP/GeoLite2-ASN.mmdb",
+    "/var/lib/amoskys/geoip/GeoLite2-ASN.mmdb",
+    "/Library/Amoskys/data/geoip/GeoLite2-ASN.mmdb",
     "data/geoip/GeoLite2-ASN.mmdb",
+    "geoip/GeoLite2-ASN.mmdb",
 ]
 
 # Well-known hosting / cloud provider ASNs
