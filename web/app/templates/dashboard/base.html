@@ -200,6 +200,20 @@
         .hdr-dropdown-item:hover { background: rgba(0,217,255,0.08); color: var(--text-primary); }
         .hdr-dropdown-item.danger { color: var(--neural-danger); }
         .hdr-dropdown-item.danger:hover { background: rgba(255,51,102,0.1); }
+        .hdr-device-ctx {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            background: rgba(0,217,255,0.08);
+            border: 1px solid rgba(0,217,255,0.15);
+            padding: 3px 10px;
+            border-radius: 4px;
+            margin-right: 8px;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .hdr-device-ctx:empty { display: none; }
         .hdr-dropdown-user { padding: 0.6rem 1rem; font-size: 0.78rem; color: var(--text-muted); border-bottom: 1px solid rgba(255,255,255,0.06); }
         .hdr-dropdown-sep { height: 1px; background: rgba(255,255,255,0.06); margin: 0.3rem 0; }
 
@@ -494,6 +508,9 @@
 
         <!-- Right area -->
         <div class="hdr-right">
+            <!-- Active device indicator (set by JS on device detail pages) -->
+            <span class="hdr-device-ctx" id="hdr-device-ctx"></span>
+
             <!-- User menu -->
             <div style="position:relative;">
                 <button class="hdr-user-btn" id="userMenuBtn" title="Account">

@@ -2,10 +2,10 @@
 {% block title %}AMOSKYS — Device{% endblock %}
 {% block content %}
 <div class="dd">
-    <a href="/dashboard/" class="dd-back">&larr; Devices</a>
-
-    <!-- Device sub-navigation -->
-    <div class="dd-subnav" id="dd-subnav" style="display:none;">
+    <!-- Device sub-navigation (back arrow merged into tab bar) -->
+    <div class="dd-subnav" id="dd-subnav">
+        <a href="/dashboard/" class="dd-subnav-link dd-subnav-back">&larr; Devices</a>
+        <div class="dd-subnav-sep"></div>
         <a href="#" class="dd-subnav-link active" data-tab="overview">Overview</a>
         <a href="/dashboard/cortex" class="dd-subnav-link">Cortex</a>
         <a href="/dashboard/observatory" class="dd-subnav-link">Observatory</a>
@@ -21,20 +21,31 @@
 
 <style>
 .dd { max-width: 1100px; margin: 0 auto; padding: 16px 20px 40px; }
-.dd-back { color: #6b7a99; text-decoration: none; font-size: 0.82em; }
-.dd-back:hover { color: #00d9ff; }
 .dd-loading { text-align: center; padding: 60px; }
 
 /* Sub-navigation */
 .dd-subnav {
     display: flex;
+    align-items: center;
     gap: 0;
     border-bottom: 1px solid #1e2a45;
-    margin: 12px 0 16px;
+    margin: 0 0 16px;
     overflow-x: auto;
 }
+.dd-subnav-back {
+    color: #6b7a99 !important;
+    border-bottom-color: transparent !important;
+}
+.dd-subnav-back:hover { color: #fff !important; }
+.dd-subnav-sep {
+    width: 1px;
+    height: 20px;
+    background: #1e2a45;
+    margin: 0 4px;
+    flex-shrink: 0;
+}
 .dd-subnav-link {
-    padding: 8px 16px;
+    padding: 10px 16px;
     color: #6b7a99;
     text-decoration: none;
     font-size: 0.8em;
@@ -148,7 +159,9 @@
             var resp = await fetch('/dashboard/api/command-center/device/' + deviceId + '/telemetry');
             var data = await resp.json();
             if (!data.device) { root.innerHTML = '<p style="color:#ff5555;padding:40px;">Device not found</p>'; return; }
-            document.getElementById('dd-subnav').style.display = 'flex';
+            // Show device name in header
+            var ctxEl = document.getElementById('hdr-device-ctx');
+            if (ctxEl) ctxEl.textContent = data.device.hostname || deviceId;
             render(data);
         } catch(e) {
             root.innerHTML = '<p style="color:#ff5555;padding:40px;">Error: ' + e.message + '</p>';
