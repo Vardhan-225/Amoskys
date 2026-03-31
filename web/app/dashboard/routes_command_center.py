@@ -94,6 +94,49 @@ def device_detail_page(device_id):
     )
 
 
+# Per-device advanced pages — same templates, scoped to one device
+@dashboard_bp.route("/device/<device_id>/cortex")
+@require_login
+def device_cortex(device_id):
+    user = get_current_user()
+    return render_template("dashboard/cortex.html", user=user, device_id=device_id)
+
+
+@dashboard_bp.route("/device/<device_id>/observatory")
+@require_login
+def device_observatory(device_id):
+    user = get_current_user()
+    return render_template("dashboard/observatory.html", user=user, device_id=device_id)
+
+
+@dashboard_bp.route("/device/<device_id>/intelligence")
+@require_login
+def device_intelligence(device_id):
+    user = get_current_user()
+    return render_template("dashboard/intelligence.html", user=user, device_id=device_id)
+
+
+@dashboard_bp.route("/device/<device_id>/threats")
+@require_login
+def device_threats(device_id):
+    user = get_current_user()
+    return render_template("dashboard/threats.html", user=user, device_id=device_id)
+
+
+@dashboard_bp.route("/device/<device_id>/igris")
+@require_login
+def device_igris(device_id):
+    user = get_current_user()
+    return render_template("dashboard/igris.html", user=user, device_id=device_id)
+
+
+@dashboard_bp.route("/device/<device_id>/guardian")
+@require_login
+def device_guardian(device_id):
+    user = get_current_user()
+    return render_template("dashboard/guardian.html", user=user, device_id=device_id)
+
+
 @dashboard_bp.route("/api/command-center/device/<device_id>/detail")
 @require_login
 def cc_device_detail(device_id):

@@ -548,6 +548,16 @@
         function visInterval(fn, ms) {
             return setInterval(() => { if (!document.hidden) fn(); }, ms);
         }
+
+        /* ── Device context (set when viewing /device/<id>/cortex etc.) ── */
+        {% if device_id is defined and device_id %}
+        window.AMOSKYS_DEVICE_ID = '{{ device_id }}';
+        // Show device name in header
+        document.addEventListener('DOMContentLoaded', function() {
+            var ctx = document.getElementById('hdr-device-ctx');
+            if (ctx && !ctx.textContent) ctx.textContent = '{{ device_id[:12] }}...';
+        });
+        {% endif %}
     </script>
 
     {% if request.args.get('embed') != '1' %}
