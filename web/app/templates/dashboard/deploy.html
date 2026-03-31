@@ -730,15 +730,15 @@
         progressText.textContent = 'Generating your personalized installer...';
 
         try {
-            // Step 1: Generate deployment token (for agent registration)
-            var resp = await fetch('/dashboard/api/agents/deploy/quick', {
+            // Step 1: Create download record (generates token + download ID)
+            var resp = await fetch('/dashboard/api/agents/deploy/download', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({label: detectLabel(), platform: platform}),
             });
 
-            progressFill.style.width = '50%';
-            progressText.textContent = 'Preparing download...';
+            progressFill.style.width = '40%';
+            progressText.textContent = 'Preparing your installer...';
 
             if (!resp.ok) {
                 var err = await resp.json();
@@ -748,19 +748,47 @@
             var data = await resp.json();
             if (data.status !== 'success') throw new Error(data.message || 'Failed');
 
-            // Save the install command for the terminal section
-            if (data.install_command) installCmd = data.install_command;
-            document.getElementById('install-cmd').textContent = installCmd;
+            progressFill.style.width = '60%';
+            progressText.textContent = 'Downloading config...';
+
+            // Step 2: Download .amoskys-config file (tiny, goes to ~/Downloads/)
+            // This file contains the deployment token + ops server URL
+            var configLink = document.createElement('a');
+            configLink.href = '/dashboard/api/agents/deploy/config/' + data.download_id + '?download=1';
+            configLink.download = '.amoskys-config';
+            document.body.appendChild(configLink);
+            configLink.click();
+            document.body.removeChild(configLink);
+
+            // Brief delay to ensure config file lands before .pkg
+            await new Promise(function(resolve) { setTimeout(resolve, 500); });
 
             progressFill.style.width = '80%';
-            progressText.textContent = 'Starting download...';
+            progressText.textContent = 'Downloading installer...';
 
-            // Step 2: Download the signed+notarized .pkg via nginx static
-            var a = document.createElement('a');
-            a.href = '/download/AMOSKYS.pkg';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            // Step 3: Download the signed+notarized .pkg via nginx static
+            var pkgLink = document.createElement('a');
+            pkgLink.href = '/download/AMOSKYS.pkg';
+            document.body.appendChild(pkgLink);
+            pkgLink.click();
+            document.body.removeChild(pkgLink);
+
+            // Also update the terminal command
+            if (data.download_id) {
+                // Fetch the quick-deploy command for terminal fallback
+                try {
+                    var cmdResp = await fetch('/dashboard/api/agents/deploy/quick', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({label: detectLabel(), platform: platform}),
+                    });
+                    var cmdData = await cmdResp.json();
+                    if (cmdData.install_command) {
+                        installCmd = cmdData.install_command;
+                        document.getElementById('install-cmd').textContent = installCmd;
+                    }
+                } catch(e) { /* ignore */ }
+            }
 
             progressFill.style.width = '100%';
             progressText.textContent = 'Downloaded!';

@@ -141,25 +141,32 @@ ENVEOF
 fi
 
 # Auto-discover .amoskys-config (token + server from download)
-REAL_USER="${SUDO_USER:-$(stat -f '%Su' /dev/console 2>/dev/null || echo '')}"
-REAL_HOME=$(eval echo "~${REAL_USER}" 2>/dev/null || echo "")
-for config_path in \
-    "${REAL_HOME}/Downloads/.amoskys-config" \
-    "${REAL_HOME}/Downloads/AMOSKYS-Install/.amoskys-config" \
-    "${REAL_HOME}/Desktop/.amoskys-config" \
-    "/tmp/.amoskys-config"; do
-    if [[ -f "$config_path" ]]; then
-        echo "Found config: $config_path"
-        while IFS='=' read -r key value; do
-            case "$key" in
-                token) echo "AMOSKYS_DEPLOY_TOKEN=$value" >> "$CONFIG_DIR/amoskys.env" ;;
-                server) echo "AMOSKYS_SERVER=$value" >> "$CONFIG_DIR/amoskys.env" ;;
-            esac
-        done < "$config_path"
-        rm -f "$config_path"
-        break
+# Only apply if AMOSKYS_SERVER is not already in the config
+if ! grep -q "AMOSKYS_SERVER" "$CONFIG_DIR/amoskys.env" 2>/dev/null; then
+    REAL_USER="${SUDO_USER:-$(stat -f '%Su' /dev/console 2>/dev/null || echo '')}"
+    REAL_HOME=$(eval echo "~${REAL_USER}" 2>/dev/null || echo "")
+    echo "Searching for .amoskys-config (user=$REAL_USER home=$REAL_HOME)..."
+    for config_path in \
+        "${REAL_HOME}/Downloads/.amoskys-config" \
+        "${REAL_HOME}/Downloads/AMOSKYS-Install/.amoskys-config" \
+        "${REAL_HOME}/Desktop/.amoskys-config" \
+        "/tmp/.amoskys-config"; do
+        if [[ -f "$config_path" ]]; then
+            echo "Found config: $config_path"
+            while IFS='=' read -r key value; do
+                case "$key" in
+                    token) echo "AMOSKYS_DEPLOY_TOKEN=$value" >> "$CONFIG_DIR/amoskys.env" ;;
+                    server) echo "AMOSKYS_SERVER=$value" >> "$CONFIG_DIR/amoskys.env" ;;
+                esac
+            done < "$config_path"
+            rm -f "$config_path"
+            echo "Config applied — agent will ship to ops server"
+            break
     fi
-done
+    done
+else
+    echo "AMOSKYS_SERVER already configured — skipping config discovery"
+fi
 
 # Create wrapper scripts
 cat > "$INSTALL_DIR/bin/amoskys-watchdog" << 'WD'

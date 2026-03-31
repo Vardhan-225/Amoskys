@@ -367,14 +367,27 @@ def _cleanup_downloads():
 def deploy_get_config(download_id):
     """Return token + server URL for a download ID.
 
-    Called by the .pkg postinstall script during installation.
-    The download ID is short-lived (10 min) and single-use.
+    Called by the .pkg postinstall script during installation OR
+    downloaded as a .amoskys-config file by the browser.
+    The download ID is short-lived (10 min).
     """
-    record = _pending_downloads.pop(download_id, None)
+    record = _pending_downloads.get(download_id)
     if not record:
         return jsonify({"error": "Download expired or not found"}), 404
 
-    return Response(
-        f"token={record['token']}\nserver={record['server']}\n",
-        mimetype="text/plain",
-    )
+    content = f"token={record['token']}\nserver={record['server']}\n"
+
+    # If requested as a file download (browser), serve as attachment
+    if request.args.get("download") == "1":
+        return Response(
+            content,
+            mimetype="application/octet-stream",
+            headers={
+                "Content-Disposition": "attachment; filename=.amoskys-config",
+            },
+        )
+
+    # Otherwise return as plain text (for postinstall curl)
+    # Consume the record on plain-text fetch (postinstall is the final consumer)
+    _pending_downloads.pop(download_id, None)
+    return Response(content, mimetype="text/plain")
