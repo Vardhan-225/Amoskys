@@ -62,6 +62,11 @@ def get_telemetry_store() -> Optional["TelemetryStore"]:
     # Mode 2: Fleet mode — sync from ops server
     if _OPS_SERVER and not _sync_started:
         _sync_started = True
+        # Run first sync immediately (blocking) so data is available right away
+        try:
+            _sync_from_ops()
+        except Exception:
+            pass
         _start_fleet_sync()
 
     # Try the cache DB (populated by fleet sync)
