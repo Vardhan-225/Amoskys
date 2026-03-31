@@ -95,131 +95,136 @@ def _start_fleet_sync():
 
 
 def _sync_from_ops():
-    """Fetch events from ops server and insert into local cache DB."""
+    """Fetch ALL event tables from ops server and populate local cache DB."""
     import requests
 
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Fetch all events from ops server
+    # Fetch bulk export from ops server
     try:
         resp = requests.get(
-            f"{_OPS_SERVER}/api/v1/events",
-            params={"limit": 500},
-            timeout=10,
+            f"{_OPS_SERVER}/api/v1/bulk-export",
+            params={"limit": 1000},
+            timeout=15,
             verify=False,
         )
         if resp.status_code != 200:
             return
-        data = resp.json()
-        events = data.get("events", [])
+        bulk = resp.json()
     except Exception as e:
         logger.debug("Fleet sync fetch failed: %s", e)
         return
 
-    if not events:
-        return
-
-    # Insert into cache DB using TelemetryStore schema
-    db = sqlite3.connect(str(_CACHE_DB_PATH), timeout=5)
+    # Initialize cache DB with TelemetryStore schema
+    db = sqlite3.connect(str(_CACHE_DB_PATH), timeout=10)
     db.execute("PRAGMA journal_mode=WAL")
+    db.execute("PRAGMA synchronous=NORMAL")
 
-    # Create security_events table if not exists (matches TelemetryStore schema)
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS security_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp_ns INTEGER NOT NULL,
-            timestamp_dt TEXT NOT NULL,
-            device_id TEXT NOT NULL,
-            event_category TEXT,
-            event_action TEXT,
-            event_outcome TEXT,
-            risk_score REAL,
-            confidence REAL,
-            mitre_techniques TEXT,
-            geometric_score REAL,
-            temporal_score REAL,
-            behavioral_score REAL,
-            final_classification TEXT,
-            description TEXT,
-            indicators TEXT,
-            requires_investigation BOOLEAN DEFAULT 0,
-            collection_agent TEXT,
-            agent_version TEXT,
-            enrichment_status TEXT DEFAULT 'raw',
-            threat_intel_match BOOLEAN DEFAULT 0,
-            geo_src_country TEXT,
-            asn_src_org TEXT,
-            event_timestamp_ns INTEGER,
-            event_id TEXT,
-            remote_ip TEXT,
-            remote_port TEXT,
-            process_name TEXT,
-            pid TEXT,
-            exe TEXT,
-            cmdline TEXT,
-            username TEXT,
-            protocol TEXT,
-            domain TEXT,
-            path TEXT,
-            sha256 TEXT,
-            probe_name TEXT,
-            detection_source TEXT,
-            geo_src_city TEXT,
-            geo_src_latitude TEXT,
-            geo_src_longitude TEXT,
-            asn_src_number TEXT,
-            asn_src_network_type TEXT
-        )
-    """)
-    db.execute("CREATE INDEX IF NOT EXISTS idx_se_ts ON security_events(timestamp_ns)")
-    db.execute("CREATE INDEX IF NOT EXISTS idx_se_device ON security_events(device_id)")
-    db.execute("CREATE INDEX IF NOT EXISTS idx_se_risk ON security_events(risk_score)")
-    db.execute("CREATE INDEX IF NOT EXISTS idx_se_category ON security_events(event_category)")
+    # Use the real TelemetryStore schema to create all tables
+    try:
+        from amoskys.storage._ts_schema import SCHEMA
+        db.executescript(SCHEMA)
+    except Exception:
+        # Fallback: create minimal tables
+        _create_minimal_schema(db)
 
-    # Also create rollups table that some dashboard queries need
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS dashboard_rollups (
-            key TEXT PRIMARY KEY,
-            value_json TEXT NOT NULL,
-            updated_at REAL NOT NULL
-        )
-    """)
-
-    # Insert events (skip duplicates by checking source_id)
-    inserted = 0
-    for e in events:
-        ts_ns = e.get("timestamp_ns") or int(time.time() * 1e9)
-        ts_dt = e.get("timestamp_dt") or ""
-        try:
-            db.execute("""
-                INSERT OR IGNORE INTO security_events
-                (timestamp_ns, timestamp_dt, device_id, event_category, event_action,
-                 event_outcome, risk_score, confidence, mitre_techniques,
-                 collection_agent, enrichment_status, threat_intel_match,
-                 geo_src_country, asn_src_org, event_timestamp_ns, event_id,
-                 remote_ip, process_name, pid, username, domain, path, sha256,
-                 probe_name, detection_source, description)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
-                ts_ns, ts_dt, e.get("device_id", ""),
-                e.get("event_category"), e.get("event_action"), e.get("event_outcome"),
-                e.get("risk_score"), e.get("confidence"), e.get("mitre_techniques"),
-                e.get("collection_agent"), e.get("enrichment_status"),
-                e.get("threat_intel_match"), e.get("geo_src_country"),
-                e.get("asn_src_org"), e.get("event_timestamp_ns"), e.get("event_id"),
-                e.get("remote_ip"), e.get("process_name"), e.get("pid"),
-                e.get("username"), e.get("domain"), e.get("path"), e.get("sha256"),
-                e.get("probe_name"), e.get("detection_source"), e.get("description"),
-            ))
-            inserted += 1
-        except Exception:
-            pass
+    # Insert each table's data
+    total = 0
+    for table_name, rows in bulk.items():
+        if not rows:
+            continue
+        inserted = _upsert_rows(db, table_name, rows)
+        total += inserted
 
     db.commit()
     db.close()
 
-    if inserted > 0:
-        # Reset the TelemetryStore singleton so it picks up new data
+    if total > 0:
         global _telemetry_store
         _telemetry_store = None
-        logger.info("Fleet sync: %d events synced from ops server", inserted)
+        logger.info("Fleet sync: %d total rows synced across %d tables", total, len(bulk))
+
+
+def _upsert_rows(db: sqlite3.Connection, table: str, rows: list) -> int:
+    """Insert rows into a table, skipping duplicates."""
+    if not rows:
+        return 0
+
+    # Get existing columns in the table
+    try:
+        cursor = db.execute(f"PRAGMA table_info({table})")
+        existing_cols = {r[1] for r in cursor.fetchall()}
+    except Exception:
+        return 0
+
+    if not existing_cols:
+        return 0
+
+    inserted = 0
+    for row in rows:
+        # Filter to columns that exist, skip 'id' (auto-increment)
+        cols = [k for k in row.keys() if k in existing_cols and k != "id"]
+        if not cols:
+            continue
+        vals = [row[k] for k in cols]
+        placeholders = ",".join(["?"] * len(cols))
+        col_names = ",".join(cols)
+        try:
+            db.execute(f"INSERT OR IGNORE INTO {table} ({col_names}) VALUES ({placeholders})", vals)
+            inserted += 1
+        except Exception:
+            pass
+
+    return inserted
+
+
+def _create_minimal_schema(db: sqlite3.Connection):
+    """Create minimal tables if TelemetryStore schema import fails."""
+    tables = {
+        "security_events": """
+            CREATE TABLE IF NOT EXISTS security_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ns INTEGER, timestamp_dt TEXT,
+                device_id TEXT, event_category TEXT, event_action TEXT, event_outcome TEXT,
+                risk_score REAL, confidence REAL, mitre_techniques TEXT,
+                collection_agent TEXT, description TEXT, process_name TEXT, remote_ip TEXT,
+                pid TEXT, username TEXT, domain TEXT, path TEXT, sha256 TEXT,
+                probe_name TEXT, detection_source TEXT, enrichment_status TEXT,
+                geo_src_country TEXT, asn_src_org TEXT, event_timestamp_ns INTEGER, event_id TEXT
+            )""",
+        "process_events": """
+            CREATE TABLE IF NOT EXISTS process_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ns INTEGER, timestamp_dt TEXT,
+                device_id TEXT, pid TEXT, exe TEXT, cmdline TEXT, ppid TEXT,
+                username TEXT, name TEXT, parent_name TEXT, status TEXT,
+                cpu_percent REAL, memory_percent REAL, collection_agent TEXT
+            )""",
+        "flow_events": """
+            CREATE TABLE IF NOT EXISTS flow_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ns INTEGER, timestamp_dt TEXT,
+                device_id TEXT, src_ip TEXT, dst_ip TEXT, src_port INTEGER, dst_port INTEGER,
+                protocol TEXT, bytes_tx INTEGER, bytes_rx INTEGER, pid TEXT,
+                process_name TEXT, geo_dst_country TEXT, asn_dst_org TEXT,
+                threat_intel_match BOOLEAN, collection_agent TEXT
+            )""",
+        "dns_events": """
+            CREATE TABLE IF NOT EXISTS dns_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ns INTEGER, timestamp_dt TEXT,
+                device_id TEXT, domain TEXT, record_type TEXT, response_code TEXT,
+                risk_score REAL, process_name TEXT, collection_agent TEXT
+            )""",
+        "persistence_events": """
+            CREATE TABLE IF NOT EXISTS persistence_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ns INTEGER, timestamp_dt TEXT,
+                device_id TEXT, mechanism TEXT, path TEXT, change_type TEXT,
+                label TEXT, sha256 TEXT, risk_score REAL, collection_agent TEXT
+            )""",
+        "dashboard_rollups": """
+            CREATE TABLE IF NOT EXISTS dashboard_rollups (
+                key TEXT PRIMARY KEY, value_json TEXT NOT NULL, updated_at REAL NOT NULL
+            )""",
+    }
+    for sql in tables.values():
+        try:
+            db.execute(sql)
+        except Exception:
+            pass

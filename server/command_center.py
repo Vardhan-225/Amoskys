@@ -1132,6 +1132,37 @@ def dashboard():
 
 # ── Health ─────────────────────────────────────────────────────────
 
+@app.route("/api/v1/bulk-export", methods=["GET"])
+def bulk_export():
+    """Export all event tables for fleet sync.
+
+    Used by the presentation server to populate its local cache DB
+    so existing dashboard pages (Cortex, Observatory, etc.) work.
+    """
+    db = get_db()
+    limit = min(request.args.get("limit", 500, type=int), 2000)
+    device_id = request.args.get("device_id")
+
+    result = {}
+
+    for table in ["security_events", "process_events", "flow_events", "dns_events", "persistence_events"]:
+        try:
+            query = f"SELECT * FROM {table}"
+            params = []
+            if device_id:
+                query += " WHERE device_id = ?"
+                params.append(device_id)
+            query += " ORDER BY id DESC LIMIT ?"
+            params.append(limit)
+
+            rows = db.execute(query, params).fetchall()
+            result[table] = [dict(r) for r in rows]
+        except Exception:
+            result[table] = []
+
+    return jsonify(result)
+
+
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "version": "0.9.1-beta"})
