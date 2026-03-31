@@ -34,7 +34,7 @@
                 </span>
                 <span class="deploy-btn-text">
                     <span class="deploy-btn-main" id="btn-download-text">Download for macOS</span>
-                    <span class="deploy-btn-sub">37 MB — Double-click to install. That's it.</span>
+                    <span class="deploy-btn-sub">37 MB — Open the folder, double-click to install.</span>
                 </span>
             </button>
 
@@ -48,7 +48,7 @@
             <div class="deploy-post-download" id="deploy-post-download" style="display:none;">
                 <div class="deploy-copied">
                     <span class="deploy-copied-check">&#x2713;</span>
-                    Downloaded! Open <strong>AMOSKYS.pkg</strong> from Downloads and follow the installer.
+                    Downloaded! Open the <strong>AMOSKYS-Install</strong> folder in Downloads, then double-click <strong>AMOSKYS.pkg</strong>.
                 </div>
             </div>
 
@@ -730,65 +730,35 @@
         progressText.textContent = 'Generating your personalized installer...';
 
         try {
-            // Step 1: Create download record (generates token + download ID)
+            // One request: generates token + returns .zip with .pkg + config
             var resp = await fetch('/dashboard/api/agents/deploy/download', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({label: detectLabel(), platform: platform}),
             });
 
-            progressFill.style.width = '40%';
+            progressFill.style.width = '60%';
             progressText.textContent = 'Preparing your installer...';
 
             if (!resp.ok) {
-                var err = await resp.json();
-                throw new Error(err.message || 'Download failed');
+                var errText = await resp.text();
+                try { var err = JSON.parse(errText); throw new Error(err.message); }
+                catch(e) { if (e.message) throw e; throw new Error('Download failed'); }
             }
-
-            var data = await resp.json();
-            if (data.status !== 'success') throw new Error(data.message || 'Failed');
-
-            progressFill.style.width = '60%';
-            progressText.textContent = 'Downloading config...';
-
-            // Step 2: Download .amoskys-config file (tiny, goes to ~/Downloads/)
-            // This file contains the deployment token + ops server URL
-            var configLink = document.createElement('a');
-            configLink.href = '/dashboard/api/agents/deploy/config/' + data.download_id + '?download=1';
-            configLink.download = '.amoskys-config';
-            document.body.appendChild(configLink);
-            configLink.click();
-            document.body.removeChild(configLink);
-
-            // Brief delay to ensure config file lands before .pkg
-            await new Promise(function(resolve) { setTimeout(resolve, 500); });
 
             progressFill.style.width = '80%';
-            progressText.textContent = 'Downloading installer...';
+            progressText.textContent = 'Downloading...';
 
-            // Step 3: Download the signed+notarized .pkg via nginx static
-            var pkgLink = document.createElement('a');
-            pkgLink.href = '/download/AMOSKYS.pkg';
-            document.body.appendChild(pkgLink);
-            pkgLink.click();
-            document.body.removeChild(pkgLink);
-
-            // Also update the terminal command
-            if (data.download_id) {
-                // Fetch the quick-deploy command for terminal fallback
-                try {
-                    var cmdResp = await fetch('/dashboard/api/agents/deploy/quick', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({label: detectLabel(), platform: platform}),
-                    });
-                    var cmdData = await cmdResp.json();
-                    if (cmdData.install_command) {
-                        installCmd = cmdData.install_command;
-                        document.getElementById('install-cmd').textContent = installCmd;
-                    }
-                } catch(e) { /* ignore */ }
-            }
+            // Download the .zip (contains signed .pkg + .amoskys-config)
+            var blob = await resp.blob();
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'AMOSKYS-Install.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
 
             progressFill.style.width = '100%';
             progressText.textContent = 'Downloaded!';

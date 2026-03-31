@@ -296,18 +296,18 @@ def serve_install_script():
 @require_login
 @require_rate_limit(max_requests=5, window_seconds=60)
 def deploy_download_pkg():
-    """Download the signed AMOSKYS.pkg directly.
+    """Download a .zip containing signed .pkg + personalized config.
 
-    Creates a short-lived download record with the user's deployment token.
-    The .pkg postinstall script fetches the config via the download ID.
+    Creates a .zip on the fly with:
+      - AMOSKYS.pkg (signed + notarized, Gatekeeper-trusted)
+      - .amoskys-config (deployment token + ops server URL)
 
-    Flow:
-      1. User clicks Download → this endpoint creates token + download record
-      2. Returns download_id to the frontend
-      3. Frontend redirects to /deploy/pkg/<download_id> to download the .pkg
-      4. postinstall calls /deploy/config/<download_id> to get token + server
+    macOS auto-extracts the .zip. User double-clicks the .pkg.
+    postinstall finds .amoskys-config in the same folder. Done.
     """
-    import secrets as _secrets
+    import io
+    import zipfile
+    from pathlib import Path
 
     from amoskys.agents.distribution import AgentDistributionService
     from amoskys.db.web_db import get_web_session_context
@@ -316,6 +316,22 @@ def deploy_download_pkg():
     data = request.get_json(silent=True) or {}
     label = data.get("label", "My Mac")
     platform = data.get("platform", "macos")
+
+    # Find the signed .pkg
+    pkg_candidates = [
+        Path("/var/www/amoskys-static/AMOSKYS.pkg"),
+        Path("/opt/amoskys/dist/AMOSKYS-0.9.1-beta.pkg"),
+        Path(__file__).parent.parent.parent.parent / "dist" / "AMOSKYS-0.9.1-beta-signed.pkg",
+        Path(__file__).parent.parent.parent.parent / "dist" / "AMOSKYS-0.9.1-beta.pkg",
+    ]
+    pkg_path = None
+    for p in pkg_candidates:
+        if p.exists():
+            pkg_path = p
+            break
+
+    if not pkg_path:
+        return jsonify({"status": "error", "message": "Installer package not found"}), 500
 
     # Generate deployment token
     try:
@@ -332,22 +348,26 @@ def deploy_download_pkg():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-    # Create a short-lived download ID (maps to token + server URL)
-    download_id = _secrets.token_urlsafe(16)
-    _pending_downloads[download_id] = {
-        "token": token,
-        "server": OPS_SERVER_URL,
-        "created": time.time(),
-    }
+    # Build .amoskys-config
+    config_content = f"token={token}\nserver={OPS_SERVER_URL}\n"
 
-    # Clean up expired downloads (older than 10 minutes)
-    _cleanup_downloads()
+    # Create .zip: signed .pkg + config
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_STORED) as zf:
+        zf.write(pkg_path, "AMOSKYS-Install/AMOSKYS.pkg")
+        zf.writestr("AMOSKYS-Install/.amoskys-config", config_content)
 
-    return jsonify({
-        "status": "success",
-        "download_id": download_id,
-        "download_url": f"/deploy/pkg/{download_id}",
-    })
+    zip_buffer.seek(0)
+    zip_bytes = zip_buffer.getvalue()
+
+    return Response(
+        zip_bytes,
+        mimetype="application/zip",
+        headers={
+            "Content-Disposition": "attachment; filename=AMOSKYS-Install.zip",
+            "Content-Length": str(len(zip_bytes)),
+        },
+    )
 
 
 # In-memory store for pending downloads (short-lived, <10 min)
