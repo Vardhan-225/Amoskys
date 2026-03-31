@@ -3,7 +3,26 @@
 {% block content %}
 <div class="dd">
     <a href="/dashboard/" class="dd-back">&larr; Devices</a>
-    <div id="dd-root"><div class="dd-loading"><div class="neural-loading"></div></div></div>
+
+    <!-- Device sub-navigation -->
+    <div class="dd-subnav" id="dd-subnav" style="display:none;">
+        <a href="#overview" class="dd-subnav-link active" data-tab="overview">Overview</a>
+        <a href="#cortex" class="dd-subnav-link" data-tab="cortex">Cortex</a>
+        <a href="#observatory" class="dd-subnav-link" data-tab="observatory">Observatory</a>
+        <a href="#intelligence" class="dd-subnav-link" data-tab="intelligence">Intelligence</a>
+        <a href="#threats" class="dd-subnav-link" data-tab="threats">Threats</a>
+        <a href="#igris" class="dd-subnav-link" data-tab="igris">IGRIS</a>
+    </div>
+
+    <!-- Overview (main device telemetry) -->
+    <div id="dd-tab-overview">
+        <div id="dd-root"><div class="dd-loading"><div class="neural-loading"></div></div></div>
+    </div>
+
+    <!-- Embedded advanced pages (loaded via iframe on click) -->
+    <div id="dd-tab-embedded" style="display:none;">
+        <iframe id="dd-iframe" class="dd-iframe" title="Advanced view"></iframe>
+    </div>
 </div>
 
 <style>
@@ -11,6 +30,40 @@
 .dd-back { color: #6b7a99; text-decoration: none; font-size: 0.82em; }
 .dd-back:hover { color: #00d9ff; }
 .dd-loading { text-align: center; padding: 60px; }
+
+/* Sub-navigation */
+.dd-subnav {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid #1e2a45;
+    margin: 12px 0 16px;
+    overflow-x: auto;
+}
+.dd-subnav-link {
+    padding: 8px 16px;
+    color: #6b7a99;
+    text-decoration: none;
+    font-size: 0.8em;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+.dd-subnav-link:hover { color: #c8d6e5; }
+.dd-subnav-link.active {
+    color: #00d9ff;
+    border-bottom-color: #00d9ff;
+}
+
+/* Iframe for advanced pages */
+.dd-iframe {
+    width: 100%;
+    height: calc(100vh - 140px);
+    border: none;
+    background: var(--bg-primary);
+    border-radius: 8px;
+}
 
 /* Header */
 .dd-hdr { display: flex; align-items: center; gap: 14px; margin: 16px 0; }
@@ -101,6 +154,34 @@
     var deviceId = '{{ device_id }}';
     var root = document.getElementById('dd-root');
 
+    // Advanced page routes (loaded in iframe with embed=1)
+    var ADV_ROUTES = {
+        cortex: '/dashboard/cortex?embed=1',
+        observatory: '/dashboard/observatory?embed=1',
+        intelligence: '/dashboard/intelligence?embed=1',
+        threats: '/dashboard/threats?embed=1',
+        igris: '/dashboard/igris?embed=1',
+    };
+
+    // Sub-nav tab switching
+    document.querySelectorAll('.dd-subnav-link').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            var tab = link.dataset.tab;
+            document.querySelectorAll('.dd-subnav-link').forEach(function(l) { l.classList.remove('active'); });
+            link.classList.add('active');
+
+            if (tab === 'overview') {
+                document.getElementById('dd-tab-overview').style.display = 'block';
+                document.getElementById('dd-tab-embedded').style.display = 'none';
+            } else if (ADV_ROUTES[tab]) {
+                document.getElementById('dd-tab-overview').style.display = 'none';
+                document.getElementById('dd-tab-embedded').style.display = 'block';
+                document.getElementById('dd-iframe').src = ADV_ROUTES[tab];
+            }
+        });
+    });
+
     load();
     setInterval(load, 15000);
 
@@ -109,6 +190,7 @@
             var resp = await fetch('/dashboard/api/command-center/device/' + deviceId + '/telemetry');
             var data = await resp.json();
             if (!data.device) { root.innerHTML = '<p style="color:#ff5555;padding:40px;">Device not found</p>'; return; }
+            document.getElementById('dd-subnav').style.display = 'flex';
             render(data);
         } catch(e) {
             root.innerHTML = '<p style="color:#ff5555;padding:40px;">Error: ' + e.message + '</p>';
