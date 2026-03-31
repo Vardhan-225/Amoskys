@@ -1,7 +1,11 @@
 """Command Center routes — multi-device fleet management.
 
-Provides the Command Center page and API endpoints that query the
-fleet database (server/fleet.db or remote Command Center server).
+Provides the Command Center page and API endpoints that proxy
+to the operations server (ops.amoskys.com) for fleet data.
+
+Architecture:
+    Browser → amoskys.com (this) → ops server (fleet.db)
+    The presentation server never touches telemetry data directly.
 """
 
 import json
@@ -11,6 +15,8 @@ import sqlite3
 import time
 from pathlib import Path
 
+import requests as http_client
+
 from flask import jsonify, render_template, request
 
 from ..middleware import get_current_user, require_login
@@ -18,36 +24,46 @@ from . import dashboard_bp
 
 logger = logging.getLogger("web.dashboard.command_center")
 
-# ── Fleet DB access ────────────────────────────────────────────────
+# ── Ops Server connection ──────────────────────────────────────────
 
-# The fleet DB can be:
-#   1. Local file (when running Command Center on the same machine)
-#   2. Remote API (when Command Center is on a separate server)
-# For now, support local file. Remote API can be added later.
+OPS_SERVER_URL = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip("/")
+OPS_TIMEOUT = (5, 15)  # (connect, read) seconds
 
-_FLEET_DB_PATH = os.getenv(
-    "CC_DB_PATH",
-    os.path.join(os.getenv("AMOSKYS_DATA", "data"), "fleet.db"),
-)
 
-# Also check server/fleet.db as fallback
-_FLEET_DB_CANDIDATES = [
-    _FLEET_DB_PATH,
-    "server/fleet.db",
-    "data/fleet.db",
-]
+def _ops_get(path: str, params: dict | None = None) -> dict | None:
+    """Fetch data from the ops server API."""
+    try:
+        resp = http_client.get(
+            f"{OPS_SERVER_URL}{path}",
+            params=params,
+            timeout=OPS_TIMEOUT,
+            verify=False,  # Self-signed cert on ops server
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        logger.warning("Ops server %s returned %d", path, resp.status_code)
+    except http_client.ConnectionError:
+        logger.debug("Ops server unreachable: %s", OPS_SERVER_URL)
+    except Exception as e:
+        logger.warning("Ops server error: %s", e)
+    return None
 
 
 def _get_fleet_db() -> sqlite3.Connection | None:
-    """Get a read-only connection to the fleet database."""
-    for path in _FLEET_DB_CANDIDATES:
-        if Path(path).exists():
+    """Fallback: try local fleet.db if ops server is unreachable."""
+    candidates = [
+        os.getenv("CC_DB_PATH", ""),
+        "server/fleet.db",
+        "data/fleet.db",
+    ]
+    for path in candidates:
+        if path and Path(path).exists():
             try:
                 db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5.0)
                 db.row_factory = sqlite3.Row
                 return db
-            except Exception as e:
-                logger.debug("Cannot open fleet DB %s: %s", path, e)
+            except Exception:
+                pass
     return None
 
 
@@ -71,12 +87,19 @@ def command_center_page():
 @dashboard_bp.route("/api/command-center/status")
 @require_login
 def cc_fleet_status():
-    """Fleet-wide posture summary for Command Center."""
+    """Fleet-wide posture summary — proxied from ops server."""
+    # Try ops server first
+    data = _ops_get("/api/v1/fleet/status")
+    if data is not None:
+        data["available"] = True
+        return jsonify(data)
+
+    # Fallback to local fleet.db
     db = _get_fleet_db()
     if db is None:
         return jsonify({
             "available": False,
-            "message": "Fleet database not found. Start the Command Center server or set AMOSKYS_SERVER on agents to begin shipping telemetry.",
+            "message": "Operations server unreachable. Agents may still be shipping — check back in a moment.",
         })
 
     try:
@@ -208,10 +231,18 @@ def cc_fleet_status():
 @dashboard_bp.route("/api/command-center/device/<device_id>/events")
 @require_login
 def cc_device_events(device_id):
-    """Recent security events for a specific device."""
+    """Recent security events for a specific device — proxied from ops."""
+    # Try ops server
+    limit = request.args.get("limit", 50, type=int)
+    min_risk = request.args.get("min_risk", 0.0, type=float)
+    data = _ops_get(f"/api/v1/devices/{device_id}", {"limit": limit})
+    if data and "recent_events" in data:
+        return jsonify({"events": data["recent_events"], "count": len(data["recent_events"])})
+
+    # Fallback to local
     db = _get_fleet_db()
     if db is None:
-        return jsonify({"events": [], "message": "Fleet database not available"})
+        return jsonify({"events": [], "message": "Operations server unreachable"})
 
     try:
         limit = min(request.args.get("limit", 50, type=int), 200)
@@ -274,7 +305,31 @@ def cc_device_events(device_id):
 @dashboard_bp.route("/api/command-center/live-feed")
 @require_login
 def cc_live_feed():
-    """Live event feed — most recent events across all devices."""
+    """Live event feed — proxied from ops server."""
+    limit = request.args.get("limit", 30, type=int)
+    after_id = request.args.get("after", 0, type=int)
+    params = {"limit": limit}
+    if after_id > 0:
+        params["min_risk"] = 0.01
+
+    data = _ops_get("/api/v1/events", params)
+    if data and "events" in data:
+        # Transform to match the feed format
+        events = []
+        for e in data["events"][:limit]:
+            events.append({
+                "id": e.get("id", 0),
+                "timestamp": e.get("timestamp_dt", ""),
+                "category": e.get("event_category", ""),
+                "risk_score": e.get("risk_score", 0),
+                "agent": e.get("collection_agent", ""),
+                "process": e.get("process_name", ""),
+                "hostname": e.get("device_id", "")[:12],
+                "device_id": e.get("device_id", ""),
+            })
+        return jsonify({"events": events})
+
+    # Fallback to local
     db = _get_fleet_db()
     if db is None:
         return jsonify({"events": []})

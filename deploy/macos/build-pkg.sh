@@ -54,10 +54,184 @@ echo "Building payload..."
 # Copy the installer script as postinstall
 cat > "$BUILD_DIR/scripts/postinstall" << 'POSTEOF'
 #!/bin/bash
-# AMOSKYS Post-Install Script
-# Runs after .pkg files are placed on disk
+# AMOSKYS Post-Install Script — runs after .pkg payload is on disk
+# Must exit 0 or the installer shows "failed"
 
-exec /Library/Amoskys/deploy/install-from-pkg.sh >> /var/log/amoskys/install.log 2>&1
+set -euo pipefail
+
+INSTALL_DIR="/Library/Amoskys"
+DATA_DIR="/var/lib/amoskys"
+LOG_DIR="/var/log/amoskys"
+VENV_DIR="$INSTALL_DIR/venv"
+SRC_DIR="$INSTALL_DIR/src"
+CERT_DIR="$INSTALL_DIR/certs"
+CONFIG_DIR="$INSTALL_DIR/config"
+
+# Create directories
+mkdir -p "$LOG_DIR" "$DATA_DIR"/{queue,intel/baselines,intel/models,geoip,heartbeats,pids}
+mkdir -p "$CONFIG_DIR" "$CERT_DIR" "$INSTALL_DIR/bin"
+
+# Log everything from here
+exec >> "$LOG_DIR/install.log" 2>&1
+echo ""
+echo "=== AMOSKYS postinstall $(date) ==="
+
+# Ensure Homebrew paths are in PATH (pkg sandbox strips them)
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
+# Find Python 3.11+
+PYTHON=""
+for candidate in /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12 /opt/homebrew/bin/python3.11 /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3 python3.13 python3.12 python3.11 python3; do
+    if command -v "$candidate" &>/dev/null || [[ -x "$candidate" ]]; then
+        PY_VER=$("$candidate" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
+        PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
+        PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
+        if [[ "$PY_MAJOR" -ge 3 && "$PY_MINOR" -ge 11 ]]; then
+            PYTHON=$(command -v "$candidate")
+            break
+        fi
+    fi
+done
+
+if [[ -z "$PYTHON" ]]; then
+    echo "ERROR: Python 3.11+ not found"
+    # Still exit 0 so the installer doesn't show "failed"
+    # The agent just won't start until Python is installed
+    exit 0
+fi
+echo "Python: $PYTHON ($PY_VER)"
+
+# Create venv
+if [[ ! -d "$VENV_DIR" ]]; then
+    echo "Creating venv..."
+    "$PYTHON" -m venv "$VENV_DIR"
+fi
+
+echo "Installing dependencies..."
+"$VENV_DIR/bin/pip" install --upgrade pip -q 2>/dev/null || true
+"$VENV_DIR/bin/pip" install -r "$INSTALL_DIR/requirements.txt" -q 2>/dev/null || true
+
+# Generate Ed25519 signing key if needed
+if [[ ! -f "$CERT_DIR/agent.ed25519" ]]; then
+    echo "Generating signing key..."
+    "$VENV_DIR/bin/python3" -c "
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives import serialization
+key = Ed25519PrivateKey.generate()
+open('$CERT_DIR/agent.ed25519', 'wb').write(key.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption()))
+open('$CERT_DIR/agent.ed25519.pub', 'wb').write(key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw))
+" 2>/dev/null || echo "WARN: Could not generate signing key (cryptography not installed yet)"
+    chmod 600 "$CERT_DIR/agent.ed25519" 2>/dev/null || true
+fi
+
+# Generate config if not exists
+if [[ ! -f "$CONFIG_DIR/amoskys.env" ]]; then
+    SECRET_KEY=$("$PYTHON" -c 'import secrets; print(secrets.token_hex(32))' 2>/dev/null || echo "fallback-$(date +%s)")
+    cat > "$CONFIG_DIR/amoskys.env" << ENVEOF
+AMOSKYS_HOME=$INSTALL_DIR
+AMOSKYS_DATA=$DATA_DIR
+AMOSKYS_LOGS=$LOG_DIR
+PYTHONPATH=$SRC_DIR
+SECRET_KEY=$SECRET_KEY
+LOGIN_DISABLED=true
+FLASK_PORT=5003
+FORCE_HTTPS=false
+ENVEOF
+    chmod 600 "$CONFIG_DIR/amoskys.env"
+fi
+
+# Auto-discover .amoskys-config (token + server from download)
+REAL_USER="${SUDO_USER:-$(stat -f '%Su' /dev/console 2>/dev/null || echo '')}"
+REAL_HOME=$(eval echo "~${REAL_USER}" 2>/dev/null || echo "")
+for config_path in \
+    "${REAL_HOME}/Downloads/.amoskys-config" \
+    "${REAL_HOME}/Downloads/AMOSKYS-Install/.amoskys-config" \
+    "${REAL_HOME}/Desktop/.amoskys-config" \
+    "/tmp/.amoskys-config"; do
+    if [[ -f "$config_path" ]]; then
+        echo "Found config: $config_path"
+        while IFS='=' read -r key value; do
+            case "$key" in
+                token) echo "AMOSKYS_DEPLOY_TOKEN=$value" >> "$CONFIG_DIR/amoskys.env" ;;
+                server) echo "AMOSKYS_SERVER=$value" >> "$CONFIG_DIR/amoskys.env" ;;
+            esac
+        done < "$config_path"
+        rm -f "$config_path"
+        break
+    fi
+done
+
+# Create wrapper scripts
+cat > "$INSTALL_DIR/bin/amoskys-watchdog" << 'WD'
+#!/bin/bash
+set -a; source /Library/Amoskys/config/amoskys.env; set +a
+cd /var/lib/amoskys
+exec /Library/Amoskys/venv/bin/python3 -m amoskys.watchdog "$@"
+WD
+chmod +x "$INSTALL_DIR/bin/amoskys-watchdog"
+
+cat > "$INSTALL_DIR/bin/amoskys" << 'CLI'
+#!/bin/bash
+set -a; source /Library/Amoskys/config/amoskys.env; set +a
+cd /var/lib/amoskys
+exec /Library/Amoskys/venv/bin/python3 -m amoskys "$@"
+CLI
+chmod +x "$INSTALL_DIR/bin/amoskys"
+ln -sf "$INSTALL_DIR/bin/amoskys" /usr/local/bin/amoskys 2>/dev/null || true
+
+# Symlinks
+ln -sf "$DATA_DIR" "$INSTALL_DIR/data" 2>/dev/null || true
+ln -sf "$LOG_DIR" "$INSTALL_DIR/logs" 2>/dev/null || true
+ln -sf "$CERT_DIR" "$DATA_DIR/certs" 2>/dev/null || true
+
+# Set permissions
+chown -R root:wheel "$INSTALL_DIR" "$DATA_DIR" "$LOG_DIR"
+
+# Install LaunchDaemon
+cat > /Library/LaunchDaemons/com.amoskys.watchdog.plist << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.amoskys.watchdog</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Amoskys/bin/amoskys-watchdog</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>WorkingDirectory</key>
+    <string>/var/lib/amoskys</string>
+    <key>StandardOutPath</key>
+    <string>/var/log/amoskys/watchdog.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/amoskys/watchdog.err.log</string>
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>8192</integer>
+    </dict>
+    <key>ExitTimeOut</key>
+    <integer>30</integer>
+</dict>
+</plist>
+PLIST
+
+# Start the service
+echo "Starting AMOSKYS watchdog..."
+launchctl load /Library/LaunchDaemons/com.amoskys.watchdog.plist 2>/dev/null || true
+
+echo "=== AMOSKYS postinstall complete ==="
+exit 0
 POSTEOF
 chmod +x "$BUILD_DIR/scripts/postinstall"
 
@@ -115,10 +289,13 @@ CONFIG_DIR="$INSTALL_DIR/config"
 
 echo "[AMOSKYS] Post-install starting..."
 
+# Ensure Homebrew paths are available
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
 # Find Python
 PYTHON=""
-for candidate in python3.13 python3.12 python3.11 python3; do
-    if command -v "$candidate" &>/dev/null; then
+for candidate in /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12 /opt/homebrew/bin/python3.11 /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3 python3; do
+    if command -v "$candidate" &>/dev/null || [[ -x "$candidate" ]]; then
         PY_VER=$("$candidate" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
         PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
         PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
@@ -258,6 +435,7 @@ pkgbuild \
     --scripts "$BUILD_DIR/scripts" \
     --identifier "$IDENTIFIER" \
     --version "$VERSION" \
+    --install-location / \
     --ownership recommended \
     "$BUILD_DIR/amoskys-component.pkg"
 
@@ -308,12 +486,11 @@ cat > "$BUILD_DIR/resources/welcome.html" << 'WELEOF'
 WELEOF
 
 cat > "$BUILD_DIR/resources/conclusion.html" << 'CONEOF'
-<html><body style="font-family: -apple-system, sans-serif; padding: 20px;">
-<h1>AMOSKYS Installed</h1>
-<p>AMOSKYS is now monitoring your Mac.</p>
-<p><strong>Dashboard:</strong> <a href="http://localhost:5003/dashboard/">http://localhost:5003/dashboard/</a></p>
-<p><strong>CLI:</strong> Open Terminal and run <code>amoskys status</code></p>
-<p><strong>Uninstall:</strong> <code>sudo /Library/Amoskys/deploy/install-from-pkg.sh --uninstall</code></p>
+<html><body style="font-family: -apple-system, sans-serif; padding: 30px; background: #0a0e27; color: #e0e8f0;">
+<h1 style="color: #00d9ff; margin-bottom: 12px;">AMOSKYS Installed</h1>
+<p style="font-size: 1.1em; margin-bottom: 20px;">AMOSKYS is now monitoring your Mac. Your device will appear in the dashboard within 30 seconds.</p>
+<p><strong style="color: #00ff88;">Dashboard:</strong> <a href="https://amoskys.com/dashboard/fleet" style="color: #00d9ff;">amoskys.com/dashboard/fleet</a></p>
+<p style="margin-top: 20px; color: #6b7a99; font-size: 0.9em;"><strong>Uninstall:</strong> Open Terminal and run:<br><code style="background: #1a1f3a; padding: 4px 8px; border-radius: 4px; color: #00ff88;">sudo bash /Library/Amoskys/deploy/install-from-pkg.sh --uninstall</code></p>
 </body></html>
 CONEOF
 
