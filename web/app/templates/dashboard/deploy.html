@@ -730,8 +730,8 @@
         progressText.textContent = 'Generating your personalized installer...';
 
         try {
-            // Step 1: Create download record (generates token + download ID)
-            var resp = await fetch('/dashboard/api/agents/deploy/download', {
+            // Step 1: Generate deployment token (for agent registration)
+            var resp = await fetch('/dashboard/api/agents/deploy/quick', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({label: detectLabel(), platform: platform}),
@@ -748,13 +748,16 @@
             var data = await resp.json();
             if (data.status !== 'success') throw new Error(data.message || 'Failed');
 
+            // Save the install command for the terminal section
+            if (data.install_command) installCmd = data.install_command;
+            document.getElementById('install-cmd').textContent = installCmd;
+
             progressFill.style.width = '80%';
             progressText.textContent = 'Starting download...';
 
-            // Step 2: Download the .pkg directly via the download URL
+            // Step 2: Download the signed+notarized .pkg via nginx static
             var a = document.createElement('a');
-            a.href = data.download_url;
-            a.download = 'AMOSKYS.pkg';
+            a.href = '/download/AMOSKYS.pkg';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
