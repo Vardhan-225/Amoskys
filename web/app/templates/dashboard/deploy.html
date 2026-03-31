@@ -9,15 +9,11 @@
     <div class="deploy-hero">
         <div class="deploy-hero-glow"></div>
         <div class="deploy-hero-content">
-            <div class="deploy-shield-icon">
-                <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-                    <path d="M32 4L8 16v16c0 14.4 10.24 27.84 24 32 13.76-4.16 24-17.6 24-32V16L32 4z" fill="url(#shield-grad)" stroke="#00d9ff" stroke-width="1.5"/>
-                    <path d="M28 33l-4-4m0 0l8 8 12-14" stroke="#00ff88" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <defs><linearGradient id="shield-grad" x1="8" y1="4" x2="56" y2="52"><stop stop-color="#0a1628"/><stop offset="1" stop-color="#0d2847"/></linearGradient></defs>
-                </svg>
+            <div class="deploy-hero-logo">
+                <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS" class="deploy-logo-img">
             </div>
             <h1 class="deploy-title">Protect this Mac</h1>
-            <p class="deploy-subtitle">Install the AMOSKYS security agent. It runs silently in the background, monitoring for threats and reporting to your dashboard.</p>
+            <p class="deploy-subtitle">Install the AMOSKYS security organism. 17 neural agents monitor every layer — processes, network, files, authentication — and report threats to your dashboard in real time.</p>
         </div>
     </div>
 
@@ -93,24 +89,32 @@
     <!-- ═══ WHAT GETS INSTALLED ═══ -->
     <div class="deploy-info-grid">
         <div class="deploy-info-card">
-            <div class="deploy-info-icon">&#x1F50D;</div>
-            <h3>17 Security Agents</h3>
-            <p>Process monitoring, network flows, DNS analysis, file integrity, persistence detection, authentication guard, and more.</p>
+            <div class="deploy-info-icon">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="12" stroke="#00d9ff" stroke-width="1.5" opacity="0.3"/><circle cx="16" cy="16" r="4" fill="#00d9ff" opacity="0.8"/><circle cx="16" cy="4" r="2.5" fill="#00ff88"/><circle cx="16" cy="28" r="2.5" fill="#00ff88"/><circle cx="4" cy="16" r="2.5" fill="#00ff88"/><circle cx="28" cy="16" r="2.5" fill="#00ff88"/><line x1="16" y1="6" x2="16" y2="12" stroke="#00d9ff" stroke-width="1" opacity="0.4"/><line x1="16" y1="20" x2="16" y2="26" stroke="#00d9ff" stroke-width="1" opacity="0.4"/><line x1="6" y1="16" x2="12" y2="16" stroke="#00d9ff" stroke-width="1" opacity="0.4"/><line x1="20" y1="16" x2="26" y2="16" stroke="#00d9ff" stroke-width="1" opacity="0.4"/><circle cx="8" cy="8" r="2" fill="#00d9ff" opacity="0.5"/><circle cx="24" cy="8" r="2" fill="#00d9ff" opacity="0.5"/><circle cx="8" cy="24" r="2" fill="#00d9ff" opacity="0.5"/><circle cx="24" cy="24" r="2" fill="#00d9ff" opacity="0.5"/></svg>
+            </div>
+            <h3>17 Neural Agents</h3>
+            <p>Process trees, network flows, DNS queries, file integrity, persistence mechanisms, authentication events, USB peripherals — all monitored in parallel.</p>
         </div>
         <div class="deploy-info-card">
-            <div class="deploy-info-icon">&#x1F6E1;</div>
+            <div class="deploy-info-icon">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><path d="M16 2L4 8v8c0 8.8 5.12 17 12 19.5C22.88 33 28 24.8 28 16V8L16 2z" stroke="#00ff88" stroke-width="1.5" fill="none" opacity="0.6"/><path d="M12 16l3 3 6-7" stroke="#00ff88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
             <h3>56 Detection Rules</h3>
-            <p>Sigma rules covering 53 MITRE ATT&CK techniques across 12 tactics. Behavioral scoring, kill chain tracking.</p>
+            <p>Sigma rules covering 106+ MITRE ATT&CK techniques. Behavioral scoring, kill chain tracking, cross-agent correlation.</p>
         </div>
         <div class="deploy-info-card">
-            <div class="deploy-info-icon">&#x26A1;</div>
+            <div class="deploy-info-icon">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="#00d9ff" stroke-width="1" opacity="0.2"/><path d="M16 6v4M16 22v4M6 16h4M22 16h4" stroke="#00d9ff" stroke-width="1.5" opacity="0.3"/><circle cx="16" cy="16" r="6" stroke="#00d9ff" stroke-width="1.5" opacity="0.5"/><circle cx="16" cy="16" r="2" fill="#00ff88"/></svg>
+            </div>
             <h3>Silent &amp; Lightweight</h3>
-            <p>Runs as a system service. Under 2% CPU, 150MB RAM. No popups, no interruptions. Just protection.</p>
+            <p>System-level service. Under 2% CPU, 150MB RAM. No popups, no interruptions. Invisible to the user, visible to attackers.</p>
         </div>
         <div class="deploy-info-card">
-            <div class="deploy-info-icon">&#x1F310;</div>
-            <h3>Cloud Dashboard</h3>
-            <p>See your device in the Fleet dashboard within 30 seconds. Real-time threat visibility from anywhere.</p>
+            <div class="deploy-info-icon">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="#00d9ff" stroke-width="1" opacity="0.15" stroke-dasharray="3,3"><animateTransform attributeName="transform" type="rotate" from="0 16 16" to="360 16 16" dur="20s" repeatCount="indefinite"/></circle><circle cx="16" cy="8" r="2.5" fill="#00d9ff" opacity="0.6"/><circle cx="8" cy="22" r="2.5" fill="#00ff88" opacity="0.6"/><circle cx="24" cy="22" r="2.5" fill="#00d9ff" opacity="0.6"/><line x1="16" y1="10" x2="10" y2="20" stroke="#00d9ff" stroke-width="1" opacity="0.3"/><line x1="16" y1="10" x2="22" y2="20" stroke="#00d9ff" stroke-width="1" opacity="0.3"/><line x1="10" y1="22" x2="22" y2="22" stroke="#00d9ff" stroke-width="1" opacity="0.3"/></svg>
+            </div>
+            <h3>Fleet Dashboard</h3>
+            <p>Device appears within 30 seconds. Real-time threat visibility, MITRE ATT&CK mapping, cross-device correlation from anywhere.</p>
         </div>
     </div>
 
@@ -200,16 +204,26 @@
 }
 .deploy-hero-glow {
     position: absolute;
-    top: 0;
+    top: -40px;
     left: 50%;
     transform: translateX(-50%);
-    width: 400px;
-    height: 200px;
-    background: radial-gradient(ellipse, rgba(0,217,255,0.08) 0%, transparent 70%);
+    width: 500px;
+    height: 300px;
+    background: radial-gradient(ellipse, rgba(0,217,255,0.1) 0%, rgba(0,255,136,0.03) 40%, transparent 70%);
     pointer-events: none;
 }
 .deploy-hero-content { position: relative; }
-.deploy-shield-icon { margin-bottom: 20px; }
+.deploy-hero-logo { margin-bottom: 20px; }
+.deploy-logo-img {
+    width: 100px;
+    height: 100px;
+    filter: drop-shadow(0 0 20px rgba(0,217,255,0.4)) drop-shadow(0 0 40px rgba(0,217,255,0.15));
+    animation: deploy-logo-breathe 4s ease-in-out infinite;
+}
+@keyframes deploy-logo-breathe {
+    0%, 100% { filter: drop-shadow(0 0 20px rgba(0,217,255,0.4)) drop-shadow(0 0 40px rgba(0,217,255,0.15)); transform: scale(1); }
+    50% { filter: drop-shadow(0 0 30px rgba(0,255,136,0.5)) drop-shadow(0 0 60px rgba(0,217,255,0.25)); transform: scale(1.05); }
+}
 .deploy-title {
     font-size: 2.2em;
     font-weight: 800;
@@ -476,8 +490,11 @@
     padding: 20px;
     transition: border-color 0.2s;
 }
-.deploy-info-card:hover { border-color: #00d9ff33; }
-.deploy-info-icon { font-size: 1.6em; margin-bottom: 8px; }
+.deploy-info-card:hover {
+    border-color: #00d9ff44;
+    box-shadow: 0 0 20px rgba(0,217,255,0.06);
+}
+.deploy-info-icon { margin-bottom: 10px; line-height: 1; }
 .deploy-info-card h3 {
     font-size: 0.95em;
     font-weight: 700;
