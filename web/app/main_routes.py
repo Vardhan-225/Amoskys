@@ -98,6 +98,32 @@ def favicon():
     )
 
 
+@main_bp.route("/deploy/pkg/<download_id>", methods=["GET"])
+def deploy_download_pkg_file(download_id):
+    """Serve the signed AMOSKYS.pkg for a valid download ID.
+
+    The download_id validates this is a legitimate download initiated
+    from the deploy page. The .pkg itself is universal (not personalized).
+    """
+    from pathlib import Path
+
+    # Verify the download_id exists (don't consume it — config endpoint does that)
+    from web.app.dashboard.routes_deploy import _pending_downloads
+    if download_id not in _pending_downloads:
+        return "Download expired or not found", 404
+
+    pkg_candidates = [
+        Path(__file__).parent.parent / "dist" / "AMOSKYS-0.9.1-beta.pkg",
+        Path("/opt/amoskys/dist/AMOSKYS-0.9.1-beta.pkg"),
+    ]
+    for p in pkg_candidates:
+        if p.exists():
+            from flask import send_file
+            return send_file(str(p), as_attachment=True, download_name="AMOSKYS.pkg")
+
+    return "Package not found", 404
+
+
 @main_bp.route("/deploy/install.sh", methods=["GET"])
 def deploy_install_script():
     """Serve AMOSKYS install script (public, no auth).

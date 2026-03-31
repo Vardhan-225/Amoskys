@@ -41,6 +41,7 @@ SILENT=false
 UNINSTALL=false
 DEPLOY_TOKEN=""
 AMOSKYS_SERVER=""
+DOWNLOAD_ID=""
 
 # ── Colors ──
 RED='\033[91m'
@@ -61,10 +62,30 @@ for arg in "$@"; do
         --uninstall) UNINSTALL=true ;;
         --token=*) DEPLOY_TOKEN="${arg#--token=}" ;;
         --server=*) AMOSKYS_SERVER="${arg#--server=}" ;;
+        --download-id=*) DOWNLOAD_ID="${arg#--download-id=}" ;;
     esac
 done
 
-# ── Auto-discover .amoskys-config (from .pkg download) ──
+# ── Fetch config from server via download ID ──
+# When downloaded from amoskys.com, the download_id maps to token + server.
+if [[ -n "$DOWNLOAD_ID" && (-z "$DEPLOY_TOKEN" || -z "$AMOSKYS_SERVER") ]]; then
+    CONFIG_URL="https://amoskys.com/dashboard/api/agents/deploy/config/${DOWNLOAD_ID}"
+    log "Fetching config from server..."
+    CONFIG_RESP=$(curl -fsSL --max-time 10 "$CONFIG_URL" 2>/dev/null || echo "")
+    if [[ -n "$CONFIG_RESP" ]]; then
+        while IFS='=' read -r key value; do
+            case "$key" in
+                token) [[ -z "$DEPLOY_TOKEN" ]] && DEPLOY_TOKEN="$value" ;;
+                server) [[ -z "$AMOSKYS_SERVER" ]] && AMOSKYS_SERVER="$value" ;;
+            esac
+        done <<< "$CONFIG_RESP"
+        log "Config received from server"
+    else
+        warn "Could not fetch config from server (download may have expired)"
+    fi
+fi
+
+# ── Auto-discover .amoskys-config (from .zip download — fallback) ──
 # When downloaded as a .zip, the config file sits next to the .pkg in ~/Downloads.
 # The macOS installer runs postinstall as root, so we check the invoking user's Downloads.
 if [[ -z "$DEPLOY_TOKEN" || -z "$AMOSKYS_SERVER" ]]; then

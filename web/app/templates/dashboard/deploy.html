@@ -52,7 +52,7 @@
             <div class="deploy-post-download" id="deploy-post-download" style="display:none;">
                 <div class="deploy-copied">
                     <span class="deploy-copied-check">&#x2713;</span>
-                    Downloaded! Open <strong>AMOSKYS-Install.zip</strong> in Downloads, then double-click <strong>AMOSKYS.pkg</strong>.
+                    Downloaded! Open <strong>AMOSKYS.pkg</strong> from Downloads and follow the installer.
                 </div>
             </div>
 
@@ -713,32 +713,34 @@
         progressText.textContent = 'Generating your personalized installer...';
 
         try {
+            // Step 1: Create download record (generates token + download ID)
             var resp = await fetch('/dashboard/api/agents/deploy/download', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({label: detectLabel(), platform: platform}),
             });
 
-            progressFill.style.width = '70%';
-            progressText.textContent = 'Packaging...';
+            progressFill.style.width = '50%';
+            progressText.textContent = 'Preparing download...';
 
             if (!resp.ok) {
                 var err = await resp.json();
                 throw new Error(err.message || 'Download failed');
             }
 
-            progressFill.style.width = '90%';
+            var data = await resp.json();
+            if (data.status !== 'success') throw new Error(data.message || 'Failed');
 
-            // Trigger browser download
-            var blob = await resp.blob();
-            var url = URL.createObjectURL(blob);
+            progressFill.style.width = '80%';
+            progressText.textContent = 'Starting download...';
+
+            // Step 2: Download the .pkg directly via the download URL
             var a = document.createElement('a');
-            a.href = url;
-            a.download = 'AMOSKYS-Install.zip';
+            a.href = data.download_url;
+            a.download = 'AMOSKYS.pkg';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
 
             progressFill.style.width = '100%';
             progressText.textContent = 'Downloaded!';
