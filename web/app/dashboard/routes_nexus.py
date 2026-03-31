@@ -27,11 +27,33 @@ FUSION_DB = Path("data/intel/fusion.db")
 MESH_DB = Path("data/mesh_events.db")
 
 
-def _ro_conn(db_path: Path) -> sqlite3.Connection:
-    """Open a read-only SQLite connection."""
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
-    conn.row_factory = sqlite3.Row
-    return conn
+def _ro_conn(db_path: Path) -> sqlite3.Connection | None:
+    """Open a read-only SQLite connection. Returns None if DB doesn't exist."""
+    if not db_path.exists():
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
+        conn.row_factory = sqlite3.Row
+        return conn
+    except Exception:
+        return None
+
+
+def _fleet_telemetry_conn() -> sqlite3.Connection | None:
+    """Get connection to fleet_cache.db or local telemetry.db — whichever exists."""
+    for path in [
+        Path("data/fleet_cache.db"),
+        Path("data/telemetry.db"),
+        TELEMETRY_DB,
+    ]:
+        if path.exists():
+            try:
+                conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+                conn.row_factory = sqlite3.Row
+                return conn
+            except Exception:
+                continue
+    return None
 
 
 # ── Verdict Funnel ──────────────────────────────────────────────────────
@@ -78,7 +100,7 @@ def nexus_verdict_funnel():
         t_base = min(0.5 / probe_conf, 1.0)
         t_susp = min(0.7 / probe_conf, 1.0)
 
-        conn = _ro_conn(TELEMETRY_DB)
+        conn = _fleet_telemetry_conn() or _ro_conn(TELEMETRY_DB)
 
         # Total security events
         total = conn.execute(
@@ -173,6 +195,8 @@ def nexus_probe_calibration():
 
     try:
         conn = _ro_conn(PROBE_CAL_DB)
+        if conn is None:
+            return jsonify({"status": "success", "probes": [], "message": "Probe calibration data not available in fleet mode"})
         rows = conn.execute(
             """
             SELECT probe_name,
@@ -234,6 +258,8 @@ def nexus_soma_stats():
 
     try:
         conn = _ro_conn(SOMA_DB)
+        if conn is None:
+            return jsonify({"status": "success", "soma": {"total_patterns": 0, "mature": 0, "maturity_pct": 0}, "suppressors": [], "message": "SOMA not available in fleet mode"})
 
         stats = conn.execute(
             """
@@ -328,7 +354,7 @@ def nexus_asv_status():
     ]
 
     try:
-        conn = _ro_conn(TELEMETRY_DB)
+        conn = _fleet_telemetry_conn() or _ro_conn(TELEMETRY_DB)
 
         # Get distinct agents that fired security events in the window
         rows = conn.execute(
@@ -407,7 +433,9 @@ def nexus_constellation():
     ]
 
     try:
-        conn = _ro_conn(TELEMETRY_DB)
+        conn = _fleet_telemetry_conn() or _ro_conn(TELEMETRY_DB)
+        if conn is None:
+            return jsonify({"agents": [], "arcs": [], "message": "No telemetry data available"})
 
         # Per-agent: event count in full window
         agent_rows = conn.execute(
@@ -559,6 +587,8 @@ def nexus_constellation():
         probes_by_agent = {}  # agent_id -> [probe_data]
         try:
             pcal_conn = _ro_conn(PROBE_CAL_DB)
+            if pcal_conn is None:
+                raise FileNotFoundError("probe_calibration.db not available")
             probe_rows = pcal_conn.execute(
                 "SELECT probe_name, alpha, beta, total_updates, "
                 "ROUND(alpha/(alpha+beta), 4) as precision "
