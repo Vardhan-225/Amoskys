@@ -6,23 +6,17 @@
 
     <!-- Device sub-navigation -->
     <div class="dd-subnav" id="dd-subnav" style="display:none;">
-        <a href="#overview" class="dd-subnav-link active" data-tab="overview">Overview</a>
-        <a href="#cortex" class="dd-subnav-link" data-tab="cortex">Cortex</a>
-        <a href="#observatory" class="dd-subnav-link" data-tab="observatory">Observatory</a>
-        <a href="#intelligence" class="dd-subnav-link" data-tab="intelligence">Intelligence</a>
-        <a href="#threats" class="dd-subnav-link" data-tab="threats">Threats</a>
-        <a href="#igris" class="dd-subnav-link" data-tab="igris">IGRIS</a>
+        <a href="#" class="dd-subnav-link active" data-tab="overview">Overview</a>
+        <a href="/dashboard/cortex" class="dd-subnav-link">Cortex</a>
+        <a href="/dashboard/observatory" class="dd-subnav-link">Observatory</a>
+        <a href="/dashboard/intelligence" class="dd-subnav-link">Intelligence</a>
+        <a href="/dashboard/threats" class="dd-subnav-link">Threats</a>
+        <a href="/dashboard/igris" class="dd-subnav-link">IGRIS</a>
+        <a href="/dashboard/guardian" class="dd-subnav-link">C2</a>
     </div>
 
     <!-- Overview (main device telemetry) -->
-    <div id="dd-tab-overview">
-        <div id="dd-root"><div class="dd-loading"><div class="neural-loading"></div></div></div>
-    </div>
-
-    <!-- Embedded advanced pages (loaded via iframe on click) -->
-    <div id="dd-tab-embedded" style="display:none;">
-        <iframe id="dd-iframe" class="dd-iframe" title="Advanced view"></iframe>
-    </div>
+    <div id="dd-root"><div class="dd-loading"><div class="neural-loading"></div></div></div>
 </div>
 
 <style>
@@ -56,14 +50,6 @@
     border-bottom-color: #00d9ff;
 }
 
-/* Iframe for advanced pages */
-.dd-iframe {
-    width: 100%;
-    height: calc(100vh - 140px);
-    border: none;
-    background: var(--bg-primary);
-    border-radius: 8px;
-}
 
 /* Header */
 .dd-hdr { display: flex; align-items: center; gap: 14px; margin: 16px 0; }
@@ -153,34 +139,6 @@
 (function() {
     var deviceId = '{{ device_id }}';
     var root = document.getElementById('dd-root');
-
-    // Advanced page routes (loaded in iframe with embed=1)
-    var ADV_ROUTES = {
-        cortex: '/dashboard/cortex?embed=1',
-        observatory: '/dashboard/observatory?embed=1',
-        intelligence: '/dashboard/intelligence?embed=1',
-        threats: '/dashboard/threats?embed=1',
-        igris: '/dashboard/igris?embed=1',
-    };
-
-    // Sub-nav tab switching
-    document.querySelectorAll('.dd-subnav-link').forEach(function(link) {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            var tab = link.dataset.tab;
-            document.querySelectorAll('.dd-subnav-link').forEach(function(l) { l.classList.remove('active'); });
-            link.classList.add('active');
-
-            if (tab === 'overview') {
-                document.getElementById('dd-tab-overview').style.display = 'block';
-                document.getElementById('dd-tab-embedded').style.display = 'none';
-            } else if (ADV_ROUTES[tab]) {
-                document.getElementById('dd-tab-overview').style.display = 'none';
-                document.getElementById('dd-tab-embedded').style.display = 'block';
-                document.getElementById('dd-iframe').src = ADV_ROUTES[tab];
-            }
-        });
-    });
 
     load();
     setInterval(load, 15000);
