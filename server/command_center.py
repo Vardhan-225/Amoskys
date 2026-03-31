@@ -657,6 +657,186 @@ def device_detail(device_id):
     })
 
 
+@app.route("/api/v1/devices/<device_id>/telemetry", methods=["GET"])
+def device_telemetry(device_id):
+    """Full telemetry dashboard data for a single device.
+
+    Returns everything needed to render a Cortex-style view:
+    posture, agents, events by category, processes, network, MITRE, timeline.
+    """
+    db = get_db()
+    now = time.time()
+    day_ago_ns = int((now - 86400) * 1e9)
+
+    device = db.execute(
+        "SELECT * FROM devices WHERE device_id = ?", (device_id,)
+    ).fetchone()
+    if not device:
+        return jsonify({"error": "Device not found"}), 404
+
+    # Security events (last 24h)
+    sec_events = db.execute(
+        """SELECT id, timestamp_dt, event_category, risk_score, confidence,
+                  description, collection_agent, mitre_techniques,
+                  process_name, remote_ip, username, domain, path,
+                  detection_source, probe_name, geo_src_country, asn_src_org
+           FROM security_events WHERE device_id = ? AND timestamp_ns > ?
+           ORDER BY timestamp_ns DESC LIMIT 200""",
+        (device_id, day_ago_ns),
+    ).fetchall()
+
+    # Category breakdown
+    categories = db.execute(
+        """SELECT event_category, COUNT(*) as cnt, AVG(risk_score) as avg_risk,
+                  MAX(risk_score) as max_risk
+           FROM security_events WHERE device_id = ? AND timestamp_ns > ?
+           GROUP BY event_category ORDER BY cnt DESC""",
+        (device_id, day_ago_ns),
+    ).fetchall()
+
+    # Risk distribution
+    critical = sum(1 for e in sec_events if (e["risk_score"] or 0) >= 0.8)
+    high = sum(1 for e in sec_events if 0.6 <= (e["risk_score"] or 0) < 0.8)
+    medium = sum(1 for e in sec_events if 0.3 <= (e["risk_score"] or 0) < 0.6)
+    low = sum(1 for e in sec_events if (e["risk_score"] or 0) < 0.3)
+
+    # Posture: weighted risk score
+    total_events = len(sec_events)
+    if total_events > 0:
+        avg_risk = sum((e["risk_score"] or 0) for e in sec_events) / total_events
+        max_risk = max((e["risk_score"] or 0) for e in sec_events)
+        posture_score = round(1.0 - (avg_risk * 0.6 + max_risk * 0.4), 2)
+        posture = "critical" if posture_score < 0.3 else "at_risk" if posture_score < 0.6 else "guarded" if posture_score < 0.8 else "safe"
+    else:
+        posture_score = 1.0
+        posture = "safe"
+        avg_risk = 0
+        max_risk = 0
+
+    # MITRE techniques
+    technique_counts = {}
+    for e in sec_events:
+        try:
+            raw = e["mitre_techniques"]
+            if raw:
+                parsed = json.loads(raw)
+                if isinstance(parsed, str):
+                    parsed = json.loads(parsed)
+                if isinstance(parsed, list):
+                    for t in parsed:
+                        if isinstance(t, str) and t.startswith("T"):
+                            technique_counts[t] = technique_counts.get(t, 0) + 1
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Active agents (unique collection_agent values)
+    agents = db.execute(
+        """SELECT collection_agent, COUNT(*) as cnt, MAX(timestamp_ns) as last_ts
+           FROM security_events WHERE device_id = ? AND timestamp_ns > ?
+           AND collection_agent IS NOT NULL AND collection_agent != ''
+           GROUP BY collection_agent ORDER BY cnt DESC""",
+        (device_id, day_ago_ns),
+    ).fetchall()
+
+    # Process events (top processes)
+    processes = db.execute(
+        """SELECT name, pid, exe, cmdline, username, COUNT(*) as cnt
+           FROM process_events WHERE device_id = ? AND timestamp_ns > ?
+           AND name IS NOT NULL
+           GROUP BY name ORDER BY cnt DESC LIMIT 20""",
+        (device_id, day_ago_ns),
+    ).fetchall()
+
+    # Network connections (top destinations)
+    connections = db.execute(
+        """SELECT dst_ip, dst_port, protocol, process_name,
+                  COUNT(*) as cnt, SUM(bytes_tx) as total_tx, SUM(bytes_rx) as total_rx,
+                  geo_dst_country, asn_dst_org
+           FROM flow_events WHERE device_id = ? AND timestamp_ns > ?
+           AND dst_ip IS NOT NULL
+           GROUP BY dst_ip, dst_port ORDER BY cnt DESC LIMIT 20""",
+        (device_id, day_ago_ns),
+    ).fetchall()
+
+    # DNS queries (top domains)
+    dns = db.execute(
+        """SELECT domain, COUNT(*) as cnt, AVG(risk_score) as avg_risk
+           FROM dns_events WHERE device_id = ? AND timestamp_ns > ?
+           AND domain IS NOT NULL
+           GROUP BY domain ORDER BY cnt DESC LIMIT 20""",
+        (device_id, day_ago_ns),
+    ).fetchall()
+
+    # Timeline (events grouped by hour)
+    timeline = db.execute(
+        """SELECT substr(timestamp_dt, 1, 13) as hour,
+                  COUNT(*) as cnt,
+                  SUM(CASE WHEN risk_score >= 0.8 THEN 1 ELSE 0 END) as critical,
+                  SUM(CASE WHEN risk_score >= 0.6 AND risk_score < 0.8 THEN 1 ELSE 0 END) as high
+           FROM security_events WHERE device_id = ? AND timestamp_ns > ?
+           GROUP BY hour ORDER BY hour""",
+        (device_id, day_ago_ns),
+    ).fetchall()
+
+    return jsonify({
+        "device": {
+            "device_id": device["device_id"],
+            "hostname": device["hostname"],
+            "os": device["os"],
+            "os_version": device["os_version"],
+            "arch": device["arch"],
+            "agent_version": device["agent_version"],
+            "first_seen": device["first_seen"],
+            "last_seen": device["last_seen"],
+            "status": "online" if device["last_seen"] and device["last_seen"] > now - 300 else "offline",
+        },
+        "posture": {
+            "score": posture_score,
+            "level": posture,
+            "avg_risk": round(avg_risk, 3),
+            "max_risk": round(max_risk, 3),
+        },
+        "summary": {
+            "total_events": total_events,
+            "critical": critical,
+            "high": high,
+            "medium": medium,
+            "low": low,
+        },
+        "categories": [
+            {"category": r[0], "count": r[1], "avg_risk": round(r[2] or 0, 3), "max_risk": round(r[3] or 0, 3)}
+            for r in categories
+        ],
+        "mitre_techniques": sorted(
+            [{"technique": t, "count": c} for t, c in technique_counts.items()],
+            key=lambda x: -x["count"],
+        )[:15],
+        "agents": [
+            {"name": r[0], "event_count": r[1]}
+            for r in agents
+        ],
+        "processes": [
+            {"name": r[0], "pid": r[1], "exe": r[2], "cmdline": r[3], "username": r[4], "count": r[5]}
+            for r in processes
+        ],
+        "connections": [
+            {"dst_ip": r[0], "dst_port": r[1], "protocol": r[2], "process": r[3],
+             "count": r[4], "bytes_tx": r[5] or 0, "bytes_rx": r[6] or 0,
+             "country": r[7], "asn": r[8]}
+            for r in connections
+        ],
+        "dns": [
+            {"domain": r[0], "count": r[1], "avg_risk": round(r[2] or 0, 3)}
+            for r in dns
+        ],
+        "timeline": [
+            {"hour": r[0], "count": r[1], "critical": r[2] or 0, "high": r[3] or 0}
+            for r in timeline
+        ],
+        "recent_events": [dict(e) for e in sec_events[:50]],
+    })
+
+
 @app.route("/api/v1/events", methods=["GET"])
 def query_events():
     """Query security events across all devices.

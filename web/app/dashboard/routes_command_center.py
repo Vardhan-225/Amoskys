@@ -105,6 +105,17 @@ def cc_device_detail(device_id):
     return jsonify({"available": False, "message": "Device not found or ops server unreachable"})
 
 
+@dashboard_bp.route("/api/command-center/device/<device_id>/telemetry")
+@require_login
+def cc_device_telemetry(device_id):
+    """Full Cortex-style telemetry — proxied from ops."""
+    data = _ops_get(f"/api/v1/devices/{device_id}/telemetry")
+    if data:
+        return jsonify(data)
+
+    return jsonify({"error": "Device not found or ops server unreachable"}), 404
+
+
 # ── API Endpoints ──────────────────────────────────────────────────
 
 @dashboard_bp.route("/api/command-center/status")
