@@ -219,6 +219,81 @@ CREATE TABLE IF NOT EXISTS persistence_events (
 );
 CREATE INDEX IF NOT EXISTS idx_pers_device ON persistence_events(device_id);
 
+-- FIM events (from all devices)
+CREATE TABLE IF NOT EXISTS fim_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id INTEGER,
+    device_id TEXT NOT NULL,
+    org_id TEXT,
+    timestamp_ns INTEGER,
+    timestamp_dt TEXT,
+    path TEXT,
+    file_extension TEXT,
+    change_type TEXT,
+    new_hash TEXT,
+    owner_uid INTEGER,
+    is_suid BOOLEAN,
+    mtime TEXT,
+    size INTEGER,
+    risk_score REAL,
+    event_type TEXT,
+    collection_agent TEXT,
+    received_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fim_device ON fim_events(device_id);
+
+-- Audit events (from all devices)
+CREATE TABLE IF NOT EXISTS audit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id INTEGER,
+    device_id TEXT NOT NULL,
+    org_id TEXT,
+    timestamp_ns INTEGER,
+    timestamp_dt TEXT,
+    event_type TEXT,
+    pid TEXT,
+    ppid TEXT,
+    uid TEXT,
+    username TEXT,
+    risk_score REAL,
+    collection_agent TEXT,
+    received_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_device ON audit_events(device_id);
+
+-- Observation events (from all devices)
+CREATE TABLE IF NOT EXISTS observation_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id INTEGER,
+    device_id TEXT NOT NULL,
+    org_id TEXT,
+    event_id TEXT,
+    domain TEXT,
+    event_timestamp_ns INTEGER,
+    raw_attributes_json TEXT,
+    received_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_obs_device ON observation_events(device_id);
+
+-- Peripheral events (from all devices)
+CREATE TABLE IF NOT EXISTS peripheral_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id INTEGER,
+    device_id TEXT NOT NULL,
+    org_id TEXT,
+    timestamp_ns INTEGER,
+    timestamp_dt TEXT,
+    peripheral_device_id TEXT,
+    event_type TEXT,
+    device_name TEXT,
+    device_type TEXT,
+    vendor_id TEXT,
+    risk_score REAL,
+    collection_agent TEXT,
+    received_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_periph_device ON peripheral_events(device_id);
+
 -- Fleet-level incidents (cross-device correlation)
 CREATE TABLE IF NOT EXISTS fleet_incidents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -571,6 +646,27 @@ ALLOWED_TABLES = {
         "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
         "mechanism", "path", "change_type", "label",
         "sha256", "risk_score", "collection_agent", "received_at",
+    },
+    "fim_events": {
+        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
+        "path", "file_extension", "change_type", "new_hash",
+        "owner_uid", "is_suid", "mtime", "size",
+        "risk_score", "event_type", "collection_agent", "received_at",
+    },
+    "audit_events": {
+        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
+        "event_type", "pid", "ppid", "uid", "username",
+        "risk_score", "collection_agent", "received_at",
+    },
+    "observation_events": {
+        "source_id", "device_id", "org_id",
+        "event_id", "domain", "event_timestamp_ns",
+        "raw_attributes_json", "received_at",
+    },
+    "peripheral_events": {
+        "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
+        "peripheral_device_id", "event_type", "device_name",
+        "device_type", "vendor_id", "risk_score", "collection_agent", "received_at",
     },
 }
 
@@ -1145,7 +1241,7 @@ def bulk_export():
 
     result = {}
 
-    for table in ["security_events", "process_events", "flow_events", "dns_events", "persistence_events"]:
+    for table in ["security_events", "process_events", "flow_events", "dns_events", "persistence_events", "audit_events", "observation_events", "fim_events", "peripheral_events"]:
         try:
             query = f"SELECT * FROM {table}"
             params = []

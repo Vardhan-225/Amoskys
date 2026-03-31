@@ -207,6 +207,34 @@ SHIP_TABLES = {
             "sha256", "risk_score", "collection_agent",
         ],
     },
+    "fim_events": {
+        "columns": [
+            "id", "timestamp_ns", "timestamp_dt", "device_id",
+            "path", "file_extension", "change_type", "new_hash",
+            "owner_uid", "is_suid", "mtime", "size",
+            "risk_score", "event_type", "collection_agent",
+        ],
+    },
+    "audit_events": {
+        "columns": [
+            "id", "timestamp_ns", "timestamp_dt", "device_id",
+            "event_type", "pid", "ppid", "uid", "username",
+            "risk_score", "collection_agent",
+        ],
+    },
+    "observation_events": {
+        "columns": [
+            "id", "event_id", "device_id", "domain",
+            "event_timestamp_ns", "raw_attributes_json",
+        ],
+    },
+    "peripheral_events": {
+        "columns": [
+            "id", "timestamp_ns", "timestamp_dt", "device_id",
+            "peripheral_device_id", "event_type", "device_name",
+            "device_type", "vendor_id", "risk_score", "collection_agent",
+        ],
+    },
 }
 
 
