@@ -77,7 +77,13 @@ class ShipperConfig:
             device_id = _generate_device_id()
 
         data_dir = os.getenv("AMOSKYS_DATA", "data")
+        # telemetry.db may be at data_dir/telemetry.db or data_dir/data/telemetry.db
+        # (depends on whether CWD is the data dir or its parent)
         telemetry_db = os.path.join(data_dir, "telemetry.db")
+        if not os.path.exists(telemetry_db):
+            alt = os.path.join(data_dir, "data", "telemetry.db")
+            if os.path.exists(alt):
+                telemetry_db = alt
         cursor_db = os.path.join(data_dir, "shipper_cursor.db")
 
         # Config file for persisting API key after first registration
@@ -218,10 +224,11 @@ class TelemetryShipper:
         self.config = config
         self.cursors = CursorStore(config.cursor_db)
         self._session = requests.Session()
+        self._session.verify = False  # Ops server may use self-signed cert
         self._session.headers.update({
             "Content-Type": "application/json",
             "X-Device-ID": config.device_id,
-            "User-Agent": f"AMOSKYS-Agent/0.9.1",
+            "User-Agent": "AMOSKYS-Agent/0.9.1",
         })
         if config.api_key:
             self._session.headers["Authorization"] = f"Bearer {config.api_key}"
