@@ -82,6 +82,29 @@ def command_center_page():
     )
 
 
+@dashboard_bp.route("/device/<device_id>")
+@require_login
+def device_detail_page(device_id):
+    """Device detail — telemetry view for a single device."""
+    user = get_current_user()
+    return render_template(
+        "dashboard/device-detail.html",
+        user=user,
+        device_id=device_id,
+    )
+
+
+@dashboard_bp.route("/api/command-center/device/<device_id>/detail")
+@require_login
+def cc_device_detail(device_id):
+    """Full device info + recent events — proxied from ops."""
+    data = _ops_get(f"/api/v1/devices/{device_id}")
+    if data:
+        return jsonify({"available": True, **data})
+
+    return jsonify({"available": False, "message": "Device not found or ops server unreachable"})
+
+
 # ── API Endpoints ──────────────────────────────────────────────────
 
 @dashboard_bp.route("/api/command-center/status")

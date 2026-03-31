@@ -1,0 +1,342 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AMOSKYS — Device{% endblock %}
+
+{% block content %}
+<div class="dd-page">
+
+    <!-- Back link -->
+    <a href="/dashboard/" class="dd-back">&larr; All Devices</a>
+
+    <!-- Device Header -->
+    <div class="dd-header" id="dd-header">
+        <div class="dd-loading"><div class="neural-loading"></div></div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="dd-cards" id="dd-cards"></div>
+
+    <!-- Events Table -->
+    <div class="dd-section" id="dd-events-section">
+        <div class="dd-section-header">
+            <h2 class="dd-section-title">Security Events</h2>
+            <div class="dd-filters">
+                <select class="dd-select" id="dd-risk-filter">
+                    <option value="0">All risks</option>
+                    <option value="0.3">Medium+</option>
+                    <option value="0.6">High+</option>
+                    <option value="0.8">Critical</option>
+                </select>
+            </div>
+        </div>
+        <div class="dd-events" id="dd-events">
+            <div class="dd-loading"><div class="neural-loading"></div></div>
+        </div>
+    </div>
+
+</div>
+
+<style>
+.dd-page { max-width: 1000px; margin: 0 auto; padding: 20px; }
+
+.dd-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #6b7a99;
+    text-decoration: none;
+    font-size: 0.85em;
+    margin-bottom: 16px;
+    transition: color 0.15s;
+}
+.dd-back:hover { color: #00d9ff; }
+
+/* Header */
+.dd-header { margin-bottom: 20px; }
+.dd-device-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.dd-status-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.dd-status-dot.online { background: #00ff88; box-shadow: 0 0 10px #00ff8866; }
+.dd-status-dot.offline { background: #555; }
+.dd-device-info { flex: 1; }
+.dd-hostname {
+    font-size: 1.5em;
+    font-weight: 800;
+    color: #fff;
+}
+.dd-meta {
+    display: flex;
+    gap: 16px;
+    margin-top: 4px;
+    font-size: 0.82em;
+    color: #6b7a99;
+}
+.dd-meta-tag {
+    padding: 2px 10px;
+    background: rgba(0,217,255,0.08);
+    border: 1px solid #1e2a45;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #8899bb;
+}
+.dd-status-badge {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.dd-status-badge.online { background: rgba(0,255,136,0.12); color: #00ff88; }
+.dd-status-badge.offline { background: rgba(100,100,100,0.2); color: #666; }
+
+/* Cards */
+.dd-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.dd-card {
+    background: #0f1628;
+    border: 1px solid #1e2a45;
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+.dd-card-label {
+    font-size: 0.68em;
+    color: #6b7a99;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.dd-card-value {
+    font-size: 1.6em;
+    font-weight: 700;
+    margin-top: 2px;
+    line-height: 1.1;
+}
+
+/* Sections */
+.dd-section {
+    background: #0f1628;
+    border: 1px solid #1e2a45;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+.dd-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+.dd-section-title {
+    font-size: 0.85em;
+    color: #00d9ff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Filters */
+.dd-select {
+    background: #0a0e20;
+    color: #8899bb;
+    border: 1px solid #1e2a45;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.8em;
+}
+
+/* Events */
+.dd-event-row {
+    display: grid;
+    grid-template-columns: 130px 1fr 70px 100px 120px 1fr;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #0a0e20;
+    font-size: 0.84em;
+    align-items: center;
+}
+.dd-event-row:last-child { border-bottom: none; }
+.dd-event-row:hover { background: #121a30; margin: 0 -10px; padding-left: 10px; padding-right: 10px; border-radius: 6px; }
+
+.dd-event-time { color: #6b7a99; font-family: 'SF Mono', monospace; font-size: 0.9em; white-space: nowrap; }
+.dd-event-cat { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-event-risk { font-weight: 700; text-align: center; }
+.dd-event-agent { color: #6b7a99; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-event-mitre { display: flex; flex-wrap: wrap; gap: 3px; }
+.dd-event-desc { color: #6b7a99; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.dd-mitre-tag {
+    display: inline-block;
+    background: #1e2235;
+    border: 1px solid #2a3050;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.78em;
+    color: #00d9ff;
+}
+
+.dd-risk-critical { color: #ff3366; }
+.dd-risk-high { color: #f0ad4e; }
+.dd-risk-medium { color: #ffcc44; }
+.dd-risk-low { color: #00ff88; }
+
+.dd-events-header {
+    display: grid;
+    grid-template-columns: 130px 1fr 70px 100px 120px 1fr;
+    gap: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #1e2a45;
+    margin-bottom: 4px;
+}
+.dd-events-header span {
+    font-size: 0.7em;
+    color: #6b7a99;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dd-empty {
+    text-align: center;
+    padding: 40px;
+    color: #6b7a99;
+}
+.dd-loading { text-align: center; padding: 30px; }
+
+@media (max-width: 800px) {
+    .dd-event-row, .dd-events-header {
+        grid-template-columns: 80px 1fr 50px;
+    }
+    .dd-event-agent, .dd-event-mitre, .dd-event-desc { display: none; }
+}
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+(function() {
+    var deviceId = '{{ device_id }}';
+    var minRisk = 0;
+
+    loadDevice();
+    loadEvents();
+
+    document.getElementById('dd-risk-filter').addEventListener('change', function() {
+        minRisk = parseFloat(this.value);
+        loadEvents();
+    });
+
+    async function loadDevice() {
+        try {
+            var resp = await fetch('/dashboard/api/command-center/device/' + deviceId + '/detail');
+            var data = await resp.json();
+
+            if (!data.available || !data.device) {
+                document.getElementById('dd-header').innerHTML = '<p style="color:#ff5555;">Device not found</p>';
+                return;
+            }
+
+            var d = data.device;
+            var statusClass = d.status === 'online' ? 'online' : 'offline';
+
+            document.getElementById('dd-header').innerHTML =
+                '<div class="dd-device-header">'
+                + '<div class="dd-status-dot ' + statusClass + '"></div>'
+                + '<div class="dd-device-info">'
+                + '<div class="dd-hostname">' + esc(d.hostname) + '</div>'
+                + '<div class="dd-meta">'
+                + '<span class="dd-meta-tag">' + esc(d.os || '') + ' ' + esc(d.arch || '') + '</span>'
+                + '<span class="dd-meta-tag">v' + esc(d.agent_version || '') + '</span>'
+                + '</div></div>'
+                + '<span class="dd-status-badge ' + statusClass + '">' + d.status + '</span>'
+                + '</div>';
+
+            // Count events from recent_events
+            var events = data.recent_events || [];
+            var critical = 0, high = 0, total = events.length;
+            for (var i = 0; i < events.length; i++) {
+                var r = events[i].risk_score || 0;
+                if (r >= 0.8) critical++;
+                else if (r >= 0.6) high++;
+            }
+
+            document.getElementById('dd-cards').innerHTML =
+                card('Events', total, 'color:#00d9ff;')
+                + card('Critical', critical, critical > 0 ? 'color:#ff3366;' : 'color:#00ff88;')
+                + card('High', high, high > 0 ? 'color:#f0ad4e;' : 'color:#00ff88;')
+                + card('Status', d.status, statusClass === 'online' ? 'color:#00ff88;' : 'color:#666;');
+
+        } catch(e) {
+            document.getElementById('dd-header').innerHTML = '<p style="color:#ff5555;">Error: ' + e.message + '</p>';
+        }
+    }
+
+    async function loadEvents() {
+        var eventsEl = document.getElementById('dd-events');
+        try {
+            var resp = await fetch('/dashboard/api/command-center/device/' + deviceId + '/events?limit=100&min_risk=' + minRisk);
+            var data = await resp.json();
+            var events = data.events || [];
+
+            if (events.length === 0) {
+                eventsEl.innerHTML = '<div class="dd-empty">No events found' + (minRisk > 0 ? ' at this risk level' : '') + '</div>';
+                return;
+            }
+
+            var html = '<div class="dd-events-header">'
+                + '<span>Time</span><span>Category</span><span>Risk</span><span>Agent</span><span>MITRE</span><span>Details</span>'
+                + '</div>';
+
+            for (var i = 0; i < events.length; i++) {
+                var e = events[i];
+                var risk = e.risk_score || 0;
+                var riskClass = risk >= 0.8 ? 'critical' : risk >= 0.6 ? 'high' : risk >= 0.3 ? 'medium' : 'low';
+                var time = (e.timestamp || '').replace('T', ' ').slice(0, 19);
+                var mitre = '';
+                if (e.mitre && e.mitre.length > 0) {
+                    for (var j = 0; j < e.mitre.length; j++) {
+                        mitre += '<span class="dd-mitre-tag">' + e.mitre[j] + '</span>';
+                    }
+                }
+
+                html += '<div class="dd-event-row">'
+                    + '<span class="dd-event-time">' + esc(time) + '</span>'
+                    + '<span class="dd-event-cat">' + esc(e.category || '') + '</span>'
+                    + '<span class="dd-event-risk dd-risk-' + riskClass + '">' + risk.toFixed(2) + '</span>'
+                    + '<span class="dd-event-agent">' + esc(e.agent || '') + '</span>'
+                    + '<span class="dd-event-mitre">' + (mitre || '-') + '</span>'
+                    + '<span class="dd-event-desc">' + esc(e.process || e.description || '') + '</span>'
+                    + '</div>';
+            }
+
+            eventsEl.innerHTML = html;
+
+        } catch(e) {
+            eventsEl.innerHTML = '<div class="dd-empty" style="color:#ff5555;">Error: ' + e.message + '</div>';
+        }
+    }
+
+    function card(label, value, style) {
+        return '<div class="dd-card"><div class="dd-card-label">' + label + '</div>'
+            + '<div class="dd-card-value" style="' + style + '">' + value + '</div></div>';
+    }
+
+    function esc(s) {
+        if (!s) return '';
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    // Auto-refresh
+    setInterval(function() { loadDevice(); loadEvents(); }, 15000);
+})();
+</script>
+{% endblock %}
