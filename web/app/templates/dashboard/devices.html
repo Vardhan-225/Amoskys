@@ -1,0 +1,290 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AMOSKYS — Devices{% endblock %}
+
+{% block content %}
+<div class="devices-page">
+
+    <!-- Header -->
+    <div class="devices-header">
+        <div>
+            <h1 class="devices-title">Your Devices</h1>
+            <p class="devices-subtitle" id="devices-subtitle">Loading...</p>
+        </div>
+        <a href="/dashboard/deploy" class="devices-add-btn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>
+            Add Device
+        </a>
+    </div>
+
+    <!-- Device List -->
+    <div id="devices-list" class="devices-list">
+        <div class="devices-loading">
+            <div class="neural-loading"></div>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="devices-empty" class="devices-empty" style="display:none;">
+        <div class="devices-empty-icon">
+            <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                <rect x="10" y="15" width="60" height="42" rx="4" stroke="#1e2a45" stroke-width="2"/>
+                <path d="M25 62h30" stroke="#1e2a45" stroke-width="2" stroke-linecap="round"/>
+                <path d="M40 30v12M34 36h12" stroke="#00d9ff" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+            </svg>
+        </div>
+        <h2>No devices yet</h2>
+        <p>Install the AMOSKYS agent on your first device to start monitoring.</p>
+        <a href="/dashboard/deploy" class="devices-empty-btn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 5v4c0 4 2.5 7 6 8 3.5-1 6-4 6-8V5L8 1z" stroke="currentColor" stroke-width="1.4"/><path d="M6 8l2 2 3-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Install on your Mac
+        </a>
+    </div>
+
+</div>
+
+<style>
+.devices-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 30px 20px;
+}
+
+.devices-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+}
+
+.devices-title {
+    font-size: 1.6em;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 4px;
+}
+.devices-subtitle {
+    font-size: 0.85em;
+    color: #6b7a99;
+}
+
+.devices-add-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #00b894, #00d9ff);
+    color: #0a0e27;
+    font-weight: 700;
+    font-size: 0.85em;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+.devices-add-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(0,217,255,0.3);
+}
+
+/* Loading */
+.devices-loading {
+    text-align: center;
+    padding: 60px;
+}
+
+/* Device cards */
+.devices-list { }
+
+.device-card {
+    background: #0f1628;
+    border: 1px solid #1e2a45;
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.device-card:hover {
+    border-color: #00d9ff33;
+    background: #121a30;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+}
+
+.device-status {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.device-status.online {
+    background: #00ff88;
+    box-shadow: 0 0 8px #00ff8866;
+}
+.device-status.offline { background: #555; }
+.device-status.stale { background: #f0ad4e; }
+
+.device-info { flex: 1; min-width: 0; }
+.device-name {
+    font-size: 1em;
+    font-weight: 700;
+    color: #e0e8f0;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.device-meta {
+    font-size: 0.78em;
+    color: #6b7a99;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.device-meta span { white-space: nowrap; }
+
+.device-stats {
+    display: flex;
+    gap: 16px;
+    flex-shrink: 0;
+}
+.device-stat {
+    text-align: center;
+}
+.device-stat-value {
+    font-size: 1.2em;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.device-stat-label {
+    font-size: 0.65em;
+    color: #6b7a99;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.stat-critical { color: #ff3366; }
+.stat-high { color: #f0ad4e; }
+.stat-events { color: #00d9ff; }
+.stat-ok { color: #00ff88; }
+
+.device-arrow {
+    color: #333;
+    font-size: 1.2em;
+    flex-shrink: 0;
+}
+.device-card:hover .device-arrow { color: #00d9ff; }
+
+/* Empty state */
+.devices-empty {
+    text-align: center;
+    padding: 80px 20px;
+}
+.devices-empty-icon { margin-bottom: 20px; opacity: 0.6; }
+.devices-empty h2 {
+    font-size: 1.3em;
+    color: #c8d6e5;
+    margin-bottom: 8px;
+}
+.devices-empty p {
+    color: #6b7a99;
+    margin-bottom: 24px;
+    font-size: 0.95em;
+}
+.devices-empty-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #00b894, #00d9ff);
+    color: #0a0e27;
+    font-weight: 700;
+    font-size: 0.95em;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+.devices-empty-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,217,255,0.3);
+}
+</style>
+
+<script nonce="{{ csp_nonce() }}">
+(function() {
+    async function loadDevices() {
+        try {
+            var resp = await fetch('/dashboard/api/command-center/status');
+            var data = await resp.json();
+
+            var listEl = document.getElementById('devices-list');
+            var emptyEl = document.getElementById('devices-empty');
+            var subtitle = document.getElementById('devices-subtitle');
+
+            if (!data.available || !data.devices || data.devices.length === 0) {
+                listEl.style.display = 'none';
+                emptyEl.style.display = 'block';
+                subtitle.textContent = 'No devices connected';
+                return;
+            }
+
+            var devices = data.devices;
+            var online = devices.filter(function(d) { return d.status === 'online'; }).length;
+            subtitle.textContent = online + ' of ' + devices.length + ' device' + (devices.length !== 1 ? 's' : '') + ' online';
+
+            var html = '';
+            for (var i = 0; i < devices.length; i++) {
+                var d = devices[i];
+                var statusClass = d.status === 'online' ? 'online' : d.status === 'stale' ? 'stale' : 'offline';
+                var risk = d.max_risk || 0;
+                var critCount = d.critical_count || 0;
+                var highCount = d.high_count || 0;
+                var eventCount = d.event_count || 0;
+
+                html += '<div class="device-card" onclick="location.href=\'/dashboard/device/' + esc(d.device_id) + '\'">'
+                    + '<div class="device-status ' + statusClass + '"></div>'
+                    + '<div class="device-info">'
+                    + '<div class="device-name">' + esc(d.hostname) + '</div>'
+                    + '<div class="device-meta">'
+                    + '<span>' + esc(d.os || '') + ' ' + esc(d.arch || '') + '</span>'
+                    + '<span>v' + esc(d.agent_version || '') + '</span>'
+                    + '<span>' + esc(d.status) + '</span>'
+                    + '</div></div>'
+                    + '<div class="device-stats">';
+
+                if (critCount > 0) {
+                    html += '<div class="device-stat"><div class="device-stat-value stat-critical">' + critCount + '</div><div class="device-stat-label">Critical</div></div>';
+                }
+                if (highCount > 0) {
+                    html += '<div class="device-stat"><div class="device-stat-value stat-high">' + highCount + '</div><div class="device-stat-label">High</div></div>';
+                }
+                html += '<div class="device-stat"><div class="device-stat-value stat-events">' + eventCount + '</div><div class="device-stat-label">Events</div></div>';
+
+                html += '</div>'
+                    + '<div class="device-arrow">&#x203A;</div>'
+                    + '</div>';
+            }
+
+            listEl.innerHTML = html;
+
+        } catch(e) {
+            document.getElementById('devices-list').style.display = 'none';
+            document.getElementById('devices-empty').style.display = 'block';
+            document.getElementById('devices-subtitle').textContent = 'Could not connect to server';
+        }
+    }
+
+    function esc(s) {
+        if (!s) return '';
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    loadDevices();
+    setInterval(loadDevices, 15000);
+})();
+</script>
+{% endblock %}

@@ -1,6 +1,6 @@
 """Dashboard page routes — template renders with no business logic."""
 
-from flask import redirect, render_template, url_for
+from flask import redirect, render_template, request, url_for
 
 from ..middleware import get_current_user, require_login
 from . import dashboard_bp
@@ -8,16 +8,16 @@ from . import dashboard_bp
 
 @dashboard_bp.route("/")
 @require_login
-def cortex_home():
-    """AMOSKYS Cortex Dashboard - Main Neural Interface"""
+def dashboard_home():
+    """Smart landing — Devices page (or Deploy if no devices yet)."""
     user = get_current_user()
-    return render_template("dashboard/cortex.html", user=user)
+    return render_template("dashboard/devices.html", user=user)
 
 
 @dashboard_bp.route("/cortex")
 @require_login
 def cortex_dashboard():
-    """AMOSKYS Cortex Dashboard - Command Center"""
+    """AMOSKYS Cortex Dashboard - Advanced View (power users)"""
     user = get_current_user()
     return render_template("dashboard/cortex.html", user=user)
 
@@ -281,3 +281,11 @@ def fleet_consolidated():
     """Fleet — Agent management, deploy, reliability"""
     user = get_current_user()
     return render_template("dashboard/fleet.html", user=user)
+
+
+@dashboard_bp.route("/settings")
+@require_login
+def settings_page():
+    """Settings — account, team, advanced"""
+    user = get_current_user()
+    return render_template("dashboard/settings.html", user=user)

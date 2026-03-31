@@ -1,0 +1,75 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}AMOSKYS — Settings{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+    <h1 class="settings-title">Settings</h1>
+
+    <!-- Account -->
+    <div class="settings-section">
+        <h2 class="settings-section-title">Account</h2>
+        <div class="settings-row">
+            <span class="settings-label">Email</span>
+            <span class="settings-value">{% if user %}{{ user.email }}{% endif %}</span>
+        </div>
+        <div class="settings-row">
+            <span class="settings-label">Name</span>
+            <span class="settings-value">{% if user and user.full_name %}{{ user.full_name }}{% else %}<em style="color:#555;">Not set</em>{% endif %}</span>
+        </div>
+        <div class="settings-row">
+            <span class="settings-label">Role</span>
+            <span class="settings-value">{% if user %}{{ user.role.value|capitalize }}{% endif %}</span>
+        </div>
+    </div>
+
+    <!-- Advanced -->
+    <div class="settings-section">
+        <h2 class="settings-section-title">Advanced Dashboard</h2>
+        <p class="settings-desc">Power tools for deep analysis. These pages are for advanced users and developers.</p>
+        <div class="settings-links">
+            <a href="/dashboard/cortex" class="settings-link">Cortex Overview</a>
+            <a href="/dashboard/observatory" class="settings-link">Observatory</a>
+            <a href="/dashboard/intelligence" class="settings-link">Intelligence</a>
+            <a href="/dashboard/fleet" class="settings-link">Fleet Management</a>
+            <a href="/dashboard/igris" class="settings-link">IGRIS AI Analyst</a>
+            <a href="/dashboard/guardian" class="settings-link">Guardian C2</a>
+        </div>
+    </div>
+</div>
+
+<style>
+.settings-page { max-width: 700px; margin: 0 auto; padding: 30px 20px; }
+.settings-title { font-size: 1.6em; font-weight: 800; color: #fff; margin-bottom: 24px; }
+.settings-section {
+    background: #0f1628;
+    border: 1px solid #1e2a45;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+.settings-section-title { font-size: 0.85em; color: #00d9ff; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; }
+.settings-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #0a0e20;
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-label { font-size: 0.88em; color: #6b7a99; }
+.settings-value { font-size: 0.88em; color: #e0e8f0; }
+.settings-desc { font-size: 0.82em; color: #6b7a99; margin-bottom: 14px; }
+.settings-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.settings-link {
+    padding: 6px 14px;
+    background: rgba(0,217,255,0.06);
+    border: 1px solid #1e2a45;
+    border-radius: 6px;
+    color: #8899bb;
+    font-size: 0.82em;
+    text-decoration: none;
+    transition: all 0.15s;
+}
+.settings-link:hover { border-color: #00d9ff44; color: #00d9ff; }
+</style>
+{% endblock %}
