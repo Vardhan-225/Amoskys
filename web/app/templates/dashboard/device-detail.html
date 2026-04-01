@@ -7,12 +7,12 @@
     <div class="dd-subnav" id="dd-subnav">
         <a href="/dashboard/" class="dd-subnav-link dd-subnav-back">&larr; Devices</a>
         <div class="dd-subnav-sep"></div>
-        <a href="/d/{{ device_id }}/" class="dd-subnav-link {{ 'active' if tab == 'overview' }}">Overview</a>
-        <a href="/d/{{ device_id }}/agents" class="dd-subnav-link {{ 'active' if tab == 'agents' }}">Agents</a>
-        <a href="/d/{{ device_id }}/threats" class="dd-subnav-link {{ 'active' if tab == 'threats' }}">Threats</a>
-        <a href="/d/{{ device_id }}/network" class="dd-subnav-link {{ 'active' if tab == 'network' }}">Network</a>
-        <a href="/d/{{ device_id }}/processes" class="dd-subnav-link {{ 'active' if tab == 'processes' }}">Processes</a>
-        <a href="/d/{{ device_id }}/events" class="dd-subnav-link {{ 'active' if tab == 'events' }}">Events</a>
+        <a href="/dashboard/device/{{ device_id }}" class="dd-subnav-link {{ 'active' if tab == 'overview' }}">Overview</a>
+        <a href="/dashboard/device/{{ device_id }}/agents" class="dd-subnav-link {{ 'active' if tab == 'agents' }}">Agents</a>
+        <a href="/dashboard/device/{{ device_id }}/threats" class="dd-subnav-link {{ 'active' if tab == 'threats' }}">Threats</a>
+        <a href="/dashboard/device/{{ device_id }}/network" class="dd-subnav-link {{ 'active' if tab == 'network' }}">Network</a>
+        <a href="/dashboard/device/{{ device_id }}/processes" class="dd-subnav-link {{ 'active' if tab == 'processes' }}">Processes</a>
+        <a href="/dashboard/device/{{ device_id }}/events" class="dd-subnav-link {{ 'active' if tab == 'events' }}">Events</a>
     </div>
 
     <!-- Tab content -->

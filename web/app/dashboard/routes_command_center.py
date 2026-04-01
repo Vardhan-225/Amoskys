@@ -85,17 +85,20 @@ def command_center_page():
 @dashboard_bp.route("/device/<device_id>")
 @require_login
 def device_detail_page(device_id):
-    """Device detail — redirect to /d/<id>/ for clean URLs."""
-    return redirect(f"/d/{device_id}/")
+    """Device detail — primary device view."""
+    user = get_current_user()
+    return render_template(
+        "dashboard/device-detail.html",
+        user=user,
+        device_id=device_id,
+        active_tab="overview",
+    )
 
 
-# ── Clean device URLs: /d/<device-id>/ ──────────────────────────
-
-@dashboard_bp.route("/d/<device_id>/")
-@dashboard_bp.route("/d/<device_id>/<tab>")
+@dashboard_bp.route("/device/<device_id>/<tab>")
 @require_login
-def device_view(device_id, tab="overview"):
-    """Primary device view — all tabs served from one template."""
+def device_tab_page(device_id, tab="overview"):
+    """Device tab view."""
     user = get_current_user()
     return render_template(
         "dashboard/device-detail.html",

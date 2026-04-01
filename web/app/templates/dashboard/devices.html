@@ -243,7 +243,7 @@
                 var highCount = d.high_count || 0;
                 var eventCount = d.event_count || 0;
 
-                html += '<div class="device-card" data-href="/d/' + encodeURIComponent(d.device_id) + '/">'
+                html += '<div class="device-card" data-href="/dashboard/device/' + encodeURIComponent(d.device_id) + '">'
                     + '<div class="device-status ' + statusClass + '"></div>'
                     + '<div class="device-info">'
                     + '<div class="device-name">' + esc(d.hostname) + '</div>'
