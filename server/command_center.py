@@ -131,6 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_se_device ON security_events(device_id);
 CREATE INDEX IF NOT EXISTS idx_se_ts ON security_events(timestamp_ns);
 CREATE INDEX IF NOT EXISTS idx_se_risk ON security_events(risk_score);
 CREATE INDEX IF NOT EXISTS idx_se_category ON security_events(event_category);
+CREATE INDEX IF NOT EXISTS idx_se_dedup ON security_events(source_id, device_id);
 
 -- Process events (from all devices)
 CREATE TABLE IF NOT EXISTS process_events (
@@ -602,6 +603,15 @@ def receive_telemetry():
             event["received_at"] = now
             source_id = event.pop("id", None)
             event["source_id"] = source_id
+
+            # Dedup: skip if this source_id from this device already stored
+            if source_id is not None:
+                dup = db.execute(
+                    f"SELECT 1 FROM {table} WHERE source_id = ? AND device_id = ? LIMIT 1",
+                    (source_id, device_id),
+                ).fetchone()
+                if dup:
+                    continue
 
             # Build INSERT dynamically from event keys
             cols = [k for k in event.keys() if k in ALLOWED_TABLES[table]]
@@ -1283,9 +1293,96 @@ def health():
 
 # ── Main ───────────────────────────────────────────────────────────
 
+# ── Maintenance ────────────────────────────────────────────────────
+
+def _start_maintenance():
+    """Start background maintenance thread for data hygiene."""
+    import threading
+
+    def maintenance_loop():
+        logger.info("Maintenance thread started")
+        while True:
+            try:
+                _run_maintenance()
+            except Exception as e:
+                logger.warning("Maintenance error: %s", e)
+            time.sleep(300)  # Every 5 minutes
+
+    t = threading.Thread(target=maintenance_loop, name="maintenance", daemon=True)
+    t.start()
+
+
+def _run_maintenance():
+    """Run all maintenance tasks."""
+    db_path = os.getenv("CC_DB_PATH", "server/fleet.db")
+    db = sqlite3.connect(db_path, timeout=10)
+
+    now = time.time()
+
+    # 1. Retention: delete events older than 7 days
+    cutoff_ns = int((now - 7 * 86400) * 1e9)
+    total_deleted = 0
+    for table in ["security_events", "process_events", "flow_events", "dns_events",
+                   "persistence_events", "fim_events", "audit_events",
+                   "observation_events", "peripheral_events"]:
+        try:
+            ts_col = "timestamp_ns" if table != "observation_events" else "event_timestamp_ns"
+            deleted = db.execute(
+                f"DELETE FROM {table} WHERE {ts_col} < ? AND {ts_col} > 0",
+                (cutoff_ns,),
+            ).rowcount
+            total_deleted += deleted
+        except Exception:
+            pass
+
+    # 2. Rate limit bloated tables (persistence, observation)
+    for table, max_rows in [("persistence_events", 50000), ("observation_events", 50000)]:
+        try:
+            count = db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            if count > max_rows:
+                excess = count - max_rows
+                db.execute(
+                    f"DELETE FROM {table} WHERE id IN "
+                    f"(SELECT id FROM {table} ORDER BY id ASC LIMIT ?)",
+                    (excess,),
+                )
+                total_deleted += excess
+        except Exception:
+            pass
+
+    # 3. Mark stale devices offline
+    db.execute(
+        "UPDATE devices SET status = 'offline' WHERE last_seen < ? AND status = 'online'",
+        (now - 300,),
+    )
+
+    db.commit()
+
+    # 4. VACUUM periodically (once per hour, tracked by file timestamp)
+    vacuum_marker = Path(db_path + ".last_vacuum")
+    should_vacuum = True
+    if vacuum_marker.exists():
+        last_vacuum = vacuum_marker.stat().st_mtime
+        should_vacuum = (now - last_vacuum) > 3600  # 1 hour
+
+    if should_vacuum and total_deleted > 100:
+        try:
+            db.execute("VACUUM")
+            vacuum_marker.touch()
+            logger.info("Maintenance: VACUUM complete")
+        except Exception:
+            pass
+
+    db.close()
+
+    if total_deleted > 0:
+        logger.info("Maintenance: cleaned %d old/excess rows", total_deleted)
+
+
 def main():
     """Run the Command Center server."""
     init_db()
+    _start_maintenance()
 
     host = os.getenv("CC_HOST", "0.0.0.0")
     port = int(os.getenv("CC_PORT", "8443"))
