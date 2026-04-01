@@ -3,20 +3,16 @@
 {% block content %}
 <div class="dd">
     <!-- Device sub-navigation -->
+    {% set tab = active_tab|default('overview') %}
     <div class="dd-subnav" id="dd-subnav">
         <a href="/dashboard/" class="dd-subnav-link dd-subnav-back">&larr; Devices</a>
         <div class="dd-subnav-sep"></div>
-        <a href="#" class="dd-subnav-link active" data-tab="overview">Overview</a>
-        <a href="#" class="dd-subnav-link" data-tab="agents">Agents</a>
-        <a href="#" class="dd-subnav-link" data-tab="threats">Threats</a>
-        <a href="#" class="dd-subnav-link" data-tab="network">Network</a>
-        <a href="#" class="dd-subnav-link" data-tab="processes">Processes</a>
-        <a href="#" class="dd-subnav-link" data-tab="events">All Events</a>
-        <div class="dd-subnav-sep"></div>
-        <a href="/dashboard/device/{{ device_id }}/cortex" class="dd-subnav-link">Cortex</a>
-        <a href="/dashboard/device/{{ device_id }}/observatory" class="dd-subnav-link">Observatory</a>
-        <a href="/dashboard/device/{{ device_id }}/intelligence" class="dd-subnav-link">Intelligence</a>
-        <a href="/dashboard/device/{{ device_id }}/igris" class="dd-subnav-link">IGRIS</a>
+        <a href="/d/{{ device_id }}/" class="dd-subnav-link {{ 'active' if tab == 'overview' }}">Overview</a>
+        <a href="/d/{{ device_id }}/agents" class="dd-subnav-link {{ 'active' if tab == 'agents' }}">Agents</a>
+        <a href="/d/{{ device_id }}/threats" class="dd-subnav-link {{ 'active' if tab == 'threats' }}">Threats</a>
+        <a href="/d/{{ device_id }}/network" class="dd-subnav-link {{ 'active' if tab == 'network' }}">Network</a>
+        <a href="/d/{{ device_id }}/processes" class="dd-subnav-link {{ 'active' if tab == 'processes' }}">Processes</a>
+        <a href="/d/{{ device_id }}/events" class="dd-subnav-link {{ 'active' if tab == 'events' }}">Events</a>
     </div>
 
     <!-- Tab content -->
@@ -154,22 +150,11 @@
 (function() {
     var deviceId = '{{ device_id }}';
     var root = document.getElementById('dd-root');
-    var currentTab = 'overview';
+    var currentTab = '{{ active_tab|default("overview") }}';
     var telemetryData = null;
 
-    // Tab switching
-    document.querySelectorAll('.dd-subnav-link[data-tab]').forEach(function(link) {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            currentTab = link.dataset.tab;
-            document.querySelectorAll('.dd-subnav-link[data-tab]').forEach(function(l) { l.classList.remove('active'); });
-            link.classList.add('active');
-            if (telemetryData) renderTab(telemetryData);
-        });
-    });
-
     load();
-    setInterval(load, 15000);
+    setInterval(load, 30000);
 
     async function load() {
         try {
