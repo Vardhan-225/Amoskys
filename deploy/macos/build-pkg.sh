@@ -67,6 +67,12 @@ SRC_DIR="$INSTALL_DIR/src"
 CERT_DIR="$INSTALL_DIR/certs"
 CONFIG_DIR="$INSTALL_DIR/config"
 
+# Detect existing installation (upgrade vs fresh install)
+IS_UPGRADE=false
+if [[ -f "$CONFIG_DIR/amoskys.env" ]]; then
+    IS_UPGRADE=true
+fi
+
 # Create directories
 mkdir -p "$LOG_DIR" "$DATA_DIR"/{queue,intel/baselines,intel/models,geoip,heartbeats,pids}
 mkdir -p "$CONFIG_DIR" "$CERT_DIR" "$INSTALL_DIR/bin"
@@ -74,6 +80,12 @@ mkdir -p "$CONFIG_DIR" "$CERT_DIR" "$INSTALL_DIR/bin"
 # Log everything from here
 exec >> "$LOG_DIR/install.log" 2>&1
 echo ""
+if $IS_UPGRADE; then
+    echo "=== AMOSKYS UPGRADE $(date) ==="
+    echo "Existing installation detected — preserving config, certs, and data"
+else
+    echo "=== AMOSKYS FRESH INSTALL $(date) ==="
+fi
 echo "=== AMOSKYS postinstall $(date) ==="
 
 # Ensure Homebrew paths are in PATH (pkg sandbox strips them)
@@ -111,7 +123,7 @@ echo "Installing dependencies..."
 "$VENV_DIR/bin/pip" install --upgrade pip -q 2>/dev/null || true
 "$VENV_DIR/bin/pip" install -r "$INSTALL_DIR/requirements.txt" -q 2>/dev/null || true
 
-# Generate Ed25519 signing key if needed
+# Generate Ed25519 signing key if needed (skip on upgrade — key already exists)
 if [[ ! -f "$CERT_DIR/agent.ed25519" ]]; then
     echo "Generating signing key..."
     "$VENV_DIR/bin/python3" -c "

@@ -393,38 +393,55 @@ def register_device():
         return jsonify({"error": "device_id required"}), 400
 
     device_id = data["device_id"]
+    hostname = data.get("hostname", "")
     deploy_token = data.get("deploy_token", "")
     db = get_db()
     now = time.time()
 
-    # Check if already registered
+    # Check if already registered — by device_id OR by hostname
+    # This prevents duplicate devices when the same Mac reinstalls
     existing = db.execute(
-        "SELECT api_key, org_id FROM devices WHERE device_id = ?", (device_id,)
+        "SELECT device_id, api_key, org_id FROM devices WHERE device_id = ? OR hostname = ?",
+        (device_id, hostname),
     ).fetchone()
 
     if existing:
+        # Use the ORIGINAL device_id (not the new one) to prevent duplicates
+        original_device_id = existing["device_id"]
+
         # Heartbeat — update device info
         db.execute(
             """UPDATE devices SET
                 hostname = ?, os = ?, os_version = ?, arch = ?,
-                agent_version = ?, last_seen = ?, status = 'online'
+                agent_version = ?, last_seen = ?, status = 'online',
+                device_id = ?
             WHERE device_id = ?""",
             (
-                data.get("hostname"),
+                hostname,
                 data.get("os"),
                 data.get("os_version"),
                 data.get("arch"),
                 data.get("agent_version"),
                 now,
-                device_id,
+                device_id,  # Update to new device_id if it changed
+                original_device_id,
             ),
         )
         db.commit()
-        logger.debug("Heartbeat: %s (%s)", device_id[:8], data.get("hostname"))
+
+        # If device_id changed (reinstall), return the api_key so agent can use it
+        if original_device_id != device_id:
+            logger.info("Device re-registered: %s → %s (%s)", original_device_id[:8], device_id[:8], hostname)
+            return jsonify({
+                "status": "registered",
+                "device_id": device_id,
+                "api_key": existing["api_key"],
+            })
+
+        logger.debug("Heartbeat: %s (%s)", device_id[:8], hostname)
         return jsonify({
             "status": "registered",
             "device_id": device_id,
-            # Don't re-send api_key on heartbeat
         })
 
     # New device — resolve org from deployment token
