@@ -26,7 +26,7 @@ logger = logging.getLogger("web.dashboard.command_center")
 
 # ── Ops Server connection ──────────────────────────────────────────
 
-OPS_SERVER_URL = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip("/")
+OPS_SERVER_URL = os.getenv("AMOSKYS_OPS_SERVER", "").rstrip("/")
 OPS_TIMEOUT = (5, 15)  # (connect, read) seconds
 
 

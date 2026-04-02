@@ -1,4 +1,4 @@
-# filepath: /Users/athanneeru/Downloads/GitHub/Amoskys/src/amoskys/common/exceptions.py
+# AMOSKYS common exceptions
 """
 AMOSKYS Unified Exception Hierarchy
 

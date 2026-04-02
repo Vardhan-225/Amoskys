@@ -106,13 +106,12 @@ def _get_hostname() -> str:
     """Get the best hostname for this device.
 
     Priority (macOS):
-      1. scutil --get ComputerName  → "Akash's MacBook Air"
-      2. scutil --get LocalHostName → "Akashs-MacBook-Air"
-      3. socket.gethostname()       → varies
+      1. scutil --get ComputerName  → user-set device name
+      2. scutil --get LocalHostName → Bonjour hostname
+      3. socket.gethostname()       → system hostname
       4. platform.node()            → fallback
 
-    Avoids socket.getfqdn() which can return reverse DNS garbage
-    like "223.2.168.192.in-addr.arpa".
+    Avoids socket.getfqdn() which can return reverse DNS artifacts.
     """
     if platform.system() == "Darwin":
         import subprocess
