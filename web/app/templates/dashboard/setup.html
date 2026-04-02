@@ -48,59 +48,50 @@
         @keyframes fade-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
         /* ═══ SECTION 2: WHAT IS AMOSKYS ═══ */
-        #s2 { flex-direction: column; padding: 60px 20px; min-height: auto; }
-        .s2-header { text-align: center; margin-bottom: 60px; }
+        #s2 { flex-direction: column; padding: 40px 20px 60px; min-height: 100vh; }
+        .s2-header { text-align: center; margin-bottom: 40px; }
         .s2-title { font-size: 2.2em; font-weight: 800; color: #fff; margin-bottom: 8px; }
         .s2-subtitle { font-size: 1.1em; color: #6b7a99; }
 
-        /* Agent orbit container */
-        .orbit-container { position: relative; width: 700px; height: 700px; margin: 0 auto; }
-        @media (max-width: 768px) { .orbit-container { width: 340px; height: 340px; } }
+        /* Split layout: orbit + showcase */
+        .s2-split { display: flex; align-items: center; gap: 40px; max-width: 1100px; width: 100%; }
+        @media (max-width: 900px) { .s2-split { flex-direction: column; } }
 
-        /* Center logo */
-        .orbit-center {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-            width: 100px; height: 100px; z-index: 10;
-        }
-        .orbit-center img { width: 100px; height: 100px; filter: drop-shadow(0 0 25px rgba(0,217,255,0.3)); }
-
-        /* Orbiting agent nodes */
-        .agent-node {
-            position: absolute; width: 48px; height: 48px;
+        /* Orbit */
+        .orbit-wrap { position: relative; width: 420px; height: 420px; flex-shrink: 0; animation: orbit-spin 120s linear infinite; }
+        @keyframes orbit-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+        @media (max-width: 900px) { .orbit-wrap { width: 300px; height: 300px; } }
+        .orbit-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 80px; height: 80px; z-index: 10; animation: orbit-spin 120s linear infinite reverse; }
+        .orbit-center img { width: 80px; height: 80px; filter: drop-shadow(0 0 20px rgba(0,217,255,0.3)); }
+        .orbit-ring { position: absolute; top: 50%; left: 50%; width: 340px; height: 340px; margin: -170px 0 0 -170px; border-radius: 50%; border: 1px solid rgba(0,217,255,0.08); }
+        @media (max-width: 900px) { .orbit-ring { width: 240px; height: 240px; margin: -120px 0 0 -120px; } }
+        .agent-dot {
+            position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px;
             border-radius: 50%; background: #0a1020; border: 2px solid #1e2a45;
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: all 0.3s;
-            z-index: 5;
+            transition: all 0.4s; cursor: pointer;
+            animation: orbit-spin 120s linear infinite reverse;
         }
-        .agent-node:hover { border-color: #00d9ff; transform: scale(1.3); z-index: 20; box-shadow: 0 0 20px rgba(0,217,255,0.3); }
-        .agent-node svg { width: 20px; height: 20px; opacity: 0.6; }
-        .agent-node:hover svg { opacity: 1; }
+        .agent-dot.active { border-color: #00d9ff; box-shadow: 0 0 15px rgba(0,217,255,0.4); transform: scale(1.3); }
+        .agent-dot svg { width: 16px; height: 16px; }
+        .agent-dot circle { fill: #1e2a45; stroke: #6b7a99; }
+        .agent-dot.active circle { fill: #00d9ff; stroke: #00d9ff; }
 
-        /* Connection lines from center to agents */
-        .orbit-lines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-        .orbit-lines line { stroke: #1e2a45; stroke-width: 1; opacity: 0.3; }
-
-        /* Agent detail panel (appears on hover/click) */
-        .agent-detail {
-            position: fixed; bottom: 0; left: 0; right: 0;
-            background: linear-gradient(180deg, transparent, #060a1a 20%, #0a1020);
-            padding: 40px 20px 30px; z-index: 50;
-            transform: translateY(100%); transition: transform 0.4s ease-out;
-        }
-        .agent-detail.visible { transform: translateY(0); }
-        .agent-detail-inner { max-width: 600px; margin: 0 auto; }
-        .agent-detail-name { font-size: 1.3em; font-weight: 800; color: #00d9ff; margin-bottom: 6px; }
-        .agent-detail-desc { font-size: 0.9em; color: #8899bb; line-height: 1.6; margin-bottom: 12px; }
-        .agent-detail-probes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-        .agent-detail-probe { padding: 3px 10px; background: rgba(0,217,255,0.06); border: 1px solid #1e2a45; border-radius: 4px; font-size: 0.72em; color: #00d9ff; }
-        .agent-detail-mitre { display: flex; flex-wrap: wrap; gap: 4px; }
-        .agent-detail-mt { padding: 2px 8px; background: rgba(255,51,102,0.06); border: 1px solid #2a1525; border-radius: 3px; font-size: 0.68em; color: #ff6688; font-family: monospace; }
-        .agent-detail-close { position: absolute; top: 10px; right: 20px; background: none; border: none; color: #555; font-size: 1.5em; cursor: pointer; }
-
-        /* Typing effect */
-        .typewriter { overflow: hidden; border-right: 2px solid #00d9ff; white-space: nowrap; animation: typing 2s steps(40) forwards, blink 0.7s step-end infinite; }
-        @keyframes typing { from { width: 0; } to { width: 100%; } }
-        @keyframes blink { 50% { border-color: transparent; } }
+        /* Agent showcase (right side) */
+        .showcase { flex: 1; min-width: 0; }
+        .showcase-counter { font-size: 0.7em; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .showcase-name { font-size: 1.5em; font-weight: 800; color: #00d9ff; margin-bottom: 8px; min-height: 1.5em; }
+        .showcase-desc { font-size: 0.92em; color: #8899bb; line-height: 1.7; margin-bottom: 16px; min-height: 80px; }
+        .showcase-label { font-size: 0.65em; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .showcase-probes { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; min-height: 30px; }
+        .showcase-probe { padding: 3px 10px; background: rgba(0,217,255,0.06); border: 1px solid #1e2a45; border-radius: 4px; font-size: 0.75em; color: #00d9ff; animation: probe-in 0.3s ease-out both; }
+        @keyframes probe-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .showcase-mitre { display: flex; flex-wrap: wrap; gap: 4px; min-height: 24px; }
+        .showcase-mt { padding: 2px 8px; background: rgba(255,51,102,0.06); border: 1px solid #2a1525; border-radius: 3px; font-size: 0.7em; color: #ff6688; font-family: monospace; animation: probe-in 0.3s ease-out both; }
+        .showcase-progress { display: flex; gap: 3px; margin-top: 20px; }
+        .showcase-pip { width: 100%; height: 3px; background: #1e2a45; border-radius: 2px; overflow: hidden; }
+        .showcase-pip-fill { height: 100%; background: #00d9ff; border-radius: 2px; width: 0%; transition: width 3s linear; }
+        .showcase-pip.active .showcase-pip-fill { width: 100%; }
 
         /* ═══ SECTION 3: LOGO REVEAL + CTA ═══ */
         #s3 { flex-direction: column; gap: 24px; }
@@ -176,25 +167,29 @@
     <div class="section" id="s2">
         <div class="s2-header">
             <h1 class="s2-title">Welcome to AMOSKYS</h1>
-            <p class="s2-subtitle">What does AMOSKYS do for you?</p>
+            <p class="s2-subtitle">17 security agents. Watching everything.</p>
         </div>
 
-        <div class="orbit-container" id="orbit">
-            <svg class="orbit-lines" id="orbit-lines" viewBox="0 0 700 700"></svg>
-            <div class="orbit-center">
-                <img src="/static/images/amoskys-logo.svg" alt="AMOSKYS">
+        <div class="s2-split">
+            <!-- Orbit (left) -->
+            <div class="orbit-wrap" id="orbit">
+                <div class="orbit-ring"></div>
+                <div class="orbit-center">
+                    <img src="/static/images/amoskys-logo.svg" alt="AMOSKYS">
+                </div>
+                <!-- Agent dots injected by JS -->
             </div>
-            <!-- Agent nodes injected by JS -->
-        </div>
 
-        <!-- Agent detail panel -->
-        <div class="agent-detail" id="agent-detail">
-            <button class="agent-detail-close" id="detail-close">&times;</button>
-            <div class="agent-detail-inner">
-                <div class="agent-detail-name" id="detail-name"></div>
-                <div class="agent-detail-desc" id="detail-desc"></div>
-                <div class="agent-detail-probes" id="detail-probes"></div>
-                <div class="agent-detail-mitre" id="detail-mitre"></div>
+            <!-- Showcase (right) — auto-cycles through agents -->
+            <div class="showcase" id="showcase">
+                <div class="showcase-counter" id="sc-counter">Agent 1 of 17</div>
+                <div class="showcase-name" id="sc-name"></div>
+                <div class="showcase-desc" id="sc-desc"></div>
+                <div class="showcase-label">Detection Probes</div>
+                <div class="showcase-probes" id="sc-probes"></div>
+                <div class="showcase-label">MITRE ATT&CK</div>
+                <div class="showcase-mitre" id="sc-mitre"></div>
+                <div class="showcase-progress" id="sc-progress"></div>
             </div>
         </div>
     </div>
@@ -239,46 +234,135 @@
         { name: 'Network Sentinel', icon: 'tower', desc: 'Network-level threat detection — monitors for lateral movement, unusual protocols, and network-based attacks.', probes: ['Lateral Movement', 'Protocol Anomaly', 'Network Attack'], mitre: ['T1046', 'T1040'] },
     ];
 
-    // ── Render orbit ──
-    var container = document.getElementById('orbit');
-    var linesEl = document.getElementById('orbit-lines');
-    var isMobile = window.innerWidth < 768;
-    var radius = isMobile ? 140 : 280;
-    var cx = isMobile ? 170 : 350, cy = cx;
-    var linesHtml = '';
+    // ── Render orbit dots ──
+    var orbitEl = document.getElementById('orbit');
+    var ringEl = orbitEl.querySelector('.orbit-ring');
+    var isMobile = window.innerWidth < 900;
+    var ringR = isMobile ? 120 : 170;
 
     agents.forEach(function(a, i) {
         var angle = (i / agents.length) * 2 * Math.PI - Math.PI / 2;
-        var x = cx + radius * Math.cos(angle);
-        var y = cy + radius * Math.sin(angle);
+        var x = 50 + ringR / (isMobile ? 1.5 : 2.1) * Math.cos(angle);
+        var y = 50 + ringR / (isMobile ? 1.5 : 2.1) * Math.sin(angle);
 
-        var node = document.createElement('div');
-        node.className = 'agent-node';
-        node.style.left = (x - 24) + 'px';
-        node.style.top = (y - 24) + 'px';
-        node.dataset.idx = i;
-        node.title = a.name;
-        node.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="#00d9ff" stroke-width="1.3"><circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="1.5" fill="#00d9ff"/></svg>';
-        container.appendChild(node);
-
-        linesHtml += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x + '" y2="' + y + '"/>';
+        var dot = document.createElement('div');
+        dot.className = 'agent-dot';
+        dot.dataset.idx = i;
+        dot.style.left = x + '%';
+        dot.style.top = y + '%';
+        dot.innerHTML = '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" stroke-width="1.5" fill="none"/></svg>';
+        ringEl.appendChild(dot);
     });
-    linesEl.innerHTML = linesHtml;
 
-    // ── Agent click → show detail ──
-    var detailEl = document.getElementById('agent-detail');
-    document.querySelectorAll('.agent-node').forEach(function(node) {
-        node.addEventListener('click', function() {
-            var a = agents[parseInt(node.dataset.idx)];
-            document.getElementById('detail-name').textContent = a.name;
-            document.getElementById('detail-desc').textContent = a.desc;
-            document.getElementById('detail-probes').innerHTML = a.probes.map(function(p) { return '<span class="agent-detail-probe">' + p + '</span>'; }).join('');
-            document.getElementById('detail-mitre').innerHTML = a.mitre.map(function(m) { return '<span class="agent-detail-mt">' + m + '</span>'; }).join('');
-            detailEl.classList.add('visible');
+    // ── Progress pips ──
+    var progressEl = document.getElementById('sc-progress');
+    agents.forEach(function(a, i) {
+        var pip = document.createElement('div');
+        pip.className = 'showcase-pip';
+        pip.innerHTML = '<div class="showcase-pip-fill"></div>';
+        pip.dataset.idx = i;
+        progressEl.appendChild(pip);
+    });
+
+    // ── Auto-cycle showcase ──
+    var currentAgent = -1;
+    var cycleTimer = null;
+
+    function showAgent(idx) {
+        var a = agents[idx];
+        currentAgent = idx;
+
+        // Update counter
+        document.getElementById('sc-counter').textContent = 'Agent ' + (idx + 1) + ' of ' + agents.length;
+
+        // Typewriter name
+        var nameEl = document.getElementById('sc-name');
+        nameEl.textContent = '';
+        typewrite(nameEl, a.name, 40);
+
+        // Typewriter description
+        var descEl = document.getElementById('sc-desc');
+        descEl.textContent = '';
+        setTimeout(function() { typewrite(descEl, a.desc, 15); }, 400);
+
+        // Probes (staggered)
+        var probesEl = document.getElementById('sc-probes');
+        probesEl.innerHTML = '';
+        a.probes.forEach(function(p, j) {
+            setTimeout(function() {
+                var span = document.createElement('span');
+                span.className = 'showcase-probe';
+                span.textContent = p;
+                span.style.animationDelay = (j * 0.1) + 's';
+                probesEl.appendChild(span);
+            }, 800 + j * 100);
         });
-    });
-    document.getElementById('detail-close').addEventListener('click', function() {
-        detailEl.classList.remove('visible');
+
+        // MITRE
+        var mitreEl = document.getElementById('sc-mitre');
+        mitreEl.innerHTML = '';
+        a.mitre.forEach(function(m, j) {
+            setTimeout(function() {
+                var span = document.createElement('span');
+                span.className = 'showcase-mt';
+                span.textContent = m;
+                span.style.animationDelay = (j * 0.1) + 's';
+                mitreEl.appendChild(span);
+            }, 1200 + j * 80);
+        });
+
+        // Highlight dot
+        document.querySelectorAll('.agent-dot').forEach(function(d, i) {
+            d.classList.toggle('active', i === idx);
+        });
+
+        // Progress
+        document.querySelectorAll('.showcase-pip').forEach(function(p, i) {
+            p.classList.remove('active');
+            p.querySelector('.showcase-pip-fill').style.width = i < idx ? '100%' : '0%';
+        });
+        var activePip = document.querySelector('.showcase-pip[data-idx="' + idx + '"]');
+        if (activePip) {
+            activePip.classList.add('active');
+            activePip.querySelector('.showcase-pip-fill').style.width = '0%';
+            requestAnimationFrame(function() {
+                activePip.querySelector('.showcase-pip-fill').style.width = '100%';
+            });
+        }
+    }
+
+    function typewrite(el, text, speed) {
+        var i = 0;
+        function tick() {
+            if (i < text.length) {
+                el.textContent += text.charAt(i);
+                i++;
+                setTimeout(tick, speed);
+            }
+        }
+        tick();
+    }
+
+    function nextAgent() {
+        showAgent((currentAgent + 1) % agents.length);
+    }
+
+    // Start cycling when section 2 is visible
+    function startCycle() {
+        if (cycleTimer) return;
+        nextAgent();
+        cycleTimer = setInterval(nextAgent, 3500);
+    }
+
+    // Click dot to jump
+    document.addEventListener('click', function(e) {
+        var dot = e.target.closest('.agent-dot');
+        if (dot) {
+            clearInterval(cycleTimer);
+            cycleTimer = null;
+            showAgent(parseInt(dot.dataset.idx));
+            cycleTimer = setInterval(nextAgent, 3500);
+        }
     });
 
     // ── Smooth scroll ──
@@ -297,7 +381,7 @@
             if (entry.isIntersecting) {
                 document.querySelectorAll('.scroll-dot').forEach(function(d) { d.classList.remove('active'); });
                 document.querySelector('.scroll-dot[data-section="' + entry.target.id + '"]').classList.add('active');
-                // Trigger logo reveal animation when s3 is visible
+                if (entry.target.id === 's2') { startCycle(); }
                 if (entry.target.id === 's3') {
                     document.getElementById('reveal-logo').style.animationPlayState = 'running';
                 }
