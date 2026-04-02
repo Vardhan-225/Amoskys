@@ -9,7 +9,15 @@ from . import dashboard_bp
 @dashboard_bp.route("/")
 @require_login
 def dashboard_home():
-    """Smart landing — Devices page (or Deploy if no devices yet)."""
+    """Landing page — security overview."""
+    user = get_current_user()
+    return render_template("dashboard/overview.html", user=user)
+
+
+@dashboard_bp.route("/devices")
+@require_login
+def devices_page():
+    """Devices list — just the devices."""
     user = get_current_user()
     return render_template("dashboard/devices.html", user=user)
 
