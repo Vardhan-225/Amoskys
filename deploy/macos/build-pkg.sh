@@ -256,12 +256,30 @@ chmod +x "$BUILD_DIR/scripts/postinstall"
 
 cat > "$BUILD_DIR/scripts/preinstall" << 'PREEOF'
 #!/bin/bash
-# Stop existing AMOSKYS if running
+# Stop ALL existing AMOSKYS processes before upgrade
+# This prevents duplicate agents after reinstall
+
+# 1. Unload the LaunchDaemon (stops the watchdog + children)
+launchctl bootout system/com.amoskys.watchdog 2>/dev/null || true
 launchctl unload /Library/LaunchDaemons/com.amoskys.watchdog.plist 2>/dev/null || true
-pkill -f "amoskys.watchdog" 2>/dev/null || true
-pkill -f "amoskys.collector_main" 2>/dev/null || true
-pkill -f "amoskys.analyzer_main" 2>/dev/null || true
-sleep 2
+
+# 2. Kill any orphaned processes (belt + suspenders)
+pkill -9 -f "amoskys.watchdog" 2>/dev/null || true
+pkill -9 -f "amoskys.collector_main" 2>/dev/null || true
+pkill -9 -f "amoskys.analyzer_main" 2>/dev/null || true
+pkill -9 -f "amoskys.launcher" 2>/dev/null || true
+pkill -9 -f "/Library/Amoskys" 2>/dev/null || true
+
+# 3. Wait for processes to die
+sleep 3
+
+# 4. Verify no AMOSKYS processes remain
+if pgrep -f "amoskys" > /dev/null 2>&1; then
+    # Force kill everything
+    pkill -9 -f "amoskys" 2>/dev/null || true
+    sleep 2
+fi
+
 exit 0
 PREEOF
 chmod +x "$BUILD_DIR/scripts/preinstall"
