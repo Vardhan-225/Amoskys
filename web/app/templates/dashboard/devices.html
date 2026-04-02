@@ -186,7 +186,7 @@
             + stat('Devices', f.total_devices, '#00d9ff', f.online + ' online')
             + stat('Critical', ev.critical, ev.critical > 0 ? '#ff3366' : '#00ff88', ev.critical > 0 ? 'needs review' : 'all clear')
             + stat('High Risk', ev.high, ev.high > 0 ? '#f0ad4e' : '#00ff88', 'last 24h')
-            + stat('Coverage', mitre.length + ' techniques', '#00d9ff', '17 agents active')
+            + stat('MITRE', mitre.length, '#00d9ff', 'techniques detected')
             + '</div>';
 
         // ── Needs Attention ──
