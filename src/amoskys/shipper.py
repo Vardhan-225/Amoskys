@@ -103,20 +103,43 @@ class ShipperConfig:
 
 
 def _generate_device_id() -> str:
-    """Generate a stable device ID from hardware characteristics."""
-    parts = [
-        platform.node(),           # hostname
-        platform.machine(),        # arm64, x86_64
-        platform.system(),         # Darwin, Linux
-    ]
-    # Add MAC address for uniqueness
+    """Generate a stable device ID from hardware serial number.
+
+    Uses IOPlatformSerialNumber on macOS (never changes across reboots,
+    reinstalls, or hostname changes). Falls back to MAC address + arch.
+    """
+    # macOS: use hardware serial (most stable identifier)
+    if platform.system() == "Darwin":
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in result.stdout.split("\n"):
+                if "IOPlatformSerialNumber" in line:
+                    serial = line.split("=")[-1].strip().strip('"')
+                    if serial and len(serial) >= 8:
+                        return hashlib.sha256(serial.encode()).hexdigest()[:16]
+        except Exception:
+            pass
+
+    # Linux: use /etc/machine-id (stable across reboots)
+    if platform.system() == "Linux":
+        try:
+            machine_id = open("/etc/machine-id").read().strip()
+            if machine_id:
+                return hashlib.sha256(machine_id.encode()).hexdigest()[:16]
+        except Exception:
+            pass
+
+    # Fallback: MAC address + arch (less stable but always available)
+    parts = [platform.machine(), platform.system()]
     try:
-        mac = uuid.getnode()
-        parts.append(str(mac))
+        parts.append(str(uuid.getnode()))
     except Exception:
         pass
-    raw = "|".join(parts)
-    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
 
 # ── Cursor Store ───────────────────────────────────────────────────
