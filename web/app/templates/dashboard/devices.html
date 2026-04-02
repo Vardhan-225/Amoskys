@@ -150,16 +150,21 @@
         var d = data.devices, f = data.fleet, ev = data.last_24h;
         var cats = data.top_categories || [], mitre = data.top_mitre_techniques || [];
 
-        // Posture
-        var totalR = 0, maxR = 0;
-        d.forEach(function(x) { totalR += (x.max_risk||0); maxR = Math.max(maxR, x.max_risk||0); });
-        var avg = totalR / Math.max(d.length, 1);
-        var ps = Math.max(0, Math.min(100, Math.round((1 - avg*0.6 - maxR*0.4) * 100)));
-        var pl, pc, pdesc;
-        if (ps >= 80) { pl = 'All Clear'; pc = '#00ff88'; pdesc = 'Your devices are well protected. No critical issues detected.'; }
-        else if (ps >= 60) { pl = 'Guarded'; pc = '#f0ad4e'; pdesc = 'Mostly secure. A few items may need your attention.'; }
-        else if (ps >= 30) { pl = 'Needs Attention'; pc = '#f0ad4e'; pdesc = ev.critical + ' critical and ' + ev.high + ' high-risk events detected in the last 24 hours.'; }
-        else { pl = 'Needs Attention'; pc = '#ff3366'; pdesc = ev.critical + ' critical threats detected. Review the items below.'; }
+        // Posture — based on actual threat counts, not device max_risk
+        var pl, pc, pdesc, ps;
+        if (ev.critical === 0 && ev.high === 0) {
+            ps = 100; pl = 'All Clear'; pc = '#00ff88';
+            pdesc = 'Your devices are well protected. No critical issues detected.';
+        } else if (ev.critical === 0 && ev.high > 0) {
+            ps = Math.max(60, 85 - ev.high); pl = 'Guarded'; pc = '#f0ad4e';
+            pdesc = ev.high + ' elevated risk events in the last 24 hours. Worth reviewing.';
+        } else if (ev.critical <= 5) {
+            ps = Math.max(30, 60 - ev.critical * 5); pl = 'Needs Attention'; pc = '#f0ad4e';
+            pdesc = ev.critical + ' critical and ' + ev.high + ' high-risk events detected. Click a device to investigate.';
+        } else {
+            ps = Math.max(5, 30 - ev.critical); pl = 'Needs Attention'; pc = '#ff3366';
+            pdesc = ev.critical + ' critical threats detected in the last 24 hours. Review the items below.';
+        }
         var circ = 2 * Math.PI * 32, off = circ * (1 - ps/100);
 
         var html = '';
@@ -250,7 +255,7 @@
         if (mitre.length) {
             html += '<div class="dv-mt-grid">';
             for (var i = 0; i < mitre.length; i++) {
-                html += '<span class="dv-mt">' + esc(mitre[i].technique) + '<span>' + mitre[i].count + '</span></span>';
+                html += '<span class="dv-mt">' + esc(mitre[i].technique) + ' <span>' + mitre[i].count + '</span></span>';
             }
             html += '</div>';
         }

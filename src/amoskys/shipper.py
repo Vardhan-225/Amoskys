@@ -102,6 +102,31 @@ class ShipperConfig:
         )
 
 
+def _get_hostname() -> str:
+    """Get the fully qualified hostname (not the short name).
+
+    platform.node() returns 'Mac' on some macOS configs.
+    socket.getfqdn() returns 'Akashs-MacBook-Air.local' — much better.
+    """
+    import socket
+    fqdn = socket.getfqdn()
+    if fqdn and fqdn != "localhost" and "." in fqdn:
+        return fqdn
+    # Fallback: try scutil on macOS
+    if platform.system() == "Darwin":
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["scutil", "--get", "ComputerName"],
+                capture_output=True, text=True, timeout=3,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception:
+            pass
+    return platform.node()
+
+
 def _generate_device_id() -> str:
     """Generate a stable device ID from hardware serial number.
 
@@ -359,7 +384,7 @@ class TelemetryShipper:
         try:
             payload = {
                 "device_id": self.config.device_id,
-                "hostname": platform.node(),
+                "hostname": _get_hostname(),
                 "os": platform.system(),
                 "os_version": platform.release(),
                 "arch": platform.machine(),
