@@ -1,17 +1,317 @@
-{% extends "dashboard/base.html" %}
-{% block title %}AMOSKYS — Setup{% endblock %}
-{% block content %}
-<div style="max-width:600px;margin:60px auto;text-align:center;padding:20px;">
-    <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS" width="100" height="100" style="margin-bottom:24px;filter:drop-shadow(0 0 20px rgba(0,217,255,0.3));">
-    <h1 style="font-size:1.8em;font-weight:800;color:#fff;margin-bottom:8px;">Welcome to AMOSKYS</h1>
-    <p style="color:#6b7a99;font-size:0.95em;margin-bottom:30px;">IGRIS onboarding is being built. For now, install the agent to get started.</p>
-    <a href="/dashboard/deploy" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#00b894,#00d9ff);color:#0a0e27;font-weight:700;border-radius:10px;text-decoration:none;font-size:0.95em;">Install on your Mac</a>
-    <p style="margin-top:20px;"><button id="skip-setup" style="background:none;border:none;color:#555;cursor:pointer;font-size:0.82em;">Skip setup for now</button></p>
-</div>
-<script nonce="{{ csp_nonce() }}">
-document.getElementById('skip-setup').addEventListener('click', async function() {
-    await fetch('/dashboard/api/setup/complete', { method: 'POST' });
-    window.location.href = '/dashboard';
-});
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Welcome to AMOSKYS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: #060a1a; color: #e0e8f0; overflow-x: hidden; }
+
+        /* ── Sections ── */
+        .section { min-height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+
+        /* ── Neural background ── */
+        .neural-bg {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none;
+            background-image: linear-gradient(rgba(0,217,255,0.03) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(0,217,255,0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+            animation: bg-drift 30s linear infinite;
+        }
+        @keyframes bg-drift { from { transform: translate(0,0); } to { transform: translate(60px,60px); } }
+
+        /* ═══ SECTION 1: IGRIS GREETING ═══ */
+        #s1 { flex-direction: column; gap: 20px; z-index: 1; }
+        .igris-eye {
+            width: 120px; height: 120px; position: relative;
+            animation: igris-appear 1.5s ease-out;
+        }
+        .igris-eye img { width: 120px; height: 120px; filter: drop-shadow(0 0 30px rgba(0,217,255,0.4)); animation: igris-breathe 4s ease-in-out infinite; }
+        @keyframes igris-appear { from { opacity: 0; transform: scale(0.5) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes igris-breathe { 0%,100% { filter: drop-shadow(0 0 30px rgba(0,217,255,0.4)); } 50% { filter: drop-shadow(0 0 50px rgba(0,255,136,0.5)); } }
+
+        .greeting { text-align: center; animation: fade-up 1s ease-out 0.5s both; }
+        .greeting-hi { font-size: 1.8em; font-weight: 300; color: #8899bb; }
+        .greeting-name { font-size: 2.4em; font-weight: 800; background: linear-gradient(135deg, #fff, #00d9ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .greeting-igris { font-size: 1.05em; color: #6b7a99; margin-top: 16px; line-height: 1.6; max-width: 500px; animation: fade-up 1s ease-out 1s both; }
+        .greeting-igris strong { color: #00d9ff; font-weight: 700; }
+
+        .cta-arrow {
+            margin-top: 40px; animation: fade-up 1s ease-out 1.5s both;
+            display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer;
+        }
+        .cta-arrow-text { font-size: 0.85em; font-weight: 700; color: #00d9ff; letter-spacing: 1px; text-transform: uppercase; }
+        .cta-arrow-icon { animation: bounce-down 2s ease-in-out infinite; color: #00d9ff; }
+        @keyframes bounce-down { 0%,100% { transform: translateY(0); } 50% { transform: translateY(8px); } }
+        @keyframes fade-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ═══ SECTION 2: WHAT IS AMOSKYS ═══ */
+        #s2 { flex-direction: column; padding: 60px 20px; min-height: auto; }
+        .s2-header { text-align: center; margin-bottom: 60px; }
+        .s2-title { font-size: 2.2em; font-weight: 800; color: #fff; margin-bottom: 8px; }
+        .s2-subtitle { font-size: 1.1em; color: #6b7a99; }
+
+        /* Agent orbit container */
+        .orbit-container { position: relative; width: 700px; height: 700px; margin: 0 auto; }
+        @media (max-width: 768px) { .orbit-container { width: 340px; height: 340px; } }
+
+        /* Center logo */
+        .orbit-center {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            width: 100px; height: 100px; z-index: 10;
+        }
+        .orbit-center img { width: 100px; height: 100px; filter: drop-shadow(0 0 25px rgba(0,217,255,0.3)); }
+
+        /* Orbiting agent nodes */
+        .agent-node {
+            position: absolute; width: 48px; height: 48px;
+            border-radius: 50%; background: #0a1020; border: 2px solid #1e2a45;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.3s;
+            z-index: 5;
+        }
+        .agent-node:hover { border-color: #00d9ff; transform: scale(1.3); z-index: 20; box-shadow: 0 0 20px rgba(0,217,255,0.3); }
+        .agent-node svg { width: 20px; height: 20px; opacity: 0.6; }
+        .agent-node:hover svg { opacity: 1; }
+
+        /* Connection lines from center to agents */
+        .orbit-lines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        .orbit-lines line { stroke: #1e2a45; stroke-width: 1; opacity: 0.3; }
+
+        /* Agent detail panel (appears on hover/click) */
+        .agent-detail {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: linear-gradient(180deg, transparent, #060a1a 20%, #0a1020);
+            padding: 40px 20px 30px; z-index: 50;
+            transform: translateY(100%); transition: transform 0.4s ease-out;
+        }
+        .agent-detail.visible { transform: translateY(0); }
+        .agent-detail-inner { max-width: 600px; margin: 0 auto; }
+        .agent-detail-name { font-size: 1.3em; font-weight: 800; color: #00d9ff; margin-bottom: 6px; }
+        .agent-detail-desc { font-size: 0.9em; color: #8899bb; line-height: 1.6; margin-bottom: 12px; }
+        .agent-detail-probes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+        .agent-detail-probe { padding: 3px 10px; background: rgba(0,217,255,0.06); border: 1px solid #1e2a45; border-radius: 4px; font-size: 0.72em; color: #00d9ff; }
+        .agent-detail-mitre { display: flex; flex-wrap: wrap; gap: 4px; }
+        .agent-detail-mt { padding: 2px 8px; background: rgba(255,51,102,0.06); border: 1px solid #2a1525; border-radius: 3px; font-size: 0.68em; color: #ff6688; font-family: monospace; }
+        .agent-detail-close { position: absolute; top: 10px; right: 20px; background: none; border: none; color: #555; font-size: 1.5em; cursor: pointer; }
+
+        /* Typing effect */
+        .typewriter { overflow: hidden; border-right: 2px solid #00d9ff; white-space: nowrap; animation: typing 2s steps(40) forwards, blink 0.7s step-end infinite; }
+        @keyframes typing { from { width: 0; } to { width: 100%; } }
+        @keyframes blink { 50% { border-color: transparent; } }
+
+        /* ═══ SECTION 3: LOGO REVEAL + CTA ═══ */
+        #s3 { flex-direction: column; gap: 24px; }
+        .reveal-logo {
+            width: 140px; height: 140px; opacity: 0;
+            animation: logo-reveal 2s ease-out forwards;
+        }
+        .reveal-logo img { width: 140px; height: 140px; }
+        @keyframes logo-reveal {
+            0% { opacity: 0; transform: scale(0.3) rotate(-180deg); filter: drop-shadow(0 0 0 transparent); }
+            60% { opacity: 1; transform: scale(1.1) rotate(10deg); }
+            80% { transform: scale(0.95) rotate(-5deg); }
+            100% { opacity: 1; transform: scale(1) rotate(0); filter: drop-shadow(0 0 40px rgba(0,217,255,0.5)); }
+        }
+        .reveal-shine {
+            position: absolute; width: 200px; height: 200px; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            background: radial-gradient(ellipse, rgba(0,217,255,0.15) 0%, transparent 70%);
+            animation: shine-pulse 3s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes shine-pulse { 0%,100% { opacity: 0.3; transform: translate(-50%,-50%) scale(1); } 50% { opacity: 1; transform: translate(-50%,-50%) scale(1.5); } }
+
+        .reveal-tagline { text-align: center; animation: fade-up 1s ease-out 1s both; }
+        .reveal-tagline h2 { font-size: 1.6em; font-weight: 800; color: #fff; margin-bottom: 8px; }
+        .reveal-tagline p { font-size: 0.95em; color: #6b7a99; }
+
+        .install-btn {
+            display: inline-flex; align-items: center; gap: 10px;
+            padding: 14px 32px; background: linear-gradient(135deg, #00b894, #00d9ff);
+            color: #060a1a; font-weight: 800; font-size: 1em;
+            border-radius: 12px; text-decoration: none; border: none; cursor: pointer;
+            animation: fade-up 1s ease-out 1.5s both;
+            transition: all 0.2s;
+        }
+        .install-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,217,255,0.3); }
+        .skip-link { color: #555; font-size: 0.78em; cursor: pointer; background: none; border: none; animation: fade-up 1s ease-out 2s both; margin-top: 10px; }
+
+        /* ── Scroll indicator ── */
+        .scroll-sections { position: fixed; right: 20px; top: 50%; transform: translateY(-50%); z-index: 100; display: flex; flex-direction: column; gap: 8px; }
+        .scroll-dot { width: 8px; height: 8px; border-radius: 50%; background: #1e2a45; border: none; cursor: pointer; transition: all 0.2s; }
+        .scroll-dot.active { background: #00d9ff; box-shadow: 0 0 8px rgba(0,217,255,0.5); }
+    </style>
+</head>
+<body>
+    <div class="neural-bg"></div>
+
+    <!-- Scroll dots -->
+    <div class="scroll-sections">
+        <button class="scroll-dot active" data-section="s1"></button>
+        <button class="scroll-dot" data-section="s2"></button>
+        <button class="scroll-dot" data-section="s3"></button>
+    </div>
+
+    <!-- ═══ SECTION 1: IGRIS GREETING ═══ -->
+    <div class="section" id="s1">
+        <div class="igris-eye">
+            <img src="/static/images/amoskys-logo.svg" alt="IGRIS">
+        </div>
+        <div class="greeting">
+            <div class="greeting-hi">Hi,</div>
+            <div class="greeting-name" id="user-name">{{ user.full_name or 'there' }}</div>
+        </div>
+        <p class="greeting-igris">
+            I'm <strong>IGRIS</strong>, your security analyst. I monitor your devices for threats, anomalies, and suspicious behavior — so you don't have to.
+        </p>
+        <div class="cta-arrow" id="cta-start">
+            <span class="cta-arrow-text">Let's get started</span>
+            <svg class="cta-arrow-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        </div>
+    </div>
+
+    <!-- ═══ SECTION 2: WHAT IS AMOSKYS ═══ -->
+    <div class="section" id="s2">
+        <div class="s2-header">
+            <h1 class="s2-title">Welcome to AMOSKYS</h1>
+            <p class="s2-subtitle">What does AMOSKYS do for you?</p>
+        </div>
+
+        <div class="orbit-container" id="orbit">
+            <svg class="orbit-lines" id="orbit-lines" viewBox="0 0 700 700"></svg>
+            <div class="orbit-center">
+                <img src="/static/images/amoskys-logo.svg" alt="AMOSKYS">
+            </div>
+            <!-- Agent nodes injected by JS -->
+        </div>
+
+        <!-- Agent detail panel -->
+        <div class="agent-detail" id="agent-detail">
+            <button class="agent-detail-close" id="detail-close">&times;</button>
+            <div class="agent-detail-inner">
+                <div class="agent-detail-name" id="detail-name"></div>
+                <div class="agent-detail-desc" id="detail-desc"></div>
+                <div class="agent-detail-probes" id="detail-probes"></div>
+                <div class="agent-detail-mitre" id="detail-mitre"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ SECTION 3: LOGO REVEAL + INSTALL ═══ -->
+    <div class="section" id="s3">
+        <div class="reveal-shine"></div>
+        <div class="reveal-logo" id="reveal-logo">
+            <img src="/static/images/amoskys-logo.svg" alt="AMOSKYS">
+        </div>
+        <div class="reveal-tagline">
+            <h2>AMOSKYS</h2>
+            <p>Your partner in securing your devices.</p>
+        </div>
+        <a href="/dashboard/deploy" class="install-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7v6c0 5.5 4.2 10.7 10 12 5.8-1.3 10-6.5 10-12V7L12 2z" stroke="currentColor" stroke-width="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Install on my Mac
+        </a>
+        <button class="skip-link" id="skip-setup">I'll do this later</button>
+    </div>
+
+<script>
+(function() {
+    // ── Agent data ──
+    var agents = [
+        { name: 'Process Monitor', icon: 'cpu', desc: 'Tracks every process execution on your device. Detects suspicious binaries (LOLBins), high CPU usage, and unauthorized process spawning.', probes: ['Process Spawn', 'LOLBin Detection', 'CPU Anomaly', 'Binary Reputation'], mitre: ['T1059', 'T1204', 'T1218', 'T1496'] },
+        { name: 'Auth Guard', icon: 'lock', desc: 'Monitors authentication events — failed logins, credential access attempts, sudo escalation, and off-hours activity.', probes: ['Login Monitor', 'Sudo Watch', 'Credential Access', 'Off-Hours Alert'], mitre: ['T1078', 'T1110', 'T1548'] },
+        { name: 'Network Flow', icon: 'wifi', desc: 'Watches every network connection. Detects data exfiltration spikes, C2 beacons, port scanning, and tunnel creation.', probes: ['Connection Tracker', 'Exfil Detection', 'C2 Beacon', 'Port Scan'], mitre: ['T1071', 'T1048', 'T1046', 'T1040'] },
+        { name: 'DNS Intelligence', icon: 'globe', desc: 'Analyzes DNS queries for beaconing patterns, DGA domains, DNS tunneling, and connections to newly-seen domains.', probes: ['Beacon Detector', 'DGA Analysis', 'DNS Tunnel', 'New Domain'], mitre: ['T1071.004', 'T1572', 'T1583'] },
+        { name: 'File Integrity', icon: 'file', desc: 'Monitors critical system files for unauthorized changes, config backdoors, and log tampering.', probes: ['Critical File Watch', 'Config Monitor', 'Log Integrity', 'Hash Verify'], mitre: ['T1070', 'T1565'] },
+        { name: 'Persistence Watcher', icon: 'anchor', desc: 'Detects persistence mechanisms — new LaunchAgents, LaunchDaemons, cron jobs, shell profile modifications, and SSH key changes.', probes: ['LaunchAgent Watch', 'Cron Monitor', 'Shell Profile', 'SSH Key Watch'], mitre: ['T1543', 'T1053', 'T1546'] },
+        { name: 'Peripheral Guard', icon: 'usb', desc: 'Tracks USB devices and removable media — detects when external drives are connected or disconnected.', probes: ['USB Monitor', 'Media Mount', 'Device Fingerprint'], mitre: ['T1200'] },
+        { name: 'Discovery Scanner', icon: 'radar', desc: 'Maps your network topology. Detects new hosts, ARP changes, rogue DHCP servers, and route modifications.', probes: ['ARP Watch', 'Topology Map', 'Rogue DHCP', 'Route Monitor'], mitre: ['T1016', 'T1018'] },
+        { name: 'App Log Analyzer', icon: 'list', desc: 'Parses application and system logs for security-relevant events, errors, and anomalies.', probes: ['Log Parser', 'Error Detector', 'Event Correlator'], mitre: [] },
+        { name: 'Internet Activity', icon: 'cloud', desc: 'Monitors internet usage patterns — late night connections, geo anomalies, cloud exfiltration, and VPN usage.', probes: ['Night Watch', 'Geo Anomaly', 'Cloud Exfil', 'VPN Detect'], mitre: ['T1567', 'T1090'] },
+        { name: 'DB Activity', icon: 'db', desc: 'Monitors database access patterns for unauthorized queries and data access.', probes: ['Query Monitor', 'Access Pattern'], mitre: [] },
+        { name: 'HTTP Inspector', icon: 'http', desc: 'Analyzes HTTP traffic for suspicious patterns, malicious payloads, and data leaks.', probes: ['Request Analyzer', 'Payload Scan'], mitre: ['T1071.001'] },
+        { name: 'Provenance Engine', icon: 'chain', desc: 'Tracks process lineage and kill chains. Detects rapid app switching, PID anomalies, and execute-to-exfil patterns.', probes: ['Kill Chain', 'PID Anomaly', 'App Switch', 'Exfil Chain'], mitre: ['T1204', 'T1041'] },
+        { name: 'Quarantine Guard', icon: 'shield', desc: 'Monitors Gatekeeper decisions and quarantine bypasses. Detects attempts to run unverified software.', probes: ['Gatekeeper Watch', 'Quarantine Bypass'], mitre: ['T1553'] },
+        { name: 'Infostealer Guard', icon: 'eye', desc: 'Detects credential theft attempts — screen capture abuse, keychain access, and browser credential extraction.', probes: ['Screen Capture', 'Keychain Watch', 'Browser Creds'], mitre: ['T1555'] },
+        { name: 'Realtime Sensor', icon: 'zap', desc: 'Monitors TCC permission requests, Gatekeeper blocks, and execution from temporary directories in real time.', probes: ['TCC Monitor', 'Gatekeeper', 'Temp Execution'], mitre: ['T1548', 'T1553'] },
+        { name: 'Network Sentinel', icon: 'tower', desc: 'Network-level threat detection — monitors for lateral movement, unusual protocols, and network-based attacks.', probes: ['Lateral Movement', 'Protocol Anomaly', 'Network Attack'], mitre: ['T1046', 'T1040'] },
+    ];
+
+    // ── Render orbit ──
+    var container = document.getElementById('orbit');
+    var linesEl = document.getElementById('orbit-lines');
+    var isMobile = window.innerWidth < 768;
+    var radius = isMobile ? 140 : 280;
+    var cx = isMobile ? 170 : 350, cy = cx;
+    var linesHtml = '';
+
+    agents.forEach(function(a, i) {
+        var angle = (i / agents.length) * 2 * Math.PI - Math.PI / 2;
+        var x = cx + radius * Math.cos(angle);
+        var y = cy + radius * Math.sin(angle);
+
+        var node = document.createElement('div');
+        node.className = 'agent-node';
+        node.style.left = (x - 24) + 'px';
+        node.style.top = (y - 24) + 'px';
+        node.dataset.idx = i;
+        node.title = a.name;
+        node.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="#00d9ff" stroke-width="1.3"><circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="1.5" fill="#00d9ff"/></svg>';
+        container.appendChild(node);
+
+        linesHtml += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x + '" y2="' + y + '"/>';
+    });
+    linesEl.innerHTML = linesHtml;
+
+    // ── Agent click → show detail ──
+    var detailEl = document.getElementById('agent-detail');
+    document.querySelectorAll('.agent-node').forEach(function(node) {
+        node.addEventListener('click', function() {
+            var a = agents[parseInt(node.dataset.idx)];
+            document.getElementById('detail-name').textContent = a.name;
+            document.getElementById('detail-desc').textContent = a.desc;
+            document.getElementById('detail-probes').innerHTML = a.probes.map(function(p) { return '<span class="agent-detail-probe">' + p + '</span>'; }).join('');
+            document.getElementById('detail-mitre').innerHTML = a.mitre.map(function(m) { return '<span class="agent-detail-mt">' + m + '</span>'; }).join('');
+            detailEl.classList.add('visible');
+        });
+    });
+    document.getElementById('detail-close').addEventListener('click', function() {
+        detailEl.classList.remove('visible');
+    });
+
+    // ── Smooth scroll ──
+    document.getElementById('cta-start').addEventListener('click', function() {
+        document.getElementById('s2').scrollIntoView({ behavior: 'smooth' });
+    });
+
+    // ── Scroll dots ──
+    document.querySelectorAll('.scroll-dot').forEach(function(dot) {
+        dot.addEventListener('click', function() {
+            document.getElementById(dot.dataset.section).scrollIntoView({ behavior: 'smooth' });
+        });
+    });
+    var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+                document.querySelectorAll('.scroll-dot').forEach(function(d) { d.classList.remove('active'); });
+                document.querySelector('.scroll-dot[data-section="' + entry.target.id + '"]').classList.add('active');
+                // Trigger logo reveal animation when s3 is visible
+                if (entry.target.id === 's3') {
+                    document.getElementById('reveal-logo').style.animationPlayState = 'running';
+                }
+            }
+        });
+    }, { threshold: 0.5 });
+    ['s1', 's2', 's3'].forEach(function(id) { observer.observe(document.getElementById(id)); });
+
+    // ── Skip setup ──
+    document.getElementById('skip-setup').addEventListener('click', async function() {
+        await fetch('/dashboard/api/setup/complete', { method: 'POST' });
+        window.location.href = '/dashboard';
+    });
+})();
 </script>
-{% endblock %}
+</body>
+</html>
