@@ -200,7 +200,7 @@ def _migrate_user_onboarding_columns(engine) -> None:
     migrations = [
         ("account_type", "VARCHAR(20)"),
         ("device_os", "VARCHAR(20)"),
-        ("setup_completed", "BOOLEAN NOT NULL DEFAULT 1"),
+        ("setup_completed", "BOOLEAN NOT NULL DEFAULT 0"),
         ("selected_coverage", "TEXT"),
     ]
     with engine.begin() as conn:
