@@ -20,16 +20,12 @@
         <div class="st-row">
             <span class="st-label">Role</span>
             <span class="st-value">
-                {% if user %}
-                <span class="st-role-badge {% if user.role.value == 'admin' %}st-role-admin{% endif %}">
-                    {{ user.role.value|capitalize }}
-                </span>
+                {% if user and user.role.value == 'admin' %}
+                <span class="st-role-badge st-role-global">Global Admin</span>
+                {% else %}
+                <span class="st-role-badge">User</span>
                 {% endif %}
             </span>
-        </div>
-        <div class="st-row">
-            <span class="st-label">Account Type</span>
-            <span class="st-value">{% if user and user.account_type %}{{ user.account_type|capitalize }}{% else %}<span class="st-muted">Individual</span>{% endif %}</span>
         </div>
     </div>
 
@@ -41,99 +37,67 @@
             <span class="st-value"><a href="/user/auth/forgot-password" class="st-action">Change password</a></span>
         </div>
         <div class="st-row">
-            <span class="st-label">Sessions</span>
-            <span class="st-value"><span class="st-muted">Active session</span></span>
-        </div>
-    </div>
-
-    <!-- Notifications -->
-    <div class="st-section">
-        <h2 class="st-sec-title">Notifications</h2>
-        <div class="st-row">
-            <span class="st-label">Email alerts</span>
-            <span class="st-value"><span class="st-muted">Coming soon</span></span>
-        </div>
-        <div class="st-row">
-            <span class="st-label">Critical threat alerts</span>
+            <span class="st-label">Two-factor authentication</span>
             <span class="st-value"><span class="st-muted">Coming soon</span></span>
         </div>
     </div>
 
     {% if user and user.role.value == 'admin' %}
-    <!-- Admin Section -->
-    <div class="st-section st-admin">
-        <h2 class="st-sec-title">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 016 0v2"/></svg>
-            Administration
-        </h2>
-        <p class="st-desc">Admin-only tools for platform management.</p>
+    <!-- Global Admin -->
+    <div class="st-section st-global">
+        <h2 class="st-sec-title st-global-title">Global Admin</h2>
+        <p class="st-desc">Full platform oversight — all users, organizations, and devices across AMOSKYS.</p>
 
-        <div class="st-admin-grid">
-            <a href="/admin" class="st-admin-card">
-                <div class="st-admin-icon">
-                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
-                </div>
-                <div>
-                    <div class="st-admin-name">User Management</div>
-                    <div class="st-admin-desc">Manage users, roles, sessions</div>
+        <div class="st-grid">
+            <a href="/admin" class="st-card">
+                <svg class="st-card-icon" width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="6" cy="5" r="2.5"/><path d="M1 14c0-2.8 2.2-5 5-5s5 2.2 5 5"/><circle cx="12" cy="5" r="2" opacity="0.5"/><path d="M12 8c1.7 0 3 1.3 3 3v1" opacity="0.5"/></svg>
+                <div class="st-card-info">
+                    <div class="st-card-name">Users & Organizations</div>
+                    <div class="st-card-desc">Manage all users, orgs, roles, and access</div>
                 </div>
             </a>
-            <a href="/dashboard/cortex" class="st-admin-card">
-                <div class="st-admin-icon">
-                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
-                </div>
-                <div>
-                    <div class="st-admin-name">Cortex Dashboard</div>
-                    <div class="st-admin-desc">Full system overview</div>
+            <a href="/dashboard/cortex" class="st-card">
+                <svg class="st-card-icon" width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2"/></svg>
+                <div class="st-card-info">
+                    <div class="st-card-name">Cortex</div>
+                    <div class="st-card-desc">Global threat overview and system health</div>
                 </div>
             </a>
-            <a href="/dashboard/observatory" class="st-admin-card">
-                <div class="st-admin-icon">
-                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><path d="M8 2v12M2 8h12"/></svg>
-                </div>
-                <div>
-                    <div class="st-admin-name">Observatory</div>
-                    <div class="st-admin-desc">Agent deep analysis</div>
+            <a href="/dashboard/fleet" class="st-card">
+                <svg class="st-card-icon" width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="2" width="6" height="5" rx="1"/><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="5" y="9" width="6" height="5" rx="1"/></svg>
+                <div class="st-card-info">
+                    <div class="st-card-name">Fleet</div>
+                    <div class="st-card-desc">All devices across all organizations</div>
                 </div>
             </a>
-            <a href="/dashboard/intelligence" class="st-admin-card">
-                <div class="st-admin-icon">
-                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="3"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/></svg>
-                </div>
-                <div>
-                    <div class="st-admin-name">Intelligence</div>
-                    <div class="st-admin-desc">SOMA, scoring, fusion</div>
+            <a href="/dashboard/igris" class="st-card">
+                <svg class="st-card-icon" width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><path d="M5 6.5C5 6.5 6.5 5 8 5s3 1.5 3 1.5M5.5 10s1 1.5 2.5 1.5 2.5-1.5 2.5-1.5"/></svg>
+                <div class="st-card-info">
+                    <div class="st-card-name">IGRIS</div>
+                    <div class="st-card-desc">AI security analyst</div>
                 </div>
             </a>
-            <a href="/dashboard/fleet" class="st-admin-card">
-                <div class="st-admin-icon">
-                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="2" width="14" height="10" rx="1.5"/><path d="M5 14h6M8 12v2"/></svg>
-                </div>
-                <div>
-                    <div class="st-admin-name">Fleet Management</div>
-                    <div class="st-admin-desc">Agent control, deploy, reliability</div>
+            <a href="/dashboard/observatory" class="st-card">
+                <svg class="st-card-icon" width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><path d="M4 8h8M8 4v8"/></svg>
+                <div class="st-card-info">
+                    <div class="st-card-name">Observatory</div>
+                    <div class="st-card-desc">Deep agent and probe analysis</div>
                 </div>
             </a>
-            <a href="/dashboard/igris" class="st-admin-card">
-                <div class="st-admin-icon">
-                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2"/></svg>
-                </div>
-                <div>
-                    <div class="st-admin-name">IGRIS AI Analyst</div>
-                    <div class="st-admin-desc">AI security analyst</div>
+            <a href="/dashboard/intelligence" class="st-card">
+                <svg class="st-card-icon" width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 12l3-4 3 2 3-5 3 3"/></svg>
+                <div class="st-card-info">
+                    <div class="st-card-name">Intelligence</div>
+                    <div class="st-card-desc">Scoring, SOMA, fusion engine</div>
                 </div>
             </a>
         </div>
     </div>
     {% endif %}
 
-    <!-- Danger Zone -->
-    <div class="st-section st-danger-zone">
-        <h2 class="st-sec-title st-danger-title">Danger Zone</h2>
-        <div class="st-row">
-            <span class="st-label">Sign out</span>
-            <button class="st-danger-btn" id="st-logout">Sign Out</button>
-        </div>
+    <!-- Sign Out -->
+    <div class="st-signout">
+        <button class="st-signout-btn" id="st-logout">Sign Out</button>
     </div>
 </div>
 
@@ -148,7 +112,6 @@
 .st-sec-title {
     font-size: 0.78em; color: #00d9ff; text-transform: uppercase;
     letter-spacing: 0.5px; margin-bottom: 14px; font-weight: 700;
-    display: flex; align-items: center; gap: 6px;
 }
 .st-row {
     display: flex; justify-content: space-between; align-items: center;
@@ -157,44 +120,44 @@
 .st-row:last-child { border-bottom: none; }
 .st-label { font-size: 0.85em; color: #6b7a99; }
 .st-value { font-size: 0.85em; color: #e0e8f0; }
-.st-muted { color: #555; font-style: italic; }
-.st-action { color: #00d9ff; text-decoration: none; font-size: 0.85em; }
+.st-muted { color: #555; }
+.st-action { color: #00d9ff; text-decoration: none; }
 .st-action:hover { text-decoration: underline; }
-.st-desc { font-size: 0.78em; color: #6b7a99; margin-bottom: 14px; }
+.st-desc { font-size: 0.78em; color: #6b7a99; margin-bottom: 14px; line-height: 1.5; }
 
 .st-role-badge {
-    padding: 2px 8px; border-radius: 4px; font-size: 0.82em; font-weight: 600;
+    padding: 3px 10px; border-radius: 4px; font-size: 0.78em; font-weight: 600;
     background: rgba(0,217,255,0.08); color: #00d9ff;
 }
-.st-role-admin { background: rgba(255,51,102,0.08); color: #ff3366; }
+.st-role-global { background: rgba(0,217,255,0.12); color: #00d9ff; border: 1px solid rgba(0,217,255,0.2); }
 
-/* Admin section */
-.st-admin { border-color: #1e2a45; }
-.st-admin-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-}
-@media (max-width: 500px) { .st-admin-grid { grid-template-columns: 1fr; } }
-.st-admin-card {
+/* Global Admin section */
+.st-global { border-color: rgba(0,217,255,0.15); }
+.st-global-title { color: #00d9ff; }
+
+.st-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 500px) { .st-grid { grid-template-columns: 1fr; } }
+
+.st-card {
     display: flex; align-items: center; gap: 12px;
-    padding: 12px 14px; background: #0a0e20; border: 1px solid #1a2040;
-    border-radius: 8px; text-decoration: none; transition: all 0.15s;
+    padding: 14px 16px; background: #0a0e20; border: 1px solid #1a2040;
+    border-radius: 10px; text-decoration: none; transition: all 0.15s;
 }
-.st-admin-card:hover { border-color: #00d9ff33; background: #0d1228; }
-.st-admin-icon { color: #6b7a99; flex-shrink: 0; }
-.st-admin-card:hover .st-admin-icon { color: #00d9ff; }
-.st-admin-name { font-size: 0.82em; font-weight: 600; color: #c8d6e5; }
-.st-admin-desc { font-size: 0.68em; color: #555; margin-top: 1px; }
+.st-card:hover { border-color: #00d9ff33; background: #0d1228; transform: translateY(-1px); }
+.st-card-icon { color: #6b7a99; flex-shrink: 0; }
+.st-card:hover .st-card-icon { color: #00d9ff; }
+.st-card-name { font-size: 0.85em; font-weight: 600; color: #c8d6e5; }
+.st-card-desc { font-size: 0.7em; color: #555; margin-top: 2px; }
 
-/* Danger zone */
-.st-danger-zone { border-color: #2a1520; }
-.st-danger-title { color: #ff3366 !important; }
-.st-danger-btn {
-    padding: 5px 14px; background: rgba(255,51,102,0.08);
-    border: 1px solid rgba(255,51,102,0.2); color: #ff3366;
-    font-size: 0.8em; font-weight: 700; border-radius: 6px;
+/* Sign out */
+.st-signout { text-align: center; margin-top: 20px; }
+.st-signout-btn {
+    padding: 8px 24px; background: transparent;
+    border: 1px solid #1e2a45; color: #6b7a99;
+    font-size: 0.82em; font-weight: 600; border-radius: 8px;
     cursor: pointer; transition: all 0.15s;
 }
-.st-danger-btn:hover { background: rgba(255,51,102,0.15); }
+.st-signout-btn:hover { border-color: #ff336644; color: #ff3366; }
 </style>
 
 <script nonce="{{ csp_nonce() }}">
