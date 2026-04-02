@@ -6,204 +6,137 @@
     <title>Welcome to AMOSKYS</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', -apple-system, sans-serif; background: #060a1a; color: #e0e8f0; overflow-x: hidden; }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Inter',-apple-system,sans-serif;background:#060a1a;color:#e0e8f0;overflow:hidden;height:100vh;width:100vw}
 
-        /* ── Sections ── */
-        .section { min-height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+        /* Neural grid */
+        body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background-image:linear-gradient(rgba(0,217,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,217,255,0.025) 1px,transparent 1px);background-size:50px 50px;z-index:0;pointer-events:none}
 
-        /* ── Neural background ── */
-        .neural-bg {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none;
-            background-image: linear-gradient(rgba(0,217,255,0.03) 1px, transparent 1px),
-                              linear-gradient(90deg, rgba(0,217,255,0.03) 1px, transparent 1px);
-            background-size: 60px 60px;
-            animation: bg-drift 30s linear infinite;
-        }
-        @keyframes bg-drift { from { transform: translate(0,0); } to { transform: translate(60px,60px); } }
+        /* Steps */
+        .step{position:absolute;top:0;left:0;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.8s ease,transform 0.8s ease;transform:scale(0.95);z-index:1}
+        .step.active{opacity:1;pointer-events:auto;transform:scale(1);z-index:10}
+        .step.exit{opacity:0;transform:scale(1.05);pointer-events:none}
 
-        /* ═══ SECTION 1: IGRIS GREETING ═══ */
-        #s1 { flex-direction: column; gap: 20px; z-index: 1; }
-        .igris-eye {
-            width: 120px; height: 120px; position: relative;
-            animation: igris-appear 1.5s ease-out;
-        }
-        .igris-eye img { width: 120px; height: 120px; filter: drop-shadow(0 0 30px rgba(0,217,255,0.4)); animation: igris-breathe 4s ease-in-out infinite; }
-        @keyframes igris-appear { from { opacity: 0; transform: scale(0.5) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        @keyframes igris-breathe { 0%,100% { filter: drop-shadow(0 0 30px rgba(0,217,255,0.4)); } 50% { filter: drop-shadow(0 0 50px rgba(0,255,136,0.5)); } }
+        /* ═══ STEP 1: IGRIS GREETING ═══ */
+        .s1-logo{width:120px;height:120px;margin-bottom:24px;animation:breathe 4s ease-in-out infinite}
+        .s1-logo img{width:120px;height:120px;filter:drop-shadow(0 0 30px rgba(0,217,255,0.4))}
+        @keyframes breathe{0%,100%{filter:drop-shadow(0 0 30px rgba(0,217,255,0.4));transform:scale(1)}50%{filter:drop-shadow(0 0 50px rgba(0,255,136,0.5));transform:scale(1.03)}}
+        .s1-hi{font-size:1.6em;font-weight:300;color:#6b7a99;opacity:0;animation:fadeUp .8s ease-out .3s forwards}
+        .s1-name{font-size:2.6em;font-weight:800;background:linear-gradient(135deg,#fff,#00d9ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;opacity:0;animation:fadeUp .8s ease-out .6s forwards}
+        .s1-desc{font-size:1em;color:#6b7a99;margin-top:14px;max-width:480px;text-align:center;line-height:1.7;opacity:0;animation:fadeUp .8s ease-out .9s forwards}
+        .s1-desc strong{color:#00d9ff;font-weight:700}
+        .s1-cta{margin-top:40px;opacity:0;animation:fadeUp .8s ease-out 1.3s forwards}
+        .cta-btn{display:flex;align-items:center;gap:8px;padding:12px 28px;background:transparent;border:1px solid rgba(0,217,255,0.3);color:#00d9ff;font-weight:700;font-size:0.9em;border-radius:10px;cursor:pointer;transition:all .25s;letter-spacing:0.5px}
+        .cta-btn:hover{background:rgba(0,217,255,0.08);border-color:#00d9ff;transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,217,255,0.15)}
+        .cta-btn svg{transition:transform .3s}
+        .cta-btn:hover svg{transform:translateX(4px)}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 
-        .greeting { text-align: center; animation: fade-up 1s ease-out 0.5s both; }
-        .greeting-hi { font-size: 1.8em; font-weight: 300; color: #8899bb; }
-        .greeting-name { font-size: 2.4em; font-weight: 800; background: linear-gradient(135deg, #fff, #00d9ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-        .greeting-igris { font-size: 1.05em; color: #6b7a99; margin-top: 16px; line-height: 1.6; max-width: 500px; animation: fade-up 1s ease-out 1s both; }
-        .greeting-igris strong { color: #00d9ff; font-weight: 700; }
+        /* ═══ STEP 2: AGENT SHOWCASE ═══ */
+        .s2-canvas{position:relative;width:100vw;height:100vh}
 
-        .cta-arrow {
-            margin-top: 40px; animation: fade-up 1s ease-out 1.5s both;
-            display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer;
-        }
-        .cta-arrow-text { font-size: 0.85em; font-weight: 700; color: #00d9ff; letter-spacing: 1px; text-transform: uppercase; }
-        .cta-arrow-icon { animation: bounce-down 2s ease-in-out infinite; color: #00d9ff; }
-        @keyframes bounce-down { 0%,100% { transform: translateY(0); } 50% { transform: translateY(8px); } }
-        @keyframes fade-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        /* Center stage */
+        .stage{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:500px;height:500px}
+        @media(max-width:600px){.stage{width:320px;height:320px}}
 
-        /* ═══ SECTION 2: WHAT IS AMOSKYS ═══ */
-        #s2 { flex-direction: column; padding: 40px 20px 60px; min-height: 100vh; }
-        .s2-header { text-align: center; margin-bottom: 40px; }
-        .s2-title { font-size: 2.2em; font-weight: 800; color: #fff; margin-bottom: 8px; }
-        .s2-subtitle { font-size: 1.1em; color: #6b7a99; }
+        /* Center logo */
+        .stage-logo{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:70px;height:70px;z-index:20;transition:all 1s}
+        .stage-logo img{width:70px;height:70px;filter:drop-shadow(0 0 15px rgba(0,217,255,0.3))}
 
-        /* Split layout: orbit + showcase */
-        .s2-split { display: flex; align-items: center; gap: 40px; max-width: 1100px; width: 100%; }
-        @media (max-width: 900px) { .s2-split { flex-direction: column; } }
+        /* Agent particles */
+        .particle{position:absolute;top:50%;left:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#1e2a45;border:1.5px solid #2a3858;transition:all 1.2s cubic-bezier(0.34,1.56,0.64,1);opacity:0;z-index:5}
+        .particle.deployed{opacity:1;width:36px;height:36px;margin:-18px 0 0 -18px;background:#0a1028;border-color:#1e2a45}
+        .particle.active{border-color:#00d9ff;background:#0d1530;box-shadow:0 0 20px rgba(0,217,255,0.3);width:44px;height:44px;margin:-22px 0 0 -22px;z-index:15}
+        .particle-inner{width:100%;height:100%;display:flex;align-items:center;justify-content:center;border-radius:50%}
+        .particle-inner svg{width:14px;height:14px;opacity:0;transition:opacity .3s}
+        .particle.deployed .particle-inner svg{opacity:0.5}
+        .particle.active .particle-inner svg{opacity:1}
+        .particle-label{position:absolute;top:105%;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:0.55em;color:#555;opacity:0;transition:opacity .3s}
+        .particle.active .particle-label{opacity:1;color:#00d9ff}
 
-        /* Orbit */
-        .orbit-wrap { position: relative; width: 420px; height: 420px; flex-shrink: 0; animation: orbit-spin 120s linear infinite; }
-        @keyframes orbit-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
-        @media (max-width: 900px) { .orbit-wrap { width: 300px; height: 300px; } }
-        .orbit-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 80px; height: 80px; z-index: 10; animation: orbit-spin 120s linear infinite reverse; }
-        .orbit-center img { width: 80px; height: 80px; filter: drop-shadow(0 0 20px rgba(0,217,255,0.3)); }
-        .orbit-ring { position: absolute; top: 50%; left: 50%; width: 340px; height: 340px; margin: -170px 0 0 -170px; border-radius: 50%; border: 1px solid rgba(0,217,255,0.08); }
-        @media (max-width: 900px) { .orbit-ring { width: 240px; height: 240px; margin: -120px 0 0 -120px; } }
-        .agent-dot {
-            position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px;
-            border-radius: 50%; background: #0a1020; border: 2px solid #1e2a45;
-            display: flex; align-items: center; justify-content: center;
-            transition: all 0.4s; cursor: pointer;
-            animation: orbit-spin 120s linear infinite reverse;
-        }
-        .agent-dot.active { border-color: #00d9ff; box-shadow: 0 0 15px rgba(0,217,255,0.4); transform: scale(1.3); }
-        .agent-dot svg { width: 16px; height: 16px; }
-        .agent-dot circle { fill: #1e2a45; stroke: #6b7a99; }
-        .agent-dot.active circle { fill: #00d9ff; stroke: #00d9ff; }
+        /* Connection lines */
+        .connections{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1}
+        .conn-line{stroke:#1e2a45;stroke-width:0.5;opacity:0;transition:opacity .5s}
+        .conn-line.visible{opacity:0.3}
+        .conn-line.active{stroke:#00d9ff;opacity:0.6;stroke-width:1}
 
-        /* Agent showcase (right side) */
-        .showcase { flex: 1; min-width: 0; }
-        .showcase-counter { font-size: 0.7em; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-        .showcase-name { font-size: 1.5em; font-weight: 800; color: #00d9ff; margin-bottom: 8px; min-height: 1.5em; }
-        .showcase-desc { font-size: 0.92em; color: #8899bb; line-height: 1.7; margin-bottom: 16px; min-height: 80px; }
-        .showcase-label { font-size: 0.65em; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-        .showcase-probes { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; min-height: 30px; }
-        .showcase-probe { padding: 3px 10px; background: rgba(0,217,255,0.06); border: 1px solid #1e2a45; border-radius: 4px; font-size: 0.75em; color: #00d9ff; animation: probe-in 0.3s ease-out both; }
-        @keyframes probe-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .showcase-mitre { display: flex; flex-wrap: wrap; gap: 4px; min-height: 24px; }
-        .showcase-mt { padding: 2px 8px; background: rgba(255,51,102,0.06); border: 1px solid #2a1525; border-radius: 3px; font-size: 0.7em; color: #ff6688; font-family: monospace; animation: probe-in 0.3s ease-out both; }
-        .showcase-progress { display: flex; gap: 3px; margin-top: 20px; }
-        .showcase-pip { width: 100%; height: 3px; background: #1e2a45; border-radius: 2px; overflow: hidden; }
-        .showcase-pip-fill { height: 100%; background: #00d9ff; border-radius: 2px; width: 0%; transition: width 3s linear; }
-        .showcase-pip.active .showcase-pip-fill { width: 100%; }
+        /* Info panel (bottom of screen) */
+        .info-panel{position:absolute;bottom:0;left:0;right:0;padding:30px 40px 24px;background:linear-gradient(180deg,transparent,rgba(6,10,26,0.95) 30%);z-index:30;opacity:0;transition:opacity .5s}
+        .info-panel.visible{opacity:1}
+        .info-name{font-size:1.2em;font-weight:800;color:#00d9ff;margin-bottom:4px;min-height:1.2em}
+        .info-desc{font-size:0.85em;color:#6b7a99;line-height:1.6;max-width:600px;min-height:40px}
+        .info-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+        .info-tag{padding:2px 8px;border-radius:3px;font-size:0.68em}
+        .info-tag-probe{background:rgba(0,217,255,0.06);border:1px solid #1a2540;color:#00d9ff}
+        .info-tag-mitre{background:rgba(255,68,102,0.06);border:1px solid #2a1525;color:#ff6688;font-family:monospace}
+        .info-counter{position:absolute;top:30px;right:40px;font-size:0.7em;color:#555;letter-spacing:1px}
 
-        /* ═══ SECTION 3: LOGO REVEAL + CTA ═══ */
-        #s3 { flex-direction: column; gap: 24px; }
-        .reveal-logo {
-            width: 140px; height: 140px; opacity: 0;
-            animation: logo-reveal 2s ease-out forwards;
-        }
-        .reveal-logo img { width: 140px; height: 140px; }
-        @keyframes logo-reveal {
-            0% { opacity: 0; transform: scale(0.3) rotate(-180deg); filter: drop-shadow(0 0 0 transparent); }
-            60% { opacity: 1; transform: scale(1.1) rotate(10deg); }
-            80% { transform: scale(0.95) rotate(-5deg); }
-            100% { opacity: 1; transform: scale(1) rotate(0); filter: drop-shadow(0 0 40px rgba(0,217,255,0.5)); }
-        }
-        .reveal-shine {
-            position: absolute; width: 200px; height: 200px; top: 50%; left: 50%; transform: translate(-50%,-50%);
-            background: radial-gradient(ellipse, rgba(0,217,255,0.15) 0%, transparent 70%);
-            animation: shine-pulse 3s ease-in-out infinite;
-            pointer-events: none;
-        }
-        @keyframes shine-pulse { 0%,100% { opacity: 0.3; transform: translate(-50%,-50%) scale(1); } 50% { opacity: 1; transform: translate(-50%,-50%) scale(1.5); } }
+        /* Progress bar */
+        .s2-progress{position:absolute;bottom:12px;left:40px;right:40px;height:2px;background:#1a2040;border-radius:1px;z-index:31;overflow:hidden}
+        .s2-progress-fill{height:100%;background:linear-gradient(90deg,#00d9ff,#00ff88);border-radius:1px;transition:width .3s}
 
-        .reveal-tagline { text-align: center; animation: fade-up 1s ease-out 1s both; }
-        .reveal-tagline h2 { font-size: 1.6em; font-weight: 800; color: #fff; margin-bottom: 8px; }
-        .reveal-tagline p { font-size: 0.95em; color: #6b7a99; }
+        /* Next button */
+        .s2-next{position:absolute;bottom:30px;right:40px;z-index:32;opacity:0;transition:opacity .5s}
+        .s2-next.visible{opacity:1}
 
-        .install-btn {
-            display: inline-flex; align-items: center; gap: 10px;
-            padding: 14px 32px; background: linear-gradient(135deg, #00b894, #00d9ff);
-            color: #060a1a; font-weight: 800; font-size: 1em;
-            border-radius: 12px; text-decoration: none; border: none; cursor: pointer;
-            animation: fade-up 1s ease-out 1.5s both;
-            transition: all 0.2s;
-        }
-        .install-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,217,255,0.3); }
-        .skip-link { color: #555; font-size: 0.78em; cursor: pointer; background: none; border: none; animation: fade-up 1s ease-out 2s both; margin-top: 10px; }
-
-        /* ── Scroll indicator ── */
-        .scroll-sections { position: fixed; right: 20px; top: 50%; transform: translateY(-50%); z-index: 100; display: flex; flex-direction: column; gap: 8px; }
-        .scroll-dot { width: 8px; height: 8px; border-radius: 50%; background: #1e2a45; border: none; cursor: pointer; transition: all 0.2s; }
-        .scroll-dot.active { background: #00d9ff; box-shadow: 0 0 8px rgba(0,217,255,0.5); }
+        /* ═══ STEP 3: INSTALL ═══ */
+        .s3-logo{width:140px;height:140px;margin-bottom:20px}
+        .s3-logo img{width:140px;height:140px;filter:drop-shadow(0 0 40px rgba(0,217,255,0.5))}
+        .s3-shine{position:absolute;width:300px;height:300px;background:radial-gradient(ellipse,rgba(0,217,255,0.12),transparent 70%);animation:shine 3s ease-in-out infinite;pointer-events:none}
+        @keyframes shine{0%,100%{opacity:.3;transform:scale(1)}50%{opacity:1;transform:scale(1.4)}}
+        .s3-title{font-size:2em;font-weight:800;color:#fff;margin-bottom:6px;opacity:0;animation:fadeUp .8s ease-out .5s forwards}
+        .s3-sub{font-size:0.95em;color:#6b7a99;margin-bottom:30px;opacity:0;animation:fadeUp .8s ease-out .8s forwards}
+        .install-btn{display:inline-flex;align-items:center;gap:10px;padding:14px 34px;background:linear-gradient(135deg,#00b894,#00d9ff);color:#060a1a;font-weight:800;font-size:1em;border-radius:12px;text-decoration:none;border:none;cursor:pointer;opacity:0;animation:fadeUp .8s ease-out 1.1s forwards;transition:all .2s}
+        .install-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,217,255,0.3)}
+        .skip-link{color:#444;font-size:0.78em;cursor:pointer;background:none;border:none;margin-top:16px;opacity:0;animation:fadeUp .8s ease-out 1.4s forwards}
+        .skip-link:hover{color:#666}
     </style>
 </head>
 <body>
-    <div class="neural-bg"></div>
 
-    <!-- Scroll dots -->
-    <div class="scroll-sections">
-        <button class="scroll-dot active" data-section="s1"></button>
-        <button class="scroll-dot" data-section="s2"></button>
-        <button class="scroll-dot" data-section="s3"></button>
-    </div>
-
-    <!-- ═══ SECTION 1: IGRIS GREETING ═══ -->
-    <div class="section" id="s1">
-        <div class="igris-eye">
-            <img src="/static/images/amoskys-logo.svg" alt="IGRIS">
-        </div>
-        <div class="greeting">
-            <div class="greeting-hi">Hi,</div>
-            <div class="greeting-name" id="user-name">{{ user.full_name or 'there' }}</div>
-        </div>
-        <p class="greeting-igris">
-            I'm <strong>IGRIS</strong>, your security analyst. I monitor your devices for threats, anomalies, and suspicious behavior — so you don't have to.
-        </p>
-        <div class="cta-arrow" id="cta-start">
-            <span class="cta-arrow-text">Let's get started</span>
-            <svg class="cta-arrow-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+    <!-- ═══ STEP 1: GREETING ═══ -->
+    <div class="step active" id="step1">
+        <div class="s1-logo"><img src="/static/images/amoskys-logo.svg" alt="IGRIS"></div>
+        <div class="s1-hi">Hi,</div>
+        <div class="s1-name">{{ user.full_name or 'there' }}</div>
+        <p class="s1-desc">I'm <strong>IGRIS</strong>, your security analyst. I watch your devices for threats, anomalies, and suspicious behavior — so you don't have to.</p>
+        <div class="s1-cta">
+            <button class="cta-btn" id="btn-start">
+                Let's get started
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+            </button>
         </div>
     </div>
 
-    <!-- ═══ SECTION 2: WHAT IS AMOSKYS ═══ -->
-    <div class="section" id="s2">
-        <div class="s2-header">
-            <h1 class="s2-title">Welcome to AMOSKYS</h1>
-            <p class="s2-subtitle">17 security agents. Watching everything.</p>
-        </div>
-
-        <div class="s2-split">
-            <!-- Orbit (left) -->
-            <div class="orbit-wrap" id="orbit">
-                <div class="orbit-ring"></div>
-                <div class="orbit-center">
-                    <img src="/static/images/amoskys-logo.svg" alt="AMOSKYS">
-                </div>
-                <!-- Agent dots injected by JS -->
+    <!-- ═══ STEP 2: AGENT SHOWCASE ═══ -->
+    <div class="step" id="step2">
+        <div class="s2-canvas">
+            <div class="stage" id="stage">
+                <svg class="connections" id="conn-svg" viewBox="0 0 500 500"></svg>
+                <div class="stage-logo" id="stage-logo"><img src="/static/images/amoskys-logo.svg" alt="AMOSKYS"></div>
             </div>
-
-            <!-- Showcase (right) — auto-cycles through agents -->
-            <div class="showcase" id="showcase">
-                <div class="showcase-counter" id="sc-counter">Agent 1 of 17</div>
-                <div class="showcase-name" id="sc-name"></div>
-                <div class="showcase-desc" id="sc-desc"></div>
-                <div class="showcase-label">Detection Probes</div>
-                <div class="showcase-probes" id="sc-probes"></div>
-                <div class="showcase-label">MITRE ATT&CK</div>
-                <div class="showcase-mitre" id="sc-mitre"></div>
-                <div class="showcase-progress" id="sc-progress"></div>
+            <div class="info-panel" id="info-panel">
+                <div class="info-name" id="info-name"></div>
+                <div class="info-desc" id="info-desc"></div>
+                <div class="info-tags" id="info-tags"></div>
+                <div class="info-counter" id="info-counter"></div>
+            </div>
+            <div class="s2-progress"><div class="s2-progress-fill" id="s2-progress"></div></div>
+            <div class="s2-next" id="s2-next">
+                <button class="cta-btn" id="btn-install">
+                    Install on my Mac
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- ═══ SECTION 3: LOGO REVEAL + INSTALL ═══ -->
-    <div class="section" id="s3">
-        <div class="reveal-shine"></div>
-        <div class="reveal-logo" id="reveal-logo">
-            <img src="/static/images/amoskys-logo.svg" alt="AMOSKYS">
-        </div>
-        <div class="reveal-tagline">
-            <h2>AMOSKYS</h2>
-            <p>Your partner in securing your devices.</p>
-        </div>
+    <!-- ═══ STEP 3: INSTALL ═══ -->
+    <div class="step" id="step3">
+        <div class="s3-shine"></div>
+        <div class="s3-logo"><img src="/static/images/amoskys-logo.svg" alt="AMOSKYS"></div>
+        <h1 class="s3-title">AMOSKYS</h1>
+        <p class="s3-sub">Your partner in securing your devices.</p>
         <a href="/dashboard/deploy" class="install-btn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7v6c0 5.5 4.2 10.7 10 12 5.8-1.3 10-6.5 10-12V7L12 2z" stroke="currentColor" stroke-width="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             Install on my Mac
@@ -212,189 +145,165 @@
     </div>
 
 <script>
-(function() {
-    // ── Agent data ──
-    var agents = [
-        { name: 'Process Monitor', icon: 'cpu', desc: 'Tracks every process execution on your device. Detects suspicious binaries (LOLBins), high CPU usage, and unauthorized process spawning.', probes: ['Process Spawn', 'LOLBin Detection', 'CPU Anomaly', 'Binary Reputation'], mitre: ['T1059', 'T1204', 'T1218', 'T1496'] },
-        { name: 'Auth Guard', icon: 'lock', desc: 'Monitors authentication events — failed logins, credential access attempts, sudo escalation, and off-hours activity.', probes: ['Login Monitor', 'Sudo Watch', 'Credential Access', 'Off-Hours Alert'], mitre: ['T1078', 'T1110', 'T1548'] },
-        { name: 'Network Flow', icon: 'wifi', desc: 'Watches every network connection. Detects data exfiltration spikes, C2 beacons, port scanning, and tunnel creation.', probes: ['Connection Tracker', 'Exfil Detection', 'C2 Beacon', 'Port Scan'], mitre: ['T1071', 'T1048', 'T1046', 'T1040'] },
-        { name: 'DNS Intelligence', icon: 'globe', desc: 'Analyzes DNS queries for beaconing patterns, DGA domains, DNS tunneling, and connections to newly-seen domains.', probes: ['Beacon Detector', 'DGA Analysis', 'DNS Tunnel', 'New Domain'], mitre: ['T1071.004', 'T1572', 'T1583'] },
-        { name: 'File Integrity', icon: 'file', desc: 'Monitors critical system files for unauthorized changes, config backdoors, and log tampering.', probes: ['Critical File Watch', 'Config Monitor', 'Log Integrity', 'Hash Verify'], mitre: ['T1070', 'T1565'] },
-        { name: 'Persistence Watcher', icon: 'anchor', desc: 'Detects persistence mechanisms — new LaunchAgents, LaunchDaemons, cron jobs, shell profile modifications, and SSH key changes.', probes: ['LaunchAgent Watch', 'Cron Monitor', 'Shell Profile', 'SSH Key Watch'], mitre: ['T1543', 'T1053', 'T1546'] },
-        { name: 'Peripheral Guard', icon: 'usb', desc: 'Tracks USB devices and removable media — detects when external drives are connected or disconnected.', probes: ['USB Monitor', 'Media Mount', 'Device Fingerprint'], mitre: ['T1200'] },
-        { name: 'Discovery Scanner', icon: 'radar', desc: 'Maps your network topology. Detects new hosts, ARP changes, rogue DHCP servers, and route modifications.', probes: ['ARP Watch', 'Topology Map', 'Rogue DHCP', 'Route Monitor'], mitre: ['T1016', 'T1018'] },
-        { name: 'App Log Analyzer', icon: 'list', desc: 'Parses application and system logs for security-relevant events, errors, and anomalies.', probes: ['Log Parser', 'Error Detector', 'Event Correlator'], mitre: [] },
-        { name: 'Internet Activity', icon: 'cloud', desc: 'Monitors internet usage patterns — late night connections, geo anomalies, cloud exfiltration, and VPN usage.', probes: ['Night Watch', 'Geo Anomaly', 'Cloud Exfil', 'VPN Detect'], mitre: ['T1567', 'T1090'] },
-        { name: 'DB Activity', icon: 'db', desc: 'Monitors database access patterns for unauthorized queries and data access.', probes: ['Query Monitor', 'Access Pattern'], mitre: [] },
-        { name: 'HTTP Inspector', icon: 'http', desc: 'Analyzes HTTP traffic for suspicious patterns, malicious payloads, and data leaks.', probes: ['Request Analyzer', 'Payload Scan'], mitre: ['T1071.001'] },
-        { name: 'Provenance Engine', icon: 'chain', desc: 'Tracks process lineage and kill chains. Detects rapid app switching, PID anomalies, and execute-to-exfil patterns.', probes: ['Kill Chain', 'PID Anomaly', 'App Switch', 'Exfil Chain'], mitre: ['T1204', 'T1041'] },
-        { name: 'Quarantine Guard', icon: 'shield', desc: 'Monitors Gatekeeper decisions and quarantine bypasses. Detects attempts to run unverified software.', probes: ['Gatekeeper Watch', 'Quarantine Bypass'], mitre: ['T1553'] },
-        { name: 'Infostealer Guard', icon: 'eye', desc: 'Detects credential theft attempts — screen capture abuse, keychain access, and browser credential extraction.', probes: ['Screen Capture', 'Keychain Watch', 'Browser Creds'], mitre: ['T1555'] },
-        { name: 'Realtime Sensor', icon: 'zap', desc: 'Monitors TCC permission requests, Gatekeeper blocks, and execution from temporary directories in real time.', probes: ['TCC Monitor', 'Gatekeeper', 'Temp Execution'], mitre: ['T1548', 'T1553'] },
-        { name: 'Network Sentinel', icon: 'tower', desc: 'Network-level threat detection — monitors for lateral movement, unusual protocols, and network-based attacks.', probes: ['Lateral Movement', 'Protocol Anomaly', 'Network Attack'], mitre: ['T1046', 'T1040'] },
+(function(){
+    var agents=[
+        {n:'Process Monitor',d:'Tracks every process on your device. Detects suspicious binaries, high CPU anomalies, and unauthorized execution.',p:['Process Spawn','LOLBin Detection','CPU Anomaly','Binary Reputation'],m:['T1059','T1204','T1218']},
+        {n:'Auth Guard',d:'Monitors authentication — failed logins, credential access, sudo escalation, and off-hours activity.',p:['Login Monitor','Sudo Watch','Credential Access','Off-Hours Alert'],m:['T1078','T1110','T1548']},
+        {n:'Network Flow',d:'Watches every network connection. Detects exfiltration, C2 beacons, port scanning, and tunnels.',p:['Connection Tracker','Exfil Detection','C2 Beacon','Port Scan'],m:['T1071','T1048','T1046']},
+        {n:'DNS Intelligence',d:'Analyzes DNS queries for beaconing, DGA domains, DNS tunneling, and newly-seen domains.',p:['Beacon Detector','DGA Analysis','DNS Tunnel','New Domain'],m:['T1071.004','T1572']},
+        {n:'File Integrity',d:'Monitors critical files for unauthorized changes, config backdoors, and log tampering.',p:['Critical File Watch','Config Monitor','Log Integrity'],m:['T1070','T1565']},
+        {n:'Persistence Watcher',d:'Detects persistence — LaunchAgents, cron jobs, shell profiles, SSH keys.',p:['LaunchAgent Watch','Cron Monitor','Shell Profile','SSH Key'],m:['T1543','T1053','T1546']},
+        {n:'Peripheral Guard',d:'Tracks USB devices and removable media connections.',p:['USB Monitor','Media Mount','Device Fingerprint'],m:['T1200']},
+        {n:'Discovery Scanner',d:'Maps network topology. Detects new hosts, ARP changes, rogue DHCP.',p:['ARP Watch','Topology Map','Rogue DHCP'],m:['T1016','T1018']},
+        {n:'App Log Analyzer',d:'Parses application and system logs for security events and anomalies.',p:['Log Parser','Error Detector','Event Correlator'],m:[]},
+        {n:'Internet Activity',d:'Monitors usage patterns — late night connections, geo anomalies, cloud exfil.',p:['Night Watch','Geo Anomaly','Cloud Exfil','VPN Detect'],m:['T1567','T1090']},
+        {n:'DB Activity',d:'Monitors database access for unauthorized queries and data patterns.',p:['Query Monitor','Access Pattern'],m:[]},
+        {n:'HTTP Inspector',d:'Analyzes HTTP traffic for suspicious patterns and data leaks.',p:['Request Analyzer','Payload Scan'],m:['T1071.001']},
+        {n:'Provenance Engine',d:'Tracks process lineage and kill chains. Detects execute-to-exfil patterns.',p:['Kill Chain','PID Anomaly','Exfil Chain'],m:['T1204','T1041']},
+        {n:'Quarantine Guard',d:'Monitors Gatekeeper and quarantine bypasses for unverified software.',p:['Gatekeeper Watch','Quarantine Bypass'],m:['T1553']},
+        {n:'Infostealer Guard',d:'Detects credential theft — screen capture, keychain access, browser extraction.',p:['Screen Capture','Keychain Watch','Browser Creds'],m:['T1555']},
+        {n:'Realtime Sensor',d:'Real-time TCC permissions, Gatekeeper blocks, temp directory execution.',p:['TCC Monitor','Gatekeeper','Temp Execution'],m:['T1548']},
+        {n:'Network Sentinel',d:'Network-level threat detection — lateral movement, protocol anomalies.',p:['Lateral Movement','Protocol Anomaly','Network Attack'],m:['T1046','T1040']},
     ];
 
-    // ── Render orbit dots ──
-    var orbitEl = document.getElementById('orbit');
-    var ringEl = orbitEl.querySelector('.orbit-ring');
-    var isMobile = window.innerWidth < 900;
-    var ringR = isMobile ? 120 : 170;
+    var stageW=500,cx=250,cy=250,radius=180;
+    var isMobile=window.innerWidth<600;
+    if(isMobile){stageW=320;cx=160;cy=160;radius=115}
 
-    agents.forEach(function(a, i) {
-        var angle = (i / agents.length) * 2 * Math.PI - Math.PI / 2;
-        var x = 50 + ringR / (isMobile ? 1.5 : 2.1) * Math.cos(angle);
-        var y = 50 + ringR / (isMobile ? 1.5 : 2.1) * Math.sin(angle);
+    // Create particles + connection lines
+    var stageEl=document.getElementById('stage');
+    var connSvg=document.getElementById('conn-svg');
+    connSvg.setAttribute('viewBox','0 0 '+stageW+' '+stageW);
+    var connHtml='';
+    var particles=[];
 
-        var dot = document.createElement('div');
-        dot.className = 'agent-dot';
-        dot.dataset.idx = i;
-        dot.style.left = x + '%';
-        dot.style.top = y + '%';
-        dot.innerHTML = '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" stroke-width="1.5" fill="none"/></svg>';
-        ringEl.appendChild(dot);
+    agents.forEach(function(a,i){
+        var angle=(i/agents.length)*2*Math.PI-Math.PI/2;
+        var tx=cx+radius*Math.cos(angle);
+        var ty=cy+radius*Math.sin(angle);
+
+        var el=document.createElement('div');
+        el.className='particle';
+        el.dataset.idx=i;
+        el.dataset.tx=tx;
+        el.dataset.ty=ty;
+        el.innerHTML='<div class="particle-inner"><svg viewBox="0 0 16 16" fill="none" stroke="#00d9ff" stroke-width="1.5"><circle cx="8" cy="8" r="4"/><circle cx="8" cy="8" r="1" fill="#00d9ff"/></svg></div><div class="particle-label">'+a.n+'</div>';
+        stageEl.appendChild(el);
+        particles.push(el);
+
+        connHtml+='<line class="conn-line" id="conn-'+i+'" x1="'+cx+'" y1="'+cy+'" x2="'+tx+'" y2="'+ty+'"/>';
+    });
+    connSvg.innerHTML=connHtml;
+
+    // ── Step transitions ──
+    var currentStep=1;
+
+    function goStep(n){
+        var cur=document.getElementById('step'+currentStep);
+        var next=document.getElementById('step'+n);
+        cur.classList.remove('active');
+        cur.classList.add('exit');
+        setTimeout(function(){cur.classList.remove('exit')},800);
+        next.classList.add('active');
+        currentStep=n;
+        if(n===2) startShowcase();
+    }
+
+    document.getElementById('btn-start').addEventListener('click',function(){goStep(2)});
+    document.getElementById('btn-install').addEventListener('click',function(){goStep(3)});
+    document.getElementById('skip-setup').addEventListener('click',async function(){
+        await fetch('/dashboard/api/setup/complete',{method:'POST'});
+        window.location.href='/dashboard';
     });
 
-    // ── Progress pips ──
-    var progressEl = document.getElementById('sc-progress');
-    agents.forEach(function(a, i) {
-        var pip = document.createElement('div');
-        pip.className = 'showcase-pip';
-        pip.innerHTML = '<div class="showcase-pip-fill"></div>';
-        pip.dataset.idx = i;
-        progressEl.appendChild(pip);
-    });
+    // ── Agent showcase sequence ──
+    var showcaseIdx=-1;
+    var showcaseTimer=null;
 
-    // ── Auto-cycle showcase ──
-    var currentAgent = -1;
-    var cycleTimer = null;
+    function startShowcase(){
+        setTimeout(function(){deployAgents()},300);
+    }
 
-    function showAgent(idx) {
-        var a = agents[idx];
-        currentAgent = idx;
+    function deployAgents(){
+        // Fly out particles one by one
+        particles.forEach(function(p,i){
+            setTimeout(function(){
+                var tx=parseFloat(p.dataset.tx);
+                var ty=parseFloat(p.dataset.ty);
+                p.style.left=tx+'px';
+                p.style.top=ty+'px';
+                p.classList.add('deployed');
+                // Show connection line
+                var line=document.getElementById('conn-'+i);
+                if(line) line.classList.add('visible');
+            }, i*120);
+        });
 
-        // Update counter
-        document.getElementById('sc-counter').textContent = 'Agent ' + (idx + 1) + ' of ' + agents.length;
+        // After all deployed, start cycling
+        setTimeout(function(){
+            document.getElementById('info-panel').classList.add('visible');
+            showcaseNext();
+            showcaseTimer=setInterval(showcaseNext,3000);
+        }, agents.length*120+500);
+    }
+
+    function showcaseNext(){
+        showcaseIdx=(showcaseIdx+1)%agents.length;
+        var a=agents[showcaseIdx];
+
+        // Highlight particle
+        particles.forEach(function(p,i){
+            p.classList.toggle('active',i===showcaseIdx);
+            var line=document.getElementById('conn-'+i);
+            if(line) line.classList.toggle('active',i===showcaseIdx);
+        });
+
+        // Update info
+        document.getElementById('info-counter').textContent=(showcaseIdx+1)+' / '+agents.length;
 
         // Typewriter name
-        var nameEl = document.getElementById('sc-name');
-        nameEl.textContent = '';
-        typewrite(nameEl, a.name, 40);
+        var nameEl=document.getElementById('info-name');
+        nameEl.textContent='';
+        typewrite(nameEl,a.n,30);
 
-        // Typewriter description
-        var descEl = document.getElementById('sc-desc');
-        descEl.textContent = '';
-        setTimeout(function() { typewrite(descEl, a.desc, 15); }, 400);
+        // Typewriter desc
+        var descEl=document.getElementById('info-desc');
+        descEl.textContent='';
+        setTimeout(function(){typewrite(descEl,a.d,12)},300);
 
-        // Probes (staggered)
-        var probesEl = document.getElementById('sc-probes');
-        probesEl.innerHTML = '';
-        a.probes.forEach(function(p, j) {
-            setTimeout(function() {
-                var span = document.createElement('span');
-                span.className = 'showcase-probe';
-                span.textContent = p;
-                span.style.animationDelay = (j * 0.1) + 's';
-                probesEl.appendChild(span);
-            }, 800 + j * 100);
+        // Tags
+        var tagsEl=document.getElementById('info-tags');
+        tagsEl.innerHTML='';
+        a.p.forEach(function(probe,j){
+            setTimeout(function(){
+                tagsEl.insertAdjacentHTML('beforeend','<span class="info-tag info-tag-probe">'+probe+'</span>');
+            },600+j*80);
         });
-
-        // MITRE
-        var mitreEl = document.getElementById('sc-mitre');
-        mitreEl.innerHTML = '';
-        a.mitre.forEach(function(m, j) {
-            setTimeout(function() {
-                var span = document.createElement('span');
-                span.className = 'showcase-mt';
-                span.textContent = m;
-                span.style.animationDelay = (j * 0.1) + 's';
-                mitreEl.appendChild(span);
-            }, 1200 + j * 80);
-        });
-
-        // Highlight dot
-        document.querySelectorAll('.agent-dot').forEach(function(d, i) {
-            d.classList.toggle('active', i === idx);
+        a.m.forEach(function(mt,j){
+            setTimeout(function(){
+                tagsEl.insertAdjacentHTML('beforeend','<span class="info-tag info-tag-mitre">'+mt+'</span>');
+            },600+a.p.length*80+j*60);
         });
 
         // Progress
-        document.querySelectorAll('.showcase-pip').forEach(function(p, i) {
-            p.classList.remove('active');
-            p.querySelector('.showcase-pip-fill').style.width = i < idx ? '100%' : '0%';
-        });
-        var activePip = document.querySelector('.showcase-pip[data-idx="' + idx + '"]');
-        if (activePip) {
-            activePip.classList.add('active');
-            activePip.querySelector('.showcase-pip-fill').style.width = '0%';
-            requestAnimationFrame(function() {
-                activePip.querySelector('.showcase-pip-fill').style.width = '100%';
-            });
+        document.getElementById('s2-progress').style.width=((showcaseIdx+1)/agents.length*100)+'%';
+
+        // Show "Install" button after full cycle
+        if(showcaseIdx===agents.length-1){
+            setTimeout(function(){
+                document.getElementById('s2-next').classList.add('visible');
+                clearInterval(showcaseTimer);
+            },2500);
         }
     }
 
-    function typewrite(el, text, speed) {
-        var i = 0;
-        function tick() {
-            if (i < text.length) {
-                el.textContent += text.charAt(i);
-                i++;
-                setTimeout(tick, speed);
-            }
+    function typewrite(el,text,speed){
+        var i=0;
+        function tick(){
+            if(i<text.length){el.textContent+=text.charAt(i);i++;setTimeout(tick,speed)}
         }
         tick();
     }
-
-    function nextAgent() {
-        showAgent((currentAgent + 1) % agents.length);
-    }
-
-    // Start cycling when section 2 is visible
-    function startCycle() {
-        if (cycleTimer) return;
-        nextAgent();
-        cycleTimer = setInterval(nextAgent, 3500);
-    }
-
-    // Click dot to jump
-    document.addEventListener('click', function(e) {
-        var dot = e.target.closest('.agent-dot');
-        if (dot) {
-            clearInterval(cycleTimer);
-            cycleTimer = null;
-            showAgent(parseInt(dot.dataset.idx));
-            cycleTimer = setInterval(nextAgent, 3500);
-        }
-    });
-
-    // ── Smooth scroll ──
-    document.getElementById('cta-start').addEventListener('click', function() {
-        document.getElementById('s2').scrollIntoView({ behavior: 'smooth' });
-    });
-
-    // ── Scroll dots ──
-    document.querySelectorAll('.scroll-dot').forEach(function(dot) {
-        dot.addEventListener('click', function() {
-            document.getElementById(dot.dataset.section).scrollIntoView({ behavior: 'smooth' });
-        });
-    });
-    var observer = new IntersectionObserver(function(entries) {
-        entries.forEach(function(entry) {
-            if (entry.isIntersecting) {
-                document.querySelectorAll('.scroll-dot').forEach(function(d) { d.classList.remove('active'); });
-                document.querySelector('.scroll-dot[data-section="' + entry.target.id + '"]').classList.add('active');
-                if (entry.target.id === 's2') { startCycle(); }
-                if (entry.target.id === 's3') {
-                    document.getElementById('reveal-logo').style.animationPlayState = 'running';
-                }
-            }
-        });
-    }, { threshold: 0.5 });
-    ['s1', 's2', 's3'].forEach(function(id) { observer.observe(document.getElementById(id)); });
-
-    // ── Skip setup ──
-    document.getElementById('skip-setup').addEventListener('click', async function() {
-        await fetch('/dashboard/api/setup/complete', { method: 'POST' });
-        window.location.href = '/dashboard';
-    });
 })();
 </script>
 </body>
