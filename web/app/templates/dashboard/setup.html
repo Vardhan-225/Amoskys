@@ -144,7 +144,7 @@
         <button class="skip-link" id="skip-setup">I'll do this later</button>
     </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
     var agents=[
         {n:'Process Monitor',d:'Tracks every process on your device. Detects suspicious binaries, high CPU anomalies, and unauthorized execution.',p:['Process Spawn','LOLBin Detection','CPU Anomaly','Binary Reputation'],m:['T1059','T1204','T1218']},
