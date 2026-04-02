@@ -61,6 +61,11 @@
 .dv-cs-val { font-size: 1.1em; font-weight: 700; }
 .dv-cs-lbl { font-size: 0.58em; color: #6b7a99; text-transform: uppercase; }
 .vc { color: #ff3366; } .vh { color: #f0ad4e; } .ve { color: #00d9ff; }
+/* Status tags */
+.dv-tag-status { font-size: 0.68em; padding: 2px 8px; border-radius: 3px; font-weight: 600; }
+.dv-online { color: #00ff88; background: rgba(0,255,136,0.1); }
+.dv-offline { color: #f0ad4e; background: rgba(240,173,78,0.08); }
+
 .dv-chevron { color: #2a3050; font-size: 1.3em; transition: transform 0.2s, color 0.15s; }
 .dv-card.expanded .dv-chevron { transform: rotate(90deg); color: #00d9ff; }
 
@@ -110,7 +115,9 @@
 .dv-monitor-btn:hover { background: rgba(0,217,255,0.15); border-color: #00d9ff; }
 
 /* MITRE mini */
-.dv-mt { display: inline-block; padding: 2px 6px; background: rgba(0,217,255,0.04); border: 1px solid #1a2040; border-radius: 3px; font-size: 0.65em; color: #00d9ff; font-family: monospace; margin: 2px; }
+.dv-mt { display: inline-block; padding: 3px 8px; background: rgba(0,217,255,0.04); border: 1px solid #1a2040; border-radius: 4px; font-size: 0.68em; color: #00d9ff; font-family: monospace; margin: 2px; cursor: help; transition: all 0.15s; }
+.dv-mt:hover { background: rgba(0,217,255,0.12); border-color: #00d9ff44; }
+.dv-mt-cnt { color: #6b7a99; margin-left: 4px; }
 
 /* Empty */
 .dv-empty { text-align: center; padding: 60px 20px; }
@@ -152,28 +159,31 @@
         var html = '';
         for (var i = 0; i < d.length; i++) {
             var x = d[i], on = x.status === 'online', risk = x.max_risk || 0;
-            var cr = x.critical_count || 0, hi = x.high_count || 0, events = x.event_count || 0;
-            var rtag = risk >= 0.8 ? '<span class="dv-tag dv-tag-crit">Critical</span>'
-                : risk >= 0.6 ? '<span class="dv-tag dv-tag-warn">High Risk</span>'
+            // Null-safe: API may return null instead of 0
+            var cr = parseInt(x.critical_count) || 0;
+            var hi = parseInt(x.high_count) || 0;
+            var events = parseInt(x.event_count) || 0;
+            var rtag = cr > 0 ? '<span class="dv-tag dv-tag-crit">Critical</span>'
+                : hi > 0 ? '<span class="dv-tag dv-tag-warn">High Risk</span>'
                 : '<span class="dv-tag dv-tag-ok">Healthy</span>';
 
-            // Posture for this device
+            // Posture based on actual threat counts
             var ps, pl, pc;
             if (cr === 0 && hi === 0) { ps = 100; pl = 'All Clear'; pc = '#00ff88'; }
             else if (cr === 0) { ps = Math.max(60, 85 - hi); pl = 'Guarded'; pc = '#f0ad4e'; }
-            else if (cr <= 5) { ps = Math.max(30, 60 - cr * 5); pl = 'Needs Attention'; pc = '#f0ad4e'; }
-            else { ps = Math.max(5, 30 - cr); pl = 'Needs Attention'; pc = '#ff3366'; }
+            else if (cr <= 10) { ps = Math.max(20, 55 - cr * 3); pl = 'Needs Attention'; pc = '#f0ad4e'; }
+            else { ps = Math.max(5, 20 - Math.floor(cr / 5)); pl = 'Critical'; pc = '#ff3366'; }
             var circ = 2 * Math.PI * 18, off = circ * (1 - ps / 100);
 
             html += '<div class="dv-card" id="dvc-' + i + '">';
 
             // Header (clickable to expand)
             html += '<div class="dv-card-header" data-idx="' + i + '">'
-                + '<div class="dv-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
-                + '<div class="dv-dot dv-dot-' + (on ? 'on' : 'off') + '"></div></div>'
+                + '<div class="dv-icon">' + osIcon(x.os) + '<div class="dv-dot dv-dot-' + (on ? 'on' : 'off') + '"></div></div>'
                 + '<div class="dv-info"><div class="dv-name">' + esc(x.hostname) + '</div>'
-                + '<div class="dv-meta"><span class="dv-tag">' + esc(x.os || '') + ' ' + esc(x.arch || '') + '</span>'
-                + '<span class="dv-tag">' + (on ? 'Online' : timeAgo(x.last_seen)) + '</span>' + rtag + '</div></div>'
+                + '<div class="dv-meta">'
+                + '<span class="dv-tag-status ' + (on ? 'dv-online' : 'dv-offline') + '">' + (on ? 'Online' : timeAgo(x.last_seen)) + '</span>'
+                + rtag + '</div></div>'
                 + '<div class="dv-stats">';
             if (cr > 0) html += '<div class="dv-cs"><div class="dv-cs-val vc">' + cr + '</div><div class="dv-cs-lbl">Critical</div></div>';
             if (hi > 0) html += '<div class="dv-cs"><div class="dv-cs-val vh">' + hi + '</div><div class="dv-cs-lbl">High</div></div>';
@@ -196,7 +206,7 @@
             html += '<div class="dv-panel"><div class="dv-panel-t">Needs Attention</div>';
             if (cr > 0) html += alertItem('c', cr + ' critical threat' + (cr>1?'s':''), 'Review immediately');
             if (hi > 0) html += alertItem('h', hi + ' high-risk event' + (hi>1?'s':''), 'Worth investigating');
-            if (cr === 0 && hi === 0) html += '<div style="color:#00ff88;font-size:0.82em;padding:8px 0;">&#x2705; All clear</div>';
+            if (cr === 0 && hi === 0) html += '<div style="color:#00ff88;font-size:0.82em;padding:8px 0;">No issues detected</div>';
             html += '</div>';
 
             // Activity (top categories for this device — using fleet-wide for now)
@@ -214,10 +224,12 @@
             html += '</div>';
 
             // MITRE
-            html += '<div class="dv-panel"><div class="dv-panel-t">MITRE Coverage</div>';
+            html += '<div class="dv-panel"><div class="dv-panel-t">MITRE Techniques Detected (24h)</div>';
             if (mitre.length > 0) {
                 for (var j = 0; j < Math.min(6, mitre.length); j++) {
-                    html += '<span class="dv-mt">' + esc(mitre[j].technique) + ' ' + mitre[j].count + '</span>';
+                    var m = mitre[j];
+                    html += '<span class="dv-mt" title="' + mitreName(m.technique) + ' — ' + m.count + ' detections">'
+                        + esc(m.technique) + ' <span class="dv-mt-cnt">' + m.count + '</span></span>';
                 }
             } else { html += '<span style="color:#555;font-size:0.78em;">No detections</span>'; }
             html += '</div>';
@@ -256,6 +268,43 @@
             'high_cpu':'High CPU', 'full_kill_chain':'Kill Chain', 'rapid_app_switch':'App Switching' };
         return map[s] || s.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
     }
+    function osIcon(os) {
+        os = (os || '').toLowerCase();
+        if (os.includes('darwin') || os.includes('macos') || os.includes('mac')) {
+            return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M18.7 8.5c-.1.1-2.1 1.2-2.1 3.7 0 2.9 2.5 3.9 2.6 3.9 0 .1-.4 1.4-1.3 2.7-.8 1.2-1.7 2.4-3 2.4s-1.6-.8-3.1-.8-1.9.8-3.1.8-2-.7-2.9-2.4C4.6 16.7 3.7 14 3.7 11.4c0-3.5 2.3-5.4 4.5-5.4 1.2 0 2.2.8 2.9.8.7 0 1.9-.8 3.3-.8.5 0 2.4 0 3.6 1.8l.7.7z" stroke="#6b7a99" stroke-width="1.2"/><circle cx="15" cy="4" r="1.5" fill="#6b7a99" opacity="0.5"/></svg>';
+        }
+        if (os.includes('linux') || os.includes('ubuntu')) {
+            return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" stroke-width="1.2"><circle cx="12" cy="8" r="4"/><path d="M8 14c-2 1-3 3-3 5h14c0-2-1-4-3-5"/><circle cx="10" cy="7.5" r="0.8" fill="#6b7a99"/><circle cx="14" cy="7.5" r="0.8" fill="#6b7a99"/></svg>';
+        }
+        if (os.includes('windows') || os.includes('win')) {
+            return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 5l8-1.2v7.7H3V5zm0 8.5h8v7.7L3 20v-6.5zm9.5-9.9L22 2v9.5h-9.5V3.6zm0 8.4H22V22l-9.5-1.4v-8.6z" stroke="#6b7a99" stroke-width="1.2"/></svg>';
+        }
+        return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>';
+    }
+
+    function mitreName(id) {
+        var names = {
+            'T1059':'Command and Scripting Interpreter','T1059.002':'AppleScript','T1059.004':'Unix Shell',
+            'T1204':'User Execution','T1218':'System Binary Proxy Execution','T1071':'Application Layer Protocol',
+            'T1071.001':'Web Protocols','T1071.004':'DNS','T1548':'Abuse Elevation Control',
+            'T1548.003':'Sudo and Sudo Caching','T1048':'Exfiltration Over Alternative Protocol',
+            'T1048.002':'Exfiltration Over Asymmetric Encrypted Non-C2',
+            'T1016':'System Network Configuration Discovery','T1046':'Network Service Scanning',
+            'T1040':'Network Sniffing','T1110':'Brute Force','T1078':'Valid Accounts',
+            'T1543.001':'Launch Agent','T1543.004':'Launch Daemon','T1053.003':'Cron',
+            'T1070':'Indicator Removal','T1070.002':'Clear Linux or Mac System Logs',
+            'T1565':'Data Manipulation','T1566.002':'Spearphishing Link',
+            'T1041':'Exfiltration Over C2 Channel','T1496':'Resource Hijacking',
+            'T1553.001':'Gatekeeper Bypass','T1200':'Hardware Additions',
+            'T1557.001':'LLMNR/NBT-NS Poisoning','T1572':'Protocol Tunneling',
+            'T1583':'Acquire Infrastructure','T1098.004':'SSH Authorized Keys',
+            'T1546.004':'Unix Shell Configuration Modification','T1546.015':'Component Object Model Hijacking',
+            'T1555.001':'Keychain','T1090.002':'External Proxy','T1090.003':'Multi-hop Proxy',
+            'T1567':'Exfiltration Over Web Service','T1018':'Remote System Discovery',
+        };
+        return names[id] || id;
+    }
+
     function timeAgo(ep) { if(!ep)return'never';var s=Math.floor(Date.now()/1000-ep);if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'; }
     function esc(s) { if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML; }
 })();
