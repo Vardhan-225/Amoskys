@@ -1,310 +1,266 @@
 {% extends "dashboard/base.html" %}
-
 {% block title %}AMOSKYS — Devices{% endblock %}
-
 {% block content %}
 <div class="dv">
-
-    <!-- Fleet Summary -->
-    <div class="dv-summary" id="dv-summary"></div>
-
-    <!-- Header -->
-    <div class="dv-header">
-        <h2 class="dv-section-title">Devices</h2>
-        <a href="/dashboard/deploy" class="dv-add-btn">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3v10M3 8h10"/></svg>
-            Add Device
-        </a>
-    </div>
-
-    <!-- Device List -->
-    <div id="dv-list" class="dv-list">
-        <div class="dv-loading"><div class="neural-loading"></div></div>
-    </div>
-
-    <!-- Empty State -->
+    <div id="dv-root"><div class="dv-loading"><div class="neural-loading"></div></div></div>
     <div id="dv-empty" class="dv-empty" style="display:none;">
-        <div class="dv-empty-shield">
-            <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS" width="80" height="80" style="opacity:0.3;">
-        </div>
+        <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS" width="80" height="80" style="opacity:0.25;margin-bottom:20px;">
         <h2>No devices yet</h2>
         <p>Install the AMOSKYS agent to start protecting your Mac.</p>
-        <a href="/dashboard/deploy" class="dv-empty-btn">Install on your Mac</a>
+        <a href="/dashboard/deploy" class="dv-cta-btn">Install on your Mac</a>
     </div>
-
 </div>
 
 <style>
-.dv { max-width: 960px; margin: 0 auto; padding: 20px; }
-
-/* ── Fleet Summary ── */
-.dv-summary {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
-    gap: 12px;
-    margin-bottom: 24px;
-}
-@media (max-width: 700px) { .dv-summary { grid-template-columns: 1fr 1fr; } }
-
-.dv-posture-card {
-    background: linear-gradient(135deg, #0d1530 0%, #111d3a 100%);
-    border: 1px solid #1e2a45;
-    border-radius: 14px;
-    padding: 20px;
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    grid-row: span 1;
-}
-.dv-posture-ring { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
-.dv-posture-ring svg { width: 64px; height: 64px; transform: rotate(-90deg); }
-.dv-posture-ring .ring-bg { fill: none; stroke: #1e2a45; stroke-width: 5; }
-.dv-posture-ring .ring-fg { fill: none; stroke-width: 5; stroke-linecap: round; }
-.dv-posture-val { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 1.2em; font-weight: 800; }
-.dv-posture-info {}
-.dv-posture-label { font-size: 0.7em; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.5px; }
-.dv-posture-level { font-size: 1.15em; font-weight: 700; margin-top: 2px; }
-.dv-posture-sub { font-size: 0.75em; color: #6b7a99; margin-top: 4px; }
-
-.dv-stat-card {
-    background: #0f1628;
-    border: 1px solid #1e2a45;
-    border-radius: 12px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-.dv-stat-label { font-size: 0.65em; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-.dv-stat-value { font-size: 1.8em; font-weight: 800; line-height: 1; }
-.dv-stat-sub { font-size: 0.7em; color: #6b7a99; margin-top: 4px; }
-
-/* ── Header ── */
-.dv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-.dv-section-title { font-size: 0.85em; color: #6b7a99; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
-.dv-add-btn {
-    display: flex; align-items: center; gap: 5px;
-    padding: 6px 14px;
-    background: rgba(0,217,255,0.1);
-    border: 1px solid rgba(0,217,255,0.2);
-    color: #00d9ff;
-    font-weight: 700; font-size: 0.78em;
-    border-radius: 6px; text-decoration: none;
-    transition: all 0.15s;
-}
-.dv-add-btn:hover { background: rgba(0,217,255,0.2); border-color: #00d9ff; }
-
-/* ── Loading ── */
+.dv { max-width: 1060px; margin: 0 auto; padding: 16px 20px 40px; }
 .dv-loading { text-align: center; padding: 60px; }
 
-/* ── Device Cards ── */
+/* ── Summary Row ── */
+.dv-top { display: grid; grid-template-columns: 280px 1fr; gap: 14px; margin-bottom: 20px; }
+@media (max-width: 768px) { .dv-top { grid-template-columns: 1fr; } }
+
+.dv-posture {
+    background: linear-gradient(135deg, #0d1530, #111d3a);
+    border: 1px solid #1e2a45;
+    border-radius: 14px;
+    padding: 22px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.dv-ring { position: relative; width: 68px; height: 68px; flex-shrink: 0; }
+.dv-ring svg { width: 68px; height: 68px; transform: rotate(-90deg); }
+.dv-ring .bg { fill: none; stroke: #1e2a45; stroke-width: 5; }
+.dv-ring .fg { fill: none; stroke-width: 5; stroke-linecap: round; }
+.dv-ring-val { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 1.3em; font-weight: 800; }
+.dv-posture-text {}
+.dv-posture-lbl { font-size: 0.68em; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.5px; }
+.dv-posture-lvl { font-size: 1.2em; font-weight: 700; margin-top: 2px; }
+.dv-posture-sub { font-size: 0.75em; color: #6b7a99; margin-top: 3px; }
+
+.dv-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.dv-stat {
+    background: #0f1628;
+    border: 1px solid #1e2a45;
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+.dv-stat-lbl { font-size: 0.62em; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.5px; }
+.dv-stat-val { font-size: 1.7em; font-weight: 800; line-height: 1.1; margin-top: 2px; }
+.dv-stat-sub { font-size: 0.68em; color: #6b7a99; margin-top: 2px; }
+
+/* ── Devices Section ── */
+.dv-section { margin-bottom: 20px; }
+.dv-sec-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.dv-sec-title { font-size: 0.78em; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; }
+.dv-add-btn {
+    display: flex; align-items: center; gap: 4px; padding: 5px 12px;
+    background: rgba(0,217,255,0.08); border: 1px solid rgba(0,217,255,0.15);
+    color: #00d9ff; font-weight: 700; font-size: 0.72em; border-radius: 5px; text-decoration: none;
+}
+.dv-add-btn:hover { background: rgba(0,217,255,0.15); }
+
+/* ── Device Card ── */
 .dv-card {
     background: #0f1628;
     border: 1px solid #1e2a45;
-    border-radius: 14px;
-    padding: 16px 20px;
-    margin-bottom: 10px;
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 8px;
     display: grid;
-    grid-template-columns: auto 1fr auto auto;
+    grid-template-columns: 44px 1fr auto auto;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
     cursor: pointer;
     transition: all 0.2s;
 }
-.dv-card:hover {
-    border-color: #00d9ff33;
-    background: #111c34;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-    transform: translateY(-1px);
-}
+.dv-card:hover { border-color: #00d9ff22; background: #111c34; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
 
-/* Status dot with device icon */
-.dv-device-icon {
-    width: 42px; height: 42px;
-    border-radius: 10px;
-    background: #0a0e20;
-    border: 1px solid #1e2a45;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.dv-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: #0a0e20; border: 1px solid #1e2a45;
+    display: flex; align-items: center; justify-content: center;
     position: relative;
-    flex-shrink: 0;
 }
-.dv-device-icon svg { opacity: 0.5; }
-.dv-device-dot {
-    position: absolute;
-    bottom: -2px; right: -2px;
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    border: 2px solid #0f1628;
+.dv-icon svg { opacity: 0.4; }
+.dv-dot {
+    position: absolute; bottom: -2px; right: -2px;
+    width: 10px; height: 10px; border-radius: 50%; border: 2px solid #0f1628;
 }
-.dv-dot-online { background: #00ff88; box-shadow: 0 0 6px #00ff8866; }
-.dv-dot-offline { background: #555; }
+.dv-dot-on { background: #00ff88; box-shadow: 0 0 6px #00ff8866; }
+.dv-dot-off { background: #555; }
 
-/* Device info */
 .dv-info { min-width: 0; }
-.dv-name { font-size: 0.95em; font-weight: 700; color: #e0e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dv-meta { display: flex; gap: 8px; margin-top: 3px; flex-wrap: wrap; }
-.dv-tag { font-size: 0.68em; color: #6b7a99; padding: 1px 6px; background: rgba(0,217,255,0.05); border-radius: 3px; }
-.dv-tag-risk { color: #ff3366; background: rgba(255,51,102,0.08); }
-.dv-tag-ok { color: #00ff88; background: rgba(0,255,136,0.08); }
+.dv-name { font-size: 0.95em; font-weight: 700; color: #e0e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-meta { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.dv-tag { font-size: 0.65em; padding: 1px 6px; border-radius: 3px; color: #6b7a99; background: rgba(255,255,255,0.03); }
+.dv-tag-ok { color: #00ff88; background: rgba(0,255,136,0.06); }
+.dv-tag-warn { color: #f0ad4e; background: rgba(240,173,78,0.08); }
+.dv-tag-crit { color: #ff3366; background: rgba(255,51,102,0.08); }
 
-/* Device stats (right side) */
-.dv-card-stats { display: flex; gap: 14px; flex-shrink: 0; }
-.dv-card-stat { text-align: right; }
-.dv-card-stat-val { font-size: 1.1em; font-weight: 700; line-height: 1.2; }
-.dv-card-stat-lbl { font-size: 0.6em; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.3px; }
-.val-crit { color: #ff3366; }
-.val-high { color: #f0ad4e; }
-.val-events { color: #00d9ff; }
-.val-ok { color: #00ff88; }
+.dv-card-stats { display: flex; gap: 16px; }
+.dv-cs { text-align: right; }
+.dv-cs-val { font-size: 1.1em; font-weight: 700; line-height: 1.2; }
+.dv-cs-lbl { font-size: 0.58em; color: #6b7a99; text-transform: uppercase; }
+.vc { color: #ff3366; } .vh { color: #f0ad4e; } .ve { color: #00d9ff; } .vo { color: #00ff88; }
 
-/* Arrow */
-.dv-arrow { color: #2a3050; font-size: 1.4em; flex-shrink: 0; transition: color 0.15s; }
+.dv-arrow { color: #2a3050; font-size: 1.3em; transition: color 0.15s; }
 .dv-card:hover .dv-arrow { color: #00d9ff; }
+
+/* ── Threat + MITRE Grid ── */
+.dv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+@media (max-width: 700px) { .dv-grid { grid-template-columns: 1fr; } }
+
+.dv-panel {
+    background: #0f1628;
+    border: 1px solid #1e2a45;
+    border-radius: 12px;
+    padding: 16px 18px;
+}
+.dv-panel-title { font-size: 0.72em; color: #00d9ff; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; font-weight: 700; }
+
+/* Bars */
+.dv-bar { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.dv-bar-label { font-size: 0.75em; min-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c8d6e5; }
+.dv-bar-bg { flex: 1; height: 12px; background: #0a0e27; border-radius: 2px; overflow: hidden; }
+.dv-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s; }
+.dv-bar-cnt { font-size: 0.7em; color: #6b7a99; min-width: 30px; text-align: right; }
+
+/* MITRE tags */
+.dv-mitre-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.dv-mt { padding: 4px 9px; background: rgba(0,217,255,0.05); border: 1px solid #1e2a45; border-radius: 4px; font-size: 0.73em; color: #00d9ff; font-family: 'SF Mono', monospace; }
+.dv-mt-cnt { color: #6b7a99; margin-left: 3px; }
 
 /* ── Empty ── */
 .dv-empty { text-align: center; padding: 80px 20px; }
-.dv-empty-shield { margin-bottom: 20px; }
 .dv-empty h2 { font-size: 1.2em; color: #c8d6e5; margin-bottom: 6px; }
-.dv-empty p { color: #6b7a99; margin-bottom: 20px; font-size: 0.9em; }
-.dv-empty-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 10px 22px; background: linear-gradient(135deg, #00b894, #00d9ff);
+.dv-empty p { color: #6b7a99; margin-bottom: 18px; font-size: 0.9em; }
+.dv-cta-btn {
+    display: inline-block; padding: 10px 22px;
+    background: linear-gradient(135deg, #00b894, #00d9ff);
     color: #0a0e27; font-weight: 700; font-size: 0.9em;
     border-radius: 8px; text-decoration: none;
 }
-.dv-empty-btn:hover { box-shadow: 0 4px 15px rgba(0,217,255,0.3); transform: translateY(-1px); }
+.dv-cta-btn:hover { box-shadow: 0 4px 15px rgba(0,217,255,0.3); }
 </style>
 
 <script nonce="{{ csp_nonce() }}">
 (function() {
-    loadDevices();
-    setInterval(loadDevices, 15000);
+    load(); setInterval(load, 15000);
 
-    async function loadDevices() {
+    async function load() {
         try {
-            var resp = await fetch('/dashboard/api/command-center/status');
-            var data = await resp.json();
-
-            var listEl = document.getElementById('dv-list');
-            var emptyEl = document.getElementById('dv-empty');
-            var summaryEl = document.getElementById('dv-summary');
-
-            if (!data.available || !data.devices || data.devices.length === 0) {
-                listEl.style.display = 'none';
-                summaryEl.style.display = 'none';
-                emptyEl.style.display = 'block';
+            var r = await fetch('/dashboard/api/command-center/status');
+            var data = await r.json();
+            if (!data.available || !data.devices || !data.devices.length) {
+                document.getElementById('dv-root').style.display = 'none';
+                document.getElementById('dv-empty').style.display = 'block';
                 return;
             }
-
-            var devices = data.devices;
-            var f = data.fleet;
-            var e = data.last_24h;
-
-            // Compute fleet posture
-            var totalRisk = 0;
-            var maxRisk = 0;
-            devices.forEach(function(d) {
-                totalRisk += (d.max_risk || 0);
-                maxRisk = Math.max(maxRisk, d.max_risk || 0);
-            });
-            var avgRisk = totalRisk / Math.max(devices.length, 1);
-            var postureScore = Math.round((1 - avgRisk * 0.6 - maxRisk * 0.4) * 100);
-            postureScore = Math.max(0, Math.min(100, postureScore));
-            var postureLevel = postureScore >= 80 ? 'Secure' : postureScore >= 60 ? 'Guarded' : postureScore >= 30 ? 'At Risk' : 'Critical';
-            var postureColor = postureScore >= 80 ? '#00ff88' : postureScore >= 60 ? '#f0ad4e' : '#ff3366';
-
-            // Summary
-            var circ = 2 * Math.PI * 26;
-            var offset = circ * (1 - postureScore / 100);
-            summaryEl.style.display = 'grid';
-            summaryEl.innerHTML =
-                '<div class="dv-posture-card">'
-                + '<div class="dv-posture-ring"><svg viewBox="0 0 60 60"><circle class="ring-bg" cx="30" cy="30" r="26"/>'
-                + '<circle class="ring-fg" cx="30" cy="30" r="26" stroke="' + postureColor + '" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '"/></svg>'
-                + '<div class="dv-posture-val" style="color:' + postureColor + '">' + postureScore + '</div></div>'
-                + '<div class="dv-posture-info"><div class="dv-posture-label">Fleet Posture</div>'
-                + '<div class="dv-posture-level" style="color:' + postureColor + '">' + postureLevel + '</div>'
-                + '<div class="dv-posture-sub">' + f.online + ' of ' + f.total_devices + ' devices online</div></div></div>'
-                + statCard('Events', e.total_events, '#00d9ff', '24 hours')
-                + statCard('Critical', e.critical, e.critical > 0 ? '#ff3366' : '#00ff88', 'threats')
-                + statCard('High', e.high, e.high > 0 ? '#f0ad4e' : '#00ff88', 'threats')
-                + statCard('MITRE', (data.top_mitre_techniques || []).length, '#00d9ff', 'techniques');
-
-            // Device cards
-            var html = '';
-            for (var i = 0; i < devices.length; i++) {
-                var d = devices[i];
-                var isOnline = d.status === 'online';
-                var risk = d.max_risk || 0;
-                var crit = d.critical_count || 0;
-                var high = d.high_count || 0;
-                var events = d.event_count || 0;
-                var riskTag = risk >= 0.8 ? '<span class="dv-tag dv-tag-risk">Critical</span>'
-                    : risk >= 0.6 ? '<span class="dv-tag dv-tag-risk">High Risk</span>'
-                    : '<span class="dv-tag dv-tag-ok">Healthy</span>';
-                var lastSeen = d.last_seen ? timeAgo(d.last_seen) : 'never';
-
-                html += '<div class="dv-card" data-href="/dashboard/device/' + encodeURIComponent(d.device_id) + '">'
-                    // Device icon + status dot
-                    + '<div class="dv-device-icon">'
-                    + '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
-                    + '<div class="dv-device-dot dv-dot-' + (isOnline ? 'online' : 'offline') + '"></div></div>'
-                    // Info
-                    + '<div class="dv-info"><div class="dv-name">' + esc(d.hostname) + '</div>'
-                    + '<div class="dv-meta">'
-                    + '<span class="dv-tag">' + esc(d.os || '') + ' ' + esc(d.arch || '') + '</span>'
-                    + '<span class="dv-tag">' + (isOnline ? 'Online' : lastSeen) + '</span>'
-                    + riskTag
-                    + '</div></div>'
-                    // Stats
-                    + '<div class="dv-card-stats">';
-
-                if (crit > 0) html += '<div class="dv-card-stat"><div class="dv-card-stat-val val-crit">' + crit + '</div><div class="dv-card-stat-lbl">Critical</div></div>';
-                if (high > 0) html += '<div class="dv-card-stat"><div class="dv-card-stat-val val-high">' + high + '</div><div class="dv-card-stat-lbl">High</div></div>';
-                html += '<div class="dv-card-stat"><div class="dv-card-stat-val val-events">' + events + '</div><div class="dv-card-stat-lbl">Events</div></div>';
-
-                html += '</div><div class="dv-arrow">&#x203A;</div></div>';
-            }
-
-            listEl.innerHTML = html;
-
-            // Click handlers
-            listEl.querySelectorAll('.dv-card[data-href]').forEach(function(card) {
-                card.addEventListener('click', function() {
-                    window.location.href = card.getAttribute('data-href');
-                });
-            });
-
-        } catch(err) {
-            document.getElementById('dv-list').style.display = 'none';
+            render(data);
+        } catch(e) {
+            document.getElementById('dv-root').style.display = 'none';
             document.getElementById('dv-empty').style.display = 'block';
         }
     }
 
-    function statCard(label, value, color, sub) {
-        return '<div class="dv-stat-card"><div class="dv-stat-label">' + label + '</div>'
-            + '<div class="dv-stat-value" style="color:' + color + '">' + value + '</div>'
-            + '<div class="dv-stat-sub">' + sub + '</div></div>';
+    function render(data) {
+        var d = data.devices, f = data.fleet, e = data.last_24h;
+        var cats = data.top_categories || [], mitre = data.top_mitre_techniques || [];
+
+        // Posture calc
+        var totalR = 0, maxR = 0;
+        d.forEach(function(x) { totalR += (x.max_risk||0); maxR = Math.max(maxR, x.max_risk||0); });
+        var avg = totalR / Math.max(d.length, 1);
+        var ps = Math.max(0, Math.min(100, Math.round((1 - avg*0.6 - maxR*0.4) * 100)));
+        var pl = ps >= 80 ? 'Secure' : ps >= 60 ? 'Guarded' : ps >= 30 ? 'At Risk' : 'Critical';
+        var pc = ps >= 80 ? '#00ff88' : ps >= 60 ? '#f0ad4e' : '#ff3366';
+        var circ = 2 * Math.PI * 26, off = circ * (1 - ps/100);
+
+        var html = '';
+
+        // Summary row
+        html += '<div class="dv-top"><div class="dv-posture">'
+            + '<div class="dv-ring"><svg viewBox="0 0 60 60"><circle class="bg" cx="30" cy="30" r="26"/>'
+            + '<circle class="fg" cx="30" cy="30" r="26" stroke="' + pc + '" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '"/></svg>'
+            + '<div class="dv-ring-val" style="color:' + pc + '">' + ps + '</div></div>'
+            + '<div class="dv-posture-text"><div class="dv-posture-lbl">Fleet Posture</div>'
+            + '<div class="dv-posture-lvl" style="color:' + pc + '">' + pl + '</div>'
+            + '<div class="dv-posture-sub">' + f.online + ' of ' + f.total_devices + ' online</div></div></div>'
+            + '<div class="dv-stats">'
+            + stat('Events', e.total_events, '#00d9ff', '24h')
+            + stat('Critical', e.critical, e.critical > 0 ? '#ff3366' : '#00ff88', 'threats')
+            + stat('High', e.high, e.high > 0 ? '#f0ad4e' : '#00ff88', 'threats')
+            + stat('MITRE', mitre.length, '#00d9ff', 'techniques')
+            + '</div></div>';
+
+        // Devices
+        html += '<div class="dv-section"><div class="dv-sec-hdr"><span class="dv-sec-title">Devices</span>'
+            + '<a href="/dashboard/deploy" class="dv-add-btn"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3v10M3 8h10"/></svg> Add</a></div>';
+
+        for (var i = 0; i < d.length; i++) {
+            var x = d[i], on = x.status === 'online', risk = x.max_risk || 0;
+            var cr = x.critical_count || 0, hi = x.high_count || 0, ev = x.event_count || 0;
+            var rtag = risk >= 0.8 ? '<span class="dv-tag dv-tag-crit">Critical</span>'
+                : risk >= 0.6 ? '<span class="dv-tag dv-tag-warn">High Risk</span>'
+                : risk >= 0.3 ? '<span class="dv-tag dv-tag-warn">Elevated</span>'
+                : '<span class="dv-tag dv-tag-ok">Healthy</span>';
+
+            html += '<div class="dv-card" data-href="/dashboard/device/' + encodeURIComponent(x.device_id) + '">'
+                + '<div class="dv-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
+                + '<div class="dv-dot dv-dot-' + (on ? 'on' : 'off') + '"></div></div>'
+                + '<div class="dv-info"><div class="dv-name">' + esc(x.hostname) + '</div>'
+                + '<div class="dv-meta"><span class="dv-tag">' + esc(x.os||'') + ' ' + esc(x.arch||'') + '</span>'
+                + '<span class="dv-tag">' + (on ? 'Online' : timeAgo(x.last_seen)) + '</span>' + rtag + '</div></div>'
+                + '<div class="dv-card-stats">';
+            if (cr > 0) html += '<div class="dv-cs"><div class="dv-cs-val vc">' + cr + '</div><div class="dv-cs-lbl">Critical</div></div>';
+            if (hi > 0) html += '<div class="dv-cs"><div class="dv-cs-val vh">' + hi + '</div><div class="dv-cs-lbl">High</div></div>';
+            html += '<div class="dv-cs"><div class="dv-cs-val ve">' + ev + '</div><div class="dv-cs-lbl">Events</div></div>';
+            html += '</div><div class="dv-arrow">&#x203A;</div></div>';
+        }
+        html += '</div>';
+
+        // Threat Categories + MITRE
+        html += '<div class="dv-grid">';
+
+        // Categories
+        html += '<div class="dv-panel"><div class="dv-panel-title">Threat Categories (24h)</div>';
+        if (cats.length > 0) {
+            var maxC = cats[0].count;
+            for (var i = 0; i < Math.min(8, cats.length); i++) {
+                var c = cats[i], pct = Math.max(3, c.count/maxC*100);
+                var clr = c.avg_risk >= 0.7 ? '#ff3366' : c.avg_risk >= 0.4 ? '#f0ad4e' : '#00d9ff';
+                html += '<div class="dv-bar"><span class="dv-bar-label">' + esc(c.category) + '</span>'
+                    + '<div class="dv-bar-bg"><div class="dv-bar-fill" style="width:' + pct + '%;background:' + clr + ';"></div></div>'
+                    + '<span class="dv-bar-cnt">' + c.count + '</span></div>';
+            }
+        } else { html += '<div style="color:#555;text-align:center;padding:20px;">No threats</div>'; }
+        html += '</div>';
+
+        // MITRE
+        html += '<div class="dv-panel"><div class="dv-panel-title">MITRE ATT&CK Coverage</div>';
+        if (mitre.length > 0) {
+            html += '<div class="dv-mitre-grid">';
+            for (var i = 0; i < mitre.length; i++) {
+                html += '<span class="dv-mt">' + esc(mitre[i].technique) + '<span class="dv-mt-cnt">' + mitre[i].count + '</span></span>';
+            }
+            html += '</div>';
+        } else { html += '<div style="color:#555;text-align:center;padding:20px;">No MITRE hits</div>'; }
+        html += '</div></div>';
+
+        document.getElementById('dv-root').innerHTML = html;
+
+        // Click handlers
+        document.querySelectorAll('.dv-card[data-href]').forEach(function(card) {
+            card.addEventListener('click', function() { window.location.href = card.getAttribute('data-href'); });
+        });
     }
 
-    function timeAgo(epoch) {
-        if (!epoch) return 'never';
-        var s = Math.floor(Date.now() / 1000 - epoch);
-        if (s < 0) return 'now';
-        if (s < 60) return s + 's ago';
-        if (s < 3600) return Math.floor(s / 60) + 'm ago';
-        if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-        return Math.floor(s / 86400) + 'd ago';
+    function stat(l, v, c, s) {
+        return '<div class="dv-stat"><div class="dv-stat-lbl">' + l + '</div><div class="dv-stat-val" style="color:' + c + '">' + v + '</div><div class="dv-stat-sub">' + s + '</div></div>';
     }
-
-    function esc(s) {
-        if (!s) return '';
-        var d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
-    }
+    function timeAgo(ep) { if(!ep)return'never';var s=Math.floor(Date.now()/1000-ep);if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'; }
+    function esc(s) { if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML; }
 })();
 </script>
 {% endblock %}
