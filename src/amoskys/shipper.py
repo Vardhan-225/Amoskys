@@ -103,27 +103,37 @@ class ShipperConfig:
 
 
 def _get_hostname() -> str:
-    """Get the fully qualified hostname (not the short name).
+    """Get the best hostname for this device.
 
-    platform.node() returns 'Mac' on some macOS configs.
-    socket.getfqdn() returns 'Akashs-MacBook-Air.local' — much better.
+    Priority (macOS):
+      1. scutil --get ComputerName  → "Akash's MacBook Air"
+      2. scutil --get LocalHostName → "Akashs-MacBook-Air"
+      3. socket.gethostname()       → varies
+      4. platform.node()            → fallback
+
+    Avoids socket.getfqdn() which can return reverse DNS garbage
+    like "223.2.168.192.in-addr.arpa".
     """
-    import socket
-    fqdn = socket.getfqdn()
-    if fqdn and fqdn != "localhost" and "." in fqdn:
-        return fqdn
-    # Fallback: try scutil on macOS
     if platform.system() == "Darwin":
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["scutil", "--get", "ComputerName"],
-                capture_output=True, text=True, timeout=3,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-        except Exception:
-            pass
+        import subprocess
+        for cmd in ["ComputerName", "LocalHostName"]:
+            try:
+                result = subprocess.run(
+                    ["scutil", "--get", cmd],
+                    capture_output=True, text=True, timeout=3,
+                )
+                name = result.stdout.strip()
+                if name and len(name) > 1:
+                    return name
+            except Exception:
+                pass
+
+    # Linux / fallback
+    import socket
+    name = socket.gethostname()
+    if name and name != "localhost":
+        return name
+
     return platform.node()
 
 
