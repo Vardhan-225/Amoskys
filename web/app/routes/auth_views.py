@@ -114,8 +114,9 @@ def resend_verification():
 
 @auth_views_bp.route("/setup", methods=["GET"])
 def setup():
-    """Render first-time user setup wizard."""
-    return render_template("auth/setup.html")
+    """Redirect to the new onboarding flow."""
+    from flask import redirect
+    return redirect("/dashboard/setup")
 
 
 @auth_views_bp.route("/logout")

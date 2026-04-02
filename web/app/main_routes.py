@@ -10,9 +10,9 @@ from flask import Blueprint, current_app, jsonify, redirect, render_template, se
 main_bp = Blueprint("main", __name__)
 
 
-@main_bp.route("/setup")
-def setup_redirect():
-    """Top-level /setup → onboarding page."""
+@main_bp.route("/setup", methods=["GET"])
+def setup_page():
+    """IGRIS onboarding — clean URL redirects to dashboard setup."""
     return redirect("/dashboard/setup")
 
 
