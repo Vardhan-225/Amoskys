@@ -80,11 +80,12 @@ class TestOpsServerHealth:
             assert table in data, f"Missing table: {table}"
 
     def test_device_registration(self):
-        """Test that device registration works."""
+        """Test that device registration works, then clean up."""
+        test_id = "test-pipeline-check"
         r = requests.post(
             f"{OPS_SERVER}/api/v1/register",
             json={
-                "device_id": "test-pipeline-check",
+                "device_id": test_id,
                 "hostname": "pipeline-test",
                 "os": "TestOS",
                 "arch": "test",
@@ -96,6 +97,15 @@ class TestOpsServerHealth:
         assert r.status_code == 200
         data = r.json()
         assert data["status"] == "registered"
+
+        # Clean up test device so it doesn't pollute the dashboard
+        try:
+            requests.delete(
+                f"{OPS_SERVER}/api/v1/devices/{test_id}",
+                timeout=5, verify=VERIFY_SSL,
+            )
+        except Exception:
+            pass  # Best effort cleanup
 
 
 # ══════════════════════════════════════════════════════════════════

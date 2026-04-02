@@ -637,6 +637,15 @@ def receive_telemetry():
     return jsonify({"status": "ok", "stored": stored})
 
 
+@app.route("/api/v1/devices/<device_id>", methods=["DELETE"])
+def delete_device(device_id):
+    """Delete a device and its events. Used for test cleanup."""
+    db = get_db()
+    db.execute("DELETE FROM devices WHERE device_id = ?", (device_id,))
+    db.commit()
+    return jsonify({"status": "deleted"})
+
+
 # Allowed columns per table (whitelist for INSERT safety)
 ALLOWED_TABLES = {
     "security_events": {
