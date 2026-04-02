@@ -3,73 +3,205 @@
 {% block title %}AMOSKYS — Settings{% endblock %}
 
 {% block content %}
-<div class="settings-page">
-    <h1 class="settings-title">Settings</h1>
+<div class="st-page">
+    <h1 class="st-title">Settings</h1>
 
     <!-- Account -->
-    <div class="settings-section">
-        <h2 class="settings-section-title">Account</h2>
-        <div class="settings-row">
-            <span class="settings-label">Email</span>
-            <span class="settings-value">{% if user %}{{ user.email }}{% endif %}</span>
+    <div class="st-section">
+        <h2 class="st-sec-title">Account</h2>
+        <div class="st-row">
+            <span class="st-label">Email</span>
+            <span class="st-value">{% if user %}{{ user.email }}{% endif %}</span>
         </div>
-        <div class="settings-row">
-            <span class="settings-label">Name</span>
-            <span class="settings-value">{% if user and user.full_name %}{{ user.full_name }}{% else %}<em style="color:#555;">Not set</em>{% endif %}</span>
+        <div class="st-row">
+            <span class="st-label">Name</span>
+            <span class="st-value">{% if user and user.full_name %}{{ user.full_name }}{% else %}<span class="st-muted">Not set</span>{% endif %}</span>
         </div>
-        <div class="settings-row">
-            <span class="settings-label">Role</span>
-            <span class="settings-value">{% if user %}{{ user.role.value|capitalize }}{% endif %}</span>
+        <div class="st-row">
+            <span class="st-label">Role</span>
+            <span class="st-value">
+                {% if user %}
+                <span class="st-role-badge {% if user.role.value == 'admin' %}st-role-admin{% endif %}">
+                    {{ user.role.value|capitalize }}
+                </span>
+                {% endif %}
+            </span>
+        </div>
+        <div class="st-row">
+            <span class="st-label">Account Type</span>
+            <span class="st-value">{% if user and user.account_type %}{{ user.account_type|capitalize }}{% else %}<span class="st-muted">Individual</span>{% endif %}</span>
         </div>
     </div>
 
-    <!-- Advanced -->
-    <div class="settings-section">
-        <h2 class="settings-section-title">Advanced Dashboard</h2>
-        <p class="settings-desc">Power tools for deep analysis. These pages are for advanced users and developers.</p>
-        <div class="settings-links">
-            <a href="/dashboard/cortex" class="settings-link">Cortex Overview</a>
-            <a href="/dashboard/observatory" class="settings-link">Observatory</a>
-            <a href="/dashboard/intelligence" class="settings-link">Intelligence</a>
-            <a href="/dashboard/fleet" class="settings-link">Fleet Management</a>
-            <a href="/dashboard/igris" class="settings-link">IGRIS AI Analyst</a>
-            <a href="/dashboard/guardian" class="settings-link">Guardian C2</a>
+    <!-- Security -->
+    <div class="st-section">
+        <h2 class="st-sec-title">Security</h2>
+        <div class="st-row">
+            <span class="st-label">Password</span>
+            <span class="st-value"><a href="/user/auth/forgot-password" class="st-action">Change password</a></span>
+        </div>
+        <div class="st-row">
+            <span class="st-label">Sessions</span>
+            <span class="st-value"><span class="st-muted">Active session</span></span>
+        </div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="st-section">
+        <h2 class="st-sec-title">Notifications</h2>
+        <div class="st-row">
+            <span class="st-label">Email alerts</span>
+            <span class="st-value"><span class="st-muted">Coming soon</span></span>
+        </div>
+        <div class="st-row">
+            <span class="st-label">Critical threat alerts</span>
+            <span class="st-value"><span class="st-muted">Coming soon</span></span>
+        </div>
+    </div>
+
+    {% if user and user.role.value == 'admin' %}
+    <!-- Admin Section -->
+    <div class="st-section st-admin">
+        <h2 class="st-sec-title">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 016 0v2"/></svg>
+            Administration
+        </h2>
+        <p class="st-desc">Admin-only tools for platform management.</p>
+
+        <div class="st-admin-grid">
+            <a href="/admin" class="st-admin-card">
+                <div class="st-admin-icon">
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+                </div>
+                <div>
+                    <div class="st-admin-name">User Management</div>
+                    <div class="st-admin-desc">Manage users, roles, sessions</div>
+                </div>
+            </a>
+            <a href="/dashboard/cortex" class="st-admin-card">
+                <div class="st-admin-icon">
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+                </div>
+                <div>
+                    <div class="st-admin-name">Cortex Dashboard</div>
+                    <div class="st-admin-desc">Full system overview</div>
+                </div>
+            </a>
+            <a href="/dashboard/observatory" class="st-admin-card">
+                <div class="st-admin-icon">
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><path d="M8 2v12M2 8h12"/></svg>
+                </div>
+                <div>
+                    <div class="st-admin-name">Observatory</div>
+                    <div class="st-admin-desc">Agent deep analysis</div>
+                </div>
+            </a>
+            <a href="/dashboard/intelligence" class="st-admin-card">
+                <div class="st-admin-icon">
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="3"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/></svg>
+                </div>
+                <div>
+                    <div class="st-admin-name">Intelligence</div>
+                    <div class="st-admin-desc">SOMA, scoring, fusion</div>
+                </div>
+            </a>
+            <a href="/dashboard/fleet" class="st-admin-card">
+                <div class="st-admin-icon">
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="2" width="14" height="10" rx="1.5"/><path d="M5 14h6M8 12v2"/></svg>
+                </div>
+                <div>
+                    <div class="st-admin-name">Fleet Management</div>
+                    <div class="st-admin-desc">Agent control, deploy, reliability</div>
+                </div>
+            </a>
+            <a href="/dashboard/igris" class="st-admin-card">
+                <div class="st-admin-icon">
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2"/></svg>
+                </div>
+                <div>
+                    <div class="st-admin-name">IGRIS AI Analyst</div>
+                    <div class="st-admin-desc">AI security analyst</div>
+                </div>
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Danger Zone -->
+    <div class="st-section st-danger-zone">
+        <h2 class="st-sec-title st-danger-title">Danger Zone</h2>
+        <div class="st-row">
+            <span class="st-label">Sign out</span>
+            <button class="st-danger-btn" id="st-logout">Sign Out</button>
         </div>
     </div>
 </div>
 
 <style>
-.settings-page { max-width: 700px; margin: 0 auto; padding: 30px 20px; }
-.settings-title { font-size: 1.6em; font-weight: 800; color: #fff; margin-bottom: 24px; }
-.settings-section {
-    background: #0f1628;
-    border: 1px solid #1e2a45;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
+.st-page { max-width: 700px; margin: 0 auto; padding: 24px 20px 40px; }
+.st-title { font-size: 1.5em; font-weight: 800; color: #fff; margin-bottom: 20px; }
+
+.st-section {
+    background: #0f1628; border: 1px solid #1e2a45;
+    border-radius: 12px; padding: 20px; margin-bottom: 14px;
 }
-.settings-section-title { font-size: 0.85em; color: #00d9ff; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; }
-.settings-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 0;
-    border-bottom: 1px solid #0a0e20;
+.st-sec-title {
+    font-size: 0.78em; color: #00d9ff; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 14px; font-weight: 700;
+    display: flex; align-items: center; gap: 6px;
 }
-.settings-row:last-child { border-bottom: none; }
-.settings-label { font-size: 0.88em; color: #6b7a99; }
-.settings-value { font-size: 0.88em; color: #e0e8f0; }
-.settings-desc { font-size: 0.82em; color: #6b7a99; margin-bottom: 14px; }
-.settings-links { display: flex; flex-wrap: wrap; gap: 8px; }
-.settings-link {
-    padding: 6px 14px;
-    background: rgba(0,217,255,0.06);
-    border: 1px solid #1e2a45;
-    border-radius: 6px;
-    color: #8899bb;
-    font-size: 0.82em;
-    text-decoration: none;
-    transition: all 0.15s;
+.st-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid #0a0e20;
 }
-.settings-link:hover { border-color: #00d9ff44; color: #00d9ff; }
+.st-row:last-child { border-bottom: none; }
+.st-label { font-size: 0.85em; color: #6b7a99; }
+.st-value { font-size: 0.85em; color: #e0e8f0; }
+.st-muted { color: #555; font-style: italic; }
+.st-action { color: #00d9ff; text-decoration: none; font-size: 0.85em; }
+.st-action:hover { text-decoration: underline; }
+.st-desc { font-size: 0.78em; color: #6b7a99; margin-bottom: 14px; }
+
+.st-role-badge {
+    padding: 2px 8px; border-radius: 4px; font-size: 0.82em; font-weight: 600;
+    background: rgba(0,217,255,0.08); color: #00d9ff;
+}
+.st-role-admin { background: rgba(255,51,102,0.08); color: #ff3366; }
+
+/* Admin section */
+.st-admin { border-color: #1e2a45; }
+.st-admin-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+@media (max-width: 500px) { .st-admin-grid { grid-template-columns: 1fr; } }
+.st-admin-card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; background: #0a0e20; border: 1px solid #1a2040;
+    border-radius: 8px; text-decoration: none; transition: all 0.15s;
+}
+.st-admin-card:hover { border-color: #00d9ff33; background: #0d1228; }
+.st-admin-icon { color: #6b7a99; flex-shrink: 0; }
+.st-admin-card:hover .st-admin-icon { color: #00d9ff; }
+.st-admin-name { font-size: 0.82em; font-weight: 600; color: #c8d6e5; }
+.st-admin-desc { font-size: 0.68em; color: #555; margin-top: 1px; }
+
+/* Danger zone */
+.st-danger-zone { border-color: #2a1520; }
+.st-danger-title { color: #ff3366 !important; }
+.st-danger-btn {
+    padding: 5px 14px; background: rgba(255,51,102,0.08);
+    border: 1px solid rgba(255,51,102,0.2); color: #ff3366;
+    font-size: 0.8em; font-weight: 700; border-radius: 6px;
+    cursor: pointer; transition: all 0.15s;
+}
+.st-danger-btn:hover { background: rgba(255,51,102,0.15); }
 </style>
+
+<script nonce="{{ csp_nonce() }}">
+document.getElementById('st-logout').addEventListener('click', function() {
+    fetch('/user/auth/logout', { method: 'POST' }).then(function() {
+        window.location.href = '/';
+    });
+});
+</script>
 {% endblock %}
