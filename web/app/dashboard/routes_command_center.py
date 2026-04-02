@@ -135,9 +135,21 @@ def cc_device_telemetry(device_id):
 @dashboard_bp.route("/api/command-center/status")
 @require_login
 def cc_fleet_status():
-    """Fleet-wide posture summary — proxied from ops server."""
-    # Try ops server first
-    data = _ops_get("/api/v1/fleet/status")
+    """Fleet status scoped to the current user's organization.
+
+    Regular users: see only their org's devices
+    Global admins: see all devices
+    """
+    user = get_current_user()
+    is_admin = user and user.role and user.role.value == "admin"
+    org_id = getattr(user, "org_id", None) if user else None
+
+    # Try ops server — pass org_id for scoping (admins get all)
+    params = {}
+    if not is_admin and org_id:
+        params["org_id"] = org_id
+
+    data = _ops_get("/api/v1/fleet/status", params=params)
     if data is not None:
         data["available"] = True
         return jsonify(data)

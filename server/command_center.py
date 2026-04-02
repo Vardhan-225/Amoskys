@@ -1015,50 +1015,65 @@ def query_events():
 
 @app.route("/api/v1/fleet/status", methods=["GET"])
 def fleet_status():
-    """Fleet-wide posture summary."""
+    """Fleet posture — scoped by org_id if provided."""
     db = get_db()
     now = time.time()
+    org_id = request.args.get("org_id")
+
+    # Org filter clause
+    org_filter = ""
+    org_params = []
+    if org_id:
+        org_filter = " AND org_id = ?"
+        org_params = [org_id]
 
     # Device counts
-    total = db.execute("SELECT COUNT(*) FROM devices").fetchone()[0]
+    total = db.execute(f"SELECT COUNT(*) FROM devices WHERE 1=1{org_filter}", org_params).fetchone()[0]
     online = db.execute(
-        "SELECT COUNT(*) FROM devices WHERE last_seen > ?", (now - 300,)
+        f"SELECT COUNT(*) FROM devices WHERE last_seen > ?{org_filter}", [now - 300] + org_params
     ).fetchone()[0]
     offline = total - online
 
     # Event stats (last 24h)
     day_ago_ns = int((now - 86400) * 1e9)
+    # Security event org filter (join through devices table)
+    se_org = ""
+    se_org_params = []
+    if org_id:
+        se_org = " AND device_id IN (SELECT device_id FROM devices WHERE org_id = ?)"
+        se_org_params = [org_id]
+
     total_events = db.execute(
-        "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
-        (day_ago_ns,),
+        f"SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?{se_org}",
+        [day_ago_ns] + se_org_params,
     ).fetchone()[0]
 
     critical = db.execute(
-        "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8",
-        (day_ago_ns,),
+        f"SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8{se_org}",
+        [day_ago_ns] + se_org_params,
     ).fetchone()[0]
 
     high = db.execute(
-        "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8",
-        (day_ago_ns,),
+        f"SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8{se_org}",
+        [day_ago_ns] + se_org_params,
     ).fetchone()[0]
 
     # Top threat categories (last 24h)
     top_categories = db.execute(
-        """SELECT event_category, COUNT(*) as cnt, AVG(risk_score) as avg_risk
+        f"""SELECT event_category, COUNT(*) as cnt, AVG(risk_score) as avg_risk
            FROM security_events
-           WHERE timestamp_ns > ? AND risk_score > 0
+           WHERE timestamp_ns > ? AND risk_score > 0{se_org}
            GROUP BY event_category
            ORDER BY cnt DESC LIMIT 10""",
-        (day_ago_ns,),
+        [day_ago_ns] + se_org_params,
     ).fetchall()
 
     # Most active MITRE techniques
     mitre_rows = db.execute(
-        """SELECT mitre_techniques FROM security_events
+        f"""SELECT mitre_techniques FROM security_events
            WHERE timestamp_ns > ? AND mitre_techniques IS NOT NULL
-           AND mitre_techniques != '[]'""",
-        (day_ago_ns,),
+           AND mitre_techniques != '[]'{se_org}""",
+        [day_ago_ns] + se_org_params,
     ).fetchall()
 
     technique_counts: dict[str, int] = {}
@@ -1079,8 +1094,10 @@ def fleet_status():
     top_techniques = sorted(technique_counts.items(), key=lambda x: -x[1])[:10]
 
     # Per-device summary
+    dev_where = " WHERE 1=1" + (" AND d.org_id = ?" if org_id else "")
+    dev_params = [org_id] if org_id else []
     device_summary = db.execute(
-        """SELECT d.device_id, d.hostname, d.os, d.arch, d.agent_version,
+        f"""SELECT d.device_id, d.hostname, d.os, d.arch, d.agent_version,
                   d.status, d.last_seen,
                   COUNT(se.id) as event_count,
                   MAX(se.risk_score) as max_risk,
@@ -1089,9 +1106,10 @@ def fleet_status():
            FROM devices d
            LEFT JOIN security_events se ON d.device_id = se.device_id
                 AND se.timestamp_ns > ?
+           {dev_where}
            GROUP BY d.device_id
            ORDER BY max_risk DESC NULLS LAST""",
-        (day_ago_ns,),
+        [day_ago_ns] + dev_params,
     ).fetchall()
 
     return jsonify({
