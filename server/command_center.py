@@ -1071,9 +1071,12 @@ def fleet_status():
 
     # Per-device summary
     device_summary = db.execute(
-        """SELECT d.device_id, d.hostname, d.status, d.last_seen,
+        """SELECT d.device_id, d.hostname, d.os, d.arch, d.agent_version,
+                  d.status, d.last_seen,
                   COUNT(se.id) as event_count,
-                  MAX(se.risk_score) as max_risk
+                  MAX(se.risk_score) as max_risk,
+                  SUM(CASE WHEN se.risk_score >= 0.8 THEN 1 ELSE 0 END) as critical_count,
+                  SUM(CASE WHEN se.risk_score >= 0.6 AND se.risk_score < 0.8 THEN 1 ELSE 0 END) as high_count
            FROM devices d
            LEFT JOIN security_events se ON d.device_id = se.device_id
                 AND se.timestamp_ns > ?
@@ -1104,10 +1107,15 @@ def fleet_status():
             {
                 "device_id": r["device_id"],
                 "hostname": r["hostname"],
+                "os": r["os"],
+                "arch": r["arch"],
+                "agent_version": r["agent_version"],
                 "status": r["status"],
                 "last_seen": r["last_seen"],
                 "event_count": r["event_count"],
                 "max_risk": r["max_risk"],
+                "critical_count": r["critical_count"],
+                "high_count": r["high_count"],
             }
             for r in device_summary
         ],
