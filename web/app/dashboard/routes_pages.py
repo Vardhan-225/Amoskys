@@ -10,9 +10,43 @@ from . import dashboard_bp
 @dashboard_bp.route("/devices")
 @require_login
 def dashboard_home():
-    """Landing page — devices with expandable detail."""
+    """Landing page — devices (or setup if first login)."""
     user = get_current_user()
+    if user and not user.setup_completed:
+        return redirect("/dashboard/setup")
     return render_template("dashboard/devices.html", user=user)
+
+
+@dashboard_bp.route("/setup")
+@require_login
+def setup_page():
+    """IGRIS onboarding — first-time setup wizard."""
+    user = get_current_user()
+    if user and user.setup_completed:
+        return redirect("/dashboard")
+    return render_template("dashboard/setup.html", user=user)
+
+
+@dashboard_bp.route("/api/setup/complete", methods=["POST"])
+@require_login
+def setup_complete():
+    """Mark setup as completed for the current user."""
+    from flask import jsonify
+    from amoskys.db.web_db import get_web_session_context
+    from amoskys.auth.models import User
+
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Not authenticated"}), 401
+
+    try:
+        with get_web_session_context() as db:
+            db_user = db.query(User).filter_by(id=user.id).first()
+            if db_user:
+                db_user.setup_completed = True
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @dashboard_bp.route("/cortex")

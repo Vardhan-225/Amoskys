@@ -136,10 +136,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.requires_mfa) {
                     window.location.href = '/auth/mfa?methods=' + data.mfa_methods.join(',');
                 } else {
-                    // Success - redirect to dashboard
+                    // Success - route based on setup status
                     showSuccess('Login successful! Redirecting...');
+                    var dest = '/dashboard';
+                    if (data.user && data.user.setup_completed === false) {
+                        dest = '/dashboard/setup';
+                    }
                     setTimeout(() => {
-                        window.location.href = '/dashboard';
+                        window.location.href = dest;
                     }, 500);
                 }
             } else {

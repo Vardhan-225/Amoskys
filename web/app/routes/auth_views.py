@@ -53,7 +53,6 @@ def login():
     if session_token:
         if _session_is_valid(session_token):
             return redirect("/dashboard")
-        # Session is invalid/revoked — clear the stale cookie and show login
         logger.info("Cleared invalid session cookie on login page")
         return _clear_session_and_render("auth/login.html")
 

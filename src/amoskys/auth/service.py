@@ -164,6 +164,8 @@ class LoginResult(AuthResult):
                 "id": str(self.user.id),
                 "email": self.user.email,
                 "full_name": self.user.full_name,
+                "role": self.user.role.value,
+                "setup_completed": self.user.setup_completed,
             }
         result["requires_mfa"] = self.requires_mfa
         if self.mfa_methods:
