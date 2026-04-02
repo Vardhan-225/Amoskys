@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     showSuccess('Login successful! Redirecting...');
                     var dest = '/dashboard';
                     if (data.user && data.user.setup_completed === false) {
-                        dest = '/dashboard/setup';
+                        dest = '/setup';
                     }
                     setTimeout(() => {
                         window.location.href = dest;

@@ -13,7 +13,7 @@ def dashboard_home():
     """Landing page — devices (or setup if first login)."""
     user = get_current_user()
     if user and not user.setup_completed:
-        return redirect("/dashboard/setup")
+        return redirect("/setup")
     return render_template("dashboard/devices.html", user=user)
 
 

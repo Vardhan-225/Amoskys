@@ -5,9 +5,15 @@ Flask Routes and Views
 
 from datetime import datetime, timezone
 
-from flask import Blueprint, current_app, jsonify, render_template, send_from_directory
+from flask import Blueprint, current_app, jsonify, redirect, render_template, send_from_directory
 
 main_bp = Blueprint("main", __name__)
+
+
+@main_bp.route("/setup")
+def setup_redirect():
+    """Top-level /setup → onboarding page."""
+    return redirect("/dashboard/setup")
 
 
 @main_bp.route("/")
