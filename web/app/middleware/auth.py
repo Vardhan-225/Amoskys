@@ -165,12 +165,15 @@ def require_login(f):
                 # Onboarding redirect for first-time users
                 if not getattr(result.user, "setup_completed", True):
                     if (
-                        not request.path.startswith("/api/onboarding")
-                        and not request.path.startswith("/auth/setup")
+                        not request.path.startswith("/dashboard/setup")
+                        and not request.path.startswith("/dashboard/api/setup")
+                        and not request.path.startswith("/dashboard/api/agents/deploy")
+                        and not request.path.startswith("/dashboard/deploy")
+                        and not request.path.startswith("/api/")
+                        and not request.path.startswith("/auth/")
                         and not request.path.startswith("/static")
-                        and not request.path.startswith("/api/user/auth")
                     ):
-                        return redirect("/auth/setup")
+                        return redirect("/dashboard/setup")
 
                 logger.debug(
                     "User authenticated",
