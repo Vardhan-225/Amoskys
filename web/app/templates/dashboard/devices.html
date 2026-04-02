@@ -1,9 +1,9 @@
 {% extends "dashboard/base.html" %}
-{% block title %}AMOSKYS — Devices{% endblock %}
+{% block title %}AMOSKYS{% endblock %}
 {% block content %}
 <div class="dv">
     <div class="dv-header">
-        <h1 class="dv-title">Devices</h1>
+        <h1 class="dv-title">Your Devices</h1>
         <a href="/dashboard/deploy" class="dv-add-btn">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3v10M3 8h10"/></svg>
             Add Device
@@ -20,7 +20,7 @@
 </div>
 
 <style>
-.dv { max-width: 900px; margin: 0 auto; padding: 24px 20px 40px; }
+.dv { max-width: 960px; margin: 0 auto; padding: 24px 20px 40px; }
 .dv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .dv-title { font-size: 1.5em; font-weight: 800; color: #fff; }
 .dv-subtitle { font-size: 0.82em; color: #6b7a99; margin-bottom: 18px; }
@@ -28,24 +28,27 @@
     display: flex; align-items: center; gap: 5px; padding: 7px 16px;
     background: linear-gradient(135deg, #00b894, #00d9ff);
     color: #0a0e27; font-weight: 700; font-size: 0.82em;
-    border-radius: 8px; text-decoration: none; transition: all 0.2s;
+    border-radius: 8px; text-decoration: none;
 }
 .dv-add-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(0,217,255,0.3); }
 
+/* ── Device Card ── */
 .dv-card {
     background: #0f1628; border: 1px solid #1e2a45; border-radius: 12px;
-    padding: 16px 20px; margin-bottom: 8px;
-    display: grid; grid-template-columns: 44px 1fr auto auto;
-    align-items: center; gap: 14px; cursor: pointer; transition: all 0.2s;
+    margin-bottom: 10px; overflow: hidden; transition: border-color 0.2s;
 }
-.dv-card:hover { border-color: #00d9ff22; background: #111c34; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+.dv-card.expanded { border-color: #00d9ff33; }
+.dv-card-header {
+    display: grid; grid-template-columns: 44px 1fr auto auto auto;
+    align-items: center; gap: 14px; padding: 16px 20px; cursor: pointer;
+}
+.dv-card-header:hover { background: #111c34; }
 
 .dv-icon { width: 44px; height: 44px; border-radius: 10px; background: #0a0e20; border: 1px solid #1a2040; display: flex; align-items: center; justify-content: center; position: relative; }
 .dv-icon svg { opacity: 0.4; }
 .dv-dot { position: absolute; bottom: -2px; right: -2px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #0f1628; }
 .dv-dot-on { background: #00ff88; box-shadow: 0 0 6px #00ff8866; }
 .dv-dot-off { background: #555; }
-
 .dv-info { min-width: 0; }
 .dv-name { font-size: 0.95em; font-weight: 700; color: #e0e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dv-meta { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
@@ -53,15 +56,63 @@
 .dv-tag-ok { color: #00ff88; background: rgba(0,255,136,0.06); }
 .dv-tag-warn { color: #f0ad4e; background: rgba(240,173,78,0.08); }
 .dv-tag-crit { color: #ff3366; background: rgba(255,51,102,0.08); }
-
 .dv-stats { display: flex; gap: 14px; }
 .dv-cs { text-align: right; }
 .dv-cs-val { font-size: 1.1em; font-weight: 700; }
 .dv-cs-lbl { font-size: 0.58em; color: #6b7a99; text-transform: uppercase; }
 .vc { color: #ff3366; } .vh { color: #f0ad4e; } .ve { color: #00d9ff; }
-.dv-arrow { color: #2a3050; font-size: 1.3em; }
-.dv-card:hover .dv-arrow { color: #00d9ff; }
+.dv-chevron { color: #2a3050; font-size: 1.3em; transition: transform 0.2s, color 0.15s; }
+.dv-card.expanded .dv-chevron { transform: rotate(90deg); color: #00d9ff; }
 
+/* ── Expanded Detail ── */
+.dv-detail { display: none; padding: 0 20px 18px; border-top: 1px solid #0a0e20; }
+.dv-card.expanded .dv-detail { display: block; }
+
+.dv-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+@media (max-width: 600px) { .dv-detail-grid { grid-template-columns: 1fr; } }
+
+.dv-panel { background: #0a0e20; border-radius: 8px; padding: 14px; }
+.dv-panel-t { font-size: 0.68em; color: #00d9ff; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; font-weight: 700; }
+
+/* Posture mini */
+.dv-posture-mini { display: flex; align-items: center; gap: 12px; }
+.dv-mini-ring { position: relative; width: 48px; height: 48px; flex-shrink: 0; }
+.dv-mini-ring svg { width: 48px; height: 48px; transform: rotate(-90deg); }
+.dv-mini-ring .bg { fill: none; stroke: #1e2a45; stroke-width: 4; }
+.dv-mini-ring .fg { fill: none; stroke-width: 4; stroke-linecap: round; }
+.dv-mini-val { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 0.9em; font-weight: 800; }
+.dv-mini-info {}
+.dv-mini-level { font-size: 0.85em; font-weight: 700; }
+.dv-mini-desc { font-size: 0.72em; color: #6b7a99; margin-top: 2px; }
+
+/* Alert items */
+.dv-alert-item { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; }
+.dv-alert-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.dv-adot-c { background: #ff3366; } .dv-adot-h { background: #f0ad4e; } .dv-adot-m { background: #00d9ff; }
+.dv-alert-text { font-size: 0.78em; color: #c8d6e5; }
+.dv-alert-sub { font-size: 0.68em; color: #555; }
+
+/* Bar */
+.dv-bar { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.dv-bar-lbl { font-size: 0.7em; min-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-bar-bg { flex: 1; height: 8px; background: #0f1628; border-radius: 2px; overflow: hidden; }
+.dv-bar-fill { height: 100%; border-radius: 2px; }
+.dv-bar-cnt { font-size: 0.65em; color: #6b7a99; min-width: 24px; text-align: right; }
+
+/* Monitor button */
+.dv-monitor-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 18px; margin-top: 14px;
+    background: rgba(0,217,255,0.08); border: 1px solid rgba(0,217,255,0.2);
+    color: #00d9ff; font-weight: 700; font-size: 0.8em;
+    border-radius: 8px; text-decoration: none; transition: all 0.15s;
+}
+.dv-monitor-btn:hover { background: rgba(0,217,255,0.15); border-color: #00d9ff; }
+
+/* MITRE mini */
+.dv-mt { display: inline-block; padding: 2px 6px; background: rgba(0,217,255,0.04); border: 1px solid #1a2040; border-radius: 3px; font-size: 0.65em; color: #00d9ff; font-family: monospace; margin: 2px; }
+
+/* Empty */
 .dv-empty { text-align: center; padding: 60px 20px; }
 .dv-empty h2 { font-size: 1.2em; color: #c8d6e5; margin-bottom: 6px; }
 .dv-empty p { color: #6b7a99; margin-bottom: 18px; }
@@ -70,50 +121,140 @@
 
 <script nonce="{{ csp_nonce() }}">
 (function() {
+    var fleetData = null;
     load(); setInterval(load, 15000);
 
     async function load() {
         try {
             var r = await fetch('/dashboard/api/command-center/status');
-            var data = await r.json();
-            if (!data.available || !data.devices || !data.devices.length) {
+            fleetData = await r.json();
+            if (!fleetData.available || !fleetData.devices || !fleetData.devices.length) {
                 document.getElementById('dv-list').style.display = 'none';
                 document.getElementById('dv-empty').style.display = 'block';
                 document.getElementById('dv-subtitle').textContent = 'No devices connected';
                 return;
             }
-            var d = data.devices;
-            var online = d.filter(function(x) { return x.status === 'online'; }).length;
-            document.getElementById('dv-subtitle').textContent = online + ' of ' + d.length + ' device' + (d.length !== 1 ? 's' : '') + ' online';
-
-            var html = '';
-            for (var i = 0; i < d.length; i++) {
-                var x = d[i], on = x.status === 'online', risk = x.max_risk || 0;
-                var cr = x.critical_count || 0, hi = x.high_count || 0, ev = x.event_count || 0;
-                var rtag = risk >= 0.8 ? '<span class="dv-tag dv-tag-crit">Critical</span>'
-                    : risk >= 0.6 ? '<span class="dv-tag dv-tag-warn">High Risk</span>'
-                    : '<span class="dv-tag dv-tag-ok">Healthy</span>';
-
-                html += '<div class="dv-card" data-href="/dashboard/device/' + encodeURIComponent(x.device_id) + '">'
-                    + '<div class="dv-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
-                    + '<div class="dv-dot dv-dot-' + (on ? 'on' : 'off') + '"></div></div>'
-                    + '<div class="dv-info"><div class="dv-name">' + esc(x.hostname) + '</div>'
-                    + '<div class="dv-meta"><span class="dv-tag">' + esc(x.os || '') + ' ' + esc(x.arch || '') + '</span>'
-                    + '<span class="dv-tag">' + (on ? 'Online' : timeAgo(x.last_seen)) + '</span>' + rtag + '</div></div>'
-                    + '<div class="dv-stats">';
-                if (cr > 0) html += '<div class="dv-cs"><div class="dv-cs-val vc">' + cr + '</div><div class="dv-cs-lbl">Critical</div></div>';
-                if (hi > 0) html += '<div class="dv-cs"><div class="dv-cs-val vh">' + hi + '</div><div class="dv-cs-lbl">High</div></div>';
-                html += '<div class="dv-cs"><div class="dv-cs-val ve">' + ev + '</div><div class="dv-cs-lbl">Events</div></div>';
-                html += '</div><div class="dv-arrow">&#x203A;</div></div>';
-            }
-            document.getElementById('dv-list').innerHTML = html;
-            document.querySelectorAll('.dv-card[data-href]').forEach(function(c) {
-                c.addEventListener('click', function() { window.location.href = c.getAttribute('data-href'); });
-            });
+            renderDevices(fleetData);
         } catch(e) {
             document.getElementById('dv-list').style.display = 'none';
             document.getElementById('dv-empty').style.display = 'block';
         }
+    }
+
+    function renderDevices(data) {
+        var d = data.devices;
+        var online = d.filter(function(x) { return x.status === 'online'; }).length;
+        document.getElementById('dv-subtitle').textContent = online + ' of ' + d.length + ' device' + (d.length !== 1 ? 's' : '') + ' online';
+        var cats = data.top_categories || [];
+        var mitre = data.top_mitre_techniques || [];
+        var ev = data.last_24h;
+
+        var html = '';
+        for (var i = 0; i < d.length; i++) {
+            var x = d[i], on = x.status === 'online', risk = x.max_risk || 0;
+            var cr = x.critical_count || 0, hi = x.high_count || 0, events = x.event_count || 0;
+            var rtag = risk >= 0.8 ? '<span class="dv-tag dv-tag-crit">Critical</span>'
+                : risk >= 0.6 ? '<span class="dv-tag dv-tag-warn">High Risk</span>'
+                : '<span class="dv-tag dv-tag-ok">Healthy</span>';
+
+            // Posture for this device
+            var ps, pl, pc;
+            if (cr === 0 && hi === 0) { ps = 100; pl = 'All Clear'; pc = '#00ff88'; }
+            else if (cr === 0) { ps = Math.max(60, 85 - hi); pl = 'Guarded'; pc = '#f0ad4e'; }
+            else if (cr <= 5) { ps = Math.max(30, 60 - cr * 5); pl = 'Needs Attention'; pc = '#f0ad4e'; }
+            else { ps = Math.max(5, 30 - cr); pl = 'Needs Attention'; pc = '#ff3366'; }
+            var circ = 2 * Math.PI * 18, off = circ * (1 - ps / 100);
+
+            html += '<div class="dv-card" id="dvc-' + i + '">';
+
+            // Header (clickable to expand)
+            html += '<div class="dv-card-header" data-idx="' + i + '">'
+                + '<div class="dv-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
+                + '<div class="dv-dot dv-dot-' + (on ? 'on' : 'off') + '"></div></div>'
+                + '<div class="dv-info"><div class="dv-name">' + esc(x.hostname) + '</div>'
+                + '<div class="dv-meta"><span class="dv-tag">' + esc(x.os || '') + ' ' + esc(x.arch || '') + '</span>'
+                + '<span class="dv-tag">' + (on ? 'Online' : timeAgo(x.last_seen)) + '</span>' + rtag + '</div></div>'
+                + '<div class="dv-stats">';
+            if (cr > 0) html += '<div class="dv-cs"><div class="dv-cs-val vc">' + cr + '</div><div class="dv-cs-lbl">Critical</div></div>';
+            if (hi > 0) html += '<div class="dv-cs"><div class="dv-cs-val vh">' + hi + '</div><div class="dv-cs-lbl">High</div></div>';
+            html += '<div class="dv-cs"><div class="dv-cs-val ve">' + events + '</div><div class="dv-cs-lbl">Events</div></div>';
+            html += '</div><div class="dv-chevron">&#x203A;</div></div>';
+
+            // Expandable detail
+            html += '<div class="dv-detail"><div class="dv-detail-grid">';
+
+            // Posture
+            html += '<div class="dv-panel"><div class="dv-panel-t">Security Posture</div>'
+                + '<div class="dv-posture-mini">'
+                + '<div class="dv-mini-ring"><svg viewBox="0 0 44 44"><circle class="bg" cx="22" cy="22" r="18"/>'
+                + '<circle class="fg" cx="22" cy="22" r="18" stroke="' + pc + '" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '"/></svg>'
+                + '<div class="dv-mini-val" style="color:' + pc + '">' + ps + '</div></div>'
+                + '<div class="dv-mini-info"><div class="dv-mini-level" style="color:' + pc + '">' + pl + '</div>'
+                + '<div class="dv-mini-desc">' + events + ' events in 24h</div></div></div></div>';
+
+            // Needs Attention
+            html += '<div class="dv-panel"><div class="dv-panel-t">Needs Attention</div>';
+            if (cr > 0) html += alertItem('c', cr + ' critical threat' + (cr>1?'s':''), 'Review immediately');
+            if (hi > 0) html += alertItem('h', hi + ' high-risk event' + (hi>1?'s':''), 'Worth investigating');
+            if (cr === 0 && hi === 0) html += '<div style="color:#00ff88;font-size:0.82em;padding:8px 0;">&#x2705; All clear</div>';
+            html += '</div>';
+
+            // Activity (top categories for this device — using fleet-wide for now)
+            html += '<div class="dv-panel"><div class="dv-panel-t">Top Activity</div>';
+            if (cats.length > 0) {
+                var maxC = cats[0].count;
+                for (var j = 0; j < Math.min(4, cats.length); j++) {
+                    var c = cats[j], pct = Math.max(3, c.count/maxC*100);
+                    var clr = c.avg_risk >= 0.6 ? '#ff3366' : c.avg_risk >= 0.3 ? '#f0ad4e' : '#00d9ff';
+                    html += '<div class="dv-bar"><span class="dv-bar-lbl">' + humanize(c.category) + '</span>'
+                        + '<div class="dv-bar-bg"><div class="dv-bar-fill" style="width:' + pct + '%;background:' + clr + '"></div></div>'
+                        + '<span class="dv-bar-cnt">' + c.count + '</span></div>';
+                }
+            }
+            html += '</div>';
+
+            // MITRE
+            html += '<div class="dv-panel"><div class="dv-panel-t">MITRE Coverage</div>';
+            if (mitre.length > 0) {
+                for (var j = 0; j < Math.min(6, mitre.length); j++) {
+                    html += '<span class="dv-mt">' + esc(mitre[j].technique) + ' ' + mitre[j].count + '</span>';
+                }
+            } else { html += '<span style="color:#555;font-size:0.78em;">No detections</span>'; }
+            html += '</div>';
+
+            html += '</div>'; // detail-grid
+
+            // Monitor button
+            html += '<a href="/dashboard/device/' + encodeURIComponent(x.device_id) + '" class="dv-monitor-btn">'
+                + '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1"/></svg>'
+                + 'Monitor Device</a>';
+
+            html += '</div></div>'; // detail, card
+        }
+
+        document.getElementById('dv-list').innerHTML = html;
+
+        // Toggle expand on header click
+        document.querySelectorAll('.dv-card-header').forEach(function(hdr) {
+            hdr.addEventListener('click', function() {
+                var card = document.getElementById('dvc-' + hdr.dataset.idx);
+                card.classList.toggle('expanded');
+            });
+        });
+    }
+
+    function alertItem(level, title, sub) {
+        return '<div class="dv-alert-item"><div class="dv-alert-dot dv-adot-' + level + '"></div>'
+            + '<div><div class="dv-alert-text">' + title + '</div><div class="dv-alert-sub">' + sub + '</div></div></div>';
+    }
+
+    function humanize(s) {
+        if (!s) return '';
+        var map = { 'process_spawned':'Process Execution', 'lolbin_execution':'Suspicious Binary', 'new_external_connection':'External Connection',
+            'tcc_permission_denied':'Permission Denied', 'exfil_spike':'Data Exfiltration', 'macos_config_backdoor_new':'Config Backdoor',
+            'c2_beacon_suspect':'C2 Beacon', 'topology_new_route':'Route Change', 'dns_beaconing_suspected':'DNS Beaconing',
+            'high_cpu':'High CPU', 'full_kill_chain':'Kill Chain', 'rapid_app_switch':'App Switching' };
+        return map[s] || s.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
     }
     function timeAgo(ep) { if(!ep)return'never';var s=Math.floor(Date.now()/1000-ep);if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'; }
     function esc(s) { if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML; }

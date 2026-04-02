@@ -7,17 +7,10 @@ from . import dashboard_bp
 
 
 @dashboard_bp.route("/")
-@require_login
-def dashboard_home():
-    """Landing page — security overview."""
-    user = get_current_user()
-    return render_template("dashboard/overview.html", user=user)
-
-
 @dashboard_bp.route("/devices")
 @require_login
-def devices_page():
-    """Devices list — just the devices."""
+def dashboard_home():
+    """Landing page — devices with expandable detail."""
     user = get_current_user()
     return render_template("dashboard/devices.html", user=user)
 
