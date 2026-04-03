@@ -573,17 +573,7 @@
             }
 
             async loadDeviceInfo() {
-                try {
-                    const r = await fetch('/dashboard/api/device-info');
-                    const d = await r.json();
-                    if (d.status === 'success' && d.system) {
-                        const el = document.getElementById('header-hostname');
-                        if (el) {
-                            const sys = d.system.system === 'Darwin' ? 'macOS' : (d.system.system || '');
-                            el.textContent = (d.system.hostname || '--') + ' · ' + sys;
-                        }
-                    }
-                } catch (e) { /* silent */ }
+                // Removed: was fetching server hostname (AWS VPS), not user's device
             }
 
             updateActiveNav() {
