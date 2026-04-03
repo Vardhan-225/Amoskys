@@ -566,14 +566,6 @@
 
             init() {
                 this.updateActiveNav();
-                this.loadDeviceInfo();
-                this.startRealTimeUpdates();
-                this.updateTime();
-                setInterval(() => this.updateTime(), 1000);
-            }
-
-            async loadDeviceInfo() {
-                // Removed: was fetching server hostname (AWS VPS), not user's device
             }
 
             updateActiveNav() {
