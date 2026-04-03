@@ -169,6 +169,7 @@ if ! grep -q "AMOSKYS_SERVER" "$CONFIG_DIR/amoskys.env" 2>/dev/null; then
                 case "$key" in
                     token) echo "AMOSKYS_DEPLOY_TOKEN=$value" >> "$CONFIG_DIR/amoskys.env" ;;
                     server) echo "AMOSKYS_SERVER=$value" >> "$CONFIG_DIR/amoskys.env" ;;
+                    org_id) echo "AMOSKYS_ORG_ID=$value" >> "$CONFIG_DIR/amoskys.env" ;;
                 esac
             done < "$config_path"
             rm -f "$config_path"

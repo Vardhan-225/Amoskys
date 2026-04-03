@@ -348,8 +348,9 @@ def deploy_download_pkg():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-    # Build .amoskys-config
-    config_content = f"token={token}\nserver={OPS_SERVER_URL}\n"
+    # Build .amoskys-config — includes org_id so ops server can link device to user's org
+    org_id = getattr(user, "org_id", "") or ""
+    config_content = f"token={token}\nserver={OPS_SERVER_URL}\norg_id={org_id}\n"
 
     # Create .zip: signed .pkg + config
     zip_buffer = io.BytesIO()

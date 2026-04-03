@@ -445,17 +445,17 @@ def register_device():
             "device_id": device_id,
         })
 
-    # New device — resolve org from deployment token
-    org_id = None
+    # New device — resolve org from payload or deployment token
+    org_id = data.get("org_id") or None  # Sent directly by shipper
     user_id = None
     token_hash = None
 
-    if deploy_token:
-        # Hash the token and look it up in the web DB
-        # The web DB (amoskys.com) stores agent_tokens with SHA-256 hashes
+    if deploy_token and not org_id:
+        # Fallback: hash the token and look it up in the web DB
         token_hash = hashlib.sha256(deploy_token.encode()).hexdigest()
         org_id, user_id = _resolve_token_org(token_hash)
-        if org_id:
+
+    if org_id:
             logger.info(
                 "Token validated: device=%s org=%s user=%s",
                 device_id[:8], org_id[:8], (user_id or "")[:8],

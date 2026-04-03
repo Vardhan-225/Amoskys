@@ -59,6 +59,7 @@ class ShipperConfig:
     server_url: str = ""           # e.g. https://ops.amoskys.com
     api_key: str = ""              # Device API key (assigned on registration)
     deploy_token: str = ""         # One-time deployment token (used on first register)
+    org_id: str = ""               # Organization ID (links device to user's org)
     device_id: str = ""            # Unique device identifier
     telemetry_db: str = "data/telemetry.db"
     cursor_db: str = "data/shipper_cursor.db"
@@ -70,6 +71,7 @@ class ShipperConfig:
         server = os.getenv("AMOSKYS_SERVER", "").rstrip("/")
         api_key = os.getenv("AMOSKYS_API_KEY", "")
         deploy_token = os.getenv("AMOSKYS_DEPLOY_TOKEN", "")
+        org_id = os.getenv("AMOSKYS_ORG_ID", "")
         device_id = os.getenv("AMOSKYS_DEVICE_ID", "")
 
         # Auto-generate device_id from hardware if not set
@@ -94,6 +96,7 @@ class ShipperConfig:
             server_url=server,
             api_key=api_key,
             deploy_token=deploy_token,
+            org_id=org_id,
             device_id=device_id,
             telemetry_db=telemetry_db,
             cursor_db=cursor_db,
@@ -401,9 +404,11 @@ class TelemetryShipper:
                 "python_version": platform.python_version(),
             }
 
-            # Include deployment token on first registration
+            # Include deployment token + org_id on first registration
             if self.config.deploy_token and not self.config.api_key:
                 payload["deploy_token"] = self.config.deploy_token
+            if self.config.org_id:
+                payload["org_id"] = self.config.org_id
 
             resp = self._session.post(
                 f"{self.config.server_url}/api/v1/register",
