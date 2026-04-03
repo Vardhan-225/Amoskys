@@ -69,7 +69,21 @@
         .info-tag{padding:2px 8px;border-radius:3px;font-size:0.68em}
         .info-tag-probe{background:rgba(0,217,255,0.06);border:1px solid #1a2540;color:#00d9ff}
         .info-tag-mitre{background:rgba(255,68,102,0.06);border:1px solid #2a1525;color:#ff6688;font-family:monospace}
-        .info-counter{position:absolute;top:30px;right:40px;font-size:0.7em;color:#555;letter-spacing:1px}
+        .info-nav{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+        .info-arrow{background:none;border:1px solid #1e2a45;color:#6b7a99;width:32px;height:32px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+        .info-arrow:hover{border-color:#00d9ff;color:#00d9ff}
+        .info-counter{font-size:0.7em;color:#555;letter-spacing:1px}
+
+        /* Collapse animation */
+        .particle.collapsing{transition:all 1.5s cubic-bezier(0.68,-0.55,0.27,1.55)!important;left:50%!important;top:50%!important;width:8px!important;height:8px!important;margin:-4px 0 0 -4px!important;opacity:0.6!important;border-color:#00d9ff!important}
+        .conn-line.collapsing{opacity:0!important;transition:opacity .8s!important}
+        .stage-logo.collapsed{transform:translate(-50%,-50%) scale(1.3)!important;filter:drop-shadow(0 0 50px rgba(0,217,255,0.6))!important;transition:all 1s ease-out!important}
+
+        /* Collapse message */
+        .collapse-msg{position:absolute;bottom:80px;left:0;right:0;text-align:center;opacity:0;transition:opacity .8s;z-index:35;pointer-events:none}
+        .collapse-msg.visible{opacity:1}
+        .collapse-title{font-size:2em;font-weight:800;color:#fff;margin-bottom:4px}
+        .collapse-sub{font-size:1em;color:#6b7a99}
 
         /* Progress bar */
         .s2-progress{position:absolute;bottom:12px;left:40px;right:40px;height:2px;background:#1a2040;border-radius:1px;z-index:31;overflow:hidden}
@@ -116,10 +130,19 @@
                 <div class="stage-logo" id="stage-logo"><img src="/static/images/amoskys-logo.svg" alt="AMOSKYS"></div>
             </div>
             <div class="info-panel" id="info-panel">
+                <div class="info-nav">
+                    <button class="info-arrow" id="info-prev"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4l-4 4 4 4"/></svg></button>
+                    <div class="info-counter" id="info-counter"></div>
+                    <button class="info-arrow" id="info-next"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4l4 4-4 4"/></svg></button>
+                </div>
                 <div class="info-name" id="info-name"></div>
                 <div class="info-desc" id="info-desc"></div>
                 <div class="info-tags" id="info-tags"></div>
-                <div class="info-counter" id="info-counter"></div>
+            </div>
+            <!-- Collapse message (after full cycle) -->
+            <div class="collapse-msg" id="collapse-msg">
+                <div class="collapse-title" id="collapse-title">AMOSKYS</div>
+                <div class="collapse-sub">Securing every layer.</div>
             </div>
             <div class="s2-progress"><div class="s2-progress-fill" id="s2-progress"></div></div>
             <div class="s2-next" id="s2-next">
@@ -211,6 +234,18 @@
 
     document.getElementById('btn-start').addEventListener('click',function(){goStep(2)});
     document.getElementById('btn-install').addEventListener('click',function(){goStep(3)});
+
+    // Prev/Next arrows
+    document.getElementById('info-prev').addEventListener('click',function(){
+        clearInterval(showcaseTimer);showcaseTimer=null;
+        showcaseIdx=(showcaseIdx-1+agents.length)%agents.length;
+        showAgent(showcaseIdx);
+    });
+    document.getElementById('info-next').addEventListener('click',function(){
+        clearInterval(showcaseTimer);showcaseTimer=null;
+        showcaseIdx=(showcaseIdx+1)%agents.length;
+        showAgent(showcaseIdx);
+    });
     document.getElementById('skip-setup').addEventListener('click',async function(){
         await fetch('/dashboard/api/setup/complete',{method:'POST'});
         window.location.href='/dashboard';
@@ -247,19 +282,32 @@
         }, agents.length*120+500);
     }
 
+    var cycleCount=0;
+
     function showcaseNext(){
         showcaseIdx=(showcaseIdx+1)%agents.length;
-        var a=agents[showcaseIdx];
+        if(showcaseIdx===0) cycleCount++;
+        showAgent(showcaseIdx);
+
+        // After full cycle: collapse particles into logo
+        if(cycleCount>=1 && showcaseIdx===agents.length-1){
+            clearInterval(showcaseTimer);showcaseTimer=null;
+            setTimeout(collapseToLogo,2500);
+        }
+    }
+
+    function showAgent(idx){
+        var a=agents[idx];
 
         // Highlight particle
         particles.forEach(function(p,i){
-            p.classList.toggle('active',i===showcaseIdx);
+            p.classList.toggle('active',i===idx);
             var line=document.getElementById('conn-'+i);
-            if(line) line.classList.toggle('active',i===showcaseIdx);
+            if(line) line.classList.toggle('active',i===idx);
         });
 
-        // Update info
-        document.getElementById('info-counter').textContent=(showcaseIdx+1)+' / '+agents.length;
+        // Counter
+        document.getElementById('info-counter').textContent=(idx+1)+' / '+agents.length;
 
         // Typewriter name
         var nameEl=document.getElementById('info-name');
@@ -286,15 +334,37 @@
         });
 
         // Progress
-        document.getElementById('s2-progress').style.width=((showcaseIdx+1)/agents.length*100)+'%';
+        document.getElementById('s2-progress').style.width=((idx+1)/agents.length*100)+'%';
+    }
 
-        // Show "Install" button after full cycle
-        if(showcaseIdx===agents.length-1){
+    function collapseToLogo(){
+        // Hide info panel
+        document.getElementById('info-panel').classList.remove('visible');
+
+        // Collapse all particles back to center
+        particles.forEach(function(p,i){
             setTimeout(function(){
-                document.getElementById('s2-next').classList.add('visible');
-                clearInterval(showcaseTimer);
-            },2500);
-        }
+                p.classList.remove('active','deployed');
+                p.classList.add('collapsing');
+                var line=document.getElementById('conn-'+i);
+                if(line) line.classList.add('collapsing');
+            },i*60);
+        });
+
+        // Logo grows + glows
+        setTimeout(function(){
+            document.getElementById('stage-logo').classList.add('collapsed');
+        },agents.length*60+300);
+
+        // Show AMOSKYS tagline
+        setTimeout(function(){
+            document.getElementById('collapse-msg').classList.add('visible');
+        },agents.length*60+800);
+
+        // Show install button
+        setTimeout(function(){
+            document.getElementById('s2-next').classList.add('visible');
+        },agents.length*60+1500);
     }
 
     function typewrite(el,text,speed){
