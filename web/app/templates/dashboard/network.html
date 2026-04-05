@@ -607,7 +607,7 @@
                 el.style.cssText = 'pointer-events:none;text-align:center;transform:translateX(-50%);';
                 if (d.isDevice) {
                     el.innerHTML =
-                        '<div style="font-size:0.62rem;font-weight:700;color:#00d9ff;text-shadow:0 0 8px rgba(0,217,255,0.6),0 1px 3px rgba(0,0,0,1);white-space:nowrap;letter-spacing:0.05em;">YOUR DEVICE</div>' +
+                        '<div style="font-size:0.62rem;font-weight:700;color:#00d9ff;text-shadow:0 0 8px rgba(0,217,255,0.6),0 1px 3px rgba(0,0,0,1);white-space:nowrap;letter-spacing:0.05em;">' + escHtml(deviceName || 'YOUR DEVICE') + '</div>' +
                         '<div style="font-size:0.5rem;color:#6b9abf;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,1);">' + escHtml(deviceCity.split(',')[0] || '') + '</div>';
                 } else {
                     const nameColor = d.threat ? '#ff6688' : '#c8d8e8';
