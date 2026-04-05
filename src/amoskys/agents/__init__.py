@@ -119,210 +119,256 @@ __all__ = [
 ]
 
 # ── Agent Registry — single source of truth for dynamic discovery ──
+#
+# Hierarchy:
+#   CORE (8)        — Always running. Fundamental data collection.
+#   SPECIALIST (5)  — Activated by Correlation when threat context detected.
+#   SITUATIONAL (3) — Only on servers with web/DB services, not endpoints.
+#   MERGED (3)      — Probes absorbed into parent CORE agent. Not standalone.
+#
 AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
-    # ── Core Endpoint Agents ──
+    # ═══ TIER 1: CORE — Always Running (8 agents) ═══
     "proc": {
         "class": ProcAgent,
         "name": "Process Agent",
-        "description": "Process behavior, resource abuse, and privilege escalation detection",
+        "description": "Process trees, code signing, DYLD injection, resource abuse",
         "platforms": ["darwin"],
         "probes": 10,
         "category": "endpoint",
         "icon": "cpu",
+        "tier": "core",
         "collection_agent": "macos_process",
     },
     "auth": {
         "class": AuthGuardAgent,
         "name": "AuthGuard Agent",
-        "description": "Authentication and authorization monitoring via unified logging",
+        "description": "SSH brute force, sudo escalation, impossible travel, off-hours login",
         "platforms": ["darwin"],
         "probes": 6,
         "category": "endpoint",
         "icon": "lock",
+        "tier": "core",
         "collection_agent": "macos_auth",
     },
     "persistence": {
         "class": PersistenceGuard,
         "name": "Persistence Guard",
-        "description": "Persistence mechanism detection (LaunchAgents, cron, SSH keys, login items)",
+        "description": "LaunchAgents, cron, SSH keys, login items — baseline-diff detection",
         "platforms": ["darwin"],
         "probes": 10,
         "category": "endpoint",
         "icon": "anchor",
+        "tier": "core",
         "collection_agent": "macos_persistence",
     },
     "fim": {
         "class": FIMAgent,
         "name": "File Integrity Monitor",
-        "description": "File modification detection for critical system paths with baseline engine",
+        "description": "SUID tracking, SIP status, Downloads monitoring, critical file hashing",
         "platforms": ["darwin"],
         "probes": 8,
         "category": "endpoint",
         "icon": "file-shield",
+        "tier": "core",
         "collection_agent": "macos_filesystem",
     },
     "flow": {
         "class": FlowAgent,
-        "name": "Flow Agent",
-        "description": "Network flow analysis, C2 beaconing, lateral movement detection",
+        "name": "Network Agent",
+        "description": "Network flows + internet activity — 18 probes: C2, exfil, TOR/VPN, mining, shadow IT",
         "platforms": ["darwin"],
-        "probes": 8,
+        "probes": 18,
         "category": "network",
         "icon": "network",
+        "tier": "core",
         "collection_agent": "macos_network",
+        "merged_from": ["macos_internet_activity"],
     },
     "peripheral": {
         "class": PeripheralAgent,
         "name": "Peripheral Agent",
-        "description": "USB, Bluetooth, and Thunderbolt device monitoring",
+        "description": "USB, Bluetooth, removable media baseline-diff monitoring",
         "platforms": ["darwin"],
         "probes": 4,
         "category": "endpoint",
         "icon": "usb",
+        "tier": "core",
         "collection_agent": "macos_peripheral",
-    },
-    # ── Platform-specific agents ──
-    "kernel_audit": {
-        "class": KernelAuditAgent,
-        "name": "Kernel Audit Agent",
-        "description": "Linux kernel-level syscall monitoring (auditd: exec, privesc, ptrace, module load)",
-        "platforms": ["linux"],
-        "probes": 8,
-        "category": "platform",
-        "icon": "terminal",
-    },
-    "macos_security_monitor": {
-        "class": MacOSSecurityMonitorAgent,
-        "name": "macOS Security Monitor",
-        "description": "macOS security framework monitoring (Gatekeeper, PKI/trust, certificate anomalies)",
-        "platforms": ["darwin"],
-        "probes": 4,
-        "category": "platform",
-        "icon": "shield-check",
     },
     "macos_unified_log": {
         "class": MacOSUnifiedLogAgent,
-        "name": "macOS Unified Log Observatory",
-        "description": "macOS Unified Logging — security framework, Gatekeeper, installer, XPC, TCC, AirDrop",
+        "name": "Unified Log Agent",
+        "description": "10 probes: securityd, Gatekeeper, TCC, XPC, installer, sharing, cert anomalies",
         "platforms": ["darwin"],
-        "probes": 6,
+        "probes": 10,
         "category": "platform",
         "icon": "scroll",
+        "tier": "core",
+        "merged_from": ["macos_security_monitor"],
     },
-    # ── Wave 2 Observatory Agents ──
+    "correlation": {
+        "class": None,  # Loaded dynamically
+        "name": "Correlation Agent",
+        "description": "Cross-agent kill chain tracking, AgentBus aggregation, MITRE tactic correlation",
+        "platforms": ["darwin"],
+        "probes": 18,
+        "category": "correlation",
+        "icon": "git-merge",
+        "tier": "core",
+    },
+    # ═══ TIER 2: SPECIALIST — Activated on Threat Context (5 agents) ═══
     "macos_dns": {
         "class": MacOSDNSAgent,
-        "name": "macOS DNS Observatory",
-        "description": "DNS threat detection — DGA, tunneling, beaconing, fast-flux, DoH bypass",
+        "name": "DNS Observatory",
+        "description": "DGA, tunneling, beaconing, fast-flux, DoH bypass detection",
         "platforms": ["darwin"],
         "probes": 8,
         "category": "network",
         "icon": "globe",
-    },
-    "macos_applog": {
-        "class": MacOSAppLogAgent,
-        "name": "macOS AppLog Observatory",
-        "description": "Application log analysis — webshell, tampering, error spikes, credential harvest",
-        "platforms": ["darwin"],
-        "probes": 7,
-        "category": "application",
-        "icon": "file-text",
+        "tier": "specialist",
+        "activation_signals": ["dns_anomaly", "c2_beacon_suspect"],
     },
     "macos_discovery": {
         "class": MacOSDiscoveryAgent,
-        "name": "macOS Discovery Observatory",
-        "description": "Network discovery — ARP changes, Bonjour services, rogue DHCP, topology shifts",
+        "name": "Discovery Observatory",
+        "description": "ARP changes, Bonjour services, rogue DHCP, topology shifts",
         "platforms": ["darwin"],
         "probes": 6,
         "category": "network",
         "icon": "radar",
+        "tier": "specialist",
+        "activation_signals": ["lateral_movement", "new_device"],
     },
-    "macos_internet_activity": {
-        "class": MacOSInternetActivityAgent,
-        "name": "macOS Internet Activity Observatory",
-        "description": "Internet activity — cloud exfil, TOR/VPN, crypto mining, CDN masquerade",
-        "platforms": ["darwin"],
-        "probes": 8,
-        "category": "application",
-        "icon": "activity",
-    },
-    "macos_db_activity": {
-        "class": MacOSDBActivityAgent,
-        "name": "macOS DB Activity Observatory",
-        "description": "Database monitoring — SQL injection, bulk extraction, priv escalation, exfil",
-        "platforms": ["darwin"],
-        "probes": 8,
-        "category": "application",
-        "icon": "database",
-    },
-    "macos_http_inspector": {
-        "class": MacOSHTTPInspectorAgent,
-        "name": "macOS HTTP Inspector Observatory",
-        "description": "HTTP inspection — XSS, SSRF, path traversal, API abuse, C2 beaconing",
-        "platforms": ["darwin"],
-        "probes": 8,
-        "category": "application",
-        "icon": "search",
-    },
-    # ── Network & Infrastructure ──
-    "network_sentinel": {
-        "class": NetworkSentinelAgent,
-        "name": "Network Sentinel",
-        "description": "HTTP access log analysis, scan detection, payload inspection, rate anomaly detection",
-        "platforms": ["darwin"],
-        "probes": 10,
-        "category": "network",
-        "icon": "shield-alert",
-    },
-    "protocol_collectors": {
-        "class": ProtocolCollectors,
-        "name": "Protocol Threat Collector",
-        "description": "Protocol-level threat detection for HTTP, TLS, SSH, DNS, SQL injection",
-        "platforms": ["darwin"],
-        "probes": 10,
-        "category": "network",
-        "icon": "layers",
-    },
-    # ── macOS Shield Agents ──
     "macos_infostealer_guard": {
         "class": MacOSInfostealerGuardAgent,
-        "name": "macOS InfostealerGuard Observatory",
-        "description": "AMOS/Poseidon/Banshee kill chain — keychain, browser, wallet theft, fake dialogs, exfil",
+        "name": "InfostealerGuard",
+        "description": "AMOS/Poseidon/Banshee kill chain — keychain, browser, wallet, fake dialogs",
         "platforms": ["darwin"],
         "probes": 10,
         "category": "platform",
         "icon": "shield-alert",
+        "tier": "specialist",
+        "activation_signals": ["credential_access", "keychain_access", "browser_cred_theft"],
     },
     "macos_quarantine_guard": {
         "class": MacOSQuarantineGuardAgent,
-        "name": "macOS QuarantineGuard Observatory",
-        "description": "Quarantine bypass, DMG delivery, ClickFix paste-and-run, Gatekeeper evasion",
+        "name": "QuarantineGuard",
+        "description": "Quarantine bypass, DMG delivery, ClickFix, Gatekeeper evasion",
         "platforms": ["darwin"],
         "probes": 8,
         "category": "platform",
         "icon": "shield-check",
+        "tier": "specialist",
+        "activation_signals": ["gatekeeper_anomaly", "quarantine_bypass", "dmg_mount"],
     },
     "macos_provenance": {
         "class": MacOSProvenanceAgent,
-        "name": "macOS Provenance Observatory",
-        "description": "Cross-application attack chain correlation — message, download, execute, exfiltrate kill chains",
+        "name": "Provenance Observatory",
+        "description": "Cross-app kill chain: message → download → execute → exfiltrate",
         "platforms": ["darwin"],
         "probes": 8,
         "category": "platform",
         "icon": "git-merge",
+        "tier": "specialist",
+        "activation_signals": ["kill_chain_stage", "download_execute", "exfil_spike"],
+    },
+    # ═══ TIER 3: SITUATIONAL — Server-Only Deployments (3 agents) ═══
+    "macos_http_inspector": {
+        "class": MacOSHTTPInspectorAgent,
+        "name": "HTTP Inspector",
+        "description": "18 probes: XSS, SSRF, SQLi, path traversal, scan storm, tool fingerprint",
+        "platforms": ["darwin"],
+        "probes": 18,
+        "category": "application",
+        "icon": "search",
+        "tier": "situational",
+        "requires": "web_server",
+        "merged_from": ["network_sentinel"],
+    },
+    "macos_applog": {
+        "class": MacOSAppLogAgent,
+        "name": "AppLog Observatory",
+        "description": "Web/DB application log analysis — webshell, tampering, credential harvest",
+        "platforms": ["darwin"],
+        "probes": 7,
+        "category": "application",
+        "icon": "file-text",
+        "tier": "situational",
+        "requires": "web_server",
+    },
+    "macos_db_activity": {
+        "class": MacOSDBActivityAgent,
+        "name": "DB Activity Observatory",
+        "description": "SQL injection, bulk extraction, privilege escalation, exfiltration",
+        "platforms": ["darwin"],
+        "probes": 8,
+        "category": "application",
+        "icon": "database",
+        "tier": "situational",
+        "requires": "database_server",
+    },
+    # ═══ MERGED — Probes absorbed into parent agent, not standalone ═══
+    "macos_internet_activity": {
+        "class": MacOSInternetActivityAgent,
+        "name": "Internet Activity (merged → flow)",
+        "description": "8 probes merged into Network Agent: cloud exfil, TOR/VPN, crypto mining, CDN masquerade",
+        "platforms": ["darwin"],
+        "probes": 8,
+        "category": "network",
+        "icon": "activity",
+        "tier": "merged",
+        "merged_into": "flow",
+    },
+    "macos_security_monitor": {
+        "class": MacOSSecurityMonitorAgent,
+        "name": "Security Monitor (merged → unified_log)",
+        "description": "4 probes merged into Unified Log Agent: cert anomaly, Gatekeeper, framework health",
+        "platforms": ["darwin"],
+        "probes": 4,
+        "category": "platform",
+        "icon": "shield-check",
+        "tier": "merged",
+        "merged_into": "macos_unified_log",
+    },
+    "network_sentinel": {
+        "class": NetworkSentinelAgent,
+        "name": "Network Sentinel (merged → http_inspector)",
+        "description": "10 probes merged into HTTP Inspector: scan storm, brute force, tool fingerprint",
+        "platforms": ["darwin"],
+        "probes": 10,
+        "category": "network",
+        "icon": "shield-alert",
+        "tier": "merged",
+        "merged_into": "macos_http_inspector",
+    },
+    # ═══ PLATFORM — Linux-only ═══
+    "kernel_audit": {
+        "class": KernelAuditAgent,
+        "name": "Kernel Audit Agent",
+        "description": "Linux kernel-level syscall monitoring (auditd: exec, privesc, ptrace)",
+        "platforms": ["linux"],
+        "probes": 8,
+        "category": "platform",
+        "icon": "terminal",
+        "tier": "core",
+    },
+    # ═══ PROTOCOL — Requires pcap/proxy, not runnable on stock macOS ═══
+    "protocol_collectors": {
+        "class": ProtocolCollectors,
+        "name": "Protocol Threat Collector",
+        "description": "Deep protocol inspection: HTTP, TLS, SSH, DNS, SQL at packet level",
+        "platforms": ["darwin"],
+        "probes": 10,
+        "category": "network",
+        "icon": "layers",
+        "tier": "situational",
+        "requires": "packet_capture",
     },
 }
 
 
 def get_available_agents(platform: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
-    """Get agents available for a given platform.
-
-    Args:
-        platform: Target platform (darwin/linux). If None, uses current.
-
-    Returns:
-        Dictionary of available agents with metadata.
-    """
+    """Get agents available for a given platform (excludes merged agents)."""
     import sys
 
     if platform is None:
@@ -331,5 +377,23 @@ def get_available_agents(platform: Optional[str] = None) -> Dict[str, Dict[str, 
     return {
         name: meta
         for name, meta in AGENT_REGISTRY.items()
-        if platform in meta["platforms"]
+        if platform in meta["platforms"] and meta.get("tier") != "merged"
     }
+
+
+def get_agents_by_tier(tier: str) -> Dict[str, Dict[str, Any]]:
+    """Get all agents for a specific tier (core/specialist/situational/merged)."""
+    return {
+        name: meta
+        for name, meta in AGENT_REGISTRY.items()
+        if meta.get("tier") == tier
+    }
+
+
+def get_active_probe_count() -> int:
+    """Total probe count across all non-merged agents."""
+    return sum(
+        meta["probes"]
+        for meta in AGENT_REGISTRY.values()
+        if meta.get("tier") != "merged"
+    )

@@ -1,7 +1,9 @@
 """macOS Network Agent — Network Observatory for Darwin.
 
 Monitors network connections and bandwidth using lsof and nettop.
-8 probes detect C2 beaconing, exfiltration, lateral movement, and anomalies.
+18 probes (10 core + 8 merged internet_activity) detect C2 beaconing,
+exfiltration, lateral movement, TOR/VPN, crypto mining, shadow IT,
+CDN masquerade, geo-anomalies, and long-lived connection patterns.
 """
 
 from __future__ import annotations
@@ -23,6 +25,16 @@ from amoskys.agents.common.probes import (
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
 from amoskys.agents.os.macos.network.collector import MacOSNetworkCollector
 from amoskys.agents.os.macos.network.probes import create_network_probes
+
+# Merged: internet_activity probes run inside the network agent (same lsof data source)
+try:
+    from amoskys.agents.os.macos.internet_activity.probes import (
+        create_internet_activity_probes,
+    )
+
+    _HAS_INTERNET_ACTIVITY = True
+except ImportError:
+    _HAS_INTERNET_ACTIVITY = False
 from amoskys.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -56,7 +68,15 @@ class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
         )
 
         self.collector = MacOSNetworkCollector(use_nettop=True)
-        self.register_probes(create_network_probes())
+
+        # Core network probes (10)
+        all_probes = create_network_probes()
+        # Merged internet_activity probes (+8) — same lsof data, different detection focus
+        if _HAS_INTERNET_ACTIVITY:
+            all_probes.extend(create_internet_activity_probes())
+            logger.info("Network agent: merged %d internet_activity probes", 8)
+
+        self.register_probes(all_probes)
 
     def setup(self) -> bool:
         if platform.system() != "Darwin":
@@ -93,6 +113,22 @@ class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
     def collect_data(self) -> Sequence[Any]:
         snapshot = self.collector.collect()
+
+        # Normalize: set remote_addr = remote_ip so internet_activity probes
+        # (which access conn.remote_addr as IP) work with Connection objects.
+        for conn in snapshot.get("connections", []):
+            if conn.remote_ip:
+                conn.remote_addr = conn.remote_ip
+
+        # Enrich: compute unique_remote_ips and unique_processes for
+        # internet_activity probes that expect these in shared_data.
+        all_conns_raw = snapshot.get("connections", [])
+        snapshot["unique_remote_ips"] = len(
+            {c.remote_ip for c in all_conns_raw if c.remote_ip}
+        )
+        snapshot["unique_processes"] = len(
+            {c.process_name for c in all_conns_raw}
+        )
 
         # Filter: only store real connections as flow observations.
         # LISTEN/bind sockets are socket inventory, not traffic flows.

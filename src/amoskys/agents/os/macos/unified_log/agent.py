@@ -2,8 +2,9 @@
 
 Purpose-built Unified Logging agent for macOS. Uses the AMOSKYS canonical
 agent pattern (MicroProbeAgentMixin + HardenedAgentBase) with a predicate-
-based collector and 6 detection probes covering securityd, Gatekeeper, TCC,
-XPC, installer, and sharing subsystems.
+based collector and 10 detection probes (6 core + 4 merged security_monitor)
+covering securityd, Gatekeeper, TCC, XPC, installer, sharing, certificate
+anomalies, and security framework health.
 
 Data flow:
     1. MacOSUnifiedLogCollector.collect() → log entries (log show --style json)
@@ -33,6 +34,17 @@ from amoskys.agents.common.probes import MicroProbeAgentMixin, Severity, Telemet
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
 from amoskys.agents.os.macos.unified_log.collector import MacOSUnifiedLogCollector
 from amoskys.agents.os.macos.unified_log.probes import create_unified_log_probes
+
+# Merged: security_monitor probes run inside unified_log agent (same data source)
+try:
+    from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
+    from amoskys.agents.os.macos.security_monitor.probes import (
+        create_macos_security_probes,
+    )
+
+    _HAS_SECURITY_MONITOR = True
+except ImportError:
+    _HAS_SECURITY_MONITOR = False
 from amoskys.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -81,7 +93,15 @@ class MacOSUnifiedLogAgent(MicroProbeAgentMixin, HardenedAgentBase):
         self.collector = MacOSUnifiedLogCollector(
             lookback_seconds=int(collection_interval) + 5,
         )
-        self.register_probes(create_unified_log_probes())
+
+        # Core unified_log probes (6)
+        all_probes = create_unified_log_probes()
+        # Merged security_monitor probes (+4) — same Unified Logging data source
+        if _HAS_SECURITY_MONITOR:
+            all_probes.extend(create_macos_security_probes())
+            logger.info("Unified log agent: merged %d security_monitor probes", 4)
+
+        self.register_probes(all_probes)
 
         logger.info(
             "MacOSUnifiedLogAgent initialized: %d probes, device=%s",
@@ -153,7 +173,25 @@ class MacOSUnifiedLogAgent(MicroProbeAgentMixin, HardenedAgentBase):
             field_mapper=self._log_entry_to_obs,
         )
 
-        # Run probes (detection events, unchanged)
+        # Convert log entries → KernelAuditEvent for merged security_monitor probes
+        if _HAS_SECURITY_MONITOR:
+            kernel_events = []
+            for entry in snapshot.get("log_entries", []):
+                kernel_events.append(
+                    KernelAuditEvent(
+                        event_id=f"ul_{id(entry)}",
+                        timestamp_ns=int(time.time() * 1e9),
+                        host=self.device_id,
+                        exe=entry.process or "",
+                        pid=entry.process_id if hasattr(entry, "process_id") else None,
+                        comm=entry.process or "",
+                        action=entry.event_type or entry.category or "",
+                        raw={"message": entry.message, "subsystem": entry.subsystem},
+                    )
+                )
+            snapshot["kernel_events"] = kernel_events
+
+        # Run probes (detection events — both unified_log + security_monitor)
         context = self._create_probe_context()
         context.shared_data = snapshot
         probe_events = self.run_probes(context)

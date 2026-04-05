@@ -54,6 +54,28 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# --- Agent Tier Hierarchy --------------------------------------------------
+
+
+class AgentTier:
+    """Agent hierarchy tiers.
+
+    CORE: Always running, fundamental data collection (8 agents).
+    SPECIALIST: Activated by Correlation when relevant threat context
+        detected. Runs on-demand for targeted analysis (5 agents).
+    SITUATIONAL: Only active on specific deployment types — servers
+        with web/DB services, not endpoints (3 agents).
+
+    Merged agents are marked MERGED — their probes run inside their
+    parent CORE agent, not as standalone processes.
+    """
+
+    CORE = "core"
+    SPECIALIST = "specialist"
+    SITUATIONAL = "situational"
+    MERGED = "merged"
+
+
 # --- Circuit Breaker -------------------------------------------------------
 
 

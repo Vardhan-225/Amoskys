@@ -24,19 +24,26 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Connection:
-    """A single network connection."""
+    """A single network connection.
+
+    Serves as the unified connection model for both the core network agent
+    and merged internet_activity probes. The internet_activity probes access
+    remote_addr (IP only) — which maps to remote_ip here.
+    """
 
     pid: int
     process_name: str
     user: str
     protocol: str  # TCP, UDP
-    local_addr: str  # IP:port
-    remote_addr: str  # IP:port or empty for LISTEN
+    local_addr: str  # IP:port (raw lsof format)
+    remote_addr: str  # IP:port (raw lsof format) or empty for LISTEN
     state: str  # ESTABLISHED, LISTEN, CLOSE_WAIT, etc.
     local_ip: str = ""
     local_port: int = 0
     remote_ip: str = ""
     remote_port: int = 0
+    direction: str = "outbound"  # outbound / inbound (for internet_activity probes)
+    duration_estimate_s: float = 0.0  # estimated duration (for long-lived detection)
 
 
 @dataclass

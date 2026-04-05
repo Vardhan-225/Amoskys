@@ -32,6 +32,16 @@ from amoskys.agents.common.probes import MicroProbeAgentMixin, Severity, Telemet
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
 from amoskys.agents.os.macos.http_inspector.collector import MacOSHTTPInspectorCollector
 from amoskys.agents.os.macos.http_inspector.probes import create_http_inspector_probes
+
+# Merged: network_sentinel probes run inside http_inspector (same HTTP data source)
+try:
+    from amoskys.agents.os.macos.network_sentinel.probes import (
+        create_network_sentinel_probes,
+    )
+
+    _HAS_SENTINEL = True
+except ImportError:
+    _HAS_SENTINEL = False
 from amoskys.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -75,7 +85,15 @@ class MacOSHTTPInspectorAgent(MicroProbeAgentMixin, HardenedAgentBase):
         )
 
         self.collector = MacOSHTTPInspectorCollector(device_id=device_id)
-        self.register_probes(create_http_inspector_probes())
+
+        # Core HTTP inspector probes (8)
+        all_probes = create_http_inspector_probes()
+        # Merged network_sentinel probes (+10) — same HTTP data source
+        if _HAS_SENTINEL:
+            all_probes.extend(create_network_sentinel_probes())
+            logger.info("HTTP inspector agent: merged %d network_sentinel probes", 10)
+
+        self.register_probes(all_probes)
 
         logger.info(
             "MacOSHTTPInspectorAgent initialized: %d probes, device=%s",
@@ -165,7 +183,35 @@ class MacOSHTTPInspectorAgent(MicroProbeAgentMixin, HardenedAgentBase):
             field_mapper=self._http_to_obs,
         )
 
-        # Run probes (detection events, unchanged)
+        # Convert HTTPRequest → HTTPTransaction for merged network_sentinel probes
+        if _HAS_SENTINEL:
+            from datetime import datetime, timezone
+            from amoskys.agents.os.macos.http_inspector.agent_types import HTTPTransaction
+
+            transactions = []
+            for req in snapshot.get("http_requests", []):
+                transactions.append(
+                    HTTPTransaction(
+                        timestamp=datetime.fromtimestamp(req.timestamp, tz=timezone.utc),
+                        method=req.method if hasattr(req, "method") else "GET",
+                        url=req.path,
+                        host="",
+                        path=req.path,
+                        query_params={},
+                        request_headers={},
+                        request_body=None,
+                        response_status=req.status_code,
+                        content_type="",
+                        src_ip=req.client_ip,
+                        dst_ip="",
+                        bytes_sent=req.body_size,
+                        bytes_received=0,
+                        process_name=getattr(req, "process_name", None),
+                    )
+                )
+            snapshot["http_transactions"] = transactions
+
+        # Run all probes (http_inspector + network_sentinel)
         context = self._create_probe_context()
         context.shared_data = snapshot
         probe_events = self.run_probes(context)
