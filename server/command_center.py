@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS devices (
     first_seen REAL NOT NULL,
     last_seen REAL NOT NULL,
     status TEXT DEFAULT 'online',
+    public_ip TEXT,
     metadata_json TEXT DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_devices_status ON devices(status);
@@ -345,7 +346,7 @@ def init_db():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(DB_PATH, timeout=10.0)
     db.executescript(FLEET_SCHEMA)
-    # Migrate: add geo columns if missing (existing DBs)
+    # Migrate: add columns if missing (existing DBs)
     for col, ctype in [
         ("geo_dst_latitude", "REAL"),
         ("geo_dst_longitude", "REAL"),
@@ -353,6 +354,13 @@ def init_db():
     ]:
         try:
             db.execute(f"ALTER TABLE flow_events ADD COLUMN {col} {ctype}")
+        except sqlite3.OperationalError:
+            pass
+    for col, ctype in [
+        ("public_ip", "TEXT"),
+    ]:
+        try:
+            db.execute(f"ALTER TABLE devices ADD COLUMN {col} {ctype}")
         except sqlite3.OperationalError:
             pass  # column already exists
     db.commit()
@@ -432,12 +440,15 @@ def register_device():
         # Use the ORIGINAL device_id (not the new one) to prevent duplicates
         original_device_id = existing["device_id"]
 
-        # Heartbeat — update device info
+        # Heartbeat — update device info + capture public IP
+        public_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+        if public_ip and "," in public_ip:
+            public_ip = public_ip.split(",")[0].strip()
         db.execute(
             """UPDATE devices SET
                 hostname = ?, os = ?, os_version = ?, arch = ?,
                 agent_version = ?, last_seen = ?, status = 'online',
-                device_id = ?
+                device_id = ?, public_ip = ?
             WHERE device_id = ?""",
             (
                 hostname,
@@ -447,6 +458,7 @@ def register_device():
                 data.get("agent_version"),
                 now,
                 device_id,  # Update to new device_id if it changed
+                public_ip,
                 original_device_id,
             ),
         )
@@ -747,7 +759,7 @@ def list_devices():
 
     rows = db.execute(
         """SELECT device_id, hostname, os, os_version, arch,
-                  agent_version, first_seen, last_seen, status
+                  agent_version, first_seen, last_seen, status, public_ip
            FROM devices ORDER BY last_seen DESC"""
     ).fetchall()
 
@@ -769,6 +781,7 @@ def list_devices():
             "first_seen": r["first_seen"],
             "last_seen": r["last_seen"],
             "status": r["status"],
+            "public_ip": r["public_ip"],
             "security_event_count": sec_count,
         })
 

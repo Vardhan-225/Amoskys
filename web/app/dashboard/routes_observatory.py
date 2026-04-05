@@ -465,57 +465,86 @@ def network_asn():
 @require_login
 @require_rate_limit(max_requests=10, window_seconds=60)
 def network_device_location():
-    """Get device location from its flow event GeoIP data.
+    """Get device location via GeoIP on the device's public IP.
 
-    Instead of calling ipinfo.io (which returns the SERVER's location),
-    infer the device location from the most common source IP geo data
-    in flow_events. This gives the actual device's location.
+    In fleet mode, gets the public_ip from the ops server device record
+    and resolves it with local GeoIP databases.
     """
+    import os as _os
+
+    # Fleet mode: get public IP from ops server, then GeoIP it locally
+    if _os.environ.get("AMOSKYS_OPS_SERVER"):
+        try:
+            from .routes_command_center import _ops_get
+            data = _ops_get("/api/v1/devices")
+            if data and data.get("devices"):
+                public_ip = data["devices"][0].get("public_ip")
+                if public_ip:
+                    geo = _geoip_lookup(public_ip)
+                    if geo:
+                        return jsonify(geo)
+        except Exception:
+            pass
+
+    # Local mode: try flow_events source geo
     store = get_telemetry_store()
-    if store is None:
-        return jsonify({"lat": 0, "lon": 0, "city": "Unknown", "country": ""})
-
-    try:
-        # Find the device's location from its outbound connections
-        # The source IP geo data tells us where the device is
-        row = store.db.execute(
-            """SELECT geo_src_latitude, geo_src_longitude, geo_src_city, geo_src_country,
-                      asn_src_org, src_ip
-               FROM flow_events
-               WHERE geo_src_latitude IS NOT NULL AND geo_src_latitude != ''
-               ORDER BY timestamp_ns DESC LIMIT 1"""
-        ).fetchone()
-
-        if row and row[0]:
-            return jsonify({
-                "lat": float(row[0]),
-                "lon": float(row[1]),
-                "city": row[2] or "",
-                "country": row[3] or "",
-                "org": row[4] or "",
-                "ip": row[5] or "",
-            })
-
-        # Fallback: try security_events for geo data
-        row2 = store.db.execute(
-            """SELECT geo_src_latitude, geo_src_longitude, geo_src_city, geo_src_country
-               FROM security_events
-               WHERE geo_src_latitude IS NOT NULL AND geo_src_latitude != ''
-               ORDER BY timestamp_ns DESC LIMIT 1"""
-        ).fetchone()
-
-        if row2 and row2[0]:
-            return jsonify({
-                "lat": float(row2[0]),
-                "lon": float(row2[1]),
-                "city": row2[2] or "",
-                "country": row2[3] or "",
-            })
-
-    except Exception:
-        pass
+    if store:
+        try:
+            row = store.db.execute(
+                """SELECT geo_src_latitude, geo_src_longitude, geo_src_city,
+                          geo_src_country, asn_src_org, src_ip
+                   FROM flow_events
+                   WHERE geo_src_latitude IS NOT NULL AND geo_src_latitude != ''
+                   ORDER BY timestamp_ns DESC LIMIT 1"""
+            ).fetchone()
+            if row and row[0]:
+                return jsonify({
+                    "lat": float(row[0]), "lon": float(row[1]),
+                    "city": row[2] or "", "country": row[3] or "",
+                    "org": row[4] or "", "ip": row[5] or "",
+                })
+        except Exception:
+            pass
 
     return jsonify({"lat": 0, "lon": 0, "city": "Unknown", "country": ""})
+
+
+def _geoip_lookup(ip: str):
+    """Resolve an IP to lat/lon/city/country using local GeoIP databases."""
+    try:
+        from amoskys.enrichment.geoip import GeoIPEnricher
+        enricher = GeoIPEnricher()
+        result = enricher.lookup(ip)
+        if result and result.get("latitude"):
+            return {
+                "lat": result["latitude"],
+                "lon": result["longitude"],
+                "city": result.get("city", ""),
+                "country": result.get("country_code", ""),
+                "region": result.get("region", ""),
+                "org": result.get("org", ""),
+                "ip": ip,
+            }
+    except Exception:
+        pass
+    # Fallback: try ipinfo.io for the specific device IP (not the server's IP)
+    try:
+        import requests
+        resp = requests.get(f"https://ipinfo.io/{ip}/json", timeout=3)
+        if resp.ok:
+            d = resp.json()
+            loc = d.get("loc", "0,0").split(",")
+            return {
+                "lat": float(loc[0]), "lon": float(loc[1]),
+                "city": d.get("city", ""),
+                "country": d.get("country", ""),
+                "region": d.get("region", ""),
+                "org": d.get("org", ""),
+                "ip": ip,
+            }
+    except Exception:
+        pass
+    return None
 
 
 @dashboard_bp.route("/api/network/geo-points")
