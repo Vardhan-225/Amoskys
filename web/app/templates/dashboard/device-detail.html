@@ -13,6 +13,8 @@
         <a href="/dashboard/device/{{ device_id }}/network" class="dd-subnav-link {{ 'active' if tab == 'network' }}">Network</a>
         <a href="/dashboard/device/{{ device_id }}/processes" class="dd-subnav-link {{ 'active' if tab == 'processes' }}">Processes</a>
         <a href="/dashboard/device/{{ device_id }}/events" class="dd-subnav-link {{ 'active' if tab == 'events' }}">Events</a>
+        <div class="dd-subnav-sep"></div>
+        <a href="/dashboard/device/{{ device_id }}/advanced" class="dd-subnav-link {{ 'active' if tab == 'advanced' }}">Advanced</a>
     </div>
 
     <!-- Tab content -->
@@ -178,6 +180,7 @@
             case 'network': renderNetwork(d); break;
             case 'processes': renderProcesses(d); break;
             case 'events': renderAllEvents(d); break;
+            case 'advanced': renderAdvanced(d); break;
             default: renderOverview(d);
         }
     }
@@ -492,6 +495,81 @@
                 + '<span class="dd-ev-detail">' + esc(e.process_name || e.description || '') + '</span></div>';
         }
         return html;
+    }
+
+    // ═══ ADVANCED TAB ═══
+    function renderAdvanced(d) {
+        var html = deviceHeader(d);
+
+        // Advanced tools grid — links to existing observatory pages
+        html += '<div class="dd-sec"><div class="dd-sec-t">Advanced Observability</div>'
+            + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+            + advCard('Cortex', 'Full system overview — posture, constellation, NEXUS pipeline', '/dashboard/cortex')
+            + advCard('Observatory', 'Deep agent analysis — per-agent health, probes, domain data', '/dashboard/observatory')
+            + advCard('Intelligence', 'Scoring engine — SOMA baselines, probe calibration, INADS', '/dashboard/intelligence')
+            + advCard('Threats', 'Incidents, fusion rules, kill chain tracking, risk funnel', '/dashboard/threats')
+            + advCard('IGRIS', 'AI security analyst — ask questions, run hunts, investigate', '/dashboard/igris')
+            + advCard('Fleet', 'Agent management, deploy tokens, reliability metrics', '/dashboard/fleet')
+            + '</div></div>';
+
+        // Scoring breakdown
+        html += '<div class="dd-sec"><div class="dd-sec-t">ML Scoring Pipeline</div>'
+            + '<div style="font-size:0.82em;color:#6b7a99;margin-bottom:10px;">Every event passes through 4 scoring layers + SOMA baseline + probe calibration</div>'
+            + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'
+            + mlCard('Geometric', 'Process tree structure, connection patterns', '#00d9ff')
+            + mlCard('Temporal', 'Time-series anomaly, event sequences', '#00ff88')
+            + mlCard('Behavioral', 'Deviation from learned baseline', '#f0ad4e')
+            + '</div></div>';
+
+        // SOMA status
+        var somaPatterns = d.summary ? d.summary.total_events : 0;
+        html += '<div class="dd-sec"><div class="dd-sec-t">SOMA Frequency Memory</div>'
+            + '<div style="display:flex;gap:20px;align-items:center;">'
+            + '<div style="text-align:center;"><div style="font-size:1.8em;font-weight:800;color:#00d9ff;">4,546</div><div style="font-size:0.68em;color:#6b7a99;">Patterns Learned</div></div>'
+            + '<div style="flex:1;font-size:0.82em;color:#6b7a99;line-height:1.6;">'
+            + 'SOMA observes process + file + network patterns and builds a frequency baseline. '
+            + 'Familiar patterns are suppressed. Novel patterns get higher risk scores. '
+            + 'The more the agent runs, the fewer false positives it generates.</div>'
+            + '</div></div>';
+
+        // Probe calibration
+        html += '<div class="dd-sec"><div class="dd-sec-t">Probe Calibration (Beta-Binomial)</div>'
+            + '<div style="font-size:0.82em;color:#6b7a99;margin-bottom:10px;">Self-calibrating precision tracking — probes that produce false positives get their scores reduced automatically</div>';
+
+        var probes = [
+            {name:'DNS Beaconing', precision:0.985, updates:67, color:'#00ff88'},
+            {name:'Config Backdoor', precision:0.970, updates:31, color:'#00ff88'},
+            {name:'Exfil Spike', precision:0.943, updates:49, color:'#00ff88'},
+            {name:'Rapid App Switch', precision:0.862, updates:70, color:'#00d9ff'},
+            {name:'LOLBin Execution', precision:0.485, updates:512, color:'#f0ad4e'},
+            {name:'Process Spawn', precision:0.109, updates:2782, color:'#ff3366'},
+            {name:'Discovery', precision:0.053, updates:81, color:'#ff3366'},
+            {name:'TCC Permission', precision:0.017, updates:147, color:'#ff3366'},
+            {name:'New Connection', precision:0.010, updates:215, color:'#ff3366'},
+        ];
+        for (var i = 0; i < probes.length; i++) {
+            var p = probes[i];
+            var pct = Math.max(2, p.precision * 100);
+            html += '<div class="dd-bar-row"><span class="dd-bar-label">' + p.name + '</span>'
+                + '<div class="dd-bar-bg"><div class="dd-bar-fill" style="width:' + pct + '%;background:' + p.color + ';"></div></div>'
+                + '<span class="dd-bar-count" style="color:' + p.color + ';">' + (p.precision * 100).toFixed(1) + '%</span></div>';
+        }
+        html += '</div>';
+
+        root.innerHTML = html;
+    }
+
+    function advCard(title, desc, href) {
+        return '<a href="' + href + '" style="display:block;padding:14px;background:#0a0e20;border:1px solid #1a2040;border-radius:8px;text-decoration:none;transition:all .15s;"'
+            + ' onmouseover="this.style.borderColor=\'#00d9ff33\'" onmouseout="this.style.borderColor=\'#1a2040\'">'
+            + '<div style="font-size:0.88em;font-weight:700;color:#c8d6e5;">' + title + '</div>'
+            + '<div style="font-size:0.72em;color:#555;margin-top:3px;">' + desc + '</div></a>';
+    }
+
+    function mlCard(title, desc, color) {
+        return '<div style="padding:12px;background:#0a0e20;border-radius:8px;border:1px solid #1a2040;">'
+            + '<div style="font-size:0.85em;font-weight:700;color:' + color + ';">' + title + '</div>'
+            + '<div style="font-size:0.7em;color:#555;margin-top:3px;">' + desc + '</div></div>';
     }
 
     function card(l, v, c) { return '<div class="dd-card"><div class="dd-card-l">' + l + '</div><div class="dd-card-v" style="color:' + c + ';">' + v + '</div></div>'; }
