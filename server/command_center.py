@@ -694,7 +694,8 @@ ALLOWED_TABLES = {
         "source_id", "device_id", "org_id", "timestamp_ns", "timestamp_dt",
         "src_ip", "dst_ip", "src_port", "dst_port", "protocol",
         "bytes_tx", "bytes_rx", "pid", "process_name",
-        "geo_dst_country", "asn_dst_org", "threat_intel_match",
+        "geo_dst_latitude", "geo_dst_longitude", "geo_dst_country",
+        "geo_dst_city", "asn_dst_org", "threat_intel_match",
         "collection_agent", "received_at",
     },
     "dns_events": {
