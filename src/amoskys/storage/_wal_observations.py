@@ -275,35 +275,50 @@ class ObservationMixin:
         agent,
         version,
     ) -> None:
-        """Insert raw auth observation into audit_events."""
+        """Insert raw auth observation into audit_events.
+
+        Maps AuthEvent fields from the collector into audit_events columns:
+            process   → exe, comm
+            message   → cmdline
+            category  → reason
+            client_exe → target_path (authorization client binary)
+            client_pid → target_pid
+            right/service → syscall (authorization right or TCC service)
+            decision  → event_type
+        """
         quality = self._quality_payload(attrs)
+
+        # Parse client_pid safely
+        client_pid_raw = attrs.get("client_pid", "")
+        client_pid = int(client_pid_raw) if client_pid_raw and client_pid_raw.isdigit() else None
+
         self.store.insert_audit_event(
             {
                 "timestamp_ns": ts_ns,
                 "timestamp_dt": timestamp_dt,
                 "device_id": device_id,
                 "host": device_id,
-                "syscall": "",
-                "event_type": attrs.get("event_type", "observation"),
-                "pid": None,
+                "syscall": attrs.get("right") or attrs.get("service") or "",
+                "event_type": attrs.get("event_type") or attrs.get("decision") or "observation",
+                "pid": client_pid,
                 "ppid": None,
                 "uid": None,
                 "euid": None,
                 "gid": None,
                 "egid": None,
-                "exe": attrs.get("process", ""),
+                "exe": attrs.get("client_exe") or attrs.get("process") or "",
                 "comm": attrs.get("process", ""),
                 "cmdline": attrs.get("message", ""),
                 "cwd": None,
-                "target_path": None,
-                "target_pid": None,
-                "target_comm": None,
+                "target_path": attrs.get("client_exe") or None,
+                "target_pid": client_pid,
+                "target_comm": attrs.get("service") or None,
                 "risk_score": 0.0,
                 "confidence": 0.0,
                 "mitre_techniques": [],
                 "reason": attrs.get("category", ""),
-                "source_ip": attrs.get("source_ip"),
-                "username": attrs.get("username"),
+                "source_ip": attrs.get("source_ip") or None,
+                "username": attrs.get("username") or None,
                 "collector_timestamp": attrs.get("timestamp"),
                 "event_source": "observation",
                 "collection_agent": agent,

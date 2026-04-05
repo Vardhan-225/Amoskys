@@ -182,15 +182,25 @@ class MacOSAuthAgent(MicroProbeAgentMixin, HardenedAgentBase):
 
     @staticmethod
     def _auth_to_obs(event) -> Dict[str, Any]:
-        """Map an AuthEvent to observation data dict."""
+        """Map an AuthEvent to observation data dict.
+
+        Every field must be populated — empty strings for missing data,
+        never None. The storage layer maps these into audit_events columns.
+        """
         return {
             "timestamp": str(event.timestamp),
             "process": event.process,
-            "message": event.message,
+            "message": event.message[:500],  # Cap message length
             "category": event.category,
             "source_ip": event.source_ip or "",
             "username": event.username or "",
             "event_type": event.event_type,
+            # Structured fields from authd/TCC
+            "right": event.right or "",
+            "client_exe": event.client_exe or "",
+            "client_pid": str(event.client_pid) if event.client_pid else "",
+            "service": event.service or "",
+            "decision": event.decision or "",
         }
 
     def _events_to_telemetry(self, events: List[TelemetryEvent]) -> Any:
