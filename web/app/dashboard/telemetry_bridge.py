@@ -123,12 +123,12 @@ def _sync_from_ops():
 
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Fetch bulk export from ops server (latest 5000 per table)
+    # Fetch bulk export from ops server (all events within 24h window)
     try:
         resp = requests.get(
             f"{_OPS_SERVER}/api/v1/bulk-export",
-            params={"limit": 5000},
-            timeout=30,
+            params={"hours": 24},
+            timeout=60,
             verify=False,
         )
         if resp.status_code != 200:

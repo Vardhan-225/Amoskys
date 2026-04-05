@@ -1330,27 +1330,49 @@ def dashboard():
 
 @app.route("/api/v1/bulk-export", methods=["GET"])
 def bulk_export():
-    """Export all event tables for fleet sync.
+    """Export event tables for fleet sync — time-based, not count-based.
 
-    Used by the presentation server to populate its local cache DB
-    so existing dashboard pages (Cortex, Observatory, etc.) work.
+    Uses hours parameter (default 24) to export all events within the
+    time window. This ensures the presentation server sees complete data
+    instead of a truncated sample.
     """
     db = get_db()
-    limit = min(request.args.get("limit", 500, type=int), 5000)
+    hours = min(request.args.get("hours", 24, type=int), 72)
     device_id = request.args.get("device_id")
+    cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+
+    # Tables with timestamp_ns column
+    ts_tables = [
+        "security_events", "process_events", "flow_events",
+        "dns_events", "persistence_events", "audit_events",
+        "fim_events", "peripheral_events",
+    ]
+    # Tables without standard timestamp_ns
+    other_tables = ["observation_events"]
 
     result = {}
 
-    for table in ["security_events", "process_events", "flow_events", "dns_events", "persistence_events", "audit_events", "observation_events", "fim_events", "peripheral_events"]:
+    for table in ts_tables:
+        try:
+            query = f"SELECT * FROM {table} WHERE timestamp_ns > ?"
+            params = [cutoff_ns]
+            if device_id:
+                query += " AND device_id = ?"
+                params.append(device_id)
+            query += " ORDER BY id DESC"
+            rows = db.execute(query, params).fetchall()
+            result[table] = [dict(r) for r in rows]
+        except Exception:
+            result[table] = []
+
+    for table in other_tables:
         try:
             query = f"SELECT * FROM {table}"
             params = []
             if device_id:
                 query += " WHERE device_id = ?"
                 params.append(device_id)
-            query += " ORDER BY id DESC LIMIT ?"
-            params.append(limit)
-
+            query += " ORDER BY id DESC LIMIT 5000"
             rows = db.execute(query, params).fetchall()
             result[table] = [dict(r) for r in rows]
         except Exception:
