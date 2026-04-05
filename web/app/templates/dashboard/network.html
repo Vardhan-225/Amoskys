@@ -89,7 +89,6 @@
     .globe-overlay-stats .mos-row { display: flex; gap: 0.5rem; align-items: center; padding: 0.12rem 0; }
     .globe-overlay-stats .mos-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
     .globe-overlay-stats .mos-label { color: #4a5580; font-size: 0.68rem; }
-    .globe-overlay-stats .mos-val { color: #c8d0e0; font-weight: 600; margin-left: auto; min-width: 1.5rem; text-align: right; }
 
     /* Globe controls — bottom-left */
     .globe-controls {
@@ -266,11 +265,10 @@
         </div>
         <div style="position:relative;">
             <div id="globe-container"></div>
-            <!-- Legend — top right -->
+            <!-- Legend — top right (colors only, no duplicate counts) -->
             <div class="globe-overlay-stats">
-                <div class="mos-row"><div class="mos-dot" style="background:#00ff88;"></div><span class="mos-label">Clean</span><span class="mos-val" id="map-clean-count">--</span></div>
-                <div class="mos-row"><div class="mos-dot" style="background:#ff3366;"></div><span class="mos-label">Threat</span><span class="mos-val" id="map-threat-count">--</span></div>
-                <div class="mos-row"><div class="mos-dot" style="background:#00d9ff;"></div><span class="mos-label">Flows</span><span class="mos-val" id="map-total-flows">--</span></div>
+                <div class="mos-row"><div class="mos-dot" style="background:#00ff88;"></div><span class="mos-label">Clean</span></div>
+                <div class="mos-row"><div class="mos-dot" style="background:#ff3366;"></div><span class="mos-label">Threat</span></div>
             </div>
             <!-- Controls — bottom left -->
             <div class="globe-controls">
@@ -280,12 +278,10 @@
                 <button class="globe-ctrl-btn" id="btn-auto-rotate" onclick="toggleAutoRotate()">Rotate</button>
                 <button class="globe-ctrl-btn" onclick="focusDevice()">Focus</button>
             </div>
-            <!-- Connection summary — bottom right -->
-            <div class="globe-info" id="globe-info">
-                <div class="globe-info-row"><span>Destinations</span><span class="globe-info-val" id="gi-dests">--</span></div>
-                <div class="globe-info-row"><span>Countries</span><span class="globe-info-val" id="gi-countries">--</span></div>
-                <div class="globe-info-row"><span>Data Out</span><span class="globe-info-val" id="gi-data">--</span></div>
-            </div>
+            <!-- Hidden elements to prevent JS errors (values set but not displayed) -->
+            <span id="gi-dests" style="display:none;"></span>
+            <span id="gi-countries" style="display:none;"></span>
+            <span id="gi-data" style="display:none;"></span>
         </div>
     </div>
 
@@ -757,12 +753,7 @@
             .ringsData(ringsData)
             .htmlElementsData(htmlData);
 
-        // Update overlay stats
-        document.getElementById('map-clean-count').textContent = cleanCount;
-        document.getElementById('map-threat-count').textContent = threatCount;
-        document.getElementById('map-total-flows').textContent = formatNumber(totalFlows);
-
-        // Update connection summary panel
+        // Update hidden summary values (used by filter logic)
         document.getElementById('gi-dests').textContent = valid.length;
         document.getElementById('gi-countries').textContent = countries.size;
         document.getElementById('gi-data').textContent = formatBytes(totalBytes);
@@ -969,9 +960,6 @@
         // Clear globe arcs while reloading
         if (globe) {
             globe.arcsData([]).pointsData([]).ringsData([]).htmlElementsData([]);
-            document.getElementById('map-clean-count').textContent = '--';
-            document.getElementById('map-threat-count').textContent = '--';
-            document.getElementById('map-total-flows').textContent = '--';
             document.getElementById('gi-dests').textContent = '--';
             document.getElementById('gi-countries').textContent = '--';
             document.getElementById('gi-data').textContent = '--';
