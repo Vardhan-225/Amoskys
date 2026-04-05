@@ -569,8 +569,10 @@ def main() -> int:
                                         pass
 
                                 # Route observations to domain-specific tables
-                                # Enrichment for network events
-                                if domain == "flow" and enrichment is not None:
+                                # Enrichment for any observation with IP fields
+                                if enrichment is not None and any(
+                                    attrs.get(k) for k in ("src_ip", "dst_ip", "remote_ip")
+                                ):
                                     try:
                                         enrichment.enrich(attrs)
                                     except Exception:
@@ -609,6 +611,32 @@ def main() -> int:
                                             "create_time": attrs.get("create_time"),
                                             "process_guid": attrs.get("process_guid"),
                                         })
+
+                                        # Populate process_genealogy for kill chain tracking
+                                        _pid = attrs.get("pid")
+                                        if _pid is not None:
+                                            try:
+                                                store.db.execute(
+                                                    """INSERT OR REPLACE INTO process_genealogy
+                                                    (device_id, pid, ppid, name, exe, cmdline, username,
+                                                     parent_name, create_time, is_alive, first_seen_ns, last_seen_ns, process_guid)
+                                                    VALUES (?,?,?,?,?,?,?,?,?,1,?,?,?)""",
+                                                    (
+                                                        dt.device_id,
+                                                        int(_pid) if _pid else 0,
+                                                        int(attrs.get("ppid") or 0),
+                                                        attrs.get("name", attrs.get("process_name")),
+                                                        attrs.get("exe"),
+                                                        attrs.get("cmdline"),
+                                                        attrs.get("username"),
+                                                        attrs.get("parent_name"),
+                                                        attrs.get("create_time"),
+                                                        ts_ns, ts_ns,
+                                                        attrs.get("process_guid"),
+                                                    ),
+                                                )
+                                            except Exception:
+                                                pass
 
                                     elif domain == "flow":
                                         store.insert_flow_event({

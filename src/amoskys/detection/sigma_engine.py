@@ -255,8 +255,20 @@ class SigmaEngine:
         event_type = event_dict.get("event_type", "")
         category = event_dict.get("category", "")
 
-        # Check against all rules (category filtering for performance)
-        candidate_rules = list(self._rules.values())
+        # Pre-filter: only evaluate rules matching event category (O(k) not O(n))
+        candidate_rules = self._rules_by_category.get(category, [])
+        if event_type and event_type != category:
+            candidate_rules = candidate_rules + self._rules_by_category.get(event_type, [])
+        # Also include wildcard/uncategorized rules
+        candidate_rules = candidate_rules + self._rules_by_category.get("", [])
+        # Deduplicate (rule may appear in multiple categories)
+        seen_ids = set()
+        unique_rules = []
+        for r in candidate_rules:
+            if r.id not in seen_ids:
+                seen_ids.add(r.id)
+                unique_rules.append(r)
+        candidate_rules = unique_rules
 
         for rule in candidate_rules:
             if self._rule_matches(rule, event_dict):
