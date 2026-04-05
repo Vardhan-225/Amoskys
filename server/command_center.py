@@ -1336,7 +1336,7 @@ def bulk_export():
     so existing dashboard pages (Cortex, Observatory, etc.) work.
     """
     db = get_db()
-    limit = min(request.args.get("limit", 500, type=int), 2000)
+    limit = min(request.args.get("limit", 500, type=int), 5000)
     device_id = request.args.get("device_id")
 
     result = {}
