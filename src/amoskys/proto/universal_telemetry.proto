@@ -1,0 +1,421 @@
+syntax = "proto3";
+
+package messaging;
+
+import "messaging_schema.proto";
+
+message DeviceTelemetry {
+  string device_id = 1;
+  string device_type = 2;
+  string protocol = 3;
+  DeviceMetadata metadata = 4;
+  repeated TelemetryEvent events = 5;
+  SecurityContext security = 6;
+  uint64 timestamp_ns = 7;
+  string collection_agent = 8;
+  string agent_version = 9;
+  bool is_compressed = 10;
+  string compression_algorithm = 11;
+  uint32 batch_size = 12;
+  uint64 collection_interval_ms = 13;
+  uint32 schema_version = 14;
+  repeated AgentCapability capabilities = 15;
+  string agent_bus_version = 16;
+}
+
+message DeviceMetadata {
+  string manufacturer = 1;
+  string model = 2;
+  string firmware_version = 3;
+  string hardware_version = 4;
+  string serial_number = 5;
+  string ip_address = 6;
+  string mac_address = 7;
+  string subnet = 8;
+  string vlan_id = 9;
+  repeated string protocols = 10;
+  repeated uint32 open_ports = 11;
+  map<string, string> capabilities = 12;
+  string physical_location = 13;
+  string department = 14;
+  string asset_tag = 15;
+  repeated string compliance_frameworks = 16;
+  float vulnerability_score = 17;
+  string criticality_level = 18;
+  map<string, string> custom_properties = 19;
+}
+
+message AgentCapability {
+  string name = 1;
+  string badge = 2;
+  string notes = 3;
+}
+
+message TelemetryEvent {
+  string event_id = 1;
+  string event_type = 2;
+  string severity = 3;
+  uint64 event_timestamp_ns = 4;
+  MetricData metric_data = 5;
+  LogData log_data = 6;
+  AlarmData alarm_data = 7;
+  StatusData status_data = 8;
+  SecurityEvent security_event = 9;
+  AuditEvent audit_event = 10;
+  repeated string tags = 11;
+  map<string, string> attributes = 12;
+  string source_component = 13;
+  float confidence_score = 14;
+  bool is_synthetic = 15;
+  uint32 retry_count = 16;
+  float reliability_score = 17;
+  string drift_indicator = 18;
+  string agent_id = 19;
+  string correlation_group = 20;
+  repeated string related_event_ids = 21;
+  string detection_rule_id = 22;
+  string detection_rule_source = 23;
+  string probe_class = 24;
+  string probe_maturity = 25;
+}
+
+message MetricData {
+  string metric_name = 1;
+  string metric_type = 2;
+  double numeric_value = 3;
+  string string_value = 4;
+  bool boolean_value = 5;
+  bytes binary_value = 6;
+  string unit = 7;
+  map<string, string> labels = 8;
+  double min_value = 9;
+  double max_value = 10;
+  double avg_value = 11;
+  uint64 sample_count = 12;
+}
+
+message LogData {
+  string log_level = 1;
+  string message = 2;
+  string source_file = 3;
+  uint32 line_number = 4;
+  string function_name = 5;
+  string thread_id = 6;
+  string process_name = 7;
+  map<string, string> fields = 8;
+  string correlation_id = 9;
+  string trace_id = 10;
+  bool contains_pii = 11;
+  bool security_relevant = 12;
+  repeated string extracted_indicators = 13;
+}
+
+message AlarmData {
+  string alarm_id = 1;
+  string alarm_name = 2;
+  string alarm_type = 3;
+  string state = 4;
+  string description = 5;
+  string cause = 6;
+  string recommended_action = 7;
+  double threshold_value = 8;
+  double current_value = 9;
+  string threshold_operator = 10;
+  uint64 alarm_time_ns = 11;
+  uint64 ack_time_ns = 12;
+  uint64 clear_time_ns = 13;
+  string priority = 14;
+  bool auto_acknowledgeable = 15;
+  uint32 escalation_timeout_seconds = 16;
+}
+
+message StatusData {
+  string component_name = 1;
+  string status = 2;
+  string previous_status = 3;
+  uint64 status_change_time_ns = 4;
+  float health_score = 5;
+  string health_status = 6;
+  float cpu_usage_percent = 7;
+  float memory_usage_percent = 8;
+  float disk_usage_percent = 9;
+  float network_usage_mbps = 10;
+  float uptime_seconds = 11;
+  uint32 restart_count = 12;
+  uint64 last_restart_time_ns = 13;
+  double response_time_ms = 14;
+  uint64 requests_per_second = 15;
+  float error_rate_percent = 16;
+}
+
+message SecurityEvent {
+  string event_category = 1;
+  string event_action = 2;
+  string event_outcome = 3;
+  string user_id = 4;
+  string user_name = 5;
+  string source_ip = 6;
+  string user_agent = 7;
+  string target_resource = 8;
+  string target_type = 9;
+  string affected_asset = 10;
+  repeated ThreatIndicator threat_indicators = 11;
+  float risk_score = 12;
+  string attack_vector = 13;
+  repeated string mitre_techniques = 14;
+  repeated string response_actions = 15;
+  bool requires_investigation = 16;
+  string analyst_notes = 17;
+}
+
+message AuditEvent {
+  string audit_category = 1;
+  string action_performed = 2;
+  string object_type = 3;
+  string object_id = 4;
+  string actor_id = 5;
+  string actor_type = 6;
+  string session_id = 7;
+  string before_value = 8;
+  string after_value = 9;
+  repeated string changed_fields = 10;
+  repeated string compliance_frameworks = 11;
+  bool retention_required = 12;
+  uint32 retention_days = 13;
+  string legal_hold_id = 14;
+  string digital_signature = 15;
+  string hash_algorithm = 16;
+  string content_hash = 17;
+}
+
+message ThreatIndicator {
+  string indicator_type = 1;
+  string indicator_value = 2;
+  string threat_type = 3;
+  float confidence = 4;
+  string source = 5;
+  uint64 first_seen_ns = 6;
+  uint64 last_seen_ns = 7;
+  repeated string associated_campaigns = 8;
+}
+
+message SecurityContext {
+  float device_trust_score = 1;
+  string authentication_method = 2;
+  string certificate_fingerprint = 3;
+  bool certificate_valid = 4;
+  string network_zone = 5;
+  repeated string security_groups = 6;
+  bool encrypted_channel = 7;
+  string encryption_protocol = 8;
+  repeated string permissions = 9;
+  string access_level = 10;
+  bool privileged_access = 11;
+  bool behavior_normal = 12;
+  float anomaly_score = 13;
+  repeated string behavioral_flags = 14;
+  map<string, bool> compliance_status = 15;
+  repeated string policy_violations = 16;
+  string data_classification = 17;
+}
+
+message TelemetryBatch {
+  repeated DeviceTelemetry telemetry_records = 1;
+  uint32 batch_sequence_number = 2;
+  uint64 batch_start_time_ns = 3;
+  uint64 batch_end_time_ns = 4;
+  bool is_compressed = 5;
+  string compression_algorithm = 6;
+  uint32 original_size_bytes = 7;
+  uint32 compressed_size_bytes = 8;
+  uint32 total_events = 9;
+  uint32 dropped_events = 10;
+  float data_quality_score = 11;
+  string edge_agent_id = 12;
+  string edge_location = 13;
+  map<string, string> edge_metadata = 14;
+}
+
+message UniversalEnvelope {
+  string version = 1;
+  uint64 ts_ns = 2;
+  string idempotency_key = 3;
+  FlowEvent flow = 4;
+  ProcessEvent process = 5;
+  DeviceTelemetry device_telemetry = 6;
+  TelemetryBatch telemetry_batch = 7;
+  bytes sig = 8;
+  bytes prev_sig = 9;
+  string signing_algorithm = 10;
+  string certificate_chain = 11;
+  string priority = 12;
+  repeated string processing_hints = 13;
+  string target_processors = 14;
+  uint32 retry_count = 15;
+  uint64 max_processing_time_ns = 16;
+  bool requires_acknowledgment = 17;
+  uint32 schema_version = 18;
+}
+
+message UniversalAck {
+  enum Status {
+    OK = 0;
+    RETRY = 1;
+    INVALID = 2;
+    OVERLOAD = 3;
+    QUOTA_EXCEEDED = 4;
+    PROCESSING_ERROR = 5;
+    SECURITY_VIOLATION = 6;
+  }
+  Status status = 1;
+  string reason = 2;
+  uint32 backoff_hint_ms = 3;
+  uint64 processed_timestamp_ns = 4;
+  uint32 events_accepted = 5;
+  uint32 events_rejected = 6;
+  repeated string validation_errors = 7;
+  float current_load = 8;
+  uint32 queue_depth = 9;
+  uint32 processing_rate_per_second = 10;
+}
+
+message DeviceRegistration {
+  string device_id = 1;
+  DeviceMetadata metadata = 2;
+  repeated string supported_protocols = 3;
+  repeated TelemetryCapability capabilities = 4;
+  string certificate_request = 5;
+  string device_fingerprint = 6;
+  string discovered_by_agent = 7;
+  uint64 discovery_timestamp_ns = 8;
+  string discovery_method = 9;
+  string deployment_environment = 10;
+  string organizational_unit = 11;
+  repeated string device_groups = 12;
+}
+
+message TelemetryCapability {
+  string protocol = 1;
+  string endpoint = 2;
+  uint32 port = 3;
+  repeated string supported_event_types = 4;
+  uint32 max_events_per_second = 5;
+  uint32 batch_size = 6;
+  map<string, string> protocol_config = 7;
+  string reliability_level = 8;
+  uint32 max_latency_ms = 9;
+  bool supports_compression = 10;
+  bool supports_encryption = 11;
+}
+
+message DeviceRegistrationResponse {
+  bool accepted = 1;
+  string device_id = 2;
+  string certificate = 3;
+  string ca_certificate = 4;
+  repeated CollectionPolicy collection_policies = 5;
+  uint32 heartbeat_interval_seconds = 6;
+  string assigned_agent_id = 7;
+  repeated string allowed_protocols = 8;
+  string encryption_requirements = 9;
+  repeated string security_policies = 10;
+  string rejection_reason = 11;
+}
+
+message CollectionPolicy {
+  string policy_id = 1;
+  string device_type_pattern = 2;
+  string protocol = 3;
+  uint32 collection_interval_seconds = 4;
+  repeated string allowed_event_types = 5;
+  repeated string blocked_event_types = 6;
+  string severity_filter = 7;
+  bool enable_compression = 8;
+  uint32 batch_size = 9;
+  uint32 max_batch_age_seconds = 10;
+  float max_error_rate = 11;
+  uint32 max_retry_attempts = 12;
+  bool enable_local_buffering = 13;
+  repeated string pii_scrubbing_rules = 14;
+  repeated string compliance_tags = 15;
+  string data_retention_policy = 16;
+}
+
+message DeviceDeregistration {
+  string device_id = 1;
+  string reason = 2;
+  uint64 deregistration_timestamp_ns = 3;
+  string deregistered_by = 4;
+}
+
+message DeviceDeregistrationResponse {
+  bool accepted = 1;
+  string reason = 2;
+  uint64 final_data_retention_until_ns = 3;
+}
+
+message HealthRequest {
+  repeated string components = 1;
+}
+
+message HealthResponse {
+  string overall_status = 1;
+  map<string, ComponentHealth> component_health = 2;
+  uint64 timestamp_ns = 3;
+}
+
+message ComponentHealth {
+  string status = 1;
+  string message = 2;
+  map<string, string> metrics = 3;
+  uint64 last_check_ns = 4;
+}
+
+message StatusRequest {
+  bool include_metrics = 1;
+  bool include_device_count = 2;
+}
+
+message StatusResponse {
+  string service_version = 1;
+  uint64 uptime_seconds = 2;
+  uint32 connected_devices = 3;
+  uint64 total_events_processed = 4;
+  uint64 events_per_second = 5;
+  float current_load = 6;
+  map<string, string> service_metrics = 7;
+}
+
+message MetricsRequest {
+  repeated string metric_names = 1;
+  uint64 start_time_ns = 2;
+  uint64 end_time_ns = 3;
+}
+
+message MetricsResponse {
+  repeated MetricTimeSeries metrics = 4;
+  uint64 collection_timestamp_ns = 5;
+}
+
+message MetricTimeSeries {
+  string metric_name = 1;
+  repeated MetricDataPoint data_points = 2;
+  map<string, string> labels = 3;
+}
+
+message MetricDataPoint {
+  uint64 timestamp_ns = 1;
+  double value = 2;
+}
+
+service UniversalEventBus {
+  rpc Publish (Envelope) returns (PublishAck);
+  rpc PublishTelemetry (UniversalEnvelope) returns (UniversalAck);
+  rpc PublishBatch (TelemetryBatch) returns (UniversalAck);
+  rpc RegisterDevice (DeviceRegistration) returns (DeviceRegistrationResponse);
+  rpc UpdateDevice (DeviceRegistration) returns (DeviceRegistrationResponse);
+  rpc DeregisterDevice (DeviceDeregistration) returns (DeviceDeregistrationResponse);
+  rpc GetHealth (HealthRequest) returns (HealthResponse);
+  rpc GetStatus (StatusRequest) returns (StatusResponse);
+  rpc GetMetrics (MetricsRequest) returns (MetricsResponse);
+}

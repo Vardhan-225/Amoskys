@@ -804,6 +804,27 @@ def main() -> int:
                                 len(incidents),
                                 device_id,
                             )
+                            # Bridge fusion incidents → telemetry.db
+                            for inc in incidents:
+                                try:
+                                    store.create_incident({
+                                        "title": f"[{inc.rule_name}] {inc.summary}",
+                                        "description": inc.summary,
+                                        "severity": inc.severity.name.lower()
+                                        if hasattr(inc.severity, "name")
+                                        else str(inc.severity),
+                                        "source_event_ids": inc.event_ids,
+                                        "mitre_techniques": inc.techniques,
+                                        "indicators": inc.metadata
+                                        if hasattr(inc, "metadata")
+                                        else {},
+                                    })
+                                except Exception:
+                                    logger.debug(
+                                        "Failed to bridge incident %s",
+                                        getattr(inc, "incident_id", "?"),
+                                        exc_info=True,
+                                    )
                 except Exception:
                     logger.debug("Fusion evaluation failed", exc_info=True)
 

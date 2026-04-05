@@ -662,9 +662,10 @@ class InsertMixin:
             command = event_data.get("command")
             change_type = event_data.get("change_type")
 
-            # Unified snapshot dedup
-            if change_type == "snapshot" and device_id and mechanism and entry_id:
-                key = self._dedup_key(device_id, mechanism, entry_id)
+            # Unified snapshot dedup — use path as fallback when entry_id is empty
+            dedup_id = entry_id or event_data.get("path") or ""
+            if change_type == "snapshot" and device_id and mechanism and dedup_id:
+                key = self._dedup_key(device_id, mechanism, dedup_id)
                 if self._check_snapshot_dedup(
                     "persistence_events", key, content_hash, timestamp_ns
                 ):
