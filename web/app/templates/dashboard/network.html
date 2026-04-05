@@ -423,7 +423,7 @@
         })
         .catch(() => {});
 
-    fetch('/dashboard/api/live/device-info')
+    fetch('/dashboard/api/device-info')
         .then(r => r.json())
         .then(d => {
             if (d.system && d.system.hostname) {
