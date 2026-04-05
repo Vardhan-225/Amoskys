@@ -373,7 +373,7 @@
     let destinationsLoaded = false;
     let globe = null;
     let deviceLat = null, deviceLon = null;
-    let deviceCity = '', deviceOrg = '';
+    let deviceCity = '', deviceOrg = '', deviceName = '';
     let selectedHours = 24;
     let activePoller = null;
 
@@ -408,7 +408,7 @@
         }
     }
 
-    /* ── Device location ── */
+    /* ── Device location + name ── */
 
     fetch('/dashboard/api/network/device-location')
         .then(r => r.json())
@@ -419,6 +419,15 @@
                 deviceCity = [d.city, d.region, d.country].filter(Boolean).join(', ');
                 deviceOrg = d.org || '';
                 if (geoPointsCache.length > 0) renderGlobe(geoPointsCache);
+            }
+        })
+        .catch(() => {});
+
+    fetch('/dashboard/api/live/device-info')
+        .then(r => r.json())
+        .then(d => {
+            if (d.system && d.system.hostname) {
+                deviceName = d.system.hostname;
             }
         })
         .catch(() => {});
@@ -445,8 +454,11 @@
         const parts = [];
 
         const timeLabel = selectedHours === 1 ? 'hour' : selectedHours + ' hours';
+        const name = deviceName || 'this endpoint';
+        const nameHtml = '<strong>' + escHtml(name) + '</strong>';
+
         if (flows > 0) {
-            parts.push('Over the past ' + timeLabel + ', this endpoint generated <strong>' +
+            parts.push('Over the past <strong>' + timeLabel + '</strong>, ' + nameHtml + ' generated <strong>' +
                 formatNumber(flows) + ' network flows</strong> reaching <strong>' +
                 formatNumber(dsts) + ' unique destinations</strong>');
             if (countries > 0) {
@@ -455,7 +467,7 @@
             }
             parts.push('.');
         } else {
-            parts.push('No network flows recorded in the past ' + timeLabel + '.');
+            parts.push('No network flows recorded from ' + nameHtml + ' in the past <strong>' + timeLabel + '</strong>.');
             nlp.innerHTML = '<p>' + parts.join('') + '</p>';
             return;
         }
