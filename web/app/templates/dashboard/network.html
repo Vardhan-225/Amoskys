@@ -23,6 +23,27 @@
     .net-stat-val.danger { color: var(--neural-danger); }
     .net-stat-val.warning { color: var(--neural-warning); }
 
+    /* Time range selector */
+    .time-range-bar {
+        display: flex; align-items: center; gap: 0.75rem;
+    }
+    .time-range-label {
+        font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;
+        letter-spacing: 0.06em; font-weight: 600;
+    }
+    .time-range-btns { display: flex; gap: 0.35rem; }
+    .time-btn {
+        background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.15);
+        color: var(--text-muted); font-size: 0.72rem; font-weight: 600;
+        padding: 0.3rem 0.75rem; border-radius: 6px; cursor: pointer;
+        transition: all 0.2s ease; letter-spacing: 0.03em;
+    }
+    .time-btn:hover { border-color: rgba(0,217,255,0.4); color: #8899bb; }
+    .time-btn.active {
+        border-color: var(--neural-primary); color: var(--neural-primary);
+        background: rgba(0,217,255,0.08); box-shadow: 0 0 8px rgba(0,217,255,0.15);
+    }
+
     .net-nlp {
         background: var(--bg-secondary); border: 1px solid rgba(0,217,255,0.2);
         border-radius: 10px; padding: 1.25rem;
@@ -193,6 +214,17 @@
         <span style="color:var(--neural-primary);font-size:0.78rem;font-weight:600;">Network Intelligence</span>
     </div>
 
+    <!-- Time Range Selector -->
+    <div class="time-range-bar">
+        <span class="time-range-label">Time Range</span>
+        <div class="time-range-btns" id="time-range-btns">
+            <button class="time-btn" data-hours="1">1H</button>
+            <button class="time-btn" data-hours="4">4H</button>
+            <button class="time-btn" data-hours="8">8H</button>
+            <button class="time-btn active" data-hours="24">24H</button>
+        </div>
+    </div>
+
     <!-- Stats Bar -->
     <div class="net-stats-grid">
         <div class="net-stat-card">
@@ -346,6 +378,8 @@
     let globe = null;
     let deviceLat = null, deviceLon = null;
     let deviceCity = '', deviceOrg = '';
+    let selectedHours = 24;
+    let activePoller = null;
 
     /* ── Helpers ── */
 
@@ -414,8 +448,9 @@
         const threats = d.threat_intel_hits || 0;
         const parts = [];
 
+        const timeLabel = selectedHours === 1 ? 'hour' : selectedHours + ' hours';
         if (flows > 0) {
-            parts.push('Over the past 24 hours, this endpoint generated <strong>' +
+            parts.push('Over the past ' + timeLabel + ', this endpoint generated <strong>' +
                 formatNumber(flows) + ' network flows</strong> reaching <strong>' +
                 formatNumber(dsts) + ' unique destinations</strong>');
             if (countries > 0) {
@@ -424,7 +459,7 @@
             }
             parts.push('.');
         } else {
-            parts.push('No network flows recorded in the past 24 hours.');
+            parts.push('No network flows recorded in the past ' + timeLabel + '.');
             nlp.innerHTML = '<p>' + parts.join('') + '</p>';
             return;
         }
@@ -776,7 +811,7 @@
     async function loadTopDestinations() {
         if (destinationsLoaded) return;
         try {
-            const d = await DashboardCache.fetch('/dashboard/api/network/top-destinations?hours=24&limit=100', 55);
+            const d = await DashboardCache.fetch(`/dashboard/api/network/top-destinations?hours=${selectedHours}&limit=100`, 55);
             allDestinations = Array.isArray(d) ? d : (d.destinations || []);
             renderDestinations(allDestinations);
             renderSuspicious(allDestinations);
@@ -842,7 +877,7 @@
     async function loadByProcess() {
         if (processLoaded) return;
         try {
-            const d = await DashboardCache.fetch('/dashboard/api/network/by-process?hours=24', 55);
+            const d = await DashboardCache.fetch(`/dashboard/api/network/by-process?hours=${selectedHours}`, 55);
             const procs = Array.isArray(d) ? d : (d.processes || []);
             const container = document.getElementById('process-bars');
             if (procs.length === 0) {
@@ -895,32 +930,63 @@
 
     /* ── DashboardPoller with priority tiers ── */
 
-    const poller = new DashboardPoller([
-        {
-            url: '/dashboard/api/network/stats?hours=24',
-            callback: onStats,
-            priority: 'high',
-            ttl: 25
-        },
-        {
-            url: '/dashboard/api/network/geo?hours=24',
-            callback: onGeo,
-            priority: 'low',
-            ttl: 55
-        },
-        {
-            url: '/dashboard/api/network/asn?hours=24',
-            callback: onAsn,
-            priority: 'low',
-            ttl: 55
-        },
-        {
-            url: '/dashboard/api/network/geo-points?hours=24&limit=500',
-            callback: onGeoPoints,
-            priority: 'low',
-            ttl: 55
+    function buildPollerConfigs(hours) {
+        return [
+            { url: `/dashboard/api/network/stats?hours=${hours}`, callback: onStats, priority: 'high', ttl: 25 },
+            { url: `/dashboard/api/network/geo?hours=${hours}`, callback: onGeo, priority: 'low', ttl: 55 },
+            { url: `/dashboard/api/network/asn?hours=${hours}`, callback: onAsn, priority: 'low', ttl: 55 },
+            { url: `/dashboard/api/network/geo-points?hours=${hours}&limit=500`, callback: onGeoPoints, priority: 'low', ttl: 55 },
+        ];
+    }
+
+    function startPoller(hours) {
+        if (activePoller) activePoller.stop();
+        activePoller = new DashboardPoller(buildPollerConfigs(hours), 30000);
+        activePoller.start();
+    }
+
+    /* ── Time range selector ── */
+
+    document.getElementById('time-range-btns').addEventListener('click', function(e) {
+        const btn = e.target.closest('.time-btn');
+        if (!btn) return;
+        const hours = parseInt(btn.dataset.hours, 10);
+        if (hours === selectedHours) return;
+
+        // Update button states
+        this.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedHours = hours;
+
+        // Clear cached data for old time range
+        DashboardCache.invalidate('/dashboard/api/network/');
+
+        // Reset lazy-load flags so they re-fetch with new hours
+        processLoaded = false;
+        destinationsLoaded = false;
+        geoPointsCache = [];
+
+        // Clear globe arcs while reloading
+        if (globe) {
+            globe.arcsData([]).pointsData([]).ringsData([]).htmlElementsData([]);
+            document.getElementById('map-clean-count').textContent = '--';
+            document.getElementById('map-threat-count').textContent = '--';
+            document.getElementById('map-total-flows').textContent = '--';
+            document.getElementById('gi-dests').textContent = '--';
+            document.getElementById('gi-countries').textContent = '--';
+            document.getElementById('gi-data').textContent = '--';
         }
-    ], 30000).start();
+
+        // Restart poller with new hours
+        startPoller(hours);
+
+        // Re-trigger lazy sections
+        loadByProcess();
+        loadTopDestinations();
+    });
+
+    // Initial start
+    startPoller(selectedHours);
 
 })();
 </script>
