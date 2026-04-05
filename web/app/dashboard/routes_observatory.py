@@ -465,38 +465,57 @@ def network_asn():
 @require_login
 @require_rate_limit(max_requests=10, window_seconds=60)
 def network_device_location():
-    """Resolve device's public IP to geo-coordinates via ipinfo.io."""
-    import urllib.request
+    """Get device location from its flow event GeoIP data.
 
-    cache_key = "_device_location"
-    cached = getattr(network_device_location, cache_key, None)
-    if cached:
-        return jsonify(cached)
+    Instead of calling ipinfo.io (which returns the SERVER's location),
+    infer the device location from the most common source IP geo data
+    in flow_events. This gives the actual device's location.
+    """
+    store = get_telemetry_store()
+    if store is None:
+        return jsonify({"lat": 0, "lon": 0, "city": "Unknown", "country": ""})
+
     try:
-        req = urllib.request.Request(
-            "https://ipinfo.io/json",
-            headers={"Accept": "application/json", "User-Agent": "AMOSKYS/1.0"},
-        )
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            import json as _json
+        # Find the device's location from its outbound connections
+        # The source IP geo data tells us where the device is
+        row = store.db.execute(
+            """SELECT geo_src_latitude, geo_src_longitude, geo_src_city, geo_src_country,
+                      asn_src_org, src_ip
+               FROM flow_events
+               WHERE geo_src_latitude IS NOT NULL AND geo_src_latitude != ''
+               ORDER BY timestamp_ns DESC LIMIT 1"""
+        ).fetchone()
 
-            data = _json.loads(resp.read())
-        loc = data.get("loc", "0,0").split(",")
-        result = {
-            "lat": float(loc[0]),
-            "lon": float(loc[1]),
-            "city": data.get("city", ""),
-            "region": data.get("region", ""),
-            "country": data.get("country", ""),
-            "org": data.get("org", ""),
-            "ip": data.get("ip", ""),
-        }
-        setattr(network_device_location, cache_key, result)
-        return jsonify(result)
+        if row and row[0]:
+            return jsonify({
+                "lat": float(row[0]),
+                "lon": float(row[1]),
+                "city": row[2] or "",
+                "country": row[3] or "",
+                "org": row[4] or "",
+                "ip": row[5] or "",
+            })
+
+        # Fallback: try security_events for geo data
+        row2 = store.db.execute(
+            """SELECT geo_src_latitude, geo_src_longitude, geo_src_city, geo_src_country
+               FROM security_events
+               WHERE geo_src_latitude IS NOT NULL AND geo_src_latitude != ''
+               ORDER BY timestamp_ns DESC LIMIT 1"""
+        ).fetchone()
+
+        if row2 and row2[0]:
+            return jsonify({
+                "lat": float(row2[0]),
+                "lon": float(row2[1]),
+                "city": row2[2] or "",
+                "country": row2[3] or "",
+            })
+
     except Exception:
-        return jsonify(
-            {"lat": 38.2542, "lon": -85.7594, "city": "Louisville", "country": "US"}
-        )
+        pass
+
+    return jsonify({"lat": 0, "lon": 0, "city": "Unknown", "country": ""})
 
 
 @dashboard_bp.route("/api/network/geo-points")

@@ -165,11 +165,24 @@ def get_agent_health_summary() -> Dict[str, Any]:
 
 def get_system_metrics_snapshot() -> Dict[str, Any]:
     """
-    Generate system metrics snapshot for monitoring
+    Generate system metrics snapshot for monitoring.
 
-    Returns:
-        Dict containing current system performance metrics
+    In fleet mode, returns zeroed-out metrics since this server is the
+    presentation layer — real device metrics come from the ops server.
     """
+    import os as _os
+
+    if _os.environ.get("AMOSKYS_OPS_SERVER"):
+        return {
+            "cpu": {"percent": 0, "cores": 0, "status": "healthy"},
+            "memory": {"percent": 0, "used_gb": 0, "total_gb": 0, "status": "healthy"},
+            "disk": {"percent": 0, "used_gb": 0, "total_gb": 0, "status": "healthy"},
+            "network": {"bytes_sent_gb": 0, "bytes_recv_gb": 0},
+            "processes": {"total": 0},
+            "amoskys": {"rss_mb": 0, "cpu_percent": 0, "threads": 0},
+            "fleet_mode": True,
+        }
+
     import psutil
 
     try:

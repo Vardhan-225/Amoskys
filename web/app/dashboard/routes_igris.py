@@ -576,7 +576,25 @@ def guardian_execute():
 
         # sysinfo
         if root == "sysinfo":
+            import os as _os
             import platform as plat
+
+            if _os.environ.get("AMOSKYS_OPS_SERVER"):
+                try:
+                    from .routes_command_center import _ops_get
+                    data = _ops_get("/api/v1/devices")
+                    if data and data.get("devices"):
+                        dev = data["devices"][0]
+                        lines = [
+                            f"Platform: {dev.get('os', '?')} {dev.get('os_version', '')}",
+                            f"Machine: {dev.get('arch', '?')}",
+                            f"Hostname: {dev.get('hostname', '?')}",
+                            f"Device ID: {dev.get('device_id', '?')}",
+                            f"Status: {dev.get('status', '?')}",
+                        ]
+                        return jsonify({"output": "\n".join(lines), "cmd_type": "info"})
+                except Exception:
+                    pass
 
             import psutil
 

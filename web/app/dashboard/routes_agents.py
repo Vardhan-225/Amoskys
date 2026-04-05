@@ -1793,25 +1793,42 @@ def agent_live_data(agent_id):
         except Exception:
             pass
 
-    # 4) Device info
-    device_info = {
-        "hostname": _socket.gethostname(),
-        "ip_address": _get_local_ip(),
-        "platform": os.uname().sysname if hasattr(os, "uname") else "Unknown",
-    }
-    if store:
+    # 4) Device info — from ops server in fleet mode, local otherwise
+    device_info = {}
+    if os.environ.get("AMOSKYS_OPS_SERVER"):
         try:
-            row = store.db.execute(
-                "SELECT device_id, ip_address, device_type "
-                "FROM device_telemetry ORDER BY id DESC LIMIT 1"
-            ).fetchone()
-            if row:
-                device_info["device_id"] = row[0]
-                if row[1]:
-                    device_info["ip_address"] = row[1]
-                device_info["device_type"] = row[2]
+            from .routes_command_center import _ops_get
+            data = _ops_get("/api/v1/devices")
+            if data and data.get("devices"):
+                dev = data["devices"][0]
+                device_info = {
+                    "hostname": dev.get("hostname", ""),
+                    "ip_address": dev.get("ip_address", ""),
+                    "platform": dev.get("os", ""),
+                    "device_id": dev.get("device_id", ""),
+                    "device_type": dev.get("device_type", ""),
+                }
         except Exception:
             pass
+    if not device_info:
+        device_info = {
+            "hostname": _socket.gethostname(),
+            "ip_address": _get_local_ip(),
+            "platform": os.uname().sysname if hasattr(os, "uname") else "Unknown",
+        }
+        if store:
+            try:
+                row = store.db.execute(
+                    "SELECT device_id, ip_address, device_type "
+                    "FROM device_telemetry ORDER BY id DESC LIMIT 1"
+                ).fetchone()
+                if row:
+                    device_info["device_id"] = row[0]
+                    if row[1]:
+                        device_info["ip_address"] = row[1]
+                    device_info["device_type"] = row[2]
+            except Exception:
+                pass
 
     # 5) Agent log tail (last 30 lines)
     log_lines = []
