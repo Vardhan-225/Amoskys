@@ -148,7 +148,7 @@ def main() -> int:
     # Injected into events as '_asv' for INADS 6th cluster scoring.
     from collections import defaultdict
 
-    _asv_window: Dict[str, float] = {}  # agent_name → last_fire_epoch
+    _asv_window: dict[str, float] = {}  # agent_name → last_fire_epoch
     _ASV_WINDOW_SEC = 60.0
 
     def _update_asv(agent_name: str) -> list:

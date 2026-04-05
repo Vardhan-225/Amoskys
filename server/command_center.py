@@ -125,6 +125,15 @@ CREATE TABLE IF NOT EXISTS security_events (
     sha256 TEXT,
     probe_name TEXT,
     detection_source TEXT,
+    cmdline TEXT,
+    exe TEXT,
+    remote_port INTEGER,
+    protocol TEXT,
+    geo_src_city TEXT,
+    geo_src_latitude REAL,
+    geo_src_longitude REAL,
+    asn_src_number INTEGER,
+    asn_src_network_type TEXT,
     received_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_se_device ON security_events(device_id);
@@ -655,9 +664,11 @@ ALLOWED_TABLES = {
         "geometric_score", "temporal_score", "behavioral_score",
         "final_classification", "description", "indicators",
         "collection_agent", "enrichment_status", "threat_intel_match",
-        "geo_src_country", "asn_src_org", "event_timestamp_ns",
-        "event_id", "remote_ip", "process_name", "pid",
-        "username", "domain", "path", "sha256",
+        "geo_src_country", "geo_src_city", "geo_src_latitude", "geo_src_longitude",
+        "asn_src_org", "asn_src_number", "asn_src_network_type",
+        "event_timestamp_ns",
+        "event_id", "remote_ip", "remote_port", "process_name", "pid",
+        "exe", "cmdline", "username", "protocol", "domain", "path", "sha256",
         "probe_name", "detection_source", "received_at",
     },
     "process_events": {
