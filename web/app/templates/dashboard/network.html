@@ -272,11 +272,11 @@
             </div>
             <!-- Controls — bottom left -->
             <div class="globe-controls">
-                <button class="globe-ctrl-btn active" data-filter="all" onclick="filterGlobe('all',this)">All</button>
-                <button class="globe-ctrl-btn" data-filter="threats" onclick="filterGlobe('threats',this)">Threats</button>
-                <button class="globe-ctrl-btn" data-filter="top5" onclick="filterGlobe('top5',this)">Top 5</button>
-                <button class="globe-ctrl-btn" id="btn-auto-rotate" onclick="toggleAutoRotate()">Rotate</button>
-                <button class="globe-ctrl-btn" onclick="focusDevice()">Focus</button>
+                <button class="globe-ctrl-btn active" data-filter="all">All</button>
+                <button class="globe-ctrl-btn" data-filter="threats">Threats</button>
+                <button class="globe-ctrl-btn" data-filter="top5">Top 5</button>
+                <button class="globe-ctrl-btn" id="btn-auto-rotate" data-action="rotate">Rotate</button>
+                <button class="globe-ctrl-btn" data-action="focus">Focus</button>
             </div>
             <!-- Hidden elements to prevent JS errors (values set but not displayed) -->
             <span id="gi-dests" style="display:none;"></span>
@@ -322,7 +322,7 @@
         <div class="net-card-title">Top Destinations</div>
         <div class="net-search-bar">
             <input type="text" class="net-search-input" id="dst-search" placeholder="Search by IP, country, ASN...">
-            <button class="net-search-btn" onclick="filterDestinations()">Filter</button>
+            <button class="net-search-btn" id="dst-filter-btn">Filter</button>
         </div>
         <div class="dst-table-wrap">
             <table class="dst-table">
@@ -787,31 +787,36 @@
 
     /* ── Globe controls ── */
 
-    window.toggleAutoRotate = function() {
-        const btn = document.getElementById('btn-auto-rotate');
-        const controls = globe.controls();
-        controls.autoRotate = !controls.autoRotate;
-        btn.classList.toggle('active', controls.autoRotate);
-    };
+    /* ── Globe control buttons (event delegation, CSP-safe) ── */
 
-    window.focusDevice = function() {
-        if (deviceLat && globe) {
+    document.querySelector('.globe-controls').addEventListener('click', function(e) {
+        const btn = e.target.closest('.globe-ctrl-btn');
+        if (!btn) return;
+
+        const filter = btn.dataset.filter;
+        const action = btn.dataset.action;
+
+        if (filter) {
+            if (!globe || !geoPointsCache.length) return;
+            let filtered = geoPointsCache;
+            if (filter === 'threats') {
+                filtered = geoPointsCache.filter(p => p.threat_intel_match || p.threat);
+            } else if (filter === 'top5') {
+                filtered = [...geoPointsCache].sort((a, b) => (b.bytes || 0) - (a.bytes || 0)).slice(0, 5);
+            }
+            document.querySelectorAll('.globe-controls [data-filter]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderGlobe(filtered);
+        } else if (action === 'rotate') {
+            if (!globe) return;
+            const controls = globe.controls();
+            controls.autoRotate = !controls.autoRotate;
+            btn.classList.toggle('active', controls.autoRotate);
+        } else if (action === 'focus') {
+            if (!globe || !deviceLat) return;
             globe.pointOfView({ lat: deviceLat, lng: deviceLon, altitude: 1.5 }, 1000);
         }
-    };
-
-    window.filterGlobe = function(mode, btnEl) {
-        let filtered = geoPointsCache;
-        if (mode === 'threats') {
-            filtered = geoPointsCache.filter(p => p.threat_intel_match || p.threat);
-        } else if (mode === 'top5') {
-            filtered = [...geoPointsCache].sort((a, b) => (b.bytes || 0) - (a.bytes || 0)).slice(0, 5);
-        }
-        // Update button states
-        document.querySelectorAll('.globe-controls [data-filter]').forEach(b => b.classList.remove('active'));
-        if (btnEl) btnEl.classList.add('active');
-        renderGlobe(filtered);
-    };
+    });
 
     /* ── Top Destinations (lazy-loaded) ── */
 
@@ -910,7 +915,7 @@
 
     /* ── Search / filter ── */
 
-    window.filterDestinations = function() {
+    function filterDestinations() {
         const q = document.getElementById('dst-search').value.toLowerCase();
         if (!q) {
             renderDestinations(allDestinations);
@@ -924,10 +929,11 @@
             (d.network_type || '').toLowerCase().includes(q)
         );
         renderDestinations(filtered);
-    };
+    }
 
+    document.getElementById('dst-filter-btn').addEventListener('click', filterDestinations);
     document.getElementById('dst-search').addEventListener('keydown', e => {
-        if (e.key === 'Enter') window.filterDestinations();
+        if (e.key === 'Enter') filterDestinations();
     });
 
     /* ── Lazy loading for bottom sections ── */
