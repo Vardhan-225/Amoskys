@@ -551,13 +551,62 @@ def _geoip_lookup(ip: str):
 @require_login
 @require_rate_limit(max_requests=60, window_seconds=60)
 def network_geo_points():
-    """Lat/lon points for world map."""
+    """Lat/lon points for world map, with country centroid fallback."""
     store = _get_store()
     if not store:
         return jsonify([])
     hours = request.args.get("hours", 24, type=int)
     limit = request.args.get("limit", 500, type=int)
-    return jsonify(store.get_flow_geo_points(hours, min(limit, 1000)))
+    points = store.get_flow_geo_points(hours, min(limit, 1000))
+
+    # Also grab flows that have country but no lat/lon — use centroid
+    try:
+        import time
+        cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        rows = store.db.execute(
+            "SELECT geo_dst_country, COUNT(*) as cnt, "
+            "SUM(COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0)) as total_bytes, "
+            "asn_dst_org, MAX(CASE WHEN threat_intel_match=1 THEN 1 ELSE 0 END) as threat "
+            "FROM flow_events WHERE timestamp_ns > ? "
+            "AND (geo_dst_latitude IS NULL OR geo_dst_latitude = 0) "
+            "AND geo_dst_country IS NOT NULL AND geo_dst_country != '' "
+            "GROUP BY geo_dst_country ORDER BY cnt DESC LIMIT 50",
+            (cutoff_ns,),
+        ).fetchall()
+        for r in rows:
+            centroid = _COUNTRY_CENTROIDS.get(r[0])
+            if centroid:
+                points.append({
+                    "lat": centroid[0], "lon": centroid[1],
+                    "country": r[0], "city": "",
+                    "count": r[1], "bytes": r[2] or 0,
+                    "asn_org": r[3] or "", "threat": bool(r[4]),
+                })
+    except Exception:
+        pass
+
+    return jsonify(points)
+
+
+# Country centroids for flows with country but no lat/lon
+_COUNTRY_CENTROIDS = {
+    "US": (39.8, -98.5), "GB": (51.5, -0.1), "DE": (51.2, 10.4),
+    "FR": (46.2, 2.2), "JP": (35.7, 139.7), "AU": (-25.3, 133.8),
+    "NL": (52.1, 5.3), "IE": (53.1, -7.7), "CA": (56.1, -106.3),
+    "BR": (-14.2, -51.9), "IN": (20.6, 78.9), "SG": (1.4, 103.8),
+    "KR": (35.9, 127.8), "SE": (60.1, 18.6), "CH": (46.8, 8.2),
+    "IT": (41.9, 12.6), "ES": (40.5, -3.7), "RU": (61.5, 105.3),
+    "CN": (35.9, 104.2), "HK": (22.3, 114.2), "ZA": (-30.6, 22.9),
+    "MX": (23.6, -102.6), "AR": (-38.4, -63.6), "CL": (-35.7, -71.5),
+    "PL": (51.9, 19.1), "NO": (60.5, 8.5), "FI": (61.9, 25.7),
+    "DK": (56.3, 9.5), "AT": (47.5, 14.6), "BE": (50.5, 4.5),
+    "PT": (39.4, -8.2), "CZ": (49.8, 15.5), "RO": (45.9, 25.0),
+    "IL": (31.0, 34.8), "TW": (23.7, 121.0), "NZ": (-40.9, 174.9),
+    "TH": (15.9, 100.9), "MY": (4.2, 101.9), "PH": (12.9, 121.8),
+    "ID": (-0.8, 113.9), "VN": (14.1, 108.3), "AE": (23.4, 53.8),
+    "SA": (23.9, 45.1), "NG": (9.1, 8.7), "EG": (26.8, 30.8),
+    "CO": (4.6, -74.3), "UA": (48.4, 31.2), "TR": (39.0, 35.2),
+}
 
 
 @dashboard_bp.route("/api/network/top-destinations")

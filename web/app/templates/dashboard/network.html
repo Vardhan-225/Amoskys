@@ -423,11 +423,14 @@
         })
         .catch(() => {});
 
+    let _lastStatsData = null;
     fetch('/dashboard/api/device-info')
         .then(r => r.json())
         .then(d => {
             if (d.system && d.system.hostname) {
                 deviceName = d.system.hostname;
+                // Re-render NLP if stats already arrived before device name
+                if (_lastStatsData) buildNlpSummary(_lastStatsData);
             }
         })
         .catch(() => {});
@@ -435,6 +438,7 @@
     /* ── Stats ── */
 
     function onStats(d) {
+        _lastStatsData = d;
         document.getElementById('stat-flows').textContent = formatNumber(d.total_flows || 0);
         document.getElementById('stat-dsts').textContent = formatNumber(d.unique_destinations || 0);
         document.getElementById('stat-countries').textContent = d.countries_reached || 0;
