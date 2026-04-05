@@ -183,7 +183,10 @@ CREATE TABLE IF NOT EXISTS flow_events (
     bytes_rx INTEGER,
     pid TEXT,
     process_name TEXT,
+    geo_dst_latitude REAL,
+    geo_dst_longitude REAL,
     geo_dst_country TEXT,
+    geo_dst_city TEXT,
     asn_dst_org TEXT,
     threat_intel_match BOOLEAN DEFAULT 0,
     collection_agent TEXT,
@@ -342,6 +345,16 @@ def init_db():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(DB_PATH, timeout=10.0)
     db.executescript(FLEET_SCHEMA)
+    # Migrate: add geo columns if missing (existing DBs)
+    for col, ctype in [
+        ("geo_dst_latitude", "REAL"),
+        ("geo_dst_longitude", "REAL"),
+        ("geo_dst_city", "TEXT"),
+    ]:
+        try:
+            db.execute(f"ALTER TABLE flow_events ADD COLUMN {col} {ctype}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
     db.commit()
     db.close()
     logger.info("Fleet database initialized: %s", DB_PATH)

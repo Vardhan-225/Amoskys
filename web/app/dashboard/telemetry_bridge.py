@@ -239,7 +239,8 @@ def _create_minimal_schema(db: sqlite3.Connection):
                 id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ns INTEGER, timestamp_dt TEXT,
                 device_id TEXT, src_ip TEXT, dst_ip TEXT, src_port INTEGER, dst_port INTEGER,
                 protocol TEXT, bytes_tx INTEGER, bytes_rx INTEGER, pid TEXT,
-                process_name TEXT, geo_dst_country TEXT, asn_dst_org TEXT,
+                process_name TEXT, geo_dst_latitude REAL, geo_dst_longitude REAL,
+                geo_dst_country TEXT, geo_dst_city TEXT, asn_dst_org TEXT,
                 threat_intel_match BOOLEAN, collection_agent TEXT
             )""",
         "dns_events": """
