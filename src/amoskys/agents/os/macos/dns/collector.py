@@ -66,14 +66,32 @@ class MacOSDNSCollector:
     """
 
     # Unified Logging predicate for mDNSResponder
+    # On macOS 15+ (Sequoia), domain names are privacy-hashed in logs.
+    # We extract: process name, PID, record type, query suppression status.
+    # Actual domains are masked as <mask.hash: 'xxx'>.
     _LOG_PREDICATE = (
         'process == "mDNSResponder" AND '
-        '(eventMessage CONTAINS "Query" OR eventMessage CONTAINS "response")'
+        '(eventMessage CONTAINS "getaddrinfo start" '
+        'OR eventMessage CONTAINS "Query suppressed" '
+        'OR eventMessage CONTAINS "Query" OR eventMessage CONTAINS "response")'
     )
     _LOG_WINDOW_SECONDS = 30  # Look back 30s for recent queries
     _LOG_TIMEOUT = 15  # Subprocess timeout
 
-    # Regex patterns for parsing mDNSResponder log lines
+    # macOS 15+ getaddrinfo start pattern (domains are hashed)
+    _GETADDR_PATTERN = re.compile(
+        r"getaddrinfo\s+start\s+--\s+"
+        r".*?hostname:\s+(?:<mask\.hash:\s+'([^']+)'>|(\S+))"  # hashed or plain domain
+        r".*?client\s+pid:\s+(\d+)\s+\(([^)]+)\)"  # client PID and process name
+    )
+
+    # Query suppression pattern (AAAA records unusable etc.)
+    _SUPPRESSED_PATTERN = re.compile(
+        r"Query\s+suppressed\s+for\s+(?:<mask\.hash:\s+'([^']+)'>|(\S+))"
+        r"\s+(\w+)"  # record type
+    )
+
+    # Legacy query pattern (pre-macOS 15, domains visible)
     _QUERY_PATTERN = re.compile(
         r"(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+)"  # timestamp
         r".*?"
@@ -82,6 +100,7 @@ class MacOSDNSCollector:
         r"\s+(\w+)"  # record type
         r"(?:\s+(\S+))?"  # optional response
     )
+    # Legacy response pattern
     _RESPONSE_PATTERN = re.compile(
         r"(\S+\.)\s+"  # domain
         r"(?:Addr|CNAME|Rdata)\s+"
@@ -180,45 +199,97 @@ class MacOSDNSCollector:
         return queries
 
     def _parse_log_line(self, line: str) -> Optional[DNSQuery]:
-        """Parse a single mDNSResponder log line into DNSQuery."""
+        """Parse a single mDNSResponder log line into DNSQuery.
+
+        Handles both macOS 15+ (privacy-hashed domains) and legacy formats.
+        On macOS 15+, domains are <mask.hash:'xxx'> but we still get:
+        - Client PID and process name (critical for attribution)
+        - Record type (A, AAAA)
+        - Query suppression status
+        """
         if not line or line.startswith("---") or line.startswith("Filtering"):
             return None
 
-        # Try query pattern
+        return (
+            self._try_parse_getaddrinfo(line)
+            or self._try_parse_suppressed(line)
+            or self._try_parse_legacy_query(line)
+            or self._try_parse_legacy_response(line)
+        )
+
+    def _try_parse_getaddrinfo(self, line: str) -> Optional[DNSQuery]:
+        """Parse macOS 15+ getaddrinfo start line."""
+        match = self._GETADDR_PATTERN.search(line)
+        if not match:
+            return None
+        domain_hash = match.group(1) or ""  # privacy hash
+        domain_plain = match.group(2) or ""  # plain domain (rare)
+        client_pid = int(match.group(3))
+        client_process = match.group(4)
+
+        domain = domain_plain if domain_plain else f"[hash:{domain_hash[:12]}]"
+
+        return DNSQuery(
+            timestamp=time.time(),
+            domain=domain,
+            record_type="A",
+            source_process=client_process,
+            source_pid=client_pid,
+            response_code="QUERY",
+        )
+
+    def _try_parse_suppressed(self, line: str) -> Optional[DNSQuery]:
+        """Parse query suppression line (e.g., AAAA unusable)."""
+        match = self._SUPPRESSED_PATTERN.search(line)
+        if not match:
+            return None
+        domain_hash = match.group(1) or ""
+        domain_plain = match.group(2) or ""
+        record_type = match.group(3).upper()
+
+        domain = domain_plain if domain_plain else f"[hash:{domain_hash[:12]}]"
+
+        return DNSQuery(
+            timestamp=time.time(),
+            domain=domain,
+            record_type=record_type,
+            response_code="SUPPRESSED",
+        )
+
+    def _try_parse_legacy_query(self, line: str) -> Optional[DNSQuery]:
+        """Parse legacy (pre-macOS 15) query line with visible domain."""
         match = self._QUERY_PATTERN.search(line)
-        if match:
-            ts = _parse_log_timestamp(match.group(1))
-            domain = match.group(2).rstrip(".")
-            record_type = match.group(3).upper()
-            is_reverse = domain.endswith(".in-addr.arpa") or domain.endswith(
-                ".ip6.arpa"
-            )
+        if not match:
+            return None
+        ts = _parse_log_timestamp(match.group(1))
+        domain = match.group(2).rstrip(".")
+        record_type = match.group(3).upper()
+        is_reverse = domain.endswith(".in-addr.arpa") or domain.endswith(".ip6.arpa")
 
-            return DNSQuery(
-                timestamp=ts,
-                domain=domain,
-                record_type=record_type,
-                is_reverse=is_reverse,
-            )
+        return DNSQuery(
+            timestamp=ts,
+            domain=domain,
+            record_type=record_type,
+            is_reverse=is_reverse,
+        )
 
-        # Try response pattern (no timestamp group — fall back to now)
+    def _try_parse_legacy_response(self, line: str) -> Optional[DNSQuery]:
+        """Parse legacy response line with visible domain and IP."""
         match = self._RESPONSE_PATTERN.search(line)
-        if match:
-            domain = match.group(1).rstrip(".")
-            value = match.group(2)
-            ttl = int(match.group(3)) if match.group(3) else 0
+        if not match:
+            return None
+        domain = match.group(1).rstrip(".")
+        value = match.group(2)
+        ttl = int(match.group(3)) if match.group(3) else 0
+        response_ips = [value] if _is_ip(value) else []
 
-            response_ips = [value] if _is_ip(value) else []
-
-            return DNSQuery(
-                timestamp=time.time(),
-                domain=domain,
-                record_type="A" if response_ips else "CNAME",
-                response_ips=response_ips,
-                ttl=ttl,
-            )
-
-        return None
+        return DNSQuery(
+            timestamp=time.time(),
+            domain=domain,
+            record_type="A" if response_ips else "CNAME",
+            response_ips=response_ips,
+            ttl=ttl,
+        )
 
     def _collect_dns_config(self) -> tuple[List[DNSServerInfo], List[str]]:
         """Parse scutil --dns for DNS server config and search domains."""
