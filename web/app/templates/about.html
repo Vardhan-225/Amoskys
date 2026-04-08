@@ -321,6 +321,102 @@
             .nav-links { display: none; }
             .agent-grid { grid-template-columns: 1fr; }
         }
+    
+        /* About dropdown — hover-reveal, CSS only */
+        .nav-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .nav-dropdown > .nav-trigger {
+            background: none;
+            border: 0;
+            padding: 0;
+            margin: 0;
+            font-family: inherit;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.95rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: color 0.3s;
+        }
+        .nav-dropdown > .nav-trigger:focus {
+            outline: none;
+        }
+        .nav-dropdown > .nav-trigger:focus-visible {
+            outline: 2px solid rgba(0, 217, 255, 0.45);
+            outline-offset: 4px;
+            border-radius: 4px;
+        }
+        .nav-dropdown > .nav-trigger::after {
+            content: '\25BE';
+            font-size: 0.7rem;
+            color: rgba(0, 217, 255, 0.5);
+            transition: transform 0.2s, color 0.2s;
+        }
+        .nav-dropdown:hover > .nav-trigger,
+        .nav-dropdown:focus-within > .nav-trigger {
+            color: var(--cyan-primary);
+        }
+        .nav-dropdown:hover > .nav-trigger::after,
+        .nav-dropdown:focus-within > .nav-trigger::after {
+            color: var(--cyan-primary);
+            transform: rotate(180deg);
+        }
+        .nav-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 10px);
+            left: 50%;
+            transform: translateX(-50%) translateY(-6px);
+            background: rgba(10, 14, 39, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 217, 255, 0.18);
+            border-radius: 10px;
+            min-width: 220px;
+            padding: 0.6rem 0;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 217, 255, 0.08);
+            z-index: 1000;
+        }
+        .nav-dropdown:hover .nav-dropdown-menu,
+        .nav-dropdown:focus-within .nav-dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+        }
+        /* Bridge the 10px gap so hover doesn't drop the menu */
+        .nav-dropdown::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            height: 14px;
+        }
+        .nav-dropdown-menu a {
+            display: block;
+            padding: 0.7rem 1.25rem;
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            font-weight: 500;
+            transition: color 0.18s, background 0.18s;
+        }
+        .nav-dropdown-menu a:hover {
+            color: var(--cyan-primary);
+            background: rgba(0, 217, 255, 0.06);
+        }
+        .nav-dropdown-menu a .nav-item-sub {
+            display: block;
+            font-size: 0.72rem;
+            color: rgba(180, 188, 208, 0.55);
+            font-weight: 400;
+            margin-top: 2px;
+            letter-spacing: 0.02em;
+        }
     </style>
 </head>
 <body>
@@ -492,7 +588,13 @@
             <p style="margin-bottom: 1.5rem; max-width: 600px; margin-left: auto; margin-right: auto;">Intelligence-First Security Platform. Built to understand threats, not just react to them.</p>
             <div class="footer-links">
                 <a href="/">Home</a>
-                <a href="/about">About</a>
+                <div class="nav-dropdown">
+                    <button type="button" class="nav-trigger" aria-haspopup="true" aria-expanded="false">About</button>
+                    <div class="nav-dropdown-menu" role="menu">
+                        <a href="/about" role="menuitem">AMOSKYS<span class="nav-item-sub">The platform &amp; mission</span></a>
+                        <a href="/about/akash" role="menuitem">Team<span class="nav-item-sub">Meet the builder</span></a>
+                    </div>
+                </div>
                 <a href="/how-it-works">How It Works</a>
                 <a href="/docs">Documentation</a>
                 <a href="/auth/login">Login</a>

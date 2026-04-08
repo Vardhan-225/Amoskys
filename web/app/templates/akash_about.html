@@ -1,409 +1,820 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Akash Thanneeru, About, AMOSKYS</title>
-<meta name="description" content="Akash Thanneeru. Security Operations Engineer and builder of AMOSKYS. Detection you can prove. Logs no attacker can rewrite.">
-<style>
-  :root{
-    --bg:#0a0f1a;
-    --panel:#0f1624;
-    --ink:#e8ecf4;
-    --ink-mute:#9aa3b7;
-    --line:#1b2436;
-    --accent:#7dc1ff;
-    --accent-dim:#4f89c0;
-    --mono:ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    --sans:-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
-  body{
-    background:var(--bg);
-    color:var(--ink);
-    font-family:var(--sans);
-    font-size:17px;
-    line-height:1.72;
-    -webkit-font-smoothing:antialiased;
-    text-rendering:optimizeLegibility;
-  }
-  main.about{
-    max-width:720px;
-    margin:0 auto;
-    padding:88px 28px 120px 28px;
-  }
-  .eyebrow{
-    font-family:var(--mono);
-    font-size:12px;
-    letter-spacing:.18em;
-    text-transform:uppercase;
-    color:var(--accent);
-    margin:0 0 18px 0;
-  }
-  h1{
-    font-size:44px;
-    line-height:1.08;
-    font-weight:700;
-    letter-spacing:-.02em;
-    margin:0 0 16px 0;
-  }
-  .tagline{
-    font-size:20px;
-    line-height:1.5;
-    color:var(--ink-mute);
-    margin:0 0 52px 0;
-    max-width:620px;
-  }
-  h2{
-    font-size:13px;
-    font-family:var(--mono);
-    font-weight:600;
-    letter-spacing:.22em;
-    text-transform:uppercase;
-    color:var(--accent);
-    margin:64px 0 18px 0;
-    padding-top:28px;
-    border-top:1px solid var(--line);
-  }
-  h3{
-    font-size:19px;
-    font-weight:650;
-    margin:28px 0 8px 0;
-    color:var(--ink);
-  }
-  p{margin:0 0 18px 0}
-  strong{color:#fff;font-weight:650}
-  a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-dim)}
-  a:hover{color:#fff;border-bottom-color:#fff}
-  .layers{
-    counter-reset:layer;
-    list-style:none;
-    padding:0;
-    margin:24px 0 28px 0;
-  }
-  .layers li{
-    counter-increment:layer;
-    position:relative;
-    padding:18px 0 18px 52px;
-    border-top:1px solid var(--line);
-  }
-  .layers li:last-child{border-bottom:1px solid var(--line)}
-  .layers li::before{
-    content:counter(layer, decimal-leading-zero);
-    position:absolute;
-    left:0;
-    top:20px;
-    font-family:var(--mono);
-    font-size:12px;
-    color:var(--accent);
-    letter-spacing:.12em;
-  }
-  .layers li b{
-    display:block;
-    font-size:16px;
-    color:#fff;
-    margin-bottom:4px;
-    font-weight:650;
-  }
-  .layers li span{
-    color:var(--ink-mute);
-    font-size:15px;
-    line-height:1.65;
-  }
-  .roles{
-    margin:12px 0 0 0;
-    padding:0;
-    list-style:none;
-  }
-  .roles li{
-    padding:20px 0;
-    border-top:1px solid var(--line);
-  }
-  .roles li:last-child{border-bottom:1px solid var(--line)}
-  .roles .head{
-    display:flex;
-    flex-wrap:wrap;
-    gap:8px 14px;
-    align-items:baseline;
-    margin-bottom:6px;
-  }
-  .roles .title{font-weight:650;color:#fff;font-size:16px}
-  .roles .org{color:var(--ink-mute);font-size:15px;font-style:italic}
-  .roles .meta{
-    font-family:var(--mono);
-    font-size:12px;
-    color:var(--ink-mute);
-    letter-spacing:.06em;
-    margin-left:auto;
-  }
-  .roles .body{color:var(--ink-mute);font-size:15px;line-height:1.65;margin:0}
-  .stat-grid{
-    display:grid;
-    grid-template-columns:repeat(2,1fr);
-    gap:14px;
-    margin:20px 0 24px 0;
-  }
-  .stat{
-    background:var(--panel);
-    border:1px solid var(--line);
-    border-radius:8px;
-    padding:16px 18px;
-  }
-  .stat .n{
-    font-family:var(--mono);
-    font-size:22px;
-    color:var(--accent);
-    display:block;
-    margin-bottom:4px;
-  }
-  .stat .l{
-    color:var(--ink-mute);
-    font-size:13px;
-    line-height:1.45;
-  }
-  .contact{
-    margin-top:12px;
-    padding:24px;
-    background:var(--panel);
-    border:1px solid var(--line);
-    border-radius:10px;
-    font-family:var(--mono);
-    font-size:14px;
-    line-height:1.9;
-  }
-  .contact div{color:var(--ink-mute)}
-  .contact a{border-bottom-color:transparent}
-  .contact a:hover{border-bottom-color:var(--accent)}
-  .header-row{
-    display:flex;
-    align-items:flex-start;
-    gap:28px;
-    margin-bottom:8px;
-  }
-  .header-row .text{flex:1;min-width:0}
-  .avatar{
-    width:112px;
-    height:112px;
-    border-radius:50%;
-    background:linear-gradient(135deg,#1b2436 0%,#0f1624 100%);
-    border:1px solid var(--line);
-    box-shadow:0 0 0 4px rgba(125,193,255,0.06), 0 8px 24px rgba(0,0,0,0.4);
-    flex-shrink:0;
-    overflow:hidden;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:var(--accent);
-    font-family:var(--mono);
-    font-size:32px;
-    font-weight:700;
-  }
-  .avatar img{width:100%;height:100%;object-fit:cover;display:block}
-  .now-card{
-    margin:24px 0;
-    padding:18px 22px;
-    background:var(--panel);
-    border:1px solid var(--line);
-    border-left:3px solid var(--accent);
-    border-radius:8px;
-    font-size:15px;
-    color:var(--ink-mute);
-    line-height:1.65;
-  }
-  .now-card .now-label{
-    font-family:var(--mono);
-    font-size:11px;
-    color:var(--accent);
-    letter-spacing:.18em;
-    text-transform:uppercase;
-    margin-bottom:6px;
-    display:block;
-  }
-  .quote{
-    margin:48px 0;
-    padding:26px 28px;
-    border-left:2px solid var(--accent);
-    background:var(--panel);
-    border-radius:0 8px 8px 0;
-  }
-  .quote p{
-    margin:0;
-    font-size:18px;
-    line-height:1.6;
-    color:#fff;
-    font-weight:500;
-    font-style:italic;
-  }
-  .cert-line{
-    font-family:var(--mono);
-    font-size:13px;
-    color:var(--ink-mute);
-    margin-top:10px;
-    line-height:1.7;
-  }
-  footer{
-    margin-top:72px;
-    padding-top:28px;
-    border-top:1px solid var(--line);
-    font-family:var(--mono);
-    font-size:12px;
-    color:var(--ink-mute);
-    letter-spacing:.04em;
-  }
-  @media (max-width:560px){
-    main.about{padding:56px 22px 80px 22px}
-    h1{font-size:34px}
-    .tagline{font-size:18px}
-    .stat-grid{grid-template-columns:1fr}
-  }
-  @media print{
-    body{background:#fff;color:#111}
-    .eyebrow,h2{color:#1f4e79;border-color:#ccc}
-    .tagline,.roles .org,.roles .body,.stat .l,.cert-line,.contact div,footer{color:#555}
-    .stat,.contact,.quote{background:#f6f7fa;border-color:#ddd}
-    .quote{border-left-color:#1f4e79}
-    .quote p{color:#111}
-    a{color:#1f4e79;border-bottom-color:#1f4e79}
-    main.about{max-width:none;padding:24px}
-    h1{font-size:34px}
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akash Thanneeru — Builder of AMOSKYS | The Team Behind the Platform</title>
+    <meta name="description" content="Akash Thanneeru. Security Operations Engineer and builder of AMOSKYS. Detection you can prove. Logs no attacker can rewrite.">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="48x48" href="{{ url_for('static', filename='images/favicon-48x48.png') }}">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='images/favicon-192x192.png') }}">
+    <link rel="apple-touch-icon" sizes="512x512" href="{{ url_for('static', filename='images/favicon-512x512.png') }}">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="profile">
+    <meta property="og:title" content="Akash Thanneeru — Builder of AMOSKYS">
+    <meta property="og:description" content="Security Operations Engineer. Builder of AMOSKYS. Detection you can prove.">
+    <meta property="og:image" content="{{ url_for('static', filename='images/akash.jpeg', _external=True) }}">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Akash Thanneeru — Builder of AMOSKYS">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy-dark: #0a0e27;
+            --navy-medium: #1a1f3a;
+            --cyan-primary: #00d9ff;
+            --cyan-bright: #00ffff;
+            --green-secure: #00ff88;
+            --amber-warning: #ffaa00;
+            --red-critical: #ff3366;
+            --text-primary: #ffffff;
+            --text-secondary: #b4bcd0;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--navy-dark);
+            color: var(--text-primary);
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        a { color: inherit; text-decoration: none; }
+
+        /* ── Navigation (matches landing.html) ── */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(10, 14, 39, 0.98);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 217, 255, 0.15);
+            z-index: 1000;
+        }
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.25rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo-section { display: flex; align-items: center; gap: 1rem; }
+        .logo-link { display: flex; align-items: center; gap: 0.75rem; }
+        .logo-image { width: 38px; height: 38px; }
+        .logo-text {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: var(--cyan-primary);
+            letter-spacing: 0.5px;
+        }
+        .logo-badge {
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            color: var(--cyan-primary);
+            padding: 0.3rem 0.7rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2.5rem;
+            align-items: center;
+        }
+        .nav-links > a {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+        }
+        .nav-links > a:hover { color: var(--cyan-primary); }
+
+        /* About dropdown — hover-reveal, CSS only */
+        .nav-dropdown { position: relative; display: inline-block; }
+        .nav-dropdown > .nav-trigger {
+            background: none;
+            border: 0;
+            padding: 0;
+            margin: 0;
+            font-family: inherit;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.95rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: color 0.3s;
+        }
+        .nav-dropdown > .nav-trigger::after {
+            content: '\25BE';
+            font-size: 0.7rem;
+            color: rgba(0, 217, 255, 0.5);
+            transition: transform 0.2s, color 0.2s;
+        }
+        .nav-dropdown:hover > .nav-trigger,
+        .nav-dropdown:focus-within > .nav-trigger,
+        .nav-dropdown.current > .nav-trigger {
+            color: var(--cyan-primary);
+        }
+        .nav-dropdown:hover > .nav-trigger::after,
+        .nav-dropdown:focus-within > .nav-trigger::after {
+            color: var(--cyan-primary);
+            transform: rotate(180deg);
+        }
+        .nav-dropdown > .nav-trigger:focus { outline: none; }
+        .nav-dropdown > .nav-trigger:focus-visible {
+            outline: 2px solid rgba(0, 217, 255, 0.45);
+            outline-offset: 4px;
+            border-radius: 4px;
+        }
+        .nav-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 10px);
+            left: 50%;
+            transform: translateX(-50%) translateY(-6px);
+            background: rgba(10, 14, 39, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 217, 255, 0.18);
+            border-radius: 10px;
+            min-width: 220px;
+            padding: 0.6rem 0;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 217, 255, 0.08);
+            z-index: 1000;
+        }
+        .nav-dropdown:hover .nav-dropdown-menu,
+        .nav-dropdown:focus-within .nav-dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+        }
+        .nav-dropdown::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            height: 14px;
+        }
+        .nav-dropdown-menu a {
+            display: block;
+            padding: 0.7rem 1.25rem;
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            font-weight: 500;
+            transition: color 0.18s, background 0.18s;
+        }
+        .nav-dropdown-menu a:hover {
+            color: var(--cyan-primary);
+            background: rgba(0, 217, 255, 0.06);
+        }
+        .nav-dropdown-menu a .nav-item-sub {
+            display: block;
+            font-size: 0.72rem;
+            color: rgba(180, 188, 208, 0.55);
+            font-weight: 400;
+            margin-top: 2px;
+            letter-spacing: 0.02em;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.85rem 1.75rem;
+            background: transparent;
+            border: 2px solid var(--cyan-primary);
+            color: var(--cyan-primary);
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+        }
+        .btn:hover { background: rgba(0, 217, 255, 0.1); }
+        .btn-primary { background: var(--cyan-primary); color: #0a0e27 !important; font-weight: 700; }
+        .btn-primary:hover { background: var(--cyan-bright); }
+
+        /* ── Hero ── */
+        .hero {
+            min-height: 60vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10rem 2rem 4rem;
+            position: relative;
+            overflow: hidden;
+            background: radial-gradient(ellipse at top, rgba(0, 217, 255, 0.08) 0%, transparent 60%);
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                radial-gradient(circle at 20% 30%, rgba(0, 217, 255, 0.07) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(0, 255, 136, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        .hero-content {
+            max-width: 1100px;
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 3rem;
+            align-items: center;
+        }
+        .hero-avatar {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(0, 217, 255, 0.15), rgba(0, 255, 136, 0.08));
+            border: 2px solid rgba(0, 217, 255, 0.35);
+            box-shadow:
+                0 0 0 8px rgba(0, 217, 255, 0.06),
+                0 20px 60px rgba(0, 0, 0, 0.5),
+                0 0 60px rgba(0, 217, 255, 0.18);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .hero-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .hero-text-block { min-width: 0; }
+        .hero-badge {
+            display: inline-block;
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            color: var(--cyan-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            margin-bottom: 1.5rem;
+        }
+        .hero-title {
+            font-size: 3.6rem;
+            font-weight: 800;
+            line-height: 1.05;
+            margin-bottom: 1.25rem;
+            letter-spacing: -0.02em;
+        }
+        .hero-title span { color: var(--cyan-primary); }
+        .hero-subtitle {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            line-height: 1.55;
+            max-width: 620px;
+        }
+
+        /* ── "Now" status card ── */
+        .now-card {
+            max-width: 900px;
+            margin: -2rem auto 0;
+            padding: 1.25rem 1.75rem;
+            background: rgba(26, 31, 58, 0.55);
+            border: 1px solid rgba(0, 217, 255, 0.18);
+            border-left: 3px solid var(--cyan-primary);
+            border-radius: 10px;
+            position: relative;
+            z-index: 2;
+        }
+        .now-label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--cyan-primary);
+            letter-spacing: 1.6px;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+        .now-card p {
+            color: var(--text-secondary);
+            font-size: 0.98rem;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        /* ── Sections ── */
+        .section { padding: 6rem 2rem; max-width: 900px; margin: 0 auto; }
+        .section-alt {
+            background: linear-gradient(180deg, rgba(26, 31, 58, 0.4) 0%, transparent 100%);
+            max-width: none;
+            padding-left: 0;
+            padding-right: 0;
+        }
+        .section-alt > .section-inner {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+        .section-header { margin-bottom: 3rem; }
+        .section-badge {
+            display: inline-block;
+            background: rgba(0, 217, 255, 0.08);
+            border: 1px solid rgba(0, 217, 255, 0.25);
+            color: var(--cyan-primary);
+            padding: 0.4rem 0.9rem;
+            border-radius: 50px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            margin-bottom: 1.25rem;
+        }
+        .section-title {
+            font-size: 2.4rem;
+            font-weight: 700;
+            line-height: 1.15;
+            letter-spacing: -0.01em;
+            margin-bottom: 1rem;
+        }
+        .section-title span { color: var(--cyan-primary); }
+        .section p {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            line-height: 1.8;
+            margin-bottom: 1.25rem;
+        }
+        .section p strong { color: #fff; font-weight: 600; }
+
+        /* ── The five layers ── */
+        .layers {
+            counter-reset: layer;
+            list-style: none;
+            margin-top: 1rem;
+        }
+        .layers li {
+            counter-increment: layer;
+            position: relative;
+            padding: 1.75rem 1.5rem 1.75rem 5rem;
+            border-top: 1px solid rgba(0, 217, 255, 0.12);
+        }
+        .layers li:last-child { border-bottom: 1px solid rgba(0, 217, 255, 0.12); }
+        .layers li::before {
+            content: counter(layer, decimal-leading-zero);
+            position: absolute;
+            left: 1.5rem;
+            top: 1.85rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--cyan-primary);
+            letter-spacing: 0.08em;
+        }
+        .layers li b {
+            display: block;
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 650;
+            margin-bottom: 0.4rem;
+        }
+        .layers li span {
+            color: var(--text-secondary);
+            font-size: 0.98rem;
+            line-height: 1.7;
+            display: block;
+        }
+
+        /* ── Stats grid ── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.25rem;
+            margin: 2rem 0 1.5rem;
+        }
+        .stat {
+            background: rgba(26, 31, 58, 0.55);
+            border: 1px solid rgba(0, 217, 255, 0.15);
+            border-radius: 10px;
+            padding: 1.5rem;
+            transition: border-color 0.3s, transform 0.3s;
+        }
+        .stat:hover {
+            border-color: rgba(0, 217, 255, 0.4);
+            transform: translateY(-3px);
+        }
+        .stat .n {
+            display: block;
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--cyan-primary);
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+        .stat .l {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.45;
+        }
+
+        /* ── Roles ── */
+        .roles {
+            list-style: none;
+            margin-top: 1.5rem;
+        }
+        .roles li {
+            padding: 1.5rem 0;
+            border-top: 1px solid rgba(0, 217, 255, 0.12);
+        }
+        .roles li:last-child { border-bottom: 1px solid rgba(0, 217, 255, 0.12); }
+        .roles .head {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem 1rem;
+            align-items: baseline;
+            margin-bottom: 0.5rem;
+        }
+        .roles .title { font-weight: 650; color: #fff; font-size: 1.05rem; }
+        .roles .org { color: var(--cyan-primary); font-style: italic; font-size: 0.95rem; }
+        .roles .meta {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.04em;
+            margin-left: auto;
+            font-weight: 500;
+        }
+        .roles .body {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.65;
+            margin: 0;
+        }
+
+        /* ── Cert chips ── */
+        .cert-line {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .cert-line span {
+            display: inline-block;
+            padding: 0.4rem 0.85rem;
+            background: rgba(0, 217, 255, 0.06);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 50px;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* ── Contact card ── */
+        .contact {
+            margin-top: 1.5rem;
+            padding: 2rem 2.25rem;
+            background: rgba(26, 31, 58, 0.55);
+            border: 1px solid rgba(0, 217, 255, 0.18);
+            border-radius: 12px;
+            font-size: 0.96rem;
+            line-height: 2;
+        }
+        .contact div { color: var(--text-secondary); }
+        .contact a { color: var(--cyan-primary); transition: color 0.18s; }
+        .contact a:hover { color: var(--cyan-bright); }
+
+        /* ── Footer ── */
+        footer {
+            background: rgba(10, 14, 39, 0.98);
+            border-top: 2px solid rgba(0, 217, 255, 0.1);
+            padding: 4rem 2rem 2rem;
+            margin-top: 4rem;
+        }
+        .footer-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 4rem;
+            margin-bottom: 3rem;
+        }
+        .footer-brand { max-width: 400px; }
+        .footer-logo {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--cyan-primary);
+            margin-bottom: 1rem;
+        }
+        .footer-tagline {
+            color: var(--text-secondary);
+            line-height: 1.8;
+            margin-bottom: 1.5rem;
+        }
+        .footer-section h4 {
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }
+        .footer-links { list-style: none; padding: 0; }
+        .footer-links li { margin-bottom: 0.75rem; }
+        .footer-links a {
+            color: var(--text-secondary);
+            transition: color 0.3s;
+        }
+        .footer-links a:hover { color: var(--cyan-primary); }
+        .footer-bottom {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(0, 217, 255, 0.1);
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 900px) {
+            .hero-content { grid-template-columns: 1fr; gap: 2rem; text-align: center; }
+            .hero-avatar { width: 150px; height: 150px; margin: 0 auto; }
+            .hero-title { font-size: 2.6rem; }
+            .stat-grid { grid-template-columns: repeat(2, 1fr); }
+            .footer-content { grid-template-columns: 1fr 1fr; gap: 2rem; }
+        }
+        @media (max-width: 600px) {
+            .nav-links { gap: 1rem; }
+            .nav-links > a:not(.btn), .nav-dropdown { display: none; }
+            .nav-links > .btn { display: inline-block; }
+            .hero { padding: 8rem 1.5rem 3rem; }
+            .hero-title { font-size: 2.1rem; }
+            .hero-subtitle { font-size: 1rem; }
+            .section { padding: 4rem 1.5rem; }
+            .section-title { font-size: 1.9rem; }
+            .stat-grid { grid-template-columns: 1fr; }
+            .layers li { padding-left: 4rem; }
+            .footer-content { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
-<main class="about">
 
-  <p class="eyebrow">Team, About AMOSKYS</p>
+    <!-- ── Navigation ── -->
+    <nav>
+        <div class="nav-container">
+            <div class="logo-section">
+                <a href="/" class="logo-link">
+                    <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS Logo" class="logo-image">
+                    <div class="logo-text">AMOSKYS</div>
+                </a>
+                <div class="logo-badge">INTELLIGENCE PLATFORM</div>
+            </div>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <div class="nav-dropdown current">
+                    <button type="button" class="nav-trigger" aria-haspopup="true" aria-expanded="false">About</button>
+                    <div class="nav-dropdown-menu" role="menu">
+                        <a href="/about" role="menuitem">AMOSKYS<span class="nav-item-sub">The platform &amp; mission</span></a>
+                        <a href="/about/akash" role="menuitem">Team<span class="nav-item-sub">Meet the builder</span></a>
+                    </div>
+                </div>
+                <a href="/how-it-works">How It Works</a>
+                <a href="/docs">Documentation</a>
+                <a href="/auth/login">Login</a>
+                <a href="/auth/signup" class="btn btn-primary">Coming Soon</a>
+            </div>
+        </div>
+    </nav>
 
-  <div class="header-row">
-    <div class="text">
-      <h1>Akash Thanneeru</h1>
-      <p class="tagline">Security Operations Engineer. Builder of AMOSKYS. Obsessed with defending the environments and the people who cannot afford to be wrong.</p>
+    <!-- ── Hero ── -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-avatar">
+                <img src="{{ url_for('static', filename='images/akash.jpeg') }}" alt="Akash Thanneeru">
+            </div>
+            <div class="hero-text-block">
+                <div class="hero-badge">TEAM · BUILDER OF AMOSKYS</div>
+                <h1 class="hero-title">Akash <span>Thanneeru</span></h1>
+                <p class="hero-subtitle">Security Operations Engineer. Builder of AMOSKYS. Obsessed with defending the environments and the people who cannot afford to be wrong.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── Now status ── -->
+    <div class="now-card">
+        <span class="now-label">Now · April 2026</span>
+        <p>Hardening AMOSKYS auth and DNS collectors for production reliability, designing the Endpoint Security Framework system extension, and preparing the distribution entitlement application.</p>
     </div>
-    <div class="avatar"><img src="/static/images/akash.jpeg" alt="Akash Thanneeru"></div>
-  </div>
 
-  <div class="now-card">
-    <span class="now-label">Now, April 2026</span>
-    Hardening AMOSKYS auth and DNS collectors for production reliability, designing the Endpoint Security Framework system extension, and preparing the distribution entitlement application.
-  </div>
+    <!-- ── Why AMOSKYS exists ── -->
+    <section class="section">
+        <div class="section-header">
+            <div class="section-badge">WHY AMOSKYS EXISTS</div>
+            <h2 class="section-title">A patient on the <span>other end</span> of an alert</h2>
+        </div>
+        <p>I spent a year on a SOC desk defending 1,200 networked medical devices at Hunterdon Healthcare. Infusion pumps, imaging modalities, bedside monitors. Boxes the vendor would not let me patch and the clinical team could not afford to unplug. One shift I sat with the thought that if I missed an alert, a patient would be on the other end of it, and I could not stop thinking about it.</p>
+        <p>That is the moment AMOSKYS started, even though I did not have a name for it yet. I wanted every place that could be attacked to be watched by something that would tell the truth about what happened, in a way that no attacker could rewrite, so that the people depending on those machines would never be quietly harmed in the dark.</p>
+        <p>I started with what I had. A Mac. A hard disk. One peripheral agent. Then another. Then a correlator. Then a detection brain. Then a dashboard. Today AMOSKYS is a signed, notarized macOS endpoint security product running the same philosophy I began with.</p>
+        <p>In March 2026 Apple granted the Endpoint Security Framework development entitlement to AMOSKYS in nine days, against a typical wait of months. The system extension is in design now, and the distribution entitlement application is the next milestone. The dense agent mesh that exists today gives AMOSKYS its eyes; ESF will give it kernel-level reflexes.</p>
+    </section>
 
-  <div class="quote">
-    <p>Detection you can prove. Logs no attacker can rewrite. For the environments and the people who cannot afford to be wrong.</p>
-  </div>
+    <!-- ── The five-layer philosophy ── -->
+    <section class="section section-alt">
+        <div class="section-inner">
+            <div class="section-header">
+                <div class="section-badge">THE PHILOSOPHY</div>
+                <h2 class="section-title">Five layers, <span>integrity as a primitive</span></h2>
+            </div>
+            <p>Any place that can be attacked has to go through something. A kernel syscall, a network socket, a disk write, a DNS lookup, a credential use. Every surface is a chance to see, and every seen event is a chance to prove. AMOSKYS is built on five layers, with integrity as a first-class primitive.</p>
+            <ol class="layers">
+                <li>
+                    <b>Dense peripheral coverage</b>
+                    <span>Every attack surface gets a single-purpose probe mapped directly to a MITRE ATT&amp;CK technique. Not one monolithic sensor, a mesh of 197 probes across 13 agents, the way a nervous system covers a body.</span>
+                </li>
+                <li>
+                    <b>Cryptographic log integrity</b>
+                    <span>Every log entry is signed at the moment of creation. Ed25519 on the wire, append-only SQLite WAL on disk. The first assumption is that an attacker will try to lie to the logs. The design makes the lie mathematically detectable.</span>
+                </li>
+                <li>
+                    <b>Context and correlation</b>
+                    <span>An AgentBus blackboard clusters events by host, user, process tree, and time window. DNS and geo enrichment agents add external context. Deduplication keeps the detection layer clean so the humans downstream only see things that matter.</span>
+                </li>
+                <li>
+                    <b>Heterogeneous detection brains</b>
+                    <span>Different anomalies need different models. XGBoost for volumetric signals. IsolationForest for behavioral outliers. LSTM autoencoders for sequences. MLP for classification. Each detector gets the brain that matches the physics of its signal.</span>
+                </li>
+                <li>
+                    <b>Adaptive retraining (AMRDR)</b>
+                    <span>A closed feedback loop where analyst dispositions and outcomes refine model weights. The system gets better at the environment it lives in instead of decaying into alert fatigue.</span>
+                </li>
+            </ol>
+            <p style="margin-top: 1.5rem;">Sensors. Signed logs. Correlation. Heterogeneous brains. Adaptive learning. Five layers, stacked.</p>
+        </div>
+    </section>
 
-  <h2>Why AMOSKYS exists</h2>
-  <p>I spent a year on a SOC desk defending 1,200 networked medical devices at Hunterdon Healthcare. Infusion pumps, imaging modalities, bedside monitors. Boxes the vendor would not let me patch and the clinical team could not afford to unplug. One shift I sat with the thought that if I missed an alert, a patient would be on the other end of it, and I could not stop thinking about it.</p>
-  <p>That is the moment AMOSKYS started, even though I did not have a name for it yet. I wanted every place that could be attacked to be watched by something that would tell the truth about what happened, in a way that no attacker could rewrite, so that the people depending on those machines would never be quietly harmed in the dark.</p>
-  <p>I started with what I had. A Mac. A hard disk. One peripheral agent. Then another. Then a correlator. Then a detection brain. Then a dashboard. Today AMOSKYS is a signed, notarized macOS endpoint security product running the same philosophy I began with.</p>
-  <p>In March 2026 Apple granted the Endpoint Security Framework development entitlement to AMOSKYS in nine days, against a typical wait of months. The system extension is in design now, and the distribution entitlement application is the next milestone. The dense agent mesh that exists today gives AMOSKYS its eyes; ESF will give it kernel-level reflexes.</p>
+    <!-- ── AMOSKYS today ── -->
+    <section class="section">
+        <div class="section-header">
+            <div class="section-badge">AMOSKYS TODAY</div>
+            <h2 class="section-title">What is <span>actually shipping</span></h2>
+        </div>
+        <div class="stat-grid">
+            <div class="stat"><span class="n">197</span><span class="l">detection probes across 13 agents</span></div>
+            <div class="stat"><span class="n">56</span><span class="l">Sigma rules covering 53 ATT&amp;CK techniques across 12 tactics</span></div>
+            <div class="stat"><span class="n">8</span><span class="l">macOS-specific YARA rules (AMOS, Poseidon, Banshee)</span></div>
+            <div class="stat"><span class="n">13</span><span class="l">fusion correlation rules across agents</span></div>
+            <div class="stat"><span class="n">5.8M</span><span class="l">telemetry events processed end to end</span></div>
+            <div class="stat"><span class="n">4,255</span><span class="l">passing tests, ~38,000 lines of code</span></div>
+        </div>
+        <p>Signed with an Apple Developer ID, notarized, and granted the Apple Endpoint Security Framework development entitlement. Live multi-tenant dashboard at <a href="https://amoskys.com" style="color: var(--cyan-primary);">amoskys.com</a>.</p>
+    </section>
 
-  <h2>The philosophy, five layers</h2>
-  <p>Any place that can be attacked has to go through something. A kernel syscall, a network socket, a disk write, a DNS lookup, a credential use. Every surface is a chance to see, and every seen event is a chance to prove. AMOSKYS is built on five layers, with integrity as a first-class primitive.</p>
+    <!-- ── Background ── -->
+    <section class="section section-alt">
+        <div class="section-inner">
+            <div class="section-header">
+                <div class="section-badge">BACKGROUND</div>
+                <h2 class="section-title">Four years <span>at the SOC desk</span></h2>
+            </div>
+            <p>I am a Security Operations Engineer with four years of hands-on defense across healthcare IT and clinical OT. I have run the NIST 800-61 incident response lifecycle on mixed IT and medical device environments, authored more than 270 runbooks and root cause analyses, tuned SIEM correlation content in Splunk and Microsoft Sentinel, and operated EDR, IDS, IPS, DLP, and WAF platforms in production.</p>
+            <p>I hold a Master of Science in Computer Science from Northwest Missouri State University and a Bachelor of Technology in Computer Science and Engineering from the National Institute of Technology, Warangal.</p>
+            <div class="cert-line">
+                <span>Security+ SY0-701</span>
+                <span>CEH v13</span>
+                <span>Microsoft SC-200</span>
+                <span>Qualys VMDR</span>
+            </div>
+        </div>
+    </section>
 
-  <ol class="layers">
-    <li>
-      <b>Dense peripheral coverage.</b>
-      <span>Every attack surface gets a single-purpose probe mapped directly to a MITRE ATT&amp;CK technique. Not one monolithic sensor, a mesh of 197 probes across 13 agents, the way a nervous system covers a body.</span>
-    </li>
-    <li>
-      <b>Cryptographic log integrity.</b>
-      <span>Every log entry is signed at the moment of creation. Ed25519 on the wire, append-only SQLite WAL on disk. The first assumption is that an attacker will try to lie to the logs. The design makes the lie mathematically detectable.</span>
-    </li>
-    <li>
-      <b>Context and correlation.</b>
-      <span>An AgentBus blackboard clusters events by host, user, process tree, and time window. DNS and geo enrichment agents add external context. Deduplication keeps the detection layer clean so the humans downstream only see things that matter.</span>
-    </li>
-    <li>
-      <b>Heterogeneous detection brains.</b>
-      <span>Different anomalies need different models. XGBoost for volumetric signals. IsolationForest for behavioral outliers. LSTM autoencoders for sequences. MLP for classification. Each detector gets the brain that matches the physics of its signal.</span>
-    </li>
-    <li>
-      <b>Adaptive retraining (AMRDR).</b>
-      <span>A closed feedback loop where analyst dispositions and outcomes refine model weights. The system gets better at the environment it lives in instead of decaying into alert fatigue.</span>
-    </li>
-  </ol>
+    <!-- ── Experience ── -->
+    <section class="section">
+        <div class="section-header">
+            <div class="section-badge">EXPERIENCE</div>
+            <h2 class="section-title">Where the <span>work happened</span></h2>
+        </div>
+        <ul class="roles">
+            <li>
+                <div class="head">
+                    <span class="title">Security Operations Engineer (Volunteer)</span>
+                    <span class="org">WinWinLabs</span>
+                    <span class="meta">2025 — present</span>
+                </div>
+                <p class="body">Microsoft Sentinel and Defender XDR deployment, automated IOC enrichment pipeline, STRIDE threat modeling and CVSS 3.1 risk analysis of an IoT platform.</p>
+            </li>
+            <li>
+                <div class="head">
+                    <span class="title">Security Consultant</span>
+                    <span class="org">First Health Advisory</span>
+                    <span class="meta">2023</span>
+                </div>
+                <p class="body">Vulnerability assessments and internal and external network penetration testing across 15 healthcare client tenants and 7,000 assets. Identified more than 90 exploitable misconfigurations and produced prioritized remediation runbooks aligned to HIPAA and ISO 27001.</p>
+            </li>
+            <li>
+                <div class="head">
+                    <span class="title">Security Operations Engineer</span>
+                    <span class="org">Hunterdon Healthcare</span>
+                    <span class="meta">2022 — 2023</span>
+                </div>
+                <p class="body">Defended 2,000 IT endpoints and 1,200 networked medical devices. Ran the full incident response lifecycle on 700 alerts per month. Authored 270 runbooks, root cause analyses, and after-action reports. Recognized as Best Employee, Q2 2022.</p>
+            </li>
+            <li>
+                <div class="head">
+                    <span class="title">Security Operations Intern, GSOC</span>
+                    <span class="org">Providence Healthcare</span>
+                    <span class="meta">2021 — 2022</span>
+                </div>
+                <p class="body">Triaged 400 alerts per month on a 24x7 global SOC desk supporting 50,000 endpoints. Contributed to the GSOC's first MITRE ATT&amp;CK coverage map and earned a return offer to the full-time engineer role.</p>
+            </li>
+        </ul>
+    </section>
 
-  <p>Sensors. Signed logs. Correlation. Heterogeneous brains. Adaptive learning. Five layers, stacked.</p>
+    <!-- ── Research ── -->
+    <section class="section section-alt">
+        <div class="section-inner">
+            <div class="section-header">
+                <div class="section-badge">RESEARCH</div>
+                <h2 class="section-title">Hierarchical Network Intrusion Detection <span>(IEEE WI-IAT 2025)</span></h2>
+            </div>
+            <p>First author of a peer-reviewed paper on hierarchical network intrusion detection, combining XGBoost, LSTM autoencoders, and a multi-layer perceptron across 2.27 million network flows from CSE-CIC-IDS-2018. Achieved 96.3 percent accuracy with a 30 percent reduction in false positives across DoS, DDoS, brute-force, and infiltration attack classes. Also presented at CCSC Central Plains 2025.</p>
+            <p>The paper is the formal version of the same question I work on operationally: how do you tell the truth from the noise, at scale, without drowning the humans who have to act on the answer?</p>
+        </div>
+    </section>
 
-  <h2>AMOSKYS today</h2>
-  <div class="stat-grid">
-    <div class="stat"><span class="n">197</span><span class="l">detection probes across 13 agents</span></div>
-    <div class="stat"><span class="n">56</span><span class="l">Sigma rules, 53 ATT&amp;CK techniques, 12 tactics</span></div>
-    <div class="stat"><span class="n">8</span><span class="l">macOS-specific YARA rules (AMOS, Poseidon, Banshee)</span></div>
-    <div class="stat"><span class="n">13</span><span class="l">fusion correlation rules across agents</span></div>
-    <div class="stat"><span class="n">5.8M</span><span class="l">telemetry events processed end to end</span></div>
-    <div class="stat"><span class="n">4,255</span><span class="l">passing tests, roughly 38,000 lines of code</span></div>
-  </div>
-  <p>Signed with an Apple Developer ID, notarized, and granted the Apple Endpoint Security Framework entitlement for system-extension telemetry. Live multi-tenant dashboard at <a href="https://amoskys.com">amoskys.com</a>.</p>
+    <!-- ── Vision ── -->
+    <section class="section">
+        <div class="section-header">
+            <div class="section-badge">VISION</div>
+            <h2 class="section-title">Defending what <span>cannot be patched</span></h2>
+        </div>
+        <p>AMOSKYS is a macOS endpoint security product today. That is the first substrate. The second is industrial and manufacturing OT, passive only, process-aware, decoding Modbus, DNP3, EtherNet/IP, Siemens S7, and OPC UA, running the same five-layer architecture on a different wire and a different physics. The third substrate is whatever cannot be patched next.</p>
+        <p>The thesis underneath all of it is simple. <strong>The things that cannot be patched are the things that carry the most risk, and the people who depend on those things deserve a defender that tells the truth.</strong> AMOSKYS is my attempt to build that defender in the open, one substrate at a time, with integrity as a primitive and detection content anyone can read.</p>
+    </section>
 
-  <h2>Background</h2>
-  <p>I am a Security Operations Engineer with four years of hands-on defense across healthcare IT and clinical OT. I have run the NIST 800-61 incident response lifecycle on mixed IT and medical device environments, authored more than 270 runbooks and root cause analyses, tuned SIEM correlation content in Splunk and Microsoft Sentinel, and operated EDR, IDS, IPS, DLP, and WAF platforms in production.</p>
-  <p>I hold a Master of Science in Computer Science from Northwest Missouri State University and a Bachelor of Technology in Computer Science and Engineering from the National Institute of Technology, Warangal.</p>
-  <p class="cert-line">Security+ (SY0-701) &nbsp;·&nbsp; CEH v13 &nbsp;·&nbsp; Microsoft SC-200 &nbsp;·&nbsp; Qualys VMDR</p>
+    <!-- ── How AMOSKYS is built ── -->
+    <section class="section section-alt">
+        <div class="section-inner">
+            <div class="section-header">
+                <div class="section-badge">HOW IT'S BUILT</div>
+                <h2 class="section-title">Honesty about <span>the tools I use</span></h2>
+            </div>
+            <p>AMOSKYS is designed, scoped, validated, and shipped by me. I use modern AI coding assistants as an accelerator for implementation, the same way an engineer in 2010 used Stack Overflow and an engineer in 2000 used O'Reilly books. Every detection philosophy, every probe-to-MITRE mapping, every architectural decision, every priority call is mine. The product knows what it is because I do.</p>
+            <p>I believe being transparent about this is the only honest way to build security tools in the era we are living through. The defenders who win the next decade will be the ones who can hold a clear philosophy, reason about adversary behavior, and direct the tools at their disposal toward outcomes that matter. AMOSKYS is my attempt to do exactly that, in public, while building something the people who depend on it can actually trust.</p>
+        </div>
+    </section>
 
-  <h2>Experience</h2>
-  <ul class="roles">
-    <li>
-      <div class="head">
-        <span class="title">Security Operations Engineer (Volunteer)</span>
-        <span class="org">WinWinLabs</span>
-        <span class="meta">2025, present</span>
-      </div>
-      <p class="body">Microsoft Sentinel and Defender XDR deployment, automated IOC enrichment pipeline, STRIDE threat modeling and CVSS 3.1 risk analysis of an IoT platform.</p>
-    </li>
-    <li>
-      <div class="head">
-        <span class="title">Security Consultant</span>
-        <span class="org">First Health Advisory</span>
-        <span class="meta">2023</span>
-      </div>
-      <p class="body">Vulnerability assessments and internal and external network penetration testing across 15 healthcare client tenants and 7,000 assets. Identified more than 90 exploitable misconfigurations and produced prioritized remediation runbooks aligned to HIPAA and ISO 27001.</p>
-    </li>
-    <li>
-      <div class="head">
-        <span class="title">Security Operations Engineer</span>
-        <span class="org">Hunterdon Healthcare</span>
-        <span class="meta">2022, 2023</span>
-      </div>
-      <p class="body">Defended 2,000 IT endpoints and 1,200 networked medical devices. Ran the full incident response lifecycle on 700 alerts per month. Authored 270 runbooks, root cause analyses, and after-action reports. Recognized as Best Employee, Q2 2022.</p>
-    </li>
-    <li>
-      <div class="head">
-        <span class="title">Security Operations Intern, GSOC</span>
-        <span class="org">Providence Healthcare</span>
-        <span class="meta">2021, 2022</span>
-      </div>
-      <p class="body">Triaged 400 alerts per month on a 24x7 global SOC desk supporting 50,000 endpoints. Contributed to the GSOC's first MITRE ATT&amp;CK coverage map and earned a return offer to the full-time engineer role.</p>
-    </li>
-  </ul>
+    <!-- ── Contact ── -->
+    <section class="section">
+        <div class="section-header">
+            <div class="section-badge">CONTACT</div>
+            <h2 class="section-title">Reach out</h2>
+        </div>
+        <div class="contact">
+            <div>Fremont, California</div>
+            <div><a href="mailto:athanneeru@outlook.com">athanneeru@outlook.com</a></div>
+            <div><a href="https://linkedin.com/in/thevardhan">linkedin.com/in/thevardhan</a></div>
+            <div><a href="https://github.com/Vardhan-225">github.com/Vardhan-225</a></div>
+            <div><a href="https://amoskys.com">amoskys.com</a></div>
+        </div>
+    </section>
 
-  <h2>Research</h2>
-  <h3>Hierarchical Network Intrusion Detection (IEEE WI-IAT 2025)</h3>
-  <p>First author of a peer-reviewed paper on hierarchical network intrusion detection, combining XGBoost, LSTM autoencoders, and a multi-layer perceptron across 2.27 million network flows from CSE-CIC-IDS-2018. Achieved 96.3 percent accuracy with a 30 percent reduction in false positives across DoS, DDoS, brute-force, and infiltration attack classes. Also presented at CCSC Central Plains 2025.</p>
-  <p>The paper is the formal version of the same question I work on operationally: how do you tell the truth from the noise, at scale, without drowning the humans who have to act on the answer?</p>
+    <!-- ── Footer ── -->
+    <footer>
+        <div class="footer-content">
+            <div class="footer-brand">
+                <div class="footer-logo">🧠 AMOSKYS</div>
+                <p class="footer-tagline">
+                    Intelligence-First Security Platform. Built to understand threats, not just react to them.
+                    Truth-preserving telemetry, cross-system correlation, and explainable reasoning for modern SOC teams.
+                </p>
+            </div>
+            <div class="footer-section">
+                <h4>Product</h4>
+                <ul class="footer-links">
+                    <li><a href="/how-it-works">How It Works</a></li>
+                    <li><a href="/docs">Documentation</a></li>
+                    <li><a href="/auth/signup">Free Trial</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h4>Company</h4>
+                <ul class="footer-links">
+                    <li><a href="/about">AMOSKYS</a></li>
+                    <li><a href="/about/akash">Team</a></li>
+                    <li><a href="/terms">Terms of Service</a></li>
+                    <li><a href="/privacy">Privacy Policy</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h4>Connect</h4>
+                <ul class="footer-links">
+                    <li><a href="/auth/login">Login</a></li>
+                    <li><a href="/auth/signup">Sign Up</a></li>
+                    <li><a href="https://github.com/Vardhan-225">GitHub</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>© 2026 AMOSKYS. Detection you can prove. Logs no attacker can rewrite.</p>
+        </div>
+    </footer>
 
-  <h2>Vision</h2>
-  <p>AMOSKYS is a macOS endpoint security product today. That is the first substrate. The second is industrial and manufacturing OT, passive only, process-aware, decoding Modbus, DNP3, EtherNet/IP, Siemens S7, and OPC UA, running the same five-layer architecture on a different wire and a different physics. The third substrate is whatever cannot be patched next.</p>
-  <p>The thesis underneath all of it is simple. The things that cannot be patched are the things that carry the most risk, and the people who depend on those things deserve a defender that tells the truth. AMOSKYS is my attempt to build that defender in the open, one substrate at a time, with integrity as a primitive and detection content anyone can read.</p>
-
-  <h2>How AMOSKYS is built</h2>
-  <p>AMOSKYS is designed, scoped, validated, and shipped by me. I use modern AI coding assistants as an accelerator for implementation, the same way an engineer in 2010 used Stack Overflow and an engineer in 2000 used O'Reilly books. Every detection philosophy, every probe-to-MITRE mapping, every architectural decision, every priority call is mine. The product knows what it is because I do.</p>
-  <p>I believe being transparent about this is the only honest way to build security tools in the era we are living through. The defenders who win the next decade will be the ones who can hold a clear philosophy, reason about adversary behavior, and direct the tools at their disposal toward outcomes that matter. AMOSKYS is my attempt to do exactly that, in public, while building something the people who depend on it can actually trust.</p>
-
-  <h2>Contact</h2>
-  <div class="contact">
-    <div>Fremont, California</div>
-    <div><a href="mailto:athanneeru@outlook.com">athanneeru@outlook.com</a></div>
-    <div><a href="https://linkedin.com/in/thevardhan">linkedin.com/in/thevardhan</a></div>
-    <div><a href="https://github.com/Vardhan-225">github.com/Vardhan-225</a></div>
-    <div><a href="https://amoskys.com">amoskys.com</a></div>
-  </div>
-
-  <footer>
-    AMOSKYS, built in the open. Detection you can prove.
-  </footer>
-
-</main>
 </body>
 </html>
