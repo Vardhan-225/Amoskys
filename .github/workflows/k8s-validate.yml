@@ -127,14 +127,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Lint Dockerfile.web
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: deploy/Dockerfile.web
           failure-threshold: warning
         continue-on-error: true
 
       - name: Lint Dockerfile.agent
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: deploy/Dockerfile.agent
           failure-threshold: warning
