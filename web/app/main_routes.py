@@ -28,6 +28,13 @@ def about():
     return render_template("about.html")
 
 
+@main_bp.route("/about/akash", methods=["GET"])
+@main_bp.route("/team/akash", methods=["GET"])
+def about_akash():
+    """Akash Thanneeru — builder of AMOSKYS, personal portfolio."""
+    return render_template("akash_about.html")
+
+
 @main_bp.route("/how-it-works")
 def how_it_works():
     """How AMOSKYS Works page - Biological architecture explained"""

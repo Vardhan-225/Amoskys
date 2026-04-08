@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Akash Thanneeru, About, AMOSKYS</title>
+<meta name="description" content="Akash Thanneeru. Security Operations Engineer and builder of AMOSKYS. Detection you can prove. Logs no attacker can rewrite.">
+<style>
+  :root{
+    --bg:#0a0f1a;
+    --panel:#0f1624;
+    --ink:#e8ecf4;
+    --ink-mute:#9aa3b7;
+    --line:#1b2436;
+    --accent:#7dc1ff;
+    --accent-dim:#4f89c0;
+    --mono:ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans:-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:17px;
+    line-height:1.72;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  main.about{
+    max-width:720px;
+    margin:0 auto;
+    padding:88px 28px 120px 28px;
+  }
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 18px 0;
+  }
+  h1{
+    font-size:44px;
+    line-height:1.08;
+    font-weight:700;
+    letter-spacing:-.02em;
+    margin:0 0 16px 0;
+  }
+  .tagline{
+    font-size:20px;
+    line-height:1.5;
+    color:var(--ink-mute);
+    margin:0 0 52px 0;
+    max-width:620px;
+  }
+  h2{
+    font-size:13px;
+    font-family:var(--mono);
+    font-weight:600;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:64px 0 18px 0;
+    padding-top:28px;
+    border-top:1px solid var(--line);
+  }
+  h3{
+    font-size:19px;
+    font-weight:650;
+    margin:28px 0 8px 0;
+    color:var(--ink);
+  }
+  p{margin:0 0 18px 0}
+  strong{color:#fff;font-weight:650}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-dim)}
+  a:hover{color:#fff;border-bottom-color:#fff}
+  .layers{
+    counter-reset:layer;
+    list-style:none;
+    padding:0;
+    margin:24px 0 28px 0;
+  }
+  .layers li{
+    counter-increment:layer;
+    position:relative;
+    padding:18px 0 18px 52px;
+    border-top:1px solid var(--line);
+  }
+  .layers li:last-child{border-bottom:1px solid var(--line)}
+  .layers li::before{
+    content:counter(layer, decimal-leading-zero);
+    position:absolute;
+    left:0;
+    top:20px;
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--accent);
+    letter-spacing:.12em;
+  }
+  .layers li b{
+    display:block;
+    font-size:16px;
+    color:#fff;
+    margin-bottom:4px;
+    font-weight:650;
+  }
+  .layers li span{
+    color:var(--ink-mute);
+    font-size:15px;
+    line-height:1.65;
+  }
+  .roles{
+    margin:12px 0 0 0;
+    padding:0;
+    list-style:none;
+  }
+  .roles li{
+    padding:20px 0;
+    border-top:1px solid var(--line);
+  }
+  .roles li:last-child{border-bottom:1px solid var(--line)}
+  .roles .head{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 14px;
+    align-items:baseline;
+    margin-bottom:6px;
+  }
+  .roles .title{font-weight:650;color:#fff;font-size:16px}
+  .roles .org{color:var(--ink-mute);font-size:15px;font-style:italic}
+  .roles .meta{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--ink-mute);
+    letter-spacing:.06em;
+    margin-left:auto;
+  }
+  .roles .body{color:var(--ink-mute);font-size:15px;line-height:1.65;margin:0}
+  .stat-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:14px;
+    margin:20px 0 24px 0;
+  }
+  .stat{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:16px 18px;
+  }
+  .stat .n{
+    font-family:var(--mono);
+    font-size:22px;
+    color:var(--accent);
+    display:block;
+    margin-bottom:4px;
+  }
+  .stat .l{
+    color:var(--ink-mute);
+    font-size:13px;
+    line-height:1.45;
+  }
+  .contact{
+    margin-top:12px;
+    padding:24px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    font-family:var(--mono);
+    font-size:14px;
+    line-height:1.9;
+  }
+  .contact div{color:var(--ink-mute)}
+  .contact a{border-bottom-color:transparent}
+  .contact a:hover{border-bottom-color:var(--accent)}
+  .header-row{
+    display:flex;
+    align-items:flex-start;
+    gap:28px;
+    margin-bottom:8px;
+  }
+  .header-row .text{flex:1;min-width:0}
+  .avatar{
+    width:112px;
+    height:112px;
+    border-radius:50%;
+    background:linear-gradient(135deg,#1b2436 0%,#0f1624 100%);
+    border:1px solid var(--line);
+    box-shadow:0 0 0 4px rgba(125,193,255,0.06), 0 8px 24px rgba(0,0,0,0.4);
+    flex-shrink:0;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--accent);
+    font-family:var(--mono);
+    font-size:32px;
+    font-weight:700;
+  }
+  .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+  .now-card{
+    margin:24px 0;
+    padding:18px 22px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:8px;
+    font-size:15px;
+    color:var(--ink-mute);
+    line-height:1.65;
+  }
+  .now-card .now-label{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--accent);
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    margin-bottom:6px;
+    display:block;
+  }
+  .quote{
+    margin:48px 0;
+    padding:26px 28px;
+    border-left:2px solid var(--accent);
+    background:var(--panel);
+    border-radius:0 8px 8px 0;
+  }
+  .quote p{
+    margin:0;
+    font-size:18px;
+    line-height:1.6;
+    color:#fff;
+    font-weight:500;
+    font-style:italic;
+  }
+  .cert-line{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--ink-mute);
+    margin-top:10px;
+    line-height:1.7;
+  }
+  footer{
+    margin-top:72px;
+    padding-top:28px;
+    border-top:1px solid var(--line);
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--ink-mute);
+    letter-spacing:.04em;
+  }
+  @media (max-width:560px){
+    main.about{padding:56px 22px 80px 22px}
+    h1{font-size:34px}
+    .tagline{font-size:18px}
+    .stat-grid{grid-template-columns:1fr}
+  }
+  @media print{
+    body{background:#fff;color:#111}
+    .eyebrow,h2{color:#1f4e79;border-color:#ccc}
+    .tagline,.roles .org,.roles .body,.stat .l,.cert-line,.contact div,footer{color:#555}
+    .stat,.contact,.quote{background:#f6f7fa;border-color:#ddd}
+    .quote{border-left-color:#1f4e79}
+    .quote p{color:#111}
+    a{color:#1f4e79;border-bottom-color:#1f4e79}
+    main.about{max-width:none;padding:24px}
+    h1{font-size:34px}
+  }
+</style>
+</head>
+<body>
+<main class="about">
+
+  <p class="eyebrow">Team, About AMOSKYS</p>
+
+  <div class="header-row">
+    <div class="text">
+      <h1>Akash Thanneeru</h1>
+      <p class="tagline">Security Operations Engineer. Builder of AMOSKYS. Obsessed with defending the environments and the people who cannot afford to be wrong.</p>
+    </div>
+    <div class="avatar"><img src="/static/images/akash.jpeg" alt="Akash Thanneeru"></div>
+  </div>
+
+  <div class="now-card">
+    <span class="now-label">Now, April 2026</span>
+    Hardening AMOSKYS auth and DNS collectors for production reliability, designing the Endpoint Security Framework system extension, and preparing the distribution entitlement application.
+  </div>
+
+  <div class="quote">
+    <p>Detection you can prove. Logs no attacker can rewrite. For the environments and the people who cannot afford to be wrong.</p>
+  </div>
+
+  <h2>Why AMOSKYS exists</h2>
+  <p>I spent a year on a SOC desk defending 1,200 networked medical devices at Hunterdon Healthcare. Infusion pumps, imaging modalities, bedside monitors. Boxes the vendor would not let me patch and the clinical team could not afford to unplug. One shift I sat with the thought that if I missed an alert, a patient would be on the other end of it, and I could not stop thinking about it.</p>
+  <p>That is the moment AMOSKYS started, even though I did not have a name for it yet. I wanted every place that could be attacked to be watched by something that would tell the truth about what happened, in a way that no attacker could rewrite, so that the people depending on those machines would never be quietly harmed in the dark.</p>
+  <p>I started with what I had. A Mac. A hard disk. One peripheral agent. Then another. Then a correlator. Then a detection brain. Then a dashboard. Today AMOSKYS is a signed, notarized macOS endpoint security product running the same philosophy I began with.</p>
+  <p>In March 2026 Apple granted the Endpoint Security Framework development entitlement to AMOSKYS in nine days, against a typical wait of months. The system extension is in design now, and the distribution entitlement application is the next milestone. The dense agent mesh that exists today gives AMOSKYS its eyes; ESF will give it kernel-level reflexes.</p>
+
+  <h2>The philosophy, five layers</h2>
+  <p>Any place that can be attacked has to go through something. A kernel syscall, a network socket, a disk write, a DNS lookup, a credential use. Every surface is a chance to see, and every seen event is a chance to prove. AMOSKYS is built on five layers, with integrity as a first-class primitive.</p>
+
+  <ol class="layers">
+    <li>
+      <b>Dense peripheral coverage.</b>
+      <span>Every attack surface gets a single-purpose probe mapped directly to a MITRE ATT&amp;CK technique. Not one monolithic sensor, a mesh of 197 probes across 13 agents, the way a nervous system covers a body.</span>
+    </li>
+    <li>
+      <b>Cryptographic log integrity.</b>
+      <span>Every log entry is signed at the moment of creation. Ed25519 on the wire, append-only SQLite WAL on disk. The first assumption is that an attacker will try to lie to the logs. The design makes the lie mathematically detectable.</span>
+    </li>
+    <li>
+      <b>Context and correlation.</b>
+      <span>An AgentBus blackboard clusters events by host, user, process tree, and time window. DNS and geo enrichment agents add external context. Deduplication keeps the detection layer clean so the humans downstream only see things that matter.</span>
+    </li>
+    <li>
+      <b>Heterogeneous detection brains.</b>
+      <span>Different anomalies need different models. XGBoost for volumetric signals. IsolationForest for behavioral outliers. LSTM autoencoders for sequences. MLP for classification. Each detector gets the brain that matches the physics of its signal.</span>
+    </li>
+    <li>
+      <b>Adaptive retraining (AMRDR).</b>
+      <span>A closed feedback loop where analyst dispositions and outcomes refine model weights. The system gets better at the environment it lives in instead of decaying into alert fatigue.</span>
+    </li>
+  </ol>
+
+  <p>Sensors. Signed logs. Correlation. Heterogeneous brains. Adaptive learning. Five layers, stacked.</p>
+
+  <h2>AMOSKYS today</h2>
+  <div class="stat-grid">
+    <div class="stat"><span class="n">197</span><span class="l">detection probes across 13 agents</span></div>
+    <div class="stat"><span class="n">56</span><span class="l">Sigma rules, 53 ATT&amp;CK techniques, 12 tactics</span></div>
+    <div class="stat"><span class="n">8</span><span class="l">macOS-specific YARA rules (AMOS, Poseidon, Banshee)</span></div>
+    <div class="stat"><span class="n">13</span><span class="l">fusion correlation rules across agents</span></div>
+    <div class="stat"><span class="n">5.8M</span><span class="l">telemetry events processed end to end</span></div>
+    <div class="stat"><span class="n">4,255</span><span class="l">passing tests, roughly 38,000 lines of code</span></div>
+  </div>
+  <p>Signed with an Apple Developer ID, notarized, and granted the Apple Endpoint Security Framework entitlement for system-extension telemetry. Live multi-tenant dashboard at <a href="https://amoskys.com">amoskys.com</a>.</p>
+
+  <h2>Background</h2>
+  <p>I am a Security Operations Engineer with four years of hands-on defense across healthcare IT and clinical OT. I have run the NIST 800-61 incident response lifecycle on mixed IT and medical device environments, authored more than 270 runbooks and root cause analyses, tuned SIEM correlation content in Splunk and Microsoft Sentinel, and operated EDR, IDS, IPS, DLP, and WAF platforms in production.</p>
+  <p>I hold a Master of Science in Computer Science from Northwest Missouri State University and a Bachelor of Technology in Computer Science and Engineering from the National Institute of Technology, Warangal.</p>
+  <p class="cert-line">Security+ (SY0-701) &nbsp;·&nbsp; CEH v13 &nbsp;·&nbsp; Microsoft SC-200 &nbsp;·&nbsp; Qualys VMDR</p>
+
+  <h2>Experience</h2>
+  <ul class="roles">
+    <li>
+      <div class="head">
+        <span class="title">Security Operations Engineer (Volunteer)</span>
+        <span class="org">WinWinLabs</span>
+        <span class="meta">2025, present</span>
+      </div>
+      <p class="body">Microsoft Sentinel and Defender XDR deployment, automated IOC enrichment pipeline, STRIDE threat modeling and CVSS 3.1 risk analysis of an IoT platform.</p>
+    </li>
+    <li>
+      <div class="head">
+        <span class="title">Security Consultant</span>
+        <span class="org">First Health Advisory</span>
+        <span class="meta">2023</span>
+      </div>
+      <p class="body">Vulnerability assessments and internal and external network penetration testing across 15 healthcare client tenants and 7,000 assets. Identified more than 90 exploitable misconfigurations and produced prioritized remediation runbooks aligned to HIPAA and ISO 27001.</p>
+    </li>
+    <li>
+      <div class="head">
+        <span class="title">Security Operations Engineer</span>
+        <span class="org">Hunterdon Healthcare</span>
+        <span class="meta">2022, 2023</span>
+      </div>
+      <p class="body">Defended 2,000 IT endpoints and 1,200 networked medical devices. Ran the full incident response lifecycle on 700 alerts per month. Authored 270 runbooks, root cause analyses, and after-action reports. Recognized as Best Employee, Q2 2022.</p>
+    </li>
+    <li>
+      <div class="head">
+        <span class="title">Security Operations Intern, GSOC</span>
+        <span class="org">Providence Healthcare</span>
+        <span class="meta">2021, 2022</span>
+      </div>
+      <p class="body">Triaged 400 alerts per month on a 24x7 global SOC desk supporting 50,000 endpoints. Contributed to the GSOC's first MITRE ATT&amp;CK coverage map and earned a return offer to the full-time engineer role.</p>
+    </li>
+  </ul>
+
+  <h2>Research</h2>
+  <h3>Hierarchical Network Intrusion Detection (IEEE WI-IAT 2025)</h3>
+  <p>First author of a peer-reviewed paper on hierarchical network intrusion detection, combining XGBoost, LSTM autoencoders, and a multi-layer perceptron across 2.27 million network flows from CSE-CIC-IDS-2018. Achieved 96.3 percent accuracy with a 30 percent reduction in false positives across DoS, DDoS, brute-force, and infiltration attack classes. Also presented at CCSC Central Plains 2025.</p>
+  <p>The paper is the formal version of the same question I work on operationally: how do you tell the truth from the noise, at scale, without drowning the humans who have to act on the answer?</p>
+
+  <h2>Vision</h2>
+  <p>AMOSKYS is a macOS endpoint security product today. That is the first substrate. The second is industrial and manufacturing OT, passive only, process-aware, decoding Modbus, DNP3, EtherNet/IP, Siemens S7, and OPC UA, running the same five-layer architecture on a different wire and a different physics. The third substrate is whatever cannot be patched next.</p>
+  <p>The thesis underneath all of it is simple. The things that cannot be patched are the things that carry the most risk, and the people who depend on those things deserve a defender that tells the truth. AMOSKYS is my attempt to build that defender in the open, one substrate at a time, with integrity as a primitive and detection content anyone can read.</p>
+
+  <h2>How AMOSKYS is built</h2>
+  <p>AMOSKYS is designed, scoped, validated, and shipped by me. I use modern AI coding assistants as an accelerator for implementation, the same way an engineer in 2010 used Stack Overflow and an engineer in 2000 used O'Reilly books. Every detection philosophy, every probe-to-MITRE mapping, every architectural decision, every priority call is mine. The product knows what it is because I do.</p>
+  <p>I believe being transparent about this is the only honest way to build security tools in the era we are living through. The defenders who win the next decade will be the ones who can hold a clear philosophy, reason about adversary behavior, and direct the tools at their disposal toward outcomes that matter. AMOSKYS is my attempt to do exactly that, in public, while building something the people who depend on it can actually trust.</p>
+
+  <h2>Contact</h2>
+  <div class="contact">
+    <div>Fremont, California</div>
+    <div><a href="mailto:athanneeru@outlook.com">athanneeru@outlook.com</a></div>
+    <div><a href="https://linkedin.com/in/thevardhan">linkedin.com/in/thevardhan</a></div>
+    <div><a href="https://github.com/Vardhan-225">github.com/Vardhan-225</a></div>
+    <div><a href="https://amoskys.com">amoskys.com</a></div>
+  </div>
+
+  <footer>
+    AMOSKYS, built in the open. Detection you can prove.
+  </footer>
+
+</main>
+</body>
+</html>
