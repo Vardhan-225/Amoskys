@@ -93,6 +93,11 @@
         .s2-next{position:absolute;bottom:30px;right:40px;z-index:32;opacity:0;transition:opacity .5s}
         .s2-next.visible{opacity:1}
 
+        /* Skip button (step 2) */
+        .s2-skip{position:absolute;top:28px;right:40px;z-index:32}
+        .s2-skip button{background:none;border:1px solid #1e2a45;color:#555;font-size:0.78em;padding:6px 16px;border-radius:6px;cursor:pointer;transition:all .2s;letter-spacing:0.3px}
+        .s2-skip button:hover{border-color:#6b7a99;color:#6b7a99}
+
         /* ═══ STEP 3: INSTALL ═══ */
         .s3-logo{width:140px;height:140px;margin-bottom:20px}
         .s3-logo img{width:140px;height:140px;filter:drop-shadow(0 0 40px rgba(0,217,255,0.5))}
@@ -144,6 +149,7 @@
                 <div class="collapse-title" id="collapse-title">AMOSKYS</div>
                 <div class="collapse-sub">Securing every layer.</div>
             </div>
+            <div class="s2-skip" id="s2-skip"><button id="btn-skip-showcase">Skip</button></div>
             <div class="s2-progress"><div class="s2-progress-fill" id="s2-progress"></div></div>
             <div class="s2-next" id="s2-next">
                 <button class="cta-btn" id="btn-install">
@@ -235,17 +241,36 @@
     document.getElementById('btn-start').addEventListener('click',function(){goStep(2)});
     document.getElementById('btn-install').addEventListener('click',function(){goStep(3)});
 
-    // Prev/Next arrows
-    document.getElementById('info-prev').addEventListener('click',function(){
+    // Skip showcase → jump to step 3
+    document.getElementById('btn-skip-showcase').addEventListener('click',function(){goStep(3)});
+
+    // Prev/Next arrows — pause auto-cycle, resume after 5s
+    function manualNav(newIdx){
         clearInterval(showcaseTimer);showcaseTimer=null;
-        showcaseIdx=(showcaseIdx-1+agents.length)%agents.length;
+        clearTimeout(resumeTimeout);
+        showcaseIdx=newIdx;
         showAgent(showcaseIdx);
+        // If we've seen the last agent, trigger collapse after a beat
+        if(showcaseIdx===agents.length-1 && cycleCount>=1){
+            setTimeout(collapseToLogo,2500);
+        } else {
+            // Resume auto-cycle after 5s of no interaction
+            resumeTimeout=setTimeout(function(){
+                showcaseTimer=setInterval(showcaseNext,3000);
+            },5000);
+        }
+    }
+    var resumeTimeout=null;
+
+    document.getElementById('info-prev').addEventListener('click',function(){
+        manualNav((showcaseIdx-1+agents.length)%agents.length);
     });
     document.getElementById('info-next').addEventListener('click',function(){
-        clearInterval(showcaseTimer);showcaseTimer=null;
-        showcaseIdx=(showcaseIdx+1)%agents.length;
-        showAgent(showcaseIdx);
+        var nextIdx=(showcaseIdx+1)%agents.length;
+        if(nextIdx===0) cycleCount++;
+        manualNav(nextIdx);
     });
+
     document.getElementById('skip-setup').addEventListener('click',async function(){
         await fetch('/dashboard/api/setup/complete',{method:'POST'});
         window.location.href='/dashboard';
