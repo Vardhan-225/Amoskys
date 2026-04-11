@@ -98,6 +98,17 @@ class Severity(str, Enum):
     CRITICAL = "CRITICAL"  # Active attacks, immediate action needed
 
 
+class EventTier(str, Enum):
+    """Event classification tier — hard boundary between noise and signal.
+
+    ATTACK:      Real threat detected. Show to user on dashboard.
+    OBSERVATION:  Baseline/telemetry data. Feed to SOMA, never show in threat feed.
+    """
+
+    ATTACK = "attack"
+    OBSERVATION = "observation"
+
+
 # =============================================================================
 # Telemetry Event
 # =============================================================================
@@ -137,6 +148,7 @@ class TelemetryEvent:
     device_id: str = ""
     correlation_id: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+    tier: EventTier = EventTier.OBSERVATION  # Default safe; probes/analyzer promote
 
     def __post_init__(self) -> None:
         """Convert timestamp_ns to timestamp if provided."""
@@ -159,6 +171,7 @@ class TelemetryEvent:
             "device_id": self.device_id,
             "correlation_id": self.correlation_id,
             "tags": self.tags,
+            "tier": self.tier.value,
         }
 
 
@@ -321,6 +334,10 @@ class MicroProbe(abc.ABC):
     evasion_notes: List[str] = []
     """Known evasion techniques against this probe. Documents detection gaps
     for red-team validation and future improvement."""
+
+    tier: EventTier = EventTier.OBSERVATION
+    """Event tier: ATTACK (real threat, show to user) or OBSERVATION (baseline
+    telemetry, feed to SOMA but never show in threat feed). Subclasses override."""
 
     supports_baseline: bool = False
     """Whether this probe can learn 'normal' behavior for anomaly detection.

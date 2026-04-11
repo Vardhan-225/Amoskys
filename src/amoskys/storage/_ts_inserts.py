@@ -266,7 +266,8 @@ class InsertMixin:
                     pid, username, probe_name, detection_source,
                     mitre_tactics, local_port, protocol,
                     connection_state, file_name, file_extension,
-                    file_owner, file_mtime, file_permissions
+                    file_owner, file_mtime, file_permissions,
+                    tier
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
@@ -274,7 +275,8 @@ class InsertMixin:
                     ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?
                 )
                 """,
                 (
@@ -355,6 +357,7 @@ class InsertMixin:
                     event_data.get("file_owner"),
                     event_data.get("file_mtime"),
                     event_data.get("file_permissions"),
+                    event_data.get("tier", "observation"),
                 ),
             )
             self._commit()

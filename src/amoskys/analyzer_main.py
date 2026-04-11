@@ -514,6 +514,26 @@ def main() -> int:
                                             exc_info=True,
                                         )
 
+                                # ── Tier classification ──
+                                # ATTACK: real threat, show to user
+                                # OBSERVATION: baseline telemetry, feed SOMA only
+                                _risk = event_data.get("risk_score", 0.0) or 0.0
+                                _conf = event_data.get("confidence", 0.0) or 0.0
+                                _sev = str(
+                                    attrs.get("severity", se.event_category or "")
+                                ).upper()
+                                _has_sigma = "|sigma" in event_data.get(
+                                    "detection_source", ""
+                                )
+                                if (
+                                    (_risk >= 0.4 and _conf >= 0.6)
+                                    or _sev in ("HIGH", "CRITICAL")
+                                    or _has_sigma
+                                ):
+                                    event_data["tier"] = "attack"
+                                else:
+                                    event_data["tier"] = "observation"
+
                                 store.insert_security_event(event_data)
 
                                 # Feed fusion engine — use from_protobuf() which

@@ -75,12 +75,19 @@ def live_threats():
         min_risk = float(request.args.get("min_risk", 0.1))
     except (ValueError, TypeError):
         pass
+    # Tier filter: default to "attack" (real threats only).
+    # Pass tier="" or tier=all to see everything including observations.
+    tier = request.args.get("tier", "attack")
+    if tier == "all":
+        tier = ""
     rows = store.get_unified_threat_events(
-        limit=per_page, hours=hours, offset=offset, min_risk=min_risk
+        limit=per_page, hours=hours, offset=offset, min_risk=min_risk, tier=tier
     )
     data_stale = False
     if not rows and page == 1:
-        rows = store.get_unified_threat_events(limit=50, hours=8760, min_risk=0.0)
+        rows = store.get_unified_threat_events(
+            limit=50, hours=8760, min_risk=0.0, tier=tier
+        )
         data_stale = bool(rows)
     recent_events = []
     for row in rows:
@@ -161,7 +168,7 @@ def live_threats():
     avg_confidence = round(sum(confidences) / len(confidences), 3) if confidences else 0
 
     db_total = counts.get("total", 0)
-    threat_total = store.get_threat_count(hours=hours, min_risk=min_risk)
+    threat_total = store.get_threat_count(hours=hours, min_risk=min_risk, tier=tier)
     total_pages = max(1, -(-threat_total // per_page))  # ceil division
 
     return jsonify(

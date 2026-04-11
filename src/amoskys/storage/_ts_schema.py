@@ -214,12 +214,16 @@ CREATE TABLE IF NOT EXISTS security_events (
     mitre_evidence TEXT,
 
     -- Lossless attribute preservation
-    raw_attributes_json TEXT
+    raw_attributes_json TEXT,
+
+    -- Tier: attack (real threat) vs observation (baseline telemetry)
+    tier TEXT DEFAULT 'observation'
 );
 
 CREATE INDEX IF NOT EXISTS idx_security_timestamp ON security_events(timestamp_ns DESC);
 CREATE INDEX IF NOT EXISTS idx_security_risk ON security_events(risk_score DESC);
 CREATE INDEX IF NOT EXISTS idx_security_classification ON security_events(final_classification);
+CREATE INDEX IF NOT EXISTS idx_security_tier ON security_events(tier, timestamp_ns DESC);
 CREATE INDEX IF NOT EXISTS idx_security_event_timestamp ON security_events(event_timestamp_ns DESC);
 CREATE INDEX IF NOT EXISTS idx_security_event_id ON security_events(event_id);
 
@@ -854,6 +858,19 @@ class SchemaMixin:
             self._ensure_column("security_events", "file_mtime", "REAL")
             self._ensure_column("security_events", "file_permissions", "TEXT")
             self._ensure_column("security_events", "agent_version", "TEXT")
+
+            # Tier column: attack vs observation
+            self._ensure_column(
+                "security_events", "tier", "TEXT DEFAULT 'observation'"
+            )
+            # Index for tier filtering
+            try:
+                self.db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_security_tier "
+                    "ON security_events(tier, timestamp_ns DESC)"
+                )
+            except sqlite3.Error:
+                pass
 
             # Mandate v1.0: rejected_events table for WAL gate audit
             self.db.execute(

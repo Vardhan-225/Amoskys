@@ -125,10 +125,16 @@ class QueryMixin:
         hours: int = 24,
         offset: int = 0,
         min_risk: float = 0.0,
+        tier: str = "",
     ) -> List[Dict[str, Any]]:
-        """Query all domain tables via UNION ALL for a unified threat view."""
+        """Query all domain tables via UNION ALL for a unified threat view.
+
+        Args:
+            tier: If set (e.g. "attack"), only return security_events with
+                  that tier value. Empty string = no filter.
+        """
         # 10s cache for identical params (dashboard polls every 5-15s)
-        cache_key = f"unified_threats:{hours}:{limit}:{offset}:{min_risk}"
+        cache_key = f"unified_threats:{hours}:{limit}:{offset}:{min_risk}:{tier}"
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
@@ -136,6 +142,7 @@ class QueryMixin:
         risk_clause = f"AND risk_score > {min_risk}" if min_risk > 0 else ""
         risk_clause_anom = f"AND anomaly_score > {min_risk}" if min_risk > 0 else ""
         risk_clause_threat = f"AND threat_score > {min_risk}" if min_risk > 0 else ""
+        tier_clause = f"AND tier = '{tier}'" if tier else ""
         sub_limit = limit + offset
         query = f"""
             SELECT * FROM (
@@ -144,7 +151,7 @@ class QueryMixin:
                    timestamp_ns, timestamp_dt, mitre_techniques, indicators,
                    collection_agent, device_id, final_classification,
                    requires_investigation, event_action
-            FROM security_events WHERE timestamp_ns > ? {risk_clause}
+            FROM security_events WHERE timestamp_ns > ? {risk_clause} {tier_clause}
             ORDER BY timestamp_ns DESC LIMIT {sub_limit}
             ) UNION ALL SELECT * FROM (
             SELECT id, 'persistence', event_type, reason, risk_score,
@@ -201,17 +208,20 @@ class QueryMixin:
                 logger.error("Failed unified threat query: %s", e)
                 return []
 
-    def get_threat_count(self, hours: int = 24, min_risk: float = 0.1) -> int:
+    def get_threat_count(
+        self, hours: int = 24, min_risk: float = 0.1, tier: str = ""
+    ) -> int:
         """Fast count of events exceeding min_risk across scored tables."""
-        cache_key = f"threat_count:{hours}:{min_risk}"
+        cache_key = f"threat_count:{hours}:{min_risk}:{tier}"
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
-        query = """
+        tier_clause = f"AND tier = '{tier}'" if tier else ""
+        query = f"""
             SELECT SUM(cnt) FROM (
                 SELECT COUNT(*) as cnt FROM security_events
-                    WHERE timestamp_ns > ? AND risk_score > ?
+                    WHERE timestamp_ns > ? AND risk_score > ? {tier_clause}
                 UNION ALL
                 SELECT COUNT(*) FROM persistence_events
                     WHERE timestamp_ns > ? AND risk_score > ?
