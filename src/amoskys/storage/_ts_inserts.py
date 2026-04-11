@@ -594,8 +594,39 @@ class InsertMixin:
             return None
 
     def insert_audit_event(self, event_data: Dict[str, Any]) -> Optional[int]:
-        """Insert a kernel audit event (syscall monitoring)."""
+        """Insert a kernel audit event (syscall monitoring).
+
+        Suppresses high-volume routine authd/TCC events ("evaluated",
+        "granted") that fire thousands of times per day. Only unique
+        (event_type, exe, target_path) combos are stored per 5-min window.
+        """
         try:
+            event_type = event_data.get("event_type", "")
+            # Suppress routine authd/TCC noise — same event+exe+target
+            # combo within 5-minute window is a duplicate
+            if event_type in ("evaluated", "granted", "grant"):
+                ts = event_data.get("timestamp_ns", int(time.time() * 1e9))
+                device_id = event_data.get("device_id", "unknown")
+                exe = event_data.get("exe") or ""
+                target = event_data.get("target_path") or event_data.get("comm") or ""
+                dedup_key = f"audit:{device_id}:{event_type}:{exe}:{target}"
+                # 5-minute dedup window (300 seconds)
+                window_ns = 300 * 1_000_000_000
+                if not hasattr(self, "_audit_dedup_cache"):
+                    self._audit_dedup_cache: dict = {}
+                last_ts = self._audit_dedup_cache.get(dedup_key, 0)
+                if ts - last_ts < window_ns:
+                    return None  # suppressed duplicate
+                self._audit_dedup_cache[dedup_key] = ts
+                # Evict old entries to prevent memory leak
+                if len(self._audit_dedup_cache) > 5000:
+                    cutoff = ts - window_ns
+                    self._audit_dedup_cache = {
+                        k: v
+                        for k, v in self._audit_dedup_cache.items()
+                        if v > cutoff
+                    }
+
             cursor = self.db.execute(
                 """
                 INSERT INTO audit_events (
@@ -665,9 +696,13 @@ class InsertMixin:
             command = event_data.get("command")
             change_type = event_data.get("change_type")
 
-            # Unified snapshot dedup — use path as fallback when entry_id is empty
+            # Unified snapshot dedup — use path as fallback when entry_id is empty.
+            # Treat NULL/missing change_type as snapshot (persistence scans
+            # re-emit the same entries every cycle; without this gate the DB
+            # grows by ~800K rows/day).
             dedup_id = entry_id or event_data.get("path") or ""
-            if change_type == "snapshot" and device_id and mechanism and dedup_id:
+            is_snapshot = change_type in ("snapshot", None, "")
+            if is_snapshot and device_id and mechanism and dedup_id:
                 key = self._dedup_key(device_id, mechanism, dedup_id)
                 if self._check_snapshot_dedup(
                     "persistence_events", key, content_hash, timestamp_ns
