@@ -423,6 +423,33 @@ class FusionEngine:
         state["last_eval"] = datetime.now()
         state["incident_count"] += len(incidents)
 
+        # AMRDR: auto-update agent reliability from incident contributions.
+        # Every agent that contributed to a detected incident gets a positive
+        # signal (α += 1). Every agent that contributed events but NO incident
+        # was created gets an implicit negative (its events were noise).
+        try:
+            if incidents:
+                # Agents that contributed to real incidents → positive
+                credited: set = set()
+                for inc in incidents:
+                    for agent_id in getattr(inc, "contributing_agents", []):
+                        if agent_id and agent_id not in credited:
+                            self.reliability_tracker.update(
+                                agent_id=agent_id, ground_truth_match=True
+                            )
+                            credited.add(agent_id)
+            # Track all agents that submitted events this cycle
+            for ev in sorted_events:
+                agent_id = getattr(ev, "collection_agent", "") or ""
+                if agent_id and agent_id not in getattr(self, "_amrdr_seen", set()):
+                    # Register the agent so AMRDR tracks it
+                    self.reliability_tracker.get_state(agent_id)
+            self._amrdr_seen = {
+                getattr(ev, "collection_agent", "") for ev in sorted_events
+            }
+        except Exception:
+            pass  # AMRDR auto-update is best-effort
+
         logger.info(
             f"Evaluated {device_id}: {len(incidents)} incidents, "
             f"risk={risk_snapshot.score}, active_weights={len(weights)}"

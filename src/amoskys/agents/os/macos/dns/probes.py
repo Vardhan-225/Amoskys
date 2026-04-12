@@ -448,6 +448,35 @@ class BeaconingPatternProbe(MicroProbe):
     MAX_INTERVAL_S = 3600.0  # Maximum interval to consider
     FREQ_FALLBACK_COUNT = 3  # Frequency fallback: flag if >= N queries in one window
 
+    # Apple system daemons that beacon by design — DNS polling at regular
+    # intervals is their normal operating behavior, not C2 communication.
+    _APPLE_BEACON_PROCESSES: frozenset = frozenset({
+        "mDNSResponder",
+        "networkserviceproxy",
+        "rtcreportingd",
+        "homed",
+        "apsd",              # Apple Push Service
+        "trustd",            # Certificate trust daemon
+        "cloudd",            # CloudKit daemon
+        "nsurlsessiond",     # URL session daemon
+        "captiveagent",      # Captive portal detection
+        "com.apple.geod",    # Location services
+        "parsecd",           # Siri/ML suggestions
+        "timed",             # NTP time sync
+        "symptomsd",         # Network diagnostics
+        "airportd",          # Wi-Fi daemon
+        "identityservicesd", # iMessage/FaceTime
+        "remindd",           # Reminders sync
+        "CalendarAgent",     # Calendar sync
+        "AddressBookSourceSync",
+        "exchangesyncd",     # Exchange mail sync
+        "IMTransferAgent",   # iMessage file transfer
+        "akd",               # AuthKit daemon
+        "amsengagementd",    # App Store engagement
+        "biomesyncd",        # Biometric sync
+        "duetexpertd",       # Siri knowledge
+    })
+
     def __init__(self) -> None:
         super().__init__()
         # domain → list of query timestamps
@@ -515,6 +544,11 @@ class BeaconingPatternProbe(MicroProbe):
                     ),
                     None,
                 )
+                # Skip Apple system daemons that beacon by design
+                if rep_query:
+                    proc_name = getattr(rep_query, "source_process", "") or ""
+                    if proc_name in self._APPLE_BEACON_PROCESSES:
+                        continue
                 detected_domains.add(domain)
                 events.append(
                     self._create_event(
@@ -557,6 +591,11 @@ class BeaconingPatternProbe(MicroProbe):
                     ),
                     None,
                 )
+                # Skip Apple system daemons
+                if rep_query:
+                    proc_name = getattr(rep_query, "source_process", "") or ""
+                    if proc_name in self._APPLE_BEACON_PROCESSES:
+                        continue
                 events.append(
                     self._create_event(
                         event_type="dns_beaconing_suspected",

@@ -34,7 +34,9 @@ class SignalMixin:
                     data.get("status", "open"),
                     data.get("assignee"),
                     json.dumps(data.get("source_event_ids", [])),
-                    json.dumps(data.get("mitre_techniques", [])),
+                    json.dumps(data.get("mitre_techniques", []))
+                    if isinstance(data.get("mitre_techniques"), list)
+                    else (data.get("mitre_techniques") or "[]"),
                     json.dumps(data.get("indicators", {})),
                 ),
             )
@@ -168,7 +170,7 @@ class SignalMixin:
     # ── Signals Layer (Directive 3) ──────────────────────────────────────────
 
     _SIGNAL_MERGE_WINDOW_NS = int(3600 * 1e9)  # 1h merge window
-    _SIGNAL_AUTO_EXPIRE_NS = int(72 * 3600 * 1e9)  # 72h auto-age
+    _SIGNAL_AUTO_EXPIRE_NS = int(2 * 3600 * 1e9)  # 2h auto-expire (IGRIS directive)
 
     def create_signal(
         self,
@@ -337,15 +339,25 @@ class SignalMixin:
             return []
 
     def expire_stale_signals(self) -> int:
-        """Auto-expire signals older than 72h that are still open."""
-        cutoff_ns = int(time.time() * 1e9) - self._SIGNAL_AUTO_EXPIRE_NS
+        """Auto-expire open signals older than 2h with no promotion.
+
+        Stale signals teach operators to ignore signals. If a signal
+        sits open for 2 hours without being promoted to an incident,
+        it's noise — dismiss it automatically.
+        """
+        now_ns = int(time.time() * 1e9)
+        cutoff_ns = now_ns - self._SIGNAL_AUTO_EXPIRE_NS
         try:
             result = self.db.execute(
-                """UPDATE signals SET status = 'expired', updated_ns = ?
+                """UPDATE signals SET status = 'expired',
+                   dismissed_by = 'igris_auto', dismissed_reason = 'expired — no escalation in 2h',
+                   updated_ns = ?
                    WHERE status = 'open' AND created_ns < ?""",
-                (int(time.time() * 1e9), cutoff_ns),
+                (now_ns, cutoff_ns),
             )
             self._commit()
+            if result.rowcount > 0:
+                logger.info("IGRIS auto-expired %d stale signals", result.rowcount)
             return result.rowcount
         except sqlite3.Error:
             return 0
