@@ -525,6 +525,37 @@ class ConfigBackdoorProbe(_BaselineDiffProbe):
         "com.apple.preferences.plist",
     }
 
+    # Apple system binaries/paths that legitimately modify /etc/ configs.
+    # These fire on every boot, daemon restart, and OS update — not backdoors.
+    _BENIGN_SYSTEM_NAMES: Set[str] = {
+        # System binaries that appear as file entries in /etc/
+        "notifyd",
+        "UserEventAgent",
+        "passwd",
+        "master.passwd",
+        "group",
+        "sudo",
+        # Config files that change during normal OS operation
+        "sudoers",
+        "hosts",
+        "resolv.conf",
+        "newsyslog.conf",
+        "ntp.conf",
+        "periodic",
+        "syslog.conf",
+        "localtime",
+        "shells",
+    }
+
+    # Process exe prefixes that are always benign when modifying /etc/.
+    # Matched against the exe path in the file entry description.
+    _BENIGN_EXE_PREFIXES = (
+        "/usr/sbin/",
+        "/usr/libexec/",
+        "/System/Library/",
+        "/usr/bin/sudo",
+    )
+
     # Apple/vendor plist prefixes that change during normal OS operation
     _BENIGN_PLIST_PREFIXES = (
         "com.apple.",
@@ -536,6 +567,8 @@ class ConfigBackdoorProbe(_BaselineDiffProbe):
 
     def _matches(self, entry: Any) -> bool:
         if entry.name in self._EXCLUDE_NAMES:
+            return False
+        if entry.name in self._BENIGN_SYSTEM_NAMES:
             return False
         # Vendor system plists in /Library/Preferences change on boot, wake,
         # preference sync, and OS updates — not indicators of backdoor activity

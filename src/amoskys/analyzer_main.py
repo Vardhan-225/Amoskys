@@ -167,11 +167,24 @@ def main() -> int:
     try:
         from amoskys.intel.fusion_engine import FusionEngine
 
+        # AMRDR: BayesianReliabilityTracker for real agent trust scoring
+        try:
+            from amoskys.intel.reliability import BayesianReliabilityTracker
+
+            _amrdr = BayesianReliabilityTracker(
+                store_path=str(DATA_DIR / "intel" / "reliability.db")
+            )
+            logger.info("AMRDR BayesianReliabilityTracker initialized")
+        except Exception as _amrdr_err:
+            _amrdr = None
+            logger.warning("AMRDR fallback to NoOp: %s", _amrdr_err)
+
         fusion = FusionEngine(
             db_path=str(FUSION_DB),
             probe_calibrator=probe_cal,
+            reliability_tracker=_amrdr,
         )
-        logger.info("FusionEngine initialized: %s (probe calibrator wired)", FUSION_DB)
+        logger.info("FusionEngine initialized: %s (AMRDR + probe calibrator wired)", FUSION_DB)
     except Exception as e:
         logger.warning("FusionEngine not available: %s", e)
         fusion = None
@@ -290,8 +303,8 @@ def main() -> int:
                                     "event_outcome": "alert",
                                     "risk_score": se.risk_score,
                                     "confidence": float(attrs.get("confidence", "0.5")),
-                                    "mitre_techniques": json.dumps(
-                                        list(se.mitre_techniques)
+                                    "mitre_techniques": list(
+                                        se.mitre_techniques
                                     ),
                                     "collection_agent": agent,
                                     "description": attrs.get("description", ""),
@@ -486,27 +499,21 @@ def main() -> int:
                                             event_data["indicators"] = ind
                                             # Promote MITRE from sigma if richer
                                             if best.mitre_techniques:
+                                                raw_mt = event_data.get(
+                                                    "mitre_techniques", []
+                                                )
+                                                if isinstance(raw_mt, str):
+                                                    try:
+                                                        raw_mt = json.loads(raw_mt)
+                                                    except (json.JSONDecodeError, TypeError):
+                                                        raw_mt = []
                                                 existing = set(
-                                                    json.loads(
-                                                        event_data.get(
-                                                            "mitre_techniques",
-                                                            "[]",
-                                                        )
-                                                    )
-                                                    if isinstance(
-                                                        event_data.get(
-                                                            "mitre_techniques"
-                                                        ),
-                                                        str,
-                                                    )
-                                                    else event_data.get(
-                                                        "mitre_techniques", []
-                                                    )
+                                                    raw_mt if isinstance(raw_mt, list) else []
                                                 )
                                                 for t in best.mitre_techniques:
                                                     existing.add(t)
                                                 event_data["mitre_techniques"] = (
-                                                    json.dumps(list(existing))
+                                                    list(existing)
                                                 )
                                     except Exception:
                                         logger.debug(
