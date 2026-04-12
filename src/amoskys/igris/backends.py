@@ -191,16 +191,13 @@ class IgrisBrain:
                 "model": self.model,
                 "max_tokens": 16000,
                 "messages": messages,
-                "thinking": {"type": "adaptive"},
             }
             if system:
                 kwargs["system"] = system
             if tools:
                 kwargs["tools"] = tools
 
-            # Use streaming + get_final_message for timeout protection
-            with client.messages.stream(**kwargs) as stream:
-                response = stream.get_final_message()
+            response = client.messages.create(**kwargs)
 
             total_input += response.usage.input_tokens
             total_output += response.usage.output_tokens
@@ -228,8 +225,26 @@ class IgrisBrain:
                 final_text = _extract_text(response)
                 break
 
-            # Append assistant response (must preserve tool_use blocks)
-            messages.append({"role": "assistant", "content": response.content})
+            # Append assistant response — serialize content blocks to plain
+            # dicts to avoid pydantic model_dump issues on subsequent calls
+            serialized_content = []
+            for block in response.content:
+                if block.type == "text":
+                    serialized_content.append({"type": "text", "text": block.text})
+                elif block.type == "tool_use":
+                    serialized_content.append(
+                        {
+                            "type": "tool_use",
+                            "id": block.id,
+                            "name": block.name,
+                            "input": block.input,
+                        }
+                    )
+                elif block.type == "thinking":
+                    serialized_content.append(
+                        {"type": "thinking", "thinking": block.thinking}
+                    )
+            messages.append({"role": "assistant", "content": serialized_content})
 
             # Execute tools and collect results
             tool_results = []

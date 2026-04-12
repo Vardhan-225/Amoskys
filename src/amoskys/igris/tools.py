@@ -38,7 +38,7 @@ class IgrisToolkit:
     def _query(self, db_path: str, sql: str, params: tuple = ()) -> List[Dict]:
         """Execute a read-only query and return list of dicts."""
         try:
-            conn = sqlite3.connect(db_path)
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
             conn.row_factory = sqlite3.Row
             rows = conn.execute(sql, params).fetchall()
             result = [dict(r) for r in rows]
@@ -54,7 +54,7 @@ class IgrisToolkit:
 
     def _count(self, db_path: str, sql: str, params: tuple = ()) -> int:
         try:
-            conn = sqlite3.connect(db_path)
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
             row = conn.execute(sql, params).fetchone()
             conn.close()
             return int(row[0]) if row else 0
