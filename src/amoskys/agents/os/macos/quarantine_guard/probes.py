@@ -295,18 +295,18 @@ class ClickFixDetectionProbe(MicroProbe):
 
             cmdline_str = " ".join(child_cmdline) if child_cmdline else ""
 
-            is_suspicious = child_name in _CLICKFIX_SUSPICIOUS_COMMANDS
-            if not is_suspicious:
-                for pattern in _CLICKFIX_CMDLINE_PATTERNS:
-                    if pattern in cmdline_str:
-                        is_suspicious = True
-                        break
+            # Require BOTH suspicious command name AND suspicious cmdline pattern.
+            # A bare "bash" while Slack is open is normal developer activity.
+            # ClickFix requires a piped/eval pattern (bash -c, curl | sh, etc.)
+            name_match = child_name in _CLICKFIX_SUSPICIOUS_COMMANDS
+            pattern_match = any(p in cmdline_str for p in _CLICKFIX_CMDLINE_PATTERNS)
+            is_suspicious = name_match and pattern_match
 
             if is_suspicious:
                 events.append(
                     self._create_event(
                         event_type="clickfix_attack",
-                        severity=Severity.CRITICAL,
+                        severity=Severity.HIGH,  # HIGH not CRITICAL — needs corroboration to escalate
                         data={
                             "child_pid": child_pid,
                             "child_name": child_name,

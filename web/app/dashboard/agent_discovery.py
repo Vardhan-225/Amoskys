@@ -693,6 +693,24 @@ def find_processes_by_patterns(patterns: List[str]) -> List[Dict[str, Any]]:
     return matches
 
 
+def _resolve_data_dir() -> Path:
+    """Resolve the AMOSKYS data directory using the same logic as collector_main.
+
+    Priority: AMOSKYS_DATA_DIR env → CWD/data → /var/lib/amoskys/data → source/data
+    """
+    import os as _os
+
+    env_dir = _os.environ.get("AMOSKYS_DATA_DIR")
+    if env_dir:
+        return Path(env_dir)
+    # Production: /var/lib/amoskys/data (where launchd CWD puts it)
+    prod_data = Path("/var/lib/amoskys/data")
+    if prod_data.is_dir():
+        return prod_data
+    # Development: source tree
+    return Path(__file__).resolve().parents[3] / "data"
+
+
 def _check_collector_heartbeat(agent_id: str) -> bool:
     """Check if an agent is alive inside collector_main via heartbeat.
 
@@ -702,8 +720,7 @@ def _check_collector_heartbeat(agent_id: str) -> bool:
     """
     import json as _json
 
-    project_root = Path(__file__).resolve().parents[3]
-    heartbeat_dir = project_root / "data" / "heartbeats"
+    heartbeat_dir = _resolve_data_dir() / "heartbeats"
 
     # Check collector heartbeat (has list of active agents)
     collector_hb = heartbeat_dir / "collector.json"
@@ -751,8 +768,7 @@ def _check_collector_heartbeat(agent_id: str) -> bool:
 
 def _check_pid_file(name: str) -> bool:
     """Check if a process is alive via PID file (collector/analyzer/dashboard)."""
-    project_root = Path(__file__).resolve().parents[3]
-    pid_file = project_root / "data" / "pids" / f"{name}.pid"
+    pid_file = _resolve_data_dir() / "pids" / f"{name}.pid"
     if not pid_file.exists():
         return False
     try:

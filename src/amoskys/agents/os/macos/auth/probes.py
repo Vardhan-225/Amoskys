@@ -38,6 +38,19 @@ def _enrich_auth_event(auth_ev) -> Dict[str, Any]:
         enrichment["username"] = auth_ev.username
     if hasattr(auth_ev, "source_ip") and auth_ev.source_ip:
         enrichment["remote_ip"] = auth_ev.source_ip
+    # Process context — critical for IGRIS to understand what triggered the auth event
+    if hasattr(auth_ev, "process") and auth_ev.process:
+        enrichment["process_name"] = auth_ev.process
+    if hasattr(auth_ev, "client_exe") and auth_ev.client_exe:
+        enrichment["exe"] = auth_ev.client_exe
+    if hasattr(auth_ev, "client_pid") and auth_ev.client_pid:
+        enrichment["pid"] = auth_ev.client_pid
+    if hasattr(auth_ev, "right") and auth_ev.right:
+        enrichment["auth_right"] = auth_ev.right
+    if hasattr(auth_ev, "service") and auth_ev.service:
+        enrichment["tcc_service"] = auth_ev.service
+    if hasattr(auth_ev, "decision") and auth_ev.decision:
+        enrichment["auth_decision"] = auth_ev.decision
     return enrichment
 
 
@@ -214,7 +227,7 @@ class OffHoursLoginProbe(MicroProbe):
 
         start_hour = context.config.get("business_hours_start", self.DEFAULT_START_HOUR)
         end_hour = context.config.get("business_hours_end", self.DEFAULT_END_HOUR)
-        check_weekends = context.config.get("check_weekends", True)
+        check_weekends = context.config.get("check_weekends", False)
 
         for ev in auth_events:
             # Only care about successful logins and unlocks
