@@ -433,16 +433,26 @@ def igris_proactive_brief():
 def igris_chat_backend():
     """Get IGRIS LLM backend status."""
     claude_ok = bool(os.environ.get("ANTHROPIC_API_KEY", ""))
+    from amoskys.igris.backends import COMMANDER_MODEL, AGENT_MODEL
+
     return jsonify(
         {
             "status": "success",
             "current": "claude",
-            "model": os.environ.get("IGRIS_MODEL", "claude-sonnet-4-20250514"),
+            "commander_model": COMMANDER_MODEL,
+            "agent_model": AGENT_MODEL,
             "backends": {
-                "claude": {
+                "commander": {
                     "available": claude_ok,
-                    "label": "Claude API",
-                    "model": "claude-sonnet-4-20250514",
+                    "label": "IGRIS Commander (Opus 4.6)",
+                    "model": COMMANDER_MODEL,
+                    "purpose": "Cross-domain reasoning, deep analysis",
+                },
+                "agent_minds": {
+                    "available": claude_ok,
+                    "label": "Agent Minds (Haiku 4.5)",
+                    "model": AGENT_MODEL,
+                    "purpose": "Per-agent anomaly reasoning",
                 },
             },
         }
@@ -457,6 +467,102 @@ def igris_chat_history():
     if not chat:
         return jsonify({"status": "success", "history": []})
     return jsonify({"status": "success", "history": chat.get_history()})
+
+
+# ── IGRIS Brain (deep analysis via Opus 4.6 + tool runner) ───────
+
+_igris_brain_instance = None
+
+
+def _get_igris_brain():
+    global _igris_brain_instance
+    if _igris_brain_instance is None:
+        try:
+            from amoskys.igris.backends import create_brain
+            from amoskys.igris.tools import IgrisToolkit
+
+            toolkit = IgrisToolkit()
+            _igris_brain_instance = create_brain(toolkit)
+        except Exception as e:
+            logger.error("Failed to initialize IGRIS brain: %s", e)
+            return None
+    return _igris_brain_instance
+
+
+@dashboard_bp.route("/api/igris/analyze", methods=["POST"])
+@require_login
+@require_rate_limit(max_requests=5, window_seconds=60)
+def igris_analyze():
+    """IGRIS deep threat analysis — Claude Opus reasons over telemetry.
+
+    This is the IGRIS commander brain. It reads all attack-tier events,
+    correlates across domains, spawns sub-agents for investigation,
+    and delivers a comprehensive verdict.
+
+    Request body:
+        {"prompt": "optional custom question", "hours": 24}
+
+    Default: full threat assessment of the device.
+    """
+    data = request.get_json(silent=True) or {}
+    hours = min(data.get("hours", 24), 168)
+    custom_prompt = (data.get("prompt") or "").strip()
+
+    brain = _get_igris_brain()
+    if brain is None:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "IGRIS brain unavailable. Check ANTHROPIC_API_KEY.",
+                }
+            ),
+            503,
+        )
+
+    # Default analysis prompt
+    if not custom_prompt:
+        custom_prompt = (
+            f"Perform a full threat assessment of this device for the last {hours} hours.\n\n"
+            "1. Check the threat posture and all active incidents/signals.\n"
+            "2. Query attack-tier security events — focus on HIGH and CRITICAL.\n"
+            "3. Check the kill chain state — are any multi-stage attacks in progress?\n"
+            "4. If anything suspicious, spawn a threat hunter to trace it.\n"
+            "5. Check agent health — are all agents online and reporting?\n\n"
+            "Deliver your verdict: Is this device clean or under threat? "
+            "If clean, say so with confidence. If threatened, explain the full "
+            "attack chain, who is doing what, and what should be done about it."
+        )
+
+    # Build system prompt with live briefing
+    from amoskys.igris.chat import SYSTEM_PROMPT
+
+    chat_instance = _get_igris_chat()
+    if chat_instance:
+        briefing = chat_instance._get_briefing()
+    else:
+        briefing = "System briefing unavailable"
+
+    system = SYSTEM_PROMPT.format(briefing=briefing)
+
+    try:
+        result = brain.reason(prompt=custom_prompt, system=system)
+        return jsonify(
+            {
+                "status": "success",
+                "verdict": result.verdict,
+                "tool_calls_made": result.tool_calls_made,
+                "turns": result.turns,
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+                "duration_ms": result.duration_ms,
+                "cost_usd": round(result.cost_usd, 4),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+    except Exception as e:
+        logger.error("IGRIS analyze error: %s", e, exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @dashboard_bp.route("/api/guardian/execute", methods=["POST"])
