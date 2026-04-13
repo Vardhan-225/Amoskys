@@ -5,6 +5,8 @@ from flask import redirect, render_template, request, url_for
 from ..middleware import get_current_user, require_login
 from . import dashboard_bp
 
+_DEVICES_URL = "/dashboard/devices"
+
 
 @dashboard_bp.route("/")
 @dashboard_bp.route("/devices")
@@ -50,12 +52,17 @@ def setup_complete():
 
 
 @dashboard_bp.route("/cortex")
+@require_login
+def cortex_redirect():
+    """Cortex without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/cortex")
 @require_login
-def cortex_dashboard(device_id=None):
-    """AMOSKYS Cortex Dashboard - Advanced View (power users)"""
+def cortex_dashboard(device_id):
+    """AMOSKYS Cortex Dashboard — scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/cortex.html", user=user, device_id=device_id)
 
 
@@ -100,22 +107,32 @@ def system_monitoring():
 
 
 @dashboard_bp.route("/processes")
+@require_login
+def processes_redirect():
+    """Processes without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/processes")
 @require_login
-def process_telemetry(device_id=None):
-    """Process Telemetry Dashboard - Mac Process Monitoring"""
+def process_telemetry(device_id):
+    """Process Telemetry — scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/processes.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/peripherals")
+@require_login
+def peripherals_redirect():
+    """Peripherals without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/peripherals")
 @require_login
-def peripheral_monitoring(device_id=None):
-    """Peripheral Monitoring Dashboard - USB/Bluetooth Device Tracking"""
+def peripheral_monitoring(device_id):
+    """Peripheral Monitoring — scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/peripherals.html", user=user, device_id=device_id)
 
 
@@ -191,12 +208,17 @@ def soma_brain_dashboard():
 
 
 @dashboard_bp.route("/network")
+@require_login
+def network_redirect():
+    """Network without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/network")
 @require_login
-def network_topology(device_id=None):
-    """Network Topology Map"""
+def network_topology(device_id):
+    """Network Topology Map — scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/network.html", user=user, device_id=device_id)
 
 
@@ -238,72 +260,107 @@ def guardian_dashboard():
 
 
 @dashboard_bp.route("/posture")
+@require_login
+def posture_redirect():
+    """Posture without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/posture")
 @require_login
-def device_posture(device_id=None):
-    """Device Posture — Single-screen device health overview"""
+def device_posture(device_id):
+    """Device Posture — scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/posture.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/dns")
+@require_login
+def dns_redirect():
+    """DNS without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/dns")
 @require_login
-def dns_intelligence(device_id=None):
-    """DNS Intelligence — DGA detection, beaconing, query analysis"""
+def dns_intelligence(device_id):
+    """DNS Intelligence — scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/dns-intelligence.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/file-integrity")
+@require_login
+def file_integrity_redirect():
+    """FIM without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/file-integrity")
 @require_login
-def file_integrity(device_id=None):
-    """File Integrity Monitor — Change tracking and risk analysis"""
+def file_integrity(device_id):
+    """File Integrity Monitor — scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/file-integrity.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/persistence")
+@require_login
+def persistence_redirect():
+    """Persistence without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/persistence")
 @require_login
-def persistence_landscape(device_id=None):
-    """Persistence Landscape — Autostart mechanism monitoring"""
+def persistence_landscape(device_id):
+    """Persistence Landscape — scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/persistence-landscape.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/auth")
+@require_login
+def auth_redirect():
+    """Auth without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/auth")
 @require_login
-def auth_observatory(device_id=None):
-    """Auth & Access — Login patterns and privilege escalation"""
+def auth_observatory(device_id):
+    """Auth & Access — scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/auth-observatory.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/timeline-replay")
+@require_login
+def timeline_redirect():
+    """Timeline without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/timeline-replay")
 @require_login
-def timeline_replay(device_id=None):
-    """Threat Timeline Replay — step-by-step attack reconstruction"""
+def timeline_replay(device_id):
+    """Threat Timeline Replay — scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/timeline-replay.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/observations")
+@require_login
+def observations_redirect():
+    """Observations without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/observations")
 @require_login
-def observation_domains(device_id=None):
-    """Observation Domains — P3 domain exploration"""
+def observation_domains(device_id):
+    """Observation Domains — scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/observations.html", user=user, device_id=device_id)
 
 
@@ -319,12 +376,17 @@ def threats_consolidated():
 
 
 @dashboard_bp.route("/observatory")
+@require_login
+def observatory_redirect():
+    """Observatory without device context — redirect to device list."""
+    return redirect(_DEVICES_URL)
+
+
 @dashboard_bp.route("/device/<device_id>/observatory")
 @require_login
-def observatory_consolidated(device_id=None):
-    """Observatory — All domain monitoring in one tabbed view"""
+def observatory_consolidated(device_id):
+    """Observatory — All domain monitoring scoped to a single device."""
     user = get_current_user()
-    device_id = device_id or request.args.get("device_id", "")
     return render_template("dashboard/observatory.html", user=user, device_id=device_id)
 
 
