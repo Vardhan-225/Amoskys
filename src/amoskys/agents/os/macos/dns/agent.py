@@ -79,7 +79,10 @@ class MacOSDNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
             queue_adapter=queue_adapter,
         )
 
-        self.collector = MacOSDNSCollector(device_id=device_id)
+        self.collector = MacOSDNSCollector(
+            device_id=device_id,
+            log_window=int(collection_interval) + 2,  # match interval + 2s overlap
+        )
         self.register_probes(create_dns_probes())
 
         logger.info(

@@ -8,13 +8,12 @@ Runs all collection sources in a single process:
     - CriticalFileWatcher (kqueue VNODE on 10 critical files)
     - ProcessLifecycleCollector (kqueue process exit events)
 
-  Snapshot (polling at per-agent intervals):
-    - ProcessAgent (10s)    - NetworkAgent (10s)
-    - AuthAgent (30s)       - PersistenceAgent (60s)
-    - FilesystemAgent (60s) - PeripheralAgent (60s)
-    - DNSAgent (30s)        - InfostealerGuardAgent (30s)
-    - DiscoveryAgent (60s)  - ProvenanceAgent (15s)
-    + 10 more Observatory agents
+  Snapshot (polling at benchmark-optimized intervals):
+    Tier 1 (5s):  ProcessAgent, NetworkAgent
+    Tier 1b (10s): AuthAgent, DNSAgent
+    Tier 2 (10s): InfostealerGuard, QuarantineGuard, Provenance, NetSentinel
+    Tier 3 (30s): AppLog, InternetActivity, HTTPInspector, ProtocolCollectors
+    Tier 4 (60s): Filesystem, Persistence, Peripheral, Discovery, DBActivity
 
 All events flow to per-agent WAL queues → Analyzer (Tier 2) reads them.
 
@@ -143,79 +142,62 @@ def _load_agents() -> List[Dict[str, Any]]:
         2.0,
     )
 
-    # ── Core Observatory agents ──
+    # ── TIER 1: Critical Fast (5s) — process, network ──
+    # Benchmark: psutil=32ms, lsof=29ms → 5s gives 100x headroom
     _try_load(
         "amoskys.agents.os.macos.process.agent",
         "MacOSProcessAgent",
         "proc",
-        10.0,
+        5.0,  # [10→5] Every process spawn visible in 5s
     )
     _try_load(
         "amoskys.agents.os.macos.network.agent",
         "MacOSNetworkAgent",
         "flow",
-        10.0,
+        5.0,  # [10→5] C2 connections caught in 5s
     )
+
+    # ── TIER 1b: Critical (10s) — auth, dns (log show costs ~680ms) ──
     _try_load(
         "amoskys.agents.os.macos.auth.agent",
         "MacOSAuthAgent",
         "auth",
-        30.0,
-    )
-    _try_load(
-        "amoskys.agents.os.macos.persistence.agent",
-        "MacOSPersistenceAgent",
-        "persistence",
-        60.0,
-    )
-    _try_load(
-        "amoskys.agents.os.macos.filesystem.agent",
-        "MacOSFileAgent",
-        "fim",
-        60.0,
-    )
-    _try_load(
-        "amoskys.agents.os.macos.peripheral.agent",
-        "MacOSPeripheralAgent",
-        "peripheral",
-        60.0,
+        10.0,  # [30→10] Auth events within 10s
     )
     _try_load(
         "amoskys.agents.os.macos.dns.agent",
         "MacOSDNSAgent",
         "dns",
-        30.0,
+        10.0,  # [30→10] DNS beaconing caught in 10s
     )
 
-    # ── Shield agents ──
+    # ── TIER 2: Threat Response (10s) — shield + correlation ──
     _try_load(
         "amoskys.agents.os.macos.infostealer_guard.agent",
         "MacOSInfostealerGuardAgent",
         "infostealer_guard",
-        30.0,
+        10.0,  # [30→10] Credential theft caught in 10s
     )
     _try_load(
         "amoskys.agents.os.macos.quarantine_guard.agent",
         "MacOSQuarantineGuardAgent",
         "quarantine_guard",
-        30.0,
+        10.0,  # [30→10] ClickFix caught in 10s
     )
     _try_load(
         "amoskys.agents.os.macos.provenance.agent",
         "MacOSProvenanceAgent",
         "provenance",
-        15.0,
+        10.0,  # [15→10] Kill chain tracking
     )
-
-    # ── Discovery (slower interval due to Bonjour timeout) ──
     _try_load(
-        "amoskys.agents.os.macos.discovery.agent",
-        "MacOSDiscoveryAgent",
-        "discovery",
-        60.0,
+        "amoskys.agents.os.macos.network_sentinel.agent",
+        "NetworkSentinelAgent",
+        "network_sentinel",
+        10.0,  # [15→10] HTTP attacks caught in 10s
     )
 
-    # ── Extended Observatory agents ──
+    # ── TIER 3: Monitoring (30s) — extended observatory ──
     _try_load(
         "amoskys.agents.os.macos.applog.agent",
         "MacOSAppLogAgent",
@@ -229,28 +211,48 @@ def _load_agents() -> List[Dict[str, Any]]:
         30.0,
     )
     _try_load(
-        "amoskys.agents.os.macos.db_activity.agent",
-        "MacOSDBActivityAgent",
-        "db_activity",
-        60.0,
-    )
-    _try_load(
         "amoskys.agents.os.macos.http_inspector.agent",
         "MacOSHTTPInspectorAgent",
         "http_inspector",
         30.0,
     )
     _try_load(
-        "amoskys.agents.os.macos.network_sentinel.agent",
-        "NetworkSentinelAgent",
-        "network_sentinel",
-        15.0,
-    )
-    _try_load(
         "amoskys.agents.os.macos.protocol_collectors.protocol_collectors",
         "ProtocolCollectorsAgent",
         "protocol_collectors",
         30.0,
+    )
+
+    # ── TIER 4: Baseline (60s) — expensive or low-urgency ──
+    _try_load(
+        "amoskys.agents.os.macos.filesystem.agent",
+        "MacOSFileAgent",
+        "fim",
+        60.0,  # SHA256 hashing is CPU-bound
+    )
+    _try_load(
+        "amoskys.agents.os.macos.persistence.agent",
+        "MacOSPersistenceAgent",
+        "persistence",
+        60.0,  # LaunchAgent changes are rare
+    )
+    _try_load(
+        "amoskys.agents.os.macos.peripheral.agent",
+        "MacOSPeripheralAgent",
+        "peripheral",
+        60.0,  # USB events are rare
+    )
+    _try_load(
+        "amoskys.agents.os.macos.discovery.agent",
+        "MacOSDiscoveryAgent",
+        "discovery",
+        60.0,  # arp -a takes 5s (!) — keep at 60s
+    )
+    _try_load(
+        "amoskys.agents.os.macos.db_activity.agent",
+        "MacOSDBActivityAgent",
+        "db_activity",
+        60.0,
     )
 
     return agents
@@ -412,9 +414,29 @@ def main() -> int:
     return 0
 
 
+def _get_data_dir() -> Path:
+    """Resolve the data directory.
+
+    Priority:
+      1. AMOSKYS_DATA_DIR env var (explicit override)
+      2. CWD/data (production: launchd sets CWD=/var/lib/amoskys)
+      3. Source-relative: <project>/data (dev fallback)
+    """
+    env_dir = os.environ.get("AMOSKYS_DATA_DIR")
+    if env_dir:
+        return Path(env_dir)
+    cwd_data = Path("data")
+    if cwd_data.is_dir():
+        return cwd_data
+    return Path(__file__).resolve().parents[2] / "data"
+
+
+_DATA_DIR = _get_data_dir()
+
+
 def _write_heartbeat(device_id: str, total_cycles: int, running: int, total: int):
     """Write heartbeat file for watchdog liveness check."""
-    heartbeat_dir = Path("data/heartbeats")
+    heartbeat_dir = _DATA_DIR / "heartbeats"
     heartbeat_dir.mkdir(parents=True, exist_ok=True)
     heartbeat = {
         "agent": "collector",
@@ -427,8 +449,8 @@ def _write_heartbeat(device_id: str, total_cycles: int, running: int, total: int
     }
     try:
         (heartbeat_dir / "collector.json").write_text(json.dumps(heartbeat))
-    except OSError:
-        pass
+    except OSError as e:
+        logger.warning("Failed to write collector heartbeat: %s", e)
 
 
 def _write_agent_heartbeats(agent_threads: list, device_id: str) -> None:
@@ -438,7 +460,7 @@ def _write_agent_heartbeats(agent_threads: list, device_id: str) -> None:
     reports 16/18 agents as 'offline' even though they're all running
     inside the collector process.
     """
-    heartbeat_dir = Path("data/heartbeats")
+    heartbeat_dir = _DATA_DIR / "heartbeats"
     now = time.time()
     for at in agent_threads:
         alive = at.thread and at.thread.is_alive()
@@ -453,8 +475,8 @@ def _write_agent_heartbeats(agent_threads: list, device_id: str) -> None:
         }
         try:
             (heartbeat_dir / f"{at.agent_name}.json").write_text(json.dumps(hb))
-        except OSError:
-            pass
+        except OSError as e:
+            logger.warning("Failed to write heartbeat for %s: %s", at.agent_name, e)
 
 
 if __name__ == "__main__":
