@@ -3,7 +3,7 @@
 Two modes:
   1. Local mode (agent running on this machine): reads data/telemetry.db directly
   2. Fleet mode (presentation server): syncs data from ops server into a local
-     cache DB, then TelemetryStore reads from that cache
+     cache DB, then TelemetryStore reads from that cache in readonly mode
 
 The bridge auto-detects which mode to use:
   - If data/telemetry.db exists → local mode (agent is running here)
@@ -12,7 +12,6 @@ The bridge auto-detects which mode to use:
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import sqlite3
@@ -27,6 +26,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _telemetry_store: Optional["TelemetryStore"] = None
+_store_lock = threading.Lock()
 _sync_started = False
 
 # Resolve paths
@@ -36,63 +36,60 @@ _CACHE_DB_PATH = _DATA_DIR / "fleet_cache.db"
 _OPS_SERVER = os.getenv("AMOSKYS_OPS_SERVER", "").rstrip("/")
 
 
-def _auto_start_fleet_sync():
-    """Start fleet sync at import time if ops server is configured."""
-    global _sync_started
-    if _OPS_SERVER and not _sync_started:
-        _sync_started = True
-        _start_fleet_sync()
-        logger.info("Fleet sync auto-started for %s", _OPS_SERVER)
-
-
-# Auto-start on import (runs when dashboard blueprint loads)
-import threading as _t
-_t.Timer(5.0, _auto_start_fleet_sync).start()
-
-
 def get_telemetry_store() -> Optional["TelemetryStore"]:
     """Get or create a TelemetryStore instance.
 
     Auto-detects local vs fleet mode:
       - Local: agent telemetry.db exists → use directly
-      - Fleet: ops server configured → sync from ops into cache DB
+      - Fleet: ops server configured → sync from ops into cache DB (readonly)
     """
     global _telemetry_store, _sync_started
 
+    # Fast path: already initialised
     if _telemetry_store is not None:
         return _telemetry_store
 
-    # Mode 1: Local telemetry.db (agent running on this machine)
-    if _DB_PATH.exists():
-        try:
-            from amoskys.storage.telemetry_store import TelemetryStore
-
-            _telemetry_store = TelemetryStore(db_path=str(_DB_PATH))
-            logger.info("Telemetry bridge: LOCAL mode (%s)", _DB_PATH)
+    with _store_lock:
+        # Double-check under lock
+        if _telemetry_store is not None:
             return _telemetry_store
-        except Exception:
-            logger.exception("Failed to initialize local TelemetryStore")
 
-    # Mode 2: Fleet mode — sync from ops server
-    if _OPS_SERVER and not _sync_started:
-        _sync_started = True
-        # Run first sync immediately (blocking) so data is available right away
-        try:
-            _sync_from_ops()
-        except Exception:
-            pass
-        _start_fleet_sync()
+        # Mode 1: Local telemetry.db (agent running on this machine)
+        if _DB_PATH.exists():
+            try:
+                from amoskys.storage.telemetry_store import TelemetryStore
 
-    # Try the cache DB (populated by fleet sync)
-    if _CACHE_DB_PATH.exists():
-        try:
-            from amoskys.storage.telemetry_store import TelemetryStore
+                _telemetry_store = TelemetryStore(db_path=str(_DB_PATH))
+                logger.info("Telemetry bridge: LOCAL mode (%s)", _DB_PATH)
+                return _telemetry_store
+            except Exception:
+                logger.exception("Failed to initialize local TelemetryStore")
 
-            _telemetry_store = TelemetryStore(db_path=str(_CACHE_DB_PATH))
-            logger.info("Telemetry bridge: FLEET mode (cache=%s)", _CACHE_DB_PATH)
-            return _telemetry_store
-        except Exception:
-            logger.exception("Failed to initialize fleet cache TelemetryStore")
+        # Mode 2: Fleet mode — sync from ops server
+        if _OPS_SERVER:
+            # First sync: blocking, so data is available on first request
+            if not _sync_started:
+                _sync_started = True
+                try:
+                    _sync_from_ops()
+                except Exception:
+                    logger.warning("Initial fleet sync failed", exc_info=True)
+                _start_fleet_sync()
+
+            # Try the cache DB (populated by fleet sync)
+            if _CACHE_DB_PATH.exists():
+                try:
+                    from amoskys.storage.telemetry_store import TelemetryStore
+
+                    _telemetry_store = TelemetryStore(
+                        db_path=str(_CACHE_DB_PATH), readonly=True
+                    )
+                    logger.info(
+                        "Telemetry bridge: FLEET mode (cache=%s)", _CACHE_DB_PATH
+                    )
+                    return _telemetry_store
+                except Exception:
+                    logger.exception("Failed to initialize fleet cache TelemetryStore")
 
     logger.debug("Telemetry bridge: no data source available")
     return None
@@ -103,11 +100,11 @@ def _start_fleet_sync():
     def sync_loop():
         logger.info("Fleet sync started: %s → %s", _OPS_SERVER, _CACHE_DB_PATH)
         while True:
+            time.sleep(60)  # Sync every 60 seconds
             try:
                 _sync_from_ops()
             except Exception as e:
                 logger.warning("Fleet sync error: %s", e)
-            time.sleep(60)  # Sync every 60 seconds
 
     t = threading.Thread(target=sync_loop, name="fleet-sync", daemon=True)
     t.start()
@@ -117,7 +114,7 @@ def _sync_from_ops():
     """Fetch event tables from ops server and REPLACE local cache.
 
     Uses truncate-and-replace strategy to prevent unbounded growth.
-    Each sync replaces the cache with the latest 1000 rows per table.
+    Each sync replaces the cache with the latest events within the time window.
     """
     import requests
 
@@ -132,6 +129,7 @@ def _sync_from_ops():
             verify=False,
         )
         if resp.status_code != 200:
+            logger.debug("Fleet sync: ops returned %d", resp.status_code)
             return
         bulk = resp.json()
     except Exception as e:
@@ -176,8 +174,18 @@ def _sync_from_ops():
     db.close()
 
     if total > 0:
+        # Invalidate cached store so next request picks up fresh data
         global _telemetry_store
-        _telemetry_store = None
+        with _store_lock:
+            old = _telemetry_store
+            _telemetry_store = None
+            # Close old store's connections gracefully
+            if old is not None:
+                try:
+                    old._read_pool.close()
+                    old.db.close()
+                except Exception:
+                    pass
         logger.info("Fleet sync: %d total rows synced across %d tables", total, len(bulk))
 
 
@@ -254,6 +262,30 @@ def _create_minimal_schema(db: sqlite3.Connection):
                 id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ns INTEGER, timestamp_dt TEXT,
                 device_id TEXT, mechanism TEXT, path TEXT, change_type TEXT,
                 label TEXT, sha256 TEXT, risk_score REAL, collection_agent TEXT
+            )""",
+        "audit_events": """
+            CREATE TABLE IF NOT EXISTS audit_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ns INTEGER, timestamp_dt TEXT,
+                device_id TEXT, event_type TEXT, username TEXT, process_name TEXT,
+                risk_score REAL, collection_agent TEXT, description TEXT
+            )""",
+        "fim_events": """
+            CREATE TABLE IF NOT EXISTS fim_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ns INTEGER, timestamp_dt TEXT,
+                device_id TEXT, path TEXT, change_type TEXT, risk_score REAL,
+                old_hash TEXT, new_hash TEXT, collection_agent TEXT
+            )""",
+        "peripheral_events": """
+            CREATE TABLE IF NOT EXISTS peripheral_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ns INTEGER, timestamp_dt TEXT,
+                device_id TEXT, device_type TEXT, vendor TEXT, product TEXT,
+                serial TEXT, action TEXT, risk_score REAL, collection_agent TEXT
+            )""",
+        "observation_events": """
+            CREATE TABLE IF NOT EXISTS observation_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp_ns INTEGER, timestamp_dt TEXT,
+                device_id TEXT, domain TEXT, observation_type TEXT, summary TEXT,
+                risk_score REAL, collection_agent TEXT
             )""",
         "dashboard_rollups": """
             CREATE TABLE IF NOT EXISTS dashboard_rollups (

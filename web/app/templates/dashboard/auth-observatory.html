@@ -360,6 +360,8 @@
    ──────────────────────────────────────────────────────────────── */
 
 const HOURS = 24;
+const _deviceId = '{{ device_id|default("", true) }}';
+const _devQ = _deviceId ? '&device_id=' + encodeURIComponent(_deviceId) : '';
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 function fmt(n) {
@@ -476,9 +478,9 @@ var timelineChartInstance = null;
 async function loadAuthData() {
     try {
         var [stats, highRisk, recentData] = await Promise.all([
-            DashboardCache.fetch('/dashboard/api/audit/stats?hours=' + HOURS, 25),
-            DashboardCache.fetch('/dashboard/api/audit/high-risk?hours=' + HOURS + '&limit=100', 30),
-            DashboardCache.fetch('/dashboard/api/audit/recent?hours=' + HOURS + '&limit=500&search=', 30),
+            DashboardCache.fetch('/dashboard/api/audit/stats?hours=' + HOURS + _devQ, 25),
+            DashboardCache.fetch('/dashboard/api/audit/high-risk?hours=' + HOURS + '&limit=100' + _devQ, 30),
+            DashboardCache.fetch('/dashboard/api/audit/recent?hours=' + HOURS + '&limit=500&search=' + _devQ, 30),
         ]);
         var recentEvents = recentData.results || recentData || [];
 

@@ -571,6 +571,9 @@
 
 {% block extra_scripts %}
 <script nonce="{{ csp_nonce() }}">
+const _deviceId = '{{ device_id|default("", true) }}';
+const _devQ = _deviceId ? '&device_id=' + encodeURIComponent(_deviceId) : '';
+
 class PersistenceDashboard {
     constructor() {
         this.updateInterval = 8000;
@@ -702,7 +705,7 @@ class PersistenceDashboard {
 
     async loadStats() {
         try {
-            const data = await DashboardCache.fetch(`/dashboard/api/persistence/stats?hours=${this.timeWindow}`, 25);
+            const data = await DashboardCache.fetch(`/dashboard/api/persistence/stats?hours=${this.timeWindow}` + _devQ, 25);
 
             // Update total entries
             const totalEntries = data.total_entries || 0;
@@ -821,7 +824,7 @@ class PersistenceDashboard {
     async loadInventory() {
         try {
             document.getElementById('inventory-loading').style.display = 'inline-block';
-            const data = await DashboardCache.fetch(`/dashboard/api/persistence/inventory?limit=200`, 30);
+            const data = await DashboardCache.fetch(`/dashboard/api/persistence/inventory?limit=200` + _devQ, 30);
             this.inventoryData = data.entries || data.inventory || [];
             this.currentPage = 1;
             this.renderInventory();
@@ -976,7 +979,7 @@ class PersistenceDashboard {
 
     async loadChanges() {
         try {
-            const data = await DashboardCache.fetch(`/dashboard/api/persistence/changes?hours=${this.timelineHours}`, 30);
+            const data = await DashboardCache.fetch(`/dashboard/api/persistence/changes?hours=${this.timelineHours}` + _devQ, 30);
 
             const buckets = data.buckets || data.timeline || [];
             const mechanismSet = new Set();

@@ -367,6 +367,9 @@
 (function() {
     'use strict';
 
+    const _deviceId = '{{ device_id|default("", true) }}';
+    const _devQ = _deviceId ? '&device_id=' + encodeURIComponent(_deviceId) : '';
+
     let allDestinations = [];
     let geoPointsCache = [];
     let processLoaded = false;
@@ -410,7 +413,7 @@
 
     /* ── Device location + name ── */
 
-    fetch('/dashboard/api/network/device-location')
+    fetch('/dashboard/api/network/device-location?' + (_devQ ? _devQ.substring(1) : ''))
         .then(r => r.json())
         .then(d => {
             if (d.lat && d.lon) {
@@ -823,7 +826,7 @@
     async function loadTopDestinations() {
         if (destinationsLoaded) return;
         try {
-            const d = await DashboardCache.fetch(`/dashboard/api/network/top-destinations?hours=${selectedHours}&limit=100`, 55);
+            const d = await DashboardCache.fetch(`/dashboard/api/network/top-destinations?hours=${selectedHours}&limit=100` + _devQ, 55);
             allDestinations = Array.isArray(d) ? d : (d.destinations || []);
             renderDestinations(allDestinations);
             renderSuspicious(allDestinations);
@@ -889,7 +892,7 @@
     async function loadByProcess() {
         if (processLoaded) return;
         try {
-            const d = await DashboardCache.fetch(`/dashboard/api/network/by-process?hours=${selectedHours}`, 55);
+            const d = await DashboardCache.fetch(`/dashboard/api/network/by-process?hours=${selectedHours}` + _devQ, 55);
             const procs = Array.isArray(d) ? d : (d.processes || []);
             const container = document.getElementById('process-bars');
             if (procs.length === 0) {
@@ -945,10 +948,10 @@
 
     function buildPollerConfigs(hours) {
         return [
-            { url: `/dashboard/api/network/stats?hours=${hours}`, callback: onStats, priority: 'high', ttl: 25 },
-            { url: `/dashboard/api/network/geo?hours=${hours}`, callback: onGeo, priority: 'low', ttl: 55 },
-            { url: `/dashboard/api/network/asn?hours=${hours}`, callback: onAsn, priority: 'low', ttl: 55 },
-            { url: `/dashboard/api/network/geo-points?hours=${hours}&limit=500`, callback: onGeoPoints, priority: 'low', ttl: 55 },
+            { url: `/dashboard/api/network/stats?hours=${hours}` + _devQ, callback: onStats, priority: 'high', ttl: 25 },
+            { url: `/dashboard/api/network/geo?hours=${hours}` + _devQ, callback: onGeo, priority: 'low', ttl: 55 },
+            { url: `/dashboard/api/network/asn?hours=${hours}` + _devQ, callback: onAsn, priority: 'low', ttl: 55 },
+            { url: `/dashboard/api/network/geo-points?hours=${hours}&limit=500` + _devQ, callback: onGeoPoints, priority: 'low', ttl: 55 },
         ];
     }
 

@@ -504,17 +504,19 @@
 
 const HOURS = 24;
 const PAGE_SIZE = 15;
+const _deviceId = '{{ device_id|default("", true) }}';
+const _devQ = _deviceId ? '&device_id=' + encodeURIComponent(_deviceId) : '';
 let allDomains = [];
 let filteredDomains = [];
 let currentPage = 0;
 
 /* ── API URLs ────────────────────────────────────────────────── */
 const API = {
-    stats:      `/dashboard/api/dns/stats?hours=${HOURS}`,
-    dga:        `/dashboard/api/dns/dga?hours=${HOURS}&min_score=0.5&limit=50`,
-    beaconing:  `/dashboard/api/dns/beaconing?hours=${HOURS}&limit=50`,
-    timeline:   `/dashboard/api/dns/timeline?hours=${HOURS}`,
-    topDomains: `/dashboard/api/dns/top-domains?hours=${HOURS}&limit=20`,
+    stats:      `/dashboard/api/dns/stats?hours=${HOURS}` + _devQ,
+    dga:        `/dashboard/api/dns/dga?hours=${HOURS}&min_score=0.5&limit=50` + _devQ,
+    beaconing:  `/dashboard/api/dns/beaconing?hours=${HOURS}&limit=50` + _devQ,
+    timeline:   `/dashboard/api/dns/timeline?hours=${HOURS}` + _devQ,
+    topDomains: `/dashboard/api/dns/top-domains?hours=${HOURS}&limit=20` + _devQ,
 };
 
 /* ── helpers — delegating to dashboard-core.js shared utilities ─ */

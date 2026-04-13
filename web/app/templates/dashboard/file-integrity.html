@@ -529,6 +529,9 @@
 (function () {
     'use strict';
 
+    const _deviceId = '{{ device_id|default("", true) }}';
+    const _devQ = _deviceId ? '&device_id=' + encodeURIComponent(_deviceId) : '';
+
     // ── State ──────────────────────────────────────────────────────────
     let timelineChart  = null;
     let extensionChart = null;
@@ -609,7 +612,7 @@
     /** Build a cached API URL with query params */
     function apiUrl(endpoint, params) {
         const qs = new URLSearchParams(params).toString();
-        return '/dashboard/api/fim/' + endpoint + '?' + qs;
+        return '/dashboard/api/fim/' + endpoint + '?' + qs + _devQ;
     }
 
     function escHtml(str) {

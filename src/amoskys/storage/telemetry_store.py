@@ -47,13 +47,37 @@ class TelemetryStore(
 ):
     """Permanent storage for processed telemetry data"""
 
-    def __init__(self, db_path: str = "data/telemetry.db"):
+    def __init__(self, db_path: str = "data/telemetry.db", readonly: bool = False):
         """Initialize telemetry store with schema
 
         Args:
             db_path: Path to SQLite database file
+            readonly: If True, open in lightweight read-only mode.
+                      Skips integrity check, schema creation, migrations,
+                      and baselines.  Used by fleet_cache on the
+                      presentation server where the sync thread owns writes.
         """
         self.db_path = db_path
+
+        if readonly:
+            # Lightweight init — fleet_cache / read-only dashboard mode
+            self.db = sqlite3.connect(
+                db_path, check_same_thread=False, timeout=5.0
+            )
+            self.db.row_factory = sqlite3.Row
+            self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.execute("PRAGMA query_only=ON")
+            self.db.execute("PRAGMA temp_store=MEMORY")
+            self.db.execute("PRAGMA mmap_size=268435456")
+            self.db.execute("PRAGMA busy_timeout=5000")
+            self._lock = threading.Lock()
+            self._read_pool = _ReadPool(db_path, size=4)
+            self._batch_mode = False
+            self._batch_count = 0
+            self._reliability = None
+            self._cache = _TTLCache(ttl_seconds=5.0)
+            logger.info("TelemetryStore READONLY at %s", db_path)
+            return
 
         # Create parent directory
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -127,6 +151,16 @@ class TelemetryStore(
                 exc_info=True,
             )
         self._migrate_convergence_schema()
+
+        # Self-heal snapshot dedup baselines — ensures dedup works even
+        # after DB rebuild or if migration 013 seeding missed new entries.
+        try:
+            stats = self.populate_baselines()
+            seeded = sum(stats.values())
+            if seeded > 0:
+                logger.info("Seeded %d snapshot dedup baselines: %s", seeded, stats)
+        except Exception:
+            logger.debug("Baseline population skipped", exc_info=True)
 
         logger.info(f"Initialized TelemetryStore at {db_path}")
 

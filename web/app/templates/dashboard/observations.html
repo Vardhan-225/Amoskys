@@ -148,6 +148,9 @@
 </div>
 
 <script nonce="{{ csp_nonce() }}">
+const _deviceId = '{{ device_id|default("", true) }}';
+const _devQ = _deviceId ? '&device_id=' + encodeURIComponent(_deviceId) : '';
+
 const DOMAIN_COLORS = {
     unified_log: '#a855f7', discovery: '#06b6d4', internet_activity: '#f97316',
     db_activity: '#00ff88', security_monitor: '#ff3366', http: '#ffaa00',
@@ -161,7 +164,7 @@ let activityChart = null;
 
 async function loadStats() {
     try {
-        const data = await DashboardCache.fetch('/dashboard/api/observations/stats?hours=24', 25);
+        const data = await DashboardCache.fetch('/dashboard/api/observations/stats?hours=24' + _devQ, 25);
         domainStats = data.by_domain || {};
         renderTabs(data);
         renderStatsCards(data);
@@ -211,12 +214,12 @@ async function loadObservations() {
     try {
         let url;
         if (search) {
-            url = `/dashboard/api/observations/search?query=${encodeURIComponent(search)}&hours=24&limit=${PAGE_SIZE}`;
+            url = `/dashboard/api/observations/search?query=${encodeURIComponent(search)}&hours=24&limit=${PAGE_SIZE}` + _devQ;
             if (currentDomain) url += `&domain=${currentDomain}`;
         } else if (currentDomain) {
-            url = `/dashboard/api/observations/${currentDomain}?hours=24&limit=${PAGE_SIZE}&offset=${currentOffset}`;
+            url = `/dashboard/api/observations/${currentDomain}?hours=24&limit=${PAGE_SIZE}&offset=${currentOffset}` + _devQ;
         } else {
-            url = `/dashboard/api/observations/search?hours=24&limit=${PAGE_SIZE}`;
+            url = `/dashboard/api/observations/search?hours=24&limit=${PAGE_SIZE}` + _devQ;
         }
         const data = await DashboardCache.fetch(url, 15);
         renderTable(data);

@@ -200,8 +200,10 @@
 
 <script nonce="{{ csp_nonce() }}">
 // ── Constants ────────────────────────────────────────────────────
-const POSTURE_API   = '/dashboard/api/posture/summary?hours=24';
-const TIMELINE_API  = '/dashboard/api/posture/timeline?hours=24&limit=50';
+const _deviceId = '{{ device_id|default("", true) }}';
+const _devQ = _deviceId ? '&device_id=' + encodeURIComponent(_deviceId) : '';
+const POSTURE_API   = '/dashboard/api/posture/summary?hours=24' + _devQ;
+const TIMELINE_API  = '/dashboard/api/posture/timeline?hours=24&limit=50' + _devQ;
 
 const DOMAIN_META = {
     process:      { icon: '\u2699\uFE0F', name: 'Processes',    link: '/dashboard/processes' },

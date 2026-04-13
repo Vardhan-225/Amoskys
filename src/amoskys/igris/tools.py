@@ -20,6 +20,61 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger("igris.tools")
 
 
+def _parse_mitre_cell(raw) -> List[str]:
+    """Parse a single mitre_techniques column value into a clean list of T-IDs.
+
+    Handles every encoding variant found in the wild:
+      - Proper JSON list:   '["T1059","T1078"]'       → ["T1059","T1078"]
+      - Double-encoded:     '"[\\"T1059\\"]"'          → ["T1059"]
+      - Python list repr:   "['T1059']"                → ["T1059"]
+      - Already a list:     ["T1059"]                  → ["T1059"]
+      - None / empty:       None, "", "[]"             → []
+    """
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [t for t in raw if isinstance(t, str) and t.startswith("T")]
+
+    # First parse
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+    # If json.loads returned a string, it was double-encoded — parse again
+    if isinstance(parsed, str):
+        try:
+            parsed = json.loads(parsed)
+        except (json.JSONDecodeError, TypeError):
+            # Bare technique ID
+            return [parsed] if parsed.startswith("T") else []
+
+    if isinstance(parsed, list):
+        return [t for t in parsed if isinstance(t, str) and t.startswith("T")]
+    return []
+
+
+def _parse_grouped_techniques(raw: str) -> List[str]:
+    """Parse MITRE techniques from GROUP_CONCAT(DISTINCT mitre_techniques).
+
+    SQLite GROUP_CONCAT on a column storing JSON arrays like '["T1059","T1078"]'
+    produces strings like '["T1059","T1078"],["T1555"]'.  Naive iteration over
+    this string yields individual characters ('[', '"', 'T', ...).
+
+    This helper extracts actual technique IDs by parsing each JSON fragment.
+    """
+    if not raw:
+        return []
+    techniques: set = set()
+    # Split on '],['  boundary — reconstitute valid JSON arrays
+    for fragment in raw.replace("],[", "]\x00[").split("\x00"):
+        fragment = fragment.strip()
+        if not fragment:
+            continue
+        techniques.update(_parse_mitre_cell(fragment))
+    return sorted(techniques)
+
+
 class IgrisToolkit:
     """33 security tools (22 query + 11 action) backed by AMOSKYS data layer."""
 
@@ -637,11 +692,7 @@ class IgrisToolkit:
             "SELECT mitre_techniques FROM security_events WHERE timestamp_ns > ? AND mitre_techniques IS NOT NULL",
             (cutoff,),
         ):
-            try:
-                for t in json.loads(r["mitre_techniques"]):
-                    techniques.add(t)
-            except (json.JSONDecodeError, TypeError):
-                pass
+            techniques.update(_parse_mitre_cell(r["mitre_techniques"]))
 
         return {
             "device_risk_score": risk.get("score", 0),
@@ -802,7 +853,7 @@ class IgrisToolkit:
             conditions.append("collection_agent = ?")
             params.append(agent)
         where = " AND ".join(conditions)
-        return self._query(
+        rows = self._query(
             self._telemetry_db,
             f"SELECT collection_agent, event_category, COUNT(*) as count, "
             f"AVG(risk_score) as avg_risk, MAX(risk_score) as max_risk, "
@@ -812,6 +863,9 @@ class IgrisToolkit:
             f"ORDER BY count DESC",
             tuple(params),
         )
+        for row in rows:
+            row["techniques"] = _parse_grouped_techniques(row.get("techniques", ""))
+        return rows
 
     # ── 8. MITRE Technique Explain ──
 
@@ -994,17 +1048,14 @@ class IgrisToolkit:
         )
         techniques = {}
         for r in rows:
-            try:
-                for t in json.loads(r["mitre_techniques"]):
-                    techniques.setdefault(t, []).append(
-                        {
-                            "agent": r["collection_agent"],
-                            "category": r["event_category"],
-                            "risk": r["risk_score"],
-                        }
-                    )
-            except (json.JSONDecodeError, TypeError):
-                pass
+            for t in _parse_mitre_cell(r["mitre_techniques"]):
+                techniques.setdefault(t, []).append(
+                    {
+                        "agent": r["collection_agent"],
+                        "category": r["event_category"],
+                        "risk": r["risk_score"],
+                    }
+                )
         return {
             "techniques_observed": len(techniques),
             "technique_details": {
@@ -1029,11 +1080,8 @@ class IgrisToolkit:
         )
         counts: Dict[str, int] = {}
         for r in rows:
-            try:
-                for t in json.loads(r["mitre_techniques"]):
-                    counts[t] = counts.get(t, 0) + 1
-            except (json.JSONDecodeError, TypeError):
-                pass
+            for t in _parse_mitre_cell(r["mitre_techniques"]):
+                counts[t] = counts.get(t, 0) + 1
         return {
             "total_techniques": len(counts),
             "technique_counts": dict(sorted(counts.items(), key=lambda x: -x[1])),
@@ -1084,7 +1132,7 @@ class IgrisToolkit:
 
     def _tool_get_sigma_rule_hits(self, hours: int = 24) -> List[Dict]:
         cutoff = self._cutoff_ns(hours)
-        return self._query(
+        rows = self._query(
             self._telemetry_db,
             "SELECT event_category, collection_agent, COUNT(*) as hit_count, "
             "AVG(risk_score) as avg_risk, "
@@ -1095,6 +1143,11 @@ class IgrisToolkit:
             "ORDER BY hit_count DESC",
             (cutoff,),
         )
+        for row in rows:
+            row["mitre_techniques"] = _parse_grouped_techniques(
+                row.get("mitre_techniques", "")
+            )
+        return rows
 
     # ── 22. Event Timeline ──
 

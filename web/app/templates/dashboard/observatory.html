@@ -31,16 +31,20 @@
 
 <script nonce="{{ csp_nonce() }}">
 (function() {
+    const deviceId = '{{ device_id|default("", true) }}';
+    const devQ = deviceId ? '&device_id=' + encodeURIComponent(deviceId) : '';
+    const basePath = deviceId ? '/dashboard/device/' + deviceId : '/dashboard';
+
     const ROUTES = {
-        posture: '/dashboard/posture?embed=1',
-        processes: '/dashboard/processes?embed=1',
-        network: '/dashboard/network?embed=1',
-        dns: '/dashboard/dns?embed=1',
-        fim: '/dashboard/file-integrity?embed=1',
-        persistence: '/dashboard/persistence?embed=1',
-        auth: '/dashboard/auth?embed=1',
-        peripherals: '/dashboard/peripherals?embed=1',
-        observations: '/dashboard/observations?embed=1',
+        posture:      basePath + '/posture?embed=1' + devQ,
+        processes:    basePath + '/processes?embed=1' + devQ,
+        network:      basePath + '/network?embed=1' + devQ,
+        dns:          basePath + '/dns?embed=1' + devQ,
+        fim:          basePath + '/file-integrity?embed=1' + devQ,
+        persistence:  basePath + '/persistence?embed=1' + devQ,
+        auth:         basePath + '/auth?embed=1' + devQ,
+        peripherals:  basePath + '/peripherals?embed=1' + devQ,
+        observations: basePath + '/observations?embed=1' + devQ,
     };
     const frame = document.getElementById('tab-frame');
     const spinner = document.getElementById('tab-spinner');
@@ -52,7 +56,7 @@
 
         // Network has Leaflet maps that break inside iframes — navigate directly
         if (tab === 'network') {
-            window.location.href = '/dashboard/network';
+            window.location.href = basePath + '/network';
             return;
         }
 
@@ -61,7 +65,10 @@
         spinner.classList.remove('hidden');
         frame.onload = function() { spinner.classList.add('hidden'); };
         frame.src = ROUTES[tab];
-        history.replaceState(null, '', '/dashboard/observatory#' + tab);
+        const obsPath = deviceId
+            ? '/dashboard/device/' + deviceId + '/observatory#' + tab
+            : '/dashboard/observatory#' + tab;
+        history.replaceState(null, '', obsPath);
     }
 
     tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));

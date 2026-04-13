@@ -302,6 +302,14 @@ class SecurityMixin:
                     ind["sigma_rule_title"] = best.rule_title
                     ind["sigma_level"] = best.level
                     event_data["indicators"] = ind
+                    # Merge sigma MITRE techniques into event
+                    if best.mitre_techniques:
+                        existing = set(event_data.get("mitre_techniques") or [])
+                        merged = list(existing)
+                        for t in best.mitre_techniques:
+                            if t not in existing:
+                                merged.append(t)
+                        event_data["mitre_techniques"] = merged
             except Exception:
                 logger.debug("Sigma evaluation failed", exc_info=True)
 

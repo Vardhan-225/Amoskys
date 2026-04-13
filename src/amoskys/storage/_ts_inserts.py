@@ -12,6 +12,24 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger("TelemetryStore")
 
 
+def _serialize_mitre(value) -> str:
+    """Safely serialize mitre_techniques for SQLite storage.
+
+    Prevents double-encoding: if value is already a JSON string, return it
+    as-is. If it's a list, json.dumps it once. Handles all legacy formats.
+    """
+    if isinstance(value, str):
+        # Already serialized — validate it's valid JSON, return as-is
+        try:
+            json.loads(value)
+            return value
+        except (json.JSONDecodeError, TypeError):
+            return "[]"
+    if isinstance(value, (list, tuple)):
+        return json.dumps(value)
+    return "[]"
+
+
 class InsertMixin:
     """All insert/upsert methods for domain event tables."""
 
@@ -291,7 +309,7 @@ class InsertMixin:
                     event_data.get("event_outcome"),
                     event_data.get("risk_score", 0.0),
                     event_data.get("confidence", 0.0),
-                    json.dumps(event_data.get("mitre_techniques", [])),
+                    _serialize_mitre(event_data.get("mitre_techniques", [])),
                     event_data.get("geometric_score", 0.0),
                     event_data.get("temporal_score", 0.0),
                     event_data.get("behavioral_score", 0.0),
@@ -568,7 +586,7 @@ class InsertMixin:
                     event_data.get("is_tunneling", False),
                     event_data.get("risk_score", 0.0),
                     event_data.get("confidence", 0.0),
-                    json.dumps(event_data.get("mitre_techniques", [])),
+                    _serialize_mitre(event_data.get("mitre_techniques", [])),
                     event_data.get("collection_agent"),
                     event_data.get("agent_version"),
                     (
@@ -664,7 +682,7 @@ class InsertMixin:
                     event_data.get("target_comm"),
                     event_data.get("risk_score", 0.0),
                     event_data.get("confidence", 0.0),
-                    json.dumps(event_data.get("mitre_techniques", [])),
+                    _serialize_mitre(event_data.get("mitre_techniques", [])),
                     event_data.get("reason"),
                     event_data.get("source_ip"),
                     event_data.get("username"),
@@ -742,7 +760,7 @@ class InsertMixin:
                     event_data.get("new_command"),
                     event_data.get("risk_score", 0.0),
                     event_data.get("confidence", 0.0),
-                    json.dumps(event_data.get("mitre_techniques", [])),
+                    _serialize_mitre(event_data.get("mitre_techniques", [])),
                     event_data.get("reason"),
                     event_data.get("collection_agent"),
                     event_data.get("agent_version"),
@@ -818,7 +836,7 @@ class InsertMixin:
                     size,
                     event_data.get("risk_score", 0.0),
                     event_data.get("confidence", 0.0),
-                    json.dumps(event_data.get("mitre_techniques", [])),
+                    _serialize_mitre(event_data.get("mitre_techniques", [])),
                     event_data.get("reason"),
                     json.dumps(event_data.get("patterns_matched", [])),
                     event_data.get("collection_agent"),

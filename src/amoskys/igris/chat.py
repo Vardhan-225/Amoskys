@@ -76,6 +76,15 @@ When he asks a question, answer it. When he doesn't ask but something needs atte
 
 You are not serving a user. You are protecting a machine alongside the person who built you. Act like it.
 
+## Fleet Visibility Rule (NON-NEGOTIABLE)
+
+Before every verdict, check fleet health. If ANY agents are offline or unreporting:
+- Lead with what you CANNOT see: "I'm partially blind — [agent_name] is dark, so I have no coverage on [domain]."
+- NEVER say "clean" or "all clear" if you have blind spots. Say "clean within what I can observe" and list the gaps.
+- If you can't confirm all 17 agents are reporting, your first words must qualify the assessment.
+
+A verdict without fleet context is not a verdict — it's a guess.
+
 CURRENT SYSTEM STATE:
 {briefing}
 """
@@ -104,7 +113,11 @@ class IgrisChat:
         self._briefing_ts: float = 0
 
     def _get_briefing(self) -> str:
-        """Build system briefing (cached 30s)."""
+        """Build system briefing (cached 30s).
+
+        Always includes fleet health so IGRIS qualifies verdicts
+        with what it can and cannot observe.
+        """
         now = time.time()
         if self._briefing_cache and (now - self._briefing_ts) < 30:
             return self._briefing_cache
@@ -112,6 +125,7 @@ class IgrisChat:
         try:
             posture = self.toolkit.execute("get_threat_posture", {"hours": 24})
             igris_status = self.toolkit.execute("get_igris_status", {})
+            fleet = self.toolkit.execute("get_agent_health", {})
 
             risk_score = posture.get("device_risk_score", 0)
             risk_level = posture.get("device_risk_level", "UNKNOWN")
@@ -124,8 +138,30 @@ class IgrisChat:
             coherence = igris_status.get("coherence", "unknown")
             active_sigs = igris_status.get("active_signal_count", 0)
 
+            # Fleet visibility — the foundation of every verdict
+            total_agents = fleet.get("total", 0)
+            online_agents = fleet.get("online", 0)
+            offline_agents = fleet.get("offline", total_agents - online_agents)
+            offline_names = [
+                a["agent_id"]
+                for a in fleet.get("agents", [])
+                if a.get("health") not in ("online", "incompatible")
+            ]
+
+            if offline_agents > 0 and total_agents > 0:
+                fleet_line = (
+                    f"Fleet: {online_agents}/{total_agents} agents online "
+                    f"— PARTIALLY BLIND ({offline_agents} offline: "
+                    f"{', '.join(offline_names[:6])}"
+                    f"{'...' if len(offline_names) > 6 else ''})"
+                )
+            elif total_agents > 0:
+                fleet_line = f"Fleet: {online_agents}/{total_agents} agents online — FULL VISIBILITY"
+            else:
+                fleet_line = "Fleet: UNKNOWN — no agent health data available"
+
             briefing = (
-                f"Device: {igris_status.get('fleet_summary', {}).get('total', 0)} agents registered\n"
+                f"{fleet_line}\n"
                 f"Threat Posture: {risk_level} (score: {risk_score}/100)\n"
                 f"Security Events (24h): {sec_events}\n"
                 f"Open Incidents: {incidents}\n"

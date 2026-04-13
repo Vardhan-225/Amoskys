@@ -50,11 +50,13 @@ def setup_complete():
 
 
 @dashboard_bp.route("/cortex")
+@dashboard_bp.route("/device/<device_id>/cortex")
 @require_login
-def cortex_dashboard():
+def cortex_dashboard(device_id=None):
     """AMOSKYS Cortex Dashboard - Advanced View (power users)"""
     user = get_current_user()
-    return render_template("dashboard/cortex.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/cortex.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/agents")
@@ -98,19 +100,23 @@ def system_monitoring():
 
 
 @dashboard_bp.route("/processes")
+@dashboard_bp.route("/device/<device_id>/processes")
 @require_login
-def process_telemetry():
+def process_telemetry(device_id=None):
     """Process Telemetry Dashboard - Mac Process Monitoring"""
     user = get_current_user()
-    return render_template("dashboard/processes.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/processes.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/peripherals")
+@dashboard_bp.route("/device/<device_id>/peripherals")
 @require_login
-def peripheral_monitoring():
+def peripheral_monitoring(device_id=None):
     """Peripheral Monitoring Dashboard - USB/Bluetooth Device Tracking"""
     user = get_current_user()
-    return render_template("dashboard/peripherals.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/peripherals.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/database")
@@ -185,11 +191,13 @@ def soma_brain_dashboard():
 
 
 @dashboard_bp.route("/network")
+@dashboard_bp.route("/device/<device_id>/network")
 @require_login
-def network_topology():
+def network_topology(device_id=None):
     """Network Topology Map"""
     user = get_current_user()
-    return render_template("dashboard/network.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/network.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/threat-feed")
@@ -225,62 +233,78 @@ def guardian_dashboard():
 
 
 # ── Observatory Pages ──
+# Each page supports an optional device_id via query param (?device_id=xxx)
+# or via device-scoped route (/device/<id>/posture).
 
 
 @dashboard_bp.route("/posture")
+@dashboard_bp.route("/device/<device_id>/posture")
 @require_login
-def device_posture():
+def device_posture(device_id=None):
     """Device Posture — Single-screen device health overview"""
     user = get_current_user()
-    return render_template("dashboard/posture.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/posture.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/dns")
+@dashboard_bp.route("/device/<device_id>/dns")
 @require_login
-def dns_intelligence():
+def dns_intelligence(device_id=None):
     """DNS Intelligence — DGA detection, beaconing, query analysis"""
     user = get_current_user()
-    return render_template("dashboard/dns-intelligence.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/dns-intelligence.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/file-integrity")
+@dashboard_bp.route("/device/<device_id>/file-integrity")
 @require_login
-def file_integrity():
+def file_integrity(device_id=None):
     """File Integrity Monitor — Change tracking and risk analysis"""
     user = get_current_user()
-    return render_template("dashboard/file-integrity.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/file-integrity.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/persistence")
+@dashboard_bp.route("/device/<device_id>/persistence")
 @require_login
-def persistence_landscape():
+def persistence_landscape(device_id=None):
     """Persistence Landscape — Autostart mechanism monitoring"""
     user = get_current_user()
-    return render_template("dashboard/persistence-landscape.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/persistence-landscape.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/auth")
+@dashboard_bp.route("/device/<device_id>/auth")
 @require_login
-def auth_observatory():
+def auth_observatory(device_id=None):
     """Auth & Access — Login patterns and privilege escalation"""
     user = get_current_user()
-    return render_template("dashboard/auth-observatory.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/auth-observatory.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/timeline-replay")
+@dashboard_bp.route("/device/<device_id>/timeline-replay")
 @require_login
-def timeline_replay():
+def timeline_replay(device_id=None):
     """Threat Timeline Replay — step-by-step attack reconstruction"""
     user = get_current_user()
-    return render_template("dashboard/timeline-replay.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/timeline-replay.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/observations")
+@dashboard_bp.route("/device/<device_id>/observations")
 @require_login
-def observation_domains():
+def observation_domains(device_id=None):
     """Observation Domains — P3 domain exploration"""
     user = get_current_user()
-    return render_template("dashboard/observations.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/observations.html", user=user, device_id=device_id)
 
 
 # ── Consolidated Views (v3 Architecture) ──
@@ -295,11 +319,13 @@ def threats_consolidated():
 
 
 @dashboard_bp.route("/observatory")
+@dashboard_bp.route("/device/<device_id>/observatory")
 @require_login
-def observatory_consolidated():
+def observatory_consolidated(device_id=None):
     """Observatory — All domain monitoring in one tabbed view"""
     user = get_current_user()
-    return render_template("dashboard/observatory.html", user=user)
+    device_id = device_id or request.args.get("device_id", "")
+    return render_template("dashboard/observatory.html", user=user, device_id=device_id)
 
 
 @dashboard_bp.route("/intelligence")

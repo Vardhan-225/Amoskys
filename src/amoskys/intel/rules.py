@@ -25,6 +25,26 @@ from amoskys.intel.models import Incident, MitreTactic, Severity, TelemetryEvent
 logger = logging.getLogger(__name__)
 
 
+def _parse_mitre_cell(raw) -> List[str]:
+    """Parse mitre_techniques value, handling single and double-encoded JSON."""
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [t for t in raw if isinstance(t, str) and t.startswith("T")]
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if isinstance(parsed, str):
+        try:
+            parsed = json.loads(parsed)
+        except (json.JSONDecodeError, TypeError):
+            return [parsed] if parsed.startswith("T") else []
+    if isinstance(parsed, list):
+        return [t for t in parsed if isinstance(t, str) and t.startswith("T")]
+    return []
+
+
 def rule_ssh_brute_force(
     events: List[TelemetryEventView], device_id: str
 ) -> Optional[Incident]:
@@ -1060,11 +1080,9 @@ def rule_infostealer_kill_chain(
         for e in stage_evts:
             all_event_ids.append(e.event_id)
             if e.security_event and e.security_event.get("mitre_techniques"):
-                try:
-                    techs = json.loads(e.security_event["mitre_techniques"])
-                    techniques.update(techs)
-                except (json.JSONDecodeError, TypeError):
-                    pass
+                techniques.update(
+                    _parse_mitre_cell(e.security_event["mitre_techniques"])
+                )
         stage_summary.append(f"{stage_name}: {len(stage_evts)} events")
 
     stages_hit = len(stage_events)
@@ -1140,11 +1158,9 @@ def rule_clickfix_attack(
     techniques = set()
     for e in clickfix_events:
         if e.security_event and e.security_event.get("mitre_techniques"):
-            try:
-                techs = json.loads(e.security_event["mitre_techniques"])
-                techniques.update(techs)
-            except (json.JSONDecodeError, TypeError):
-                pass
+            techniques.update(
+                _parse_mitre_cell(e.security_event["mitre_techniques"])
+            )
 
     start_ts = min(e.timestamp for e in clickfix_events)
     end_ts = max(e.timestamp for e in clickfix_events)
