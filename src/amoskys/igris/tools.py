@@ -821,7 +821,10 @@ class IgrisToolkit:
         import time as _time
 
         now_ns = int(_time.time() * 1e9)
-        hour_ago_ns = now_ns - int(3600 * 1e9)
+        # Use 6-hour window — agents ship at different intervals (5s to 60s)
+        # and fleet_cache syncs every 60s. A 1-hour window creates false
+        # "degraded" status for agents whose last event is 45-50 min old.
+        hour_ago_ns = now_ns - int(6 * 3600 * 1e9)
 
         # Strategy 1: Derive from actual event timestamps per agent
         agent_rows = self._query(
@@ -877,12 +880,12 @@ class IgrisToolkit:
                     "detection_method": "event_data",
                 }
 
-        # Mark agents with no recent events as degraded
+        # Mark agents based on event recency (matches 6h query window)
         for info in agent_map.values():
             age_s = (now_ns - info["last_event_ns"]) / 1e9 if info["last_event_ns"] else 999999
-            if age_s > 3600:
+            if age_s > 21600:  # >6h = offline
                 info["health"] = "offline"
-            elif age_s > 300:
+            elif age_s > 7200:  # >2h = degraded
                 info["health"] = "degraded"
 
         agents = sorted(agent_map.values(), key=lambda a: a["event_count"], reverse=True)
