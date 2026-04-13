@@ -243,8 +243,12 @@ class LifecycleMixin:
 
     # ── Data Retention ──
 
-    def cleanup_old_data(self, max_age_days: int = 90) -> Dict[str, int]:
-        """Delete telemetry data older than max_age_days."""
+    def cleanup_old_data(self, max_age_days: int = 3) -> Dict[str, int]:
+        """Delete telemetry data older than max_age_days (default 3 days).
+
+        Aggressive retention by design — disk space is precious on endpoints.
+        The ops server keeps the long-term archive via the shipper.
+        """
         cutoff_ns = int((time.time() - max_age_days * 86400) * 1e9)
         cutoff_dt = datetime.fromtimestamp(
             time.time() - max_age_days * 86400, tz=timezone.utc

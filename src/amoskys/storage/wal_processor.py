@@ -586,7 +586,7 @@ class WALProcessor(
                 # Periodic data retention cleanup
                 if cycle % retention_interval == 0:
                     try:
-                        self.store.cleanup_old_data(max_age_days=90)
+                        self.store.cleanup_old_data(max_age_days=3)
                     except Exception as e:
                         logger.warning("Retention cleanup error: %s", e)
 

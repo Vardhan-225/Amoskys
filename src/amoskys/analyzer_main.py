@@ -891,10 +891,10 @@ def main() -> int:
                 except Exception:
                     logger.debug("Fusion evaluation failed", exc_info=True)
 
-            # Retention cleanup (every ~30 min = 900 cycles × 2s)
-            if cycle % 900 == 0:
+            # Retention cleanup (every ~10 min = 300 cycles × 2s)
+            if cycle % 300 == 0:
                 try:
-                    deleted = store.cleanup_old_data(max_age_days=7)
+                    deleted = store.cleanup_old_data(max_age_days=3)
                     total_deleted = sum(deleted.values())
                     if total_deleted > 0:
                         logger.info(
