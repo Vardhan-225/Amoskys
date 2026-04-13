@@ -67,17 +67,23 @@ def get_telemetry_store() -> Optional["TelemetryStore"]:
 
         # Mode 2: Fleet mode — sync from ops server
         if _OPS_SERVER:
-            # First sync: blocking, so data is available on first request
+            # If cache already exists from a prior sync, use it immediately
+            # (don't block on re-sync — background thread will refresh it)
+            cache_exists = _CACHE_DB_PATH.exists()
+
             if not _sync_started:
                 _sync_started = True
-                try:
-                    _sync_from_ops()
-                except Exception:
-                    logger.warning("Initial fleet sync failed", exc_info=True)
+                if not cache_exists:
+                    # No cache yet — do a blocking first sync
+                    try:
+                        _sync_from_ops()
+                        cache_exists = _CACHE_DB_PATH.exists()
+                    except Exception:
+                        logger.warning("Initial fleet sync failed", exc_info=True)
                 _start_fleet_sync()
 
             # Try the cache DB (populated by fleet sync)
-            if _CACHE_DB_PATH.exists():
+            if cache_exists:
                 try:
                     from amoskys.storage.telemetry_store import TelemetryStore
 
