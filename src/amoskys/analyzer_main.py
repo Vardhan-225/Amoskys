@@ -747,11 +747,19 @@ def main() -> int:
                                         store.insert_audit_event({
                                             **_base,
                                             "event_type": attrs.get("event_type", "auth"),
-                                            "pid": attrs.get("pid"),
-                                            "ppid": attrs.get("ppid"),
-                                            "uid": attrs.get("uid"),
-                                            "username": attrs.get("username"),
+                                            # Map auth-specific fields from collector
+                                            "pid": attrs.get("client_pid") or attrs.get("pid"),
+                                            "exe": attrs.get("client_exe") or attrs.get("exe"),
+                                            "comm": attrs.get("process", ""),
+                                            "username": attrs.get("username", ""),
+                                            "source_ip": attrs.get("source_ip", ""),
+                                            "reason": attrs.get("message", "")[:500],
                                             "risk_score": float(attrs.get("risk_score", 0) or 0),
+                                            "raw_attributes_json": json.dumps(
+                                                {k: v for k, v in attrs.items()
+                                                 if k not in ("message",)},
+                                                default=str,
+                                            ),
                                         })
 
                                     else:

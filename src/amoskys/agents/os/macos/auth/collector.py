@@ -67,6 +67,7 @@ _PROCESS_CATEGORY = {
     "authd": "authz",
     "tccd": "tcc",
     "SecurityAgent": "password_prompt",
+    "cron": "cron",
 }
 
 # ---------------------------------------------------------------------------
@@ -639,13 +640,15 @@ class StreamingAuthCollector(MacOSAuthCollector):
         Agent cycle: collect() → drains deque → returns events
     """
 
-    # Combined predicate (OR of all 7 sources)
+    # Combined predicate (9 sources — 7 original + security CLI + cron)
     _STREAM_PREDICATE = (
         '(subsystem == "com.apple.Authorization" AND category == "authd") OR '
         '(subsystem == "com.apple.TCC" AND category == "access") OR '
         'process == "SecurityAgent" OR '
         'process == "sshd" OR '
         'process == "sudo" OR '
+        'process == "security" OR '  # Keychain CLI access (T1555.001)
+        'process == "cron" OR '  # Cron job execution
         '(process == "loginwindow" AND (eventMessage CONTAINS "login" OR '
         'eventMessage CONTAINS "logout" OR eventMessage CONTAINS "unlock" OR '
         'eventMessage CONTAINS "authenticated" OR eventMessage CONTAINS "denied")) OR '
