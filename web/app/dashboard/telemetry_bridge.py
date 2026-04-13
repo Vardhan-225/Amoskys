@@ -196,19 +196,36 @@ def _sync_from_ops():
 
 
 def _upsert_rows(db: sqlite3.Connection, table: str, rows: list) -> int:
-    """Insert rows into a table, skipping duplicates."""
+    """Insert rows into a table, skipping duplicates.
+
+    Handles schema mismatches between ops server (simple columns) and
+    TelemetryStore (full schema with NOT NULL constraints) by providing
+    defaults for required columns that the ops server doesn't send.
+    """
     if not rows:
         return 0
 
-    # Get existing columns in the table
+    # Get existing columns and their NOT NULL constraints
     try:
         cursor = db.execute(f"PRAGMA table_info({table})")
-        existing_cols = {r[1] for r in cursor.fetchall()}
+        col_info = cursor.fetchall()
+        existing_cols = {r[1] for r in col_info}
+        # Map of NOT NULL columns → default values (skip 'id' which is autoincrement)
+        notnull_cols = {
+            r[1] for r in col_info if r[3] == 1 and r[1] != "id"
+        }
     except Exception:
         return 0
 
     if not existing_cols:
         return 0
+
+    # Default values for NOT NULL columns the ops server doesn't send
+    _NOT_NULL_DEFAULTS = {
+        "event_type": "unknown",
+        "syscall": "unknown",
+        "host": "",
+    }
 
     inserted = 0
     for row in rows:
@@ -217,10 +234,22 @@ def _upsert_rows(db: sqlite3.Connection, table: str, rows: list) -> int:
         if not cols:
             continue
         vals = [row[k] for k in cols]
+
+        # Fill in NOT NULL columns that are missing from the ops server row
+        col_set = set(cols)
+        for nn_col in notnull_cols:
+            if nn_col not in col_set:
+                default = _NOT_NULL_DEFAULTS.get(nn_col, "")
+                cols.append(nn_col)
+                vals.append(default)
+
         placeholders = ",".join(["?"] * len(cols))
         col_names = ",".join(cols)
         try:
-            db.execute(f"INSERT OR IGNORE INTO {table} ({col_names}) VALUES ({placeholders})", vals)
+            db.execute(
+                f"INSERT OR IGNORE INTO {table} ({col_names}) VALUES ({placeholders})",
+                vals,
+            )
             inserted += 1
         except Exception:
             pass
