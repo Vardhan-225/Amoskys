@@ -676,7 +676,7 @@ class IgrisToolkit:
             self._telemetry_db, "SELECT COUNT(*) FROM signals WHERE status = 'open'"
         )
 
-        # Risk from fusion
+        # Risk: try fusion table first, fall back to computing from events
         risk = (
             self._query_one(
                 self._fusion_db,
@@ -684,6 +684,25 @@ class IgrisToolkit:
             )
             or {}
         )
+        if not risk.get("score"):
+            # Compute risk from security events directly
+            risk_row = self._query_one(
+                self._telemetry_db,
+                "SELECT AVG(risk_score) as avg_risk, MAX(risk_score) as max_risk, "
+                "COUNT(*) as cnt FROM security_events WHERE timestamp_ns > ? "
+                "AND risk_score > 0",
+                (cutoff,),
+            ) or {}
+            avg_r = risk_row.get("avg_risk", 0) or 0
+            max_r = risk_row.get("max_risk", 0) or 0
+            score = round((1.0 - (avg_r * 0.6 + max_r * 0.4)) * 100, 1)
+            level = (
+                "CRITICAL" if score < 30 else
+                "HIGH" if score < 50 else
+                "ELEVATED" if score < 70 else
+                "LOW"
+            )
+            risk = {"score": score, "level": level}
 
         # MITRE techniques seen
         techniques = set()
@@ -791,12 +810,93 @@ class IgrisToolkit:
     # ── 6. Agent Health ──
 
     def _tool_get_agent_health(self) -> Dict:
-        """Get actual running status of all agents.
+        """Get agent health by checking actual event data.
 
-        Uses unified detection: heartbeat → PID file → process pattern.
-        This correctly handles the new architecture where agents run as
-        threads inside collector_main, not as separate processes.
+        Derives status from telemetry: if an agent shipped events in the
+        last hour, it's online. This works in both local mode (direct DB)
+        and fleet mode (fleet_cache synced from ops server).
+
+        Falls back to PID-based detection if available (local agent only).
         """
+        import time as _time
+
+        now_ns = int(_time.time() * 1e9)
+        hour_ago_ns = now_ns - int(3600 * 1e9)
+
+        # Strategy 1: Derive from actual event timestamps per agent
+        agent_rows = self._query(
+            self._telemetry_db,
+            "SELECT collection_agent, COUNT(*) as event_count, "
+            "MAX(timestamp_ns) as last_event_ns "
+            "FROM security_events WHERE timestamp_ns > ? "
+            "AND collection_agent IS NOT NULL AND collection_agent != '' "
+            "GROUP BY collection_agent",
+            (hour_ago_ns,),
+        )
+
+        # Also check domain tables for agents that only write to those
+        for table, agent_col in [
+            ("process_events", "collection_agent"),
+            ("dns_events", "collection_agent"),
+            ("flow_events", "collection_agent"),
+            ("fim_events", "collection_agent"),
+            ("persistence_events", "collection_agent"),
+            ("audit_events", "collection_agent"),
+            ("peripheral_events", "collection_agent"),
+        ]:
+            extra = self._query(
+                self._telemetry_db,
+                f"SELECT {agent_col} as collection_agent, COUNT(*) as event_count, "
+                f"MAX(timestamp_ns) as last_event_ns "
+                f"FROM {table} WHERE timestamp_ns > ? "
+                f"AND {agent_col} IS NOT NULL AND {agent_col} != '' "
+                f"GROUP BY {agent_col}",
+                (hour_ago_ns,),
+            )
+            agent_rows.extend(extra)
+
+        # Merge per-agent stats
+        agent_map: Dict[str, Dict] = {}
+        for row in agent_rows:
+            aid = row.get("collection_agent", "")
+            if not aid:
+                continue
+            existing = agent_map.get(aid)
+            if existing:
+                existing["event_count"] += row.get("event_count", 0)
+                existing["last_event_ns"] = max(
+                    existing["last_event_ns"], row.get("last_event_ns", 0) or 0
+                )
+            else:
+                agent_map[aid] = {
+                    "agent_id": aid,
+                    "name": aid,
+                    "event_count": row.get("event_count", 0),
+                    "last_event_ns": row.get("last_event_ns", 0) or 0,
+                    "health": "online",
+                    "detection_method": "event_data",
+                }
+
+        # Mark agents with no recent events as degraded
+        for info in agent_map.values():
+            age_s = (now_ns - info["last_event_ns"]) / 1e9 if info["last_event_ns"] else 999999
+            if age_s > 3600:
+                info["health"] = "offline"
+            elif age_s > 300:
+                info["health"] = "degraded"
+
+        agents = sorted(agent_map.values(), key=lambda a: a["event_count"], reverse=True)
+        online = sum(1 for a in agents if a["health"] == "online")
+
+        if agents:
+            return {
+                "agents": agents,
+                "total": len(agents),
+                "online": online,
+                "offline": len(agents) - online,
+            }
+
+        # Strategy 2: Fall back to PID-based detection (local agent only)
         try:
             from web.app.dashboard.agent_discovery import (
                 AGENT_CATALOG,
@@ -825,21 +925,19 @@ class IgrisToolkit:
                 "offline": len(agents) - online,
             }
         except Exception:
-            # Fallback to static registry if dashboard not importable
-            try:
-                from amoskys.agents import AGENT_REGISTRY
+            pass
 
-                agents = [
-                    {
-                        "agent_id": aid,
-                        "name": meta.get("name", aid),
-                        "health": "unknown",
-                    }
-                    for aid, meta in AGENT_REGISTRY.items()
-                ]
-                return {"agents": agents, "total": len(agents)}
-            except Exception as e2:
-                return {"error": str(e2)}
+        # Strategy 3: Static registry (no health info)
+        try:
+            from amoskys.agents import AGENT_REGISTRY
+
+            agents = [
+                {"agent_id": aid, "name": meta.get("name", aid), "health": "unknown"}
+                for aid, meta in AGENT_REGISTRY.items()
+            ]
+            return {"agents": agents, "total": len(agents)}
+        except Exception as e2:
+            return {"error": str(e2)}
 
     # ── 7. Probes Fired ──
 
