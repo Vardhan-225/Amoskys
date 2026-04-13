@@ -336,12 +336,24 @@ def _get_igris_chat():
     global _igris_chat_instance
     if _igris_chat_instance is None:
         try:
+            import os as _os
             from flask import current_app
-
             from amoskys.igris.chat import IgrisChat
 
             action_executor = current_app.config.get("ACTION_EXECUTOR")
+
+            # Fleet mode: use fleet_cache.db (synced from ops server)
+            # Local mode: use telemetry.db (agent running on this machine)
+            if _os.environ.get("AMOSKYS_OPS_SERVER"):
+                from web.app.dashboard.telemetry_bridge import _CACHE_DB_PATH
+                db_path = str(_CACHE_DB_PATH) if _CACHE_DB_PATH.exists() else "data/telemetry.db"
+            else:
+                db_path = "data/telemetry.db"
+
             _igris_chat_instance = IgrisChat(
+                telemetry_db=db_path,
+                fusion_db=db_path,  # fleet_cache has all tables
+                reliability_db=db_path,
                 action_executor=action_executor,
             )
         except Exception as e:
