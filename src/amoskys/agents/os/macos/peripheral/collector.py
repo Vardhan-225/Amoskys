@@ -77,11 +77,15 @@ class MacOSPeripheralCollector:
         usb_devices: List[PeripheralDevice] - USB peripherals
         bluetooth_devices: List[PeripheralDevice] - Bluetooth peripherals
         volumes: List[PeripheralDevice] - mounted volumes (non-system)
+        volume_activity: Dict - per-volume activity stats (plug count, duration)
         collection_time_ms: float - total collection time
     """
 
     def __init__(self) -> None:
         self._volumes_path = Path("/Volumes")
+        # Track volume plug/unplug history across collections
+        self._volume_history: Dict[str, Dict[str, Any]] = {}
+        # {name: {"first_seen": float, "last_seen": float, "plug_count": int, "total_seconds": float}}
 
     def collect(self) -> Dict[str, Any]:
         """Collect full peripheral snapshot.
@@ -94,12 +98,20 @@ class MacOSPeripheralCollector:
         bluetooth_devices = self._collect_bluetooth()
         volumes = self._collect_volumes()
 
+        # Enrich volumes with diskutil metadata (vendor, serial, filesystem)
+        for vol in volumes:
+            self._enrich_volume(vol)
+
+        # Track volume plug/unplug activity
+        volume_activity = self._track_volume_activity(volumes)
+
         elapsed_ms = (time.monotonic() - start) * 1000
 
         return {
             "usb_devices": usb_devices,
             "bluetooth_devices": bluetooth_devices,
             "volumes": volumes,
+            "volume_activity": volume_activity,
             "collection_time_ms": round(elapsed_ms, 2),
         }
 
@@ -291,6 +303,109 @@ class MacOSPeripheralCollector:
             address=str(address),
             connected=connected,
         )
+
+    # -------------------------------------------------------------------------
+    # Volume Enrichment & Activity Tracking
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _enrich_volume(vol: PeripheralDevice) -> None:
+        """Enrich a volume with diskutil info for real hardware metadata.
+
+        Extracts: device vendor, media name, serial (disk identifier),
+        filesystem type, total size, and protocol (USB/SATA/NVMe).
+        """
+        if not vol.mount_point:
+            return
+        try:
+            result = subprocess.run(
+                ["diskutil", "info", vol.mount_point],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode != 0:
+                return
+            info: Dict[str, str] = {}
+            for line in result.stdout.split("\n"):
+                if ":" in line:
+                    key, _, value = line.partition(":")
+                    info[key.strip()] = value.strip()
+
+            vol.manufacturer = (
+                info.get("Media Name", "")
+                or info.get("Device / Media Name", "")
+            )
+            vol.vendor_id = info.get("Disk / Partition UUID", "")[:16]
+            vol.serial = (
+                info.get("Volume UUID", "")
+                or info.get("Disk / Partition UUID", "")
+            )
+            # Store extra metadata in the address field (protocol + filesystem)
+            protocol = info.get("Protocol", "")
+            fs_type = info.get("Type (Bundle)", "") or info.get("File System Personality", "")
+            total_size = info.get("Disk Size", "") or info.get("Container Total Space", "")
+            vol.address = f"{protocol}|{fs_type}|{total_size}"
+        except Exception as e:
+            logger.debug("diskutil enrich failed for %s: %s", vol.mount_point, e)
+
+    def _track_volume_activity(
+        self, current_volumes: List[PeripheralDevice]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Track plug/unplug events and connection duration per volume.
+
+        Compares current snapshot with previous snapshot to detect:
+        - New volumes (plug event) → increment plug_count
+        - Missing volumes (unplug event) → record duration
+        - Persistent volumes → update last_seen, accumulate duration
+        """
+        now = time.time()
+        current_names = {v.name for v in current_volumes}
+        prev_names = set(self._volume_history.keys())
+
+        # New volumes (plugged in since last collection)
+        for name in current_names - prev_names:
+            self._volume_history[name] = {
+                "first_seen": now,
+                "last_seen": now,
+                "plug_count": 1,
+                "total_seconds": 0.0,
+            }
+
+        # Still present volumes (update last_seen)
+        for name in current_names & prev_names:
+            h = self._volume_history[name]
+            h["last_seen"] = now
+            h["total_seconds"] = now - h["first_seen"]
+
+        # Removed volumes (unplugged since last collection)
+        for name in prev_names - current_names:
+            h = self._volume_history[name]
+            h["total_seconds"] = h["last_seen"] - h["first_seen"]
+            # Keep history for a while (re-plug detection)
+
+        # Re-plugged volumes (was gone, now back)
+        for name in current_names & prev_names:
+            h = self._volume_history[name]
+            # If last_seen was far from now (gap > 2 collection cycles), it's a re-plug
+            gap = now - h.get("_prev_last_seen", h["last_seen"])
+            if gap > 120:  # >2 min gap = re-plug
+                h["plug_count"] = h.get("plug_count", 1) + 1
+                h["first_seen"] = now
+            h["_prev_last_seen"] = now
+
+        # Build activity report
+        activity: Dict[str, Dict[str, Any]] = {}
+        for name, h in self._volume_history.items():
+            activity[name] = {
+                "plug_count": h.get("plug_count", 1),
+                "total_seconds": round(h.get("total_seconds", 0), 1),
+                "first_seen": h.get("first_seen", 0),
+                "last_seen": h.get("last_seen", 0),
+                "currently_mounted": name in current_names,
+            }
+
+        return activity
 
     # -------------------------------------------------------------------------
     # Volume Collection

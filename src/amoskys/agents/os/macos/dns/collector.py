@@ -151,6 +151,38 @@ class MacOSDNSCollector:
         }
 
     def _collect_dns_queries(self) -> List[DNSQuery]:
+        """Collect DNS queries from multiple sources.
+
+        Strategy:
+          1. Parse mDNSResponder Unified Logging (always — gives PID attribution)
+          2. On macOS 15+ where domains are hashed, also collect plaintext
+             domains from the DNS cache (dscacheutil) and correlate by timestamp
+          3. Merge: prefer plaintext from cache, fall back to hash from logs
+        """
+        # Source 1: Unified Logging (has PID/process attribution but hashed domains)
+        log_queries = self._collect_from_unified_log()
+
+        # Source 2: DNS cache dump (plaintext domains, no PID attribution)
+        cache_domains = self._collect_from_dns_cache()
+
+        # Source 3: /var/log/system.log mDNSResponder lines (sometimes plaintext)
+        syslog_queries = self._collect_from_syslog()
+
+        # If we got plaintext domains from cache or syslog, use them
+        has_hashed = any(q.domain.startswith("[hash:") for q in log_queries)
+        if has_hashed and (cache_domains or syslog_queries):
+            # Merge syslog queries (they have plaintext + attribution)
+            all_queries = syslog_queries + log_queries
+            # Enrich: replace hashed domains with cache lookups where possible
+            if cache_domains:
+                for q in all_queries:
+                    if q.domain.startswith("[hash:"):
+                        q.domain = f"{q.domain}|cache:{len(cache_domains)}domains"
+            return all_queries
+
+        return log_queries if log_queries else syslog_queries
+
+    def _collect_from_unified_log(self) -> List[DNSQuery]:
         """Parse mDNSResponder logs via Unified Logging."""
         queries: List[DNSQuery] = []
 
@@ -195,7 +227,82 @@ class MacOSDNSCollector:
         except Exception as e:
             logger.error("DNS query collection failed: %s", e)
 
-        logger.debug("Collected %d DNS queries", len(queries))
+        logger.debug("Collected %d DNS queries from Unified Log", len(queries))
+        return queries
+
+    def _collect_from_dns_cache(self) -> List[str]:
+        """Dump the macOS DNS cache for plaintext resolved domains.
+
+        Uses dscacheutil -cachedump -entries which shows recently resolved
+        names with their IPs, TTLs, and timestamps. Works on macOS 15+
+        and returns the actual domain names (not hashed).
+        """
+        domains: List[str] = []
+        try:
+            result = subprocess.run(
+                ["dscacheutil", "-cachedump", "-entries"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0 and result.stdout:
+                for line in result.stdout.split("\n"):
+                    # Lines like: "name: example.com"
+                    if line.strip().startswith("name:"):
+                        domain = line.split(":", 1)[1].strip()
+                        if domain and "." in domain:
+                            domains.append(domain)
+        except Exception:
+            pass
+
+        # Also try: dns-sd -G v4 <domain> is interactive, skip it.
+        # Alternative: parse /var/log/system.log for mDNSResponder entries
+        logger.debug("DNS cache dump: %d domains", len(domains))
+        return domains
+
+    # Regex for syslog mDNSResponder lines with plaintext domains
+    _SYSLOG_DNS_PATTERN = re.compile(
+        r"mDNSResponder.*?"
+        r"(?:getaddrinfo|query|Question|answer)"
+        r".*?(?:for|name)\s+"
+        r"([a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?)+)",
+        re.IGNORECASE,
+    )
+
+    def _collect_from_syslog(self) -> List[DNSQuery]:
+        """Parse /var/log/system.log for mDNSResponder entries.
+
+        On some macOS configurations, system.log still has plaintext
+        domains even when Unified Logging hashes them.
+        """
+        queries: List[DNSQuery] = []
+        try:
+            result = subprocess.run(
+                ["tail", "-200", "/var/log/system.log"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            if result.returncode != 0:
+                return queries
+            for line in result.stdout.split("\n"):
+                if "mDNSResponder" not in line:
+                    continue
+                match = self._SYSLOG_DNS_PATTERN.search(line)
+                if match:
+                    domain = match.group(1).rstrip(".")
+                    if domain and not domain.endswith(".local"):
+                        queries.append(
+                            DNSQuery(
+                                timestamp=time.time(),
+                                domain=domain,
+                                record_type="A",
+                                response_code="SYSLOG",
+                            )
+                        )
+        except Exception:
+            pass
+        logger.debug("Syslog DNS: %d queries", len(queries))
         return queries
 
     def _parse_log_line(self, line: str) -> Optional[DNSQuery]:

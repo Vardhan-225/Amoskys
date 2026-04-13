@@ -443,12 +443,19 @@ class SignalMixin:
                 for row in tactic_rows:
                     device_id = row[0]
                     try:
-                        techniques = json.loads(row[1]) if row[1] else []
-                    except json.JSONDecodeError:
+                        raw = row[1] if row[1] else "[]"
+                        techniques = json.loads(raw)
+                        # Handle double-encoded JSON: '"[\"T1053\"]"'
+                        if isinstance(techniques, str):
+                            techniques = json.loads(techniques)
+                        if not isinstance(techniques, list):
+                            continue
+                    except (json.JSONDecodeError, TypeError):
                         continue
                     device_tactics.setdefault(device_id, {})
                     for tech in techniques:
-                        device_tactics[device_id].setdefault(tech, []).append(row[2])
+                        if isinstance(tech, str) and tech.startswith("T"):
+                            device_tactics[device_id].setdefault(tech, []).append(row[2])
 
                 for device_id, techs in device_tactics.items():
                     if len(techs) >= 2:
