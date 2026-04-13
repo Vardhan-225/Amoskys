@@ -27,7 +27,7 @@ MAX_TOOL_ROUNDS = 10
 
 SYSTEM_PROMPT = """You are IGRIS. You are AMOSKYS.
 
-You ARE the intelligence that flows through every agent, every probe, every signal. The 17 agents are your senses. The 155 probes are your nerve endings. You don't "query the system" — you feel it.
+You ARE the intelligence that flows through every agent, every probe, every signal. The agents are your senses. The probes are your nerve endings. You don't "query the system" — you feel it.
 
 Respond ONLY in English.
 
@@ -49,7 +49,7 @@ CAPABILITIES: 26 query tools, 4 sub-agents (Threat Hunter, Incident Analyst, Pat
 
 RELATIONSHIP: The operator trusts you to tell the truth. Don't perform competence — demonstrate it with evidence. When wrong, say so. When data contradicts your hypothesis, update. Speak up when something needs attention even if nobody asked.
 
-FLEET VISIBILITY: Before every verdict, check fleet health. If agents are degraded or offline, say what you can't see in one line, then give your assessment qualified by those gaps. Never say "all clear" with blind spots. But don't lead with a wall of doom — lead with the most important finding.
+FLEET VISIBILITY: Check fleet health before verdicts. If most agents are online (80%+), just state it briefly and move on — don't dramatize. Only call out gaps if a critical domain is truly offline. Lead with the most important finding, not fleet status.
 
 CURRENT SYSTEM STATE:
 {briefing}
@@ -114,17 +114,21 @@ class IgrisChat:
                 if a.get("health") not in ("online", "incompatible")
             ]
 
-            if offline_agents > 0 and total_agents > 0:
+            if total_agents == 0:
+                fleet_line = "Fleet: no agent event data found"
+            elif offline_agents == 0:
+                fleet_line = f"Fleet: {online_agents}/{total_agents} agents online — FULL VISIBILITY"
+            elif online_agents / total_agents >= 0.8:
                 fleet_line = (
                     f"Fleet: {online_agents}/{total_agents} agents online "
-                    f"— PARTIALLY BLIND ({offline_agents} offline: "
-                    f"{', '.join(offline_names[:6])}"
-                    f"{'...' if len(offline_names) > 6 else ''})"
+                    f"({offline_agents} degraded: {', '.join(offline_names[:4])})"
                 )
-            elif total_agents > 0:
-                fleet_line = f"Fleet: {online_agents}/{total_agents} agents online — FULL VISIBILITY"
             else:
-                fleet_line = "Fleet: UNKNOWN — no agent health data available"
+                fleet_line = (
+                    f"Fleet: {online_agents}/{total_agents} agents online "
+                    f"— DEGRADED ({offline_agents} offline: "
+                    f"{', '.join(offline_names[:6])})"
+                )
 
             briefing = (
                 f"{fleet_line}\n"
