@@ -300,3 +300,132 @@ class MacOSFileCollector:
             pass
 
         return suid
+
+
+# ═══════════════════════════════════════════════════════════════════
+# FSEvents-Enhanced File Collector
+# ═══════════════════════════════════════════════════════════════════
+
+
+class FSEventsFileCollector(MacOSFileCollector):
+    """FSEvents-enhanced file collector — real-time change notifications.
+
+    Runs a background watcher on critical paths. When a file changes,
+    its path is queued for immediate re-scan on the next collect() cycle.
+
+    The 60s full scan continues for baseline maintenance, but file changes
+    within the 60s window are detected in near-real-time via FSEvents.
+
+    Uses ``watchdog`` library if available (real kernel FSEvents), falls
+    back to standard polling if not.
+    """
+
+    _WATCH_PATHS = [
+        "/etc",
+        "/Library/LaunchAgents",
+        "/Library/LaunchDaemons",
+        "/usr/local/bin",
+        "/usr/local/sbin",
+        "/tmp",
+        "/var/tmp",
+    ]
+
+    def __init__(self, device_id: str = "") -> None:
+        super().__init__(device_id=device_id)
+        from collections import deque
+
+        self._changed_paths: deque = deque(maxlen=5000)
+        self._watcher_running = False
+        self._observer = None
+        self._start_watcher()
+
+    def _start_watcher(self) -> None:
+        """Start FSEvents watcher via watchdog library."""
+        try:
+            from watchdog.events import FileSystemEventHandler
+            from watchdog.observers import Observer
+
+            collector_ref = self
+
+            class _Handler(FileSystemEventHandler):
+                def on_any_event(self, event):
+                    if event.is_directory:
+                        return
+                    path = getattr(event, "src_path", "") or ""
+                    if path and not path.endswith(".DS_Store"):
+                        collector_ref._changed_paths.append(path)
+
+            self._observer = Observer()
+            for watch_path in self._WATCH_PATHS:
+                if os.path.isdir(watch_path):
+                    try:
+                        self._observer.schedule(_Handler(), watch_path, recursive=True)
+                    except Exception:
+                        pass
+
+            user_paths = [
+                os.path.join(self._home, "Library", "LaunchAgents"),
+                os.path.join(self._home, ".ssh"),
+                os.path.join(self._home, "Downloads"),
+            ]
+            for p in user_paths:
+                if os.path.isdir(p):
+                    try:
+                        self._observer.schedule(_Handler(), p, recursive=False)
+                    except Exception:
+                        pass
+
+            self._observer.daemon = True
+            self._observer.start()
+            self._watcher_running = True
+            logger.info(
+                "FSEventsFileCollector: real-time watcher started (%d paths)",
+                len(self._WATCH_PATHS),
+            )
+        except ImportError:
+            logger.info("FSEventsFileCollector: watchdog not available, polling only")
+        except Exception as e:
+            logger.warning("FSEventsFileCollector: watcher failed: %s", e)
+
+    def collect(self) -> Dict[str, Any]:
+        """Collect files — includes FSEvents-triggered changes."""
+        priority_files: List[FileEntry] = []
+        changed_paths: set = set()
+        while self._changed_paths:
+            try:
+                path = self._changed_paths.popleft()
+                if path not in changed_paths:
+                    changed_paths.add(path)
+                    entry = self._stat_file(path)
+                    if entry:
+                        priority_files.append(entry)
+            except IndexError:
+                break
+
+        result = super().collect()
+
+        if priority_files:
+            existing_paths = {f.path for f in result["files"]}
+            for pf in priority_files:
+                if pf.path not in existing_paths:
+                    result["files"].append(pf)
+            result["fsevents_changes"] = len(changed_paths)
+            logger.debug(
+                "FSEventsFileCollector: %d real-time changes merged",
+                len(changed_paths),
+            )
+        else:
+            result["fsevents_changes"] = 0
+
+        result["fsevents_active"] = self._watcher_running
+        return result
+
+    def shutdown(self) -> None:
+        """Stop the FSEvents watcher."""
+        if self._observer:
+            try:
+                self._observer.stop()
+                self._observer.join(timeout=3)
+            except Exception:
+                pass
+            logger.info("FSEventsFileCollector: watcher stopped")

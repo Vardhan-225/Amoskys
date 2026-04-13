@@ -100,20 +100,25 @@ _AUTHD_FAILED_RE = re.compile(
     r"Failed\s+to\s+authorize\s+right\s+'([^']+)'\s+by\s+client\s+'([^']+)'\s+\[(\d+)\]"
 )
 
-# TCC: "Granting <process> access to <service>"
-_TCC_GRANT_RE = re.compile(
-    r"Granting\s+TCCDProcess:\s+identifier=([^,]+),\s+pid=(\d+).*?access\s+to\s+(\S+)"
-)
-# TCC: "REQUEST: ... sender_pid=<pid>, ... function=<func>, service=<service>"
-_TCC_REQUEST_RE = re.compile(
-    r"REQUEST:.*?sender_pid=(\d+).*?function=(\w+)"
-)
-# TCC: "AUTHREQ_CTX: ... service=<service>"
+# TCC: "Granting TCCDProcess: identifier=..., pid=..., binary_path=..."
+# Same fields as AUTHREQ_ATTRIBUTION — extracted via _TCC_ATTRIB_RE.
+_TCC_GRANT_PREFIX_RE = re.compile(r"Granting\s+TCCDProcess:")
+_TCC_GRANT_SERVICE_RE = re.compile(r"access\s+to\s+(kTCCService\w+|\S+)")
+
+# TCC: "REQUEST: tccd_uid=..., sender_pid=..., function=..., msgID=..."
+_TCC_SENDER_PID_RE = re.compile(r"sender_pid=(\d+)")
+_TCC_FUNCTION_RE = re.compile(r"function=([\w]+)")
+
+# TCC: any line containing "service=kTCCServiceXxx"
 _TCC_SERVICE_RE = re.compile(r"service=(kTCCService\w+)")
-# TCC: "AUTHREQ_ATTRIBUTION: ... identifier=<id>, pid=<pid>, ... binary_path=<path>"
+
+# TCC: identifier + pid + binary_path tuple — appears in BOTH AUTHREQ_ATTRIBUTION
+# and Granting lines. Used as the canonical client extractor.
 _TCC_ATTRIB_RE = re.compile(
-    r"identifier=([^,]+),\s+pid=(\d+).*?binary_path=([^\s,]+)"
+    r"identifier=([^,]+),\s+pid=(\d+).*?binary_path=([^\s,}]+)"
 )
+# Fallback: identifier + pid only (when binary_path is private/redacted)
+_TCC_IDENT_PID_RE = re.compile(r"identifier=([^,]+),\s+pid=(\d+)")
 
 
 # ---------------------------------------------------------------------------
@@ -122,18 +127,20 @@ _TCC_ATTRIB_RE = re.compile(
 
 
 def _classify_tcc_decision(message: str) -> Optional[str]:
-    """Classify TCC message into a decision type."""
+    """Classify a TCC message into a decision type.
+
+    We only classify lines that carry structured client attribution
+    (Granting, AUTHREQ_ATTRIBUTION). REQUEST/RESULT/CTX/REPLY lines are
+    skipped — they're metadata for the same decision and don't include
+    the client binary path or identifier we need for the dashboard.
+    """
     if "Granting" in message:
         return "granted"
-    if "AUTHREQ_RESULT" in message:
-        if "authValue=2" in message:
-            return "granted"
-        if "authValue=0" in message:
-            return "denied"
+    if "AUTHREQ_ATTRIBUTION" in message:
+        # Attribution lines accompany every decision; classify by service
+        # context but treat as observed-access since we have full client info.
         return "evaluated"
-    if "REQUEST:" in message:
-        return "request"
-    return None  # Skip REPLY and other noise
+    return None  # Skip REQUEST, AUTHREQ_RESULT, AUTHREQ_CTX, REPLY
 
 
 class MacOSAuthCollector:
@@ -437,23 +444,49 @@ class MacOSAuthCollector:
 
     @staticmethod
     def _extract_tcc_fields(message: str) -> Optional[Dict[str, Any]]:
-        """Extract structured fields from a TCC log message."""
-        service = None
-        client_exe = None
-        client_pid = None
+        """Extract structured fields from a TCC log message.
 
+        TCC emits 5 line types per request — we extract whatever each
+        contains rather than bailing when one field is missing:
+
+        - REQUEST: sender_pid, function (no service/exe yet)
+        - AUTHREQ_CTX: service (no pid/exe yet)
+        - AUTHREQ_ATTRIBUTION: identifier, pid, binary_path (full client info)
+        - Granting: identifier, pid, binary_path + "access to <service>"
+        - AUTHREQ_RESULT: authValue=N (no fields, just decision)
+        """
+        decision = _classify_tcc_decision(message)
+        if not decision:
+            return None
+
+        # Extract service from any line type
+        service = None
         sm = _TCC_SERVICE_RE.search(message)
         if sm:
             service = sm.group(1)
+        else:
+            gm = _TCC_GRANT_SERVICE_RE.search(message)
+            if gm and decision == "granted":
+                service = gm.group(1)
+
+        # Extract client exe + pid: try full attrib, fall back to identifier-only,
+        # then to sender_pid (REQUEST lines only have this).
+        client_exe = None
+        client_pid = None
 
         am = _TCC_ATTRIB_RE.search(message)
         if am:
             client_pid = int(am.group(2))
             client_exe = am.group(3)
-
-        decision = _classify_tcc_decision(message)
-        if not decision:
-            return None
+        else:
+            im = _TCC_IDENT_PID_RE.search(message)
+            if im:
+                client_exe = im.group(1)  # bundle identifier as fallback
+                client_pid = int(im.group(2))
+            else:
+                pm = _TCC_SENDER_PID_RE.search(message)
+                if pm:
+                    client_pid = int(pm.group(1))
 
         return {
             "decision": decision,
@@ -584,3 +617,167 @@ def _get_hostname() -> str:
     import socket
 
     return socket.gethostname()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Streaming Auth Collector — push-based via `log stream`
+# ═══════════════════════════════════════════════════════════════════
+
+
+class StreamingAuthCollector(MacOSAuthCollector):
+    """Push-based auth collector using ``log stream`` instead of ``log show``.
+
+    Runs a persistent ``log stream`` subprocess with a combined predicate
+    covering all 7 auth sources. Events arrive in real-time via stdout.
+    The agent's collect() drains the buffer — zero blind window.
+
+    Falls back to polling MacOSAuthCollector if log stream fails.
+
+    Architecture:
+        Background thread: log stream --predicate '...' --style ndjson
+            → parses each JSON line → buffers in deque
+        Agent cycle: collect() → drains deque → returns events
+    """
+
+    # Combined predicate (OR of all 7 sources)
+    _STREAM_PREDICATE = (
+        '(subsystem == "com.apple.Authorization" AND category == "authd") OR '
+        '(subsystem == "com.apple.TCC" AND category == "access") OR '
+        'process == "SecurityAgent" OR '
+        'process == "sshd" OR '
+        'process == "sudo" OR '
+        '(process == "loginwindow" AND (eventMessage CONTAINS "login" OR '
+        'eventMessage CONTAINS "logout" OR eventMessage CONTAINS "unlock" OR '
+        'eventMessage CONTAINS "authenticated" OR eventMessage CONTAINS "denied")) OR '
+        '(process == "screensaverengine" AND (eventMessage CONTAINS "unlock" OR '
+        'eventMessage CONTAINS "lock" OR eventMessage CONTAINS "authenticated"))'
+    )
+
+    def __init__(self, window_seconds: int = 10, device_id: str = "") -> None:
+        super().__init__(window_seconds=window_seconds, device_id=device_id)
+        import collections
+        import threading
+
+        self._buffer: collections.deque = collections.deque(maxlen=10000)
+        self._stream_proc: Optional[subprocess.Popen] = None
+        self._reader_thread: Optional[threading.Thread] = None
+        self._shutdown = threading.Event()
+        self._stream_alive = False
+        self._start_stream()
+
+    def _start_stream(self) -> None:
+        """Launch log stream subprocess + reader thread."""
+        import threading
+
+        try:
+            self._stream_proc = subprocess.Popen(
+                [
+                    "/usr/bin/log",
+                    "stream",
+                    "--predicate",
+                    self._STREAM_PREDICATE,
+                    "--style",
+                    "ndjson",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                bufsize=1,  # line-buffered
+            )
+            self._reader_thread = threading.Thread(
+                target=self._read_loop, daemon=True, name="auth-stream-reader"
+            )
+            self._reader_thread.start()
+            self._stream_alive = True
+            logger.info(
+                "StreamingAuthCollector: log stream started (pid=%d)",
+                self._stream_proc.pid,
+            )
+        except Exception as e:
+            logger.warning("StreamingAuthCollector: log stream failed, using polling: %s", e)
+            self._stream_alive = False
+
+    def _read_loop(self) -> None:
+        """Background thread: read lines from log stream, parse, buffer."""
+        proc = self._stream_proc
+        if not proc or not proc.stdout:
+            return
+
+        for line in proc.stdout:
+            if self._shutdown.is_set():
+                break
+            line = line.strip()
+            if not line or line.startswith("Filtering"):
+                continue
+
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            # Determine category from process name
+            process_name = entry.get("processImagePath", "")
+            if "/" in process_name:
+                process_name = process_name.rsplit("/", 1)[-1]
+            if not process_name:
+                process_name = entry.get("process", "")
+
+            category = _PROCESS_CATEGORY.get(process_name, "unknown")
+
+            parsed = self._parse_entry(entry, category)
+            if parsed is not None:
+                self._buffer.append(parsed)
+
+        logger.info("StreamingAuthCollector: reader thread exiting")
+
+    def collect(self) -> Dict[str, Any]:
+        """Drain the event buffer. Zero blind window."""
+        # If stream died, fall back to polling
+        if not self._stream_alive or (
+            self._stream_proc and self._stream_proc.poll() is not None
+        ):
+            if self._stream_alive:
+                logger.warning("StreamingAuthCollector: stream died, falling back to polling")
+                self._stream_alive = False
+            return super().collect()
+
+        start = time.monotonic()
+
+        # Drain buffer
+        events: List[AuthEvent] = []
+        while self._buffer:
+            try:
+                events.append(self._buffer.popleft())
+            except IndexError:
+                break
+
+        events.sort(key=lambda e: e.timestamp)
+        elapsed_ms = (time.monotonic() - start) * 1000
+
+        logger.debug(
+            "StreamingAuthCollector: drained %d events in %.1fms (buffer remaining: %d)",
+            len(events),
+            elapsed_ms,
+            len(self._buffer),
+        )
+
+        return {
+            "auth_events": events,
+            "event_count": len(events),
+            "collection_time_ms": round(elapsed_ms, 2),
+            "streaming": True,
+        }
+
+    def shutdown(self) -> None:
+        """Stop the log stream subprocess."""
+        self._shutdown.set()
+        if self._stream_proc:
+            try:
+                self._stream_proc.terminate()
+                self._stream_proc.wait(timeout=5)
+            except Exception:
+                try:
+                    self._stream_proc.kill()
+                except Exception:
+                    pass
+            logger.info("StreamingAuthCollector: stream stopped")

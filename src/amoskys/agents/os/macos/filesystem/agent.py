@@ -27,7 +27,10 @@ from typing import Any, Dict, List, Sequence
 from amoskys.agents.common.base import HardenedAgentBase, ValidationResult
 from amoskys.agents.common.probes import MicroProbeAgentMixin, Severity, TelemetryEvent
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
-from amoskys.agents.os.macos.filesystem.collector import MacOSFileCollector
+from amoskys.agents.os.macos.filesystem.collector import (
+    FSEventsFileCollector,
+    MacOSFileCollector,
+)
 from amoskys.agents.os.macos.filesystem.probes import create_filesystem_probes
 from amoskys.config import get_config
 
@@ -74,7 +77,14 @@ class MacOSFileAgent(MicroProbeAgentMixin, HardenedAgentBase):
             queue_adapter=queue_adapter,
         )
 
-        self.collector = MacOSFileCollector(device_id=device_id)
+        # Use FSEvents-enhanced collector for real-time file change detection.
+        # Falls back to standard polling if watchdog library unavailable.
+        try:
+            self.collector = FSEventsFileCollector(device_id=device_id)
+            logger.info("FIM agent using FSEvents-enhanced collector")
+        except Exception as e:
+            logger.warning("FSEvents collector failed, using polling: %s", e)
+            self.collector = MacOSFileCollector(device_id=device_id)
         self.register_probes(create_filesystem_probes())
 
         logger.info(

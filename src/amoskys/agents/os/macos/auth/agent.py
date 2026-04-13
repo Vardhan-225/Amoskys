@@ -32,7 +32,7 @@ from amoskys.agents.common.probes import (
     TelemetryEvent,
 )
 from amoskys.agents.common.queue_adapter import LocalQueueAdapter
-from amoskys.agents.os.macos.auth.collector import MacOSAuthCollector
+from amoskys.agents.os.macos.auth.collector import MacOSAuthCollector, StreamingAuthCollector
 from amoskys.agents.os.macos.auth.probes import create_auth_probes
 from amoskys.config import get_config
 
@@ -79,10 +79,20 @@ class MacOSAuthAgent(MicroProbeAgentMixin, HardenedAgentBase):
             queue_adapter=queue_adapter,
         )
 
-        self.collector = MacOSAuthCollector(
-            window_seconds=int(collection_interval),
-            device_id=device_id,
-        )
+        # Use streaming collector (log stream) for zero-blind-window auth
+        # monitoring. Falls back to polling (log show) if stream fails.
+        try:
+            self.collector = StreamingAuthCollector(
+                window_seconds=int(collection_interval),
+                device_id=device_id,
+            )
+            logger.info("Auth agent using STREAMING collector (log stream)")
+        except Exception as e:
+            logger.warning("Streaming collector failed, using polling: %s", e)
+            self.collector = MacOSAuthCollector(
+                window_seconds=int(collection_interval),
+                device_id=device_id,
+            )
         self.register_probes(create_auth_probes())
 
         logger.info(
