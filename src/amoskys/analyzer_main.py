@@ -666,8 +666,14 @@ def main() -> int:
                                                 pass
 
                                     elif domain == "flow":
+                                        # Unique ns offset per flow event —
+                                        # prevents UNIQUE constraint collision
+                                        _flow_counter = getattr(store, "_flow_ns_ctr", 0) + 1
+                                        store._flow_ns_ctr = _flow_counter
+                                        _flow_ts = _base["timestamp_ns"] + (_flow_counter % 1_000_000)
                                         store.insert_flow_event({
                                             **_base,
+                                            "timestamp_ns": _flow_ts,
                                             "src_ip": attrs.get("src_ip"),
                                             "dst_ip": attrs.get("dst_ip"),
                                             "src_port": attrs.get("src_port"),
