@@ -10,6 +10,10 @@ logger = logging.getLogger("WALProcessor")
 class ObservationMixin:
     """Insert methods for all observation domain tables."""
 
+    # Per-cycle nanosecond counter — ensures each event within a batch
+    # gets a unique timestamp_ns even when the cycle timestamp is shared.
+    _obs_ns_counter: int = 0
+
     # Domain routers for OBSERVATION events -> domain tables
     # P1/P2 domains have dedicated tables; P3 domains use generic observation_events
     _OBSERVATION_ROUTERS = {
@@ -160,6 +164,10 @@ class ObservationMixin:
 
         Filters out LISTEN/bind sockets -- they're socket inventory, not traffic.
         Defense-in-depth: agents should also filter, but WAL catches stragglers.
+
+        Each event gets a unique timestamp_ns (cycle_ts + nanosecond offset)
+        to avoid UNIQUE constraint collisions when the same connection tuple
+        appears across collection cycles.
         """
         state = (attrs.get("state") or "").strip().upper()
         dst_ip = (attrs.get("dst_ip") or "").strip()
@@ -175,9 +183,15 @@ class ObservationMixin:
             except Exception:
                 logger.debug("Enrichment failed for flow observation", exc_info=True)
 
+        # Unique nanosecond offset per event within a batch — prevents
+        # UNIQUE(device_id, src_ip, dst_ip, src_port, dst_port, timestamp_ns)
+        # from silently dropping repeated connections across cycles.
+        ObservationMixin._obs_ns_counter += 1
+        unique_ts_ns = ts_ns + (ObservationMixin._obs_ns_counter % 1_000_000)
+
         self.store.insert_flow_event(
             {
-                "timestamp_ns": ts_ns,
+                "timestamp_ns": unique_ts_ns,
                 "timestamp_dt": timestamp_dt,
                 "device_id": device_id,
                 "src_ip": attrs.get("src_ip"),

@@ -321,6 +321,19 @@ class LifecycleMixin:
             except sqlite3.Error:
                 deleted[table] = 0
 
+        # Process genealogy: trim exited processes older than retention window.
+        # This table grows unbounded (~2.7M rows) because it tracks every
+        # process spawn/exit. Keep running + recently exited only.
+        try:
+            cursor = self.db.execute(
+                "DELETE FROM process_genealogy WHERE exit_ts IS NOT NULL "
+                "AND exit_ts < ?",
+                (time.time() - max_age_days * 86400,),
+            )
+            deleted["process_genealogy"] = cursor.rowcount
+        except sqlite3.Error:
+            deleted["process_genealogy"] = 0
+
         self.db.commit()
 
         total = sum(deleted.values())

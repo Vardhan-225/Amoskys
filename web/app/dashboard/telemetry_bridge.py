@@ -205,6 +205,29 @@ def _upsert_rows(db: sqlite3.Connection, table: str, rows: list) -> int:
     if not rows:
         return 0
 
+    # Column renames: ops server → fleet_cache TelemetryStore schema
+    _COLUMN_MAP = {
+        "event_timestamp_ns": "timestamp_ns",
+        "raw_attributes_json": "attributes",
+    }
+
+    # Apply column renames to all rows
+    if any(k in rows[0] for k in _COLUMN_MAP):
+        for row in rows:
+            for old_key, new_key in _COLUMN_MAP.items():
+                if old_key in row and new_key not in row:
+                    row[new_key] = row.pop(old_key)
+            # Generate timestamp_dt from timestamp_ns if missing
+            if "timestamp_ns" in row and "timestamp_dt" not in row:
+                try:
+                    from datetime import datetime, timezone
+                    ts = row["timestamp_ns"] / 1e9
+                    row["timestamp_dt"] = datetime.fromtimestamp(
+                        ts, tz=timezone.utc
+                    ).isoformat()
+                except Exception:
+                    pass
+
     # Get existing columns and their NOT NULL constraints
     try:
         cursor = db.execute(f"PRAGMA table_info({table})")

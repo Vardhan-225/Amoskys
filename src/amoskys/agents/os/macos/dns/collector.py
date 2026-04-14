@@ -155,32 +155,36 @@ class MacOSDNSCollector:
 
         Strategy:
           1. Parse mDNSResponder Unified Logging (always — gives PID attribution)
-          2. On macOS 15+ where domains are hashed, also collect plaintext
-             domains from the DNS cache (dscacheutil) and correlate by timestamp
-          3. Merge: prefer plaintext from cache, fall back to hash from logs
+          2. On macOS 15+ where domains are hashed, capture plaintext domains
+             via tcpdump on port 53 (agent runs as root, has BPF access)
+          3. Merge: plaintext from packet capture + PID from Unified Log
         """
-        # Source 1: Unified Logging (has PID/process attribution but hashed domains)
+        # Source 1: Unified Logging (has PID/process attribution but hashed domains on 15+)
         log_queries = self._collect_from_unified_log()
 
-        # Source 2: DNS cache dump (plaintext domains, no PID attribution)
-        cache_domains = self._collect_from_dns_cache()
+        # Source 2: Packet capture on port 53 (plaintext domains, no PID)
+        pcap_queries = self._collect_from_pcap()
 
-        # Source 3: /var/log/system.log mDNSResponder lines (sometimes plaintext)
-        syslog_queries = self._collect_from_syslog()
-
-        # If we got plaintext domains from cache or syslog, use them
+        # If we have plaintext from pcap, prefer those. Merge PID attribution
+        # from log_queries where timestamps align.
         has_hashed = any(q.domain.startswith("[hash:") for q in log_queries)
-        if has_hashed and (cache_domains or syslog_queries):
-            # Merge syslog queries (they have plaintext + attribution)
-            all_queries = syslog_queries + log_queries
-            # Enrich: replace hashed domains with cache lookups where possible
-            if cache_domains:
-                for q in all_queries:
-                    if q.domain.startswith("[hash:"):
-                        q.domain = f"{q.domain}|cache:{len(cache_domains)}domains"
-            return all_queries
+        if has_hashed and pcap_queries:
+            # Use pcap queries as primary (plaintext domains)
+            # Attach PID/process from log queries by timestamp proximity
+            log_by_ts = {}
+            for lq in log_queries:
+                bucket = int(lq.timestamp)  # 1-second bucket
+                if bucket not in log_by_ts:
+                    log_by_ts[bucket] = lq
+            for pq in pcap_queries:
+                bucket = int(pq.timestamp)
+                match = log_by_ts.get(bucket) or log_by_ts.get(bucket - 1)
+                if match and not pq.source_process:
+                    pq.source_process = match.source_process
+                    pq.source_pid = match.source_pid
+            return pcap_queries
 
-        return log_queries if log_queries else syslog_queries
+        return log_queries
 
     def _collect_from_unified_log(self) -> List[DNSQuery]:
         """Parse mDNSResponder logs via Unified Logging."""
@@ -230,79 +234,80 @@ class MacOSDNSCollector:
         logger.debug("Collected %d DNS queries from Unified Log", len(queries))
         return queries
 
-    def _collect_from_dns_cache(self) -> List[str]:
-        """Dump the macOS DNS cache for plaintext resolved domains.
-
-        Uses dscacheutil -cachedump -entries which shows recently resolved
-        names with their IPs, TTLs, and timestamps. Works on macOS 15+
-        and returns the actual domain names (not hashed).
-        """
-        domains: List[str] = []
-        try:
-            result = subprocess.run(
-                ["dscacheutil", "-cachedump", "-entries"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0 and result.stdout:
-                for line in result.stdout.split("\n"):
-                    # Lines like: "name: example.com"
-                    if line.strip().startswith("name:"):
-                        domain = line.split(":", 1)[1].strip()
-                        if domain and "." in domain:
-                            domains.append(domain)
-        except Exception:
-            pass
-
-        # Also try: dns-sd -G v4 <domain> is interactive, skip it.
-        # Alternative: parse /var/log/system.log for mDNSResponder entries
-        logger.debug("DNS cache dump: %d domains", len(domains))
-        return domains
-
-    # Regex for syslog mDNSResponder lines with plaintext domains
-    _SYSLOG_DNS_PATTERN = re.compile(
-        r"mDNSResponder.*?"
-        r"(?:getaddrinfo|query|Question|answer)"
-        r".*?(?:for|name)\s+"
-        r"([a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?)+)",
-        re.IGNORECASE,
+    # Regex to extract domain from tcpdump DNS output
+    # Matches lines like: "12:34:56.789 IP 192.168.1.1.52311 > 8.8.8.8.53: 12345+ A? example.com. (30)"
+    _TCPDUMP_DNS_PATTERN = re.compile(
+        r"(\d{2}:\d{2}:\d{2}\.\d+)\s+"  # timestamp
+        r"IP[46]?\s+\S+\s+>\s+\S+:\s+"  # src > dst:
+        r"\d+\+?\s+"  # query ID
+        r"(A{1,4}\??|AAAA\??|PTR\??|MX\??|TXT\??|CNAME\??|SRV\??|NS\??)\s+"  # record type
+        r"(\S+?)\.\s"  # domain (ends with dot + space)
     )
 
-    def _collect_from_syslog(self) -> List[DNSQuery]:
-        """Parse /var/log/system.log for mDNSResponder entries.
+    def _collect_from_pcap(self) -> List[DNSQuery]:
+        """Capture plaintext DNS queries via tcpdump on port 53.
 
-        On some macOS configurations, system.log still has plaintext
-        domains even when Unified Logging hashes them.
+        The agent runs as root, so BPF access is available. Captures
+        outbound DNS queries for a short window and extracts the actual
+        domain names from the wire — bypasses macOS 15+ Unified Logging
+        privacy hashing entirely.
+
+        Captures for 3 seconds max or 200 packets, whichever comes first.
         """
         queries: List[DNSQuery] = []
+        output = ""
         try:
-            result = subprocess.run(
-                ["tail", "-200", "/var/log/system.log"],
-                capture_output=True,
+            # Use Popen so we can capture output even on timeout
+            proc = subprocess.Popen(
+                [
+                    "tcpdump",
+                    "-i", "any",
+                    "-nn",           # no name resolution
+                    "-l",            # line-buffered
+                    "-c", "200",     # max packets
+                    "udp port 53 and not src port 53",  # outbound queries only
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
                 text=True,
-                timeout=3,
             )
-            if result.returncode != 0:
-                return queries
-            for line in result.stdout.split("\n"):
-                if "mDNSResponder" not in line:
-                    continue
-                match = self._SYSLOG_DNS_PATTERN.search(line)
-                if match:
-                    domain = match.group(1).rstrip(".")
-                    if domain and not domain.endswith(".local"):
-                        queries.append(
-                            DNSQuery(
-                                timestamp=time.time(),
-                                domain=domain,
-                                record_type="A",
-                                response_code="SYSLOG",
-                            )
-                        )
-        except Exception:
-            pass
-        logger.debug("Syslog DNS: %d queries", len(queries))
+            try:
+                output, _ = proc.communicate(timeout=4)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                output, _ = proc.communicate()
+
+        except FileNotFoundError:
+            logger.warning("tcpdump not found — DNS plaintext capture unavailable")
+            return queries
+        except Exception as e:
+            logger.debug("DNS pcap capture failed: %s", e)
+            return queries
+
+        seen = set()
+        for line in output.split("\n"):
+            match = self._TCPDUMP_DNS_PATTERN.search(line)
+            if not match:
+                continue
+            record_type = match.group(2).rstrip("?").upper()
+            domain = match.group(3).rstrip(".")
+
+            if not domain or domain.endswith(".local"):
+                continue
+            if domain in seen:
+                continue
+            seen.add(domain)
+
+            queries.append(
+                DNSQuery(
+                    timestamp=time.time(),
+                    domain=domain,
+                    record_type=record_type,
+                    response_code="PCAP",
+                )
+            )
+
+        logger.debug("DNS pcap: %d unique queries captured", len(queries))
         return queries
 
     def _parse_log_line(self, line: str) -> Optional[DNSQuery]:

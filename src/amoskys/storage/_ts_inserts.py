@@ -718,6 +718,12 @@ class InsertMixin:
             # Treat NULL/missing change_type as snapshot (persistence scans
             # re-emit the same entries every cycle; without this gate the DB
             # grows by ~800K rows/day).
+            #
+            # Instead of suppressing duplicates entirely, UPDATE the timestamp
+            # so the entry stays "fresh" in queries. This way:
+            # - DB doesn't grow unbounded (still 1 row per entry)
+            # - Entry shows as recently observed (not stale from first scan)
+            # - Actual CHANGES (content_hash differs) still insert as new rows
             dedup_id = entry_id or event_data.get("path") or ""
             is_snapshot = change_type in ("snapshot", None, "")
             if is_snapshot and device_id and mechanism and dedup_id:
@@ -725,8 +731,28 @@ class InsertMixin:
                 if self._check_snapshot_dedup(
                     "persistence_events", key, content_hash, timestamp_ns
                 ):
+                    # Duplicate content — just refresh the timestamp so it stays visible
+                    try:
+                        self.db.execute(
+                            "UPDATE persistence_events SET timestamp_ns = ?, "
+                            "timestamp_dt = ? WHERE device_id = ? AND mechanism = ? "
+                            "AND (entry_id = ? OR path = ?) "
+                            "AND content_hash = ? LIMIT 1",
+                            (
+                                timestamp_ns,
+                                event_data.get("timestamp_dt",
+                                    datetime.now(timezone.utc).isoformat()),
+                                device_id,
+                                mechanism,
+                                entry_id,
+                                event_data.get("path", ""),
+                                content_hash,
+                            ),
+                        )
+                    except Exception:
+                        pass  # UPDATE best-effort; don't break the pipeline
                     self._commit()
-                    return None  # suppressed duplicate
+                    return None  # still deduped, but timestamp refreshed
 
             cursor = self.db.execute(
                 """
