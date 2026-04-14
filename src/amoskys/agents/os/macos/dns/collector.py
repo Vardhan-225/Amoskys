@@ -256,15 +256,15 @@ class MacOSDNSCollector:
         output = ""
         try:
             # Use Popen so we can capture output even on timeout.
-            # Run for up to 8 seconds (aligns with collection cycle) or 500
-            # packets. The timeout ensures we don't block the collector.
+            # DNS collector runs every 10s — tcpdump must finish well within
+            # that window. 3s capture + 50 packet cap keeps it fast.
             proc = subprocess.Popen(
                 [
                     "tcpdump",
                     "-i", "any",
                     "-nn",           # no name resolution
                     "-l",            # line-buffered
-                    "-c", "500",     # max packets
+                    "-c", "50",      # max packets (enough for one burst)
                     "udp port 53 and not src port 53",  # outbound queries only
                 ],
                 stdout=subprocess.PIPE,
@@ -272,7 +272,7 @@ class MacOSDNSCollector:
                 text=True,
             )
             try:
-                output, _ = proc.communicate(timeout=8)
+                output, _ = proc.communicate(timeout=3)
             except subprocess.TimeoutExpired:
                 proc.kill()
                 output, _ = proc.communicate()
