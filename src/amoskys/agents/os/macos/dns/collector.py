@@ -159,30 +159,7 @@ class MacOSDNSCollector:
              via tcpdump on port 53 (agent runs as root, has BPF access)
           3. Merge: plaintext from packet capture + PID from Unified Log
         """
-        # Source 1: Unified Logging (has PID/process attribution but hashed domains on 15+)
-        log_queries = self._collect_from_unified_log()
-
-        # Source 2: Packet capture on port 53 (plaintext domains, no PID)
-        pcap_queries = self._collect_from_pcap()
-
-        # Always combine both sources. Pcap provides plaintext domains,
-        # Unified Log provides PID attribution. Together they're complete.
-        if pcap_queries:
-            # Attach PID/process from log queries by timestamp proximity
-            log_by_ts = {}
-            for lq in log_queries:
-                bucket = int(lq.timestamp)
-                if bucket not in log_by_ts:
-                    log_by_ts[bucket] = lq
-            for pq in pcap_queries:
-                bucket = int(pq.timestamp)
-                match = log_by_ts.get(bucket) or log_by_ts.get(bucket - 1)
-                if match and not pq.source_process:
-                    pq.source_process = match.source_process
-                    pq.source_pid = match.source_pid
-
-        # Return combined: pcap (plaintext) + log (hashed but with PID)
-        return pcap_queries + log_queries
+        return self._collect_from_unified_log()
 
     def _collect_from_unified_log(self) -> List[DNSQuery]:
         """Parse mDNSResponder logs via Unified Logging."""
