@@ -150,16 +150,80 @@ class MacOSDNSCollector:
             "collection_time_ms": round(elapsed_ms, 2),
         }
 
+    # Path where the standalone DNS pcap daemon writes captured domains
+    _PCAP_DOMAINS_PATH = Path("/var/lib/amoskys/data/dns_plaintext.log")
+
     def _collect_dns_queries(self) -> List[DNSQuery]:
         """Collect DNS queries from multiple sources.
 
         Strategy:
           1. Parse mDNSResponder Unified Logging (always — gives PID attribution)
-          2. On macOS 15+ where domains are hashed, capture plaintext domains
-             via tcpdump on port 53 (agent runs as root, has BPF access)
-          3. Merge: plaintext from packet capture + PID from Unified Log
+          2. Read plaintext domains from dns_plaintext.log (written by
+             standalone pcap daemon, not inline subprocess)
+          3. Merge both — plaintext from pcap + PID from Unified Log
         """
-        return self._collect_from_unified_log()
+        log_queries = self._collect_from_unified_log()
+        pcap_queries = self._read_pcap_domains()
+
+        if pcap_queries:
+            # Attach PID/process from log queries by timestamp proximity
+            log_by_ts = {}
+            for lq in log_queries:
+                bucket = int(lq.timestamp)
+                if bucket not in log_by_ts:
+                    log_by_ts[bucket] = lq
+            for pq in pcap_queries:
+                bucket = int(pq.timestamp)
+                match = log_by_ts.get(bucket) or log_by_ts.get(bucket - 1)
+                if match and not pq.source_process:
+                    pq.source_process = match.source_process
+                    pq.source_pid = match.source_pid
+
+        return pcap_queries + log_queries
+
+    def _read_pcap_domains(self) -> List[DNSQuery]:
+        """Read plaintext domains from the pcap daemon's output file.
+
+        The dns_pcap_daemon.py runs as a separate process under the watchdog,
+        captures port 53 traffic via tcpdump, and appends lines like:
+            1712345678.123|A|api.github.com
+        to /var/lib/amoskys/data/dns_plaintext.log
+
+        We read and consume lines newer than our last read.
+        """
+        queries: List[DNSQuery] = []
+        try:
+            if not self._PCAP_DOMAINS_PATH.exists():
+                return queries
+            cutoff = time.time() - self._log_window
+            with open(self._PCAP_DOMAINS_PATH) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split("|", 2)
+                    if len(parts) < 3:
+                        continue
+                    try:
+                        ts = float(parts[0])
+                    except ValueError:
+                        continue
+                    if ts < cutoff:
+                        continue
+                    record_type = parts[1]
+                    domain = parts[2]
+                    if domain and "." in domain and not domain.endswith(".local"):
+                        queries.append(
+                            DNSQuery(
+                                timestamp=ts,
+                                domain=domain,
+                                record_type=record_type,
+                                response_code="PCAP",
+                            )
+                        )
+        except Exception:
+            pass
+        return queries
 
     def _collect_from_unified_log(self) -> List[DNSQuery]:
         """Parse mDNSResponder logs via Unified Logging."""

@@ -820,14 +820,31 @@ class InsertMixin:
             size = event_data.get("size")
             change_type = event_data.get("change_type")
 
-            # Unified snapshot dedup
+            # Unified snapshot dedup — suppress content-identical re-scans
+            # but refresh timestamp so entries stay visible in queries.
             if change_type == "snapshot" and device_id and path:
                 key = self._dedup_key(device_id, path)
                 if self._check_snapshot_dedup(
                     "fim_events", key, new_hash, timestamp_ns
                 ):
+                    try:
+                        self.db.execute(
+                            "UPDATE fim_events SET timestamp_ns = ?, timestamp_dt = ? "
+                            "WHERE device_id = ? AND path = ? AND new_hash = ? "
+                            "ORDER BY timestamp_ns DESC LIMIT 1",
+                            (
+                                timestamp_ns,
+                                event_data.get("timestamp_dt",
+                                    datetime.now(timezone.utc).isoformat()),
+                                device_id,
+                                path,
+                                new_hash,
+                            ),
+                        )
+                    except Exception:
+                        pass
                     self._commit()
-                    return None  # suppressed duplicate
+                    return None  # deduped but timestamp refreshed
 
             cursor = self.db.execute(
                 """

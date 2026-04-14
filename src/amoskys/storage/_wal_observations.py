@@ -171,8 +171,10 @@ class ObservationMixin:
         """
         state = (attrs.get("state") or "").strip().upper()
         dst_ip = (attrs.get("dst_ip") or "").strip()
-        # Drop LISTEN/bind sockets and entries with no destination
-        if state in ("LISTEN", "NONE", "") or not dst_ip:
+        # Drop LISTEN sockets and entries with no destination.
+        # Empty state is ALLOWED — macOS lsof often omits state for
+        # established TCP connections. Only drop explicit LISTEN.
+        if state == "LISTEN" or not dst_ip:
             return
 
         quality = self._quality_payload(attrs)

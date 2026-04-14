@@ -148,7 +148,14 @@ class AMOSKYSWatchdog:
                 "FORCE_HTTPS": "false",
             },
         )
-        self.children = [self.collector, self.analyzer, self.dashboard]
+        # DNS plaintext capture daemon — runs tcpdump in a separate process
+        # to bypass macOS 15+ Unified Logging domain hashing.
+        self.dns_pcap = ChildProcess(
+            name="dns_pcap",
+            entry_module="amoskys.agents.os.macos.dns.dns_pcap_daemon",
+            rss_limit_mb=50,
+        )
+        self.children = [self.collector, self.analyzer, self.dashboard, self.dns_pcap]
         self._running = True
         self._setup_signals()
 
@@ -322,6 +329,7 @@ class AMOSKYSWatchdog:
         self.start_child(self.analyzer)
         time.sleep(2)
         self.start_child(self.dashboard)
+        self.start_child(self.dns_pcap)
 
         # Supervision loop
         while self._running:
