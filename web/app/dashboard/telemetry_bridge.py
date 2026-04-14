@@ -67,19 +67,12 @@ def get_telemetry_store() -> Optional["TelemetryStore"]:
 
         # Mode 2: Fleet mode — sync from ops server
         if _OPS_SERVER:
-            # If cache already exists from a prior sync, use it immediately
-            # (don't block on re-sync — background thread will refresh it)
             cache_exists = _CACHE_DB_PATH.exists()
 
             if not _sync_started:
                 _sync_started = True
-                if not cache_exists:
-                    # No cache yet — do a blocking first sync
-                    try:
-                        _sync_from_ops()
-                        cache_exists = _CACHE_DB_PATH.exists()
-                    except Exception:
-                        logger.warning("Initial fleet sync failed", exc_info=True)
+                # NEVER block the request thread on sync — it takes 30-60s
+                # and freezes the gunicorn worker. Always start background sync.
                 _start_fleet_sync()
 
             # Try the cache DB (populated by fleet sync)
