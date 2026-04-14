@@ -1380,14 +1380,24 @@ def bulk_export():
 
     result = {}
 
+    # Per-table row limits for export — prevents massive JSON responses
+    # that choke the presentation server (914MB RAM)
+    _EXPORT_LIMITS = {
+        "flow_events": 30_000,
+        "dns_events": 30_000,
+        "observation_events": 10_000,
+        "process_events": 10_000,
+    }
+
     for table in ts_tables:
         try:
+            limit = _EXPORT_LIMITS.get(table, 50_000)
             query = f"SELECT * FROM {table} WHERE timestamp_ns > ?"
             params = [cutoff_ns]
             if device_id:
                 query += " AND device_id = ?"
                 params.append(device_id)
-            query += " ORDER BY id DESC"
+            query += f" ORDER BY id DESC LIMIT {limit}"
             rows = db.execute(query, params).fetchall()
             result[table] = [dict(r) for r in rows]
         except Exception:
@@ -1458,8 +1468,21 @@ def _run_maintenance():
         except Exception:
             pass
 
-    # 2. Rate limit bloated tables (persistence, observation)
-    for table, max_rows in [("persistence_events", 50000), ("observation_events", 50000)]:
+    # 2. Cap high-volume tables to prevent unbounded growth.
+    # flow_events grows fastest (~4K/hour). Retention already handles age-based
+    # cleanup, but row caps protect against bursts. Limits are per-table:
+    _TABLE_CAPS = {
+        "flow_events": 500_000,       # ~5 days at 4K/hour
+        "dns_events": 500_000,        # ~2 days at 12K/hour
+        "observation_events": 200_000,
+        "process_events": 200_000,
+        "security_events": 100_000,
+        "audit_events": 100_000,
+        "persistence_events": 50_000,
+        "fim_events": 50_000,
+        "peripheral_events": 50_000,
+    }
+    for table, max_rows in _TABLE_CAPS.items():
         try:
             count = db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             if count > max_rows:
