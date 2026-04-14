@@ -165,15 +165,13 @@ class MacOSDNSCollector:
         # Source 2: Packet capture on port 53 (plaintext domains, no PID)
         pcap_queries = self._collect_from_pcap()
 
-        # If we have plaintext from pcap, prefer those. Merge PID attribution
-        # from log_queries where timestamps align.
-        has_hashed = any(q.domain.startswith("[hash:") for q in log_queries)
-        if has_hashed and pcap_queries:
-            # Use pcap queries as primary (plaintext domains)
+        # Always combine both sources. Pcap provides plaintext domains,
+        # Unified Log provides PID attribution. Together they're complete.
+        if pcap_queries:
             # Attach PID/process from log queries by timestamp proximity
             log_by_ts = {}
             for lq in log_queries:
-                bucket = int(lq.timestamp)  # 1-second bucket
+                bucket = int(lq.timestamp)
                 if bucket not in log_by_ts:
                     log_by_ts[bucket] = lq
             for pq in pcap_queries:
@@ -182,9 +180,9 @@ class MacOSDNSCollector:
                 if match and not pq.source_process:
                     pq.source_process = match.source_process
                     pq.source_pid = match.source_pid
-            return pcap_queries
 
-        return log_queries
+        # Return combined: pcap (plaintext) + log (hashed but with PID)
+        return pcap_queries + log_queries
 
     def _collect_from_unified_log(self) -> List[DNSQuery]:
         """Parse mDNSResponder logs via Unified Logging."""
@@ -257,14 +255,16 @@ class MacOSDNSCollector:
         queries: List[DNSQuery] = []
         output = ""
         try:
-            # Use Popen so we can capture output even on timeout
+            # Use Popen so we can capture output even on timeout.
+            # Run for up to 8 seconds (aligns with collection cycle) or 500
+            # packets. The timeout ensures we don't block the collector.
             proc = subprocess.Popen(
                 [
                     "tcpdump",
                     "-i", "any",
                     "-nn",           # no name resolution
                     "-l",            # line-buffered
-                    "-c", "200",     # max packets
+                    "-c", "500",     # max packets
                     "udp port 53 and not src port 53",  # outbound queries only
                 ],
                 stdout=subprocess.PIPE,
@@ -272,7 +272,7 @@ class MacOSDNSCollector:
                 text=True,
             )
             try:
-                output, _ = proc.communicate(timeout=4)
+                output, _ = proc.communicate(timeout=8)
             except subprocess.TimeoutExpired:
                 proc.kill()
                 output, _ = proc.communicate()
