@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS process_events (
 );
 CREATE INDEX IF NOT EXISTS idx_pe_device ON process_events(device_id);
 CREATE INDEX IF NOT EXISTS idx_pe_ts ON process_events(timestamp_ns);
+CREATE INDEX IF NOT EXISTS idx_pe_dedup ON process_events(source_id, device_id);
 
 -- Network flow events (from all devices)
 CREATE TABLE IF NOT EXISTS flow_events (
@@ -195,6 +196,7 @@ CREATE TABLE IF NOT EXISTS flow_events (
 );
 CREATE INDEX IF NOT EXISTS idx_fe_device ON flow_events(device_id);
 CREATE INDEX IF NOT EXISTS idx_fe_ts ON flow_events(timestamp_ns);
+CREATE INDEX IF NOT EXISTS idx_fe_dedup ON flow_events(source_id, device_id);
 
 -- DNS events (from all devices)
 CREATE TABLE IF NOT EXISTS dns_events (
@@ -213,6 +215,8 @@ CREATE TABLE IF NOT EXISTS dns_events (
     received_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_de_device ON dns_events(device_id);
+CREATE INDEX IF NOT EXISTS idx_de_dedup ON dns_events(source_id, device_id);
+CREATE INDEX IF NOT EXISTS idx_de_ts ON dns_events(timestamp_ns);
 
 -- Persistence events (from all devices)
 CREATE TABLE IF NOT EXISTS persistence_events (
@@ -232,6 +236,8 @@ CREATE TABLE IF NOT EXISTS persistence_events (
     received_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pers_device ON persistence_events(device_id);
+CREATE INDEX IF NOT EXISTS idx_pers_dedup ON persistence_events(source_id, device_id);
+CREATE INDEX IF NOT EXISTS idx_pers_ts ON persistence_events(timestamp_ns);
 
 -- FIM events (from all devices)
 CREATE TABLE IF NOT EXISTS fim_events (
@@ -255,6 +261,8 @@ CREATE TABLE IF NOT EXISTS fim_events (
     received_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_fim_device ON fim_events(device_id);
+CREATE INDEX IF NOT EXISTS idx_fim_dedup ON fim_events(source_id, device_id);
+CREATE INDEX IF NOT EXISTS idx_fim_ts ON fim_events(timestamp_ns);
 
 -- Audit events (from all devices)
 CREATE TABLE IF NOT EXISTS audit_events (
@@ -274,6 +282,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
     received_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_device ON audit_events(device_id);
+CREATE INDEX IF NOT EXISTS idx_audit_dedup ON audit_events(source_id, device_id);
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_events(timestamp_ns);
 
 -- Observation events (from all devices)
 CREATE TABLE IF NOT EXISTS observation_events (
@@ -307,6 +317,8 @@ CREATE TABLE IF NOT EXISTS peripheral_events (
     received_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_periph_device ON peripheral_events(device_id);
+CREATE INDEX IF NOT EXISTS idx_periph_dedup ON peripheral_events(source_id, device_id);
+CREATE INDEX IF NOT EXISTS idx_periph_ts ON peripheral_events(timestamp_ns);
 
 -- Fleet-level incidents (cross-device correlation)
 CREATE TABLE IF NOT EXISTS fleet_incidents (
@@ -629,6 +641,27 @@ def receive_telemetry():
     ).fetchone()
     org_id = device_row["org_id"] if device_row else None
 
+    # Pre-fetch existing source_ids for this device in one query (batch dedup)
+    # Instead of N individual SELECT queries, do one set lookup.
+    source_ids = [e.get("id") for e in events if e.get("id") is not None]
+    existing_ids: set = set()
+    if source_ids:
+        # Query in batches of 500 to avoid SQLite variable limit
+        for i in range(0, len(source_ids), 500):
+            batch = source_ids[i:i + 500]
+            placeholders = ",".join("?" * len(batch))
+            try:
+                rows = db.execute(
+                    f"SELECT source_id FROM {table} WHERE device_id = ? "
+                    f"AND source_id IN ({placeholders})",
+                    [device_id] + batch,
+                ).fetchall()
+                existing_ids.update(r[0] for r in rows)
+            except Exception:
+                pass
+
+    allowed_cols = ALLOWED_TABLES[table]
+
     for event in events:
         try:
             # Force device_id and org_id from server context (prevent spoofing)
@@ -638,17 +671,12 @@ def receive_telemetry():
             source_id = event.pop("id", None)
             event["source_id"] = source_id
 
-            # Dedup: skip if this source_id from this device already stored
-            if source_id is not None:
-                dup = db.execute(
-                    f"SELECT 1 FROM {table} WHERE source_id = ? AND device_id = ? LIMIT 1",
-                    (source_id, device_id),
-                ).fetchone()
-                if dup:
-                    continue
+            # Batch dedup: skip if source_id already exists
+            if source_id is not None and source_id in existing_ids:
+                continue
 
             # Build INSERT dynamically from event keys
-            cols = [k for k in event.keys() if k in ALLOWED_TABLES[table]]
+            cols = [k for k in event.keys() if k in allowed_cols]
             vals = [event[k] for k in cols]
             placeholders = ", ".join(["?"] * len(cols))
             col_names = ", ".join(cols)
