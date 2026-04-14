@@ -193,6 +193,20 @@ CREATE TABLE IF NOT EXISTS flow_events (
 
 CREATE INDEX IF NOT EXISTS idx_flow_timestamp ON flow_events(timestamp_ns DESC);
 CREATE INDEX IF NOT EXISTS idx_flow_ips ON flow_events(src_ip, dst_ip);
+CREATE INDEX IF NOT EXISTS idx_flow_geo_country_covering
+    ON flow_events(timestamp_ns, geo_dst_country, bytes_tx, bytes_rx);
+CREATE INDEX IF NOT EXISTS idx_flow_geo_city_covering
+    ON flow_events(timestamp_ns, geo_dst_city, geo_dst_country);
+CREATE INDEX IF NOT EXISTS idx_flow_asn_covering
+    ON flow_events(timestamp_ns, asn_dst_org, asn_dst_network_type, bytes_tx, bytes_rx);
+CREATE INDEX IF NOT EXISTS idx_flow_geopoints_covering
+    ON flow_events(timestamp_ns, geo_dst_latitude, geo_dst_longitude, geo_dst_country,
+                   geo_dst_city, bytes_tx, bytes_rx, asn_dst_org, threat_intel_match);
+CREATE INDEX IF NOT EXISTS idx_flow_topdst_covering
+    ON flow_events(timestamp_ns, dst_ip, dst_port, protocol, geo_dst_country, geo_dst_city,
+                   asn_dst_org, asn_dst_network_type, bytes_tx, bytes_rx, threat_intel_match);
+CREATE INDEX IF NOT EXISTS idx_flow_byprocess_covering
+    ON flow_events(timestamp_ns, process_name, bytes_tx, bytes_rx, dst_ip);
 
 -- Security Events Table (for threat correlation)
 CREATE TABLE IF NOT EXISTS security_events (
@@ -524,6 +538,10 @@ CREATE TABLE IF NOT EXISTS persistence_events (
 
 CREATE INDEX IF NOT EXISTS idx_persistence_timestamp ON persistence_events(timestamp_ns DESC);
 CREATE INDEX IF NOT EXISTS idx_persistence_mechanism ON persistence_events(mechanism);
+CREATE INDEX IF NOT EXISTS idx_persistence_mechanism_covering
+    ON persistence_events(timestamp_ns, mechanism);
+CREATE INDEX IF NOT EXISTS idx_persistence_changetype_covering
+    ON persistence_events(timestamp_ns, change_type);
 CREATE INDEX IF NOT EXISTS idx_persistence_risk ON persistence_events(risk_score DESC);
 CREATE INDEX IF NOT EXISTS idx_persistence_entry ON persistence_events(entry_id);
 
