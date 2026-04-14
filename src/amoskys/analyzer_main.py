@@ -258,7 +258,7 @@ def main() -> int:
             try:
                 conn = _sqlite3.connect(qdb_path, timeout=2)
                 rows = conn.execute(
-                    "SELECT id, bytes FROM queue ORDER BY id LIMIT 1000"
+                    "SELECT id, bytes FROM queue ORDER BY id LIMIT 5000"
                 ).fetchall()
 
                 if not rows:
