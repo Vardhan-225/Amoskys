@@ -152,6 +152,41 @@ CREATE TABLE IF NOT EXISTS flow_events (
     contract_violation_code TEXT DEFAULT 'NONE',
     missing_fields TEXT,
     raw_attributes_json TEXT,
+    schema_version TEXT,
+
+    -- GeoIP enrichment
+    geo_src_country TEXT,
+    geo_src_city TEXT,
+    geo_src_latitude REAL,
+    geo_src_longitude REAL,
+    geo_dst_country TEXT,
+    geo_dst_city TEXT,
+    geo_dst_latitude REAL,
+    geo_dst_longitude REAL,
+
+    -- ASN enrichment
+    asn_src_number INTEGER,
+    asn_src_org TEXT,
+    asn_src_network_type TEXT,
+    asn_dst_number INTEGER,
+    asn_dst_org TEXT,
+    asn_dst_network_type TEXT,
+
+    -- Threat intel
+    threat_intel_match BOOLEAN DEFAULT 0,
+    threat_source TEXT,
+    threat_severity TEXT,
+
+    -- Process attribution
+    pid INTEGER,
+    process_name TEXT,
+    conn_user TEXT,
+    state TEXT,
+
+    -- Agent
+    collection_agent TEXT,
+    agent_version TEXT,
+    event_source TEXT DEFAULT 'observation',
 
     UNIQUE(device_id, src_ip, dst_ip, src_port, dst_port, timestamp_ns)
 );
