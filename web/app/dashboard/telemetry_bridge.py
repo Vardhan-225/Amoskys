@@ -126,11 +126,12 @@ def _sync_from_ops():
 
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Fetch bulk export from ops server (all events within 24h window)
+    # Fetch bulk export from ops server (6h window — keeps cache small
+    # for the t2.micro presentation server with 914MB RAM)
     try:
         resp = requests.get(
             f"{_OPS_SERVER}/api/v1/bulk-export",
-            params={"hours": 24},
+            params={"hours": 6},
             timeout=60,
             verify=False,
         )
