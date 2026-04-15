@@ -32,19 +32,34 @@ _AUTH_DETECTION_SOURCE = "system_auth_logs"
 
 
 def _enrich_auth_event(auth_ev) -> Dict[str, Any]:
-    """Map auth event fields to mandate-standard CONDITIONAL fields."""
-    enrichment: Dict[str, Any] = {"detection_source": _AUTH_DETECTION_SOURCE}
+    """Map auth event fields to mandate-standard context — Mandate v1.0.
+
+    Resolves PID to full process context when available.  Always returns
+    pid, process_name, exe with sentinels for missing data.
+    """
+    from amoskys.agents.common.process_resolver import mandate_context_from_pid
+
+    pid = getattr(auth_ev, "client_pid", 0) or 0
+    process_hint = getattr(auth_ev, "process", "") or ""
+
+    # Start with full mandate process context (sentinels for missing)
+    enrichment = mandate_context_from_pid(
+        pid,
+        probe_name="auth_probe",
+        process_name_hint=process_hint,
+        detection_source=_AUTH_DETECTION_SOURCE,
+    )
+
+    # Override exe from auth log if resolver couldn't get it
+    client_exe = getattr(auth_ev, "client_exe", "") or ""
+    if client_exe and enrichment.get("exe") in ("UNRESOLVED", "EXITED"):
+        enrichment["exe"] = client_exe
+
+    # Auth-specific fields
     if hasattr(auth_ev, "username") and auth_ev.username:
         enrichment["username"] = auth_ev.username
     if hasattr(auth_ev, "source_ip") and auth_ev.source_ip:
         enrichment["remote_ip"] = auth_ev.source_ip
-    # Process context — critical for IGRIS to understand what triggered the auth event
-    if hasattr(auth_ev, "process") and auth_ev.process:
-        enrichment["process_name"] = auth_ev.process
-    if hasattr(auth_ev, "client_exe") and auth_ev.client_exe:
-        enrichment["exe"] = auth_ev.client_exe
-    if hasattr(auth_ev, "client_pid") and auth_ev.client_pid:
-        enrichment["pid"] = auth_ev.client_pid
     if hasattr(auth_ev, "right") and auth_ev.right:
         enrichment["auth_right"] = auth_ev.right
     if hasattr(auth_ev, "service") and auth_ev.service:

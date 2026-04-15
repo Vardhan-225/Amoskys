@@ -62,25 +62,18 @@ def _is_non_routable(ip: str) -> bool:
 
 
 def _resolve_process(pid: int, fallback_name: str = "UNKNOWN") -> Dict[str, Any]:
-    """Resolve PID to full process context via shared resolver (cached)."""
-    from amoskys.agents.common.process_resolver import resolver
+    """Resolve PID to full process context — Mandate v1.0 compliant.
 
-    snap = resolver.resolve(pid)
-    if snap.is_alive:
-        return {
-            "pid": pid,
-            "process_name": snap.process_name or fallback_name,
-            "exe": snap.exe or "ACCESS_DENIED",
-            "cmdline": snap.cmdline,
-            "ppid": snap.ppid,
-            "parent_name": snap.parent_name,
-            "username": snap.username,
-        }
-    return {
-        "pid": pid,
-        "process_name": fallback_name,
-        "exe": "UNRESOLVED",
-    }
+    Always returns ALL mandate fields with sentinels for dead processes.
+    """
+    from amoskys.agents.common.process_resolver import mandate_context_from_pid
+
+    return mandate_context_from_pid(
+        pid,
+        probe_name="network_probe",
+        process_name_hint=fallback_name,
+        detection_source="lsof",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1026,11 +1019,7 @@ class UnexpectedListenerProbe(MicroProbe):
                         event_type="unexpected_listener",
                         severity=Severity.HIGH,
                         data={
-                            "probe_name": self.name,
-                            "detection_source": "lsof",
-                            "pid": resolved["pid"],
-                            "process_name": resolved["process_name"],
-                            "exe": resolved["exe"],
+                            **resolved,
                             "local_port": conn.local_port,
                             "protocol": getattr(conn, "protocol", "TCP"),
                             "remote_ip": "",

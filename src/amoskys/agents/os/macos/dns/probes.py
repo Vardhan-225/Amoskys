@@ -56,19 +56,24 @@ def _extract_effective_domain(domain: str) -> str:
 
 from amoskys.agents.common.ip_utils import is_benign_domain as _is_benign_domain
 from amoskys.agents.common.ip_utils import is_private_ip as _is_private_ip
-from amoskys.agents.common.process_resolver import resolver as _resolver
+from amoskys.agents.common.process_resolver import mandate_context_from_pid
 
 
 def _enrich_dns_process(query: Any) -> Dict[str, Any]:
-    """Resolve process context for a DNS query's source PID."""
-    enrichment: Dict[str, Any] = {"detection_source": "dns_monitor"}
+    """Resolve FULL process context for a DNS query — Mandate v1.0 compliant.
+
+    Always returns pid, process_name, exe, cmdline, ppid, parent_name,
+    username with sentinel values when the process is dead or the PID
+    is unavailable.
+    """
     pid = getattr(query, "process_pid", 0) or getattr(query, "source_pid", 0)
-    if not pid:
-        return enrichment
-    snap = _resolver.resolve(pid)
-    if snap.is_alive:
-        enrichment.update(snap.to_event_fields())
-    return enrichment
+    process_hint = getattr(query, "source_process", "") or ""
+    return mandate_context_from_pid(
+        pid,
+        probe_name="dns_probe",
+        process_name_hint=process_hint,
+        detection_source="dns_monitor",
+    )
 
 
 # ── Probe 1: DGA Detection ──────────────────────────────────────────────────

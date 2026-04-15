@@ -32,7 +32,23 @@ from amoskys.agents.os.macos.internet_activity.collector import (
     _is_tor_exit_node,
 )
 
+from amoskys.agents.common.process_resolver import mandate_context_from_pid
+
 logger = logging.getLogger(__name__)
+
+
+def _enrich_connection_process(conn: Any) -> Dict[str, Any]:
+    """Resolve full process context from a connection's PID — Mandate v1.0."""
+    pid = getattr(conn, "pid", 0) or 0
+    hint = getattr(conn, "process_name", "") or ""
+    return mandate_context_from_pid(pid, "internet_activity", process_name_hint=hint, detection_source="lsof")
+
+
+def _enrich_primary_pid(pids: set, process_names: set) -> Dict[str, Any]:
+    """Resolve the first available PID from an aggregate set — Mandate v1.0."""
+    pid = next(iter(sorted(pids)), 0) if pids else 0
+    hint = next(iter(sorted(process_names)), "") if process_names else ""
+    return mandate_context_from_pid(pid, "internet_activity", process_name_hint=hint, detection_source="lsof")
 
 
 # ── Shared utilities ─────────────────────────────────────────────────────────
@@ -250,8 +266,7 @@ class CloudExfilProbe(MicroProbe):
                     event_type="cloud_exfil_detected",
                     severity=severity,
                     data={
-                        "probe_name": self.name,
-                        "detection_source": "lsof",
+                        **_enrich_primary_pid(unique_pids, processes),
                         "cloud_type": cloud_type,
                         "connection_count": len(conns),
                         "unique_pids": sorted(unique_pids),
@@ -752,10 +767,7 @@ class LongLivedConnProbe(MicroProbe):
                         event_type="long_lived_connection",
                         severity=Severity.HIGH,
                         data={
-                            "probe_name": self.name,
-                            "detection_source": "lsof",
-                            "process_name": conn.process_name,
-                            "pid": conn.pid,
+                            **_enrich_connection_process(conn),
                             "remote_addr": conn.remote_addr,
                             "remote_port": conn.remote_port,
                             "duration_s": round(effective_duration, 1),

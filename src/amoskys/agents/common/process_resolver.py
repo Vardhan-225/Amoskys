@@ -363,10 +363,69 @@ def resolve_file_owner_process(file_path: str) -> Optional[ProcessSnapshot]:
 # Global singleton
 resolver = ProcessResolver()
 
+
+def mandate_context_from_pid(
+    pid: int,
+    probe_name: str,
+    *,
+    process_name_hint: str = "",
+    detection_source: str = "psutil_resolve",
+) -> Dict[str, Any]:
+    """Resolve a PID to full Observability Mandate process context.
+
+    Returns a dict with ALL mandate fields populated — never None or
+    empty string.  Uses sentinels for unresolvable fields:
+        "EXITED"         — process died before resolution
+        "ACCESS_DENIED"  — insufficient permissions
+        "UNRESOLVED"     — pid <= 0 or resolver unavailable
+
+    Any agent with a PID can call this to get mandate-grade context::
+
+        from amoskys.agents.common.process_resolver import mandate_context_from_pid
+        ctx = mandate_context_from_pid(conn.pid, self.name)
+        data = {**ctx, "domain": query.domain, ...}
+    """
+    ctx: Dict[str, Any] = {
+        "pid": pid,
+        "process_name": process_name_hint or "UNRESOLVED",
+        "exe": "UNRESOLVED",
+        "cmdline": "",
+        "ppid": 0,
+        "parent_name": "UNRESOLVED",
+        "username": "UNRESOLVED",
+        "probe_name": probe_name,
+        "detection_source": detection_source,
+    }
+
+    if pid <= 0:
+        return ctx
+
+    snap = resolver.resolve(pid)
+
+    if snap.is_alive:
+        ctx["process_name"] = snap.process_name or process_name_hint or "UNKNOWN"
+        ctx["exe"] = snap.exe or "ACCESS_DENIED"
+        ctx["cmdline"] = snap.cmdline or ""
+        ctx["ppid"] = snap.ppid
+        ctx["parent_name"] = snap.parent_name or "UNKNOWN"
+        ctx["username"] = snap.username or "ACCESS_DENIED"
+    else:
+        # Process exited between observation and resolution — use sentinels
+        ctx["process_name"] = process_name_hint or "EXITED"
+        ctx["exe"] = "EXITED"
+        ctx["cmdline"] = ""
+        ctx["ppid"] = 0
+        ctx["parent_name"] = "EXITED"
+        ctx["username"] = "EXITED"
+
+    return ctx
+
+
 __all__ = [
     "DEAD_PROCESS",
     "ProcessResolver",
     "ProcessSnapshot",
+    "mandate_context_from_pid",
     "resolve_file_owner_process",
     "resolver",
 ]
