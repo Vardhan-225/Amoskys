@@ -7,69 +7,104 @@
 
 {% block content %}
 <div class="ov">
-    <div id="ov-root"><div style="text-align:center;padding:60px;"><div class="neural-loading"></div></div></div>
+    <div id="ov-root"><div style="text-align:center;padding:80px;"><div class="neural-loading"></div><div style="margin-top:12px;color:#6b7a99;font-size:0.82em;">Loading fleet data...</div></div></div>
     <div id="ov-empty" class="ov-empty" style="display:none;">
         <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="AMOSKYS" width="80" height="80" style="opacity:0.25;margin-bottom:20px;">
         <h2>No devices yet</h2>
-        <p>Install the AMOSKYS agent to start protecting your Mac.</p>
+        <p>Install the AMOSKYS agent to start protecting your devices.</p>
         <a href="/dashboard/deploy" class="ov-cta">Install on your Mac</a>
     </div>
 </div>
 
 <style>
-.ov { max-width: 1400px; margin: 0 auto; padding: 16px 20px 60px; }
+.ov { max-width: 1600px; margin: 0 auto; padding: 0 0 60px; }
 
-/* ── Hero: Posture + Globe ── */
-.ov-hero {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 28px;
-    align-items: center; margin-bottom: 24px; min-height: 400px;
+/* ── Globe Section (full-width hero) ── */
+.ov-globe-section {
+    position: relative; width: 100%; background: #030712;
+    border-bottom: 1px solid rgba(0,217,255,0.1);
 }
-.ov-posture-side { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.ov-ring-wrap { position: relative; width: 180px; height: 180px; }
-.ov-ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-.ov-ring-wrap .bg { fill: none; stroke: #1e2a45; stroke-width: 5; }
-.ov-ring-wrap .fg { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1), stroke 0.5s; }
-.ov-ring-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
-.ov-ring-score { font-size: 2.8rem; font-weight: 800; line-height: 1; transition: color 0.5s; }
-.ov-ring-label { font-size: 0.82rem; font-weight: 600; transition: color 0.5s; margin-top: 4px; }
-.ov-posture-desc { font-size: 0.82rem; color: #8899bb; text-align: center; max-width: 340px; line-height: 1.5; }
-
-/* Metrics row inside hero */
-.ov-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
-.ov-metric { background: #0f1628; border: 1px solid #1e2a45; border-radius: 10px; padding: 12px 8px; text-align: center; transition: all 0.2s; }
-.ov-metric:hover { border-color: rgba(0,217,255,0.25); transform: translateY(-2px); }
-.ov-metric-val { font-size: 1.3rem; font-weight: 700; color: #00d9ff; }
-.ov-metric-lbl { font-size: 0.6rem; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
-.ov-metric-trend { font-size: 0.62rem; font-weight: 600; margin-top: 3px; min-height: 14px; }
-.ov-metric.crit-on .ov-metric-val { color: #ff3366; }
-.trend-up { color: #ff3366; }
-.trend-down { color: #00ff88; }
-.trend-flat { color: #555; }
-
-/* Globe side */
-.ov-globe-side { display: flex; flex-direction: column; align-items: center; }
-.ov-globe-box {
-    width: 100%; height: 400px; border-radius: 12px; overflow: hidden;
-    background: radial-gradient(ellipse at center, #0a1028 0%, #050816 70%);
-    border: 1px solid rgba(0,217,255,0.1); position: relative;
+.ov-globe-container {
+    width: 100%; height: 520px; position: relative; cursor: grab;
+    background: radial-gradient(ellipse at center, #0a1028 0%, #030712 70%);
 }
-.ov-globe-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
-.ov-globe-legend { display: flex; gap: 14px; margin-top: 6px; }
-.ov-gl { display: flex; align-items: center; gap: 4px; font-size: 0.65rem; color: #6b7a99; }
+.ov-globe-container:active { cursor: grabbing; }
+.ov-globe-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none; z-index: 5;
+}
+/* Posture badge — top-left on globe */
+.ov-posture-badge {
+    position: absolute; top: 20px; left: 24px; pointer-events: auto;
+    background: rgba(5,8,22,0.92); border: 1px solid rgba(0,217,255,0.2);
+    border-radius: 12px; padding: 16px 20px; backdrop-filter: blur(12px);
+    min-width: 160px;
+}
+.ov-pb-label { font-size: 1.4rem; font-weight: 800; line-height: 1; }
+.ov-pb-score { font-size: 0.72rem; opacity: 0.6; margin-top: 4px; }
+.ov-pb-events { font-size: 0.68rem; color: #6b7a99; margin-top: 8px; }
+/* Metrics — top-right on globe */
+.ov-globe-metrics {
+    position: absolute; top: 20px; right: 24px; pointer-events: auto;
+    display: flex; gap: 8px;
+}
+.ov-gm {
+    background: rgba(5,8,22,0.88); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; padding: 10px 14px; backdrop-filter: blur(12px);
+    text-align: center; min-width: 80px;
+}
+.ov-gm-val { font-size: 1.1rem; font-weight: 700; color: #00d9ff; }
+.ov-gm-val.danger { color: #ff3366; }
+.ov-gm-lbl { font-size: 0.55rem; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+.ov-gm-trend { font-size: 0.55rem; margin-top: 2px; }
+.trend-up { color: #ff3366; } .trend-down { color: #00ff88; } .trend-flat { color: #555; }
+/* Controls — bottom-left on globe */
+.ov-globe-controls {
+    position: absolute; bottom: 16px; left: 24px; pointer-events: auto;
+    display: flex; gap: 6px;
+}
+.ov-gc-btn {
+    background: rgba(5,8,22,0.88); border: 1px solid rgba(0,217,255,0.15);
+    border-radius: 6px; padding: 5px 12px; color: #6b7a99;
+    font-size: 0.68rem; font-weight: 600; cursor: pointer;
+    backdrop-filter: blur(12px); transition: all 0.2s;
+}
+.ov-gc-btn:hover { border-color: rgba(0,217,255,0.4); color: #b4bcd0; }
+.ov-gc-btn.active { border-color: #00d9ff; color: #00d9ff; background: rgba(0,217,255,0.06); }
+/* Legend — bottom-right on globe */
+.ov-globe-legend {
+    position: absolute; bottom: 16px; right: 24px; pointer-events: auto;
+    display: flex; gap: 12px;
+    background: rgba(5,8,22,0.88); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px; padding: 5px 12px; backdrop-filter: blur(12px);
+}
+.ov-gl { display: flex; align-items: center; gap: 4px; font-size: 0.62rem; color: #6b7a99; }
 .ov-gl-dot { width: 6px; height: 6px; border-radius: 50%; }
 
-/* ── Section ── */
+/* ── NLP Summary ── */
+.ov-nlp {
+    padding: 16px 24px; background: rgba(0,217,255,0.02);
+    border-bottom: 1px solid rgba(0,217,255,0.06);
+    font-size: 0.88rem; color: #b4bcd0; line-height: 1.6;
+}
+.ov-nlp strong { color: #00d9ff; }
+.ov-nlp .warn { color: #ff3366; font-weight: 600; }
+
+/* ── Content area (below globe) ── */
+.ov-content { padding: 20px 24px; }
+
+/* ── Sections ── */
 .ov-sec { background: #0f1628; border: 1px solid #1e2a45; border-radius: 12px; padding: 18px 20px; margin-bottom: 14px; }
-.ov-sec-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.ov-sec-t { font-size: 0.75em; color: #00d9ff; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
-.ov-sec-badge { font-size: 0.68em; padding: 2px 8px; border-radius: 4px; font-weight: 700; }
+.ov-sec-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.ov-sec-t { font-size: 0.72rem; color: #00d9ff; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+.ov-sec-badge { font-size: 0.65rem; padding: 2px 8px; border-radius: 4px; font-weight: 700; }
 .badge-red { background: rgba(255,51,102,0.1); color: #ff3366; }
 .badge-grn { background: rgba(0,255,136,0.08); color: #00ff88; }
-.ov-sec-link { font-size: 0.72em; color: #6b7a99; text-decoration: none; }
+.ov-sec-link { font-size: 0.72rem; color: #6b7a99; text-decoration: none; }
 .ov-sec-link:hover { color: #00d9ff; }
 
 /* ── Needs Attention ── */
-.ov-attn { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; margin-bottom: 6px; text-decoration: none; transition: all 0.15s; cursor: pointer; }
+.ov-attn { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; margin-bottom: 4px; text-decoration: none; transition: all 0.15s; }
 .ov-attn:hover { background: rgba(0,217,255,0.04); }
 .ov-attn-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .ov-attn-dot.critical { background: #ff3366; box-shadow: 0 0 8px rgba(255,51,102,0.4); }
@@ -77,43 +112,43 @@
 .ov-attn-dot.medium { background: #00d9ff; }
 .ov-attn-text { flex: 1; font-size: 0.85em; color: #e0e8f0; }
 .ov-attn-action { font-size: 0.68em; color: #6b7a99; }
-.ov-attn-go { color: #2a3050; font-size: 1.1em; }
-.ov-attn-ok { text-align: center; padding: 16px; color: #00ff88; font-size: 0.88em; }
+.ov-attn-go { color: #2a3050; }
+.ov-attn-ok { text-align: center; padding: 16px; color: #00ff88; font-size: 0.85em; }
 
-/* ── Device card ── */
-.ov-fleet { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+/* ── Device cards ── */
+.ov-fleet { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
 .ov-dev {
-    display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 10px;
+    display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 12px;
     padding: 14px 16px; background: #0a0e20; border-radius: 8px; text-decoration: none;
     border: 1px solid transparent; transition: all 0.2s; cursor: pointer;
 }
-.ov-dev:hover { border-color: rgba(0,217,255,0.2); transform: translateY(-1px); }
-.ov-dev-icon { width: 36px; height: 36px; border-radius: 8px; background: #0f1628; border: 1px solid #1a2040; display: flex; align-items: center; justify-content: center; position: relative; }
-.ov-dev-dot { position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; border: 2px solid #0a0e20; }
-.ov-dev-dot-on { background: #00ff88; }
+.ov-dev:hover { border-color: rgba(0,217,255,0.2); transform: translateY(-1px); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+.ov-dev-icon { width: 40px; height: 40px; border-radius: 10px; background: #0f1628; border: 1px solid #1a2040; display: flex; align-items: center; justify-content: center; position: relative; }
+.ov-dev-dot { position: absolute; bottom: -2px; right: -2px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid #0a0e20; }
+.ov-dev-dot-on { background: #00ff88; box-shadow: 0 0 6px rgba(0,255,136,0.4); }
 .ov-dev-dot-off { background: #555; }
 .ov-dev-info { min-width: 0; }
-.ov-dev-name { font-size: 0.85em; font-weight: 700; color: #e0e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ov-dev-meta { font-size: 0.65em; color: #6b7a99; margin-top: 2px; display: flex; gap: 8px; align-items: center; }
+.ov-dev-name { font-size: 0.88em; font-weight: 700; color: #e0e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-dev-meta { font-size: 0.68em; color: #6b7a99; margin-top: 3px; display: flex; gap: 8px; align-items: center; }
 .ov-dev-tag { font-size: 0.62em; padding: 1px 6px; border-radius: 3px; font-weight: 600; }
 .ov-dev-tag-ok { color: #00ff88; background: rgba(0,255,136,0.06); }
 .ov-dev-tag-warn { color: #f0ad4e; background: rgba(240,173,78,0.06); }
 .ov-dev-tag-crit { color: #ff3366; background: rgba(255,51,102,0.06); }
-.ov-dev-gauge { width: 36px; height: 36px; position: relative; }
+.ov-dev-gauge { width: 40px; height: 40px; position: relative; }
 .ov-dev-gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .ov-dev-gauge .bg { fill: none; stroke: #1e2a45; stroke-width: 3.5; }
 .ov-dev-gauge .fg { fill: none; stroke-width: 3.5; stroke-linecap: round; }
-.ov-dev-gauge-v { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 0.6rem; font-weight: 700; }
+.ov-dev-gauge-v { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 0.62rem; font-weight: 700; }
 
 /* ── Two col ── */
 .ov-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
-/* ── Kill chain bar ── */
+/* ── Kill chain ── */
 .ov-kc { display: flex; gap: 4px; }
 .ov-kc-s { flex: 1; text-align: center; padding: 8px 2px; border-radius: 6px; background: rgba(0,217,255,0.03); border: 1px solid transparent; transition: all 0.3s; }
 .ov-kc-s.active { border-color: rgba(0,217,255,0.2); background: rgba(0,217,255,0.06); }
 .ov-kc-s.hot { border-color: rgba(255,51,102,0.25); background: rgba(255,51,102,0.04); }
-.ov-kc-name { display: block; font-size: 0.55rem; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.04em; }
+.ov-kc-name { display: block; font-size: 0.55rem; color: #6b7a99; text-transform: uppercase; }
 .ov-kc-val { display: block; font-size: 0.95rem; font-weight: 700; color: #2a3050; margin-top: 2px; }
 .ov-kc-s.active .ov-kc-val { color: #00d9ff; }
 .ov-kc-s.hot .ov-kc-val { color: #ff3366; }
@@ -123,21 +158,14 @@
 .ov-mt { padding: 3px 8px; background: rgba(0,217,255,0.04); border: 1px solid #1a2040; border-radius: 4px; font-size: 0.7em; color: #00d9ff; font-family: monospace; cursor: help; transition: all 0.15s; }
 .ov-mt:hover { background: rgba(0,217,255,0.12); border-color: #00d9ff44; }
 .ov-mt span { color: #555; margin-left: 3px; }
-.ov-mt-none { color: #6b7a99; font-size: 0.82em; padding: 8px 0; }
 
-/* ── Activity bars ── */
+/* ── Activity ── */
 .ov-act-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
-.ov-act { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.ov-act { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
 .ov-act-name { font-size: 0.73em; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b4bcd0; }
 .ov-act-bar { flex: 1; height: 8px; background: #0a0e27; border-radius: 2px; overflow: hidden; }
 .ov-act-fill { height: 100%; border-radius: 2px; transition: width 0.4s; }
 .ov-act-cnt { font-size: 0.65em; color: #6b7a99; min-width: 28px; text-align: right; }
-
-/* ── Agent health grid ── */
-.ov-agents { display: flex; gap: 6px; flex-wrap: wrap; }
-.ov-ag-pill { font-size: 0.68em; padding: 3px 8px; border-radius: 4px; font-weight: 600; }
-.ov-ag-ok { background: rgba(0,255,136,0.06); color: #00ff88; }
-.ov-ag-down { background: rgba(255,51,102,0.06); color: #ff3366; }
 
 /* ── Empty ── */
 .ov-empty { text-align: center; padding: 80px 20px; }
@@ -147,14 +175,15 @@
 
 /* ── Responsive ── */
 @media (max-width: 900px) {
-    .ov-hero { grid-template-columns: 1fr; }
-    .ov-globe-box { height: 300px; }
-    .ov-metrics { grid-template-columns: repeat(2, 1fr); }
+    .ov-globe-container { height: 360px; }
+    .ov-globe-metrics { flex-wrap: wrap; top: auto; bottom: 50px; right: 12px; }
     .ov-2col { grid-template-columns: 1fr; }
+    .ov-fleet { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
-    .ov-metrics { grid-template-columns: 1fr 1fr; }
-    .ov-fleet { grid-template-columns: 1fr; }
+    .ov-globe-container { height: 280px; }
+    .ov-posture-badge { padding: 10px 14px; }
+    .ov-pb-label { font-size: 1rem; }
     .ov-kc { flex-wrap: wrap; }
 }
 </style>
@@ -165,16 +194,18 @@
 
     var globe = null;
     var deviceLat = null, deviceLon = null;
+    var geoPointsCache = [];
+    var fleetData = null;
 
     load();
-    setInterval(function() { if (!document.hidden) load(); }, 20000);
+    setInterval(function() { if (!document.hidden) load(); }, 25000);
 
     async function load() {
         try {
+            // Try new overview API first, fall back to command center
             var r = await fetch('/dashboard/api/overview');
             var data = await r.json();
-            if (!data.available || (!data.devices || !data.devices.length)) {
-                // Fall back to command center API
+            if (!data.available) {
                 r = await fetch('/dashboard/api/command-center/status');
                 data = await r.json();
                 if (!data.available || !data.devices || !data.devices.length) {
@@ -182,18 +213,17 @@
                     document.getElementById('ov-empty').style.display = 'block';
                     return;
                 }
-                // Adapt old API shape
+                // Adapt shape
                 data.posture = computePosture(data.last_24h.critical, data.last_24h.high);
                 data.previous_24h = { total_events: 0, critical: 0 };
                 data.mitre = { unique_techniques: (data.top_mitre_techniques || []).length, top: data.top_mitre_techniques || [] };
-                data.signals = { active: 0, items: [] };
-                data.agents = { total: 0, healthy: 0 };
+                data.signals = { active: 0 };
                 data.needs_attention = [];
-                // Add posture to each device
                 data.devices.forEach(function(d) {
                     d.posture = computePosture(d.critical_count || 0, d.high_count || 0);
                 });
             }
+            fleetData = data;
             render(data);
         } catch(e) {
             document.getElementById('ov-root').style.display = 'none';
@@ -215,62 +245,67 @@
         var mitre = data.mitre || { unique_techniques: 0, top: [] };
         var p = data.posture;
         var prev = data.previous_24h || {};
-
-        var circ = 2 * Math.PI * 72;
-        var off = circ * (1 - p.score / 100);
-
         var html = '';
 
-        /* ═══ HERO ═══ */
-        html += '<div class="ov-hero">';
+        /* ═══ GLOBE SECTION (full width) ═══ */
+        html += '<div class="ov-globe-section">';
+        html += '<div class="ov-globe-container" id="ov-globe-container"></div>';
+        html += '<div class="ov-globe-overlay">';
 
-        // Left: posture + metrics
-        html += '<div class="ov-posture-side">';
-        html += '<div class="ov-ring-wrap"><svg viewBox="0 0 160 160">'
-            + '<circle class="bg" cx="80" cy="80" r="72"/>'
-            + '<circle class="fg" cx="80" cy="80" r="72" stroke="' + p.color + '" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '"/></svg>'
-            + '<div class="ov-ring-center">'
-            + '<div class="ov-ring-score" style="color:' + p.color + ';font-size:1.5rem;">' + p.label + '</div>'
-            + '<div class="ov-ring-label" style="color:' + p.color + ';font-size:0.72rem;opacity:0.7;">' + p.score + ' / 100</div>'
-            + '</div></div>';
-        html += '<div class="ov-posture-desc">' + ev.total_events + ' event' + (ev.total_events !== 1 ? 's' : '') + ' analyzed in the last 24 hours</div>';
-
-        // Metric cards
-        var critTrend = trend(ev.critical, prev.critical || 0, true);
-        var evtTrend = trend(ev.total_events, prev.total_events || 0, true);
-        html += '<div class="ov-metrics">'
-            + metric(f.online + '/' + f.total_devices, 'Devices Online', '')
-            + metric(ev.critical, 'Critical (24h)', critTrend, ev.critical > 0)
-            + metric(data.signals.active, 'Active Signals', '')
-            + metric(mitre.unique_techniques, 'MITRE T-IDs', '')
-            + '</div>';
+        // Posture badge — top-left
+        html += '<div class="ov-posture-badge">';
+        html += '<div class="ov-pb-label" style="color:' + p.color + '">' + p.label + '</div>';
+        html += '<div class="ov-pb-score" style="color:' + p.color + '">' + p.score + ' / 100</div>';
+        html += '<div class="ov-pb-events">' + fmtNum(ev.total_events) + ' events (24h)</div>';
         html += '</div>';
 
-        // Right: globe
-        html += '<div class="ov-globe-side">'
-            + '<div class="ov-globe-box" id="ov-globe-container"><div class="ov-globe-loading"><div class="neural-loading"></div></div></div>'
-            + '<div class="ov-globe-legend">'
-            + '<span class="ov-gl"><span class="ov-gl-dot" style="background:#00ff88"></span>Clean</span>'
-            + '<span class="ov-gl"><span class="ov-gl-dot" style="background:#ff3366"></span>Threat</span>'
-            + '<span class="ov-gl"><span class="ov-gl-dot" style="background:#00d9ff"></span>Device</span>'
-            + '</div></div>';
+        // Metrics — top-right
+        var critTrend = trend(ev.critical, prev.critical || 0, true);
+        html += '<div class="ov-globe-metrics">';
+        html += gMetric(f.online + '/' + f.total_devices, 'Devices', false, '');
+        html += gMetric(ev.critical, 'Critical', ev.critical > 0, critTrend);
+        html += gMetric(data.signals ? data.signals.active : 0, 'Signals', false, '');
+        html += gMetric(mitre.unique_techniques, 'MITRE T-IDs', false, '');
+        html += '</div>';
 
-        html += '</div>'; // hero
+        // Controls — bottom-left
+        html += '<div class="ov-globe-controls">';
+        html += '<button class="ov-gc-btn active" id="gc-all">All</button>';
+        html += '<button class="ov-gc-btn" id="gc-threats">Threats</button>';
+        html += '<button class="ov-gc-btn" id="gc-rotate">Rotate</button>';
+        html += '</div>';
 
-        /* ═══ NEEDS ATTENTION ═══ */
+        // Legend — bottom-right
+        html += '<div class="ov-globe-legend">';
+        html += '<span class="ov-gl"><span class="ov-gl-dot" style="background:#00ff88"></span>Clean</span>';
+        html += '<span class="ov-gl"><span class="ov-gl-dot" style="background:#ff3366"></span>Threat</span>';
+        html += '<span class="ov-gl"><span class="ov-gl-dot" style="background:#00d9ff"></span>Device</span>';
+        html += '</div>';
+
+        html += '</div>'; // overlay
+        html += '</div>'; // globe section
+
+        /* ═══ NLP SUMMARY ═══ */
+        html += '<div class="ov-nlp" id="ov-nlp">';
+        var nlp = 'In the last <strong>24 hours</strong>, your fleet of <strong>' + f.total_devices + ' device' + (f.total_devices !== 1 ? 's' : '') + '</strong> generated <strong>' + fmtNum(ev.total_events) + ' security events</strong>.';
+        if (ev.critical > 0) nlp += ' <span class="warn">' + ev.critical + ' critical</span> and ' + (ev.high || 0) + ' high-risk events require attention.';
+        else nlp += ' No critical threats detected &mdash; traffic appears clean.';
+        html += nlp + '</div>';
+
+        /* ═══ CONTENT BELOW GLOBE ═══ */
+        html += '<div class="ov-content">';
+
+        // Needs Attention
         var attn = data.needs_attention || [];
         if (attn.length === 0) {
-            // Build from raw data if overview API not available
-            if (ev.critical > 0) attn.push({ severity: 'critical', text: ev.critical + ' critical event' + (ev.critical > 1 ? 's' : ''), action: 'Review now', link: '/dashboard/threats' });
+            if (ev.critical > 0) attn.push({ severity: 'critical', text: ev.critical + ' critical events', action: 'Review now', link: '/dashboard/threats' });
             if (ev.high > 0) attn.push({ severity: 'high', text: ev.high + ' high-risk events', action: 'Investigate', link: '/dashboard/threats' });
             var offDev = d.filter(function(x) { return x.status !== 'online'; });
             if (offDev.length > 0) attn.push({ severity: 'medium', text: offDev.length + ' device' + (offDev.length > 1 ? 's' : '') + ' offline', action: 'Check', link: '/dashboard/devices' });
         }
-
-        html += '<div class="ov-sec"><div class="ov-sec-hdr"><span class="ov-sec-t">Needs Attention</span>'
-            + '<span class="ov-sec-badge ' + (attn.length > 0 ? 'badge-red' : 'badge-grn') + '">'
-            + (attn.length > 0 ? attn.length + ' item' + (attn.length > 1 ? 's' : '') : 'All clear') + '</span></div>';
         if (attn.length > 0) {
+            html += '<div class="ov-sec"><div class="ov-sec-hdr"><span class="ov-sec-t">Needs Attention</span>';
+            html += '<span class="ov-sec-badge badge-red">' + attn.length + ' item' + (attn.length > 1 ? 's' : '') + '</span></div>';
             for (var i = 0; i < Math.min(5, attn.length); i++) {
                 var a = attn[i];
                 html += '<a href="' + esc(a.link || '#') + '" class="ov-attn">'
@@ -279,206 +314,85 @@
                     + '<div class="ov-attn-action">' + esc(a.action) + '</div>'
                     + '<div class="ov-attn-go">&#x203A;</div></a>';
             }
-        } else {
-            html += '<div class="ov-attn-ok">No issues detected. Your devices are secure.</div>';
+            html += '</div>';
         }
-        html += '</div>';
 
-        /* ═══ FLEET ═══ */
-        html += '<div class="ov-sec"><div class="ov-sec-hdr"><span class="ov-sec-t">Fleet</span>'
-            + '<a href="/dashboard/devices" class="ov-sec-link">View All &rarr;</a></div>';
+        // Personal Devices
+        html += '<div class="ov-sec"><div class="ov-sec-hdr"><span class="ov-sec-t">Personal Devices</span>';
+        html += '<a href="/dashboard/devices" class="ov-sec-link">View All &rarr;</a></div>';
         html += '<div class="ov-fleet">';
         for (var i = 0; i < d.length; i++) {
             var x = d[i], on = x.status === 'online';
             var cr = x.critical_count || 0, hi = x.high_count || 0;
             var dp = x.posture || computePosture(cr, hi);
-            var gc = 2 * Math.PI * 13, go = gc * (1 - dp.score / 100);
+            var gc = 2 * Math.PI * 14, go = gc * (1 - dp.score / 100);
             var tagCls = cr > 0 ? 'crit' : hi > 0 ? 'warn' : 'ok';
             var tagText = cr > 0 ? 'Critical' : hi > 0 ? 'High Risk' : 'Healthy';
-
             html += '<a href="/dashboard/device/' + encodeURIComponent(x.device_id) + '" class="ov-dev">'
                 + '<div class="ov-dev-icon">' + osIcon(x.os) + '<div class="ov-dev-dot ov-dev-dot-' + (on ? 'on' : 'off') + '"></div></div>'
                 + '<div class="ov-dev-info"><div class="ov-dev-name">' + esc(x.hostname) + '</div>'
-                + '<div class="ov-dev-meta">'
-                + '<span class="ov-dev-tag ov-dev-tag-' + tagCls + '">' + tagText + '</span>'
-                + '<span>' + (x.event_count || 0) + ' events</span>'
-                + '</div></div>'
-                + '<div class="ov-dev-gauge"><svg viewBox="0 0 32 32">'
-                + '<circle class="bg" cx="16" cy="16" r="13"/>'
-                + '<circle class="fg" cx="16" cy="16" r="13" stroke="' + dp.color + '" stroke-dasharray="' + gc.toFixed(1) + '" stroke-dashoffset="' + go.toFixed(1) + '"/></svg>'
+                + '<div class="ov-dev-meta"><span class="ov-dev-tag ov-dev-tag-' + tagCls + '">' + tagText + '</span>'
+                + '<span>' + (on ? 'Online' : 'Offline') + '</span>'
+                + '<span>' + fmtNum(x.event_count || 0) + ' events</span></div></div>'
+                + '<div class="ov-dev-gauge"><svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="14"/>'
+                + '<circle class="fg" cx="18" cy="18" r="14" stroke="' + dp.color + '" stroke-dasharray="' + gc.toFixed(1) + '" stroke-dashoffset="' + go.toFixed(1) + '"/></svg>'
                 + '<div class="ov-dev-gauge-v" style="color:' + dp.color + '">' + dp.score + '</div></div></a>';
         }
-        if (d.length === 0) {
-            html += '<a href="/dashboard/deploy" class="ov-dev" style="justify-content:center;grid-template-columns:1fr;">'
-                + '<div style="text-align:center;color:#6b7a99;">No devices &mdash; <strong style="color:#00d9ff">Install Agent</strong></div></a>';
-        }
         html += '</div></div>';
 
-        /* ═══ DETECTION & MITRE ═══ */
+        // Kill Chain + MITRE
         html += '<div class="ov-2col">';
-
         // Kill chain
-        html += '<div class="ov-sec"><div class="ov-sec-t" style="margin-bottom:10px">Kill Chain Progression</div>'
-            + '<div class="ov-kc">';
+        html += '<div class="ov-sec"><div class="ov-sec-t" style="margin-bottom:10px">Kill Chain Progression</div><div class="ov-kc">';
         var kcStages = ['Recon', 'Weapon', 'Deliver', 'Exploit', 'Install', 'C2', 'Action'];
         var kcMap = buildKillChain(cats);
-        for (var i = 0; i < kcStages.length; i++) {
-            var cnt = kcMap[i] || 0;
+        for (var k = 0; k < kcStages.length; k++) {
+            var cnt = kcMap[k] || 0;
             var cls = cnt > 0 ? (cnt >= 5 ? 'hot' : 'active') : '';
-            html += '<div class="ov-kc-s ' + cls + '">'
-                + '<span class="ov-kc-name">' + kcStages[i] + '</span>'
-                + '<span class="ov-kc-val">' + cnt + '</span></div>';
+            html += '<div class="ov-kc-s ' + cls + '"><span class="ov-kc-name">' + kcStages[k] + '</span><span class="ov-kc-val">' + fmtNum(cnt) + '</span></div>';
         }
         html += '</div></div>';
-
         // MITRE
-        html += '<div class="ov-sec"><div class="ov-sec-t" style="margin-bottom:10px">MITRE ATT&amp;CK Detected (24h)</div>';
+        html += '<div class="ov-sec"><div class="ov-sec-t" style="margin-bottom:10px">MITRE ATT&CK (24h)</div>';
         if (mitre.top && mitre.top.length > 0) {
             html += '<div class="ov-mt-grid">';
-            var mList = mitre.top;
-            for (var i = 0; i < mList.length; i++) {
-                var t = mList[i].technique || mList[i];
-                var c = mList[i].count || '';
+            (mitre.top || []).forEach(function(m) {
+                var t = m.technique || m; var c = m.count || '';
                 html += '<span class="ov-mt" title="' + mitreName(t) + '">' + esc(t) + (c ? ' <span>' + c + '</span>' : '') + '</span>';
-            }
+            });
             html += '</div>';
-        } else {
-            html += '<div class="ov-mt-none">No technique detections in the last 24h</div>';
-        }
+        } else { html += '<div style="color:#6b7a99;font-size:0.82em;">No detections</div>'; }
         html += '</div></div>';
 
-        /* ═══ ACTIVITY ═══ */
-        html += '<div class="ov-sec"><div class="ov-sec-t" style="margin-bottom:10px">Top Activity (24h)</div>';
+        // Activity
         if (cats.length > 0) {
+            html += '<div class="ov-sec"><div class="ov-sec-t" style="margin-bottom:10px">Top Activity (24h)</div><div class="ov-act-grid">';
             var maxC = cats[0].count;
-            html += '<div class="ov-act-grid">';
             for (var i = 0; i < Math.min(8, cats.length); i++) {
                 var c = cats[i], pct = Math.max(5, c.count / maxC * 100);
                 var clr = c.avg_risk >= 0.6 ? '#ff3366' : c.avg_risk >= 0.3 ? '#f0ad4e' : '#00d9ff';
                 html += '<div class="ov-act"><span class="ov-act-name">' + humanize(c.category) + '</span>'
                     + '<div class="ov-act-bar"><div class="ov-act-fill" style="width:' + pct + '%;background:' + clr + '"></div></div>'
-                    + '<span class="ov-act-cnt">' + c.count + '</span></div>';
+                    + '<span class="ov-act-cnt">' + fmtNum(c.count) + '</span></div>';
             }
-            html += '</div>';
-        }
-        html += '</div>';
-
-        /* ═══ AGENTS ═══ */
-        if (data.agents && data.agents.total > 0) {
-            html += '<div class="ov-sec"><div class="ov-sec-hdr"><span class="ov-sec-t">Agent Health</span>'
-                + '<span class="ov-sec-badge ' + (data.agents.healthy === data.agents.total ? 'badge-grn' : 'badge-red') + '">'
-                + data.agents.healthy + '/' + data.agents.total + ' healthy</span></div>'
-                + '<div class="ov-agents">'
-                + '<span class="ov-ag-pill ov-ag-ok">' + data.agents.healthy + ' online</span>';
-            var down = data.agents.total - data.agents.healthy;
-            if (down > 0) html += '<span class="ov-ag-pill ov-ag-down">' + down + ' offline</span>';
             html += '</div></div>';
         }
 
+        html += '</div>'; // content
+
         document.getElementById('ov-root').innerHTML = html;
 
-        // Init globe after DOM render
-        setTimeout(initGlobe, 50);
+        // Init globe after DOM
+        setTimeout(initGlobe, 100);
+
+        // Bind globe controls
+        setTimeout(bindControls, 200);
     }
 
-    /* ── Helpers ── */
-
-    function metric(val, label, trendHtml, isCrit) {
-        return '<div class="ov-metric' + (isCrit ? ' crit-on' : '') + '">'
-            + '<div class="ov-metric-val">' + val + '</div>'
-            + '<div class="ov-metric-lbl">' + label + '</div>'
-            + '<div class="ov-metric-trend">' + trendHtml + '</div></div>';
-    }
-
-    function trend(curr, prev, higherIsBad) {
-        if (prev === 0 && curr === 0) return '<span class="trend-flat">&mdash; flat</span>';
-        var diff = curr - prev;
-        if (diff > 0) {
-            var cls = higherIsBad ? 'trend-up' : 'trend-down';
-            return '<span class="' + cls + '">&uarr;' + diff + ' vs yesterday</span>';
-        }
-        if (diff < 0) {
-            var cls = higherIsBad ? 'trend-down' : 'trend-up';
-            return '<span class="' + cls + '">&darr;' + Math.abs(diff) + ' vs yesterday</span>';
-        }
-        return '<span class="trend-flat">&mdash; same</span>';
-    }
-
-    function buildKillChain(cats) {
-        // Map event categories to kill chain stages (0-6)
-        // 0=Recon, 1=Weapon, 2=Deliver, 3=Exploit, 4=Install, 5=C2, 6=Action
-        var map = {
-            'topology_new_route': 0, 'port_scan_detected': 0, 'arp_new_host': 0,
-            'lolbin_execution': 1, 'credential_access_indirect': 1, 'credential_theft_command': 1,
-            'new_external_connection': 2, 'new_domain_first_seen': 2,
-            'process_spawned': 3, 'tcc_permission_denied': 3, 'suspicious_script': 3, 'execution_from_temp': 3, 'gatekeeper_block': 3,
-            'macos_config_backdoor_new': 4, 'macos_launchagent_new': 4, 'macos_launchdaemon_new': 4,
-            'c2_beacon_suspect': 5, 'dns_beaconing_suspected': 5, 'dns_beaconing_detected': 5, 'connection_burst_detected': 5, 'long_lived_connection': 5,
-            'exfil_spike': 6, 'full_kill_chain': 6, 'cloud_exfil_detected': 6, 'execute_to_exfil': 6,
-        };
-        var counts = {};
-        (cats || []).forEach(function(c) {
-            var stage = map[c.category];
-            if (stage !== undefined) counts[stage] = (counts[stage] || 0) + c.count;
-        });
-        return counts;
-    }
-
-    function humanize(s) {
-        if (!s) return '';
-        var map = {
-            'process_spawned': 'Process Exec', 'lolbin_execution': 'Suspicious Binary',
-            'new_external_connection': 'External Conn', 'tcc_permission_denied': 'Perm Denied',
-            'exfil_spike': 'Data Exfil', 'macos_config_backdoor_new': 'Config Backdoor',
-            'c2_beacon_suspect': 'C2 Beacon', 'topology_new_route': 'Route Change',
-            'full_kill_chain': 'Kill Chain', 'rapid_app_switch': 'App Switch',
-            'dns_beaconing_suspected': 'DNS Beacon', 'high_cpu': 'High CPU',
-            'credential_access_indirect': 'Credential Access',
-        };
-        return map[s] || s.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
-    }
-
-    function mitreName(id) {
-        var names = {
-            'T1059':'Command & Scripting','T1059.002':'AppleScript','T1059.004':'Unix Shell',
-            'T1204':'User Execution','T1218':'System Binary Proxy','T1071':'App Layer Protocol',
-            'T1071.001':'Web Protocols','T1071.004':'DNS','T1548':'Elevation Control',
-            'T1548.003':'Sudo Caching','T1048':'Alt Protocol Exfil',
-            'T1016':'Network Config Discovery','T1046':'Network Service Scan',
-            'T1040':'Network Sniffing','T1110':'Brute Force','T1078':'Valid Accounts',
-            'T1543.001':'Launch Agent','T1543.004':'Launch Daemon','T1053.003':'Cron',
-            'T1070':'Indicator Removal','T1565':'Data Manipulation',
-            'T1041':'Exfil Over C2','T1496':'Resource Hijacking',
-            'T1553.001':'Gatekeeper Bypass','T1200':'Hardware Additions',
-            'T1572':'Protocol Tunneling','T1098.004':'SSH Auth Keys',
-            'T1567':'Exfil Over Web Service','T1018':'Remote System Discovery',
-        };
-        return names[id] || id;
-    }
-
-    function osIcon(os) {
-        os = (os || '').toLowerCase();
-        if (os.includes('darwin') || os.includes('macos') || os.includes('mac'))
-            return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M18.7 8.5c-.1.1-2.1 1.2-2.1 3.7 0 2.9 2.5 3.9 2.6 3.9 0 .1-.4 1.4-1.3 2.7-.8 1.2-1.7 2.4-3 2.4s-1.6-.8-3.1-.8-1.9.8-3.1.8-2-.7-2.9-2.4C4.6 16.7 3.7 14 3.7 11.4c0-3.5 2.3-5.4 4.5-5.4 1.2 0 2.2.8 2.9.8.7 0 1.9-.8 3.3-.8.5 0 2.4 0 3.6 1.8l.7.7z" stroke="#6b7a99" stroke-width="1.2"/><circle cx="15" cy="4" r="1.5" fill="#6b7a99" opacity="0.5"/></svg>';
-        if (os.includes('linux'))
-            return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" stroke-width="1.2"><circle cx="12" cy="8" r="4"/><path d="M8 14c-2 1-3 3-3 5h14c0-2-1-4-3-5"/></svg>';
-        if (os.includes('windows'))
-            return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 5l8-1.2v7.7H3V5zm0 8.5h8v7.7L3 20v-6.5zm9.5-9.9L22 2v9.5h-9.5V3.6zm0 8.4H22V22l-9.5-1.4v-8.6z" stroke="#6b7a99" stroke-width="1.2"/></svg>';
-        return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>';
-    }
-
-    function esc(s) { if(!s) return ''; var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
-
-    /* ══════════════════════════════════════════════════════════════
-       Globe.gl — Embedded overview globe
-       ══════════════════════════════════════════════════════════════ */
-
+    /* ── Globe ── */
     function initGlobe() {
         var container = document.getElementById('ov-globe-container');
-        if (!container || typeof Globe === 'undefined') return;
-        if (globe) return; // Already initialized
-
-        container.innerHTML = '';
+        if (!container || typeof Globe === 'undefined' || globe) return;
 
         if (typeof THREE !== 'undefined' && THREE.TextureLoader) {
             var origLoad = THREE.TextureLoader.prototype.load;
@@ -492,11 +406,12 @@
             .backgroundColor('rgba(0,0,0,0)')
             .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-dark.jpg')
             .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png')
+            .backgroundImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png')
             .showAtmosphere(true)
             .atmosphereColor('#0099cc')
             .atmosphereAltitude(0.22)
             .width(container.clientWidth)
-            .height(container.clientHeight || 400)
+            .height(container.clientHeight || 520)
             .arcColor(function(d) { return d.color; })
             .arcStroke(function(d) { return d.stroke; })
             .arcAltitudeAutoScale(0.25)
@@ -504,76 +419,182 @@
             .arcDashGap(0.15)
             .arcDashAnimateTime(function(d) { return d.animTime; })
             .arcLabel(function(d) {
-                return '<div style="background:rgba(5,8,22,0.96);border:1px solid ' + (d.threat ? 'rgba(255,51,102,0.35)' : 'rgba(0,217,255,0.25)') + ';border-radius:8px;padding:0.5rem 0.7rem;font-size:0.7rem;box-shadow:0 8px 32px rgba(0,0,0,0.7);">'
-                    + '<div style="font-weight:700;color:' + (d.threat ? '#ff3366' : '#e2e8f0') + ';">' + esc(d.asnOrg) + '</div>'
-                    + '<div style="color:#6b7a99;font-size:0.65rem;">' + esc(d.city ? d.city + ', ' + d.country : d.label) + '</div></div>';
+                return '<div style="background:rgba(5,8,22,0.96);border:1px solid ' + (d.threat ? 'rgba(255,51,102,0.35)' : 'rgba(0,217,255,0.25)') + ';border-radius:8px;padding:0.6rem 0.8rem;font-size:0.72rem;min-width:180px;box-shadow:0 8px 32px rgba(0,0,0,0.7);">'
+                    + '<div style="display:flex;align-items:center;gap:0.3rem;margin-bottom:0.3rem;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:0.3rem;">'
+                    + '<span style="width:6px;height:6px;border-radius:50%;background:' + (d.threat ? '#ff3366' : '#00ff88') + ';"></span>'
+                    + '<span style="font-weight:700;color:' + (d.threat ? '#ff3366' : '#e2e8f0') + ';">' + esc(d.asnOrg) + '</span></div>'
+                    + '<div style="display:grid;grid-template-columns:auto 1fr;gap:0.1rem 0.6rem;font-size:0.68rem;">'
+                    + '<span style="color:#6b7a99;">Location</span><span style="color:#e2e8f0;text-align:right;">' + esc(d.city ? d.city + ', ' + d.country : d.country) + '</span>'
+                    + '<span style="color:#6b7a99;">Data</span><span style="color:#00d9ff;text-align:right;font-weight:600;">' + fmtBytes(d.bytes) + '</span>'
+                    + '<span style="color:#6b7a99;">Flows</span><span style="color:#b4bcd0;text-align:right;">' + fmtNum(d.count) + '</span>'
+                    + '</div></div>';
             })
             .pointColor(function(d) { return d.color; })
             .pointAltitude(function(d) { return d.alt; })
             .pointRadius(function(d) { return d.radius; })
             .pointLabel(function() { return null; })
             .ringsData([])
-            .ringColor(function() { return function(t) { return 'rgba(0,217,255,' + (1 - t) * 0.3 + ')'; }; })
-            .ringMaxRadius(3)
-            .ringPropagationSpeed(1.5)
-            .ringRepeatPeriod(2000);
+            .ringColor(function(d) { return function(t) { return d.threat ? 'rgba(255,51,102,' + Math.max(0, 0.5 - t * 0.5) + ')' : 'rgba(0,255,136,' + Math.max(0, 0.3 - t * 0.3) + ')'; }; })
+            .ringMaxRadius(2.5)
+            .ringPropagationSpeed(1.2)
+            .ringRepeatPeriod(function(d) { return d.threat ? 1400 : 2800; })
+            .htmlElementsData([])
+            .htmlElement(function(d) {
+                var el = document.createElement('div');
+                el.style.cssText = 'pointer-events:none;text-align:center;transform:translateX(-50%);';
+                if (d.isDevice) {
+                    el.innerHTML = '<div style="font-size:0.65rem;font-weight:700;color:#00d9ff;text-shadow:0 0 8px rgba(0,217,255,0.6),0 1px 3px rgba(0,0,0,1);white-space:nowrap;">' + esc(d.name) + '</div>'
+                        + '<div style="font-size:0.5rem;color:#6b9abf;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,1);">' + esc(d.loc || '') + '</div>';
+                } else {
+                    var nc = d.threat ? '#ff6688' : '#c8d8e8';
+                    el.innerHTML = '<div style="font-size:0.58rem;font-weight:600;color:' + nc + ';white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,1),0 1px 3px rgba(0,0,0,1);">' + esc((d.asnOrg || '').split(/[\s,]/)[0]) + '</div>'
+                        + '<div style="font-size:0.48rem;color:#7a9ab8;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,1);">' + esc(d.country || '') + ' &middot; ' + fmtBytes(d.bytes || 0) + '</div>';
+                }
+                return el;
+            })
+            .htmlAltitude(function(d) { return d.isDevice ? 0.045 : 0.025; })
+            .onArcClick(function(d) {
+                globe.pointOfView({ lat: d.endLat, lng: d.endLng, altitude: 1.3 }, 1000);
+            });
+
+        // Globe material polish
+        globe.onGlobeReady(function() {
+            var mat = globe.globeMaterial();
+            mat.bumpScale = 3;
+            if (typeof THREE !== 'undefined') {
+                mat.emissive = new THREE.Color('#071530');
+                mat.emissiveIntensity = 0.1;
+            }
+        });
 
         globe.controls().autoRotate = true;
-        globe.controls().autoRotateSpeed = 0.5;
-        globe.controls().enableZoom = false;
-        globe.pointOfView({ lat: 30, lng: -20, altitude: 2.5 });
+        globe.controls().autoRotateSpeed = 0.4;
+        globe.controls().enableDamping = true;
+        globe.controls().dampingFactor = 0.12;
+        globe.controls().rotateSpeed = 0.6;
+        globe.controls().zoomSpeed = 0.8;
+        globe.controls().minDistance = 120;
+        globe.controls().maxDistance = 500;
+        globe.pointOfView({ lat: 32, lng: -90, altitude: 2.0 }, 0);
 
         window.addEventListener('resize', function() {
-            if (globe && container.clientWidth) {
-                globe.width(container.clientWidth).height(container.clientHeight || 400);
-            }
+            if (globe && container.clientWidth) globe.width(container.clientWidth).height(container.clientHeight || 520);
         });
 
         loadGlobeData();
     }
 
     function loadGlobeData() {
-        // Get device location — try without device_id first (uses default device)
         fetch('/dashboard/api/network/device-location')
             .then(function(r) { return r.json(); })
-            .then(function(d) {
-                if (d.lat && d.lon) { deviceLat = d.lat; deviceLon = d.lon; }
-                else { deviceLat = 33.45; deviceLon = -112.07; } // Fallback: Phoenix AZ
-            })
-            .catch(function() { deviceLat = 33.45; deviceLon = -112.07; });
+            .then(function(d) { if (d.lat && d.lon) { deviceLat = d.lat; deviceLon = d.lon; } })
+            .catch(function() {});
 
-        // Load geo points from fleet-level endpoint (aggregated across all devices)
         fetch('/dashboard/api/overview/geo-points?hours=24&limit=300')
             .then(function(r) { return r.json(); })
             .then(function(points) {
-                if (!globe || !Array.isArray(points) || points.length === 0) return;
-                var srcLat = deviceLat || 37.77, srcLon = deviceLon || -122.42;
-                var arcs = [], pts = [], rings = [];
-
-                pts.push({ lat: srcLat, lng: srcLon, color: '#00d9ff', alt: 0.02, radius: 0.6 });
-                rings.push({ lat: srcLat, lng: srcLon, threat: false });
-
-                points.forEach(function(p) {
-                    if (!p.lat || !p.lon) return;
-                    var isThreat = !!p.threat;
-                    var bytes = p.bytes || 0;
-                    var sw = Math.min(1.5, 0.3 + Math.log10(Math.max(1, bytes)) * 0.1);
-                    arcs.push({
-                        startLat: srcLat, startLng: srcLon, endLat: p.lat, endLng: p.lon,
-                        color: isThreat ? ['rgba(255,51,102,0.7)', 'rgba(255,51,102,0.3)'] : ['rgba(0,255,136,0.5)', 'rgba(0,255,136,0.15)'],
-                        stroke: sw, animTime: isThreat ? 1500 : 3000 + Math.random() * 2000,
-                        threat: isThreat, asnOrg: p.asn_org || 'Unknown',
-                        city: p.city || '', country: p.country || '', label: p.country || 'Unknown',
-                        bytes: bytes, count: p.count || 1,
-                    });
-                    pts.push({ lat: p.lat, lng: p.lon, color: isThreat ? '#ff3366' : 'rgba(0,255,136,0.6)', alt: 0.01, radius: 0.25 });
-                    if (isThreat) rings.push({ lat: p.lat, lng: p.lon, threat: true });
-                });
-
-                globe.arcsData(arcs).pointsData(pts).ringsData(rings);
+                geoPointsCache = points;
+                if (globe && Array.isArray(points) && points.length > 0) renderGlobeArcs(points);
             })
             .catch(function() {});
     }
+
+    function renderGlobeArcs(points) {
+        var srcLat = deviceLat || 33.45, srcLon = deviceLon || -112.07;
+        var arcs = [], pts = [], rings = [], labels = [];
+        var maxBytes = Math.max(1, Math.max.apply(null, points.map(function(p) { return p.bytes || 1; })));
+
+        // Device marker
+        pts.push({ lat: srcLat, lng: srcLon, color: '#00d9ff', alt: 0.025, radius: 0.7 });
+        rings.push({ lat: srcLat, lng: srcLon, threat: false });
+        labels.push({ lat: srcLat, lng: srcLon, isDevice: true, name: 'YOUR FLEET', loc: '' });
+
+        points.forEach(function(p) {
+            if (!p.lat || !p.lon) return;
+            var isThreat = !!p.threat;
+            var bytes = p.bytes || 0;
+            var volRatio = bytes / maxBytes;
+            var sw = 0.3 + volRatio * 2.5;
+            var speed = isThreat ? 900 : Math.round(3500 - volRatio * 2500);
+
+            arcs.push({
+                startLat: srcLat, startLng: srcLon, endLat: p.lat, endLng: p.lon,
+                color: isThreat ? ['rgba(255,51,102,0.85)', 'rgba(255,51,102,0.35)'] : ['rgba(0,217,255,0.45)', 'rgba(0,255,136,0.20)'],
+                stroke: sw, animTime: speed, threat: isThreat,
+                asnOrg: p.asn_org || 'Unknown', city: p.city || '', country: p.country || '',
+                bytes: bytes, count: p.count || 1,
+            });
+            pts.push({ lat: p.lat, lng: p.lon, color: isThreat ? '#ff3366' : 'rgba(0,255,136,0.6)', alt: 0.01, radius: Math.max(0.2, Math.min(0.6, volRatio * 0.8)) });
+            if (isThreat) rings.push({ lat: p.lat, lng: p.lon, threat: true });
+
+            // Labels for top destinations
+            if (volRatio > 0.05 || isThreat) {
+                labels.push({ lat: p.lat, lng: p.lon, isDevice: false, asnOrg: p.asn_org, country: p.country, city: p.city, bytes: bytes, threat: isThreat });
+            }
+        });
+
+        globe.arcsData(arcs).pointsData(pts).ringsData(rings).htmlElementsData(labels);
+    }
+
+    function bindControls() {
+        var rotateBtn = document.getElementById('gc-rotate');
+        if (rotateBtn) {
+            rotateBtn.addEventListener('click', function() {
+                if (!globe) return;
+                var c = globe.controls();
+                c.autoRotate = !c.autoRotate;
+                rotateBtn.classList.toggle('active', c.autoRotate);
+            });
+        }
+        var allBtn = document.getElementById('gc-all');
+        var threatsBtn = document.getElementById('gc-threats');
+        if (allBtn) allBtn.addEventListener('click', function() {
+            allBtn.classList.add('active'); if (threatsBtn) threatsBtn.classList.remove('active');
+            renderGlobeArcs(geoPointsCache);
+        });
+        if (threatsBtn) threatsBtn.addEventListener('click', function() {
+            threatsBtn.classList.add('active'); if (allBtn) allBtn.classList.remove('active');
+            renderGlobeArcs(geoPointsCache.filter(function(p) { return p.threat; }));
+        });
+    }
+
+    /* ── Helpers ── */
+    function gMetric(val, label, isDanger, trendHtml) {
+        return '<div class="ov-gm"><div class="ov-gm-val' + (isDanger ? ' danger' : '') + '">' + val + '</div>'
+            + '<div class="ov-gm-lbl">' + label + '</div>'
+            + (trendHtml ? '<div class="ov-gm-trend">' + trendHtml + '</div>' : '') + '</div>';
+    }
+    function trend(curr, prev, higherIsBad) {
+        if (prev === 0 && curr === 0) return '<span class="trend-flat">&mdash;</span>';
+        var diff = curr - prev;
+        if (diff > 0) return '<span class="' + (higherIsBad ? 'trend-up' : 'trend-down') + '">&uarr;' + diff + '</span>';
+        if (diff < 0) return '<span class="' + (higherIsBad ? 'trend-down' : 'trend-up') + '">&darr;' + Math.abs(diff) + '</span>';
+        return '<span class="trend-flat">&mdash;</span>';
+    }
+    function buildKillChain(cats) {
+        var map = { 'topology_new_route':0,'port_scan_detected':0,'arp_new_host':0, 'lolbin_execution':1,'credential_access_indirect':1,'credential_theft_command':1, 'new_external_connection':2,'new_domain_first_seen':2, 'process_spawned':3,'tcc_permission_denied':3,'suspicious_script':3,'execution_from_temp':3,'gatekeeper_block':3, 'macos_config_backdoor_new':4,'macos_launchagent_new':4,'macos_launchdaemon_new':4, 'c2_beacon_suspect':5,'dns_beaconing_suspected':5,'dns_beaconing_detected':5,'connection_burst_detected':5,'long_lived_connection':5, 'exfil_spike':6,'full_kill_chain':6,'cloud_exfil_detected':6,'execute_to_exfil':6 };
+        var counts = {};
+        (cats || []).forEach(function(c) { var s = map[c.category]; if (s !== undefined) counts[s] = (counts[s] || 0) + c.count; });
+        return counts;
+    }
+    function humanize(s) {
+        if (!s) return '';
+        var m = { 'process_spawned':'Process Exec','lolbin_execution':'Suspicious Binary','new_external_connection':'External Conn','tcc_permission_denied':'Perm Denied','exfil_spike':'Data Exfil','macos_config_backdoor_new':'Config Backdoor','c2_beacon_suspect':'C2 Beacon','dns_beaconing_suspected':'DNS Beacon','dns_beaconing_detected':'DNS Beacon','full_kill_chain':'Kill Chain','cloud_exfil_detected':'Cloud Exfil','new_domain_first_seen':'New Domain' };
+        return m[s] || s.replace(/_/g,' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    }
+    function mitreName(id) {
+        var n = { 'T1059':'Command & Scripting','T1204':'User Execution','T1071':'App Layer Protocol','T1071.004':'DNS','T1059.002':'AppleScript','T1218':'System Binary Proxy','T1548':'Elevation Control','T1583':'Acquire Infrastructure','T1048':'Alt Protocol Exfil','T1568.002':'DNS Calc','T1567':'Web Service Exfil' };
+        return n[id] || id;
+    }
+    function osIcon(os) {
+        os = (os || '').toLowerCase();
+        if (os.includes('darwin') || os.includes('mac')) return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M18.7 8.5c-.1.1-2.1 1.2-2.1 3.7 0 2.9 2.5 3.9 2.6 3.9 0 .1-.4 1.4-1.3 2.7-.8 1.2-1.7 2.4-3 2.4s-1.6-.8-3.1-.8-1.9.8-3.1.8-2-.7-2.9-2.4C4.6 16.7 3.7 14 3.7 11.4c0-3.5 2.3-5.4 4.5-5.4 1.2 0 2.2.8 2.9.8.7 0 1.9-.8 3.3-.8.5 0 2.4 0 3.6 1.8l.7.7z" stroke="#6b7a99" stroke-width="1.2"/><circle cx="15" cy="4" r="1.5" fill="#6b7a99" opacity="0.5"/></svg>';
+        if (os.includes('linux')) return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" stroke-width="1.2"><circle cx="12" cy="8" r="4"/><path d="M8 14c-2 1-3 3-3 5h14c0-2-1-4-3-5"/></svg>';
+        return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>';
+    }
+    function fmtNum(n) { if (n >= 1e6) return (n/1e6).toFixed(1) + 'M'; if (n >= 1e3) return (n/1e3).toFixed(1) + 'K'; return String(n); }
+    function fmtBytes(b) { if (b >= 1e12) return (b/1e12).toFixed(1) + ' TB'; if (b >= 1e9) return (b/1e9).toFixed(1) + ' GB'; if (b >= 1e6) return (b/1e6).toFixed(1) + ' MB'; if (b >= 1e3) return (b/1e3).toFixed(0) + ' KB'; return b + ' B'; }
+    function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 })();
 </script>
 {% endblock %}
