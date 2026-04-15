@@ -90,7 +90,7 @@ def _get_flow_db() -> sqlite3.Connection | None:
 @dashboard_bp.route("/api/overview/geo-points")
 @require_login
 def overview_geo_points():
-    """Geo points for the overview globe — aggregated from fleet flow_events."""
+    """Geo points for the overview globe — scoped to user's devices."""
     db = _get_flow_db()
     if db is None:
         return jsonify([])
@@ -98,8 +98,42 @@ def overview_geo_points():
         hours = request.args.get("hours", 24, type=int)
         limit = request.args.get("limit", 300, type=int)
         cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+
+        # ── Device-level isolation for flow data ──
+        user = get_current_user()
+        is_admin = user and getattr(user, "role", None) and user.role.value == "admin"
+        org_id = get_current_org_id()
+
+        dev_filter = ""
+        dev_params: tuple = ()
+        if not is_admin and org_id:
+            # Get this org's device_ids from command center
+            try:
+                import urllib.request as urlreq
+                import ssl
+                ops_host = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip("/")
+                rq = urlreq.Request(
+                    f"{ops_host}/api/v1/fleet/status?org_id={org_id}",
+                    headers={"Accept": "application/json"},
+                )
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                with urlreq.urlopen(rq, timeout=8, context=ctx) as rsp:
+                    devs = json.loads(rsp.read()).get("devices", [])
+                dev_ids = [d["device_id"] for d in devs if d.get("device_id")]
+                if dev_ids:
+                    ph = ",".join("?" * len(dev_ids))
+                    dev_filter = f" AND device_id IN ({ph})"
+                    dev_params = tuple(dev_ids)
+                else:
+                    dev_filter = " AND device_id = ?"
+                    dev_params = ("__none__",)
+            except Exception:
+                pass
+
         rows = db.execute(
-            """SELECT geo_dst_latitude as lat, geo_dst_longitude as lon,
+            f"""SELECT geo_dst_latitude as lat, geo_dst_longitude as lon,
                       geo_dst_country as country, geo_dst_city as city,
                       asn_dst_org as asn_org,
                       SUM(COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0)) as bytes,
@@ -107,9 +141,10 @@ def overview_geo_points():
                       MAX(CASE WHEN threat_intel_match=1 THEN 1 ELSE 0 END) as threat
                FROM flow_events
                WHERE timestamp_ns > ? AND geo_dst_latitude IS NOT NULL AND geo_dst_latitude != 0
+               {dev_filter}
                GROUP BY ROUND(geo_dst_latitude,1), ROUND(geo_dst_longitude,1)
                ORDER BY count DESC LIMIT ?""",
-            (cutoff_ns, min(limit, 500)),
+            (cutoff_ns,) + dev_params + (min(limit, 500),),
         ).fetchall()
         points = [
             {
@@ -279,84 +314,86 @@ def overview_data():
         except Exception:
             pass
 
-        # Build WHERE clause fragments for org isolation
-        if is_admin or not has_evt_org:
-            evt_org_clause = ""
-            evt_org_params: tuple = ()
-        elif org_id:
-            evt_org_clause = " AND org_id = ?"
-            evt_org_params = (org_id,)
-        else:
-            evt_org_clause = " AND org_id = ?"
-            evt_org_params = ("__none__",)
-
-        # ── Fleet counts — from devices table if available, else command center ──
-        total, online = 0, 0
+        # ── Device-level isolation ──────────────────────────────────────
+        # The fleet_cache.db has device_id on every event but no org_id.
+        # We enforce tenant isolation by resolving the user's org → their
+        # device_ids from the command center, then filtering all queries
+        # to only those device_ids.  Admins see all devices.
         cc_devices = []
-        if has_devices_table:
-            dev_org_clause = ""
-            dev_org_params: tuple = ()
+        allowed_device_ids: list[str] = []
+
+        # Always call command center for device list (we need it for
+        # both the device cards AND the device_id isolation filter)
+        try:
+            import urllib.request as urlreq
+            import ssl
+            ops_host = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip("/")
+            cc_url = f"{ops_host}/api/v1/fleet/status"
             if not is_admin and org_id:
-                dev_org_clause = " AND org_id = ?"
-                dev_org_params = (org_id,)
-            total = db.execute(
-                "SELECT COUNT(*) FROM devices WHERE 1=1" + dev_org_clause,
-                dev_org_params,
-            ).fetchone()[0]
-            online = db.execute(
-                "SELECT COUNT(*) FROM devices WHERE last_seen > ?" + dev_org_clause,
-                (now - 300,) + dev_org_params,
-            ).fetchone()[0]
+                cc_url += f"?org_id={org_id}"
+            rq = urlreq.Request(cc_url, headers={"Accept": "application/json"})
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            with urlreq.urlopen(rq, timeout=8, context=ctx) as rsp:
+                cc_data = json.loads(rsp.read())
+            cc_devices = cc_data.get("devices", [])
+        except Exception as e:
+            logger.debug("Failed to get fleet status from command center: %s", e)
+
+        # Build allowed device_id list
+        if cc_devices:
+            allowed_device_ids = [d["device_id"] for d in cc_devices if d.get("device_id")]
+
+        # Build event WHERE clause using device_id IN (...) for isolation
+        if is_admin and not org_id:
+            # Admin with no specific org → see all events
+            evt_dev_clause = ""
+            evt_dev_params: tuple = ()
+        elif allowed_device_ids:
+            placeholders = ",".join("?" * len(allowed_device_ids))
+            evt_dev_clause = f" AND device_id IN ({placeholders})"
+            evt_dev_params = tuple(allowed_device_ids)
         else:
-            # Get device info from command center API (routes_command_center has this)
-            try:
-                import urllib.request as urlreq
-                import ssl
-                ops_host = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip("/")
-                cc_url = f"{ops_host}/api/v1/fleet/status"
-                rq = urlreq.Request(cc_url, headers={"Accept": "application/json"})
-                ctx = ssl.create_default_context()
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
-                with urlreq.urlopen(rq, timeout=8, context=ctx) as rsp:
-                    cc_data = json.loads(rsp.read())
-                cc_devices = cc_data.get("devices", [])
-                fleet_info = cc_data.get("fleet", {})
-                total = fleet_info.get("total_devices", len(cc_devices))
-                online = fleet_info.get("online", 0)
-            except Exception as e:
-                logger.debug("Failed to get fleet status from command center: %s", e)
+            # No devices resolved → block all results
+            evt_dev_clause = " AND device_id = ?"
+            evt_dev_params = ("__none__",)
+
+        # ── Fleet counts ──
+        total = len(cc_devices)
+        fleet_info = cc_data.get("fleet", {}) if cc_devices else {}
+        online = fleet_info.get("online", 0)
 
         # ── Event stats (last 24h) — always from local DB ──
         total_events = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?" + evt_org_clause,
-            (day_ago_ns,) + evt_org_params,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?" + evt_dev_clause,
+            (day_ago_ns,) + evt_dev_params,
         ).fetchone()[0]
         critical = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8" + evt_org_clause,
-            (day_ago_ns,) + evt_org_params,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8" + evt_dev_clause,
+            (day_ago_ns,) + evt_dev_params,
         ).fetchone()[0]
         high = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8" + evt_org_clause,
-            (day_ago_ns,) + evt_org_params,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8" + evt_dev_clause,
+            (day_ago_ns,) + evt_dev_params,
         ).fetchone()[0]
 
         # ── Previous 24h (for trend arrows) ──
         prev_events = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ?" + evt_org_clause,
-            (two_days_ago_ns, day_ago_ns) + evt_org_params,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ?" + evt_dev_clause,
+            (two_days_ago_ns, day_ago_ns) + evt_dev_params,
         ).fetchone()[0]
         prev_critical = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ? AND risk_score >= 0.8" + evt_org_clause,
-            (two_days_ago_ns, day_ago_ns) + evt_org_params,
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ? AND risk_score >= 0.8" + evt_dev_clause,
+            (two_days_ago_ns, day_ago_ns) + evt_dev_params,
         ).fetchone()[0]
 
         # ── MITRE techniques (24h) ──
         mitre_rows = db.execute(
             """SELECT mitre_techniques FROM security_events
                WHERE timestamp_ns > ? AND mitre_techniques IS NOT NULL
-               AND mitre_techniques != '[]'""" + evt_org_clause,
-            (day_ago_ns,) + evt_org_params,
+               AND mitre_techniques != '[]'""" + evt_dev_clause,
+            (day_ago_ns,) + evt_dev_params,
         ).fetchall()
         technique_counts: dict[str, int] = {}
         for row in mitre_rows:
@@ -378,10 +415,10 @@ def overview_data():
         top_categories = db.execute(
             """SELECT event_category, COUNT(*) as cnt, AVG(risk_score) as avg_risk
                FROM security_events
-               WHERE timestamp_ns > ? AND risk_score > 0""" + evt_org_clause + """
+               WHERE timestamp_ns > ? AND risk_score > 0""" + evt_dev_clause + """
                GROUP BY event_category
                ORDER BY cnt DESC LIMIT 8""",
-            (day_ago_ns,) + evt_org_params,
+            (day_ago_ns,) + evt_dev_params,
         ).fetchall()
 
         # ── Per-device summary ──
