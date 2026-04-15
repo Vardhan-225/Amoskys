@@ -38,8 +38,17 @@ def _get_fusion_engine():
     """Get a FusionEngine instance for read-only queries."""
     from pathlib import Path
 
-    fusion_db = Path("data/intel/fusion.db")
-    if not fusion_db.exists():
+    project_root = Path(__file__).resolve().parents[3]
+    candidates = [
+        project_root / "data" / "intel" / "fusion.db",
+        Path("data/intel/fusion.db"),
+    ]
+    fusion_db = None
+    for p in candidates:
+        if p.exists():
+            fusion_db = p
+            break
+    if fusion_db is None:
         return None
     try:
         from amoskys.intel.fusion_engine import FusionEngine
