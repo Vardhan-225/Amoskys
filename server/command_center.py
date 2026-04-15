@@ -404,6 +404,7 @@ def require_device_auth(f):
         ).fetchone()
 
         if not row:
+            logger.warning("AUTH_FAIL: key=%s (len=%d)", api_key, len(api_key))
             return jsonify({"error": "Invalid API key"}), 403
 
         # Update last_seen
@@ -625,7 +626,9 @@ def receive_telemetry():
 
     table = data.get("table", "")
     events = data.get("events", [])
-    device_id = data.get("device_id", "")
+    # Use the authenticated device_id (from API key lookup) — not what
+    # the shipper claims.  This handles device ID changes after reinstall.
+    device_id = g.authenticated_device or data.get("device_id", "")
 
     if table not in ALLOWED_TABLES:
         return jsonify({"error": f"Unknown table: {table}"}), 400
