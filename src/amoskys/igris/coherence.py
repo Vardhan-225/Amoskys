@@ -79,8 +79,8 @@ def assess(metrics: dict[str, Any], active_signal_count: int = 0) -> dict:
     wal_depth = metrics.get("transport.wal_queue_depth")
 
     if eventbus is False:
-        subsystem_status["transport"] = "critical"
-        degrade(COMPROMISED, "EventBus offline — event transport severed")
+        subsystem_status["transport"] = "degraded"
+        degrade(DEGRADED, "EventBus offline — using fleet transport")
     elif eventbus is None:
         subsystem_status["transport"] = "unknown"
         degrade(DEGRADED, "EventBus status unknown")
