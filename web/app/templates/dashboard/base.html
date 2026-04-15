@@ -769,25 +769,16 @@
                 this.results = document.getElementById('commandPaletteResults');
                 this.selectedIndex = -1;
                 this.commands = [
-                    { icon:'&#x1F3E0;', title:'Overview', desc:'Security posture & fleet status', url:'/dashboard/', kw:['overview','home','dashboard','posture','safe'] },
-                    { icon:'&#x2B22;', title:'Cortex', desc:'Advanced command center', url:'/dashboard/cortex', kw:['cortex','command','advanced','3d'] },
-                    { icon:'&#x26A0;', title:'Threats — Live Feed', desc:'Real-time threat events', url:'/dashboard/threats', kw:['threats','feed','live','events'] },
-                    { icon:'&#x1F3AF;', title:'Threats — MITRE ATT&CK', desc:'Technique coverage matrix', url:'/dashboard/threats#mitre', kw:['mitre','attack','technique','coverage'] },
-                    { icon:'&#x1F50D;', title:'Threats — Hunt', desc:'Cross-table threat hunting', url:'/dashboard/threats#hunt', kw:['hunt','search','query','log'] },
-                    { icon:'&#x1F6A8;', title:'Threats — Incidents', desc:'Incident management', url:'/dashboard/threats#incidents', kw:['incidents','sla','triage'] },
-                    { icon:'&#x1F517;', title:'Threats — Correlation', desc:'Fusion engine incidents', url:'/dashboard/threats#correlation', kw:['correlation','fusion','rules'] },
-                    { icon:'&#x1F52D;', title:'Observatory', desc:'All domain monitoring', url:'/dashboard/observatory', kw:['observatory','domains','posture'] },
-                    { icon:'&#x2699;', title:'Observatory — Processes', desc:'Process telemetry', url:'/dashboard/observatory#processes', kw:['process','pid','executable'] },
-                    { icon:'&#x1F310;', title:'Observatory — Network', desc:'GeoIP flow analysis', url:'/dashboard/observatory#network', kw:['network','flow','geo','ip','traffic'] },
-                    { icon:'&#x1F50D;', title:'Observatory — DNS', desc:'DGA and beaconing', url:'/dashboard/observatory#dns', kw:['dns','dga','beacon','domain'] },
-                    { icon:'&#x1F4C1;', title:'Observatory — File Integrity', desc:'FIM change tracking', url:'/dashboard/observatory#fim', kw:['file','integrity','fim','hash'] },
-                    { icon:'&#x1F517;', title:'Observatory — Persistence', desc:'Autostart mechanisms', url:'/dashboard/observatory#persistence', kw:['persistence','launchd','cron','autostart'] },
-                    { icon:'&#x1F511;', title:'Observatory — Auth', desc:'Login & privilege tracking', url:'/dashboard/observatory#auth', kw:['auth','login','sudo','ssh'] },
-                    { icon:'&#x1F50C;', title:'Observatory — Peripherals', desc:'USB & Bluetooth devices', url:'/dashboard/observatory#peripherals', kw:['peripheral','usb','bluetooth','device'] },
-                    { icon:'&#x1F9E0;', title:'Intelligence', desc:'SOMA + INADS + Scoring', url:'/dashboard/intelligence', kw:['intelligence','soma','inads','ml','scoring','brain'] },
-                    { icon:'&#x2699;', title:'Fleet', desc:'Agent management & deploy', url:'/dashboard/fleet', kw:['fleet','agents','deploy','reliability'] },
-                    { icon:'&#x1F441;', title:'IGRIS', desc:'AI security analyst', url:'/dashboard/igris', kw:['igris','chat','ask','analyst'] },
-                    { icon:'&#x1F5A5;', title:'Guardian C2', desc:'Command & control terminal', url:'/dashboard/guardian', kw:['guardian','c2','terminal','command'] },
+                    /* ── Primary ── */
+                    { icon:'&#x1F3E0;', title:'Overview', desc:'Security posture, globe, fleet status', url:'/dashboard/', kw:['overview','home','dashboard','posture','safe'] },
+                    { icon:'&#x26A0;', title:'Threats', desc:'Live feed, incidents, signals, hunt', url:'/dashboard/threats', kw:['threats','feed','live','events','incidents','correlation','hunt'] },
+                    { icon:'&#x1F4BB;', title:'Devices', desc:'Fleet inventory & device health', url:'/dashboard/devices', kw:['devices','fleet','agents','monitor'] },
+                    { icon:'&#x1F441;', title:'IGRIS', desc:'AI security analyst & governance', url:'/dashboard/igris', kw:['igris','chat','ask','analyst','guardian','c2'] },
+                    /* ── Secondary ── */
+                    { icon:'&#x1F6E1;', title:'Deploy', desc:'Install agent on new device', url:'/dashboard/deploy', kw:['deploy','install','download','agent'] },
+                    { icon:'&#x1F3AF;', title:'MITRE Coverage', desc:'ATT&CK technique detection matrix', url:'/dashboard/mitre', kw:['mitre','attack','technique','coverage','matrix','heatmap'] },
+                    { icon:'&#x1F52D;', title:'Observatory', desc:'Deep domain monitoring (device-scoped)', url:'/dashboard/observatory', kw:['observatory','process','dns','auth','file','persistence','peripheral'] },
+                    { icon:'&#x2699;', title:'Settings', desc:'Account, intelligence, system config', url:'/dashboard/settings', kw:['settings','account','intelligence','soma','system','reliability'] },
                 ];
                 this.init();
             }

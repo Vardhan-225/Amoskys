@@ -61,8 +61,8 @@ def setup_complete():
 @dashboard_bp.route("/cortex")
 @require_login
 def cortex_redirect():
-    """Cortex without device context — redirect to device list."""
-    return redirect(_DEVICES_URL)
+    """Cortex → Overview (consolidated)."""
+    return redirect("/dashboard/")
 
 
 @dashboard_bp.route("/device/<device_id>/cortex")
@@ -400,17 +400,15 @@ def observatory_consolidated(device_id):
 @dashboard_bp.route("/intelligence")
 @require_login
 def intelligence_consolidated():
-    """Intelligence — SOMA + INADS + Scoring + Fusion + AMRDR"""
-    user = get_current_user()
-    return render_template("dashboard/intelligence.html", user=user)
+    """Intelligence → Settings (consolidated)."""
+    return redirect("/dashboard/settings")
 
 
 @dashboard_bp.route("/fleet")
 @require_login
 def fleet_consolidated():
-    """Fleet — Agent management, deploy, reliability"""
-    user = get_current_user()
-    return render_template("dashboard/fleet.html", user=user)
+    """Fleet → Devices (consolidated)."""
+    return redirect(_DEVICES_URL)
 
 
 @dashboard_bp.route("/settings")
@@ -419,3 +417,16 @@ def settings_page():
     """Settings — account, team, advanced"""
     user = get_current_user()
     return render_template("dashboard/settings.html", user=user)
+
+
+# ── Investigation Page ──
+
+
+@dashboard_bp.route("/investigation/<incident_id>")
+@require_login
+def investigation_page(incident_id):
+    """Investigation — crime scene reconstruction for an incident."""
+    user = get_current_user()
+    return render_template(
+        "dashboard/investigation.html", user=user, incident_id=incident_id
+    )
