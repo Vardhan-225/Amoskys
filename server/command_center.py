@@ -1159,12 +1159,12 @@ def fleet_status():
 
     top_techniques = sorted(technique_counts.items(), key=lambda x: -x[1])[:10]
 
-    # Per-device summary
+    # Per-device summary (include public_ip and org_id for globe markers)
     dev_where = " WHERE 1=1" + (" AND d.org_id = ?" if org_id else "")
     dev_params = [org_id] if org_id else []
     device_summary = db.execute(
         f"""SELECT d.device_id, d.hostname, d.os, d.arch, d.agent_version,
-                  d.status, d.last_seen,
+                  d.status, d.last_seen, d.public_ip, d.org_id,
                   COUNT(se.id) as event_count,
                   MAX(se.risk_score) as max_risk,
                   SUM(CASE WHEN se.risk_score >= 0.8 THEN 1 ELSE 0 END) as critical_count,
@@ -1205,6 +1205,8 @@ def fleet_status():
                 "agent_version": r["agent_version"],
                 "status": r["status"],
                 "last_seen": r["last_seen"],
+                "public_ip": r["public_ip"],
+                "org_id": r["org_id"],
                 "event_count": r["event_count"],
                 "max_risk": r["max_risk"],
                 "critical_count": r["critical_count"],
