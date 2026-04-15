@@ -32,7 +32,9 @@ import json
 import logging
 import os
 import platform
+import shutil
 import sqlite3
+import sys
 import threading
 import time
 import uuid
@@ -381,6 +383,10 @@ class TelemetryShipper:
                 if self._registered:
                     self._ship_all_tables()
 
+                # Poll for commands from MCP server
+                if self._registered:
+                    self._poll_commands()
+
             except Exception as e:
                 logger.error("Shipper cycle failed: %s", e)
                 self._stats["last_error"] = str(e)
@@ -564,6 +570,267 @@ class TelemetryShipper:
             self._stats["failed"] += len(events)
             self._stats["last_error"] = str(e)
             logger.warning("Ship error: %s", e)
+
+
+    # ── Command Polling (MCP → Device) ──────────────────────────
+
+    def _poll_commands(self):
+        """Poll the Command Center for pending commands and execute them."""
+        try:
+            resp = self._session.get(
+                f"{self.config.server_url}/api/v1/devices/{self.config.device_id}/commands",
+                timeout=(CONNECT_TIMEOUT_S, READ_TIMEOUT_S),
+            )
+            if resp.status_code != 200:
+                return
+
+            data = resp.json()
+            commands = data.get("commands", [])
+            if not commands:
+                return
+
+            logger.info("Received %d command(s) from MCP server", len(commands))
+
+            for cmd in commands:
+                cmd_id = cmd.get("id", "")
+                cmd_type = cmd.get("command_type", "")
+                payload = cmd.get("payload", "{}")
+                if isinstance(payload, str):
+                    try:
+                        payload = json.loads(payload)
+                    except (json.JSONDecodeError, TypeError):
+                        payload = {}
+
+                result = self._execute_command(cmd_type, payload)
+
+                # Report result back
+                try:
+                    self._session.post(
+                        f"{self.config.server_url}/api/v1/devices/"
+                        f"{self.config.device_id}/commands/{cmd_id}/result",
+                        json=result,
+                        timeout=(CONNECT_TIMEOUT_S, READ_TIMEOUT_S),
+                    )
+                except Exception as e:
+                    logger.warning("Failed to report command result: %s", e)
+
+        except Exception as e:
+            # Non-fatal — command polling is best-effort
+            logger.debug("Command poll failed: %s", e)
+
+    def _execute_command(self, cmd_type: str, payload: dict) -> dict:
+        """Execute a command locally on this device."""
+        logger.info("Executing command: %s payload=%s", cmd_type, payload)
+
+        try:
+            if cmd_type == "START_AGENT":
+                return self._cmd_agent_lifecycle("start", payload.get("agent_name", ""))
+            elif cmd_type == "STOP_AGENT":
+                return self._cmd_agent_lifecycle("stop", payload.get("agent_name", ""))
+            elif cmd_type == "RESTART_AGENT":
+                return self._cmd_agent_lifecycle("restart", payload.get("agent_name", ""))
+            elif cmd_type == "COLLECT_NOW":
+                return self._cmd_collect_now()
+            elif cmd_type == "UPDATE_CONFIG":
+                return self._cmd_update_config(payload)
+            elif cmd_type == "KILL_PROCESS":
+                return self._cmd_kill_process(payload)
+            elif cmd_type == "BLOCK_IP":
+                return self._cmd_block_ip(payload)
+            elif cmd_type == "BLOCK_DOMAIN":
+                return self._cmd_block_domain(payload)
+            elif cmd_type == "ISOLATE":
+                return self._cmd_isolate(payload)
+            elif cmd_type == "UNISOLATE":
+                return self._cmd_unisolate()
+            elif cmd_type == "QUARANTINE_FILE":
+                return self._cmd_quarantine_file(payload)
+            else:
+                return {"success": False, "error": f"Unknown command: {cmd_type}"}
+        except Exception as e:
+            logger.exception("Command execution failed: %s", cmd_type)
+            return {"success": False, "error": str(e)}
+
+    def _cmd_agent_lifecycle(self, action: str, agent_name: str) -> dict:
+        """Start/stop/restart an agent via subprocess."""
+        if not agent_name:
+            return {"success": False, "error": "No agent_name provided"}
+        import subprocess
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "amoskys.launcher", action, "--agents-only"],
+                capture_output=True, text=True, timeout=30,
+                env={**os.environ, "AMOSKYS_AGENT": agent_name},
+            )
+            return {
+                "success": result.returncode == 0,
+                "output": result.stdout[-500:] if result.stdout else "",
+                "error": result.stderr[-500:] if result.stderr else "",
+            }
+        except subprocess.TimeoutExpired:
+            return {"success": False, "error": "Agent lifecycle command timed out"}
+
+    def _cmd_collect_now(self) -> dict:
+        """Trigger immediate data collection."""
+        import subprocess
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "amoskys.launcher", "collect"],
+                capture_output=True, text=True, timeout=60,
+            )
+            return {
+                "success": result.returncode == 0,
+                "output": result.stdout[-500:] if result.stdout else "",
+            }
+        except subprocess.TimeoutExpired:
+            return {"success": False, "error": "Collection timed out"}
+
+    def _cmd_update_config(self, payload: dict) -> dict:
+        """Update a local configuration value."""
+        key = payload.get("key", "")
+        value = payload.get("value", "")
+        if not key:
+            return {"success": False, "error": "No config key provided"}
+        # Write to environment config file
+        config_path = Path(self.config.config_file)
+        if config_path.exists():
+            content = config_path.read_text()
+        else:
+            content = ""
+        # Update or append
+        lines = content.splitlines()
+        found = False
+        for i, line in enumerate(lines):
+            if line.startswith(f"{key}="):
+                lines[i] = f"{key}={value}"
+                found = True
+                break
+        if not found:
+            lines.append(f"{key}={value}")
+        config_path.write_text("\n".join(lines) + "\n")
+        return {"success": True, "output": f"Set {key}={value}"}
+
+    def _cmd_kill_process(self, payload: dict) -> dict:
+        """Kill a process by PID."""
+        pid = payload.get("pid")
+        if not pid:
+            return {"success": False, "error": "No PID provided"}
+        try:
+            os.kill(int(pid), 9)  # SIGKILL
+            return {"success": True, "output": f"Killed PID {pid}"}
+        except ProcessLookupError:
+            return {"success": False, "error": f"PID {pid} not found"}
+        except PermissionError:
+            return {"success": False, "error": f"Permission denied for PID {pid}"}
+
+    def _cmd_block_ip(self, payload: dict) -> dict:
+        """Block an IP using pf (macOS) or iptables (Linux)."""
+        ip = payload.get("ip", "")
+        duration = payload.get("duration_s", 3600)
+        if not ip:
+            return {"success": False, "error": "No IP provided"}
+
+        import subprocess
+        if platform.system() == "Darwin":
+            # macOS: use pf
+            rule = f'block drop from {ip} to any\nblock drop from any to {ip}\n'
+            anchor_file = Path("/tmp/amoskys_block.rules")
+            # Append rule
+            with open(anchor_file, "a") as f:
+                f.write(rule)
+            result = subprocess.run(
+                ["sudo", "pfctl", "-a", "amoskys", "-f", str(anchor_file)],
+                capture_output=True, text=True, timeout=10,
+            )
+            return {
+                "success": result.returncode == 0,
+                "output": f"Blocked {ip} for {duration}s via pf",
+                "error": result.stderr[:200] if result.stderr else "",
+            }
+        else:
+            # Linux: use iptables
+            result = subprocess.run(
+                ["sudo", "iptables", "-A", "INPUT", "-s", ip, "-j", "DROP"],
+                capture_output=True, text=True, timeout=10,
+            )
+            return {
+                "success": result.returncode == 0,
+                "output": f"Blocked {ip} via iptables",
+                "error": result.stderr[:200] if result.stderr else "",
+            }
+
+    def _cmd_block_domain(self, payload: dict) -> dict:
+        """Block a domain by adding to /etc/hosts (sinkhole)."""
+        domain = payload.get("domain", "")
+        if not domain:
+            return {"success": False, "error": "No domain provided"}
+        try:
+            hosts_line = f"\n127.0.0.1 {domain}  # AMOSKYS-BLOCK\n"
+            with open("/etc/hosts", "a") as f:
+                f.write(hosts_line)
+            # Flush DNS cache
+            import subprocess
+            if platform.system() == "Darwin":
+                subprocess.run(["sudo", "dscacheutil", "-flushcache"],
+                               capture_output=True, timeout=5)
+            return {"success": True, "output": f"Sinkholed {domain}"}
+        except PermissionError:
+            return {"success": False, "error": "Need root to modify /etc/hosts"}
+
+    def _cmd_isolate(self, payload: dict) -> dict:
+        """Network-isolate this device (allow only AMOSKYS traffic)."""
+        import subprocess
+        server_ip = self.config.server_url.split("://")[-1].split(":")[0]
+        if platform.system() == "Darwin":
+            rules = (
+                f"pass out proto tcp to {server_ip} port 8443\n"
+                f"pass in proto tcp from {server_ip} port 8443\n"
+                "block all\n"
+            )
+            Path("/tmp/amoskys_isolate.rules").write_text(rules)
+            result = subprocess.run(
+                ["sudo", "pfctl", "-a", "amoskys_isolate", "-f",
+                 "/tmp/amoskys_isolate.rules"],
+                capture_output=True, text=True, timeout=10,
+            )
+            return {
+                "success": result.returncode == 0,
+                "output": "Device isolated — only AMOSKYS traffic allowed",
+            }
+        return {"success": False, "error": "Isolation not implemented for this OS"}
+
+    def _cmd_unisolate(self) -> dict:
+        """Remove network isolation."""
+        import subprocess
+        if platform.system() == "Darwin":
+            result = subprocess.run(
+                ["sudo", "pfctl", "-a", "amoskys_isolate", "-F", "all"],
+                capture_output=True, text=True, timeout=10,
+            )
+            return {
+                "success": result.returncode == 0,
+                "output": "Network isolation removed",
+            }
+        return {"success": False, "error": "Unisolation not implemented for this OS"}
+
+    def _cmd_quarantine_file(self, payload: dict) -> dict:
+        """Quarantine a file — move to secure location, strip permissions."""
+        file_path = payload.get("path", "")
+        if not file_path:
+            return {"success": False, "error": "No path provided"}
+        src = Path(file_path)
+        if not src.exists():
+            return {"success": False, "error": f"File not found: {file_path}"}
+        quarantine_dir = Path("data/quarantine")
+        quarantine_dir.mkdir(parents=True, exist_ok=True)
+        dst = quarantine_dir / f"{src.name}.{int(time.time())}"
+        import shutil
+        shutil.move(str(src), str(dst))
+        os.chmod(str(dst), 0o000)  # Remove all permissions
+        return {
+            "success": True,
+            "output": f"Quarantined {file_path} → {dst}",
+        }
 
 
 # ── Standalone mode ────────────────────────────────────────────────

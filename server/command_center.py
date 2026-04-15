@@ -375,6 +375,28 @@ def init_db():
             db.execute(f"ALTER TABLE devices ADD COLUMN {col} {ctype}")
         except sqlite3.OperationalError:
             pass  # column already exists
+    # Command queue table (MCP server → device agent)
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS device_commands (
+            id TEXT PRIMARY KEY,
+            device_id TEXT NOT NULL,
+            command_type TEXT NOT NULL,
+            payload TEXT NOT NULL DEFAULT '{}',
+            status TEXT NOT NULL DEFAULT 'pending',
+            priority INTEGER NOT NULL DEFAULT 5,
+            created_at REAL NOT NULL,
+            expires_at REAL NOT NULL,
+            claimed_at REAL,
+            completed_at REAL,
+            result TEXT,
+            source TEXT NOT NULL DEFAULT 'mcp'
+        );
+        CREATE INDEX IF NOT EXISTS idx_commands_device_status
+            ON device_commands(device_id, status);
+        CREATE INDEX IF NOT EXISTS idx_commands_expires
+            ON device_commands(expires_at);
+    """)
+
     db.commit()
     db.close()
     logger.info("Fleet database initialized: %s", DB_PATH)
@@ -1534,6 +1556,69 @@ def _run_maintenance():
 
     if total_deleted > 0:
         logger.info("Maintenance: cleaned %d old/excess rows", total_deleted)
+
+
+# ── Command Queue API (MCP → Device) ──────────────────────────────
+
+
+@app.route("/api/v1/devices/<device_id>/commands", methods=["GET"])
+@require_device_auth
+def poll_commands(device_id):
+    """Device polls for pending commands. Returns and marks them 'claimed'."""
+    db = get_db()
+    now = time.time()
+
+    # Expire old commands first
+    db.execute(
+        "UPDATE device_commands SET status = 'expired' "
+        "WHERE status = 'pending' AND expires_at < ?",
+        (now,),
+    )
+
+    # Fetch pending commands for this device, highest priority first
+    rows = db.execute(
+        "SELECT id, command_type, payload, priority, created_at, expires_at "
+        "FROM device_commands "
+        "WHERE device_id = ? AND status = 'pending' "
+        "ORDER BY priority ASC, created_at ASC LIMIT 10",
+        (device_id,),
+    ).fetchall()
+
+    commands = []
+    for row in rows:
+        cmd = dict(row)
+        commands.append(cmd)
+        # Mark as claimed
+        db.execute(
+            "UPDATE device_commands SET status = 'claimed', claimed_at = ? WHERE id = ?",
+            (now, cmd["id"]),
+        )
+
+    db.commit()
+    return jsonify({"commands": commands, "count": len(commands)})
+
+
+@app.route("/api/v1/devices/<device_id>/commands/<command_id>/result", methods=["POST"])
+@require_device_auth
+def report_command_result(device_id, command_id):
+    """Device reports the result of executing a command."""
+    db = get_db()
+    data = request.get_json(silent=True) or {}
+
+    result = json.dumps({
+        "success": data.get("success", False),
+        "output": data.get("output", ""),
+        "error": data.get("error", ""),
+    })
+
+    db.execute(
+        "UPDATE device_commands SET status = 'completed', completed_at = ?, result = ? "
+        "WHERE id = ? AND device_id = ?",
+        (time.time(), result, command_id, device_id),
+    )
+    db.commit()
+
+    return jsonify({"status": "ok"})
 
 
 def main():

@@ -1,0 +1,44 @@
+[Unit]
+Description=AMOSKYS MCP Server — IGRIS Fleet Command & Control
+After=network.target amoskys-ops.service
+Wants=amoskys-ops.service
+
+[Service]
+Type=simple
+User=amoskys
+Group=amoskys
+WorkingDirectory=/opt/amoskys
+
+# Environment
+Environment="PYTHONPATH=/opt/amoskys/src"
+Environment="CC_DB_PATH=/opt/amoskys/server/fleet.db"
+Environment="MCP_FLEET_DB=/opt/amoskys/server/fleet.db"
+Environment="MCP_PORT=8444"
+Environment="MCP_AUTH_ENABLED=true"
+Environment="MCP_BRAIN_ENABLED=true"
+Environment="MCP_BRAIN_INTERVAL=60"
+Environment="MCP_LOG_LEVEL=INFO"
+EnvironmentFile=-/opt/amoskys/config/mcp.env
+
+# Run
+ExecStart=/usr/bin/python3 -m amoskys.mcp.server
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/amoskys/server /opt/amoskys/data /opt/amoskys/logs
+PrivateTmp=yes
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=amoskys-mcp
+
+[Install]
+WantedBy=multi-user.target
