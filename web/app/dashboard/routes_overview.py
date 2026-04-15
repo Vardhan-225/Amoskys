@@ -143,14 +143,19 @@ def overview_device_locations():
     org_id = get_current_org_id()
     is_admin = user and getattr(user, "role", None) and user.role.value == "admin"
 
-    # Get device list from command center
-    ops_host = os.getenv("OPS_SERVER", "http://18.223.110.15:8443")
+    # Get device list from command center (use same env var as routes_command_center)
+    ops_host = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip("/")
     try:
+        import ssl
         url = f"{ops_host}/api/v1/fleet/status"
         if not is_admin and org_id:
             url += f"?org_id={org_id}"
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        # Allow self-signed certs on ops server
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
             data = json.loads(resp.read())
     except Exception as e:
         logger.debug("Failed to get fleet status: %s", e)
@@ -218,9 +223,18 @@ def overview_device_locations():
 @dashboard_bp.route("/api/overview")
 @require_login
 def overview_data():
-    """Aggregated overview data for the landing page."""
+    """Aggregated overview data for the landing page.
+
+    Data sources (in order of preference):
+    1. Local fleet.db — has devices + events (ideal, single source)
+    2. fleet_cache.db for events + command center API for devices (production)
+    3. Command center API alone (minimal fallback)
+    """
     db = _get_fleet_db()
-    if db is None:
+    evt_db = _get_flow_db()  # fleet_cache.db — also has security_events
+
+    # If we have neither local DB nor fleet_cache, we still try command center
+    if db is None and evt_db is None:
         return jsonify({
             "available": False,
             "message": "No data source available",
@@ -236,6 +250,10 @@ def overview_data():
             "agents": {"total": 0, "healthy": 0},
         })
 
+    # If no full fleet.db but we have fleet_cache.db, use it for events
+    if db is None:
+        db = evt_db
+
     try:
         now = time.time()
         day_ago_ns = int((now - 86400) * 1e9)
@@ -246,35 +264,70 @@ def overview_data():
         is_admin = user and user.role and user.role.value == "admin"
         org_id = get_current_org_id()
 
+        # fleet_cache.db may not have org_id columns — check
+        has_evt_org = False
+        try:
+            cols = [c[1] for c in db.execute("PRAGMA table_info(security_events)").fetchall()]
+            has_evt_org = "org_id" in cols
+        except Exception:
+            pass
+
+        has_devices_table = False
+        try:
+            db.execute("SELECT 1 FROM devices LIMIT 1")
+            has_devices_table = True
+        except Exception:
+            pass
+
         # Build WHERE clause fragments for org isolation
-        if is_admin:
-            dev_org_clause = ""
-            dev_org_params: tuple = ()
+        if is_admin or not has_evt_org:
             evt_org_clause = ""
             evt_org_params: tuple = ()
         elif org_id:
-            dev_org_clause = " AND org_id = ?"
-            dev_org_params = (org_id,)
             evt_org_clause = " AND org_id = ?"
             evt_org_params = (org_id,)
         else:
-            # No org → see nothing (safety default)
-            dev_org_clause = " AND org_id = ?"
-            dev_org_params = ("__none__",)
             evt_org_clause = " AND org_id = ?"
             evt_org_params = ("__none__",)
 
-        # ── Fleet counts ──
-        total = db.execute(
-            "SELECT COUNT(*) FROM devices WHERE 1=1" + dev_org_clause,
-            dev_org_params,
-        ).fetchone()[0]
-        online = db.execute(
-            "SELECT COUNT(*) FROM devices WHERE last_seen > ?" + dev_org_clause,
-            (now - 300,) + dev_org_params,
-        ).fetchone()[0]
+        # ── Fleet counts — from devices table if available, else command center ──
+        total, online = 0, 0
+        cc_devices = []
+        if has_devices_table:
+            dev_org_clause = ""
+            dev_org_params: tuple = ()
+            if not is_admin and org_id:
+                dev_org_clause = " AND org_id = ?"
+                dev_org_params = (org_id,)
+            total = db.execute(
+                "SELECT COUNT(*) FROM devices WHERE 1=1" + dev_org_clause,
+                dev_org_params,
+            ).fetchone()[0]
+            online = db.execute(
+                "SELECT COUNT(*) FROM devices WHERE last_seen > ?" + dev_org_clause,
+                (now - 300,) + dev_org_params,
+            ).fetchone()[0]
+        else:
+            # Get device info from command center API (routes_command_center has this)
+            try:
+                import urllib.request as urlreq
+                import ssl
+                ops_host = os.getenv("AMOSKYS_OPS_SERVER", "https://18.223.110.15").rstrip("/")
+                cc_url = f"{ops_host}/api/v1/fleet/status"
+                rq = urlreq.Request(cc_url, headers={"Accept": "application/json"})
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                with urlreq.urlopen(rq, timeout=8, context=ctx) as rsp:
+                    cc_data = json.loads(rsp.read())
+                cc_devices = cc_data.get("devices", [])
+                fleet_info = cc_data.get("fleet", {})
+                total = fleet_info.get("total_devices", len(cc_devices))
+                online = fleet_info.get("online", 0)
+            except Exception as e:
+                logger.debug("Failed to get fleet status from command center: %s", e)
 
-        # ── Event stats (last 24h) ──
+        # ── Event stats (last 24h) — always from local DB ──
         total_events = db.execute(
             "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?" + evt_org_clause,
             (day_ago_ns,) + evt_org_params,
@@ -332,42 +385,80 @@ def overview_data():
         ).fetchall()
 
         # ── Per-device summary ──
-        dev_where = "WHERE 1=1" + dev_org_clause
-        device_rows = db.execute(
-            f"""SELECT d.device_id, d.hostname, d.os, d.os_version,
-                      d.agent_version, d.last_seen,
-                      COUNT(se.id) as event_count,
-                      COALESCE(MAX(se.risk_score), 0) as max_risk,
-                      SUM(CASE WHEN se.risk_score >= 0.8 THEN 1 ELSE 0 END) as critical_count,
-                      SUM(CASE WHEN se.risk_score >= 0.6 AND se.risk_score < 0.8 THEN 1 ELSE 0 END) as high_count
-               FROM devices d
-               LEFT JOIN security_events se ON d.device_id = se.device_id
-                    AND se.timestamp_ns > ?
-               {dev_where}
-               GROUP BY d.device_id
-               ORDER BY max_risk DESC""",
-            (day_ago_ns,) + dev_org_params,
-        ).fetchall()
-
         devices = []
-        for r in device_rows:
-            status = "online" if r["last_seen"] and r["last_seen"] > now - 300 else "offline"
-            cr = r["critical_count"] or 0
-            hi = r["high_count"] or 0
-            devices.append({
-                "device_id": r["device_id"],
-                "hostname": r["hostname"] or r["device_id"][:12],
-                "os": r["os"],
-                "os_version": r["os_version"],
-                "agent_version": r["agent_version"],
-                "status": status,
-                "last_seen": r["last_seen"],
-                "event_count": r["event_count"] or 0,
-                "max_risk": r["max_risk"] or 0,
-                "critical_count": cr,
-                "high_count": hi,
-                "posture": _compute_posture(cr, hi),
-            })
+        if has_devices_table:
+            dev_where = "WHERE 1=1"
+            dev_params_q: tuple = ()
+            if not is_admin and org_id:
+                dev_where += " AND d.org_id = ?"
+                dev_params_q = (org_id,)
+            device_rows = db.execute(
+                f"""SELECT d.device_id, d.hostname, d.os, d.os_version,
+                          d.agent_version, d.last_seen,
+                          COUNT(se.id) as event_count,
+                          COALESCE(MAX(se.risk_score), 0) as max_risk,
+                          SUM(CASE WHEN se.risk_score >= 0.8 THEN 1 ELSE 0 END) as critical_count,
+                          SUM(CASE WHEN se.risk_score >= 0.6 AND se.risk_score < 0.8 THEN 1 ELSE 0 END) as high_count
+                   FROM devices d
+                   LEFT JOIN security_events se ON d.device_id = se.device_id
+                        AND se.timestamp_ns > ?
+                   {dev_where}
+                   GROUP BY d.device_id
+                   ORDER BY max_risk DESC""",
+                (day_ago_ns,) + dev_params_q,
+            ).fetchall()
+            for r in device_rows:
+                status = "online" if r["last_seen"] and r["last_seen"] > now - 300 else "offline"
+                cr = r["critical_count"] or 0
+                hi = r["high_count"] or 0
+                devices.append({
+                    "device_id": r["device_id"],
+                    "hostname": r["hostname"] or r["device_id"][:12],
+                    "os": r["os"],
+                    "os_version": r["os_version"],
+                    "agent_version": r["agent_version"],
+                    "status": status,
+                    "last_seen": r["last_seen"],
+                    "event_count": r["event_count"] or 0,
+                    "max_risk": r["max_risk"] or 0,
+                    "critical_count": cr,
+                    "high_count": hi,
+                    "posture": _compute_posture(cr, hi),
+                })
+        else:
+            # No devices table — use command center devices, enrich with local event counts
+            for ccd in cc_devices:
+                did = ccd.get("device_id", "")
+                # Get per-device event counts from local security_events
+                try:
+                    ec = db.execute(
+                        "SELECT COUNT(*) FROM security_events WHERE device_id = ? AND timestamp_ns > ?",
+                        (did, day_ago_ns),
+                    ).fetchone()[0]
+                    cr = db.execute(
+                        "SELECT COUNT(*) FROM security_events WHERE device_id = ? AND timestamp_ns > ? AND risk_score >= 0.8",
+                        (did, day_ago_ns),
+                    ).fetchone()[0]
+                    hi = db.execute(
+                        "SELECT COUNT(*) FROM security_events WHERE device_id = ? AND timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8",
+                        (did, day_ago_ns),
+                    ).fetchone()[0]
+                except Exception:
+                    ec, cr, hi = 0, 0, 0
+                devices.append({
+                    "device_id": did,
+                    "hostname": ccd.get("hostname", did[:12]),
+                    "os": ccd.get("os", ""),
+                    "os_version": ccd.get("os_version", ""),
+                    "agent_version": ccd.get("agent_version", ""),
+                    "status": ccd.get("status", "offline"),
+                    "last_seen": ccd.get("last_seen"),
+                    "event_count": ec,
+                    "max_risk": ccd.get("max_risk", 0) or 0,
+                    "critical_count": cr,
+                    "high_count": hi,
+                    "posture": _compute_posture(cr, hi),
+                })
 
         # ── Needs Attention items ──
         needs_attention = []
