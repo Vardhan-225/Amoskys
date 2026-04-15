@@ -20,7 +20,7 @@ logger = logging.getLogger("web.dashboard.overview")
 
 
 def _get_fleet_db() -> sqlite3.Connection | None:
-    """Try local fleet.db for overview data."""
+    """Try local fleet.db for overview data (needs devices + security_events)."""
     candidates = [
         os.getenv("CC_DB_PATH", ""),
         "server/fleet.db",
@@ -58,11 +58,35 @@ def _compute_posture(critical: int, high: int, medium: int = 0) -> dict:
     return {"score": score, "label": label, "color": color}
 
 
+def _get_flow_db() -> sqlite3.Connection | None:
+    """Try any DB that has flow_events with geo data (fleet.db or fleet_cache.db)."""
+    candidates = [
+        os.getenv("CC_DB_PATH", ""),
+        "server/fleet.db",
+        "data/fleet.db",
+        "data/fleet_cache.db",
+    ]
+    for path in candidates:
+        if path and Path(path).exists():
+            try:
+                db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5.0)
+                db.row_factory = sqlite3.Row
+                # Verify flow_events table exists
+                db.execute("SELECT 1 FROM flow_events LIMIT 1")
+                return db
+            except Exception:
+                try:
+                    db.close()
+                except Exception:
+                    pass
+    return None
+
+
 @dashboard_bp.route("/api/overview/geo-points")
 @require_login
 def overview_geo_points():
     """Geo points for the overview globe — aggregated from fleet flow_events."""
-    db = _get_fleet_db()
+    db = _get_flow_db()
     if db is None:
         return jsonify([])
     try:
