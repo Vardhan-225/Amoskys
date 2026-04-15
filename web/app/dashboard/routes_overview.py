@@ -60,11 +60,16 @@ def _compute_posture(critical: int, high: int, medium: int = 0) -> dict:
 
 def _get_flow_db() -> sqlite3.Connection | None:
     """Try any DB that has flow_events with geo data (fleet.db or fleet_cache.db)."""
+    # Resolve paths relative to the project root, not the web/ subdirectory
+    project_root = Path(__file__).resolve().parents[3]
     candidates = [
         os.getenv("CC_DB_PATH", ""),
         "server/fleet.db",
         "data/fleet.db",
         "data/fleet_cache.db",
+        str(project_root / "data" / "fleet_cache.db"),
+        str(project_root / "data" / "fleet.db"),
+        str(project_root / "server" / "fleet.db"),
     ]
     for path in candidates:
         if path and Path(path).exists():
