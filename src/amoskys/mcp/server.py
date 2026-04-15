@@ -71,6 +71,8 @@ mcp = FastMCP(
         "respond to threats. The Cloud Brain runs autonomously in the background, "
         "but you can query its status and override its decisions."
     ),
+    host=cfg.host,
+    port=cfg.port,
 )
 
 
