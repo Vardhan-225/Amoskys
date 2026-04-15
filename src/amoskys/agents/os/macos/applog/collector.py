@@ -175,7 +175,7 @@ class MacOSAppLogCollector:
                 return None
 
             return AppLogEntry(
-                timestamp=_parse_timestamp(match.group(1)),
+                timestamp=_parse_timestamp(match.group(1)) or time.time(),
                 log_level=match.group(2),
                 pid=int(match.group(3)),
                 process=process,
@@ -191,7 +191,7 @@ class MacOSAppLogCollector:
                 return None
 
             return AppLogEntry(
-                timestamp=_parse_timestamp(match.group(1)),
+                timestamp=_parse_timestamp(match.group(1)) or time.time(),
                 process=process,
                 pid=int(match.group(3)),
                 message=match.group(4).strip(),
@@ -233,11 +233,12 @@ def _get_hostname() -> str:
     return socket.gethostname()
 
 
-def _parse_timestamp(ts_str: str) -> float:
+def _parse_timestamp(ts_str: str) -> Optional[float]:
     """Parse a timestamp string into Unix epoch seconds.
 
     Expected format: '2024-01-15 10:30:45.123456'
-    Falls back to current time on parse failure.
+    Returns ``None`` when parsing fails so callers can flag the
+    event rather than silently fabricating a timestamp.
     """
     try:
         from datetime import datetime
@@ -246,4 +247,5 @@ def _parse_timestamp(ts_str: str) -> float:
         dt = datetime.strptime(ts_str[:26], "%Y-%m-%d %H:%M:%S.%f")
         return dt.timestamp()
     except (ValueError, IndexError):
-        return time.time()
+        logger.warning("applog: unparseable timestamp %r", ts_str)
+        return None

@@ -5,6 +5,7 @@ Populates the system with sample agents, events, and metrics
 """
 
 import json
+import os
 import random
 import sys
 import time
@@ -15,7 +16,7 @@ import requests
 # Configuration
 API_BASE_URL = "http://127.0.0.1:5001"
 AGENT_ID = "flowagent-001"
-AGENT_SECRET = "amoskys-neural-flow-secure-key-2025"
+AGENT_SECRET = os.environ.get("AMOSKYS_AGENT_FLOW_SECRET", "test-only-secret")
 API_TOKEN = None  # Will be populated after login
 
 # Sample threat types

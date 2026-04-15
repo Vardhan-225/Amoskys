@@ -28,6 +28,9 @@ os.environ.setdefault("FLASK_DEBUG", "true")
 os.environ.setdefault("FORCE_HTTPS", "false")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest")
 os.environ.setdefault("TESTING", "true")
+# Stable agent secrets for test reproducibility (never used in production)
+os.environ.setdefault("AMOSKYS_AGENT_FLOW_SECRET", "test-flow-agent-secret-for-pytest")
+os.environ.setdefault("AMOSKYS_AGENT_ADMIN_SECRET", "test-admin-agent-secret-for-pytest")
 
 def pytest_configure(config):
     """Configure pytest with AMOSKYS-specific settings"""

@@ -653,9 +653,9 @@ def _load_keys():
         via SIGHUP).
 
     Note:
-        This function is currently defined but not called in the serve() function.
-        Signature verification is not yet implemented in the Publish RPC handler.
-        This represents future functionality for enhanced security.
+        Called in serve() during server startup.  If the key file is missing,
+        serve() logs a warning and continues — signed envelopes will be
+        rejected with ``AGENT_PUBKEY is None``.
     """
     global AGENT_PUBKEY
     AGENT_PUBKEY = load_public_key("certs/agent.ed25519.pub")
@@ -691,9 +691,9 @@ def _load_trust():
         - Message integrity (signature verified with agent's public key)
 
     Note:
-        Like _load_keys(), this function is defined but not called in serve().
-        Full signature verification and authorization is not yet implemented.
-        Currently, the server relies solely on mTLS client certificate validation.
+        Called in serve() during server startup.  If the trust map file is
+        missing, serve() logs a warning and per-agent CN authorization is
+        disabled (but mTLS and global signature verification still apply).
 
     Future Enhancements:
         - Hot reload trust map without server restart
@@ -1395,7 +1395,7 @@ class EventBusServicer(pbrpc.EventBusServicer):
         Security:
             - Enforces size limits to prevent resource exhaustion
             - Requires mTLS (enforced at server level)
-            - Future: Signature verification and CN authorization
+            - Ed25519 signature verification (via _verify_legacy_envelope_signature)
 
         Performance:
             The method is designed for high throughput:
@@ -1405,8 +1405,7 @@ class EventBusServicer(pbrpc.EventBusServicer):
             - Async processing could be added for heavy analytics
 
         Future Enhancements:
-            - Signature verification using AGENT_PUBKEY or TRUST map
-            - Client CN extraction and authorization
+            - Client CN extraction and per-agent authorization via TRUST map
             - Idempotency key deduplication using _seen()
             - Message forwarding to downstream analytics engines
             - Async processing to reduce RPC latency

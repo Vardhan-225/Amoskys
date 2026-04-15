@@ -1,10 +1,20 @@
 """
 AMOSKYS API Authentication Module
 JWT-based authentication with role-based access control
+
+Agent credentials MUST be supplied via environment variables:
+    AMOSKYS_AGENT_FLOW_SECRET  — secret for flowagent-001
+    AMOSKYS_AGENT_ADMIN_SECRET — secret for admin agent
+
+In development (FLASK_DEBUG=1), ephemeral secrets are auto-generated
+if the env vars are missing.  In production, missing secrets cause
+the agent to be unavailable (no login possible).
 """
 
 import hmac
 import logging
+import os
+import secrets as _secrets
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Dict, Optional
@@ -18,24 +28,72 @@ auth_bp = Blueprint("agent_auth", __name__, url_prefix="/agent-auth")
 
 # In-memory token store (replace with Redis in production)
 VALID_TOKENS = set()
-AGENT_CREDENTIALS = {
-    "flowagent-001": {
-        "secret": "amoskys-neural-flow-secure-key-2025",
-        "role": "agent",
-        "permissions": [
-            "event.submit",
-            "agent.ping",
-            "agent.status",
-            "agent.register",
-            "agent.list",
-        ],
-    },
-    "admin": {
-        "secret": "amoskys-neural-admin-secure-key-2025",
-        "role": "admin",
-        "permissions": ["*"],
-    },
-}
+
+
+def _load_agent_credentials() -> Dict[str, Dict[str, Any]]:
+    """Build the credential map from environment variables.
+
+    Never stores secrets in source code.  In dev mode, generates
+    ephemeral random secrets so the system still boots without
+    manual configuration.
+    """
+    _truthy = {"1", "true", "yes"}
+    is_dev = (
+        os.getenv("FLASK_DEBUG", "").lower() in _truthy
+        or os.getenv("FLASK_ENV") == "development"
+        or os.getenv("TESTING", "").lower() in _truthy
+    )
+
+    flow_secret = os.getenv("AMOSKYS_AGENT_FLOW_SECRET")
+    admin_secret = os.getenv("AMOSKYS_AGENT_ADMIN_SECRET")
+
+    if not flow_secret:
+        if is_dev:
+            flow_secret = _secrets.token_hex(32)
+            logger.warning(
+                "AMOSKYS_AGENT_FLOW_SECRET not set — generated ephemeral dev secret"
+            )
+        else:
+            logger.error(
+                "AMOSKYS_AGENT_FLOW_SECRET not configured — "
+                "flowagent-001 login disabled"
+            )
+
+    if not admin_secret:
+        if is_dev:
+            admin_secret = _secrets.token_hex(32)
+            logger.warning(
+                "AMOSKYS_AGENT_ADMIN_SECRET not set — generated ephemeral dev secret"
+            )
+        else:
+            logger.error(
+                "AMOSKYS_AGENT_ADMIN_SECRET not configured — "
+                "admin agent login disabled"
+            )
+
+    creds: Dict[str, Dict[str, Any]] = {}
+    if flow_secret:
+        creds["flowagent-001"] = {
+            "secret": flow_secret,
+            "role": "agent",
+            "permissions": [
+                "event.submit",
+                "agent.ping",
+                "agent.status",
+                "agent.register",
+                "agent.list",
+            ],
+        }
+    if admin_secret:
+        creds["admin"] = {
+            "secret": admin_secret,
+            "role": "admin",
+            "permissions": ["*"],
+        }
+    return creds
+
+
+AGENT_CREDENTIALS = _load_agent_credentials()
 
 
 def generate_jwt(agent_id: str, role: str, permissions: list) -> str:
@@ -48,16 +106,14 @@ def generate_jwt(agent_id: str, role: str, permissions: list) -> str:
         "exp": datetime.now(timezone.utc) + timedelta(hours=24),
     }
 
-    secret_key = current_app.config.get("SECRET_KEY", "amoskys-neural-security-dev-key")
+    secret_key = current_app.config["SECRET_KEY"]  # guaranteed by app init
     return jwt.encode(payload, secret_key, algorithm="HS256")
 
 
 def verify_jwt(token: str) -> Optional[Dict[str, Any]]:
     """Verify and decode JWT token"""
     try:
-        secret_key = current_app.config.get(
-            "SECRET_KEY", "amoskys-neural-security-dev-key"
-        )
+        secret_key = current_app.config["SECRET_KEY"]  # guaranteed by app init
         payload = jwt.decode(token, secret_key, algorithms=["HS256"])
         return payload
     except jwt.ExpiredSignatureError:

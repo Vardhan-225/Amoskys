@@ -203,6 +203,8 @@ class MacOSHTTPInspectorCollector:
 
         body_size = int(body_size_str) if body_size_str != "-" else 0
         timestamp = self._parse_clf_timestamp(timestamp_str)
+        if timestamp is None:
+            timestamp = time.time()  # ingest time — flagged via log warning
 
         return HTTPRequest(
             timestamp=timestamp,
@@ -216,14 +218,15 @@ class MacOSHTTPInspectorCollector:
             server_type=server_type,
         )
 
-    def _parse_clf_timestamp(self, ts: str) -> float:
+    def _parse_clf_timestamp(self, ts: str) -> Optional[float]:
         """Parse Combined Log Format timestamp to Unix epoch.
 
         Format: 10/Oct/2000:13:55:36 -0700
+
+        Returns ``None`` when parsing fails so callers can flag the
+        event rather than silently fabricating a timestamp.
         """
         try:
-            import calendar
-
             parts = ts.split(":")
             date_part = parts[0]
             day, month_str, year = date_part.split("/")
@@ -232,9 +235,9 @@ class MacOSHTTPInspectorCollector:
 
             month = self._MONTH_MAP.get(month_str, 1)
 
-            import datetime
+            import datetime as _dt
 
-            dt = datetime.datetime(
+            dt = _dt.datetime(
                 int(year),
                 month,
                 int(day),
@@ -244,7 +247,8 @@ class MacOSHTTPInspectorCollector:
             )
             return dt.timestamp()
         except Exception:
-            return time.time()
+            logger.warning("http_inspector: unparseable CLF timestamp %r", ts)
+            return None
 
     def _collect_urlsession_logs(self) -> List[HTTPRequest]:
         """Parse Unified Logging for URLSession/NSURLConnection activity."""

@@ -54,6 +54,19 @@ def get_current_user() -> Optional[User]:
     return g.get("current_user", None)
 
 
+def get_current_org_id() -> Optional[str]:
+    """Return the org_id of the authenticated user, or None.
+
+    Use this in every query that returns tenant-scoped data.
+    Admin users still receive their org_id — global access should be
+    an explicit override (``is_admin``), never implicit.
+    """
+    user = get_current_user()
+    if user is None:
+        return None
+    return getattr(user, "org_id", None)
+
+
 def require_login(f):
     """
     Decorator to require authentication for a route.
@@ -84,6 +97,7 @@ def require_login(f):
                 email="test@amoskys.local",
                 role=SimpleNamespace(value="admin"),
                 is_active=True,
+                org_id="test-org-id",
             )
             return f(*args, **kwargs)
 

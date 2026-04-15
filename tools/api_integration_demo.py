@@ -9,15 +9,17 @@ This script shows how the FlowAgent (or other agents) can:
 4. Submit security events
 """
 
-import requests
-import time
 import json
+import os
+import time
+
+import requests
 from datetime import datetime
 
 # API Configuration
 API_BASE = "http://localhost:8000/api"
 AGENT_ID = "flowagent-001"
-AGENT_SECRET = "amoskys-neural-flow-secure-key-2025"
+AGENT_SECRET = os.environ.get("AMOSKYS_AGENT_FLOW_SECRET", "")
 
 class AMOSKYSAgentClient:
     def __init__(self, base_url, agent_id, secret):

@@ -415,7 +415,7 @@ class MacOSDNSCollector:
         match = self._QUERY_PATTERN.search(line)
         if not match:
             return None
-        ts = _parse_log_timestamp(match.group(1))
+        ts = _parse_log_timestamp(match.group(1)) or time.time()
         domain = match.group(2).rstrip(".")
         record_type = match.group(3).upper()
         is_reverse = domain.endswith(".in-addr.arpa") or domain.endswith(".ip6.arpa")
@@ -579,11 +579,12 @@ class MacOSDNSCollector:
         return caps
 
 
-def _parse_log_timestamp(ts_str: str) -> float:
+def _parse_log_timestamp(ts_str: str) -> Optional[float]:
     """Convert a Unified Logging timestamp string to epoch seconds.
 
     Expected format: '2026-03-26 14:05:32.123456'
-    Falls back to time.time() if parsing fails.
+    Returns ``None`` when parsing fails so callers can flag the
+    event rather than silently fabricating a timestamp.
     """
     try:
         # Parse the timestamp assuming local time (macOS log show uses local tz)
@@ -592,7 +593,8 @@ def _parse_log_timestamp(ts_str: str) -> float:
         dt = dt.replace(tzinfo=datetime.now(timezone.utc).astimezone().tzinfo)
         return dt.timestamp()
     except (ValueError, OSError):
-        return time.time()
+        logger.warning("dns: unparseable timestamp %r", ts_str)
+        return None
 
 
 def _get_hostname() -> str:

@@ -44,11 +44,20 @@ def broadcast_dashboard_event(
     payload: dict,
     *,
     room: str | None = None,
+    org_id: str | None = None,
 ) -> None:
-    """Emit a dashboard websocket event to all clients or a specific room."""
+    """Emit a dashboard websocket event, scoped to an org when provided.
 
+    If *org_id* is given the event is sent only to clients whose
+    ``org-{org_id}`` room matches.  If *room* is also given it is
+    further narrowed to ``org-{org_id}-{room}``.
+    """
     kwargs = {"namespace": "/dashboard"}
-    if room:
+    if org_id and room:
+        kwargs["to"] = f"org-{org_id}-{room}"
+    elif org_id:
+        kwargs["to"] = f"org-{org_id}"
+    elif room:
         kwargs["to"] = room
     socketio.emit(event_name, payload, **kwargs)
 
@@ -153,36 +162,52 @@ class DashboardUpdater:
                             logger.debug("Update fetch '%s' failed: %s", key, exc)
                             updates[key] = {}
 
-                    # Emit to all connected clients
-                    self.socketio.emit(
-                        "dashboard_update", updates, namespace="/dashboard"
-                    )
+                    # Broadcast per-org so tenants only see their own data.
+                    # Collect unique org_ids from connected clients.
+                    org_ids = {
+                        conn.get("org_id", "default")
+                        for conn in active_connections.values()
+                    }
 
-                    # Push dedicated incident update to SOC room on new incidents
-                    if incident_data["incident_count"] != self._prev_incident_count:
+                    for oid in org_ids:
+                        org_room = f"org-{oid}"
                         self.socketio.emit(
-                            "incidents_update",
-                            incident_data,
+                            "dashboard_update",
+                            updates,
                             namespace="/dashboard",
-                            to="soc",
+                            to=org_room,
                         )
-                        self._prev_incident_count = incident_data["incident_count"]
 
-                    # Push dedicated signal update to SOC room on new signals
-                    signal_data = updates.get("signals", {})
-                    sig_count = (
+                        # Push incident update to SOC sub-room on change
+                        if incident_data["incident_count"] != self._prev_incident_count:
+                            self.socketio.emit(
+                                "incidents_update",
+                                incident_data,
+                                namespace="/dashboard",
+                                to=f"org-{oid}-soc",
+                            )
+
+                        # Push signal update to SOC sub-room on change
+                        signal_data = updates.get("signals", {})
+                        sig_count = (
+                            signal_data.get("signal_count", 0)
+                            if isinstance(signal_data, dict)
+                            else 0
+                        )
+                        if sig_count != self._prev_signal_count:
+                            self.socketio.emit(
+                                "signals_update",
+                                signal_data,
+                                namespace="/dashboard",
+                                to=f"org-{oid}-soc",
+                            )
+
+                    self._prev_incident_count = incident_data["incident_count"]
+                    self._prev_signal_count = (
                         signal_data.get("signal_count", 0)
                         if isinstance(signal_data, dict)
                         else 0
                     )
-                    if sig_count != self._prev_signal_count:
-                        self.socketio.emit(
-                            "signals_update",
-                            signal_data,
-                            namespace="/dashboard",
-                            to="soc",
-                        )
-                        self._prev_signal_count = sig_count
 
                     logger.debug(f"Sent updates to {len(active_connections)} clients")
 
@@ -227,9 +252,20 @@ def handle_connect(_auth=None):
         return False
 
     client_id = flask_request.sid
-    active_connections[client_id] = {"connected_at": time.time(), "rooms": []}
 
-    logger.info(f"Dashboard client connected: {client_id}")
+    # Extract org_id from the validated session for room scoping
+    user_org_id = getattr(result.user, "org_id", None) or "default"
+
+    active_connections[client_id] = {
+        "connected_at": time.time(),
+        "rooms": [],
+        "org_id": user_org_id,
+    }
+
+    # Auto-join the org-level room so broadcasts are tenant-scoped
+    join_room(f"org-{user_org_id}")
+
+    logger.info("Dashboard client connected: %s (org=%s)", client_id, user_org_id)
 
     # Start updater if first connection
     if len(active_connections) == 1:
@@ -280,12 +316,16 @@ def handle_join_dashboard(data):
     dashboard_type = data.get("dashboard", "cortex")
     client_id = flask_request.sid
 
-    join_room(dashboard_type)
+    # Scope room by org so broadcasts are tenant-isolated
+    org_id = active_connections.get(client_id, {}).get("org_id", "default")
+    scoped_room = f"org-{org_id}-{dashboard_type}"
+
+    join_room(scoped_room)
 
     if client_id in active_connections:
-        active_connections[client_id]["rooms"].append(dashboard_type)
+        active_connections[client_id]["rooms"].append(scoped_room)
 
-    logger.info(f"Client {client_id} joined dashboard: {dashboard_type}")
+    logger.info("Client %s joined dashboard: %s (room=%s)", client_id, dashboard_type, scoped_room)
     emit("joined_dashboard", {"dashboard": dashboard_type})
 
 
@@ -297,15 +337,18 @@ def handle_leave_dashboard(data):
     dashboard_type = data.get("dashboard", "cortex")
     client_id = flask_request.sid
 
-    leave_room(dashboard_type)
+    org_id = active_connections.get(client_id, {}).get("org_id", "default")
+    scoped_room = f"org-{org_id}-{dashboard_type}"
+
+    leave_room(scoped_room)
 
     if (
         client_id in active_connections
-        and dashboard_type in active_connections[client_id]["rooms"]
+        and scoped_room in active_connections[client_id]["rooms"]
     ):
-        active_connections[client_id]["rooms"].remove(dashboard_type)
+        active_connections[client_id]["rooms"].remove(scoped_room)
 
-    logger.info(f"Client {client_id} left dashboard: {dashboard_type}")
+    logger.info("Client %s left dashboard: %s", client_id, dashboard_type)
     emit("left_dashboard", {"dashboard": dashboard_type})
 
 

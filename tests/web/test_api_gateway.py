@@ -53,7 +53,7 @@ def auth_headers(client):
         "/api/agent-auth/login",
         json={
             "agent_id": "flowagent-001",
-            "secret": "amoskys-neural-flow-secure-key-2025",
+            "secret": os.environ.get("AMOSKYS_AGENT_FLOW_SECRET", "test-flow-agent-secret-for-pytest"),
         },
         headers={"Content-Type": "application/json"},
     )
@@ -71,7 +71,7 @@ def admin_headers(client):
     # Login as admin using the agent auth endpoint
     response = client.post(
         "/api/agent-auth/login",
-        json={"agent_id": "admin", "secret": "amoskys-neural-admin-secure-key-2025"},
+        json={"agent_id": "admin", "secret": os.environ.get("AMOSKYS_AGENT_ADMIN_SECRET", "test-admin-agent-secret-for-pytest")},
         headers={"Content-Type": "application/json"},
     )
 
@@ -91,7 +91,7 @@ class TestAuthentication:
             "/api/agent-auth/login",
             json={
                 "agent_id": "flowagent-001",
-                "secret": "amoskys-neural-flow-secure-key-2025",
+                "secret": os.environ.get("AMOSKYS_AGENT_FLOW_SECRET", "test-flow-agent-secret-for-pytest"),
             },
             headers={"Content-Type": "application/json"},
         )

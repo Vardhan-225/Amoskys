@@ -291,9 +291,13 @@ class MacOSAuthCollector:
 
         category = _PROCESS_CATEGORY.get(process_name, category_hint)
 
-        # Parse timestamp
+        # Parse timestamp — None means unparseable; use ingest time as fallback
         ts_str = entry.get("timestamp", "")
         timestamp = _parse_timestamp(ts_str)
+        if timestamp is None:
+            timestamp = datetime.now(timezone.utc)
+            # Downstream can inspect this flag to know the timestamp is synthetic
+            entry["_timestamp_synthetic"] = True
 
         message = entry.get("eventMessage", "") or ""
         pid = entry.get("processID")
@@ -594,10 +598,14 @@ class MacOSAuthCollector:
 # ---------------------------------------------------------------------------
 
 
-def _parse_timestamp(ts_str: str) -> datetime:
-    """Parse macOS Unified Logging timestamp string."""
+def _parse_timestamp(ts_str: str) -> Optional[datetime]:
+    """Parse macOS Unified Logging timestamp string.
+
+    Returns ``None`` when the string is empty or unparseable so callers
+    can flag the event instead of silently fabricating a timestamp.
+    """
     if not ts_str:
-        return datetime.now(timezone.utc)
+        return None
     try:
         for fmt in (
             "%Y-%m-%d %H:%M:%S.%f%z",
@@ -611,7 +619,8 @@ def _parse_timestamp(ts_str: str) -> datetime:
                 continue
         return datetime.fromisoformat(ts_str.replace(" ", "T"))
     except Exception:
-        return datetime.now(timezone.utc)
+        logger.warning("auth: unparseable timestamp %r — event will use ingest time", ts_str)
+        return None
 
 
 def _get_hostname() -> str:
