@@ -9,13 +9,20 @@ _DEVICES_URL = "/dashboard/devices"
 
 
 @dashboard_bp.route("/")
-@dashboard_bp.route("/devices")
 @require_login
 def dashboard_home():
-    """Landing page — devices (or setup if first login)."""
+    """Landing page — overview (or setup if first login)."""
     user = get_current_user()
     if user and not user.setup_completed:
         return redirect("/dashboard/setup")
+    return render_template("dashboard/overview.html", user=user)
+
+
+@dashboard_bp.route("/devices")
+@require_login
+def devices_page():
+    """Device list — fleet inventory."""
+    user = get_current_user()
     return render_template("dashboard/devices.html", user=user)
 
 

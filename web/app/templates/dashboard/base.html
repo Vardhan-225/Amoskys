@@ -459,7 +459,11 @@
     <!-- ═══ MOBILE NAV DRAWER ═══ -->
     <div class="mobile-nav-drawer" id="mobileDrawer">
         <div class="mobile-nav-panel">
+            <a href="/dashboard/" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F3E0;</span> Overview</a>
+            <a href="/dashboard/threats" class="mobile-nav-link"><span class="hdr-nav-icon">&#x26A0;</span> Threats</a>
             <a href="/dashboard/devices" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F4BB;</span> Devices</a>
+            <a href="/dashboard/igris" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F9E0;</span> IGRIS</a>
+            <div style="border-top:1px solid #1e2a45; margin: 8px 0;"></div>
             <a href="/dashboard/deploy" class="mobile-nav-link"><span class="hdr-nav-icon">&#x1F6E1;</span> Deploy</a>
             <a href="/dashboard/settings" class="mobile-nav-link"><span class="hdr-nav-icon">&#x2699;</span> Settings</a>
             {% if user and user.role.value == 'admin' %}
@@ -478,13 +482,29 @@
             <span class="hdr-logo-text">AMOSKYS</span>
         </a>
 
-        <!-- Primary Nav (4 items — logo links to overview) -->
+        <!-- Primary Nav -->
         <nav class="hdr-nav" id="primaryNav">
+            <a href="/dashboard/" class="hdr-nav-link" data-nav="overview">
+                <span class="hdr-nav-icon">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L1 6v8.5a.5.5 0 00.5.5H6V10h4v5h4.5a.5.5 0 00.5-.5V6L8 1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+                </span> Overview
+            </a>
+            <a href="/dashboard/threats" class="hdr-nav-link" data-nav="threats">
+                <span class="hdr-nav-icon">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L1 14h14L8 1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6v3M8 11v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                </span> Threats
+            </a>
             <a href="/dashboard/devices" class="hdr-nav-link" data-nav="devices">
                 <span class="hdr-nav-icon">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 14h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
                 </span> Devices
             </a>
+            <a href="/dashboard/igris" class="hdr-nav-link" data-nav="igris">
+                <span class="hdr-nav-icon">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M6 6h.01M10 6h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6.5 8a2.5 2.5 0 003 0" stroke="currentColor" stroke-width="1.2"/><path d="M5 12v2M11 12v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                </span> IGRIS
+            </a>
+            <div class="hdr-nav-sep"></div>
             <a href="/dashboard/deploy" class="hdr-nav-link" data-nav="deploy">
                 <span class="hdr-nav-icon">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 5v4c0 4 2.5 7 6 8 3.5-1 6-4 6-8V5L8 1z" stroke="currentColor" stroke-width="1.4"/><path d="M6 8l2 2 3-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -570,20 +590,23 @@
 
             updateActiveNav() {
                 const path = window.location.pathname;
-                /* Map old routes to nav items */
+                /* Map routes to nav items */
                 const NAV_MAP = {
-                    cortex: ['cortex', '/dashboard', '/dashboard/'],
+                    overview: ['dashboard', 'cortex', 'command-center'],
                     threats: ['threats', 'threat-feed', 'mitre', 'hunt', 'incidents', 'correlation', 'timeline-replay', 'event-stream'],
-                    observatory: ['observatory', 'posture', 'processes', 'network', 'dns', 'file-integrity', 'persistence', 'auth', 'peripherals', 'observations'],
-                    intelligence: ['intelligence', 'soma', 'reliability'],
-                    fleet: ['fleet', 'agents', 'agent-monitor', 'deploy', 'my-agents', 'agent-control-panel', 'probe-explorer', 'system', 'database'],
-                    igris: ['igris'],
-                    guardian: ['guardian'],
+                    devices: ['devices', 'device', 'observatory', 'posture', 'processes', 'network', 'dns', 'file-integrity', 'persistence', 'auth', 'peripherals', 'observations'],
+                    igris: ['igris', 'guardian'],
+                    deploy: ['deploy', 'fleet', 'agents', 'agent-monitor', 'my-agents', 'agent-control-panel', 'probe-explorer', 'system', 'database'],
+                    settings: ['settings', 'intelligence', 'soma', 'reliability'],
                 };
-                const segment = path.split('/').filter(Boolean).pop() || 'cortex';
-                let activeNav = 'cortex';
-                for (const [nav, segments] of Object.entries(NAV_MAP)) {
-                    if (segments.includes(segment)) { activeNav = nav; break; }
+                const segment = path.split('/').filter(Boolean).pop() || 'dashboard';
+                /* /dashboard/ with no trailing segment = overview */
+                let activeNav = 'overview';
+                if (path === '/dashboard/' || path === '/dashboard') { activeNav = 'overview'; }
+                else {
+                    for (const [nav, segments] of Object.entries(NAV_MAP)) {
+                        if (segments.includes(segment)) { activeNav = nav; break; }
+                    }
                 }
                 document.querySelectorAll('.hdr-nav-link').forEach(link => {
                     link.classList.toggle('active', link.dataset.nav === activeNav);
@@ -746,7 +769,8 @@
                 this.results = document.getElementById('commandPaletteResults');
                 this.selectedIndex = -1;
                 this.commands = [
-                    { icon:'&#x2B22;', title:'Cortex', desc:'Command center', url:'/dashboard/cortex', kw:['cortex','home','overview','command'] },
+                    { icon:'&#x1F3E0;', title:'Overview', desc:'Security posture & fleet status', url:'/dashboard/', kw:['overview','home','dashboard','posture','safe'] },
+                    { icon:'&#x2B22;', title:'Cortex', desc:'Advanced command center', url:'/dashboard/cortex', kw:['cortex','command','advanced','3d'] },
                     { icon:'&#x26A0;', title:'Threats — Live Feed', desc:'Real-time threat events', url:'/dashboard/threats', kw:['threats','feed','live','events'] },
                     { icon:'&#x1F3AF;', title:'Threats — MITRE ATT&CK', desc:'Technique coverage matrix', url:'/dashboard/threats#mitre', kw:['mitre','attack','technique','coverage'] },
                     { icon:'&#x1F50D;', title:'Threats — Hunt', desc:'Cross-table threat hunting', url:'/dashboard/threats#hunt', kw:['hunt','search','query','log'] },
