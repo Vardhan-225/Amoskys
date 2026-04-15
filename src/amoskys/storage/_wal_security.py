@@ -368,6 +368,32 @@ class SecurityMixin:
                 self._store_rejected_event(event_data, rejection)
                 return
 
+            # ── Beacon FP suppression (WAL-level, post-enrichment) ──
+            # Legitimate apps that poll DNS periodically are not C2.
+            # Checked HERE (not in the probe) because process_name is
+            # only available after PID resolution and WAL enrichment.
+            _KNOWN_POLLING = {
+                "ChatGPT", "ChatGPTHelper", "Microsoft Update Assistant",
+                "Dropbox", "DropboxUpdater", "Slack", "Slack Helper",
+                "zoom.us", "Spotify", "SpotifyHelper",
+                "Google Chrome", "Google Chrome Helper",
+                "com.docker.backend", "Docker", "WhatsApp", "WhatsAppHelper",
+                "Teams", "MSTeams", "Microsoft Teams WebView Helper",
+                "OneDrive", "Firefox", "Safari", "Mail", "Notes",
+                "Reminders", "Messages", "replicatord", "NewsToday2",
+                "com.apple.WebKit.Networking", "AddressBookSourceSync",
+                "ControlCenter", "com.apple.appkit.xpc.openAndSavePanelService",
+                "GitHub Desktop Helper", "Cluely Helper", "Electron",
+                "Microsoft Excel", "idleassetsd", "multipassd",
+                "desktop_sdk_macos_exe", "syspolicyd",
+            }
+            evt_cat = event_data.get("event_category", "")
+            proc_name = event_data.get("process_name", "")
+            if "beacon" in evt_cat and proc_name in _KNOWN_POLLING:
+                logger.debug("Beacon FP suppressed: %s (%s)", proc_name, evt_cat)
+                event_data["tier"] = "observation"
+                event_data["risk_score"] = min(event_data.get("risk_score", 0), 0.1)
+
             # ── Noise gate: sub-0.05 risk events are observation-grade ──
             # These fire on normal system activity (process spawns, new TCP
             # connections, TCC checks).  They have forensic value but are not
@@ -382,6 +408,20 @@ class SecurityMixin:
                 )
                 # Still store — just in observation tier, not security tier
                 event_data["tier"] = "observation"
+
+            # ── FINAL classification — last step, cannot be overridden ──
+            final_risk = event_data.get("risk_score", 0.0) or 0.0
+            if isinstance(final_risk, str):
+                try:
+                    final_risk = float(final_risk)
+                except (ValueError, TypeError):
+                    final_risk = 0.0
+            if final_risk >= 0.75:
+                event_data["final_classification"] = "malicious"
+            elif final_risk >= 0.5:
+                event_data["final_classification"] = "suspicious"
+            else:
+                event_data["final_classification"] = "legitimate"
 
             self.store.insert_security_event(event_data)
 
