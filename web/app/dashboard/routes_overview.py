@@ -320,3 +320,144 @@ def overview_data():
         if db:
             db.close()
         return jsonify({"available": False, "message": str(e)})
+
+
+# ── Investigation Context Endpoint ─────────────────────────────────
+
+
+@dashboard_bp.route("/api/investigation/<int:incident_id>/context")
+@require_login
+def investigation_context(incident_id):
+    """Full evidence package for the investigation page.
+
+    Combines: incident metadata, timeline, story narrative,
+    event explanations, and MITRE mapping into a single response.
+    """
+    from .telemetry_bridge import get_telemetry_store
+
+    store = get_telemetry_store()
+    if store is None:
+        return jsonify({"status": "error", "message": "Database unavailable"}), 500
+
+    # 1. Get incident
+    incident = store.get_incident(incident_id)
+    if not incident:
+        return jsonify({"status": "error", "message": "Incident not found"}), 404
+
+    result: dict = {
+        "status": "success",
+        "incident": incident,
+        "narrative": None,
+        "timeline": [],
+        "explanations": [],
+        "mitre_techniques": [],
+        "kill_chain_stages": [],
+        "scoring": None,
+    }
+
+    # 2. Try to build attack story
+    try:
+        from amoskys.intel.story_engine import StoryEngine
+
+        engine = StoryEngine()
+        story = engine.build_story_for_incident(str(incident_id))
+        if story:
+            result["narrative"] = {
+                "story_id": story.story_id,
+                "pattern_name": story.pattern_name,
+                "pattern_label": story.pattern_label,
+                "severity": story.severity,
+                "confidence": story.confidence,
+                "techniques": story.techniques,
+                "affected_assets": story.affected_assets,
+                "duration_seconds": story.duration_seconds,
+                "raw_event_count": story.raw_event_count,
+                "kill_chain": [
+                    {
+                        "stage": s.stage,
+                        "techniques": s.techniques,
+                        "technique_names": s.technique_names,
+                        "summary": s.summary,
+                        "first_seen": s.first_seen,
+                        "last_seen": s.last_seen,
+                        "event_count": len(s.events),
+                    }
+                    for s in story.kill_chain
+                ],
+            }
+    except Exception as e:
+        logger.debug("StoryEngine unavailable: %s", e)
+
+    # 3. Build timeline
+    try:
+        import re as _re
+
+        device_id = incident.get("device_id", "")
+        end_ns = int(time.time() * 1e9)
+        start_ns = end_ns - int(24 * 3600 * 1e9)
+        if incident.get("created_at"):
+            try:
+                from datetime import datetime, timezone as _tz
+
+                created = datetime.fromisoformat(
+                    incident["created_at"].replace("Z", "+00:00")
+                )
+                start_ns = int(created.timestamp() * 1e9) - int(3600 * 1e9)
+            except (ValueError, TypeError):
+                pass
+        if not device_id:
+            for field in ("title", "description"):
+                text = incident.get(field, "")
+                m = _re.search(r" on ([A-Za-z0-9._-]+)", text)
+                if m:
+                    device_id = m.group(1)
+                    break
+        if device_id:
+            raw_timeline = store.build_incident_timeline(device_id, start_ns, end_ns)
+            if raw_timeline:
+                result["timeline"] = [
+                    {
+                        "ts": e.get("ts") or e.get("timestamp_ns"),
+                        "source": e.get("source") or e.get("agent") or e.get("table"),
+                        "significance": e.get("significance", 1),
+                        "category": e.get("event_category", ""),
+                        "risk_score": e.get("risk_score", 0),
+                        "description": e.get("description", ""),
+                        "process_name": e.get("process_name", ""),
+                        "remote_ip": e.get("remote_ip", ""),
+                        "mitre": e.get("mitre_techniques", []),
+                    }
+                    for e in raw_timeline[:500]
+                ]
+    except Exception as e:
+        logger.debug("Timeline build failed: %s", e)
+
+    # 4. Explain top events
+    try:
+        from amoskys.intel.explanation import EventExplainer
+
+        explainer = EventExplainer()
+        source_ids = json.loads(incident.get("source_event_ids", "[]"))
+        for eid in source_ids[:10]:
+            event = store.get_event(eid)
+            if event:
+                explanation = explainer.explain_event(event)
+                explanation["event_id"] = eid
+                result["explanations"].append(explanation)
+    except Exception as e:
+        logger.debug("EventExplainer unavailable: %s", e)
+
+    # 5. Extract MITRE techniques
+    techniques = set()
+    for field in ("tactics", "techniques"):
+        val = incident.get(field)
+        if val:
+            try:
+                parsed = json.loads(val) if isinstance(val, str) else val
+                if isinstance(parsed, list):
+                    techniques.update(t for t in parsed if isinstance(t, str))
+            except (json.JSONDecodeError, TypeError):
+                pass
+    result["mitre_techniques"] = sorted(techniques)
+
+    return jsonify(result)
