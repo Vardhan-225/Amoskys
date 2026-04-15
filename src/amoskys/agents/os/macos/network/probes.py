@@ -100,10 +100,8 @@ def _mandate_network_context(
     resolved = _resolve_process(conn.pid, fallback_name=conn.process_name or "UNKNOWN")
 
     ctx: Dict[str, Any] = {
-        # Identity (MANDATORY)
-        "pid": resolved["pid"],
-        "process_name": resolved["process_name"],
-        "exe": resolved["exe"],
+        # Identity (MANDATORY) — full process context from resolver
+        **resolved,
         # Network addressing (MANDATORY)
         "remote_ip": conn.remote_ip or "",
         "remote_port": conn.remote_port or 0,
@@ -139,9 +137,7 @@ def _mandate_bandwidth_context(
     resolved = _resolve_process(bw.pid, fallback_name=bw.process_name or "UNKNOWN")
 
     ctx: Dict[str, Any] = {
-        "pid": resolved["pid"],
-        "process_name": resolved["process_name"],
-        "exe": resolved["exe"],
+        **resolved,
         "remote_ip": "",
         "remote_port": 0,
         "local_port": 0,

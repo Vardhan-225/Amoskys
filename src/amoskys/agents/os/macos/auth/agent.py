@@ -149,6 +149,37 @@ class MacOSAuthAgent(MicroProbeAgentMixin, HardenedAgentBase):
         logger.info("MacOSAuthAgent setup complete")
         return True
 
+    def enrich_event(self, event: Any) -> Any:
+        """Auto-enrich auth events with full process context from PID.
+
+        Auth log entries sometimes carry client_pid but not exe/cmdline.
+        This resolves the PID to full context for every detection event.
+        """
+        from amoskys.agents.common.process_resolver import mandate_context_from_pid
+
+        if not hasattr(event, "data") or not isinstance(event.data, dict):
+            return event
+
+        data = event.data
+        pid = data.get("pid")
+        if not pid:
+            return event
+
+        if data.get("exe") and data["exe"] not in ("", "UNRESOLVED", "EXITED", "NULL"):
+            return event
+
+        ctx = mandate_context_from_pid(
+            int(pid),
+            probe_name=data.get("probe_name", "auth_probe"),
+            process_name_hint=data.get("process_name", ""),
+            detection_source="system_auth_logs",
+        )
+        for k, v in ctx.items():
+            if k not in data or data[k] is None or data[k] == "":
+                data[k] = v
+
+        return event
+
     def collect_data(self) -> Sequence[Any]:
         """Run collector + probes, emit raw observations + detections."""
         snapshot = self.collector.collect()

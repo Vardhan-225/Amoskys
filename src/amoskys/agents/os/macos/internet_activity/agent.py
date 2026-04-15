@@ -126,6 +126,46 @@ class MacOSInternetActivityAgent(MicroProbeAgentMixin, HardenedAgentBase):
         logger.info("MacOSInternetActivityAgent setup complete — 8 probes active")
         return True
 
+    def enrich_event(self, event: Any) -> Any:
+        """Auto-enrich detection events with full process context from PID.
+
+        Probes emit pid from lsof but not exe/cmdline/ppid/parent_name.
+        This hook resolves the PID to full mandate-grade context for ALL
+        probes without modifying each probe individually.
+        """
+        from amoskys.agents.common.process_resolver import mandate_context_from_pid
+
+        if not hasattr(event, "data") or not isinstance(event.data, dict):
+            return event
+
+        data = event.data
+        pid = data.get("pid")
+        # Also check "pids" list for aggregate events
+        if not pid and "pids" in data:
+            pids = data["pids"]
+            if isinstance(pids, (list, set)) and pids:
+                pid = next(iter(sorted(pids)), 0)
+
+        if not pid:
+            return event
+
+        # Only enrich if exe is missing (don't overwrite existing context)
+        if data.get("exe") and data["exe"] not in ("", "UNRESOLVED", "EXITED"):
+            return event
+
+        ctx = mandate_context_from_pid(
+            int(pid),
+            probe_name=data.get("probe_name", "internet_activity"),
+            process_name_hint=data.get("process_name", ""),
+            detection_source="lsof",
+        )
+        # Merge without overwriting existing non-empty fields
+        for k, v in ctx.items():
+            if k not in data or data[k] is None or data[k] == "":
+                data[k] = v
+
+        return event
+
     def collect_data(self) -> Sequence[Any]:
         """Run connection collector + probes, emit raw observations + detections."""
         snapshot = self.collector.collect()
