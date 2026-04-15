@@ -533,6 +533,32 @@ class BeaconingPatternProbe(MicroProbe):
         "duetexpertd",       # Siri knowledge
     })
 
+    # Third-party apps with known periodic polling behavior.
+    # These beacon by design (update checks, sync, push connections).
+    _KNOWN_POLLING_APPS: frozenset = frozenset({
+        "ChatGPT", "ChatGPTHelper",
+        "Microsoft Update Assistant", "MAU",
+        "Dropbox", "DropboxUpdater", "dbfseventsd",
+        "Slack", "Slack Helper",
+        "zoom.us", "zoom.us.ZoomAudioDevice",
+        "Spotify", "SpotifyHelper",
+        "Google Chrome", "Google Chrome Helper",
+        "com.docker.backend", "Docker",
+        "WhatsApp", "WhatsAppHelper",
+        "Teams", "MSTeams",
+        "OneDrive", "OneDriveUpdater",
+        "Firefox", "firefox",
+        "Safari",
+        "Mail",
+        "Notes",
+        "Reminders",
+        "Messages",
+        "replicatord",           # iCloud replication
+        "NewsToday2",            # Apple News
+        "amsaccountsd",          # App Store accounts
+        "com.apple.WebKit.Networking",
+    })
+
     def __init__(self) -> None:
         super().__init__()
         # domain → list of query timestamps
@@ -600,10 +626,12 @@ class BeaconingPatternProbe(MicroProbe):
                     ),
                     None,
                 )
-                # Skip Apple system daemons that beacon by design
+                # Skip known legitimate polling apps and Apple daemons
                 if rep_query:
                     proc_name = getattr(rep_query, "source_process", "") or ""
                     if proc_name in self._APPLE_BEACON_PROCESSES:
+                        continue
+                    if proc_name in self._KNOWN_POLLING_APPS:
                         continue
                 detected_domains.add(domain)
                 events.append(

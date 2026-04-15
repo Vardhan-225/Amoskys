@@ -272,6 +272,11 @@ class SecurityMixin:
                         "Scoring failed for event — continuing", exc_info=True
                     )
 
+            # Re-classify after scoring — the scorer may have adjusted risk_score
+            event_data["final_classification"] = SecurityMixin._classify_risk(
+                event_data.get("risk_score", 0.0)
+            )
+
             # Sigma detection-as-code: evaluate against stateless rules
             try:
                 from amoskys.detection.sigma_engine import SigmaEngine
@@ -362,6 +367,21 @@ class SecurityMixin:
             if rejection:
                 self._store_rejected_event(event_data, rejection)
                 return
+
+            # ── Noise gate: sub-0.05 risk events are observation-grade ──
+            # These fire on normal system activity (process spawns, new TCP
+            # connections, TCC checks).  They have forensic value but are not
+            # security detections.  Route to observation_events to keep
+            # security_events focused on real signal.
+            final_risk = event_data.get("risk_score", 0.0)
+            if final_risk < 0.05:
+                logger.debug(
+                    "Noise gate: routing %s (risk=%.3f) to observation",
+                    event_data.get("event_category", ""),
+                    final_risk,
+                )
+                # Still store — just in observation tier, not security tier
+                event_data["tier"] = "observation"
 
             self.store.insert_security_event(event_data)
 
