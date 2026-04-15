@@ -272,7 +272,7 @@ CREATE TABLE IF NOT EXISTS security_events (
 CREATE INDEX IF NOT EXISTS idx_security_timestamp ON security_events(timestamp_ns DESC);
 CREATE INDEX IF NOT EXISTS idx_security_risk ON security_events(risk_score DESC);
 CREATE INDEX IF NOT EXISTS idx_security_classification ON security_events(final_classification);
-CREATE INDEX IF NOT EXISTS idx_security_tier ON security_events(tier, timestamp_ns DESC);
+-- idx_security_tier created by _migrate_convergence_schema after tier column is ensured
 CREATE INDEX IF NOT EXISTS idx_security_event_timestamp ON security_events(event_timestamp_ns DESC);
 CREATE INDEX IF NOT EXISTS idx_security_event_id ON security_events(event_id);
 

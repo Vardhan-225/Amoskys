@@ -261,6 +261,10 @@ class SigmaEngine:
             candidate_rules = candidate_rules + self._rules_by_category.get(event_type, [])
         # Also include wildcard/uncategorized rules
         candidate_rules = candidate_rules + self._rules_by_category.get("", [])
+        # Fallback: if no candidates found by category, evaluate ALL rules so
+        # events without an explicit category field still get matched.
+        if not candidate_rules:
+            candidate_rules = list(self._rules.values())
         # Deduplicate (rule may appear in multiple categories)
         seen_ids = set()
         unique_rules = []

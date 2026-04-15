@@ -134,7 +134,7 @@ CSP = {
         "https://cdn.socket.io",  # For Socket.IO source maps
     ],
     "worker-src": ["'self'", "blob:"],
-    "frame-ancestors": ["'self'"],
+    "frame-ancestors": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
 }

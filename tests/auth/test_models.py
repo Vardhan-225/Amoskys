@@ -30,6 +30,7 @@ from amoskys.auth.models import (
 )
 from amoskys.auth.models import Session as AuthSession
 from amoskys.auth.models import User, UserRole
+from amoskys.auth.organization import Organization  # noqa: F401 — registers FK target
 from amoskys.db import Base
 
 # =============================================================================

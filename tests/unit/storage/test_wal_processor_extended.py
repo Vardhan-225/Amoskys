@@ -77,6 +77,7 @@ def _make_security_event(
     ev.severity = "HIGH"
     ev.source_component = source_component
     ev.confidence_score = confidence_score
+    ev.event_timestamp_ns = 1000  # nonzero — required by mandate gate
     if attributes:
         for k, v in attributes.items():
             ev.attributes[k] = v

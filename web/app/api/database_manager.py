@@ -252,6 +252,9 @@ def view_table(table_name):
     """View raw table data with pagination, search, and sorting."""
     try:
         conn = get_db_connection(DB_PATH)
+    except FileNotFoundError:
+        return jsonify({"error": "Database not available"}), 404
+    try:
         if not _is_valid_table(table_name, conn):
             conn.close()
             return jsonify({"error": "Invalid table name"}), 400
@@ -339,6 +342,9 @@ def export_table(table_name):
     """Export table data as CSV or JSON."""
     try:
         conn = get_db_connection(DB_PATH)
+    except FileNotFoundError:
+        return jsonify({"error": "Database not available"}), 404
+    try:
         if not _is_valid_table(table_name, conn):
             conn.close()
             return jsonify({"error": "Invalid table name"}), 400

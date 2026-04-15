@@ -379,6 +379,7 @@ class TestDashboardAPIIntegration:
                     "confidence": 0.85,
                     "mitre_techniques": [["T1110"], ["T1046"], ["T1048"]][i],
                     "final_classification": ["malicious", "suspicious", "malicious"][i],
+                    "tier": "attack",
                     "description": f"Test event {i}",
                     "requires_investigation": True,
                 }

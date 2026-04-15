@@ -45,6 +45,7 @@ from amoskys.auth.service import (
     SignupResult,
 )
 from amoskys.auth.sessions import SessionConfig
+from amoskys.auth.organization import Organization  # noqa: F401 — registers FK target
 from amoskys.auth.tokens import hash_token
 from amoskys.db import Base
 

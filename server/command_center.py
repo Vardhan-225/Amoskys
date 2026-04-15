@@ -1367,6 +1367,7 @@ def bulk_export():
     db = get_db()
     hours = min(request.args.get("hours", 24, type=int), 72)
     device_id = request.args.get("device_id")
+    user_limit = request.args.get("limit", type=int)
     cutoff_ns = int((time.time() - hours * 3600) * 1e9)
 
     # Tables with timestamp_ns column
@@ -1392,6 +1393,8 @@ def bulk_export():
     for table in ts_tables:
         try:
             limit = _EXPORT_LIMITS.get(table, 50_000)
+            if user_limit is not None:
+                limit = min(limit, user_limit)
             query = f"SELECT * FROM {table} WHERE timestamp_ns > ?"
             params = [cutoff_ns]
             if device_id:
@@ -1410,7 +1413,8 @@ def bulk_export():
             if device_id:
                 query += " WHERE device_id = ?"
                 params.append(device_id)
-            query += " ORDER BY id DESC LIMIT 5000"
+            other_limit = min(5000, user_limit) if user_limit is not None else 5000
+            query += f" ORDER BY id DESC LIMIT {other_limit}"
             rows = db.execute(query, params).fetchall()
             result[table] = [dict(r) for r in rows]
         except Exception:
