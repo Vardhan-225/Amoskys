@@ -36,4 +36,5 @@ from . import routes_observatory  # noqa: E402, F401
 from . import routes_pages  # noqa: E402, F401
 from . import routes_soma  # noqa: E402, F401
 from . import routes_command_center  # noqa: E402, F401
+from . import routes_overview  # noqa: E402, F401
 from . import routes_threats  # noqa: E402, F401
