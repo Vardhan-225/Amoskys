@@ -190,6 +190,17 @@ def assess(metrics: dict[str, Any], active_signal_count: int = 0) -> dict:
     if not reasons:
         reasons.append("All subsystems nominal. Data flowing. Models fresh.")
 
+    # If most subsystems are "unknown" (web-only deployment, no local agents),
+    # cap the verdict at DEGRADED — "unknown" means we can't assess, not that
+    # something is actively compromised.
+    unknown_count = sum(1 for v in subsystem_status.values() if v == "unknown")
+    critical_count = sum(1 for v in subsystem_status.values() if v == "critical")
+    total_subs = len(subsystem_status) or 1
+    if unknown_count >= total_subs * 0.5 and critical_count == 0:
+        if _VERDICT_RANK.get(worst_verdict, 0) > _VERDICT_RANK.get(DEGRADED, 0):
+            worst_verdict = DEGRADED
+            reasons.append("Fleet monitoring mode — local subsystems unavailable")
+
     return {
         "verdict": worst_verdict,
         "reasons": reasons,

@@ -41,7 +41,10 @@ def _ro_conn(db_path: Path) -> sqlite3.Connection | None:
 
 def _fleet_telemetry_conn() -> sqlite3.Connection | None:
     """Get connection to fleet_cache.db or local telemetry.db — whichever exists."""
+    project_root = Path(__file__).resolve().parents[3]
     for path in [
+        project_root / "data" / "fleet_cache.db",
+        project_root / "data" / "telemetry.db",
         Path("data/fleet_cache.db"),
         Path("data/telemetry.db"),
         TELEMETRY_DB,
@@ -104,7 +107,7 @@ def nexus_verdict_funnel():
 
         # Total security events
         total = conn.execute(
-            "SELECT COUNT(*) FROM security_events " "WHERE event_timestamp_ns > ?",
+            "SELECT COUNT(*) FROM security_events " "WHERE timestamp_ns > ?",
             (cutoff_ns,),
         ).fetchone()[0]
 
@@ -117,7 +120,7 @@ def nexus_verdict_funnel():
                 COUNT(CASE WHEN risk_score >= ? AND risk_score < ? THEN 1 END) as suspicious,
                 COUNT(CASE WHEN risk_score >= ? THEN 1 END) as threats
             FROM security_events
-            WHERE event_timestamp_ns > ?
+            WHERE timestamp_ns > ?
         """,
             (t_noise, t_noise, t_base, t_base, t_susp, t_susp, cutoff_ns),
         ).fetchone()
@@ -136,7 +139,7 @@ def nexus_verdict_funnel():
         # Active agents count
         active_agents = conn.execute(
             "SELECT COUNT(DISTINCT collection_agent) FROM security_events "
-            "WHERE event_timestamp_ns > ?",
+            "WHERE timestamp_ns > ?",
             (cutoff_ns,),
         ).fetchone()[0]
 
@@ -360,7 +363,7 @@ def nexus_asv_status():
         rows = conn.execute(
             "SELECT DISTINCT collection_agent, COUNT(*) as cnt "
             "FROM security_events "
-            "WHERE event_timestamp_ns > ? "
+            "WHERE timestamp_ns > ? "
             "GROUP BY collection_agent",
             (cutoff_ns,),
         ).fetchall()
@@ -440,7 +443,7 @@ def nexus_constellation():
         # Per-agent: event count in full window
         agent_rows = conn.execute(
             "SELECT collection_agent, COUNT(*) as cnt "
-            "FROM security_events WHERE event_timestamp_ns > ? "
+            "FROM security_events WHERE timestamp_ns > ? "
             "GROUP BY collection_agent",
             (cutoff_ns,),
         ).fetchall()
@@ -451,7 +454,7 @@ def nexus_constellation():
         risk_rows = conn.execute(
             "SELECT collection_agent, "
             "MAX(risk_score) as max_risk, AVG(risk_score) as avg_risk "
-            "FROM security_events WHERE event_timestamp_ns > ? "
+            "FROM security_events WHERE timestamp_ns > ? "
             "GROUP BY collection_agent",
             (recent_cutoff,),
         ).fetchall()
@@ -471,18 +474,18 @@ def nexus_constellation():
                    MAX(a.max_risk + b.max_risk) AS combined_risk
             FROM (
                 SELECT collection_agent AS agent,
-                       CAST(event_timestamp_ns / 30000000000 AS INTEGER) AS bucket,
+                       CAST(timestamp_ns / 30000000000 AS INTEGER) AS bucket,
                        MAX(risk_score) AS max_risk
                 FROM security_events
-                WHERE event_timestamp_ns > ?
+                WHERE timestamp_ns > ?
                 GROUP BY collection_agent, bucket
             ) a
             JOIN (
                 SELECT collection_agent AS agent,
-                       CAST(event_timestamp_ns / 30000000000 AS INTEGER) AS bucket,
+                       CAST(timestamp_ns / 30000000000 AS INTEGER) AS bucket,
                        MAX(risk_score) AS max_risk
                 FROM security_events
-                WHERE event_timestamp_ns > ?
+                WHERE timestamp_ns > ?
                 GROUP BY collection_agent, bucket
             ) b ON a.bucket = b.bucket AND a.agent < b.agent
             GROUP BY a.agent, b.agent
@@ -531,7 +534,7 @@ def nexus_constellation():
         try:
             det_rows = conn.execute(
                 "SELECT event_category, COUNT(*) as cnt, MAX(risk_score) as max_risk "
-                "FROM security_events WHERE event_timestamp_ns > ? "
+                "FROM security_events WHERE timestamp_ns > ? "
                 "GROUP BY event_category",
                 (recent_probe_cutoff,),
             ).fetchall()
