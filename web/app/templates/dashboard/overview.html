@@ -193,9 +193,10 @@
     'use strict';
 
     var globe = null;
-    var deviceLat = null, deviceLon = null;
+    var deviceMarkers = [];   // [{device_id, hostname, lat, lon, city, ...}]
     var geoPointsCache = [];
     var fleetData = null;
+    var selectedDeviceId = null; // null = all devices
 
     load();
     setInterval(function() { if (!document.hidden) load(); }, 25000);
@@ -273,6 +274,15 @@
         html += '<button class="ov-gc-btn active" id="gc-all">All</button>';
         html += '<button class="ov-gc-btn" id="gc-threats">Threats</button>';
         html += '<button class="ov-gc-btn" id="gc-rotate">Rotate</button>';
+        // Device filter dropdown (admin sees all, user sees only theirs)
+        if (d.length > 1) {
+            html += '<select id="gc-device" class="ov-gc-btn" style="appearance:none;padding-right:20px;background-image:url(\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22><path d=%22M0 0l5 6 5-6%22 fill=%22%236b7a99%22/></svg>\');background-repeat:no-repeat;background-position:right 6px center;">';
+            html += '<option value="">All Devices</option>';
+            for (var di = 0; di < d.length; di++) {
+                html += '<option value="' + esc(d[di].device_id) + '">' + esc(d[di].hostname) + '</option>';
+            }
+            html += '</select>';
+        }
         html += '</div>';
 
         // Legend — bottom-right
@@ -287,7 +297,15 @@
 
         /* ═══ NLP SUMMARY ═══ */
         html += '<div class="ov-nlp" id="ov-nlp">';
-        var nlp = 'In the last <strong>24 hours</strong>, your fleet of <strong>' + f.total_devices + ' device' + (f.total_devices !== 1 ? 's' : '') + '</strong> generated <strong>' + fmtNum(ev.total_events) + ' security events</strong>.';
+        var nlp = 'In the last <strong>24 hours</strong>, ';
+        // List device names and locations if available
+        if (d.length === 1) {
+            nlp += '<strong>' + esc(d[0].hostname) + '</strong> generated <strong>' + fmtNum(ev.total_events) + ' security events</strong>.';
+        } else if (d.length === 2) {
+            nlp += '<strong>' + esc(d[0].hostname) + '</strong> and <strong>' + esc(d[1].hostname) + '</strong> generated <strong>' + fmtNum(ev.total_events) + ' security events</strong> across your fleet.';
+        } else {
+            nlp += 'your fleet of <strong>' + f.total_devices + ' device' + (f.total_devices !== 1 ? 's' : '') + '</strong> generated <strong>' + fmtNum(ev.total_events) + ' security events</strong>.';
+        }
         if (ev.critical > 0) nlp += ' <span class="warn">' + ev.critical + ' critical</span> and ' + (ev.high || 0) + ' high-risk events require attention.';
         else nlp += ' No critical threats detected &mdash; traffic appears clean.';
         html += nlp + '</div>';
@@ -443,8 +461,15 @@
                 var el = document.createElement('div');
                 el.style.cssText = 'pointer-events:none;text-align:center;transform:translateX(-50%);';
                 if (d.isDevice) {
-                    el.innerHTML = '<div style="font-size:0.65rem;font-weight:700;color:#00d9ff;text-shadow:0 0 8px rgba(0,217,255,0.6),0 1px 3px rgba(0,0,0,1);white-space:nowrap;">' + esc(d.name) + '</div>'
-                        + '<div style="font-size:0.5rem;color:#6b9abf;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,1);">' + esc(d.loc || '') + '</div>';
+                    var nameColor = d.color || '#00d9ff';
+                    var statusDot = d.status === 'online'
+                        ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#00ff88;margin-right:4px;box-shadow:0 0 6px rgba(0,255,136,0.5);"></span>'
+                        : '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#555;margin-right:4px;"></span>';
+                    el.innerHTML = '<div style="background:rgba(5,8,22,0.85);border:1px solid ' + nameColor + '44;border-radius:6px;padding:4px 10px;backdrop-filter:blur(8px);">'
+                        + '<div style="font-size:0.68rem;font-weight:700;color:' + nameColor + ';white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:2px;">' + statusDot + esc(d.name) + '</div>'
+                        + (d.loc ? '<div style="font-size:0.52rem;color:#7a9ab8;white-space:nowrap;">' + esc(d.loc) + '</div>' : '')
+                        + (d.evtStr ? '<div style="font-size:0.48rem;color:#6b7a99;white-space:nowrap;">' + esc(d.evtStr) + '</div>' : '')
+                        + '</div>';
                 } else {
                     var nc = d.threat ? '#ff6688' : '#c8d8e8';
                     el.innerHTML = '<div style="font-size:0.58rem;font-weight:600;color:' + nc + ';white-space:nowrap;text-shadow:0 0 4px rgba(0,0,0,1),0 1px 3px rgba(0,0,0,1);">' + esc((d.asnOrg || '').split(/[\s,]/)[0]) + '</div>'
@@ -485,30 +510,62 @@
     }
 
     function loadGlobeData() {
-        fetch('/dashboard/api/network/device-location')
+        // Fetch both device locations and geo points in parallel
+        var p1 = fetch('/dashboard/api/overview/device-locations')
             .then(function(r) { return r.json(); })
-            .then(function(d) { if (d.lat && d.lon) { deviceLat = d.lat; deviceLon = d.lon; } })
+            .then(function(markers) { if (Array.isArray(markers)) deviceMarkers = markers; })
             .catch(function() {});
 
-        fetch('/dashboard/api/overview/geo-points?hours=24&limit=300')
+        var p2 = fetch('/dashboard/api/overview/geo-points?hours=24&limit=300')
             .then(function(r) { return r.json(); })
-            .then(function(points) {
-                geoPointsCache = points;
-                if (globe && Array.isArray(points) && points.length > 0) renderGlobeArcs(points);
-            })
+            .then(function(points) { geoPointsCache = points; })
             .catch(function() {});
+
+        Promise.all([p1, p2]).then(function() {
+            if (globe && geoPointsCache.length > 0) renderGlobeArcs(geoPointsCache);
+        });
     }
 
     function renderGlobeArcs(points) {
-        var srcLat = deviceLat || 33.45, srcLon = deviceLon || -112.07;
         var arcs = [], pts = [], rings = [], labels = [];
         var maxBytes = Math.max(1, Math.max.apply(null, points.map(function(p) { return p.bytes || 1; })));
 
-        // Device marker
-        pts.push({ lat: srcLat, lng: srcLon, color: '#00d9ff', alt: 0.025, radius: 0.7 });
-        rings.push({ lat: srcLat, lng: srcLon, threat: false });
-        labels.push({ lat: srcLat, lng: srcLon, isDevice: true, name: 'YOUR FLEET', loc: '' });
+        // Compute centroid of all device markers for fleet-level view
+        var devs = deviceMarkers.length > 0 ? deviceMarkers : [{ lat: 33.45, lon: -112.07, hostname: 'YOUR FLEET' }];
+        var fleetLat = 0, fleetLon = 0;
+        devs.forEach(function(d) { fleetLat += d.lat; fleetLon += d.lon; });
+        fleetLat /= devs.length; fleetLon /= devs.length;
 
+        // Device markers — each pinned at its real geo location
+        devs.forEach(function(d) {
+            var isSelected = !selectedDeviceId || selectedDeviceId === d.device_id;
+            var devColor = d.status === 'online' ? '#00ff88' : '#ff9933';
+            var cr = d.critical_count || 0;
+            if (cr > 10) devColor = '#ff3366';
+            else if (cr > 0) devColor = '#f0ad4e';
+
+            pts.push({ lat: d.lat, lng: d.lon, color: isSelected ? devColor : '#333', alt: isSelected ? 0.03 : 0.01, radius: isSelected ? 0.8 : 0.3 });
+            if (isSelected) rings.push({ lat: d.lat, lng: d.lon, threat: cr > 0 });
+
+            var locParts = [];
+            if (d.city) locParts.push(d.city);
+            if (d.region) locParts.push(d.region);
+            var locStr = locParts.join(', ');
+            var evtStr = fmtNum(d.event_count || 0) + ' events';
+            if (cr > 0) evtStr += ' · ' + cr + ' critical';
+
+            labels.push({
+                lat: d.lat, lng: d.lon, isDevice: true,
+                name: d.hostname || 'Device',
+                loc: locStr,
+                status: d.status || 'offline',
+                evtStr: evtStr,
+                color: devColor,
+                isSelected: isSelected,
+            });
+        });
+
+        // Flow arcs — from nearest device to each destination
         points.forEach(function(p) {
             if (!p.lat || !p.lon) return;
             var isThreat = !!p.threat;
@@ -516,6 +573,15 @@
             var volRatio = bytes / maxBytes;
             var sw = 0.3 + volRatio * 2.5;
             var speed = isThreat ? 900 : Math.round(3500 - volRatio * 2500);
+
+            // Find nearest device as the source of this arc
+            var srcLat = fleetLat, srcLon = fleetLon;
+            var minDist = Infinity;
+            devs.forEach(function(d) {
+                if (selectedDeviceId && d.device_id !== selectedDeviceId) return;
+                var dist = Math.pow(d.lat - p.lat, 2) + Math.pow(d.lon - p.lon, 2);
+                if (dist < minDist) { minDist = dist; srcLat = d.lat; srcLon = d.lon; }
+            });
 
             arcs.push({
                 startLat: srcLat, startLng: srcLon, endLat: p.lat, endLng: p.lon,
@@ -526,8 +592,6 @@
             });
             pts.push({ lat: p.lat, lng: p.lon, color: isThreat ? '#ff3366' : 'rgba(0,255,136,0.6)', alt: 0.01, radius: Math.max(0.2, Math.min(0.6, volRatio * 0.8)) });
             if (isThreat) rings.push({ lat: p.lat, lng: p.lon, threat: true });
-
-            // Labels for top destinations
             if (volRatio > 0.05 || isThreat) {
                 labels.push({ lat: p.lat, lng: p.lon, isDevice: false, asnOrg: p.asn_org, country: p.country, city: p.city, bytes: bytes, threat: isThreat });
             }
@@ -555,6 +619,18 @@
         if (threatsBtn) threatsBtn.addEventListener('click', function() {
             threatsBtn.classList.add('active'); if (allBtn) allBtn.classList.remove('active');
             renderGlobeArcs(geoPointsCache.filter(function(p) { return p.threat; }));
+        });
+        // Device filter — zoom to selected device on globe
+        var devSelect = document.getElementById('gc-device');
+        if (devSelect) devSelect.addEventListener('change', function() {
+            selectedDeviceId = devSelect.value || null;
+            renderGlobeArcs(geoPointsCache);
+            if (selectedDeviceId && globe) {
+                var dm = deviceMarkers.find(function(m) { return m.device_id === selectedDeviceId; });
+                if (dm) globe.pointOfView({ lat: dm.lat, lng: dm.lon, altitude: 1.5 }, 1200);
+            } else if (globe) {
+                globe.pointOfView({ lat: 32, lng: -90, altitude: 2.0 }, 1200);
+            }
         });
     }
 

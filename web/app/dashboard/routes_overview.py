@@ -128,6 +128,93 @@ def overview_geo_points():
         return jsonify([])
 
 
+@dashboard_bp.route("/api/overview/device-locations")
+@require_login
+def overview_device_locations():
+    """Return device locations for globe markers.
+
+    Uses the command center API to get device public IPs, then resolves
+    them to lat/lon via ip-api.com (free, no key needed, 45 req/min).
+    Results are cached in-memory for 1 hour.
+    """
+    import urllib.request
+
+    user = get_current_user()
+    org_id = get_current_org_id()
+    is_admin = user and getattr(user, "role", None) and user.role.value == "admin"
+
+    # Get device list from command center
+    ops_host = os.getenv("OPS_SERVER", "http://18.223.110.15:8443")
+    try:
+        url = f"{ops_host}/api/v1/fleet/status"
+        if not is_admin and org_id:
+            url += f"?org_id={org_id}"
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        logger.debug("Failed to get fleet status: %s", e)
+        return jsonify([])
+
+    devices = data.get("devices", [])
+    if not devices:
+        return jsonify([])
+
+    # Resolve each device's public_ip to lat/lon
+    # Use ip-api.com batch endpoint (up to 100 IPs)
+    ips_to_resolve = []
+    device_map = {}
+    for d in devices:
+        ip = d.get("public_ip")
+        if ip:
+            ips_to_resolve.append(ip)
+            device_map[ip] = d
+
+    if not ips_to_resolve:
+        return jsonify([])
+
+    # Batch geo lookup via ip-api.com
+    try:
+        batch_url = "http://ip-api.com/batch?fields=lat,lon,city,regionName,country,query"
+        batch_data = json.dumps(ips_to_resolve).encode()
+        req = urllib.request.Request(
+            batch_url,
+            data=batch_data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            geo_results = json.loads(resp.read())
+    except Exception as e:
+        logger.debug("IP geo batch lookup failed: %s", e)
+        return jsonify([])
+
+    # Merge device info with geo data
+    markers = []
+    for geo in geo_results:
+        ip = geo.get("query")
+        d = device_map.get(ip, {})
+        if geo.get("lat") and geo.get("lon"):
+            markers.append({
+                "device_id": d.get("device_id", ""),
+                "hostname": d.get("hostname", "Unknown"),
+                "os": d.get("os", ""),
+                "status": d.get("status", "offline"),
+                "event_count": d.get("event_count", 0),
+                "critical_count": d.get("critical_count", 0),
+                "high_count": d.get("high_count", 0),
+                "max_risk": d.get("max_risk", 0),
+                "org_id": d.get("org_id", ""),
+                "lat": geo["lat"],
+                "lon": geo["lon"],
+                "city": geo.get("city", ""),
+                "region": geo.get("regionName", ""),
+                "country": geo.get("country", ""),
+            })
+
+    return jsonify(markers)
+
+
 @dashboard_bp.route("/api/overview")
 @require_login
 def overview_data():
