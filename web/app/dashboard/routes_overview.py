@@ -13,7 +13,7 @@ from pathlib import Path
 
 from flask import jsonify, request
 
-from ..middleware import get_current_user, require_login
+from ..middleware import get_current_org_id, get_current_user, require_login
 from . import dashboard_bp
 
 logger = logging.getLogger("web.dashboard.overview")
@@ -84,42 +84,69 @@ def overview_data():
         day_ago_ns = int((now - 86400) * 1e9)
         two_days_ago_ns = int((now - 172800) * 1e9)
 
+        # ── Org scoping: regular users see only their org's data ──
+        user = get_current_user()
+        is_admin = user and user.role and user.role.value == "admin"
+        org_id = get_current_org_id()
+
+        # Build WHERE clause fragments for org isolation
+        if is_admin:
+            dev_org_clause = ""
+            dev_org_params: tuple = ()
+            evt_org_clause = ""
+            evt_org_params: tuple = ()
+        elif org_id:
+            dev_org_clause = " AND org_id = ?"
+            dev_org_params = (org_id,)
+            evt_org_clause = " AND org_id = ?"
+            evt_org_params = (org_id,)
+        else:
+            # No org → see nothing (safety default)
+            dev_org_clause = " AND org_id = ?"
+            dev_org_params = ("__none__",)
+            evt_org_clause = " AND org_id = ?"
+            evt_org_params = ("__none__",)
+
         # ── Fleet counts ──
-        total = db.execute("SELECT COUNT(*) FROM devices").fetchone()[0]
+        total = db.execute(
+            "SELECT COUNT(*) FROM devices WHERE 1=1" + dev_org_clause,
+            dev_org_params,
+        ).fetchone()[0]
         online = db.execute(
-            "SELECT COUNT(*) FROM devices WHERE last_seen > ?", (now - 300,)
+            "SELECT COUNT(*) FROM devices WHERE last_seen > ?" + dev_org_clause,
+            (now - 300,) + dev_org_params,
         ).fetchone()[0]
 
         # ── Event stats (last 24h) ──
         total_events = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
-            (day_ago_ns,),
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?" + evt_org_clause,
+            (day_ago_ns,) + evt_org_params,
         ).fetchone()[0]
         critical = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8",
-            (day_ago_ns,),
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8" + evt_org_clause,
+            (day_ago_ns,) + evt_org_params,
         ).fetchone()[0]
         high = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8",
-            (day_ago_ns,),
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8" + evt_org_clause,
+            (day_ago_ns,) + evt_org_params,
         ).fetchone()[0]
 
         # ── Previous 24h (for trend arrows) ──
         prev_events = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ?",
-            (two_days_ago_ns, day_ago_ns),
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ?" + evt_org_clause,
+            (two_days_ago_ns, day_ago_ns) + evt_org_params,
         ).fetchone()[0]
         prev_critical = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ? AND risk_score >= 0.8",
-            (two_days_ago_ns, day_ago_ns),
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND timestamp_ns <= ? AND risk_score >= 0.8" + evt_org_clause,
+            (two_days_ago_ns, day_ago_ns) + evt_org_params,
         ).fetchone()[0]
 
         # ── MITRE techniques (24h) ──
         mitre_rows = db.execute(
             """SELECT mitre_techniques FROM security_events
                WHERE timestamp_ns > ? AND mitre_techniques IS NOT NULL
-               AND mitre_techniques != '[]'""",
-            (day_ago_ns,),
+               AND mitre_techniques != '[]'""" + evt_org_clause,
+            (day_ago_ns,) + evt_org_params,
         ).fetchall()
         technique_counts: dict[str, int] = {}
         for row in mitre_rows:
@@ -141,15 +168,16 @@ def overview_data():
         top_categories = db.execute(
             """SELECT event_category, COUNT(*) as cnt, AVG(risk_score) as avg_risk
                FROM security_events
-               WHERE timestamp_ns > ? AND risk_score > 0
+               WHERE timestamp_ns > ? AND risk_score > 0""" + evt_org_clause + """
                GROUP BY event_category
                ORDER BY cnt DESC LIMIT 8""",
-            (day_ago_ns,),
+            (day_ago_ns,) + evt_org_params,
         ).fetchall()
 
         # ── Per-device summary ──
+        dev_where = "WHERE 1=1" + dev_org_clause
         device_rows = db.execute(
-            """SELECT d.device_id, d.hostname, d.os, d.os_version,
+            f"""SELECT d.device_id, d.hostname, d.os, d.os_version,
                       d.agent_version, d.last_seen,
                       COUNT(se.id) as event_count,
                       COALESCE(MAX(se.risk_score), 0) as max_risk,
@@ -158,9 +186,10 @@ def overview_data():
                FROM devices d
                LEFT JOIN security_events se ON d.device_id = se.device_id
                     AND se.timestamp_ns > ?
+               {dev_where}
                GROUP BY d.device_id
                ORDER BY max_risk DESC""",
-            (day_ago_ns,),
+            (day_ago_ns,) + dev_org_params,
         ).fetchall()
 
         devices = []

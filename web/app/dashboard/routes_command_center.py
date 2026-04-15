@@ -165,45 +165,62 @@ def cc_fleet_status():
     try:
         now = time.time()
 
+        # Org scoping for local fleet.db fallback
+        if is_admin:
+            d_org = ""
+            d_prm: tuple = ()
+            e_org = ""
+            e_prm: tuple = ()
+        elif org_id:
+            d_org = " AND org_id = ?"
+            d_prm = (org_id,)
+            e_org = " AND org_id = ?"
+            e_prm = (org_id,)
+        else:
+            d_org = " AND org_id = ?"
+            d_prm = ("__none__",)
+            e_org = " AND org_id = ?"
+            e_prm = ("__none__",)
+
         # Device counts
-        total = db.execute("SELECT COUNT(*) FROM devices").fetchone()[0]
+        total = db.execute("SELECT COUNT(*) FROM devices WHERE 1=1" + d_org, d_prm).fetchone()[0]
         online = db.execute(
-            "SELECT COUNT(*) FROM devices WHERE last_seen > ?", (now - 300,)
+            "SELECT COUNT(*) FROM devices WHERE last_seen > ?" + d_org, (now - 300,) + d_prm
         ).fetchone()[0]
 
         # Event stats (last 24h)
         day_ago_ns = int((now - 86400) * 1e9)
         total_events = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
-            (day_ago_ns,),
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?" + e_org,
+            (day_ago_ns,) + e_prm,
         ).fetchone()[0]
 
         critical = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8",
-            (day_ago_ns,),
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.8" + e_org,
+            (day_ago_ns,) + e_prm,
         ).fetchone()[0]
 
         high = db.execute(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8",
-            (day_ago_ns,),
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.6 AND risk_score < 0.8" + e_org,
+            (day_ago_ns,) + e_prm,
         ).fetchone()[0]
 
         # Top categories
         top_categories = db.execute(
             """SELECT event_category, COUNT(*) as cnt, AVG(risk_score) as avg_risk
                FROM security_events
-               WHERE timestamp_ns > ? AND risk_score > 0
+               WHERE timestamp_ns > ? AND risk_score > 0""" + e_org + """
                GROUP BY event_category
                ORDER BY cnt DESC LIMIT 10""",
-            (day_ago_ns,),
+            (day_ago_ns,) + e_prm,
         ).fetchall()
 
         # Top MITRE techniques
         mitre_rows = db.execute(
             """SELECT mitre_techniques FROM security_events
                WHERE timestamp_ns > ? AND mitre_techniques IS NOT NULL
-               AND mitre_techniques != '[]'""",
-            (day_ago_ns,),
+               AND mitre_techniques != '[]'""" + e_org,
+            (day_ago_ns,) + e_prm,
         ).fetchall()
 
         technique_counts: dict[str, int] = {}
@@ -222,9 +239,10 @@ def cc_fleet_status():
 
         top_techniques = sorted(technique_counts.items(), key=lambda x: -x[1])[:10]
 
-        # Per-device summary
+        # Per-device summary (org-scoped)
+        dev_filter = "WHERE 1=1" + d_org
         device_rows = db.execute(
-            """SELECT d.device_id, d.hostname, d.os, d.os_version, d.arch,
+            f"""SELECT d.device_id, d.hostname, d.os, d.os_version, d.arch,
                       d.agent_version, d.status, d.last_seen, d.first_seen,
                       COUNT(se.id) as event_count,
                       COALESCE(MAX(se.risk_score), 0) as max_risk,
@@ -233,9 +251,10 @@ def cc_fleet_status():
                FROM devices d
                LEFT JOIN security_events se ON d.device_id = se.device_id
                     AND se.timestamp_ns > ?
+               {dev_filter}
                GROUP BY d.device_id
                ORDER BY max_risk DESC""",
-            (day_ago_ns,),
+            (day_ago_ns,) + d_prm,
         ).fetchall()
 
         devices = []
