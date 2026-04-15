@@ -485,10 +485,12 @@ def register_device():
                 "api_key": existing["api_key"],
             })
 
+        # Always return api_key so agent can recover after wipe/reinstall
         logger.debug("Heartbeat: %s (%s)", device_id[:8], hostname)
         return jsonify({
             "status": "registered",
             "device_id": device_id,
+            "api_key": existing["api_key"],
         })
 
     # New device — resolve org from payload or deployment token

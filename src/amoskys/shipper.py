@@ -419,17 +419,23 @@ class TelemetryShipper:
 
             if resp.status_code == 200:
                 data = resp.json()
-                # Server assigns API key on first registration
-                if "api_key" in data and not self.config.api_key:
-                    self.config.api_key = data["api_key"]
-                    self._session.headers["Authorization"] = f"Bearer {data['api_key']}"
-                    # Persist API key to config file so it survives restarts
-                    self._persist_api_key(data["api_key"])
-                    # Clear deploy token — it's consumed, no longer needed
+                # Accept API key from server — handles first registration,
+                # re-registration after wipe, and key rotation.
+                server_key = data.get("api_key", "")
+                if server_key and server_key != self.config.api_key:
+                    self.config.api_key = server_key
+                    self._session.headers["Authorization"] = f"Bearer {server_key}"
+                    self._persist_api_key(server_key)
+                    self.config.deploy_token = ""
+                    logger.info("API key updated (device=%s)", self.config.device_id[:8])
+                elif server_key and not self.config.api_key:
+                    self.config.api_key = server_key
+                    self._session.headers["Authorization"] = f"Bearer {server_key}"
+                    self._persist_api_key(server_key)
                     self.config.deploy_token = ""
                     logger.info("Registered with API key (device=%s)", self.config.device_id[:8])
                 self._registered = True
-                if not data.get("api_key"):
+                if not server_key:
                     logger.debug("Heartbeat OK (device=%s)", self.config.device_id[:8])
             else:
                 logger.warning("Registration failed: %d %s", resp.status_code, resp.text[:200])
@@ -440,14 +446,24 @@ class TelemetryShipper:
             logger.warning("Registration error: %s", e)
 
     def _persist_api_key(self, api_key: str):
-        """Write API key to config file so it survives agent restarts."""
+        """Write API key to config file so it survives agent restarts.
+
+        Replaces existing AMOSKYS_API_KEY line if present (no duplicates).
+        """
         config_file = self.config.config_file
         if not config_file:
             return
         try:
-            # Append to existing config
-            with open(config_file, "a") as f:
-                f.write(f"\nAMOSKYS_API_KEY={api_key}\n")
+            # Read existing config, strip old key lines
+            lines = []
+            if os.path.exists(config_file):
+                with open(config_file) as f:
+                    lines = [ln for ln in f.readlines()
+                             if not ln.strip().startswith("AMOSKYS_API_KEY=")]
+            # Append new key
+            lines.append(f"AMOSKYS_API_KEY={api_key}\n")
+            with open(config_file, "w") as f:
+                f.writelines(lines)
             logger.info("API key persisted to %s", config_file)
         except OSError as e:
             logger.warning("Could not persist API key: %s", e)
