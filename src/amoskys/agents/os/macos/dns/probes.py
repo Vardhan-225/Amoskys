@@ -65,15 +65,66 @@ def _enrich_dns_process(query: Any) -> Dict[str, Any]:
     Always returns pid, process_name, exe, cmdline, ppid, parent_name,
     username with sentinel values when the process is dead or the PID
     is unavailable.
+
+    When the DNS log has no source PID, attempts to infer the requesting
+    process by checking lsof for active connections to the resolved IPs.
     """
     pid = getattr(query, "process_pid", 0) or getattr(query, "source_pid", 0)
     process_hint = getattr(query, "source_process", "") or ""
+
+    # If no PID from the log, try to infer from active connections
+    if not pid:
+        resolved_ips = getattr(query, "response_ips", []) or []
+        if resolved_ips:
+            pid = _infer_pid_from_connections(resolved_ips)
+
     return mandate_context_from_pid(
         pid,
         probe_name="dns_probe",
         process_name_hint=process_hint,
-        detection_source="dns_monitor",
+        detection_source="dns_monitor" if pid else "dns_monitor_inferred",
     )
+
+
+def _infer_pid_from_connections(resolved_ips: list) -> int:
+    """Try to find which process connected to one of the resolved IPs.
+
+    Runs a targeted lsof query for connections to specific IPs.
+    Returns the PID if found, 0 otherwise. Cached for 10 seconds.
+    """
+    import subprocess
+    import time as _time
+
+    # Simple cache to avoid hammering lsof
+    now = _time.monotonic()
+    cache = getattr(_infer_pid_from_connections, "_cache", {})
+    cache_ts = getattr(_infer_pid_from_connections, "_cache_ts", 0)
+    if now - cache_ts > 10:
+        cache = {}
+        _infer_pid_from_connections._cache_ts = now
+
+    for ip in resolved_ips[:3]:  # Check at most 3 IPs
+        if ip in cache:
+            if cache[ip]:
+                return cache[ip]
+            continue
+        try:
+            result = subprocess.run(
+                ["lsof", "-i", f"@{ip}", "-nP", "-F", "p", "-sTCP:ESTABLISHED"],
+                capture_output=True, text=True, timeout=2,
+            )
+            for line in result.stdout.splitlines():
+                if line.startswith("p"):
+                    pid = int(line[1:])
+                    cache[ip] = pid
+                    _infer_pid_from_connections._cache = cache
+                    return pid
+            cache[ip] = 0
+        except Exception:
+            cache[ip] = 0
+
+    _infer_pid_from_connections._cache = cache
+    return 0
 
 
 # ── Probe 1: DGA Detection ──────────────────────────────────────────────────

@@ -63,7 +63,9 @@ class NetworkSentinelAgent(MicroProbeAgentMixin, HardenedAgentBase):
     QUEUE_PATH = "data/queue/network_sentinel.db"
     CERT_DIR = "certs"
 
-    MANDATE_DATA_FIELDS = ("remote_ip", "remote_port", "local_port", "protocol", "pid", "process_name")
+    # Sentinel detects attacks FROM external IPs TO local servers.
+    # "pid" here = the target web server process, not the attacker.
+    MANDATE_DATA_FIELDS = ("remote_ip",)
 
     def __init__(
         self,
@@ -125,6 +127,55 @@ class NetworkSentinelAgent(MicroProbeAgentMixin, HardenedAgentBase):
         except Exception as e:
             logger.error("Setup failed: %s", e)
             return False
+
+    def enrich_event(self, event: Any) -> Any:
+        """Add target web server process context to sentinel events.
+
+        Sentinel events are about attacks FROM external IPs. The
+        "process" is the SERVER being attacked. We resolve it once per
+        cycle by finding the process listening on port 443/8443/5001.
+        """
+        import subprocess as _sp
+
+        from amoskys.agents.common.process_resolver import mandate_context_from_pid
+
+        if not hasattr(event, "data") or not isinstance(event.data, dict):
+            return event
+
+        data = event.data
+        # Already has process context
+        if data.get("exe") and data["exe"] not in ("", "UNRESOLVED", "EXITED"):
+            return event
+
+        # Cache server PID for 30 seconds
+        now = time.time()
+        if not hasattr(self, "_server_ctx") or now - getattr(self, "_server_ctx_at", 0) > 30:
+            self._server_ctx = {}
+            try:
+                result = _sp.run(
+                    ["lsof", "-i", "TCP", "-sTCP:LISTEN", "-nP", "-F", "pcn"],
+                    capture_output=True, text=True, timeout=3,
+                )
+                pid = None
+                for line in result.stdout.splitlines():
+                    if line.startswith("p"):
+                        pid = int(line[1:])
+                    elif line.startswith("n") and pid and (":443" in line or ":8443" in line or ":5001" in line):
+                        self._server_ctx = mandate_context_from_pid(
+                            pid, "network_sentinel",
+                            detection_source="lsof_listen",
+                        )
+                        break
+            except Exception:
+                pass
+            self._server_ctx_at = now
+
+        if self._server_ctx:
+            for k, v in self._server_ctx.items():
+                if k not in data or data[k] is None or data[k] == "":
+                    data[k] = v
+
+        return event
 
     def collect_data(self) -> Sequence[Any]:
         """Collect from both sources, run all 10 probes."""
