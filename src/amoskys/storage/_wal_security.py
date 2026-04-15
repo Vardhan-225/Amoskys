@@ -81,6 +81,12 @@ class SecurityMixin:
         evt_id = event.event_id if event.event_id else None
         latency = (ts_ns - evt_ts_ns) if evt_ts_ns else None
 
+        # Promote process/network context from attributes to top-level
+        # so SQL columns get populated (Observability Mandate v1.0).
+        attrs = indicators
+        pid_raw = attrs.get("pid")
+        remote_ip = attrs.get("remote_ip") or attrs.get("source_ip") or None
+
         return {
             "timestamp_ns": ts_ns,
             "timestamp_dt": timestamp_dt,
@@ -100,6 +106,19 @@ class SecurityMixin:
             "event_timestamp_ns": evt_ts_ns,
             "event_id": evt_id,
             "probe_latency_ns": latency,
+            # ── Mandate v1.0: process context ──
+            "pid": int(pid_raw) if pid_raw else None,
+            "process_name": attrs.get("process_name") or attrs.get("name") or None,
+            "exe": attrs.get("exe") or attrs.get("binary") or None,
+            "cmdline": attrs.get("cmdline") or None,
+            "username": attrs.get("username") or attrs.get("user") or None,
+            # ── Mandate v1.0: network context ──
+            "remote_ip": remote_ip,
+            "remote_port": attrs.get("remote_port") or attrs.get("dst_port") or None,
+            "domain": attrs.get("domain") or None,
+            # ── Mandate v1.0: attribution ──
+            "probe_name": attrs.get("probe_name") or event.source_component or None,
+            "detection_source": attrs.get("detection_source") or None,
         }
 
     def _process_security_event(
