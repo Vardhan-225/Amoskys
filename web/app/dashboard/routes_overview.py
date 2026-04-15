@@ -58,6 +58,47 @@ def _compute_posture(critical: int, high: int, medium: int = 0) -> dict:
     return {"score": score, "label": label, "color": color}
 
 
+@dashboard_bp.route("/api/overview/geo-points")
+@require_login
+def overview_geo_points():
+    """Geo points for the overview globe — aggregated from fleet flow_events."""
+    db = _get_fleet_db()
+    if db is None:
+        return jsonify([])
+    try:
+        hours = request.args.get("hours", 24, type=int)
+        limit = request.args.get("limit", 300, type=int)
+        cutoff_ns = int((time.time() - hours * 3600) * 1e9)
+        rows = db.execute(
+            """SELECT geo_dst_latitude as lat, geo_dst_longitude as lon,
+                      geo_dst_country as country, geo_dst_city as city,
+                      asn_dst_org as asn_org,
+                      SUM(COALESCE(bytes_tx,0)+COALESCE(bytes_rx,0)) as bytes,
+                      COUNT(*) as count,
+                      MAX(CASE WHEN threat_intel_match=1 THEN 1 ELSE 0 END) as threat
+               FROM flow_events
+               WHERE timestamp_ns > ? AND geo_dst_latitude IS NOT NULL AND geo_dst_latitude != 0
+               GROUP BY ROUND(geo_dst_latitude,1), ROUND(geo_dst_longitude,1)
+               ORDER BY count DESC LIMIT ?""",
+            (cutoff_ns, min(limit, 500)),
+        ).fetchall()
+        points = [
+            {
+                "lat": r[0], "lon": r[1], "country": r[2] or "",
+                "city": r[3] or "", "asn_org": r[4] or "",
+                "bytes": r[5] or 0, "count": r[6], "threat": bool(r[7]),
+            }
+            for r in rows
+        ]
+        db.close()
+        return jsonify(points)
+    except Exception as e:
+        logger.debug("Overview geo-points failed: %s", e)
+        if db:
+            db.close()
+        return jsonify([])
+
+
 @dashboard_bp.route("/api/overview")
 @require_login
 def overview_data():

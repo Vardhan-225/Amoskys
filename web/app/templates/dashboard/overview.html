@@ -230,8 +230,8 @@
             + '<circle class="bg" cx="80" cy="80" r="72"/>'
             + '<circle class="fg" cx="80" cy="80" r="72" stroke="' + p.color + '" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '"/></svg>'
             + '<div class="ov-ring-center">'
-            + '<div class="ov-ring-score" style="color:' + p.color + '">' + p.score + '</div>'
-            + '<div class="ov-ring-label" style="color:' + p.color + '">' + p.label + '</div>'
+            + '<div class="ov-ring-score" style="color:' + p.color + ';font-size:1.5rem;">' + p.label + '</div>'
+            + '<div class="ov-ring-label" style="color:' + p.color + ';font-size:0.72rem;opacity:0.7;">' + p.score + ' / 100</div>'
             + '</div></div>';
         html += '<div class="ov-posture-desc">' + ev.total_events + ' event' + (ev.total_events !== 1 ? 's' : '') + ' analyzed in the last 24 hours</div>';
 
@@ -406,14 +406,15 @@
 
     function buildKillChain(cats) {
         // Map event categories to kill chain stages (0-6)
+        // 0=Recon, 1=Weapon, 2=Deliver, 3=Exploit, 4=Install, 5=C2, 6=Action
         var map = {
-            'dns_beaconing_suspected': 0, 'topology_new_route': 0,
-            'lolbin_execution': 1, 'credential_access_indirect': 1,
-            'new_external_connection': 2,
-            'process_spawned': 3, 'tcc_permission_denied': 3,
-            'macos_config_backdoor_new': 4,
-            'c2_beacon_suspect': 5,
-            'exfil_spike': 6, 'full_kill_chain': 6,
+            'topology_new_route': 0, 'port_scan_detected': 0, 'arp_new_host': 0,
+            'lolbin_execution': 1, 'credential_access_indirect': 1, 'credential_theft_command': 1,
+            'new_external_connection': 2, 'new_domain_first_seen': 2,
+            'process_spawned': 3, 'tcc_permission_denied': 3, 'suspicious_script': 3, 'execution_from_temp': 3, 'gatekeeper_block': 3,
+            'macos_config_backdoor_new': 4, 'macos_launchagent_new': 4, 'macos_launchdaemon_new': 4,
+            'c2_beacon_suspect': 5, 'dns_beaconing_suspected': 5, 'dns_beaconing_detected': 5, 'connection_burst_detected': 5, 'long_lived_connection': 5,
+            'exfil_spike': 6, 'full_kill_chain': 6, 'cloud_exfil_detected': 6, 'execute_to_exfil': 6,
         };
         var counts = {};
         (cats || []).forEach(function(c) {
@@ -532,12 +533,17 @@
     }
 
     function loadGlobeData() {
+        // Get device location — try without device_id first (uses default device)
         fetch('/dashboard/api/network/device-location')
             .then(function(r) { return r.json(); })
-            .then(function(d) { if (d.lat && d.lon) { deviceLat = d.lat; deviceLon = d.lon; } })
-            .catch(function() {});
+            .then(function(d) {
+                if (d.lat && d.lon) { deviceLat = d.lat; deviceLon = d.lon; }
+                else { deviceLat = 33.45; deviceLon = -112.07; } // Fallback: Phoenix AZ
+            })
+            .catch(function() { deviceLat = 33.45; deviceLon = -112.07; });
 
-        fetch('/dashboard/api/network/geo-points?hours=24&limit=200')
+        // Load geo points from fleet-level endpoint (aggregated across all devices)
+        fetch('/dashboard/api/overview/geo-points?hours=24&limit=300')
             .then(function(r) { return r.json(); })
             .then(function(points) {
                 if (!globe || !Array.isArray(points) || points.length === 0) return;
