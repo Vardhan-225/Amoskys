@@ -51,6 +51,8 @@ class MacOSAppLogAgent(MicroProbeAgentMixin, HardenedAgentBase):
         macos_applog_auth_bypass       — T1556     Authentication bypass
     """
 
+    MANDATE_DATA_FIELDS = ("pid", "process_name")
+
     def __init__(self, collection_interval: float = 30.0) -> None:
         device_id = socket.gethostname()
 

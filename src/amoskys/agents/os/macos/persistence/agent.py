@@ -46,6 +46,8 @@ class MacOSPersistenceAgent(MicroProbeAgentMixin, HardenedAgentBase):
     First scan establishes baseline. Subsequent scans detect changes.
     """
 
+    MANDATE_DATA_FIELDS = ("file_path", "file_name", "pid", "process_name")
+
     def __init__(self, collection_interval: float = 30.0) -> None:
         device_id = socket.gethostname()
 

@@ -77,6 +77,8 @@ class MacOSInfostealerGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
         10. macos_infostealer_sensitive_file_exfil  — credential PID with outbound conn
     """
 
+    MANDATE_DATA_FIELDS = ("file_path", "file_name", "pid", "process_name")
+
     def __init__(self, collection_interval: float = 15.0) -> None:
         device_id = socket.gethostname()
 

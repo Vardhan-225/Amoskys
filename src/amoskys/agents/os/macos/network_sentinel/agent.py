@@ -63,6 +63,8 @@ class NetworkSentinelAgent(MicroProbeAgentMixin, HardenedAgentBase):
     QUEUE_PATH = "data/queue/network_sentinel.db"
     CERT_DIR = "certs"
 
+    MANDATE_DATA_FIELDS = ("remote_ip", "remote_port", "local_port", "protocol", "pid", "process_name")
+
     def __init__(
         self,
         collection_interval: float = 10.0,

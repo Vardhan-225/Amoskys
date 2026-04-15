@@ -53,6 +53,8 @@ class MacOSDBActivityAgent(MicroProbeAgentMixin, HardenedAgentBase):
         macos_db_exfiltration       — T1048     Exfiltration via DB
     """
 
+    MANDATE_DATA_FIELDS = ("pid", "process_name")
+
     def __init__(self, collection_interval: float = 30.0) -> None:
         device_id = socket.gethostname()
 

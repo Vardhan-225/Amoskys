@@ -79,6 +79,8 @@ class MacOSProvenanceAgent(MicroProbeAgentMixin, HardenedAgentBase):
         8. macos_provenance_chain               — causal chain scoring (60s)
     """
 
+    MANDATE_DATA_FIELDS = ("file_path", "file_name", "pid", "process_name")
+
     def __init__(self, collection_interval: float = 10.0) -> None:
         device_id = socket.gethostname()
 

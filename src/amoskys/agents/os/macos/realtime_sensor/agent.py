@@ -891,6 +891,8 @@ class IMessageFaceTimeProbe(MicroProbe):
         }
     )
 
+    MANDATE_DATA_FIELDS = ("pid", "process_name", "exe", "cmdline", "ppid", "parent_name", "username")
+
     def __init__(self) -> None:
         super().__init__()
         self._message_count_window: List[int] = []  # timestamps for rate detection

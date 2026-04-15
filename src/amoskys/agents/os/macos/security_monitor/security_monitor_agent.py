@@ -80,6 +80,8 @@ QUEUE_PATH = getattr(
 class EventBusPublisher:
     """Wrapper for EventBus gRPC client."""
 
+    MANDATE_DATA_FIELDS = ("pid", "process_name", "exe", "cmdline", "ppid", "parent_name", "username")
+
     def __init__(self, address: str, cert_dir: str):
         self.address = address
         self.cert_dir = cert_dir

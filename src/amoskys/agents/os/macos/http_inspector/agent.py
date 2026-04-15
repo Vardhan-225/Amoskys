@@ -64,6 +64,8 @@ class MacOSHTTPInspectorAgent(MicroProbeAgentMixin, HardenedAgentBase):
         macos_http_cookie_theft     — T1539     Cookie theft
     """
 
+    MANDATE_DATA_FIELDS = ("remote_ip", "remote_port", "local_port", "protocol", "pid", "process_name")
+
     def __init__(self, collection_interval: float = 30.0) -> None:
         device_id = socket.gethostname()
 

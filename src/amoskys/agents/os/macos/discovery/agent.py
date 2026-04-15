@@ -49,6 +49,8 @@ class MacOSDiscoveryAgent(MicroProbeAgentMixin, HardenedAgentBase):
         macos_discovery_port_scan       -- T1046 Port scan detection
     """
 
+    MANDATE_DATA_FIELDS = ("pid", "process_name")
+
     def __init__(self, collection_interval: float = 60.0) -> None:
         device_id = socket.gethostname()
 

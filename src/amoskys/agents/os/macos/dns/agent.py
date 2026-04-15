@@ -59,6 +59,8 @@ class MacOSDNSAgent(MicroProbeAgentMixin, HardenedAgentBase):
         macos_dns_reverse_recon — T1046     Reverse DNS recon
     """
 
+    MANDATE_DATA_FIELDS = ("domain", "record_type", "pid", "process_name")
+
     def __init__(self, collection_interval: float = 30.0) -> None:
         device_id = socket.gethostname()
 

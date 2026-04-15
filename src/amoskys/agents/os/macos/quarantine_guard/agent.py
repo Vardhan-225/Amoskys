@@ -77,6 +77,8 @@ class MacOSQuarantineGuardAgent(MicroProbeAgentMixin, HardenedAgentBase):
         8. quarantine_evasion_pattern — no xattr + process running from path
     """
 
+    MANDATE_DATA_FIELDS = ("file_path", "file_name", "pid", "process_name")
+
     def __init__(self, collection_interval: float = 30.0) -> None:
         device_id = socket.gethostname()
 

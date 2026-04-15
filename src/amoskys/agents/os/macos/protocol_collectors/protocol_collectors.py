@@ -79,6 +79,8 @@ QUEUE_PATH = os.environ.get(
 class EventBusPublisher:
     """Wrapper for EventBus gRPC client."""
 
+    MANDATE_DATA_FIELDS = ("remote_ip", "remote_port", "local_port", "protocol", "pid", "process_name")
+
     def __init__(self, address: str, cert_dir: str):
         self.address = address
         self.cert_dir = cert_dir

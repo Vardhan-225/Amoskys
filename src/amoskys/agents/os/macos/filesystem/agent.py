@@ -57,6 +57,8 @@ class MacOSFileAgent(MicroProbeAgentMixin, HardenedAgentBase):
         8. macos_downloads_monitor — new files in ~/Downloads
     """
 
+    MANDATE_DATA_FIELDS = ("file_path", "file_name", "pid", "process_name")
+
     def __init__(self, collection_interval: float = 60.0) -> None:
         device_id = socket.gethostname()
 

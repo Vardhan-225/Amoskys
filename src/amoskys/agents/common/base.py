@@ -219,6 +219,13 @@ class HardenedAgentBase(abc.ABC):
         - shutdown(): Cleanup resources (optional)
     """
 
+    # ── Observability Mandate v1.0 ──────────────────────────────────────
+    # Override per-agent to declare which event.data keys MUST be present.
+    # The base class checks these on every event after validation.
+    # Missing fields are logged and attached as _mandate_missing on the
+    # event, but the event is NOT dropped — downstream can filter.
+    MANDATE_DATA_FIELDS: tuple[str, ...] = ()
+
     def __init__(
         self,
         agent_name: str,
@@ -731,6 +738,44 @@ class HardenedAgentBase(abc.ABC):
             errors.append(f"invalid timestamp_ns: {ts}")
 
         return ValidationResult(is_valid=len(errors) == 0, errors=errors)
+
+    def _check_mandate_compliance(self, event: Any) -> list[str]:
+        """Check event against the Observability Mandate field requirements.
+
+        Returns list of missing field names (empty = fully compliant).
+        Non-compliant events are NOT dropped — they are flagged with
+        ``_mandate_missing`` in the data dict so downstream (WAL gate,
+        AMRDR, dashboards) can measure and act on field gaps.
+        """
+        if not self.MANDATE_DATA_FIELDS:
+            return []
+
+        data: dict = {}
+        if isinstance(event, dict):
+            data = event
+        elif hasattr(event, "data") and isinstance(event.data, dict):
+            data = event.data
+        elif hasattr(event, "attributes"):
+            data = dict(event.attributes) if hasattr(event.attributes, "items") else {}
+        else:
+            return []
+
+        missing = []
+        for f in self.MANDATE_DATA_FIELDS:
+            val = data.get(f)
+            # Treat None, empty string, and missing as violations.
+            # Zero is valid (e.g., bytes_in=0, ppid=0 for init).
+            if val is None or val == "":
+                missing.append(f)
+
+        if missing:
+            # Stamp the event so downstream knows what's absent
+            if isinstance(event, dict):
+                event["_mandate_missing"] = missing
+            elif hasattr(event, "data") and isinstance(event.data, dict):
+                event.data["_mandate_missing"] = missing
+
+        return missing
 
     def enrich_event(self, event: Any) -> Any:
         """Add contextual metadata to validated event.
@@ -1281,6 +1326,18 @@ class HardenedAgentBase(abc.ABC):
                         vr.errors,
                     )
 
+            # Step 2.5: Observability Mandate compliance check
+            mandate_violations = 0
+            for ev in validated:
+                missing = self._check_mandate_compliance(ev)
+                if missing:
+                    mandate_violations += len(missing)
+                    logger.warning(
+                        "MANDATE_GAP agent=%s fields=%s",
+                        self.agent_name,
+                        missing,
+                    )
+
             # Step 3: Enrich validated events (P0-4: failure must not block)
             enriched = []
             for ev in validated:
@@ -1318,12 +1375,13 @@ class HardenedAgentBase(abc.ABC):
             self.metrics.record_loop_success()
 
             logger.info(
-                "Agent %s cycle %s complete: raw=%d valid=%d rejected=%d duration=%.3fs",
+                "Agent %s cycle %s complete: raw=%d valid=%d rejected=%d mandate_gaps=%d duration=%.3fs",
                 self.agent_name,
                 cycle_id,
                 len(raw_events),
                 len(enriched),
                 rejected,
+                mandate_violations,
                 duration,
             )
 

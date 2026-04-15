@@ -62,6 +62,8 @@ class MacOSPeripheralAgent(MicroProbeAgentMixin, HardenedAgentBase):
         4. macos_removable_media -- /Volumes/ mount detection
     """
 
+    MANDATE_DATA_FIELDS = ("pid", "process_name")
+
     def __init__(self, collection_interval: float = 30.0) -> None:
         device_id = socket.gethostname()
 

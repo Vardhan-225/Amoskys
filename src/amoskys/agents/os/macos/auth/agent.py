@@ -58,6 +58,8 @@ class MacOSAuthAgent(MicroProbeAgentMixin, HardenedAgentBase):
         6. macos_credential_access -- Keychain credential access
     """
 
+    MANDATE_DATA_FIELDS = ("pid", "process_name", "event_category")
+
     def __init__(self, collection_interval: float = 30.0) -> None:
         device_id = socket.gethostname()
 

@@ -47,6 +47,12 @@ QUEUE_PATH = "data/queue/macos_network.db"
 class MacOSNetworkAgent(MicroProbeAgentMixin, HardenedAgentBase):
     """macOS Network Observatory agent."""
 
+    # Observability Mandate v1.0 — network context fields
+    MANDATE_DATA_FIELDS = (
+        "remote_ip", "remote_port", "local_port",
+        "protocol", "pid", "process_name",
+    )
+
     def __init__(self, collection_interval: float = 10.0) -> None:
         device_id = socket.gethostname()
 

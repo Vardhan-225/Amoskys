@@ -71,6 +71,8 @@ class MacOSCorrelationAgent(MicroProbeAgentMixin, HardenedAgentBase):
        12. macos_corr_auth_geo_anomaly — new source IP
     """
 
+    MANDATE_DATA_FIELDS = ("pid", "process_name")
+
     def __init__(self, collection_interval: float = 15.0) -> None:
         device_id = socket.gethostname()
 

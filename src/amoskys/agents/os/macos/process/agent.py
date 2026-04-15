@@ -66,6 +66,12 @@ class MacOSProcessAgent(MicroProbeAgentMixin, HardenedAgentBase):
        10. macos_process_masquerade — name vs exe mismatch
     """
 
+    # Observability Mandate v1.0 — process context fields
+    MANDATE_DATA_FIELDS = (
+        "pid", "process_name", "exe", "cmdline",
+        "ppid", "parent_name", "username",
+    )
+
     def __init__(self, collection_interval: float = 10.0) -> None:
         device_id = socket.gethostname()
 

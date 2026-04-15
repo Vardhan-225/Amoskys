@@ -57,6 +57,8 @@ class MacOSInternetActivityAgent(MicroProbeAgentMixin, HardenedAgentBase):
         macos_internet_cdn_masquerade — T1090.002 CDN masquerade C2
     """
 
+    MANDATE_DATA_FIELDS = ("remote_ip", "remote_port", "local_port", "protocol", "pid", "process_name")
+
     def __init__(self, collection_interval: float = 30.0) -> None:
         device_id = socket.gethostname()
 

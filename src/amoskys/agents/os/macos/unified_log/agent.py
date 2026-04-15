@@ -69,6 +69,8 @@ class MacOSUnifiedLogAgent(MicroProbeAgentMixin, HardenedAgentBase):
         6. macos_sharing_service — AirDrop/sharing activity (T1105)
     """
 
+    MANDATE_DATA_FIELDS = ("pid", "process_name")
+
     def __init__(self, collection_interval: float = 30.0) -> None:
         device_id = socket.gethostname()
 
