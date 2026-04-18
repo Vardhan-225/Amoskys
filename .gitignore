@@ -205,3 +205,36 @@ ipython_config.py
 target/
 kali/.env
 certs/*.key
+
+# ---- Local-only / sensitive (never push) ----
+# Any directory literally named _local/ anywhere in the tree.
+# Use for session notes, credentials, infrastructure addresses
+# that must not leave this machine.
+_local/
+**/_local/
+
+# Explicit: session + lab credential notes
+docs/_local/
+**/creds.env
+**/*.creds
+**/*.secrets
+.local.*
+*.local
+
+# MCP server config (may contain endpoint URLs / tokens)
+.mcp.json
+
+# Claude launch.json with env-injected secrets
+.claude/launch.json
+
+# ---- WordPress core (test lab target — don't commit upstream code) ----
+# Our Aegis plugin IS committed at:
+#   src/amoskys/agents/Web/wordpress/wp-content/plugins/amoskys-aegis/
+# Everything else under wordpress/ is upstream WordPress and stays local.
+src/amoskys/agents/Web/wordpress/*
+!src/amoskys/agents/Web/wordpress/wp-content/
+src/amoskys/agents/Web/wordpress/wp-content/*
+!src/amoskys/agents/Web/wordpress/wp-content/plugins/
+src/amoskys/agents/Web/wordpress/wp-content/plugins/*
+!src/amoskys/agents/Web/wordpress/wp-content/plugins/amoskys-aegis/
+
