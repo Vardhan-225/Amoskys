@@ -27,6 +27,16 @@ class Amoskys_Aegis_Emitter {
 	const LOG_FILENAME   = 'events.jsonl';
 	const HASH_ALGO      = 'sha256';
 
+	/**
+	 * Re-entrancy guard. The emitter calls update_option(), which fires
+	 * the 'updated_option' hook, which our options sensor listens on.
+	 * Without this flag, emitting an event would recursively emit again
+	 * forever, eating PHP-FPM workers until the host OOMs.
+	 *
+	 * @var bool
+	 */
+	private static $emitting = false;
+
 	/** @var string Absolute path to the log directory. */
 	private $log_dir;
 
@@ -62,6 +72,12 @@ class Amoskys_Aegis_Emitter {
 	 * @param string $severity   info | warn | high | critical
 	 */
 	public function emit( string $event_type, array $data, string $severity = 'info' ): void {
+		// Re-entrancy guard — prevents infinite recursion when a sensor
+		// fires on an option we updated during our own emit().
+		if ( self::$emitting ) {
+			return;
+		}
+		self::$emitting = true;
 		try {
 			$envelope = $this->build_envelope( $event_type, $data, $severity );
 			$this->write_local( $envelope );
@@ -71,6 +87,8 @@ class Amoskys_Aegis_Emitter {
 		} catch ( \Throwable $e ) {
 			// Never break the host site. Best-effort stderr for debugging.
 			error_log( 'AMOSKYS Aegis emit failed: ' . $e->getMessage() );
+		} finally {
+			self::$emitting = false;
 		}
 	}
 

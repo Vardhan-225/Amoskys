@@ -13,7 +13,18 @@ engine can enforce Scope.allowed_probe_classes / DENIED_PROBE_CLASSES.
 """
 
 from amoskys.agents.Web.argos.tools.base import Tool, ToolResult
+from amoskys.agents.Web.argos.tools.httpx import HTTPXTool
+from amoskys.agents.Web.argos.tools.nmap import NmapTool
 from amoskys.agents.Web.argos.tools.nuclei import NucleiTool
+from amoskys.agents.Web.argos.tools.subfinder import SubfinderTool
 from amoskys.agents.Web.argos.tools.wpscan import WPScanTool
 
-__all__ = ["Tool", "ToolResult", "NucleiTool", "WPScanTool"]
+__all__ = [
+    "Tool",
+    "ToolResult",
+    "HTTPXTool",
+    "NmapTool",
+    "NucleiTool",
+    "SubfinderTool",
+    "WPScanTool",
+]

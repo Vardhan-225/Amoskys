@@ -20,15 +20,34 @@ import uuid
 from pathlib import Path
 
 from amoskys.agents.Web.argos.engine import Engagement, Scope
-from amoskys.agents.Web.argos.tools import NucleiTool, WPScanTool
+from amoskys.agents.Web.argos.tools import (
+    HTTPXTool,
+    NmapTool,
+    NucleiTool,
+    SubfinderTool,
+    WPScanTool,
+)
 
 
 TOOL_REGISTRY = {
+    # Recon
+    "subfinder": lambda: SubfinderTool(),
+    "nmap": lambda: NmapTool(),
+    # Fingerprint
+    "httpx": lambda: HTTPXTool(),
+    "wpscan": lambda: WPScanTool(),
+    # Probe (nuclei categories)
     "nuclei-cves": lambda: NucleiTool(category="cves"),
     "nuclei-misconfig": lambda: NucleiTool(category="misconfiguration"),
     "nuclei-exposures": lambda: NucleiTool(category="exposures"),
     "nuclei-vulnerabilities": lambda: NucleiTool(category="vulnerabilities"),
-    "wpscan": lambda: WPScanTool(),
+    # Preset bundles
+    "recon": lambda: [SubfinderTool(), NmapTool(), HTTPXTool()],
+    "wp-full": lambda: [
+        HTTPXTool(), WPScanTool(),
+        NucleiTool(category="cves"), NucleiTool(category="exposures"),
+        NucleiTool(category="misconfiguration"),
+    ],
 }
 
 
@@ -40,7 +59,12 @@ def cmd_scan(args: argparse.Namespace) -> int:
         if not builder:
             print(f"error: unknown tool '{name}'. available: {list(TOOL_REGISTRY)}", file=sys.stderr)
             return 2
-        tools.append(builder())
+        result = builder()
+        # Preset bundles return a list; individual tools return one instance
+        if isinstance(result, list):
+            tools.extend(result)
+        else:
+            tools.append(result)
 
     now_ns = int(time.time() * 1e9)
     scope = Scope(

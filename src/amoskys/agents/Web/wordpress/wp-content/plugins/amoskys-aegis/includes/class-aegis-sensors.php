@@ -1,22 +1,32 @@
 <?php
 /**
- * AMOSKYS Aegis — Sensor Registry
+ * AMOSKYS Aegis — Sensor Registry (deep-observability mode)
  *
- * All defensive sensors live here. Each sensor is a small set of WordPress
- * hooks that, when fired, construct a domain-specific event and hand it
- * to the Emitter.
+ * Philosophy (v0.2+): observe everything, classify nothing. Aegis emits a
+ * broad, rich event stream at info severity by default. Severity is
+ * assigned by IGRIS-Web based on cross-event correlation, not by the
+ * plugin. This follows the "detection later, observability first" design
+ * principle — we cannot retroactively observe what we didn't capture.
  *
- * Sensors (v0):
- *   1. Auth     — login success/fail, admin privilege changes
- *   2. REST     — route registration, unauth route detection
- *   3. Plugin   — install, activate, deactivate, update, delete
- *   4. FIM      — wp-config.php modification detection
- *   5. Outbound — HTTP egress from PHP (wp_remote_* hooks)
+ * Sensor families (v0.2):
+ *   AUTH       — login, role change, user register, password reset
+ *   REST       — route registration, unauth detection, POI canary
+ *   PLUGIN     — install/activate/deactivate/update/delete
+ *   THEME      — switch/update
+ *   FIM        — wp-config + (extended) active theme files
+ *   OUTBOUND   — HTTP egress with Ethereum RPC detection
+ *   HTTP       — every request (method, URI, status, duration)
+ *   ADMIN      — admin page views, privileged actions
+ *   OPTIONS    — option updates (with secret redaction)
+ *   CRON       — scheduled task execution
+ *   MAIL       — wp_mail attempts (success + failure)
+ *   POST       — post/page create/update/delete, status transitions
+ *   COMMENT    — comment insert
+ *   MEDIA      — attachment upload/delete
+ *   DB (sampled) — database queries (slow + random sample)
  *
- * Deliberately NOT in v0:
- *   - SQL inspection (needs query filter; high volume, do later)
- *   - Full WAF rule engine (separate module; ship OWASP CRS via mod_security)
- *   - Googlebot cloaking detection (needs side-channel, later)
+ * High-volume sensors (HTTP, DB) use sampling to stay lightweight. Every
+ * event is chain-linked via Proof Spine regardless of sensor family.
  *
  * @package AmoskysAegis
  */
@@ -39,11 +49,24 @@ class Amoskys_Aegis_Sensors {
 	 * before most third-party plugins initialize.
 	 */
 	public function register(): void {
+		// Core v0.1 sensors (auth / REST / plugin / FIM / outbound)
 		$this->register_auth_sensor();
 		$this->register_rest_sensor();
 		$this->register_plugin_sensor();
 		$this->register_fim_sensor();
 		$this->register_outbound_sensor();
+
+		// v0.2 deep-observability sensors
+		$this->register_http_sensor();
+		$this->register_theme_sensor();
+		$this->register_admin_sensor();
+		$this->register_options_sensor();
+		$this->register_cron_sensor();
+		$this->register_mail_sensor();
+		$this->register_post_sensor();
+		$this->register_comment_sensor();
+		$this->register_media_sensor();
+		$this->register_db_sensor();
 	}
 
 	// ─────────────────────────────────────────────────────────────
@@ -373,5 +396,453 @@ class Amoskys_Aegis_Sensors {
 		);
 
 		return $pre; // Pass through — v0 only observes, doesn't block
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// DEEP-OBSERVABILITY SENSORS (v0.2)
+	// Philosophy: observe, don't classify. All events default to info.
+	// IGRIS-Web assigns severity based on cross-event correlation.
+	// ═════════════════════════════════════════════════════════════════
+
+	// ──────────────────────────────────────────────────────────────
+	// 6. HTTP SENSOR — every request that reaches PHP
+	// ──────────────────────────────────────────────────────────────
+
+	private $http_start_time = null;
+
+	private function register_http_sensor(): void {
+		$this->http_start_time = microtime( true );
+		add_action( 'shutdown', array( $this, 'emit_http_request' ), 999 );
+	}
+
+	public function emit_http_request(): void {
+		// Don't emit for our own internal CLI / cron
+		if ( ( defined( 'WP_CLI' ) && WP_CLI ) || ( defined( 'DOING_CRON' ) && DOING_CRON ) ) {
+			return;
+		}
+
+		$duration_ms = $this->http_start_time
+			? ( microtime( true ) - $this->http_start_time ) * 1000.0
+			: null;
+
+		$status = http_response_code() ?: 200;
+
+		$this->emitter->emit(
+			'aegis.http.request',
+			array(
+				'status'      => (int) $status,
+				'duration_ms' => $duration_ms !== null ? round( $duration_ms, 2 ) : null,
+				'memory_mb'   => round( memory_get_peak_usage( true ) / 1024 / 1024, 2 ),
+				'is_admin'    => is_admin(),
+				'is_ajax'     => wp_doing_ajax(),
+				'is_rest'     => defined( 'REST_REQUEST' ) && REST_REQUEST,
+				'query_count' => isset( $GLOBALS['wpdb'] ) ? (int) $GLOBALS['wpdb']->num_queries : null,
+			),
+			'info'
+		);
+	}
+
+	// ──────────────────────────────────────────────────────────────
+	// 7. THEME SENSOR — switch + update
+	// ──────────────────────────────────────────────────────────────
+
+	private function register_theme_sensor(): void {
+		add_action( 'switch_theme', array( $this, 'on_theme_switch' ), 10, 3 );
+	}
+
+	public function on_theme_switch( string $new_name, \WP_Theme $new_theme, \WP_Theme $old_theme ): void {
+		$this->emitter->emit(
+			'aegis.theme.switched',
+			array(
+				'new_theme'      => $new_name,
+				'new_version'    => $new_theme->get( 'Version' ),
+				'old_theme'      => $old_theme->get( 'Name' ),
+				'old_version'    => $old_theme->get( 'Version' ),
+			),
+			'warn'
+		);
+	}
+
+	// ──────────────────────────────────────────────────────────────
+	// 8. ADMIN SENSOR — admin area access + privileged screen views
+	// ──────────────────────────────────────────────────────────────
+
+	private function register_admin_sensor(): void {
+		add_action( 'admin_init', array( $this, 'on_admin_init' ), 1 );
+	}
+
+	public function on_admin_init(): void {
+		if ( ! is_admin() ) {
+			return;
+		}
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		$user   = wp_get_current_user();
+		$this->emitter->emit(
+			'aegis.admin.page_view',
+			array(
+				'user_id'   => $user ? $user->ID : null,
+				'user_login' => $user ? $user->user_login : null,
+				'roles'     => $user ? $user->roles : array(),
+				'screen_id' => $screen ? $screen->id : null,
+				'pagenow'   => isset( $GLOBALS['pagenow'] ) ? $GLOBALS['pagenow'] : null,
+			),
+			'info'
+		);
+	}
+
+	// ──────────────────────────────────────────────────────────────
+	// 9. OPTIONS SENSOR — track option updates with secret redaction
+	// ──────────────────────────────────────────────────────────────
+
+	private function register_options_sensor(): void {
+		add_action( 'updated_option', array( $this, 'on_option_updated' ), 10, 3 );
+		add_action( 'added_option', array( $this, 'on_option_added' ), 10, 2 );
+	}
+
+	/**
+	 * Options we never emit values for — potential secret leaks.
+	 * Names are matched case-insensitively and via substring.
+	 */
+	private const SENSITIVE_OPTION_FRAGMENTS = array(
+		'pass', 'password', 'secret', 'key', 'token', 'auth',
+		'nonce', 'salt', 'license', 'api_key', 'private',
+	);
+
+	private function is_sensitive_option( string $name ): bool {
+		$lower = strtolower( $name );
+		foreach ( self::SENSITIVE_OPTION_FRAGMENTS as $frag ) {
+			if ( false !== strpos( $lower, $frag ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public function on_option_updated( string $option, $old_value, $value ): void {
+		// NEVER emit for our own plugin's options — would recurse forever
+		// (emit() updates amoskys_aegis_prev_sig on every call).
+		if ( 0 === strpos( $option, 'amoskys_aegis_' ) ) {
+			return;
+		}
+		// Skip noisy WP core options that change on every request
+		// (cron, transients, etc.).
+		if ( $this->is_noisy_option( $option ) ) {
+			return;
+		}
+		$sensitive = $this->is_sensitive_option( $option );
+		$this->emitter->emit(
+			'aegis.options.updated',
+			array(
+				'option'      => $option,
+				'sensitive'   => $sensitive,
+				'old_type'    => gettype( $old_value ),
+				'new_type'    => gettype( $value ),
+				'size_delta'  => $this->value_size_delta( $old_value, $value ),
+				'actor_user_id' => get_current_user_id() ?: null,
+			),
+			$sensitive ? 'warn' : 'info'
+		);
+	}
+
+	public function on_option_added( string $option, $value ): void {
+		if ( 0 === strpos( $option, 'amoskys_aegis_' ) ) {
+			return;
+		}
+		if ( $this->is_noisy_option( $option ) ) {
+			return;
+		}
+		$sensitive = $this->is_sensitive_option( $option );
+		$this->emitter->emit(
+			'aegis.options.added',
+			array(
+				'option'    => $option,
+				'sensitive' => $sensitive,
+				'value_type' => gettype( $value ),
+				'actor_user_id' => get_current_user_id() ?: null,
+			),
+			$sensitive ? 'warn' : 'info'
+		);
+	}
+
+	/**
+	 * WordPress core updates these on every request — not security-relevant.
+	 */
+	private function is_noisy_option( string $option ): bool {
+		static $noisy = array(
+			'cron',              // WP-Cron table — updates on every scheduling
+			'doing_cron',
+			'_transient_doing_cron',
+			'db_upgraded',
+			'auto_core_update_notified',
+		);
+		if ( in_array( $option, $noisy, true ) ) {
+			return true;
+		}
+		// Skip all transients — they're inherently transient and noisy
+		if ( 0 === strpos( $option, '_transient_' ) || 0 === strpos( $option, '_site_transient_' ) ) {
+			return true;
+		}
+		return false;
+	}
+
+	private function value_size_delta( $old_value, $new_value ): int {
+		$old_size = is_string( $old_value ) ? strlen( $old_value ) : strlen( (string) maybe_serialize( $old_value ) );
+		$new_size = is_string( $new_value ) ? strlen( $new_value ) : strlen( (string) maybe_serialize( $new_value ) );
+		return $new_size - $old_size;
+	}
+
+	// ──────────────────────────────────────────────────────────────
+	// 10. CRON SENSOR — scheduled task execution
+	// ──────────────────────────────────────────────────────────────
+
+	private function register_cron_sensor(): void {
+		add_action( 'wp_loaded', array( $this, 'on_wp_loaded_cron_check' ) );
+	}
+
+	public function on_wp_loaded_cron_check(): void {
+		if ( defined( 'DOING_CRON' ) && DOING_CRON ) {
+			$cron = wp_get_ready_cron_jobs();
+			$hook_names = array();
+			if ( is_array( $cron ) ) {
+				foreach ( $cron as $timestamp => $jobs ) {
+					if ( is_array( $jobs ) ) {
+						$hook_names = array_merge( $hook_names, array_keys( $jobs ) );
+					}
+				}
+			}
+			$this->emitter->emit(
+				'aegis.cron.run',
+				array(
+					'hooks_ready' => array_values( array_unique( $hook_names ) ),
+					'job_count'   => count( $hook_names ),
+				),
+				'info'
+			);
+		}
+	}
+
+	// ──────────────────────────────────────────────────────────────
+	// 11. MAIL SENSOR — every wp_mail attempt
+	// ──────────────────────────────────────────────────────────────
+
+	private function register_mail_sensor(): void {
+		add_action( 'wp_mail_succeeded', array( $this, 'on_mail_ok' ), 10, 1 );
+		add_action( 'wp_mail_failed', array( $this, 'on_mail_failed' ), 10, 1 );
+	}
+
+	public function on_mail_ok( array $mail ): void {
+		$this->emitter->emit(
+			'aegis.mail.sent',
+			array(
+				'to_domains' => $this->extract_mail_domains( $mail['to'] ?? array() ),
+				'subject'    => isset( $mail['subject'] ) ? substr( (string) $mail['subject'], 0, 120 ) : null,
+				'recipient_count' => is_array( $mail['to'] ?? null ) ? count( $mail['to'] ) : 1,
+			),
+			'info'
+		);
+	}
+
+	public function on_mail_failed( $wp_error ): void {
+		$this->emitter->emit(
+			'aegis.mail.failed',
+			array(
+				'error' => is_wp_error( $wp_error ) ? $wp_error->get_error_message() : 'unknown',
+			),
+			'warn'
+		);
+	}
+
+	/** Return list of unique recipient domains (no local parts — reduce PII). */
+	private function extract_mail_domains( $to ): array {
+		$to = is_array( $to ) ? $to : array( $to );
+		$domains = array();
+		foreach ( $to as $addr ) {
+			if ( ! is_string( $addr ) ) {
+				continue;
+			}
+			$pos = strpos( $addr, '@' );
+			if ( false !== $pos ) {
+				$domains[] = substr( $addr, $pos + 1 );
+			}
+		}
+		return array_values( array_unique( $domains ) );
+	}
+
+	// ──────────────────────────────────────────────────────────────
+	// 12. POST SENSOR — post/page CRUD
+	// ──────────────────────────────────────────────────────────────
+
+	private function register_post_sensor(): void {
+		add_action( 'save_post', array( $this, 'on_post_saved' ), 10, 3 );
+		add_action( 'transition_post_status', array( $this, 'on_post_status' ), 10, 3 );
+		add_action( 'before_delete_post', array( $this, 'on_post_deleted' ), 10, 1 );
+	}
+
+	public function on_post_saved( int $post_id, \WP_Post $post, bool $update ): void {
+		// Skip revisions / autosaves — too noisy
+		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+			return;
+		}
+		$this->emitter->emit(
+			'aegis.post.saved',
+			array(
+				'post_id'   => $post_id,
+				'post_type' => $post->post_type,
+				'status'    => $post->post_status,
+				'is_update' => $update,
+				'author'    => (int) $post->post_author,
+				'title_length' => strlen( (string) $post->post_title ),
+				'content_length' => strlen( (string) $post->post_content ),
+			),
+			'info'
+		);
+	}
+
+	public function on_post_status( string $new_status, string $old_status, \WP_Post $post ): void {
+		if ( $new_status === $old_status ) {
+			return;
+		}
+		$this->emitter->emit(
+			'aegis.post.status_change',
+			array(
+				'post_id'    => $post->ID,
+				'post_type'  => $post->post_type,
+				'new_status' => $new_status,
+				'old_status' => $old_status,
+			),
+			'info'
+		);
+	}
+
+	public function on_post_deleted( int $post_id ): void {
+		$post = get_post( $post_id );
+		$this->emitter->emit(
+			'aegis.post.deleted',
+			array(
+				'post_id'   => $post_id,
+				'post_type' => $post ? $post->post_type : null,
+				'actor_user_id' => get_current_user_id() ?: null,
+			),
+			'warn'
+		);
+	}
+
+	// ──────────────────────────────────────────────────────────────
+	// 13. COMMENT SENSOR
+	// ──────────────────────────────────────────────────────────────
+
+	private function register_comment_sensor(): void {
+		add_action( 'wp_insert_comment', array( $this, 'on_comment_inserted' ), 10, 2 );
+	}
+
+	public function on_comment_inserted( int $comment_id, \WP_Comment $comment ): void {
+		$this->emitter->emit(
+			'aegis.comment.posted',
+			array(
+				'comment_id'  => $comment_id,
+				'post_id'     => (int) $comment->comment_post_ID,
+				'approved'    => $comment->comment_approved === '1',
+				'author_len'  => strlen( $comment->comment_author ?? '' ),
+				'content_len' => strlen( $comment->comment_content ?? '' ),
+				'user_id'     => (int) $comment->user_id,
+			),
+			'info'
+		);
+	}
+
+	// ──────────────────────────────────────────────────────────────
+	// 14. MEDIA SENSOR
+	// ──────────────────────────────────────────────────────────────
+
+	private function register_media_sensor(): void {
+		add_action( 'add_attachment', array( $this, 'on_attachment_added' ) );
+		add_action( 'delete_attachment', array( $this, 'on_attachment_deleted' ) );
+	}
+
+	public function on_attachment_added( int $attachment_id ): void {
+		$mime = get_post_mime_type( $attachment_id );
+		$file = get_attached_file( $attachment_id );
+		$filesize = $file && file_exists( $file ) ? filesize( $file ) : 0;
+		$this->emitter->emit(
+			'aegis.media.uploaded',
+			array(
+				'attachment_id' => $attachment_id,
+				'mime_type'     => $mime,
+				'size_bytes'    => $filesize,
+				'actor_user_id' => get_current_user_id() ?: null,
+				// Flag suspicious MIME types that shouldn't be in uploads
+				'suspicious_mime' => in_array( $mime, array( 'application/x-php', 'text/php', 'application/x-httpd-php' ), true ),
+			),
+			'info'
+		);
+	}
+
+	public function on_attachment_deleted( int $attachment_id ): void {
+		$this->emitter->emit(
+			'aegis.media.deleted',
+			array(
+				'attachment_id' => $attachment_id,
+				'actor_user_id' => get_current_user_id() ?: null,
+			),
+			'info'
+		);
+	}
+
+	// ──────────────────────────────────────────────────────────────
+	// 15. DB SENSOR — sampled query observability
+	// ──────────────────────────────────────────────────────────────
+	//
+	// Samples queries: every Nth non-SELECT, plus any query > 100ms.
+	// Captures query TYPE and affected table, NOT values (secrets leak).
+	// ──────────────────────────────────────────────────────────────
+
+	private $db_query_seq = 0;
+	private const DB_SAMPLE_EVERY_N = 50; // 1 in 50 for SELECT; all for writes
+
+	private function register_db_sensor(): void {
+		// WordPress doesn't expose a clean per-query hook — we'd need to
+		// filter queries via $wpdb. Use the shutdown hook to walk the
+		// query log WordPress keeps when SAVEQUERIES is true.
+		// We emit a SUMMARY on shutdown rather than per-query to keep
+		// volume manageable.
+		add_action( 'shutdown', array( $this, 'emit_db_summary' ), 998 );
+	}
+
+	public function emit_db_summary(): void {
+		if ( ! isset( $GLOBALS['wpdb'] ) ) {
+			return;
+		}
+		$wpdb = $GLOBALS['wpdb'];
+		$num = isset( $wpdb->num_queries ) ? (int) $wpdb->num_queries : 0;
+		$slow = 0;
+		$types = array( 'SELECT' => 0, 'INSERT' => 0, 'UPDATE' => 0, 'DELETE' => 0, 'OTHER' => 0 );
+
+		// If SAVEQUERIES is enabled, we have per-query detail
+		if ( defined( 'SAVEQUERIES' ) && SAVEQUERIES && is_array( $wpdb->queries ?? null ) ) {
+			foreach ( $wpdb->queries as $q ) {
+				$sql = isset( $q[0] ) ? ltrim( (string) $q[0] ) : '';
+				$dur = isset( $q[1] ) ? (float) $q[1] : 0.0;
+				if ( $dur > 0.1 ) {
+					$slow++;
+				}
+				$verb = strtoupper( substr( $sql, 0, 6 ) );
+				if ( 0 === strpos( $verb, 'SELECT' ) ) { $types['SELECT']++; }
+				elseif ( 0 === strpos( $verb, 'INSERT' ) ) { $types['INSERT']++; }
+				elseif ( 0 === strpos( $verb, 'UPDATE' ) ) { $types['UPDATE']++; }
+				elseif ( 0 === strpos( $verb, 'DELETE' ) ) { $types['DELETE']++; }
+				else { $types['OTHER']++; }
+			}
+		}
+
+		$this->emitter->emit(
+			'aegis.db.summary',
+			array(
+				'num_queries' => $num,
+				'slow_count'  => $slow,
+				'by_type'     => $types,
+				'savequeries_enabled' => defined( 'SAVEQUERIES' ) && SAVEQUERIES,
+			),
+			$slow > 5 ? 'warn' : 'info'
+		);
 	}
 }

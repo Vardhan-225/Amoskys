@@ -108,14 +108,19 @@ class Scope:
     max_duration_s: int = 3600
     allowed_probe_classes: List[str] = field(
         default_factory=lambda: [
-            "nuclei.cves",
-            "nuclei.misconfigurations",
-            "nuclei.exposures",
-            "nuclei.vulnerabilities",
+            # Recon (passive/external)
+            "subfinder.passive",
+            "nmap.portscan",
+            # Fingerprint
+            "httpx.fingerprint",
             "wpscan.plugins",
             "wpscan.themes",
             "wpscan.users",
-            "httpx.fingerprint",
+            # Probe
+            "nuclei.cves",
+            "nuclei.misconfiguration",
+            "nuclei.exposures",
+            "nuclei.vulnerabilities",
         ]
     )
     # These probe classes are PERMANENTLY blacklisted — never allowed:
