@@ -313,11 +313,26 @@ class IGRISCloudBrain:
         )
 
         # Incident velocity
+        #
+        # CRITICAL FIX (IGRIS Fix 1 from NOISE_AUDIT.md): exclude incidents
+        # that were created by the THRESHOLD_INCIDENTS.CRITICAL signal
+        # itself. Previously, this metric included self-generated incidents,
+        # causing an amplification loop: every firing of the threshold
+        # created a new incident, which raised the next measurement, which
+        # guaranteed the next firing.
+        #
+        # Titles of self-created incidents follow the pattern:
+        #   '[IGRIS Brain] THRESHOLD_INCIDENTS.CRITICAL'
+        # (see _decide_and_act).
         m["incidents.open"] = scalar(
-            "SELECT COUNT(*) FROM fleet_incidents WHERE status != 'resolved'"
+            "SELECT COUNT(*) FROM fleet_incidents "
+            "WHERE status != 'resolved' "
+            "AND title NOT LIKE '[IGRIS Brain] THRESHOLD_INCIDENTS.%'"
         ) or 0
         m["incidents.critical"] = scalar(
-            "SELECT COUNT(*) FROM fleet_incidents WHERE severity = 'critical' AND status != 'resolved'"
+            "SELECT COUNT(*) FROM fleet_incidents "
+            "WHERE severity = 'critical' AND status != 'resolved' "
+            "AND title NOT LIKE '[IGRIS Brain] THRESHOLD_INCIDENTS.%'"
         ) or 0
 
         # Malicious classification rate
