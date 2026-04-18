@@ -78,6 +78,35 @@ class Amoskys_Aegis_Emitter {
 			return;
 		}
 		self::$emitting = true;
+
+		// Chain-integrity lock: serialize the read-modify-write of
+		// prev_sig across PHP-FPM workers. Without this, concurrent
+		// workers read the same prev_sig, emit, and only one wins the
+		// option write → chain breaks under load.
+		//
+		// We flock() the events log file itself as the semaphore. Any
+		// worker that would write to the log must hold the lock for
+		// the full read-modify-write cycle, not just the file append.
+		$lock_path = $this->get_log_dir() . '/.chain.lock';
+		if ( ! is_dir( $this->get_log_dir() ) ) {
+			wp_mkdir_p( $this->get_log_dir() );
+		}
+		$lock_fh = @fopen( $lock_path, 'c' );
+		$have_lock = false;
+		if ( $lock_fh ) {
+			// LOCK_EX = exclusive blocking lock. Cap waits to ~2s
+			// via a non-blocking retry to avoid deadlocking a
+			// request if something goes wrong upstream.
+			$deadline = microtime( true ) + 2.0;
+			while ( microtime( true ) < $deadline ) {
+				if ( flock( $lock_fh, LOCK_EX | LOCK_NB ) ) {
+					$have_lock = true;
+					break;
+				}
+				usleep( 2000 ); // 2ms
+			}
+		}
+
 		try {
 			$envelope = $this->build_envelope( $event_type, $data, $severity );
 			$this->write_local( $envelope );
@@ -88,6 +117,12 @@ class Amoskys_Aegis_Emitter {
 			// Never break the host site. Best-effort stderr for debugging.
 			error_log( 'AMOSKYS Aegis emit failed: ' . $e->getMessage() );
 		} finally {
+			if ( $have_lock && $lock_fh ) {
+				flock( $lock_fh, LOCK_UN );
+			}
+			if ( $lock_fh ) {
+				fclose( $lock_fh );
+			}
 			self::$emitting = false;
 		}
 	}
