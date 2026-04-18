@@ -173,6 +173,11 @@ class EngagementResult:
                 "findings": [asdict(f) for f in self.findings],
                 "summary_counts": self.summary_counts,
                 "errors": self.errors,
+                "tool_outputs": {
+                    name: asdict(result) if hasattr(result, "__dataclass_fields__")
+                    else result.__dict__ if hasattr(result, "__dict__") else str(result)
+                    for name, result in self.tool_outputs.items()
+                },
             },
             indent=2,
             default=default,
@@ -252,41 +257,45 @@ class Engagement:
         self._emit_phase(Phase.CONSENT, "ok", {"target": self.scope.target})
         self.phases_complete.append(Phase.CONSENT)
 
-    def _phase_recon(self) -> None:
-        """Enumerate the external surface: subdomains, IPs, ports, services."""
-        recon_tools = [t for t in self.tools if t.tool_class == "recon"]
-        for tool in recon_tools:
+    def _run_tools_of_class(self, tool_class: str) -> List[str]:
+        """Run every tool of the given class, capturing outputs AND findings.
+
+        All three phases (recon / fingerprint / probe) use this — the
+        fingerprint class used to silently drop findings, which was a bug:
+        wpscan classifies as "fingerprint" but produces real vulnerabilities.
+        Every tool that yields findings has those findings appended.
+        """
+        ran: List[str] = []
+        for tool in self.tools:
+            if tool.tool_class != tool_class:
+                continue
             if not self._tool_allowed(tool):
                 continue
             result = tool.run(self.scope.target, self.scope)
             self.tool_outputs[tool.name] = result
+            ran.append(tool.name)
             for f in result.findings:
-                self.findings.append(Finding.from_tool_result(tool.name, self.scope.target, f))
-        self._emit_phase(Phase.RECON, "ok", {"tools_run": [t.name for t in recon_tools]})
+                self.findings.append(
+                    Finding.from_tool_result(tool.name, self.scope.target, f)
+                )
+        return ran
+
+    def _phase_recon(self) -> None:
+        """Enumerate the external surface: subdomains, IPs, ports, services."""
+        ran = self._run_tools_of_class("recon")
+        self._emit_phase(Phase.RECON, "ok", {"tools_run": ran})
         self.phases_complete.append(Phase.RECON)
 
     def _phase_fingerprint(self) -> None:
         """Identify the tech stack — WP version, plugins, themes, server."""
-        fp_tools = [t for t in self.tools if t.tool_class == "fingerprint"]
-        for tool in fp_tools:
-            if not self._tool_allowed(tool):
-                continue
-            result = tool.run(self.scope.target, self.scope)
-            self.tool_outputs[tool.name] = result
-        self._emit_phase(Phase.FINGERPRINT, "ok", {"tools_run": [t.name for t in fp_tools]})
+        ran = self._run_tools_of_class("fingerprint")
+        self._emit_phase(Phase.FINGERPRINT, "ok", {"tools_run": ran})
         self.phases_complete.append(Phase.FINGERPRINT)
 
     def _phase_probe(self) -> None:
         """Run vulnerability probes against the fingerprinted target."""
-        probe_tools = [t for t in self.tools if t.tool_class == "probe"]
-        for tool in probe_tools:
-            if not self._tool_allowed(tool):
-                continue
-            result = tool.run(self.scope.target, self.scope)
-            self.tool_outputs[tool.name] = result
-            for f in result.findings:
-                self.findings.append(Finding.from_tool_result(tool.name, self.scope.target, f))
-        self._emit_phase(Phase.PROBE, "ok", {"findings": len(self.findings)})
+        ran = self._run_tools_of_class("probe")
+        self._emit_phase(Phase.PROBE, "ok", {"tools_run": ran, "findings": len(self.findings)})
         self.phases_complete.append(Phase.PROBE)
 
     def _phase_triage(self) -> None:

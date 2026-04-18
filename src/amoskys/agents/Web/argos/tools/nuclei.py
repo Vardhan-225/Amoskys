@@ -20,9 +20,12 @@ v1 will:
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, TYPE_CHECKING
 
@@ -59,14 +62,23 @@ class NucleiTool(Tool):
                 f"or GO install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
             )
 
+        # Output to a temp file so findings survive SIGTERM / SIGKILL.
+        # We parse the file at the end regardless of how the subprocess exited.
+        out_dir = Path(tempfile.gettempdir()) / "argos-nuclei"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"nuclei-{uuid.uuid4().hex[:10]}.jsonl"
+        stderr_path = out_dir / f"nuclei-{uuid.uuid4().hex[:10]}.stderr"
+
         # Build command
         cmd: List[str] = [
             "nuclei",
             "-u", f"https://{target}" if not target.startswith("http") else target,
             "-jsonl",
             "-silent",
+            "-nc",  # no color codes
             "-rate-limit", str(scope.max_rps),
             "-timeout", "10",
+            "-o", str(out_path),
         ]
 
         # Category selection
@@ -82,37 +94,66 @@ class NucleiTool(Tool):
         if self.template_tags:
             cmd.extend(["-tags", ",".join(self.template_tags)])
 
+        errors: List[str] = []
+        exit_code = -1
         try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=min(scope.max_duration_s, 1800),  # hard cap 30 min
-                check=False,
-            )
-            findings = self._parse_jsonl(proc.stdout)
-            completed = int(time.time() * 1e9)
-
-            return ToolResult(
-                tool=self.name,
-                command=cmd,
-                target=target,
-                exit_code=proc.returncode,
-                started_at_ns=started,
-                completed_at_ns=completed,
-                stdout_bytes=len(proc.stdout.encode()),
-                stderr_bytes=len(proc.stderr.encode()),
-                findings=findings,
-                errors=[proc.stderr] if proc.stderr else [],
-            )
-        except subprocess.TimeoutExpired:
-            return ToolResult.failed(
-                self.name,
-                target,
-                f"nuclei timed out after {scope.max_duration_s}s",
-            )
+            with open(stderr_path, "wb") as stderr_fh:
+                # Run with stderr to file, stdout is already -> out_path via -o flag.
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=stderr_fh,
+                )
+                try:
+                    exit_code = proc.wait(timeout=min(scope.max_duration_s, 1800))
+                except subprocess.TimeoutExpired:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                    errors.append(
+                        f"nuclei timed out after {scope.max_duration_s}s — "
+                        f"parsing partial output from {out_path}"
+                    )
         except Exception as e:  # noqa: BLE001
-            return ToolResult.failed(self.name, target, f"{type(e).__name__}: {e}")
+            errors.append(f"{type(e).__name__}: {e}")
+
+        # Parse whatever made it to disk — even on timeout, this gives partials.
+        findings: List[Dict[str, Any]] = []
+        stdout_bytes = 0
+        if out_path.exists():
+            try:
+                content = out_path.read_text()
+                stdout_bytes = len(content.encode())
+                findings = self._parse_jsonl(content)
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"failed to parse {out_path}: {type(e).__name__}: {e}")
+
+        stderr_bytes = 0
+        if stderr_path.exists():
+            try:
+                stderr_bytes = os.path.getsize(stderr_path)
+                if stderr_bytes > 0:
+                    tail = stderr_path.read_bytes()[-500:].decode("utf-8", errors="replace")
+                    errors.append(f"stderr (tail): {tail}")
+            except Exception:  # noqa: BLE001
+                pass
+
+        completed = int(time.time() * 1e9)
+        return ToolResult(
+            tool=self.name,
+            command=cmd,
+            target=target,
+            exit_code=exit_code,
+            started_at_ns=started,
+            completed_at_ns=completed,
+            stdout_bytes=stdout_bytes,
+            stderr_bytes=stderr_bytes,
+            findings=findings,
+            raw_output_path=str(out_path),
+            errors=errors,
+        )
 
     @staticmethod
     def _parse_jsonl(stdout: str) -> List[Dict[str, Any]]:
