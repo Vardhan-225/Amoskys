@@ -1,0 +1,225 @@
+{% extends "web/base.html" %}
+{% block title %}Quick Preview — AMOSKYS Web{% endblock %}
+
+{% block extra_head %}
+<style>
+  .pv-hero { text-align: center; padding: 2.5rem 0 1rem; }
+  .pv-hero h1 {
+    font-size: 2.6rem; font-weight: 800; letter-spacing: -1.2px;
+    margin: 0; color: var(--w-fg-0);
+  }
+  .pv-hero p {
+    font-size: 1.1rem; color: var(--w-fg-2); max-width: 680px;
+    margin: .8rem auto 0;
+  }
+  .pv-form {
+    max-width: 640px; margin: 1.5rem auto 0;
+    display: flex; gap: .5rem;
+  }
+  .pv-input {
+    flex: 1; background: var(--w-surface);
+    border: 2px solid var(--w-border); color: var(--w-fg-0);
+    font-size: 1.05rem; padding: 0.9rem 1.1rem; border-radius: 10px;
+    outline: none; transition: border .15s;
+    font-family: var(--w-font);
+  }
+  .pv-input:focus { border-color: var(--w-accent); }
+  .pv-input::placeholder { color: var(--w-fg-3); }
+  .pv-btn-go {
+    padding: 0 1.5rem; font-size: 1rem; font-weight: 700;
+    background: var(--w-offense); color: #fff; border: none;
+    border-radius: 10px; cursor: pointer;
+    transition: all .15s;
+  }
+  .pv-btn-go:hover { filter: brightness(1.12); transform: translateY(-1px); }
+  .pv-btn-go:disabled { opacity: .5; cursor: wait; }
+
+  .pv-note {
+    text-align: center; font-size: .75rem; color: var(--w-fg-3);
+    margin-top: .7rem;
+  }
+
+  .pv-results { margin-top: 2rem; }
+  .pv-status-row {
+    display: flex; align-items: center; gap: .75rem;
+    padding: 1rem; background: var(--w-surface);
+    border: 1px solid var(--w-border); border-radius: 10px;
+    margin-bottom: .6rem;
+    animation: pv-fade .3s ease;
+  }
+  @keyframes pv-fade { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+  .pv-status-row.bad    { border-color: rgba(255,51,102,.35); background: rgba(255,51,102,.04); }
+  .pv-status-row.warn   { border-color: rgba(255,170,0,.35);  background: rgba(255,170,0,.04); }
+  .pv-status-row.good   { border-color: rgba(0,255,136,.28);  background: rgba(0,255,136,.03); }
+
+  .pv-status-ico { font-size: 1.4rem; line-height: 1; flex-shrink: 0; }
+  .pv-status-body { flex: 1; }
+  .pv-status-title { font-size: .95rem; font-weight: 700; color: var(--w-fg-0); }
+  .pv-status-desc  { font-size: .82rem; color: var(--w-fg-2); margin-top: .15rem; line-height: 1.4; }
+
+  .pv-summary {
+    display: grid; grid-template-columns: repeat(4,1fr); gap: .75rem;
+    margin: 1rem 0 1.25rem;
+  }
+  .pv-sumcell {
+    background: var(--w-surface); border: 1px solid var(--w-border);
+    border-radius: 10px; padding: .9rem; text-align: center;
+  }
+  .pv-sumcell-num {
+    font-size: 1.8rem; font-weight: 800; color: var(--w-fg-0);
+    font-variant-numeric: tabular-nums;
+  }
+  .pv-sumcell-lbl {
+    font-size: .7rem; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--w-fg-3); margin-top: .25rem;
+  }
+  .pv-sumcell.bad  .pv-sumcell-num { color: var(--w-offense); }
+  .pv-sumcell.warn .pv-sumcell-num { color: #ffaa00; }
+  .pv-sumcell.good .pv-sumcell-num { color: #00ff88; }
+
+  .pv-cta {
+    background: linear-gradient(135deg, rgba(255,51,102,0.1), rgba(255,51,102,0.02));
+    border: 1px solid rgba(255,51,102,.3);
+    border-radius: 14px; padding: 1.75rem; text-align: center;
+    margin: 2rem 0;
+  }
+  .pv-cta h2 {
+    font-size: 1.4rem; font-weight: 800; margin: 0 0 .4rem;
+    letter-spacing: -.4px; color: var(--w-fg-0);
+  }
+  .pv-cta p { color: var(--w-fg-2); margin: 0 auto 1rem; max-width: 560px; }
+
+  .pv-comparison {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: .75rem; margin-top: 1rem;
+  }
+  .pv-cmp-row {
+    background: var(--w-surface); border: 1px solid var(--w-border);
+    border-radius: 8px; padding: .75rem; font-size: .85rem;
+  }
+  .pv-cmp-label { color: var(--w-fg-3); font-size: .7rem; text-transform: uppercase; letter-spacing: .5px; }
+  .pv-cmp-preview { color: #ffaa00; font-weight: 600; margin-top: .2rem; }
+  .pv-cmp-full    { color: #00ff88; font-weight: 600; margin-top: .2rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section>
+  <div class="pv-hero">
+    <div class="section-eyebrow" style="color: var(--w-accent);">⚡ 10-SECOND PREVIEW</div>
+    <h1>What's exposed on your WordPress?</h1>
+    <p>
+      Type your domain. We run a passive external check — same thing
+      an attacker does in their first look. No signup, no credit card,
+      no DNS changes. Results in about 10 seconds.
+    </p>
+
+    <form class="pv-form" method="POST" action="{{ url_for('web.preview') }}">
+      <input name="target"
+             class="pv-input"
+             type="text"
+             placeholder="example.com"
+             value="{{ submitted_target or '' }}"
+             autofocus
+             required
+             pattern="[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+             autocomplete="off"
+             spellcheck="false">
+      <button class="pv-btn-go" type="submit">Preview →</button>
+    </form>
+    <div class="pv-note">
+      This is a single HTTP request looking at headers and public HTML.
+      Zero invasive probes. For the real pentest,
+      <a href="{{ url_for('web.redemption') }}" style="color:var(--w-accent);">claim the free scan</a>.
+    </div>
+  </div>
+
+  {% if result %}
+  <div class="pv-results">
+    {% if result.error %}
+      <div class="pv-status-row bad">
+        <span class="pv-status-ico">❌</span>
+        <div class="pv-status-body">
+          <div class="pv-status-title">We couldn't reach {{ submitted_target }}</div>
+          <div class="pv-status-desc">{{ result.error }}</div>
+        </div>
+      </div>
+    {% else %}
+      <!-- Summary cells -->
+      <div class="pv-summary">
+        <div class="pv-sumcell {{ 'good' if result.is_wordpress else 'warn' }}">
+          <div class="pv-sumcell-num">{% if result.is_wordpress %}WP{% else %}?{% endif %}</div>
+          <div class="pv-sumcell-lbl">{% if result.is_wordpress %}WordPress detected{% else %}Not WordPress{% endif %}</div>
+        </div>
+        <div class="pv-sumcell {{ 'bad' if result.issues_high else ('warn' if result.issues_med else 'good') }}">
+          <div class="pv-sumcell-num">{{ result.issues_high + result.issues_med + result.issues_low }}</div>
+          <div class="pv-sumcell-lbl">Issues found</div>
+        </div>
+        <div class="pv-sumcell">
+          <div class="pv-sumcell-num">{{ result.tls_ok and '✓' or '✗' }}</div>
+          <div class="pv-sumcell-lbl">TLS</div>
+        </div>
+        <div class="pv-sumcell">
+          <div class="pv-sumcell-num">{{ result.response_ms }}<span style="font-size:.6rem">ms</span></div>
+          <div class="pv-sumcell-lbl">Response</div>
+        </div>
+      </div>
+
+      <!-- Per-finding rows -->
+      {% for f in result.findings %}
+      <div class="pv-status-row {{ f.severity_class }}">
+        <span class="pv-status-ico">{{ f.ico }}</span>
+        <div class="pv-status-body">
+          <div class="pv-status-title">{{ f.title }}</div>
+          <div class="pv-status-desc">{{ f.desc }}</div>
+        </div>
+      </div>
+      {% endfor %}
+
+      <!-- Preview vs Full comparison -->
+      <div style="margin-top:1.75rem;">
+        <div class="section-eyebrow">What this preview didn't check (you need the full scan for this)</div>
+        <div class="pv-comparison" style="margin-top:.75rem;">
+          <div class="pv-cmp-row">
+            <div class="pv-cmp-label">Plugin vulnerabilities</div>
+            <div class="pv-cmp-preview">Not checked</div>
+            <div class="pv-cmp-full">✓ WPScan + nuclei (8,000+ templates)</div>
+          </div>
+          <div class="pv-cmp-row">
+            <div class="pv-cmp-label">Supply-chain / author changes</div>
+            <div class="pv-cmp-preview">Not checked</div>
+            <div class="pv-cmp-full">✓ SVN committer drift detection</div>
+          </div>
+          <div class="pv-cmp-row">
+            <div class="pv-cmp-label">SQL / XSS injection tests</div>
+            <div class="pv-cmp-preview">Not checked</div>
+            <div class="pv-cmp-full">✓ sqlmap + dalfox full suite</div>
+          </div>
+          <div class="pv-cmp-row">
+            <div class="pv-cmp-label">Authenticated attack paths</div>
+            <div class="pv-cmp-preview">Not checked</div>
+            <div class="pv-cmp-full">✓ With DNS-TXT ownership proof</div>
+          </div>
+          <div class="pv-cmp-row">
+            <div class="pv-cmp-label">Professional PDF report</div>
+            <div class="pv-cmp-preview">—</div>
+            <div class="pv-cmp-full">✓ Branded, audit-ready deliverable</div>
+          </div>
+          <div class="pv-cmp-row">
+            <div class="pv-cmp-label">Severity scoring + CVSS</div>
+            <div class="pv-cmp-preview">—</div>
+            <div class="pv-cmp-full">✓ Per-finding CVSS + CWE mapping</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pv-cta">
+        <h2>Ready for the real scan?</h2>
+        <p>Add one DNS TXT record so we can prove you own the site, and Argos runs the full 6-phase engagement with nuclei, WPScan, and our own WordPress-specific probes. PDF report in your inbox in about 20 minutes.</p>
+        <a href="{{ url_for('web.redemption') }}?target={{ submitted_target }}" class="btn btn-primary">Claim the full pentest for {{ submitted_target }} →</a>
+      </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
