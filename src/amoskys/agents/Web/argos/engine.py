@@ -106,6 +106,7 @@ class Scope:
     window_end_ns: int
     max_rps: int = 5
     max_duration_s: int = 3600
+    skip_dns_verify: bool = False  # DEV/LAB ONLY — never true for customers
     allowed_probe_classes: List[str] = field(
         default_factory=lambda: [
             # Recon (passive/external)
@@ -249,17 +250,103 @@ class Engagement:
     def _phase_consent(self) -> None:
         """Verify DNS TXT ownership proof.
 
-        v0: always passes if txt_token is set. Real implementation does
-        a DNS lookup for `amoskys-verify.<target>` TXT record and
-        compares to the expected token.
+        For legal safety: we require the target's owner to add a DNS TXT
+        record at `_amoskys-verify.<target>` containing
+        `amoskys-verify=<our-token>`. This is their written authorization
+        to scan — the same mechanism Google Search Console uses for site
+        ownership proof.
+
+        Behaviour:
+          - `txt_token` missing from Scope: refuse to probe (legal floor)
+          - `skip_dns_verify=True`: skip the actual DNS lookup (dev/lab
+            use only — don't ship this flag to real customers)
+          - Otherwise: resolve `_amoskys-verify.<target>` TXT, require at
+            least one record to contain `amoskys-verify=<token>`
+
+        If DNS lookup fails or no matching record is found, raise
+        PermissionError. Engagement short-circuits; no probes run.
         """
         if not self.scope.txt_token:
             raise PermissionError(
-                "Scope has no txt_token — ownership not proven. "
-                "Refusing to probe."
+                "Scope has no txt_token — ownership not proven. Refusing to probe."
             )
-        # TODO(v1): actually resolve and verify the DNS TXT
-        self._emit_phase(Phase.CONSENT, "ok", {"target": self.scope.target})
+
+        # Extract clean hostname (strip scheme, port, path)
+        host = self.scope.target.replace("https://", "").replace("http://", "")
+        host = host.split("/")[0].split(":")[0]
+        record_name = f"_amoskys-verify.{host}"
+        expected_value = f"amoskys-verify={self.scope.txt_token}"
+
+        if self.scope.skip_dns_verify:
+            self._emit_phase(
+                Phase.CONSENT, "ok",
+                {
+                    "target": self.scope.target,
+                    "dns_verify_skipped": True,
+                    "note": "skip_dns_verify=True (dev/lab use only)",
+                },
+            )
+            self.phases_complete.append(Phase.CONSENT)
+            return
+
+        try:
+            import dns.resolver  # type: ignore
+        except ImportError as e:
+            raise PermissionError(
+                "DNS verification requires dnspython. Install: pip install dnspython"
+            ) from e
+
+        try:
+            resolver = dns.resolver.Resolver()
+            resolver.timeout = 5.0
+            resolver.lifetime = 15.0
+            answer = resolver.resolve(record_name, "TXT")
+            record_strings: List[str] = []
+            for rdata in answer:
+                # rdata.strings is a tuple of byte-strings; join + decode
+                txt = b"".join(rdata.strings).decode("utf-8", errors="replace")
+                record_strings.append(txt)
+        except dns.resolver.NXDOMAIN:
+            raise PermissionError(
+                f"DNS verification failed: no TXT record at {record_name}. "
+                f"Add: TXT record '{record_name}' with value '{expected_value}' "
+                f"and retry. This record is your written authorization to probe."
+            )
+        except dns.resolver.NoAnswer:
+            raise PermissionError(
+                f"DNS verification failed: {record_name} has no TXT records. "
+                f"Expected at least one containing '{expected_value}'."
+            )
+        except dns.resolver.Timeout as e:
+            raise PermissionError(
+                f"DNS verification timed out resolving {record_name}: {e}. "
+                f"Retry once propagation is complete (usually <60 seconds)."
+            )
+        except Exception as e:  # noqa: BLE001 — any DNS error is a consent failure
+            raise PermissionError(
+                f"DNS verification failed ({type(e).__name__}: {e}). "
+                f"Expected TXT '{record_name}' containing '{expected_value}'."
+            )
+
+        matched = any(expected_value in s for s in record_strings)
+        if not matched:
+            raise PermissionError(
+                f"DNS verification failed: {record_name} has TXT records "
+                f"but none contain the expected token.\n"
+                f"  Expected:  {expected_value}\n"
+                f"  Found:     {record_strings}\n"
+                f"  Update the TXT record with the correct token and retry."
+            )
+
+        self._emit_phase(
+            Phase.CONSENT, "ok",
+            {
+                "target": self.scope.target,
+                "dns_record": record_name,
+                "match_found": True,
+                "dns_verify_skipped": False,
+            },
+        )
         self.phases_complete.append(Phase.CONSENT)
 
     def _run_tools_of_class(self, tool_class: str) -> List[str]:

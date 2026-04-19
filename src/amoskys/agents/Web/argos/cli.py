@@ -145,6 +145,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
         window_end_ns=now_ns + args.max_duration * 1_000_000_000,
         max_rps=args.max_rps,
         max_duration_s=args.max_duration,
+        skip_dns_verify=args.skip_dns_verify,
     )
 
     report_dir = Path(args.report_dir).expanduser().resolve()
@@ -187,6 +188,12 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--txt-token", help="DNS TXT proof token")
     scan.add_argument("--max-rps", type=int, default=5)
     scan.add_argument("--max-duration", type=int, default=3600)
+    scan.add_argument(
+        "--skip-dns-verify",
+        action="store_true",
+        help="DEV/LAB ONLY: skip the DNS-TXT ownership verification step. "
+             "Never use this for customer engagements.",
+    )
     scan.set_defaults(func=cmd_scan)
 
     report = sub.add_parser("report", help="render an engagement JSON as branded HTML + PDF")

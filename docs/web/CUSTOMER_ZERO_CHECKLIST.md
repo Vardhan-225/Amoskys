@@ -22,11 +22,11 @@ scaffold exists" and "we can sell this to customer #1."
   - Paste into `report.py`'s `customer_info.product_url` default
   - Test: click the link on a rendered PDF, confirms Stripe checkout page loads
 
-- [ ] **`_amoskys-verify.<domain>` DNS-TXT verification code path in Argos**
-  - Current: `--txt-token` CLI arg exists but no actual DNS lookup runs
-  - Add: `dnspython` import, resolve TXT record, compare to expected token,
-    fail engagement with clear error if mismatch
-  - Effort: ~1 hour
+- [x] **`_amoskys-verify.<domain>` DNS-TXT verification code path in Argos**
+  - DONE (commit 388463d+1): dnspython-based TXT lookup against
+    `_amoskys-verify.<target>`. Rejects engagement with clear error if
+    record missing, empty, or token mismatch. Dev bypass via
+    `--skip-dns-verify` flag (lab use only — never ship to customers).
 
 - [ ] **Outbound email mechanism**
   - Option A: AWS SES (cheap, but needs domain verification + production access approval, 2-3 days)
