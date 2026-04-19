@@ -1,0 +1,235 @@
+{% extends "web/base.html" %}
+{% block title %}Dashboard — {{ site }} · AMOSKYS Web{% endblock %}
+
+{% block extra_head %}
+<style>
+  .db-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem;
+  }
+  .db-header .db-title { font-size: 1.7rem; font-weight: 800; letter-spacing: -.4px; margin: 0; color: var(--w-fg-0); }
+  .db-header .db-sub { font-size: .85rem; color: var(--w-fg-3); margin-top: .25rem; }
+  .db-pill-live {
+    background: rgba(0,255,136,.08); border: 1px solid rgba(0,255,136,.3);
+    color: #00ff88; padding: .25rem .7rem; border-radius: 100px;
+    font-size: .65rem; text-transform: uppercase; letter-spacing: 1px;
+    font-weight: 700;
+  }
+  .db-pill-live::before {
+    content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px;
+    background: #00ff88; border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 50% { opacity: .35; } }
+
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  .db-bar { margin: .4rem 0; }
+  .db-bar-row { display: flex; align-items: center; gap: .75rem; margin: .25rem 0; font-size: .85rem; }
+  .db-bar-name { flex: 0 0 150px; color: var(--w-fg-1); }
+  .db-bar-track { flex: 1; height: 8px; background: var(--w-border); border-radius: 4px; overflow: hidden; position: relative; }
+  .db-bar-fill { height: 100%; border-radius: 4px; }
+  .db-bar-count { flex: 0 0 60px; text-align: right; font-weight: 700; color: var(--w-fg-0); font-variant-numeric: tabular-nums; font-size: .85rem; }
+
+  .db-bar-fill.sev-info    { background: var(--w-accent); }
+  .db-bar-fill.sev-warn    { background: #ffaa00; }
+  .db-bar-fill.sev-high    { background: #ff3366; }
+  .db-bar-fill.sev-critical { background: #7F1D1D; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="db-header">
+  <div>
+    <h1 class="db-title">{{ site }}</h1>
+    <div class="db-sub">
+      Signed in as <strong>{{ user_email }}</strong> · binding: customer-zero (WordPress {{ wp_version or "—" }})
+    </div>
+  </div>
+  <div style="display:flex; gap:.5rem; align-items:center;">
+    <span class="db-pill-live">LIVE</span>
+    <a href="{{ url_for('web.signout') }}" class="btn btn-ghost btn-sm">Sign out</a>
+  </div>
+</div>
+
+<!-- 5 headline metric cards, all real -->
+<div class="metrics">
+  <div class="metric metric-accent">
+    <div class="metric-label">Total Aegis events</div>
+    <div class="metric-value">{{ "{:,}".format(snap.total_events) }}</div>
+    <div class="metric-delta">chain-linked, cumulative</div>
+  </div>
+  <div class="metric {% if snap.severities.get('critical', 0) + snap.severities.get('high', 0) > 0 %}metric-offense{% else %}metric-ok{% endif %}">
+    <div class="metric-label">High/Critical</div>
+    <div class="metric-value">{{ snap.severities.get('critical', 0) + snap.severities.get('high', 0) }}</div>
+    <div class="metric-delta">severity escalations</div>
+  </div>
+  <div class="metric metric-accent">
+    <div class="metric-label">Sensor families firing</div>
+    <div class="metric-value">{{ snap.sensors | length }}<span class="text-muted" style="font-size:1rem;">/{{ sensor_catalog | length }}</span></div>
+    <div class="metric-delta">of Aegis catalog wired</div>
+  </div>
+  <div class="metric metric-accent">
+    <div class="metric-label">External IPs</div>
+    <div class="metric-value">{{ snap.external_ips | length }}</div>
+    <div class="metric-delta">unique callers observed</div>
+  </div>
+  <div class="metric {% if snap.chain_breaks > 0 %}metric-offense{% else %}metric-ok{% endif %}">
+    <div class="metric-label">Chain integrity</div>
+    <div class="metric-value">
+      {% if snap.total_events %}{{ "%.1f"|format(100 * snap.chain_ok / snap.total_events) }}%{% else %}—{% endif %}
+    </div>
+    <div class="metric-delta">{{ snap.chain_ok }} ok · {{ snap.chain_breaks }} breaks</div>
+  </div>
+</div>
+
+<!-- Crawler / bot breakdown — the new lens the user asked for -->
+<div class="card" style="padding:1.25rem; margin-bottom:1rem;">
+  <div class="card-head">
+    <div>
+      <div class="card-title">Crawler & bot traffic (who's visiting {{ site }})</div>
+      <div class="card-sub">User-Agent classification of real Aegis HTTP events — search engines, SEO bots, AI crawlers, active scanners, humans</div>
+    </div>
+  </div>
+
+  <div class="grid-3" style="margin-top:1rem;">
+    <div>
+      <div class="section-eyebrow">Humans vs. bots</div>
+      <div style="margin-top:.4rem;">
+        <div class="db-bar-row">
+          <span class="db-bar-name">Humans</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-info" style="width:{{ (crawlers.totals.human / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.human }}</div>
+        </div>
+        <div class="db-bar-row">
+          <span class="db-bar-name">Search crawlers</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-info" style="width:{{ (crawlers.totals.search / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.search }}</div>
+        </div>
+        <div class="db-bar-row">
+          <span class="db-bar-name">SEO tools</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-info" style="width:{{ (crawlers.totals.seo / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.seo }}</div>
+        </div>
+        <div class="db-bar-row">
+          <span class="db-bar-name">Security research</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-info" style="width:{{ (crawlers.totals.security / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.security }}</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="section-eyebrow">Concerning</div>
+      <div style="margin-top:.4rem;">
+        <div class="db-bar-row">
+          <span class="db-bar-name">AI crawlers</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-warn" style="width:{{ (crawlers.totals.ai / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.ai }}</div>
+        </div>
+        <div class="db-bar-row">
+          <span class="db-bar-name">Active scanners</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-high" style="width:{{ (crawlers.totals.scanner / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.scanner }}</div>
+        </div>
+        <div class="db-bar-row">
+          <span class="db-bar-name">Other bots</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-warn" style="width:{{ (crawlers.totals.bot_other / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.bot_other }}</div>
+        </div>
+        <div class="db-bar-row">
+          <span class="db-bar-name">Unknown</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-warn" style="width:{{ (crawlers.totals.unknown / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.unknown }}</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="section-eyebrow">Top identified callers</div>
+      <div style="margin-top:.4rem;">
+        {% for b in crawlers.top_bots[:8] %}
+        <div style="margin:.35rem 0; font-size:.82rem; display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
+          <span>
+            <span class="pill sev-{{ b.severity }}" style="font-size:.6rem;">{{ b.category }}</span>
+            <span style="color:var(--w-fg-1);">{{ b.pretty_name }}</span>
+          </span>
+          <strong style="color:var(--w-fg-0); font-variant-numeric:tabular-nums;">{{ b.count }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Plugin inventory + recent events -->
+<div class="grid-2" style="margin-bottom:1rem;">
+  <div class="card" style="padding:1.25rem;">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Plugin inventory</div>
+        <div class="card-sub">Derived from public /wp-json/ + Aegis lifecycle events</div>
+      </div>
+    </div>
+    <div class="table-wrap" style="margin-top:1rem;">
+      <table class="w-table">
+        <thead><tr><th>Plugin</th><th>Version</th><th>State</th></tr></thead>
+        <tbody>
+        {% for p in plugins %}
+          <tr>
+            <td class="mono">{{ p.slug }}</td>
+            <td>{{ p.version or "—" }}</td>
+            <td>
+              {% if p.state == "active" %}<span class="pill sev-info">active</span>
+              {% elif p.state == "inactive" %}<span class="pill sev-warn">inactive</span>
+              {% elif p.state == "updated_recently" %}<span class="pill sev-warn">updated recently</span>
+              {% else %}<span class="pill sev-warn">{{ p.state }}</span>{% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="text-muted" style="text-align:center;">No plugins observed yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:1.25rem;">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Recent events (last 10)</div>
+        <div class="card-sub">Chain-linked, most recent first</div>
+      </div>
+    </div>
+    <div style="margin-top:1rem;">
+    {% for e in snap.recent[:10] %}
+      <div style="display:grid; grid-template-columns: auto 1fr auto; gap:.6rem; padding:.5rem 0; border-bottom:1px solid var(--w-border); align-items:start;">
+        <span class="pill sev-{{ e.severity }}" style="font-size:.6rem;">{{ e.severity }}</span>
+        <div style="font-size:.82rem;">
+          <code>{{ e.event_type }}</code>
+          {% if e.attributes %}
+            <div class="text-muted" style="font-size:.7rem; margin-top:.15rem;">
+              {% for k, v in e.attributes.items() %}{% if loop.index <= 2 %}{{ k }}=<code>{{ v | string | truncate(30) }}</code>{% if not loop.last and loop.index < 2 %} · {% endif %}{% endif %}{% endfor %}
+            </div>
+          {% endif %}
+        </div>
+        <span class="text-muted" style="font-size:.7rem; white-space:nowrap;">{{ e.ts_ns | humantime }}</span>
+      </div>
+    {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Footer CTAs -->
+<div style="margin-top:1.5rem; display:flex; gap:.6rem; flex-wrap:wrap;">
+  <a href="{{ url_for('web.threats') }}" class="btn btn-ghost btn-sm">Threat wall</a>
+  <a href="{{ url_for('web.globe') }}" class="btn btn-ghost btn-sm">Globe</a>
+  <a href="{{ url_for('web.preview') }}" class="btn btn-ghost btn-sm">Run a preview</a>
+</div>
+
+<div class="text-muted" style="text-align:center; font-size:.7rem; margin:1.5rem 0;">
+  Data pulled from the Aegis plugin's chain-linked event log. Auto-refresh every 30s.
+</div>
+
+<script>setTimeout(() => window.location.reload(), 30000);</script>
+{% endblock %}

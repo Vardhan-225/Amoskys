@@ -1,0 +1,85 @@
+{% extends "web/base.html" %}
+{% block title %}Sign in — AMOSKYS Web{% endblock %}
+
+{% block extra_head %}
+<style>
+  .si-wrap {
+    max-width: 440px; margin: 3rem auto;
+    background: var(--w-surface);
+    border: 1px solid var(--w-border);
+    border-radius: 14px; padding: 2.25rem 2rem;
+  }
+  .si-wrap h1 {
+    font-size: 1.7rem; font-weight: 800; letter-spacing: -.5px;
+    margin: 0 0 .4rem; color: var(--w-fg-0);
+  }
+  .si-wrap .si-sub {
+    color: var(--w-fg-3); font-size: .85rem; margin-bottom: 1.5rem;
+  }
+  .si-field { margin-bottom: 1rem; }
+  .si-field label {
+    display: block; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .8px;
+    color: var(--w-fg-3); margin-bottom: .4rem;
+  }
+  .si-field input {
+    width: 100%; box-sizing: border-box;
+    background: #0b0f1f; border: 1px solid var(--w-border);
+    color: var(--w-fg-0); font-size: 1rem; padding: .75rem .9rem;
+    border-radius: 8px; outline: none;
+    font-family: var(--w-font);
+    transition: border .15s;
+  }
+  .si-field input:focus { border-color: var(--w-accent); }
+  .si-err {
+    background: rgba(255,51,102,.08);
+    border: 1px solid rgba(255,51,102,.3);
+    color: #ff6688;
+    padding: .6rem .85rem; border-radius: 8px;
+    font-size: .82rem; margin-bottom: 1rem;
+  }
+  .si-btn {
+    width: 100%; padding: .85rem; font-size: 1rem; font-weight: 700;
+    background: var(--w-accent); color: #042028;
+    border: none; border-radius: 8px; cursor: pointer;
+    transition: all .15s;
+  }
+  .si-btn:hover { filter: brightness(1.1); }
+  .si-note {
+    font-size: .72rem; color: var(--w-fg-3);
+    margin-top: 1.25rem; padding-top: 1.25rem;
+    border-top: 1px solid var(--w-border);
+    line-height: 1.5;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="si-wrap">
+  <h1>Sign in</h1>
+  <p class="si-sub">Access to the live AMOSKYS Web console for <code>{{ customer_site }}</code>.</p>
+
+  {% if error %}<div class="si-err">{{ error }}</div>{% endif %}
+
+  <form method="POST" action="{{ url_for('web.signin') }}">
+    <input type="hidden" name="next" value="{{ next or '' }}" />
+    <div class="si-field">
+      <label>Email</label>
+      <input type="email" name="email" required autofocus autocomplete="email"
+             value="{{ submitted_email or '' }}" />
+    </div>
+    <div class="si-field">
+      <label>Password</label>
+      <input type="password" name="password" required autocomplete="current-password" />
+    </div>
+    <button type="submit" class="si-btn">Sign in →</button>
+  </form>
+
+  <div class="si-note">
+    This is the operator console for AMOSKYS Web. You're binding to
+    the site <code>{{ customer_site }}</code> — after sign-in you'll
+    see the live Aegis event stream, plugin inventory, and crawler
+    traffic for that site only.
+  </div>
+</section>
+{% endblock %}
