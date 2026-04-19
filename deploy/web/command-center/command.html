@@ -1,0 +1,240 @@
+{% extends "web/base.html" %}
+{% block title %}Command Center — AMOSKYS Web{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; flex-wrap:wrap; gap:1rem;">
+  <div>
+    <div class="section-eyebrow">Operator · Live Aegis feed</div>
+    <h1 class="section-title" style="margin:.25rem 0 0; font-size:1.7rem;">Command Center</h1>
+    <div class="card-sub" style="margin-top:.4rem;">
+      Real-time view of what the Aegis plugin is watching on
+      <code>lab.amoskys.com</code> — reads the plugin's own chain-linked
+      log, not a mock.
+    </div>
+  </div>
+  <div style="display:flex; gap:.5rem;">
+    <a href="{{ url_for('web.command') }}" class="btn btn-ghost btn-sm">Refresh</a>
+    <a href="{{ url_for('web.arena') }}" class="btn btn-primary btn-sm">Arena →</a>
+  </div>
+</div>
+
+<!-- 5 widgets, same shape as the customer dashboard -->
+<div class="metrics">
+  <div class="metric metric-accent">
+    <div class="metric-label">Total events</div>
+    <div class="metric-value">{{ "{:,}".format(snap.total_events) }}</div>
+    <div class="metric-delta">cumulative log size</div>
+  </div>
+  <div class="metric {% if (snap.sensors | length) < 5 %}metric-offense{% else %}metric-ok{% endif %}">
+    <div class="metric-label">Sensor families firing</div>
+    <div class="metric-value">{{ snap.sensors | length }}<span class="text-muted" style="font-size:1rem;">/{{ sensor_catalog | length }}</span></div>
+    <div class="metric-delta">of catalog wired</div>
+  </div>
+  <div class="metric metric-accent">
+    <div class="metric-label">External IPs seen</div>
+    <div class="metric-value">{{ snap.external_ips | length }}</div>
+    <div class="metric-delta">excludes localhost</div>
+  </div>
+  <div class="metric {% if snap.chain_breaks > 0 %}metric-offense{% else %}metric-ok{% endif %}">
+    <div class="metric-label">Chain integrity</div>
+    <div class="metric-value">
+      {% if snap.total_events %}{{ "%.1f"|format(100 * snap.chain_ok / snap.total_events) }}%{% else %}—{% endif %}
+    </div>
+    <div class="metric-delta">{{ "{:,}".format(snap.chain_ok) }} ok · {{ "{:,}".format(snap.chain_breaks) }} breaks</div>
+  </div>
+  <div class="metric metric-accent">
+    <div class="metric-label">Last event</div>
+    <div class="metric-value" style="font-size:1.3rem;">{{ last_event_ago or "—" }}</div>
+    <div class="metric-delta">most recent emit</div>
+  </div>
+</div>
+
+<!-- Sensor catalog + severity side by side -->
+<div class="grid-2" style="gap:1rem; margin-bottom:1.5rem;">
+  <div class="card" style="padding:1.25rem;">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Aegis sensor catalog</div>
+        <div class="card-sub">All {{ sensor_catalog | length }} families wired into the plugin</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="w-table">
+        <thead>
+          <tr><th>Family</th><th>Purpose</th><th style="text-align:right;">Firing</th></tr>
+        </thead>
+        <tbody>
+          {% for family, purpose in sensor_catalog.items() %}
+          <tr>
+            <td class="mono">{{ family }}</td>
+            <td style="color:var(--w-fg-2); font-size:.85rem;">{{ purpose }}</td>
+            <td style="text-align:right;">
+              {% set c = snap.sensors.get(family, 0) %}
+              {% if c > 0 %}
+                <strong>{{ "{:,}".format(c) }}</strong>
+              {% else %}
+                <span class="text-muted" style="font-size:.75rem;">idle</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:1.25rem;">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Severity distribution</div>
+        <div class="card-sub">Raw severity as emitted by Aegis (pre-correlation)</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="w-table">
+        <thead><tr><th>Severity</th><th style="text-align:right;">Count</th></tr></thead>
+        <tbody>
+          {% for sev, count in snap.severities.items() %}
+          <tr>
+            <td><span class="pill sev-{{ sev }}">{{ sev }}</span></td>
+            <td style="text-align:right;"><strong>{{ "{:,}".format(count) }}</strong></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid var(--w-border);">
+      <div class="section-eyebrow">Proof Spine</div>
+      <div class="card-sub" style="margin-top:.35rem;">
+        <div>First sig: <code>{{ snap.chain_first_sig or "—" }}</code></div>
+        <div>Last sig:&nbsp; <code>{{ snap.chain_last_sig or "—" }}</code></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- External IPs + UAs -->
+<div class="grid-2" style="gap:1rem; margin-bottom:1.5rem;">
+  <div class="card" style="padding:1.25rem;">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Top external IPs</div>
+        <div class="card-sub">Scanner traffic + attribution</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="w-table">
+        <thead><tr><th>IP</th><th style="text-align:right;">Events</th></tr></thead>
+        <tbody>
+          {% for ip, count in snap.external_ips.items() %}
+          <tr>
+            <td class="mono">{{ ip }}</td>
+            <td style="text-align:right;">{{ "{:,}".format(count) }}</td>
+          </tr>
+          {% endfor %}
+          {% if not snap.external_ips %}
+          <tr><td colspan="2" class="text-muted" style="text-align:center; font-size:.85rem;">No external traffic yet.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:1.25rem;">
+    <div class="card-head">
+      <div>
+        <div class="card-title">User agents seen</div>
+        <div class="card-sub">Scanner signatures, browsers, bots</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="w-table">
+        <thead><tr><th>UA (truncated)</th><th style="text-align:right;">Events</th></tr></thead>
+        <tbody>
+          {% for ua, count in snap.user_agents.items() %}
+          <tr>
+            <td class="mono" style="font-size:.75rem;">{{ ua }}</td>
+            <td style="text-align:right;">{{ count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Live event tail -->
+<div class="card" style="padding:1.25rem; margin-bottom:1.5rem;">
+  <div class="card-head">
+    <div>
+      <div class="card-title">Live event stream · last {{ snap.recent | length }}</div>
+      <div class="card-sub">Most recent first · auto-refresh every 15s</div>
+    </div>
+    <div style="display:flex; gap:.4rem; font-size:.7rem;">
+      <a href="{{ url_for('web.command') }}" class="btn btn-ghost btn-sm">All</a>
+      <a href="{{ url_for('web.command', severity='critical') }}" class="btn btn-ghost btn-sm">critical</a>
+      <a href="{{ url_for('web.command', severity='high') }}" class="btn btn-ghost btn-sm">high</a>
+      <a href="{{ url_for('web.command', severity='warn') }}" class="btn btn-ghost btn-sm">warn</a>
+      <a href="{{ url_for('web.command', severity='info') }}" class="btn btn-ghost btn-sm">info</a>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="w-table">
+      <thead>
+        <tr>
+          <th style="width:90px;">Time</th>
+          <th style="width:70px;">Sev</th>
+          <th>Event</th>
+          <th style="width:140px;">Source</th>
+          <th style="width:90px;">Sig</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in snap.recent %}
+        <tr>
+          <td class="mono text-muted" style="font-size:.7rem;">{{ e.ts_ns | humantime }}</td>
+          <td><span class="pill sev-{{ e.severity }}">{{ e.severity }}</span></td>
+          <td>
+            <div class="mono">{{ e.event_type }}</div>
+            {% if e.request.uri %}
+              <div class="text-muted" style="font-size:.75rem;">{{ e.request.method or "" }} {{ e.request.uri }}</div>
+            {% endif %}
+            {% if e.attributes %}
+              <div class="text-muted" style="font-size:.7rem; margin-top:.2rem;">
+                {% for k, v in e.attributes.items() %}{% if loop.index <= 3 %}{{ k }}=<code>{{ v | string | truncate(40) }}</code>{% if not loop.last and loop.index < 3 %} · {% endif %}{% endif %}{% endfor %}
+              </div>
+            {% endif %}
+          </td>
+          <td class="mono" style="font-size:.75rem;">{{ e.request.ip or "—" }}</td>
+          <td class="mono" style="font-size:.7rem;">{{ e.sig_short }}</td>
+        </tr>
+        {% endfor %}
+        {% if not snap.recent %}
+        <tr><td colspan="5" class="text-muted" style="text-align:center;">No events match this filter.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="text-muted" style="text-align:center; font-size:.72rem; margin-bottom:2rem;">
+  Snapshot at {{ snap.read_at_ns | humantime_abs }} ·
+  <a href="{{ url_for('web.command') }}">refresh</a> ·
+  page auto-reloads every 15s
+</div>
+
+<script>
+// Auto-refresh every 15 seconds so this acts as a live feed
+setTimeout(() => { window.location.reload(); }, 15000);
+</script>
+
+{% if snap.errors %}
+<div class="card" style="padding:1rem; margin-top:1rem; border-color:#B91C1C;">
+  <div class="card-title" style="color:#B91C1C;">Reader warnings</div>
+  {% for err in snap.errors %}<div class="card-sub">{{ err }}</div>{% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}
