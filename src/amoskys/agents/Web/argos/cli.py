@@ -51,6 +51,76 @@ TOOL_REGISTRY = {
 }
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    """Render an existing engagement JSON as HTML/PDF."""
+    import json as _json
+    from amoskys.agents.Web.argos.engine import (
+        EngagementResult, Scope, Phase, Finding, Severity
+    )
+    from amoskys.agents.Web.argos.tools.base import ToolResult
+    from amoskys.agents.Web.argos.report import ReportRenderer
+
+    report_path = Path(args.engagement_json)
+    if not report_path.exists():
+        print(f"error: engagement file not found: {report_path}", file=sys.stderr)
+        return 2
+    data = _json.loads(report_path.read_text())
+
+    # Reconstitute the EngagementResult from JSON
+    scope = Scope(**data["scope"])
+    phases = [Phase(p) for p in data["phases_complete"]]
+
+    def _reify_finding(f: dict) -> Finding:
+        return Finding(
+            finding_id=f["finding_id"], tool=f["tool"],
+            template_id=f.get("template_id"), target=f["target"],
+            severity=Severity(f["severity"]), title=f["title"],
+            description=f.get("description", ""), evidence=f.get("evidence") or {},
+            cwe=f.get("cwe"), cvss=f.get("cvss"),
+            references=f.get("references") or [],
+            mitre_techniques=f.get("mitre_techniques") or [],
+            detected_at_ns=f.get("detected_at_ns") or 0,
+        )
+    findings = [_reify_finding(f) for f in data.get("findings", [])]
+
+    tool_outputs = {}
+    for name, tr in data.get("tool_outputs", {}).items():
+        tool_outputs[name] = ToolResult(**{k: v for k, v in tr.items() if k in ToolResult.__dataclass_fields__})
+
+    result = EngagementResult(
+        engagement_id=data["engagement_id"],
+        scope=scope,
+        started_at_ns=data["started_at_ns"],
+        completed_at_ns=data["completed_at_ns"],
+        phases_complete=phases,
+        findings=findings,
+        tool_outputs=tool_outputs,
+        errors=data.get("errors", []),
+    )
+
+    renderer = ReportRenderer()
+    out_dir = Path(args.out_dir or ".").resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stem = f"argos-{result.engagement_id}"
+
+    html = renderer.render_html(result)
+    html_path = out_dir / f"{stem}.html"
+    html_path.write_text(html)
+    print(f"[argos report] HTML → {html_path}")
+
+    if not args.html_only:
+        try:
+            pdf_bytes = renderer.render_pdf(result)
+            pdf_path = out_dir / f"{stem}.pdf"
+            pdf_path.write_bytes(pdf_bytes)
+            print(f"[argos report] PDF  → {pdf_path}")
+        except Exception as e:  # noqa: BLE001
+            print(f"[argos report] PDF render failed: {type(e).__name__}: {e}", file=sys.stderr)
+            print("[argos report] (HTML-only output)")
+            return 1
+    return 0
+
+
 def cmd_scan(args: argparse.Namespace) -> int:
     tool_names = [t.strip() for t in args.tools.split(",") if t.strip()]
     tools = []
@@ -118,6 +188,12 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--max-rps", type=int, default=5)
     scan.add_argument("--max-duration", type=int, default=3600)
     scan.set_defaults(func=cmd_scan)
+
+    report = sub.add_parser("report", help="render an engagement JSON as branded HTML + PDF")
+    report.add_argument("engagement_json", help="path to the argos-<uuid>.json engagement report")
+    report.add_argument("--out-dir", default=".", help="where to write the rendered files")
+    report.add_argument("--html-only", action="store_true", help="skip PDF render (HTML only)")
+    report.set_defaults(func=cmd_report)
 
     return parser
 
