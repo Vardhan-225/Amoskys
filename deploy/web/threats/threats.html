@@ -1,0 +1,296 @@
+{% extends "web/base.html" %}
+{% block title %}Live Threat Wall — AMOSKYS Web{% endblock %}
+
+{% block extra_head %}
+<style>
+  .tw-hero {
+    text-align: center; padding: 2rem 0 1.25rem; margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--w-border);
+  }
+  .tw-hero h1 {
+    font-size: 2.4rem; font-weight: 800; letter-spacing: -1px;
+    margin: 0; color: var(--w-fg-0);
+  }
+  .tw-hero .tw-sub {
+    font-size: 1.05rem; color: var(--w-fg-3); margin-top: .75rem;
+    max-width: 720px; margin-left: auto; margin-right: auto;
+  }
+
+  .tw-counters {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;
+    margin: 1rem 0 1.75rem;
+  }
+  .tw-counter {
+    background: rgba(255, 51, 102, 0.06);
+    border: 1px solid rgba(255, 51, 102, 0.25);
+    border-radius: 12px; padding: 1.25rem; text-align: center;
+  }
+  .tw-counter.tw-cn-amber {
+    background: rgba(255, 170, 0, 0.06); border-color: rgba(255, 170, 0, 0.25);
+  }
+  .tw-counter.tw-cn-cyan {
+    background: rgba(0, 217, 255, 0.06); border-color: rgba(0, 217, 255, 0.25);
+  }
+  .tw-cn-num {
+    font-size: 2.2rem; font-weight: 800; line-height: 1;
+    color: var(--w-offense); font-variant-numeric: tabular-nums;
+  }
+  .tw-cn-amber .tw-cn-num { color: #ffaa00; }
+  .tw-cn-cyan  .tw-cn-num { color: var(--w-accent); }
+  .tw-cn-lbl {
+    font-size: .75rem; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--w-fg-3); margin-top: .5rem;
+  }
+  .tw-cn-sub {
+    font-size: .72rem; color: var(--w-fg-3); margin-top: .3rem;
+  }
+
+  .tw-grid {
+    display: grid; grid-template-columns: 1.4fr 1fr; gap: 1.25rem;
+    margin-bottom: 1.75rem;
+  }
+  @media (max-width: 900px) { .tw-grid { grid-template-columns: 1fr; } }
+
+  .tw-feed-card, .tw-cve-card {
+    background: var(--w-surface); border: 1px solid var(--w-border);
+    border-radius: 12px; padding: 1.25rem;
+  }
+
+  .tw-feed-row {
+    display: grid; grid-template-columns: auto 1fr auto; gap: .75rem;
+    align-items: start; padding: .6rem 0; border-bottom: 1px solid var(--w-border);
+    animation: tw-fade-in .3s ease;
+  }
+  .tw-feed-row:last-child { border-bottom: none; }
+  @keyframes tw-fade-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+  .tw-feed-dot {
+    width: 8px; height: 8px; border-radius: 50%; margin-top: .4rem;
+    box-shadow: 0 0 6px currentColor;
+  }
+  .tw-feed-dot.sev-critical { background: #ff3366; color: #ff3366; animation: tw-pulse 1.5s infinite; }
+  .tw-feed-dot.sev-high     { background: #ff3366; color: #ff3366; }
+  .tw-feed-dot.sev-warn     { background: #ffaa00; color: #ffaa00; }
+  .tw-feed-dot.sev-info     { background: var(--w-accent); color: var(--w-accent); }
+  @keyframes tw-pulse { 50% { opacity: .3; } }
+
+  .tw-feed-body {
+    font-size: .85rem; color: var(--w-fg-1); line-height: 1.45;
+  }
+  .tw-feed-body code { font-size: .78rem; color: var(--w-accent); }
+  .tw-feed-time {
+    font-size: .7rem; color: var(--w-fg-3); white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tw-cve-item {
+    padding: .9rem 0; border-bottom: 1px solid var(--w-border);
+  }
+  .tw-cve-item:last-child { border-bottom: none; }
+  .tw-cve-header {
+    display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+    margin-bottom: .4rem;
+  }
+  .tw-cve-id {
+    font-family: 'JetBrains Mono', monospace; font-size: .8rem;
+    font-weight: 700; color: var(--w-fg-0);
+  }
+  .tw-cve-title {
+    font-size: .9rem; color: var(--w-fg-1); margin: .25rem 0;
+    line-height: 1.4;
+  }
+  .tw-cve-meta {
+    font-size: .7rem; color: var(--w-fg-3); display: flex; gap: .7rem;
+    flex-wrap: wrap;
+  }
+  .tw-cve-affected {
+    font-size: .7rem; color: var(--w-fg-2); margin-top: .25rem;
+    padding: .3rem .5rem; background: rgba(255,51,102,.06);
+    border-left: 2px solid var(--w-offense); border-radius: 2px;
+    display: inline-block;
+  }
+
+  .tw-cta {
+    background: linear-gradient(135deg, rgba(255,51,102,0.08), rgba(255,51,102,0.02));
+    border: 1px solid rgba(255, 51, 102, 0.3);
+    border-radius: 14px; padding: 2rem; text-align: center;
+    margin: 2rem 0;
+  }
+  .tw-cta h2 {
+    font-size: 1.6rem; font-weight: 800; letter-spacing: -.5px;
+    color: var(--w-fg-0); margin: 0 0 .5rem;
+  }
+  .tw-cta p {
+    color: var(--w-fg-2); font-size: 1rem; max-width: 600px;
+    margin: 0 auto 1.25rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section>
+  <div class="tw-hero">
+    <div class="section-eyebrow" style="color: var(--w-offense); font-weight: 700;">🔴 LIVE THREAT WALL</div>
+    <h1>WordPress is under attack right now.</h1>
+    <p class="tw-sub">
+      Every 39 seconds, a WordPress site gets compromised. This page shows
+      the real attack traffic our Aegis plugin catches on our own lab, the
+      CVEs shipping this week, and the specific plugin failures that
+      shipped the April 2026 supply-chain catastrophe.
+    </p>
+  </div>
+
+  <!-- Four headline counters -->
+  <div class="tw-counters">
+    <div class="tw-counter">
+      <div class="tw-cn-num" id="tw-cnt-attacks-today">{{ stats.attacks_today }}</div>
+      <div class="tw-cn-lbl">Scans blocked today</div>
+      <div class="tw-cn-sub">on lab.amoskys.com alone</div>
+    </div>
+    <div class="tw-counter tw-cn-amber">
+      <div class="tw-cn-num">{{ stats.wp_share }}<span style="font-size:1.2rem;">%</span></div>
+      <div class="tw-cn-lbl">of the web runs WP</div>
+      <div class="tw-cn-sub">{{ "{:,}".format(stats.wp_sites_global) }} sites globally</div>
+    </div>
+    <div class="tw-counter tw-cn-amber">
+      <div class="tw-cn-num">{{ stats.cves_this_week }}</div>
+      <div class="tw-cn-lbl">New WP CVEs this week</div>
+      <div class="tw-cn-sub">Across core + plugins + themes</div>
+    </div>
+    <div class="tw-counter tw-cn-cyan">
+      <div class="tw-cn-num">{{ "{:,}".format(stats.aegis_sensors_firing) }}</div>
+      <div class="tw-cn-lbl">Aegis events captured</div>
+      <div class="tw-cn-sub">Chain-linked, last 24h</div>
+    </div>
+  </div>
+
+  <div class="tw-grid">
+    <!-- Live Aegis feed — left column, wider -->
+    <div class="tw-feed-card">
+      <div class="card-head" style="margin-bottom: .5rem;">
+        <div>
+          <div class="card-title">Seen by AMOSKYS · right now</div>
+          <div class="card-sub">Live from our own Aegis plugin — auto-refreshes every 20s</div>
+        </div>
+        <span class="pill pill-live">LIVE</span>
+      </div>
+      <div style="margin-top: 1rem;">
+      {% for ev in live_feed %}
+        <div class="tw-feed-row">
+          <span class="tw-feed-dot sev-{{ ev.severity }}"></span>
+          <div class="tw-feed-body">
+            <strong>{{ ev.headline }}</strong>
+            {% if ev.detail %}<div class="card-sub" style="margin-top:.2rem;">{{ ev.detail }}</div>{% endif %}
+            {% if ev.ip %}<code>{{ ev.ip }}</code>{% endif %}
+            {% if ev.event_type %}<code>{{ ev.event_type }}</code>{% endif %}
+          </div>
+          <span class="tw-feed-time">{{ ev.ago }}</span>
+        </div>
+      {% else %}
+        <div class="tw-feed-row"><div class="tw-feed-body">No live events — check back in a minute.</div></div>
+      {% endfor %}
+      </div>
+    </div>
+
+    <!-- Recent CVEs — right column -->
+    <div class="tw-cve-card">
+      <div class="card-head" style="margin-bottom: .5rem;">
+        <div>
+          <div class="card-title">Recent WordPress CVEs</div>
+          <div class="card-sub">High-severity flaws shipping now</div>
+        </div>
+      </div>
+      <div style="margin-top: 1rem;">
+      {% for cve in recent_cves %}
+        <div class="tw-cve-item">
+          <div class="tw-cve-header">
+            <span class="tw-cve-id">{{ cve.cve_id }}</span>
+            <span class="pill sev-{{ cve.severity }}">{{ cve.severity }}</span>
+            {% if cve.cvss %}<span style="font-size:.7rem; color: var(--w-fg-3);">CVSS {{ cve.cvss }}</span>{% endif %}
+          </div>
+          <div class="tw-cve-title">{{ cve.title }}</div>
+          <div class="tw-cve-affected">Affects: <code>{{ cve.affected }}</code></div>
+          <div class="tw-cve-meta" style="margin-top:.3rem;">
+            <span>{{ cve.class }}</span>
+            <span>·</span>
+            <span>{{ cve.install_count }}</span>
+          </div>
+        </div>
+      {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- What's shipped to the real world — supply chain attacks block -->
+  <div class="card" style="padding: 1.5rem; margin-bottom: 1.75rem;">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Supply-chain attacks · the class no WAF catches</div>
+        <div class="card-sub">Recent real incidents where the plugin itself was the attacker</div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem;">
+
+      <div style="padding: 1rem; border: 1px solid var(--w-border); border-radius: 8px;">
+        <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.4rem;">
+          <span class="pill sev-critical">CRITICAL</span>
+          <span style="font-size:.7rem; color: var(--w-fg-3);">Apr 2026</span>
+        </div>
+        <strong style="color: var(--w-fg-0);">EssentialPlugin — 20,000 sites</strong>
+        <p class="card-sub" style="margin-top:.4rem; line-height:1.45;">
+          A buyer acquired 30 plugins via Flippa → pushed a backdoored update
+          to Countdown Timer Ultimate → dormant 8 months → POI RCE + C2 via
+          Ethereum smart contracts. <strong>Wordfence's signature-based
+          detection failed.</strong> AMOSKYS would have flagged the
+          committer change before the backdoor shipped.
+        </p>
+      </div>
+
+      <div style="padding: 1rem; border: 1px solid var(--w-border); border-radius: 8px;">
+        <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.4rem;">
+          <span class="pill sev-high">HIGH</span>
+          <span style="font-size:.7rem; color: var(--w-fg-3);">Apr 2026</span>
+        </div>
+        <strong style="color: var(--w-fg-0);">Smart Slider 3 Pro — update infra</strong>
+        <p class="card-sub" style="margin-top:.4rem; line-height:1.45;">
+          Compromised update infrastructure at Nextend pushed malicious
+          v3.5.1.35 to paid customers. Aegis's <code>plugin.updated</code>
+          event correlates with version-changed + outbound-anomaly signatures
+          to catch this class.
+        </p>
+      </div>
+
+      <div style="padding: 1rem; border: 1px solid var(--w-border); border-radius: 8px;">
+        <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.4rem;">
+          <span class="pill sev-critical">CRITICAL</span>
+          <span style="font-size:.7rem; color: var(--w-fg-3);">Nov 2024</span>
+        </div>
+        <strong style="color: var(--w-fg-0);">Really Simple Security — 4M sites</strong>
+        <p class="card-sub" style="margin-top:.4rem; line-height:1.45;">
+          CVE-2024-10924 auth bypass in a security plugin installed on four
+          million sites. One REST call bypassed 2FA entirely. Our
+          <code>rest.unauth_routes_detected</code> sensor fires the moment
+          a vulnerable version registers the flawed endpoint.
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Final CTA -->
+  <div class="tw-cta">
+    <h2>Your site is one of the {{ "{:,}".format(stats.wp_sites_global) }} being scanned right now.</h2>
+    <p>Get our autonomous offensive agent to attack your WordPress site first, before the criminals do. Free external pentest, professional report in your inbox in 20 minutes.</p>
+    <a href="{{ url_for('web.redemption') }}" class="btn btn-primary">Claim the free scan →</a>
+    <div style="font-size:.72rem; color: var(--w-fg-3); margin-top: .75rem;">
+      No credit card · DNS TXT ownership proof required · 15 minutes of your time
+    </div>
+  </div>
+</section>
+
+<script>
+// Auto-refresh the live feed every 20s without reloading the whole page
+setTimeout(() => window.location.reload(), 20000);
+</script>
+{% endblock %}
