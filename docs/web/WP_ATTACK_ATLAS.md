@@ -27,7 +27,8 @@ L<layer>.<n>  <entry point>
 | Version | Aegis (defense) | Argos (offense) | Delta |
 |---|---|---|---|
 | v0.4 (baseline)        | 26/93 (28%) | 5/93 (5%)  | — |
-| **v0.5 (SQLi pair)**   | **29/93 (31%)** | **9/93 (10%)** | **+3 WATCH, +4 PROBE** |
+| v0.5 (SQLi pair)       | 29/93 (31%) | 9/93 (10%) | +3 WATCH, +4 PROBE |
+| **v0.6 (file-upload)** | **32/93 (34%)** | **12/93 (13%)** | **+3 WATCH, +3 PROBE** |
 
 ### v0.5 additions (this release)
 
@@ -42,25 +43,25 @@ L<layer>.<n>  <entry point>
 - L6.2 · Direct SQL without prepare (static)
 - L9.6 · unserialize() detection → partial (not in this release, planned next)
 
-### Current coverage
+### Current coverage (v0.6)
 
 | Layer | Entries | Aegis | Argos |
 |---|---|---|---|
 | L0 · Edge/infra          | 9  | 2/9   | 0/9 |
 | L1 · HTTP edge           | 10 | 3/10  | 2/10 |
 | L2 · Core auth           | 9  | 6/9   | 1/9 |
-| L3 · Core surface        | 11 | 7/11  | 1/11 |
-| L4 · Plugins             | 14 | **4/14** | **2/14** |
+| L3 · Core surface        | 11 | **8/11** | **2/11** |
+| L4 · Plugins             | 14 | **5/14** | **3/14** |
 | L5 · Themes              | 6  | 1/6   | 0/6 |
-| L6 · DB/session          | 7  | **4/7**  | **2/7** |
-| L7 · Filesystem          | 8  | 1/8   | 0/8 |
+| L6 · DB/session          | 7  | 4/7   | 2/7 |
+| L7 · Filesystem          | 8  | **2/8**  | **1/8** |
 | L8 · Supply chain        | 6  | 1/6   | 0/6 |
 | L9 · Server exec         | 7  | 0/7   | 0/7 |
 | L10 · Business logic     | 6  | 0/6   | 0/6 |
-| **Total**                | **93** | **29/93 (31%)** | **9/93 (10%)** |
+| **Total**                | **93** | **32/93 (34%)** | **12/93 (13%)** |
 
-Still not bug-bounty grade. The gap remains the build list — file-upload,
-POI, CSRF, SSRF, XSS, dangerous-functions, and the sandbox infra.
+Still not bug-bounty grade. Remaining build list: POI, CSRF, SSRF,
+XSS, dangerous-functions, sandbox infra.
 
 ---
 
@@ -300,11 +301,13 @@ L3.3 admin-ajax.php auth'd action CSRF
          that bypass nonce entirely.
 
 L3.4 Media upload MIME-sniff bypass
-  WATCH: aegis.media.uploaded (mime classifier)
-  PROBE: BLIND
+  WATCH: aegis.media.dangerous_upload (v0.6 — 4 classifiers)
+  PROBE: argos.ast.file_upload (v0.6 — 7 rules, 14 tests)
   CWE:   CWE-434
-  NOTES: Need matching AST rule: any wp_handle_upload call in
-         plugin source without the mimes-allowed filter is suspect.
+  NOTES: v0.6 pairs content-sniff + MIME-vs-ext + double-extension
+         runtime detection with static source scanning for 7 classes
+         of upload vulnerability. Strike rule file_upload_attempt
+         at threshold=1 (instant block on any exec-content upload).
 
 L3.5 Media EXIF XSS / SVG script injection
   WATCH: BLIND
@@ -376,8 +379,10 @@ L4.2  Authz bypass (CVE-2023-52174 LayerSlider, CVE-2024-10924 Really
   NOTES: We see denials, not absences. The absence is the bug.
 
 L4.3  Arbitrary file upload
-  WATCH: aegis.media.uploaded
-  PROBE: BLIND (AST: move_uploaded_file without mime/path checks)
+  WATCH: aegis.media.dangerous_upload (v0.6)
+  PROBE: argos.ast.file_upload — rules upload.move_uploaded_file_*,
+         wp_handle_upload_test_form_off, upload_mimes_adds_php,
+         sideload_tainted_url, file_put_contents/fwrite_tainted
   CWE:   CWE-434
 
 L4.4  Arbitrary file read (LFI via download.php pattern)
@@ -550,8 +555,11 @@ L7.6  wp-config.php unauthorized modification
   CWE:   CWE-345
 
 L7.7  Plugin-deposited PHP in uploads/
-  WATCH: aegis.media.uploaded
-  PROBE: BLIND
+  WATCH: aegis.media.dangerous_upload (v0.6 — content-sniffs first 4KB
+         of every upload for PHP open tags, shebangs, .htaccess dirs,
+         and MIME divergence)
+  PROBE: argos.ast.file_upload — file_put_contents_tainted,
+         fwrite_tainted (flags web-reachable destinations critical)
   CWE:   CWE-434
 
 L7.8  Core file tampering (modified wp-includes)
