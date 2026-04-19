@@ -3,6 +3,26 @@
 
 {% block content %}
 
+{% if snap.supply_chain_drift %}
+<!-- v0.4 · Supply-chain drift banner — only shown if drift detected in last 24h -->
+<div class="card" style="padding:1rem 1.25rem; margin-bottom:1.25rem; border:1px solid #B91C1C; background:rgba(185,28,28,0.07);">
+  <div style="display:flex; align-items:flex-start; gap:.75rem;">
+    <div style="font-size:1.5rem; line-height:1;">⚠</div>
+    <div style="flex:1;">
+      <div style="font-weight:700; color:#B91C1C;">Plugin supply-chain drift detected</div>
+      <div class="card-sub" style="margin-top:.25rem;">
+        {{ snap.supply_chain_drift | length }} plugin{{ 's' if snap.supply_chain_drift|length != 1 else '' }} show structural change in the last 24h. This is the class of signal that caught the April 2026 EssentialPlugin incident.
+      </div>
+      <ul style="margin:.6rem 0 0; padding-left:1.2rem; font-size:.85rem;">
+        {% for d in snap.supply_chain_drift[:5] %}
+        <li><code>{{ d.slug }}</code> — <strong>{{ d.drift_type }}</strong>{% if d.remote_ver %} · v{{ d.remote_ver }}{% endif %}{% if d.author %} · author: {{ d.author }}{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- Header -->
 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; flex-wrap:wrap; gap:1rem;">
   <div>
@@ -48,6 +68,84 @@
     <div class="metric-label">Last event</div>
     <div class="metric-value" style="font-size:1.3rem;">{{ last_event_ago or "—" }}</div>
     <div class="metric-delta">most recent emit</div>
+  </div>
+</div>
+
+<!-- v0.4 · Active Defense — blocks-enforced + currently-blocked IP list -->
+<div class="grid-2" style="gap:1rem; margin-bottom:1.5rem;">
+  <div class="card" style="padding:1.25rem; {% if snap.active_blocks %}border-color:#B91C1C;{% endif %}">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Active defense · last 10 min
+          {% if snap.active_blocks %}<span class="pill sev-high" style="margin-left:.5rem;">{{ snap.active_blocks | length }} blocked</span>{% endif %}
+        </div>
+        <div class="card-sub">Burst thresholds: priv_esc=3 · nonce=10 · 404=5 · auth=8 · POI=1 · TTL=10m</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:.75rem; margin:.75rem 0;">
+      <div style="flex:1; padding:.6rem .8rem; border:1px solid var(--w-border); border-radius:6px;">
+        <div class="metric-label" style="font-size:.7rem;">block.started</div>
+        <div style="font-weight:700; font-size:1.3rem;">{{ snap.blocks_started_count }}</div>
+        <div class="text-muted" style="font-size:.68rem;">transitions to blocked</div>
+      </div>
+      <div style="flex:1; padding:.6rem .8rem; border:1px solid var(--w-border); border-radius:6px;">
+        <div class="metric-label" style="font-size:.7rem;">block.enforced</div>
+        <div style="font-weight:700; font-size:1.3rem;">{{ snap.blocks_enforced_count }}</div>
+        <div class="text-muted" style="font-size:.68rem;">403s returned</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="w-table">
+        <thead><tr><th>IP</th><th>Rule</th><th style="text-align:right;">Strikes</th><th style="text-align:right;">Since</th></tr></thead>
+        <tbody>
+          {% for b in snap.active_blocks[:8] %}
+          <tr>
+            <td class="mono">{{ b.ip }}</td>
+            <td><span class="pill sev-high">{{ b.rule }}</span></td>
+            <td style="text-align:right;">{{ b.strikes }}</td>
+            <td class="mono text-muted" style="text-align:right; font-size:.72rem;">{{ b.blocked_since | humantime if b.blocked_since else "—" }}</td>
+          </tr>
+          {% endfor %}
+          {% if not snap.active_blocks %}
+          <tr><td colspan="4" class="text-muted" style="text-align:center; font-size:.85rem;">No active blocks — all traffic passing.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:1.25rem;">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Supply-chain watcher</div>
+        <div class="card-sub">Daily cron pulls wp.org metadata · detects author/update drift</div>
+      </div>
+    </div>
+    {% if snap.supply_chain_last_cycle %}
+    <div style="margin-top:.4rem; display:flex; gap:.75rem;">
+      <div style="flex:1; padding:.6rem .8rem; border:1px solid var(--w-border); border-radius:6px;">
+        <div class="metric-label" style="font-size:.7rem;">Plugins tracked</div>
+        <div style="font-weight:700; font-size:1.3rem;">{{ snap.supply_chain_last_cycle.checked }}<span class="text-muted" style="font-size:.9rem;">/{{ snap.supply_chain_last_cycle.installed }}</span></div>
+        <div class="text-muted" style="font-size:.68rem;">in wp.org directory</div>
+      </div>
+      <div style="flex:1; padding:.6rem .8rem; border:1px solid var(--w-border); border-radius:6px; {% if snap.supply_chain_last_cycle.drift_count %}border-color:#B91C1C;{% endif %}">
+        <div class="metric-label" style="font-size:.7rem;">Drift this cycle</div>
+        <div style="font-weight:700; font-size:1.3rem; {% if snap.supply_chain_last_cycle.drift_count %}color:#B91C1C;{% endif %}">{{ snap.supply_chain_last_cycle.drift_count or 0 }}</div>
+        <div class="text-muted" style="font-size:.68rem;">AUTHOR / STALE / SUDDEN</div>
+      </div>
+    </div>
+    <div class="text-muted" style="font-size:.7rem; margin-top:.6rem;">Last cycle: {{ snap.supply_chain_last_cycle.ts_sec | humantime }}</div>
+    {% else %}
+    <div class="card-sub" style="margin-top:.75rem;">Awaiting first cycle (runs daily at install-time + 5 min).</div>
+    {% endif %}
+    <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid var(--w-border);">
+      <div class="section-eyebrow">Drift classes</div>
+      <div class="card-sub" style="margin-top:.35rem; font-size:.78rem;">
+        <div>· <code>AUTHOR_CHANGED</code> — wp.org author field flipped</div>
+        <div>· <code>SUDDEN_UPDATE_AFTER_LONG_SILENCE</code> — &gt;1yr silent then new release</div>
+        <div>· <code>STALE_FOR_YEARS</code> — &gt;18mo no update (acquisition bait)</div>
+      </div>
+    </div>
   </div>
 </div>
 

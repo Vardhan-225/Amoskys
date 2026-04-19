@@ -50,6 +50,12 @@ class LiveSnapshot:
     recent: List[Dict[str, Any]] = field(default_factory=list)
     by_severity_recent: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
+    # v0.4 — active defense + supply chain
+    active_blocks: List[Dict[str, Any]] = field(default_factory=list)
+    blocks_started_count: int = 0
+    blocks_enforced_count: int = 0
+    supply_chain_drift: List[Dict[str, Any]] = field(default_factory=list)
+    supply_chain_last_cycle: Optional[Dict[str, Any]] = None
 
 
 class AegisTail:
@@ -87,6 +93,18 @@ class AegisTail:
         user_agents: Counter[str] = Counter()
         ring: deque = deque(maxlen=self.window)
         recent_by_sev: Dict[str, List[Dict[str, Any]]] = {}
+        # v0.4 — active-defense + supply-chain rollups
+        # Block window = 10 min (matches plugin BLOCK_DURATION_SEC). Only
+        # count blocks.started / enforced within that window to reflect what's
+        # actually active right now.
+        block_window_sec = 600
+        drift_window_sec = 24 * 3600
+        now_sec = time.time()
+        active_blocks_by_ip: Dict[str, Dict[str, Any]] = {}
+        blocks_started_count = 0
+        blocks_enforced_count = 0
+        drift_events: List[Dict[str, Any]] = []
+        last_supply_cycle: Optional[Dict[str, Any]] = None
 
         prev_sig = None
         chain_ok = 0
@@ -144,6 +162,41 @@ class AegisTail:
 
                         last_event_ns = e.get("event_timestamp_ns") or last_event_ns
 
+                        # v0.4 rollups — done BEFORE severity filter so the
+                        # sidebar widgets reflect total state, not a filtered
+                        # view of it.
+                        attrs = e.get("attributes") or {}
+                        event_sec = (e.get("event_timestamp_ns") or 0) / 1e9
+                        if et == "aegis.block.started" and (now_sec - event_sec) < block_window_sec:
+                            blocks_started_count += 1
+                            ip_ = attrs.get("ip") or ""
+                            if ip_:
+                                active_blocks_by_ip[ip_] = {
+                                    "ip": ip_,
+                                    "rule": attrs.get("rule"),
+                                    "strikes": attrs.get("strikes"),
+                                    "blocked_since": int(event_sec),
+                                    "ttl_sec": attrs.get("ttl_sec", block_window_sec),
+                                }
+                        elif et == "aegis.block.enforced" and (now_sec - event_sec) < block_window_sec:
+                            blocks_enforced_count += 1
+                        elif et == "aegis.supply_chain.drift" and (now_sec - event_sec) < drift_window_sec:
+                            drift_events.append({
+                                "slug": attrs.get("slug"),
+                                "drift_type": attrs.get("drift_type"),
+                                "reason": attrs.get("reason"),
+                                "remote_ver": attrs.get("remote_ver"),
+                                "author": attrs.get("author"),
+                                "ts_sec": int(event_sec),
+                            })
+                        elif et == "aegis.supply_chain.cycle":
+                            last_supply_cycle = {
+                                "installed": attrs.get("installed"),
+                                "checked": attrs.get("checked"),
+                                "drift_count": attrs.get("drift_count"),
+                                "ts_sec": int(event_sec),
+                            }
+
                         if severity_filter and sev != severity_filter:
                             continue
 
@@ -171,6 +224,12 @@ class AegisTail:
         for k in list(recent_by_sev.keys()):
             recent_by_sev[k] = list(reversed(recent_by_sev[k]))[:20]
 
+        active_blocks_list = sorted(
+            active_blocks_by_ip.values(),
+            key=lambda b: b.get("blocked_since") or 0,
+            reverse=True,
+        )
+
         return LiveSnapshot(
             total_events=total,
             last_event_ns=last_event_ns,
@@ -187,6 +246,11 @@ class AegisTail:
             recent=list(reversed(ring)),
             by_severity_recent=recent_by_sev,
             errors=errors,
+            active_blocks=active_blocks_list,
+            blocks_started_count=blocks_started_count,
+            blocks_enforced_count=blocks_enforced_count,
+            supply_chain_drift=list(reversed(drift_events))[:10],
+            supply_chain_last_cycle=last_supply_cycle,
         )
 
 
@@ -208,4 +272,8 @@ AEGIS_SENSOR_FAMILIES = {
     "aegis.media":       "Media — upload/delete with MIME flagging",
     "aegis.db":          "Database — per-request query summary",
     "aegis.lifecycle":   "Plugin lifecycle — own activation/deactivation",
+    # v0.4 additions
+    "aegis.block":       "Active defense — IP burst blocking + 403 enforcement",
+    "aegis.supply_chain":"Supply chain — daily plugin author/update drift check",
+    "aegis.browser":     "Browser beacon — admin-page client-side events",
 }
