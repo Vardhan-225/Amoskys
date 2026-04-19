@@ -1,0 +1,271 @@
+{% extends "web/base.html" %}
+{% block title %}The Fleet — AMOSKYS Web{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2"></script>
+<style>
+  .fleet-wrap { max-width: var(--w-maxw); margin: 0 auto; padding: 0 1.25rem; }
+  .fleet-hero {
+    position: relative; width: 100%; height: 620px;
+    background: radial-gradient(ellipse at center, #0a1028 0%, #030712 70%);
+    border: 1px solid var(--w-border); border-radius: 16px;
+    overflow: hidden; margin-top: 1.25rem;
+  }
+  .fleet-overlay {
+    position: absolute; inset: 0; pointer-events: none; z-index: 3;
+    padding: 20px;
+  }
+  .fleet-badge {
+    position: absolute; top: 20px; left: 24px; pointer-events: auto;
+    background: rgba(5,8,22,0.92); border: 1px solid rgba(0,217,255,0.2);
+    border-radius: 10px; padding: 12px 16px; min-width: 240px;
+    backdrop-filter: blur(8px);
+  }
+  .fleet-badge-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--w-accent); font-weight: 700; }
+  .fleet-badge-title { font-size: 22px; font-weight: 800; margin-top: 4px; color: var(--w-fg-0); }
+  .fleet-badge-sub { font-size: 12px; color: var(--w-fg-3); margin-top: 6px; line-height: 1.4; }
+  .fleet-metrics {
+    position: absolute; top: 20px; right: 24px; pointer-events: auto;
+    display: flex; gap: 8px;
+  }
+  .fleet-metric {
+    background: rgba(5,8,22,0.92); border: 1px solid rgba(0,217,255,0.18);
+    border-radius: 8px; padding: 10px 14px; min-width: 72px;
+    text-align: center; backdrop-filter: blur(8px);
+  }
+  .fleet-metric-v { font-size: 20px; font-weight: 800; color: var(--w-accent); }
+  .fleet-metric-l { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--w-fg-3); margin-top: 2px; }
+  .fleet-legend {
+    position: absolute; bottom: 16px; right: 24px; pointer-events: auto;
+    background: rgba(5,8,22,0.92); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px; padding: 8px 12px; display: flex; gap: 14px;
+    font-size: 11px; color: var(--w-fg-2);
+  }
+  .fleet-legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: middle; }
+  .fleet-controls {
+    position: absolute; bottom: 16px; left: 24px; pointer-events: auto;
+    display: flex; gap: 6px;
+  }
+  .fleet-ctrl-btn {
+    background: rgba(5,8,22,0.92); border: 1px solid rgba(255,255,255,0.12);
+    color: var(--w-fg-2); font-size: 11px; padding: 6px 12px; border-radius: 6px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .fleet-ctrl-btn:hover { border-color: var(--w-accent); color: var(--w-fg-0); }
+  .fleet-ctrl-btn.active { border-color: var(--w-accent); background: rgba(0,217,255,0.1); color: var(--w-fg-0); }
+  #fleet-globe-root { width: 100%; height: 100%; cursor: grab; }
+  #fleet-globe-root:active { cursor: grabbing; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="fleet-wrap">
+  <div style="display:flex; align-items:baseline; justify-content:space-between; margin-top:1rem; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <div class="section-eyebrow">The Fleet · Live view</div>
+      <h1 class="section-title" style="margin:.25rem 0 0; font-size:1.7rem;">WordPress sites we protect</h1>
+      <div class="card-sub" style="margin-top:.4rem;">
+        Every point is a site running Aegis. Arcs show attack traffic observed
+        in the last 24h — scanner IPs, credential-stuffing bots, supply-chain
+        probes. Rings pulse where an engagement is active.
+      </div>
+    </div>
+    <div style="display:flex; gap:.5rem;">
+      <a href="{{ url_for('web.arena') }}" class="btn btn-primary btn-sm">Launch Argos →</a>
+      <a href="{{ url_for('web.sites_list') }}" class="btn btn-ghost btn-sm">Site list</a>
+    </div>
+  </div>
+
+  <div class="fleet-hero">
+    <div id="fleet-globe-root"></div>
+    <div class="fleet-overlay">
+      <div class="fleet-badge">
+        <div class="fleet-badge-label">Protection posture</div>
+        <div class="fleet-badge-title" id="fleet-posture-text">All clear</div>
+        <div class="fleet-badge-sub" id="fleet-posture-sub">
+          <span id="fleet-events-24h">{{ "{:,}".format(stats.events_24h) }}</span> events observed in the last 24h
+        </div>
+      </div>
+      <div class="fleet-metrics">
+        <div class="fleet-metric"><div class="fleet-metric-v">{{ stats.sites }}</div><div class="fleet-metric-l">Sites</div></div>
+        <div class="fleet-metric"><div class="fleet-metric-v">{{ stats.countries }}</div><div class="fleet-metric-l">Countries</div></div>
+        <div class="fleet-metric"><div class="fleet-metric-v">{{ stats.attacks_24h }}</div><div class="fleet-metric-l">Attacks 24h</div></div>
+        <div class="fleet-metric"><div class="fleet-metric-v">{{ "%.1f"|format(stats.chain_integrity) }}%</div><div class="fleet-metric-l">Chain</div></div>
+      </div>
+      <div class="fleet-controls">
+        <button class="fleet-ctrl-btn active" id="fc-all">All</button>
+        <button class="fleet-ctrl-btn" id="fc-threats">Threats only</button>
+        <button class="fleet-ctrl-btn" id="fc-rotate">Rotate: on</button>
+      </div>
+      <div class="fleet-legend">
+        <span><span class="fleet-legend-dot" style="background:#00ff88"></span>Healthy site</span>
+        <span><span class="fleet-legend-dot" style="background:#ffaa00"></span>Attack observed</span>
+        <span><span class="fleet-legend-dot" style="background:#ff3366"></span>Under scan</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Under the globe: fleet table -->
+  <div style="margin-top:1.5rem;">
+    <div class="section-eyebrow">Fleet inventory</div>
+    <div style="font-size:1rem; font-weight:700; color:var(--w-fg-0); margin-top:.2rem;">Sites plotted on the globe</div>
+  </div>
+  <div class="table-wrap" style="margin-top:.75rem; margin-bottom:2rem;">
+    <table class="w-table">
+      <thead>
+        <tr>
+          <th>Site</th>
+          <th>Country</th>
+          <th>Plan</th>
+          <th>Aegis</th>
+          <th>Posture</th>
+          <th>Attacks 24h</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sites_view %}
+        <tr>
+          <td class="mono">{{ s.domain }}</td>
+          <td>{{ s.country_name }}</td>
+          <td><span class="pill pill-{{ s.plan }}">{{ s.plan }}</span></td>
+          <td>
+            {% if s.aegis_active %}<span class="pill sev-info">v{{ s.aegis_version }}</span>
+            {% else %}<span class="pill sev-warn">inactive</span>{% endif %}
+          </td>
+          <td>
+            {% if s.posture == 'healthy' %}<span class="pill sev-info">healthy</span>
+            {% elif s.posture == 'warn' %}<span class="pill sev-warn">needs attention</span>
+            {% else %}<span class="pill sev-critical">critical</span>{% endif %}
+          </td>
+          <td style="text-align:right;"><strong>{{ s.attacks_24h }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<script>
+(function() {
+  var globe = null;
+  var autoRotate = true;
+
+  // Data from server
+  var sites = {{ sites_json | safe }};
+  var arcs  = {{ arcs_json | safe }};
+
+  function init() {
+    var el = document.getElementById('fleet-globe-root');
+    if (!el || typeof Globe === 'undefined') return;
+
+    globe = Globe()(el)
+      .backgroundColor('rgba(0,0,0,0)')
+      .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-dark.jpg')
+      .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png')
+      .backgroundImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png')
+      .showAtmosphere(true)
+      .atmosphereColor('#0099cc')
+      .atmosphereAltitude(0.22)
+      .width(el.clientWidth)
+      .height(el.clientHeight)
+      .pointsData(sites)
+      .pointColor(function(d) { return d.color; })
+      .pointAltitude(0.02)
+      .pointRadius(0.45)
+      .pointLabel(function(d) {
+        return '<div style="background:rgba(5,8,22,0.96);border:1px solid rgba(0,217,255,0.25);border-radius:8px;padding:.55rem .8rem;font-size:.72rem;min-width:200px;">'
+          + '<div style="font-weight:700;color:#00d9ff;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:.3rem;margin-bottom:.3rem;">' + d.domain + '</div>'
+          + '<div style="display:grid;grid-template-columns:auto 1fr;gap:.1rem .8rem;font-size:.68rem;">'
+          + '<span style="color:#6b7a99;">Location</span><span style="color:#e2e8f0;text-align:right;">' + d.country + '</span>'
+          + '<span style="color:#6b7a99;">Plan</span><span style="color:#e2e8f0;text-align:right;">' + d.plan + '</span>'
+          + '<span style="color:#6b7a99;">Attacks 24h</span><span style="color:#00d9ff;text-align:right;font-weight:600;">' + d.attacks + '</span>'
+          + '</div></div>';
+      })
+      .arcsData(arcs)
+      .arcColor(function(d) { return d.color; })
+      .arcStroke(0.4)
+      .arcAltitudeAutoScale(0.35)
+      .arcDashLength(0.4)
+      .arcDashGap(0.15)
+      .arcDashAnimateTime(function(d) { return d.animTime; })
+      .arcLabel(function(d) {
+        return '<div style="background:rgba(5,8,22,0.96);border:1px solid rgba(255,170,0,0.35);border-radius:8px;padding:.5rem .75rem;font-size:.7rem;">'
+          + '<div style="font-weight:700;color:#ffaa00;">' + d.attack_type + '</div>'
+          + '<div style="color:#b4bcd0;margin-top:.2rem;">From ' + d.origin + ' → ' + d.target + '</div>'
+          + '<div style="color:#6b7a99;margin-top:.2rem;">' + d.count + ' events</div></div>';
+      })
+      .ringsData(sites.filter(function(s) { return s.engaged; }))
+      .ringColor(function() { return function(t) { return 'rgba(255,51,102,' + Math.max(0, 0.5 - t*0.5) + ')'; }; })
+      .ringMaxRadius(2.5)
+      .ringPropagationSpeed(1.3)
+      .ringRepeatPeriod(1500);
+
+    globe.onGlobeReady(function() {
+      var mat = globe.globeMaterial();
+      mat.bumpScale = 3;
+      if (typeof THREE !== 'undefined') {
+        mat.emissive = new THREE.Color('#071530');
+        mat.emissiveIntensity = 0.1;
+      }
+    });
+
+    globe.controls().autoRotate = autoRotate;
+    globe.controls().autoRotateSpeed = 0.4;
+    globe.controls().enableDamping = true;
+    globe.controls().dampingFactor = 0.12;
+    globe.controls().minDistance = 140;
+    globe.controls().maxDistance = 500;
+    globe.pointOfView({ lat: 25, lng: 0, altitude: 2.2 }, 0);
+
+    window.addEventListener('resize', function() {
+      if (globe && el.clientWidth) globe.width(el.clientWidth).height(el.clientHeight);
+    });
+
+    wireControls();
+    updatePosture();
+  }
+
+  function wireControls() {
+    document.getElementById('fc-all').addEventListener('click', function() {
+      setActive('fc-all');
+      globe.arcsData(arcs);
+    });
+    document.getElementById('fc-threats').addEventListener('click', function() {
+      setActive('fc-threats');
+      globe.arcsData(arcs.filter(function(a) { return a.threat; }));
+    });
+    document.getElementById('fc-rotate').addEventListener('click', function(e) {
+      autoRotate = !autoRotate;
+      globe.controls().autoRotate = autoRotate;
+      e.target.textContent = 'Rotate: ' + (autoRotate ? 'on' : 'off');
+      e.target.classList.toggle('active', autoRotate);
+    });
+  }
+  function setActive(id) {
+    ['fc-all','fc-threats'].forEach(function(x) { document.getElementById(x).classList.toggle('active', x===id); });
+  }
+  function updatePosture() {
+    var threats = arcs.filter(function(a) { return a.threat; }).length;
+    var el = document.getElementById('fleet-posture-text');
+    var sub = document.getElementById('fleet-posture-sub');
+    if (threats === 0) {
+      el.textContent = 'All clear';
+      el.style.color = '#00ff88';
+    } else if (threats < 5) {
+      el.textContent = 'Watching';
+      el.style.color = '#ffaa00';
+    } else {
+      el.textContent = 'Active threats';
+      el.style.color = '#ff3366';
+    }
+  }
+
+  // Init after the container has dimensions
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(init, 50); });
+  } else {
+    setTimeout(init, 50);
+  }
+})();
+</script>
+{% endblock %}
