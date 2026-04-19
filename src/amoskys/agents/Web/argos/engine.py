@@ -122,6 +122,9 @@ class Scope:
             "nuclei.misconfiguration",
             "nuclei.exposures",
             "nuclei.vulnerabilities",
+            # AST-based source analysis (reads public plugin source from
+            # wp.org; does not touch the target beyond normal fingerprint)
+            "ast.source",
         ]
     )
     # These probe classes are PERMANENTLY blacklisted — never allowed:
@@ -385,10 +388,39 @@ class Engagement:
         self.phases_complete.append(Phase.FINGERPRINT)
 
     def _phase_probe(self) -> None:
-        """Run vulnerability probes against the fingerprinted target."""
+        """Run vulnerability probes against the fingerprinted target.
+
+        Before probes fire, prime any PluginASTTool in the tool list
+        with the plugin slugs+versions discovered by wpscan in the
+        fingerprint phase. This is the bridge that lets source-level
+        AST analysis target the client's actually-installed plugins.
+        """
+        self._link_plugin_ast_tools()
         ran = self._run_tools_of_class("probe")
         self._emit_phase(Phase.PROBE, "ok", {"tools_run": ran, "findings": len(self.findings)})
         self.phases_complete.append(Phase.PROBE)
+
+    def _link_plugin_ast_tools(self) -> None:
+        """Feed wpscan fingerprint output into any primed-less PluginASTTool."""
+        # Lazy import to avoid cycles at module load.
+        from amoskys.agents.Web.argos.tools.plugin_ast import PluginASTTool
+
+        wpscan_result = self.tool_outputs.get("wpscan")
+        for tool in self.tools:
+            if not isinstance(tool, PluginASTTool):
+                continue
+            if tool.primed_plugins:
+                continue  # operator pre-primed; don't override
+            if wpscan_result is None:
+                # No wpscan output to drive us. Tool will run() empty
+                # and emit a warning finding; engagement still completes.
+                continue
+            count = tool.prime_from_wpscan(wpscan_result)
+            self._emit_phase(
+                Phase.FINGERPRINT,
+                "plugin_ast_linked",
+                {"plugins_primed": count, "tool": tool.name},
+            )
 
     def _phase_triage(self) -> None:
         """Dedup, re-score, and correlate findings.
@@ -414,13 +446,22 @@ class Engagement:
         self.phases_complete.append(Phase.TRIAGE)
 
     def _phase_report(self) -> None:
-        """Write the JSON report to disk.
+        """Write the JSON report AND auto-render HTML + PDF.
 
-        Human-readable PDF rendering lives in argos.report — this phase
-        just ensures the structured output is durable.
+        The HTML + PDF is the actual customer deliverable — the JSON is
+        for tooling. We render both here so the engagement produces a
+        ready-to-send artifact without a separate CLI call.
+
+        HTML render failures are surfaced as errors but do not fail the
+        engagement (JSON is the durable source of truth). PDF render
+        requires WeasyPrint + system libs — if those aren't present the
+        HTML is still produced and the PDF step is skipped with a note.
         """
         self.report_dir.mkdir(parents=True, exist_ok=True)
-        path = self.report_dir / f"argos-{self.engagement_id}.json"
+        json_path = self.report_dir / f"argos-{self.engagement_id}.json"
+        html_path = self.report_dir / f"argos-{self.engagement_id}.html"
+        pdf_path = self.report_dir / f"argos-{self.engagement_id}.pdf"
+
         # Mark REPORT complete first so it's reflected in the written report
         self.phases_complete.append(Phase.REPORT)
         result = EngagementResult(
@@ -433,8 +474,29 @@ class Engagement:
             tool_outputs=self.tool_outputs,
             errors=self.errors,
         )
-        path.write_text(result.to_json())
-        self._emit_phase(Phase.REPORT, "ok", {"report_path": str(path)})
+        json_path.write_text(result.to_json())
+
+        artifacts: Dict[str, Any] = {"json": str(json_path)}
+        try:
+            from amoskys.agents.Web.argos.report import ReportRenderer
+
+            renderer = ReportRenderer()
+            html = renderer.render_html(result)
+            html_path.write_text(html)
+            artifacts["html"] = str(html_path)
+
+            try:
+                pdf_bytes = renderer.render_pdf(result)
+                pdf_path.write_bytes(pdf_bytes)
+                artifacts["pdf"] = str(pdf_path)
+            except Exception as e:  # noqa: BLE001
+                artifacts["pdf_error"] = f"{type(e).__name__}: {e}"
+                self.errors.append(f"pdf render skipped: {type(e).__name__}: {e}")
+        except Exception as e:  # noqa: BLE001
+            artifacts["html_error"] = f"{type(e).__name__}: {e}"
+            self.errors.append(f"html render failed: {type(e).__name__}: {e}")
+
+        self._emit_phase(Phase.REPORT, "ok", artifacts)
 
     # ─────────────────────────────────────────────────────────
     # Helpers

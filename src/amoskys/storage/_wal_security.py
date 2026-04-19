@@ -410,18 +410,30 @@ class SecurityMixin:
                 event_data["tier"] = "observation"
 
             # ── FINAL classification — last step, cannot be overridden ──
-            final_risk = event_data.get("risk_score", 0.0) or 0.0
+            final_risk = event_data.get("risk_score", 0.0)
+            if final_risk is None:
+                final_risk = 0.0
             if isinstance(final_risk, str):
                 try:
                     final_risk = float(final_risk)
                 except (ValueError, TypeError):
                     final_risk = 0.0
+            final_risk = float(final_risk)
             if final_risk >= 0.75:
                 event_data["final_classification"] = "malicious"
             elif final_risk >= 0.5:
                 event_data["final_classification"] = "suspicious"
             else:
                 event_data["final_classification"] = "legitimate"
+
+            # DEBUG: log classification decision for high-risk events
+            if final_risk >= 0.5:
+                logger.info(
+                    "CLASSIFY: risk=%.4f → %s (cat=%s)",
+                    final_risk,
+                    event_data["final_classification"],
+                    event_data.get("event_category", "?"),
+                )
 
             self.store.insert_security_event(event_data)
 

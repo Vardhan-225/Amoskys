@@ -24,6 +24,7 @@ from amoskys.agents.Web.argos.ast.base import (
     strip_comments_and_strings,
 )
 from amoskys.agents.Web.argos.ast.file_upload import FileUploadScanner
+from amoskys.agents.Web.argos.ast.poi import PoiScanner
 from amoskys.agents.Web.argos.ast.rest_authz import RestAuthzScanner
 from amoskys.agents.Web.argos.ast.sql_injection import SqlInjectionScanner
 
@@ -33,6 +34,7 @@ __all__ = [
     "FileUploadScanner",
     "PHPCallSite",
     "PHPSource",
+    "PoiScanner",
     "RestAuthzScanner",
     "SqlInjectionScanner",
     "find_calls",

@@ -16,6 +16,7 @@ from amoskys.agents.Web.argos.tools.base import Tool, ToolResult
 from amoskys.agents.Web.argos.tools.httpx import HTTPXTool
 from amoskys.agents.Web.argos.tools.nmap import NmapTool
 from amoskys.agents.Web.argos.tools.nuclei import NucleiTool
+from amoskys.agents.Web.argos.tools.plugin_ast import PluginASTTool
 from amoskys.agents.Web.argos.tools.subfinder import SubfinderTool
 from amoskys.agents.Web.argos.tools.wpscan import WPScanTool
 
@@ -25,6 +26,7 @@ __all__ = [
     "HTTPXTool",
     "NmapTool",
     "NucleiTool",
+    "PluginASTTool",
     "SubfinderTool",
     "WPScanTool",
 ]

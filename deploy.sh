@@ -79,9 +79,11 @@ deploy_local() {
     sudo rsync -a "$REPO/src/amoskys/" "$INSTALL/" --exclude=__pycache__ --delete
     ok "Code synced to $INSTALL"
 
-    # Restart agent
-    sudo launchctl unload /Library/LaunchDaemons/com.amoskys.watchdog.plist 2>/dev/null
-    sudo launchctl load /Library/LaunchDaemons/com.amoskys.watchdog.plist
+    # Kill ALL amoskys processes (children survive launchctl unload)
+    sudo pkill -9 -f "amoskys" 2>/dev/null || true
+    sleep 1
+    # Restart via launchd
+    sudo launchctl load /Library/LaunchDaemons/com.amoskys.watchdog.plist 2>/dev/null
 
     # Verify it's running
     sleep 2
