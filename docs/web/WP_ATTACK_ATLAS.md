@@ -22,25 +22,45 @@ L<layer>.<n>  <entry point>
   NOTES: <known CVE families, exploitation pattern, reproducer pointer>
 ```
 
-## Quick coverage score (v0.4)
+## Coverage score history
 
-| Layer | Entries | Aegis coverage | Argos coverage |
+| Version | Aegis (defense) | Argos (offense) | Delta |
+|---|---|---|---|
+| v0.4 (baseline)        | 26/93 (28%) | 5/93 (5%)  | — |
+| **v0.5 (SQLi pair)**   | **29/93 (31%)** | **9/93 (10%)** | **+3 WATCH, +4 PROBE** |
+
+### v0.5 additions (this release)
+
+**Defense — aegis.db.suspicious_query classifier** covers:
+- L4.1 · SQLi in plugin AJAX/REST/shortcode (runtime `query` filter catches exploitation attempts regardless of which plugin was exploited)
+- L6.1 · $wpdb->prepare format-string misuse (same runtime capture)
+- L6.2 · Direct SQL without prepare (same)
+
+**Offense — ast.sql_injection scanner** covers:
+- L4.1 · SQLi in plugin source (interpolated query, prepare-with-interp, tainted global)
+- L6.1 · $wpdb->prepare format-string misuse (static)
+- L6.2 · Direct SQL without prepare (static)
+- L9.6 · unserialize() detection → partial (not in this release, planned next)
+
+### Current coverage
+
+| Layer | Entries | Aegis | Argos |
 |---|---|---|---|
 | L0 · Edge/infra          | 9  | 2/9   | 0/9 |
 | L1 · HTTP edge           | 10 | 3/10  | 2/10 |
 | L2 · Core auth           | 9  | 6/9   | 1/9 |
 | L3 · Core surface        | 11 | 7/11  | 1/11 |
-| L4 · Plugins             | 14 | 3/14  | 1/14 |
+| L4 · Plugins             | 14 | **4/14** | **2/14** |
 | L5 · Themes              | 6  | 1/6   | 0/6 |
-| L6 · DB/session          | 7  | 2/7   | 0/7 |
+| L6 · DB/session          | 7  | **4/7**  | **2/7** |
 | L7 · Filesystem          | 8  | 1/8   | 0/8 |
 | L8 · Supply chain        | 6  | 1/6   | 0/6 |
 | L9 · Server exec         | 7  | 0/7   | 0/7 |
 | L10 · Business logic     | 6  | 0/6   | 0/6 |
-| **Total**                | **93** | **26/93 (28%)** | **5/93 (5%)** |
+| **Total**                | **93** | **29/93 (31%)** | **9/93 (10%)** |
 
-At 28% defensive / 5% offensive, we are **not** bug-bounty grade yet.
-The gap is the build list.
+Still not bug-bounty grade. The gap remains the build list — file-upload,
+POI, CSRF, SSRF, XSS, dangerous-functions, and the sandbox infra.
 
 ---
 
@@ -340,10 +360,12 @@ L3.11 Customizer option injection
 
 ```
 L4.1  SQLi in plugin AJAX/REST/shortcode
-  WATCH: BLIND (no query AST at plugin runtime)
-  PROBE: BLIND (AST: unsafe $wpdb->query( $_POST ))
+  WATCH: aegis.db.suspicious_query (v0.5 — 8 pattern classes)
+  PROBE: argos.ast.sql_injection (v0.5 — 5 rules, 16 tests passing)
   CWE:   CWE-89
-  NOTES: Most common plugin CVE class by a wide margin.
+  NOTES: Most common plugin CVE class by a wide margin. v0.5 both
+         detects exploitation AT RUNTIME (via the `query` filter) and
+         FINDS IT IN SOURCE (via the AST scanner). 2 strikes → block.
 
 L4.2  Authz bypass (CVE-2023-52174 LayerSlider, CVE-2024-10924 Really
       Simple SSL class — wildly famous examples)
@@ -457,13 +479,14 @@ L5.6  PHP execution inside uploaded theme file (if FTP mode)
 
 ```
 L6.1  $wpdb->prepare format-string misuse
-  WATCH: BLIND
-  PROBE: BLIND (AST: prepare( "...$var..." ) is always unsafe)
+  WATCH: aegis.db.suspicious_query (v0.5)
+  PROBE: argos.ast.sql_injection — rule sql.prepare_with_interpolation
   CWE:   CWE-89
 
 L6.2  Direct SQL without prepare
-  WATCH: BLIND
-  PROBE: BLIND (AST: $wpdb->query( "...$var..." ))
+  WATCH: aegis.db.suspicious_query (v0.5)
+  PROBE: argos.ast.sql_injection — rules sql.interpolation_in_query,
+         sql.direct_request_query, sql.raw_mysqli_query
   CWE:   CWE-89
 
 L6.3  Exposed DB port beyond loopback
