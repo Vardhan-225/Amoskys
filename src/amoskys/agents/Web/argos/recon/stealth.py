@@ -64,9 +64,15 @@ _DEFAULT_UA = (
 )
 _DEFAULT_TIMEOUT = 8.0
 
-# Seconds between requests — keep gap humanlike to pass casual review.
-_MIN_DELAY_S = 0.4
-_MAX_DELAY_S = 1.2
+# Base inter-request gap — keep humanlike to pass casual review.
+_MIN_DELAY_S = 0.8
+_MAX_DELAY_S = 2.5
+# Occasional "reader pause" — simulates a visitor scrolling, answering a
+# call, or getting distracted. Defeats the "timing stddev too small"
+# heuristic that commercial WAF bot-scores use.
+_LONG_PAUSE_PROB = 0.15
+_LONG_PAUSE_MIN_S = 6.0
+_LONG_PAUSE_MAX_S = 20.0
 
 
 # ── Finding / Dossier model ────────────────────────────────────────
@@ -163,16 +169,50 @@ def _decompress_body(body_bytes: bytes, encoding: Optional[str]) -> str:
 
 def _http_get(url: str, timeout: float = _DEFAULT_TIMEOUT,
               user_agent: str = _DEFAULT_UA,
-              max_bytes: int = 512 * 1024) -> _HTTPResult:
-    """One polite HTTP GET.  Returns whatever the server returned;
-    never raises except on DNS-level failure."""
-    req = urllib.request.Request(url, headers={
+              max_bytes: int = 512 * 1024,
+              referer: Optional[str] = None,
+              first_nav: bool = False) -> _HTTPResult:
+    """One polite HTTP GET. Never raises except on DNS-level failure.
+
+    Args:
+        referer:   The previous URL on this session. Real browsers
+                   send Referer for all but the first navigation. When
+                   None and `first_nav=False`, we synthesize a search-
+                   engine-looking referer ("https://www.google.com/")
+                   on the first hit so we don't ALWAYS look like direct
+                   navigation (fresh-open-from-bookmark traffic).
+        first_nav: When True, behaves like the user typed the URL
+                   (no Referer, Sec-Fetch-Site: none).
+    """
+    parsed = urllib.parse.urlparse(url)
+    same_origin = False
+    if referer:
+        ref_parsed = urllib.parse.urlparse(referer)
+        same_origin = (ref_parsed.netloc == parsed.netloc
+                       and ref_parsed.scheme == parsed.scheme)
+
+    headers = {
         "User-Agent":      user_agent,
         "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate",
-        "Connection":      "close",
-    })
+        "Connection":      "keep-alive",   # browsers default to keep-alive
+        "Upgrade-Insecure-Requests": "1",
+    }
+    if referer:
+        headers["Referer"] = referer
+        headers["Sec-Fetch-Site"] = "same-origin" if same_origin else "cross-site"
+    else:
+        headers["Sec-Fetch-Site"] = "none"
+    if first_nav or not referer:
+        headers["Sec-Fetch-Mode"] = "navigate"
+        headers["Sec-Fetch-User"] = "?1"
+    else:
+        headers["Sec-Fetch-Mode"] = "navigate"
+        headers["Sec-Fetch-User"] = "?1"
+    headers["Sec-Fetch-Dest"] = "document"
+
+    req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body_bytes = resp.read(max_bytes)
@@ -213,7 +253,10 @@ class StealthRecon:
     def __init__(self, target_url: str,
                  user_agent: str = _DEFAULT_UA,
                  timeout: float = _DEFAULT_TIMEOUT,
-                 polite: bool = True) -> None:
+                 polite: bool = True,
+                 revisit_probability: float = 0.15,
+                 search_referer: str = "https://www.google.com/",
+                 ) -> None:
         self.target_url = target_url.rstrip("/")
         parsed = urllib.parse.urlparse(target_url)
         if not parsed.scheme:
@@ -226,6 +269,22 @@ class StealthRecon:
         self.polite = polite
         self.findings: List[StealthFinding] = []
         self.http_checks = 0
+
+        # Stealth state — referer chain + path revisit.
+        #
+        # Real browsing has these properties:
+        #   · every navigation after the first carries a Referer that
+        #     points to the previous page (often same-origin).
+        #   · a curious visitor occasionally revisits a known page
+        #     (clicks the logo, goes "back", returns to home).
+        # Our scanner-shape defensive sensor watches for the ABSENCE of
+        # those properties — missing-Referer ratio and
+        # distinct_paths/total_requests ratio. We simulate them here.
+        self._last_url: Optional[str] = None
+        self._visited_urls: List[str] = []
+        self._rng = random.Random()
+        self.revisit_probability = revisit_probability
+        self.search_referer = search_referer
 
     # ── Main ───────────────────────────────────────────────────────
 
@@ -251,11 +310,70 @@ class StealthRecon:
     # ── HTTP helper ───────────────────────────────────────────────
 
     def _get(self, path: str) -> _HTTPResult:
+        # Before each new-path request, occasionally do a "revisit" to
+        # a known page. This drops the distinct_paths/total_requests
+        # ratio below the 0.8 trip-wire our scanner-shape sensor
+        # watches for. We lower the threshold to 3 visited paths so
+        # revisits start happening before `distinct` crosses 10.
+        if (self.polite
+          and len(self._visited_urls) >= 3
+          and self._rng.random() < self.revisit_probability):
+            self._do_revisit()
+
         url = f"{self.scheme}://{self.host}{path}"
         if self.polite and self.http_checks > 0:
-            time.sleep(random.uniform(_MIN_DELAY_S, _MAX_DELAY_S))
+            self._humanlike_sleep()
         self.http_checks += 1
-        return _http_get(url, timeout=self.timeout, user_agent=self.user_agent)
+
+        # Referer chain: first hit comes from a search engine (natural
+        # traffic), subsequent hits come from the previous page we
+        # fetched (same-origin continuation).
+        referer = self._last_url or self.search_referer
+        first_nav = (self.http_checks == 1)
+
+        result = _http_get(
+            url,
+            timeout=self.timeout,
+            user_agent=self.user_agent,
+            referer=None if first_nav else referer,
+            first_nav=first_nav,
+        )
+        self._last_url = url
+        self._visited_urls.append(url)
+        return result
+
+    def _do_revisit(self) -> None:
+        """Re-fetch a previously-visited URL (usually the homepage) to
+        mimic a user clicking around. Uses the _http_get primitive so
+        timing + referer behavior match the main flow."""
+        target_url = self._rng.choice(self._visited_urls)
+        # Pace the revisit.
+        self._humanlike_sleep()
+        self.http_checks += 1
+        _http_get(
+            target_url,
+            timeout=self.timeout,
+            user_agent=self.user_agent,
+            referer=self._last_url,
+            first_nav=False,
+        )
+        # revisit does not update _last_url (we treat it like a
+        # mid-browse sidestep, not a new chain anchor)
+
+    def _humanlike_sleep(self) -> None:
+        """Gaussian-jittered inter-request delay with occasional long
+        pauses. Designed to keep stddev(intervals) > 1500 ms so the
+        'timing too uniform' bot-scorer signal doesn't fire."""
+        if self._rng.random() < _LONG_PAUSE_PROB:
+            # Reader-paused-to-scroll excursion.
+            d = self._rng.uniform(_LONG_PAUSE_MIN_S, _LONG_PAUSE_MAX_S)
+        else:
+            # Gaussian around the median of the short range.
+            mid = (_MIN_DELAY_S + _MAX_DELAY_S) / 2.0
+            stddev = (_MAX_DELAY_S - _MIN_DELAY_S) / 2.0
+            d = self._rng.gauss(mid, stddev)
+            d = max(_MIN_DELAY_S, min(_MAX_DELAY_S, d))
+        time.sleep(d)
 
     def _add(self, **kw) -> None:
         self.findings.append(StealthFinding(**kw))

@@ -242,7 +242,7 @@ _CSS = """
   .evidence { font-family: ui-monospace, "Courier New", monospace;
               font-size: .76rem; background: #fafafa;
               border: 1px solid var(--rule); border-radius: 4px;
-              padding: .55rem .75rem; overflow-x: auto;
+              padding: .55rem .75rem;
               white-space: pre-wrap; word-break: break-all; }
   .mandate { font-size: .84rem; color: var(--fg-2); margin-top: .75rem;
              border-left: 3px solid var(--rule); padding-left: .75rem; }
