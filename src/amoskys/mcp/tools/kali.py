@@ -398,11 +398,14 @@ def kali_nikto(target_url: str,
     if err:
         return {"ok": False, "error": err, "tool": "nikto"}
 
+    # nikto requires -output FILE when -Format is set. We pipe to stdout
+    # by using /dev/stdout; -ask no keeps it non-interactive without
+    # requiring -nointeractive (which isn't universal across nikto builds).
     cmd = [
         "nikto", "-h", target_url,
         "-Tuning", tuning,
-        "-Format", "txt",
-        "-nointeractive",
+        "-ask", "no",
+        "-maxtime", "600s",  # 10-min cap so it doesn't run forever
     ]
     raw = _run(cmd, timeout=900)
     log_path = _persist_full_log("nikto", target_url, raw)
