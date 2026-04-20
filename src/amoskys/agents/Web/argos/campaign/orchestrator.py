@@ -38,9 +38,15 @@ from amoskys.agents.Web.argos.adapt import (
     AdaptedStrategy, pick_strategy,
     OriginCandidate, discover_origin,
 )
+from amoskys.agents.Web.argos.auth import (
+    scan_jwt, bypass_case_variation,
+)
 from amoskys.agents.Web.argos.campaign.events import EventBus, EventKind
 from amoskys.agents.Web.argos.chain import ChainFinding, reason_chains, ExploitChain
 from amoskys.agents.Web.argos.smuggle import detect_smuggling
+from amoskys.agents.Web.argos.zeroday import (
+    HIDDEN_PARAM_WORDLIST, discover_hidden_params,
+)
 
 logger = logging.getLogger("amoskys.argos.campaign.orchestrator")
 
@@ -312,6 +318,101 @@ class Campaign:
         self.bus.stage_end(stage, f"{len(cands)} candidate(s); "
                             f"{sum(1 for c in cands if c.confirmed)} confirmed")
 
+    # ── Hidden-param fuzzer (CONFIRM / EXPLOIT) ------------------
+
+    def _hidden_params(self):
+        if self.mode == CampaignMode.REPORT:
+            return
+        stage = "fuzz_params"
+        self.bus.stage_start(stage, "discovering hidden parameters on the index page")
+        if self.http_get is None:
+            self.bus.stage_end(stage, "skipped (no http_get)")
+            return
+        # Build a sender for discover_hidden_params:
+        #   sender(url, params_dict) -> ResponseObservation-compatible object
+        from amoskys.agents.Web.argos.zeroday import ResponseObservation
+        def _sender(url, params):
+            try:
+                qs = "&".join(f"{k}={v}" for k, v in (params or {}).items())
+                full = url + ("?" + qs if qs else "")
+                status, hdrs, body = self.http_get(full, 6.0, {})
+                return ResponseObservation(
+                    status=status,
+                    length=len(body or ""),
+                    body_hash=_short_hash((body or "")[:4096]),
+                    content_type=(hdrs or {}).get("content-type", ""),
+                    latency_ms=0,
+                    headers=dict(hdrs or {}),
+                    body_preview=(body or "")[:400],
+                )
+            except Exception as exc:  # noqa: BLE001
+                return ResponseObservation(
+                    status=0, length=0, body_hash="",
+                    content_type="", latency_ms=0,
+                    headers={}, body_preview=f"__error__:{exc}",
+                )
+
+        try:
+            # Cap wordlist to keep volume polite in CONFIRM mode
+            limit = 15 if self.mode == CampaignMode.CONFIRM else 40
+            wl = HIDDEN_PARAM_WORDLIST[:limit]
+            fuzz_rep = discover_hidden_params(self.target_url, sender=_sender,
+                                                wordlist=wl,
+                                                baseline_samples=1)
+        except Exception as exc:  # noqa: BLE001
+            self.bus.error(stage, f"discover_hidden_params failed: {exc}")
+            self._report.errors.append(f"fuzz_params: {exc}")
+            return
+        hits = getattr(fuzz_rep, "hits", []) or []
+        for h in hits[:8]:
+            param = h.get("param") if isinstance(h, dict) else getattr(h, "param", "")
+            sig = h.get("signal") if isinstance(h, dict) else getattr(h, "signal", "")
+            self.bus.finding(stage, "hidden_param", f"{self.target_url}?{param}=",
+                             "medium", f"{param}: {sig}")
+        self.bus.stage_end(stage, f"{len(hits)} hidden param candidate(s)")
+
+    # ── Auth surface probe (EXPLOIT) -----------------------------
+
+    def _auth_probe(self):
+        if self.mode != CampaignMode.EXPLOIT:
+            return
+        stage = "auth_probe"
+        self.bus.stage_start(stage, "auth-endpoint discovery + JWT capture")
+        if self.http_get is None:
+            self.bus.stage_end(stage, "skipped (no http_get)")
+            return
+        # 1. Try well-known auth endpoints and capture any bearer token
+        endpoints = [
+            "/wp-login.php", "/wp-json/jwt-auth/v1/token", "/api/login",
+            "/api/auth/login", "/oauth/token",
+        ]
+        tokens_seen: List[str] = []
+        for ep in endpoints:
+            url = self.target_url + ep
+            try:
+                status, hdrs, body = self.http_get(url, 6.0, {})
+            except Exception:
+                continue
+            # Scan body + Set-Cookie + Authorization-like headers for JWTs
+            candidates = _extract_jwts(f"{body or ''}\n{hdrs or {}}")
+            for tok in candidates:
+                if tok not in tokens_seen:
+                    tokens_seen.append(tok)
+                    self.bus.evidence(stage, f"JWT spotted at {ep} (len={len(tok)})")
+        # 2. Run JWT attack suite on any token we captured
+        for tok in tokens_seen[:3]:
+            try:
+                rep = scan_jwt(tok)
+            except Exception as exc:  # noqa: BLE001
+                self.bus.error(stage, f"scan_jwt failed: {exc}")
+                continue
+            for f in rep.findings:
+                if f.severity in ("critical", "high"):
+                    self.bus.finding(stage, f"jwt_{f.technique}",
+                                     self.target_url, f.severity, f.evidence)
+        self.bus.stage_end(stage,
+            f"tokens captured={len(tokens_seen)}")
+
     # ── Smuggling probe ------------------------------------------
 
     def _smuggle(self):
@@ -387,6 +488,8 @@ class Campaign:
             strategy = self._strategy(profile)
             self._origin_bypass(strategy)
             self._smuggle()
+            self._hidden_params()
+            self._auth_probe()
 
             # Chain reasoning takes findings from all prior stages
             self._chains(profile)
@@ -413,6 +516,27 @@ class Campaign:
             f"{self._report.finished_at - self._report.started_at:.1f}s",
             target=self.target_url, mode=self.mode,
         )
+
+
+# ── Module-private helpers ────────────────────────────────────────
+
+
+import hashlib as _hashlib
+import re as _re
+
+
+_JWT_RE = _re.compile(r"\b(ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{0,})\b")
+
+
+def _extract_jwts(text: str) -> List[str]:
+    """Pull JWT-shaped tokens (ey… three-dot) out of text."""
+    if not text:
+        return []
+    return list(dict.fromkeys(_JWT_RE.findall(text)))
+
+
+def _short_hash(s: str) -> str:
+    return _hashlib.sha256(s.encode("utf-8", errors="replace")).hexdigest()[:12]
 
 
 def run_campaign(target_url: str,

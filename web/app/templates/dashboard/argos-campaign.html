@@ -328,8 +328,10 @@
             <div class="profile-grid" id="argos-report-profile"></div>
             <h3 style="margin-top: 1.25rem;">Exploit Chains</h3>
             <div id="argos-report-chains"></div>
-            <div style="margin-top: 1rem; color: var(--text-muted); font-size: 0.75rem;">
-                Raw JSON: <a href="#" id="argos-json-link" style="color: var(--neural-primary);">copy to clipboard</a>
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                <a id="argos-download-html" href="#" style="background: var(--neural-primary); color: var(--bg-primary); padding: 0.5rem 1rem; border-radius: 5px; font-weight: 700; text-decoration: none; letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.78rem;">Download HTML report</a>
+                <a id="argos-download-json" href="#" style="background: var(--bg-tertiary); color: var(--neural-primary); padding: 0.5rem 1rem; border-radius: 5px; font-weight: 700; text-decoration: none; letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.78rem; border: 1px solid rgba(0,217,255,0.3);">Download JSON</a>
+                <a href="#" id="argos-json-link" style="color: var(--text-muted); font-size: 0.78rem; margin-left: 0.25rem;">copy JSON to clipboard</a>
             </div>
         </div>
     </section>
@@ -352,6 +354,8 @@
     const reportProf = document.getElementById('argos-report-profile');
     const reportChns = document.getElementById('argos-report-chains');
     const jsonLink   = document.getElementById('argos-json-link');
+    const dlHtml     = document.getElementById('argos-download-html');
+    const dlJson     = document.getElementById('argos-download-json');
 
     let socket = null;
     let currentCampaignId = null;
@@ -483,8 +487,14 @@
         if (!lastReport) return;
         navigator.clipboard.writeText(JSON.stringify(lastReport, null, 2));
         jsonLink.textContent = 'copied ✓';
-        setTimeout(() => { jsonLink.textContent = 'copy to clipboard'; }, 1500);
+        setTimeout(() => { jsonLink.textContent = 'copy JSON to clipboard'; }, 1500);
     });
+
+    function wireDownloads() {
+        if (!currentCampaignId) return;
+        dlHtml.href = `/dashboard/api/argos/campaign/${currentCampaignId}/report.html`;
+        dlJson.href = `/dashboard/api/argos/campaign/${currentCampaignId}/report.json`;
+    }
 
     async function launch() {
         errorBox.style.display = 'none';
@@ -547,7 +557,10 @@
             if (msg.campaign_id !== currentCampaignId) return;
             liveStatus.textContent = msg.error ? 'error' : 'done';
             liveStatus.className = 'status ' + (msg.error ? 'fatal' : 'done');
-            if (msg.report) renderReport(msg.report);
+            if (msg.report) {
+                renderReport(msg.report);
+                wireDownloads();
+            }
             if (msg.error) {
                 errorBox.textContent = msg.error;
                 errorBox.style.display = 'block';

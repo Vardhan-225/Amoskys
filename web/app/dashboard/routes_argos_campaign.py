@@ -33,10 +33,10 @@ import urllib.parse
 import urllib.request
 from typing import Any, Callable, Dict, List, Optional
 
-from flask import jsonify, render_template, request
+from flask import Response, jsonify, render_template, request
 
 from amoskys.agents.Web.argos.campaign import (
-    Campaign, CampaignMode, EventBus,
+    Campaign, CampaignMode, EventBus, render_campaign_html,
 )
 
 from ..middleware import get_current_user, require_login
@@ -276,6 +276,49 @@ def argos_campaign_detail(campaign_id: str):
         "report":       meta.get("report"),
         "running":      meta.get("report") is None and meta.get("thread") and meta["thread"].is_alive(),
     })
+
+
+# ── API: download HTML report ──────────────────────────────────────
+
+@dashboard_bp.route("/api/argos/campaign/<campaign_id>/report.html")
+@require_login
+def argos_campaign_report_html(campaign_id: str):
+    _purge_old()
+    meta = _ACTIVE.get(campaign_id)
+    if meta is None or meta.get("report") is None:
+        return jsonify({"ok": False, "error": "campaign not found or still running"}), 404
+    body = render_campaign_html(meta["report"])
+    host = meta.get("host") or "target"
+    fname = f"argos-campaign-{host}-{campaign_id}.html"
+    return Response(
+        body,
+        mimetype="text/html; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{fname}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+# ── API: download JSON report ──────────────────────────────────────
+
+@dashboard_bp.route("/api/argos/campaign/<campaign_id>/report.json")
+@require_login
+def argos_campaign_report_json(campaign_id: str):
+    _purge_old()
+    meta = _ACTIVE.get(campaign_id)
+    if meta is None or meta.get("report") is None:
+        return jsonify({"ok": False, "error": "campaign not found or still running"}), 404
+    import json as _json
+    host = meta.get("host") or "target"
+    fname = f"argos-campaign-{host}-{campaign_id}.json"
+    return Response(
+        _json.dumps(meta["report"], indent=2, default=str),
+        mimetype="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{fname}"',
+        },
+    )
 
 
 # ── SocketIO: join campaign room ───────────────────────────────────
