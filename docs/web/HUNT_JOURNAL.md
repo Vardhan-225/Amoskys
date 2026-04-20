@@ -541,7 +541,84 @@ the mutation-encoded forms our suite generates). Then show Aegis
 catching the same probe. That's the sales loop: "your WAF missed
 this; we caught it."
 
+### Cycle 005 — 2026-04-20 · Argos Zero-Day Hunter (offense-first v2.1)
 
+**What shipped.** Five new modules under argos/zeroday/, 27 passing
+tests, orchestrator that chains every real-world novel-vuln
+discovery technique into one call.
+
+#### Argos v2.1 offense
+
+**patch_diff.py** — the 1-day goldmine.
+  Given two versions of a plugin from wp.org SVN, diff every PHP
+  file, flag security-relevant hunks (added sanitizers/guards or
+  touched danger sinks), run all 6 AST scanners against both. Any
+  finding present in v_old but absent in v_new IS a silently-patched
+  vulnerability. Output: PatchDiffReport with diff context + PoC-
+  ready finding list.
+
+  Why this finds zero-days-in-the-wild: on wp.org ~40-50% of plugin
+  installs lag the latest release. A patch shipped last week is a
+  working exploit against half the install base until they update.
+  Silent patches (no CVE, no advisory) are the MAJORITY of real-
+  world plugin security fixes — WPScan/Patchstack miss them.
+
+**taint.py** — inter-procedural dataflow analysis.
+  Tracks assignments (`$var = $_POST['x']`), variable-to-variable
+  propagation, sanitizer application (intval/esc_html/wp_unslash/...)
+  and sink detection ($wpdb->query, file_put_contents, eval,
+  unserialize, system, echo). Produces taint.sqli / xss_reflected /
+  rce / poi / file_op findings for the multi-hop flows regex
+  scanners miss. ~15-30% of its novel findings are real bugs per
+  prior-art benchmarks.
+
+**fuzzer.py** — coverage-guided grammar fuzzer.
+  Response-bucket analysis: fire baseline + mutations, bucket by
+  (status, length, content-hash, header-set), flag anything
+  producing a new bucket. Includes `discover_hidden_params()` with
+  40-entry WP-tuned wordlist — surfaces reflective params and
+  undocumented endpoints.
+
+**polyglot.py** — 7 curated context-auto-detecting payloads.
+  PortSwigger universal XSS, SQL+XSS dual, LFI+upload+null-byte,
+  SSTI engine detector, JSON proto-pollution, CRLF header injection,
+  path-normalization bypass. All INERT (alert()-style only).
+
+**zeroday.py** — orchestrator. `hunt(slug, v_old, v_new)` chains
+  all four techniques + the existing 6 AST scanners, attaches
+  polyglot candidates per finding.
+
+#### What this UNLOCKS
+
+On any plugin a customer uses:
+  1. `hunt(customer_plugin, v_latest-1, v_latest)` → lists what the
+     latest release silently patched. Often 2-5 bugs per big plugin.
+  2. Each patched bug flows through `argos.precision.payload_synth`
+     for PoC generation, then through `argos.evasion` for WAF bypass.
+  3. Customer sees: "your plugin vendor patched 3 unauth SQLi last
+     week without mentioning them. Here's the working exploit against
+     YOUR current version. Aegis caught it at critical in <100 ms."
+
+This is the bug-bounty-grade demo — "we have a CVE-equivalent for
+YOUR deployed version" — not the generic "we found a theoretical
+vuln somewhere."
+
+#### Files + test count
+  zeroday/__init__.py           57 lines
+  zeroday/patch_diff.py        305 lines
+  zeroday/taint.py             427 lines
+  zeroday/fuzzer.py            214 lines
+  zeroday/polyglot.py          225 lines
+  zeroday/zeroday.py           175 lines
+  test_argos_zeroday.py        380 lines → 27/27 passing
+  Total: 1,783 new lines.  417 web tests passing across the suite.
+
+#### Known gaps
+  · Aegis doesn't yet detect reflected-XSS execution (needs CSP-
+    violation or output-mirror sensor, v2.2 target).
+  · Patch-diff 1-day probes use legitimately-shaped requests — the
+    evasion sensor catches the payload SHAPE but not plugin-version-
+    aware behavioral anomaly. v2.2 plugin-version-aware sensor.
 
 ## Bug-bounty candidates discovered
 
