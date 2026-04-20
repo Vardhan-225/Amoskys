@@ -1,0 +1,568 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Argos Campaign — AMOSKYS{% endblock %}
+
+{% block extra_head %}
+<style>
+    .argos-shell {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 1rem;
+        padding: 1rem;
+        min-height: calc(100vh - var(--header-height));
+    }
+    .argos-panel {
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0, 217, 255, 0.15);
+        border-radius: 10px;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    .argos-panel h2 {
+        font-size: 0.95rem;
+        color: var(--neural-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        border-bottom: 1px solid rgba(0, 217, 255, 0.2);
+        padding-bottom: 0.5rem;
+    }
+    .argos-panel label {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        display: block;
+        margin-bottom: 0.25rem;
+    }
+    .argos-panel input, .argos-panel select {
+        width: 100%;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        border-radius: 6px;
+        padding: 0.65rem 0.8rem;
+        font-family: inherit;
+        font-size: 0.95rem;
+        outline: none;
+        transition: border-color 0.15s;
+    }
+    .argos-panel input:focus, .argos-panel select:focus {
+        border-color: var(--neural-primary);
+        box-shadow: 0 0 0 2px rgba(0, 217, 255, 0.15);
+    }
+    .argos-panel button {
+        background: var(--neural-primary);
+        color: var(--bg-primary);
+        border: none;
+        border-radius: 6px;
+        padding: 0.8rem 1.2rem;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        transition: background 0.15s;
+    }
+    .argos-panel button:hover { background: var(--neural-secondary); }
+    .argos-panel button:disabled { background: var(--text-muted); cursor: not-allowed; }
+
+    .argos-live {
+        background: #05070f;
+        border: 1px solid rgba(0, 217, 255, 0.15);
+        border-radius: 10px;
+        padding: 1rem;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-height: 600px;
+    }
+    .argos-live header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid rgba(0, 217, 255, 0.2);
+        margin-bottom: 1rem;
+    }
+    .argos-live .target {
+        font-family: 'SF Mono', Menlo, Monaco, monospace;
+        color: var(--neural-primary);
+        font-size: 1rem;
+    }
+    .argos-live .status {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+    .argos-live .status.running { color: var(--neural-primary); animation: pulse 1.5s infinite; }
+    .argos-live .status.done { color: var(--neural-success); }
+    .argos-live .status.fatal { color: var(--neural-danger); }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    .argos-stages {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .argos-stage {
+        padding: 0.5rem 0.75rem;
+        background: rgba(0, 217, 255, 0.04);
+        border: 1px solid rgba(0, 217, 255, 0.1);
+        border-radius: 6px;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        text-align: center;
+        transition: all 0.2s;
+    }
+    .argos-stage.active {
+        background: rgba(0, 217, 255, 0.15);
+        border-color: var(--neural-primary);
+        color: var(--neural-primary);
+        box-shadow: 0 0 8px rgba(0, 217, 255, 0.25);
+    }
+    .argos-stage.done {
+        background: rgba(0, 255, 136, 0.08);
+        border-color: var(--neural-success);
+        color: var(--neural-success);
+    }
+    .argos-stage.failed {
+        background: rgba(255, 51, 102, 0.08);
+        border-color: var(--neural-danger);
+        color: var(--neural-danger);
+    }
+
+    .argos-stream {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.25rem;
+        font-family: 'SF Mono', Menlo, Monaco, monospace;
+        font-size: 0.82rem;
+        line-height: 1.5;
+    }
+    .argos-stream::-webkit-scrollbar { width: 6px; }
+    .argos-stream::-webkit-scrollbar-thumb { background: rgba(0, 217, 255, 0.3); border-radius: 3px; }
+
+    .evt {
+        display: grid;
+        grid-template-columns: 64px 90px 1fr;
+        gap: 0.5rem;
+        padding: 0.35rem 0.5rem;
+        border-left: 2px solid transparent;
+        border-radius: 2px;
+    }
+    .evt .ts { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .evt .stage { color: var(--neural-secondary); font-weight: 600; text-transform: uppercase; font-size: 0.7rem; }
+    .evt .msg { color: var(--text-primary); word-break: break-word; }
+    .evt.k-stage_start   { border-left-color: var(--neural-primary); background: rgba(0, 217, 255, 0.04); }
+    .evt.k-stage_end     { border-left-color: var(--neural-success); }
+    .evt.k-progress      { border-left-color: var(--neural-secondary); opacity: 0.8; }
+    .evt.k-finding       { border-left-color: var(--neural-warning); background: rgba(240, 173, 78, 0.04); }
+    .evt.k-evidence      { border-left-color: var(--text-muted); }
+    .evt.k-decision      { border-left-color: #a855f7; }
+    .evt.k-chain         { border-left-color: var(--neural-danger); background: rgba(255, 51, 102, 0.08); font-weight: 600; }
+    .evt.k-log           { opacity: 0.7; }
+    .evt.k-error         { border-left-color: var(--severity-medium); color: var(--severity-medium); }
+    .evt.k-fatal         { border-left-color: var(--severity-critical); background: rgba(220, 38, 38, 0.1); }
+    .evt.k-report        { border-left-color: var(--neural-primary); font-weight: 700; }
+    .evt.k-done          { border-left-color: var(--neural-success); font-weight: 700; background: rgba(0, 255, 136, 0.06); }
+
+    .argos-report {
+        background: var(--bg-secondary);
+        border: 1px solid rgba(0, 217, 255, 0.15);
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-top: 1rem;
+        display: none;
+    }
+    .argos-report.visible { display: block; }
+    .argos-report h3 {
+        color: var(--neural-primary);
+        margin-bottom: 0.75rem;
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .chain-card {
+        background: var(--bg-tertiary);
+        border-left: 3px solid var(--neural-danger);
+        padding: 0.85rem 1rem;
+        border-radius: 4px;
+        margin-bottom: 0.75rem;
+    }
+    .chain-card.critical { border-left-color: var(--severity-critical); }
+    .chain-card.high     { border-left-color: var(--severity-high); }
+    .chain-card.medium   { border-left-color: var(--severity-medium); }
+    .chain-card .chain-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 0.4rem;
+    }
+    .chain-card .chain-name { color: var(--text-primary); font-weight: 700; }
+    .chain-card .chain-cvss { color: var(--neural-primary); font-family: monospace; }
+    .chain-card .chain-narrative {
+        color: var(--text-secondary);
+        font-size: 0.82rem;
+        white-space: pre-wrap;
+        margin-top: 0.5rem;
+        padding-left: 0.5rem;
+        border-left: 1px dotted var(--text-muted);
+    }
+
+    .sev-badge {
+        display: inline-block;
+        padding: 0.1rem 0.5rem;
+        border-radius: 3px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .sev-badge.critical { background: var(--severity-critical); color: white; }
+    .sev-badge.high     { background: var(--severity-high); color: white; }
+    .sev-badge.medium   { background: var(--severity-medium); color: white; }
+    .sev-badge.low      { background: var(--severity-low); color: white; }
+    .sev-badge.info     { background: var(--severity-info); color: white; }
+
+    .profile-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.5rem;
+    }
+    .profile-grid .cell {
+        background: var(--bg-tertiary);
+        border-radius: 4px;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.78rem;
+    }
+    .profile-grid .cell .k { color: var(--text-muted); font-size: 0.7rem; letter-spacing: 0.04em; }
+    .profile-grid .cell .v { color: var(--text-primary); font-weight: 600; }
+
+    @media (max-width: 900px) {
+        .argos-shell { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="argos-shell">
+
+    <!-- LEFT: SUBMIT FORM ────────────────────────────────────────── -->
+    <section class="argos-panel" aria-label="Campaign launch">
+        <h2>Argos Campaign</h2>
+        <div style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5;">
+            Give me a domain. I'll fingerprint the stack, pick tactics the
+            observed architecture is known to be weak against, look for
+            exploit chains, and show you every decision I make in real time.
+        </div>
+
+        <div>
+            <label for="argos-target">Target domain</label>
+            <input id="argos-target" type="text" placeholder="example.com or https://example.com/" autocomplete="off">
+        </div>
+
+        <div>
+            <label for="argos-mode">Mode</label>
+            <select id="argos-mode">
+                <option value="report">Report — OSINT + passive fingerprint (any domain, safe)</option>
+                <option value="confirm">Confirm — low-volume probes (consent advised)</option>
+                <option value="exploit">Exploit — full kill chain (written authorization required)</option>
+            </select>
+        </div>
+
+        <div id="argos-consent-row" style="display: none;">
+            <label for="argos-consent">Consent token</label>
+            <input id="argos-consent" type="text" placeholder="bounty:program-name  or  sow:client-name">
+            <div style="color: var(--text-muted); font-size: 0.7rem; margin-top: 0.35rem;">
+                For bug-bounty, enter <code>bounty:&lt;program&gt;</code>. For signed engagements, <code>sow:&lt;client&gt;</code>.
+            </div>
+        </div>
+
+        <button id="argos-launch" type="button">Launch Campaign</button>
+
+        <div id="argos-error" style="color: var(--neural-danger); font-size: 0.82rem; display: none;"></div>
+
+        <div style="color: var(--text-muted); font-size: 0.72rem; line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.75rem; margin-top: auto;">
+            <strong style="color: var(--text-secondary);">Legal</strong><br>
+            Report mode runs only on publicly-queryable data (DNS, CT logs,
+            robots.txt, fingerprint-grade GETs). Confirm/exploit modes
+            require authorization. Argos logs every action to an immutable
+            audit trail. CFAA 1030(a)(2)(C) + Van Buren (2021) + hiQ v.
+            LinkedIn (2022).
+        </div>
+    </section>
+
+    <!-- RIGHT: LIVE STREAM + REPORT ─────────────────────────────── -->
+    <section class="argos-live" aria-label="Live campaign events">
+        <header>
+            <div class="target" id="argos-live-target">— no campaign running —</div>
+            <div class="status" id="argos-live-status">idle</div>
+        </header>
+
+        <div class="argos-stages" id="argos-stages">
+            <div class="argos-stage" data-stage="consent">Consent</div>
+            <div class="argos-stage" data-stage="recon">Recon</div>
+            <div class="argos-stage" data-stage="fingerprint">Fingerprint</div>
+            <div class="argos-stage" data-stage="strategy">Strategy</div>
+            <div class="argos-stage" data-stage="origin_bypass">Origin</div>
+            <div class="argos-stage" data-stage="smuggle">Smuggle</div>
+            <div class="argos-stage" data-stage="chain">Chain</div>
+            <div class="argos-stage" data-stage="report">Report</div>
+        </div>
+
+        <div class="argos-stream" id="argos-stream">
+            <div style="color: var(--text-muted); padding: 2rem; text-align: center;">
+                Events will stream here as the campaign runs.
+            </div>
+        </div>
+
+        <!-- Final report -->
+        <div class="argos-report" id="argos-report">
+            <h3>Final Report</h3>
+            <div id="argos-report-summary"></div>
+            <h3 style="margin-top: 1.25rem;">Architecture Profile</h3>
+            <div class="profile-grid" id="argos-report-profile"></div>
+            <h3 style="margin-top: 1.25rem;">Exploit Chains</h3>
+            <div id="argos-report-chains"></div>
+            <div style="margin-top: 1rem; color: var(--text-muted); font-size: 0.75rem;">
+                Raw JSON: <a href="#" id="argos-json-link" style="color: var(--neural-primary);">copy to clipboard</a>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+(function() {
+    const launchBtn  = document.getElementById('argos-launch');
+    const targetInp  = document.getElementById('argos-target');
+    const modeSel    = document.getElementById('argos-mode');
+    const consentRow = document.getElementById('argos-consent-row');
+    const consentInp = document.getElementById('argos-consent');
+    const errorBox   = document.getElementById('argos-error');
+    const liveTarget = document.getElementById('argos-live-target');
+    const liveStatus = document.getElementById('argos-live-status');
+    const streamBox  = document.getElementById('argos-stream');
+    const stagesBox  = document.getElementById('argos-stages');
+    const reportBox  = document.getElementById('argos-report');
+    const reportSum  = document.getElementById('argos-report-summary');
+    const reportProf = document.getElementById('argos-report-profile');
+    const reportChns = document.getElementById('argos-report-chains');
+    const jsonLink   = document.getElementById('argos-json-link');
+
+    let socket = null;
+    let currentCampaignId = null;
+    let lastReport = null;
+
+    modeSel.addEventListener('change', () => {
+        consentRow.style.display = (modeSel.value === 'report') ? 'none' : 'block';
+    });
+
+    function esc(s) {
+        return (s == null ? '' : String(s))
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    function setStage(stage, state) {
+        const el = stagesBox.querySelector(`[data-stage="${stage}"]`);
+        if (!el) return;
+        el.classList.remove('active', 'done', 'failed');
+        if (state) el.classList.add(state);
+    }
+
+    function appendEvent(evt) {
+        const tsDate = new Date(evt.timestamp * 1000);
+        const ts = tsDate.toTimeString().slice(0, 8);
+        const row = document.createElement('div');
+        row.className = `evt k-${evt.kind}`;
+        row.innerHTML = `
+            <div class="ts">${ts}</div>
+            <div class="stage">${esc(evt.stage)}</div>
+            <div class="msg">${esc(evt.message)}</div>
+        `;
+        streamBox.appendChild(row);
+        streamBox.scrollTop = streamBox.scrollHeight;
+
+        // Update stage indicators
+        if (evt.kind === 'stage_start') {
+            setStage(evt.stage, 'active');
+        } else if (evt.kind === 'stage_end') {
+            setStage(evt.stage, 'done');
+        } else if (evt.kind === 'fatal') {
+            setStage(evt.stage, 'failed');
+            liveStatus.textContent = 'fatal';
+            liveStatus.className = 'status fatal';
+        } else if (evt.kind === 'error') {
+            setStage(evt.stage, 'failed');
+        }
+    }
+
+    function renderReport(report) {
+        if (!report) return;
+        lastReport = report;
+        reportBox.classList.add('visible');
+
+        // Summary
+        reportSum.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem;">
+                <div class="cell" style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 6px;">
+                    <div class="k" style="color: var(--text-muted); font-size: 0.7rem;">Target</div>
+                    <div class="v" style="font-family: monospace; color: var(--neural-primary);">${esc(report.target_url)}</div>
+                </div>
+                <div class="cell" style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 6px;">
+                    <div class="k" style="color: var(--text-muted); font-size: 0.7rem;">Mode</div>
+                    <div class="v">${esc(report.mode)}</div>
+                </div>
+                <div class="cell" style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 6px;">
+                    <div class="k" style="color: var(--text-muted); font-size: 0.7rem;">Duration</div>
+                    <div class="v">${(report.duration_s || 0).toFixed(2)}s</div>
+                </div>
+                <div class="cell" style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 6px;">
+                    <div class="k" style="color: var(--text-muted); font-size: 0.7rem;">Max severity</div>
+                    <div class="v"><span class="sev-badge ${esc(report.max_severity)}">${esc(report.max_severity)}</span></div>
+                </div>
+                <div class="cell" style="background: var(--bg-tertiary); padding: 0.75rem; border-radius: 6px;">
+                    <div class="k" style="color: var(--text-muted); font-size: 0.7rem;">Consent</div>
+                    <div class="v" style="font-size: 0.78rem;">${esc(report.consent_method || 'none')}</div>
+                </div>
+            </div>
+        `;
+
+        // Profile
+        reportProf.innerHTML = '';
+        const p = report.profile || {};
+        const rows = [
+            ['CDN',       (p.cdn && p.cdn.name) || '—'],
+            ['WAF',       (p.waf && (p.waf.names || []).join(', ')) || '—'],
+            ['Origin',    (p.origin && p.origin.server) ? `${p.origin.server} ${p.origin.version || ''}` : '—'],
+            ['Runtime',   (p.runtime && p.runtime.name) ? `${p.runtime.name} ${p.runtime.version || ''}` : '—'],
+            ['Database',  (p.database && p.database.name) || '—'],
+            ['OS',        (p.os && p.os.family) || '—'],
+            ['Framework', (p.framework && p.framework.name) ? `${p.framework.name} ${p.framework.version || ''}` : '—'],
+            ['Verbose',   p.verbose_errors ? 'YES (leak)' : 'no'],
+        ];
+        for (const [k, v] of rows) {
+            const c = document.createElement('div');
+            c.className = 'cell';
+            c.innerHTML = `<div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>`;
+            reportProf.appendChild(c);
+        }
+
+        // Chains
+        reportChns.innerHTML = '';
+        const chains = report.chains || [];
+        if (chains.length === 0) {
+            reportChns.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">No exploit chains composed from current findings.</div>';
+        } else {
+            for (const c of chains) {
+                const card = document.createElement('div');
+                card.className = `chain-card ${esc(c.severity)}`;
+                card.innerHTML = `
+                    <div class="chain-head">
+                        <span class="chain-name">${esc(c.name)}</span>
+                        <span class="chain-cvss">CVSS ${Number(c.cvss_estimate || 0).toFixed(1)}</span>
+                    </div>
+                    <div><span class="sev-badge ${esc(c.severity)}">${esc(c.severity)}</span> <span style="color: var(--text-muted); margin-left: 0.5rem;">confidence ${esc(c.confidence)}%</span></div>
+                    <div class="chain-narrative">${esc(c.narrative)}</div>
+                    <div style="margin-top: 0.5rem; color: var(--neural-warning); font-size: 0.78rem;">
+                        Business impact: ${esc(c.business_impact)}
+                    </div>
+                `;
+                reportChns.appendChild(card);
+            }
+        }
+    }
+
+    jsonLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!lastReport) return;
+        navigator.clipboard.writeText(JSON.stringify(lastReport, null, 2));
+        jsonLink.textContent = 'copied ✓';
+        setTimeout(() => { jsonLink.textContent = 'copy to clipboard'; }, 1500);
+    });
+
+    async function launch() {
+        errorBox.style.display = 'none';
+        reportBox.classList.remove('visible');
+        const target = targetInp.value.trim();
+        const mode = modeSel.value;
+        const consent = consentInp.value.trim();
+        if (!target) {
+            errorBox.textContent = 'target is required';
+            errorBox.style.display = 'block';
+            return;
+        }
+
+        launchBtn.disabled = true;
+        launchBtn.textContent = 'Starting…';
+        streamBox.innerHTML = '';
+        stagesBox.querySelectorAll('.argos-stage').forEach(s => s.classList.remove('active', 'done', 'failed'));
+
+        try {
+            const res = await fetch('/dashboard/api/argos/campaign/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target, mode, consent_token: consent }),
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                errorBox.textContent = data.error || 'failed to start campaign';
+                errorBox.style.display = 'block';
+                launchBtn.disabled = false;
+                launchBtn.textContent = 'Launch Campaign';
+                return;
+            }
+            currentCampaignId = data.campaign_id;
+            liveTarget.textContent = data.target;
+            liveStatus.textContent = 'running';
+            liveStatus.className = 'status running';
+            connectSocket();
+        } catch (exc) {
+            errorBox.textContent = 'network error: ' + exc.message;
+            errorBox.style.display = 'block';
+            launchBtn.disabled = false;
+            launchBtn.textContent = 'Launch Campaign';
+        }
+    }
+
+    function connectSocket() {
+        if (socket) { try { socket.close(); } catch (e) {} }
+        socket = io('/dashboard', { transports: ['websocket', 'polling'] });
+        socket.on('connect', () => {
+            socket.emit('argos_campaign_join', { campaign_id: currentCampaignId });
+        });
+        socket.on('argos_campaign_joined', (msg) => {
+            // room joined; stream will flow
+        });
+        socket.on('argos_campaign_event', (msg) => {
+            if (msg.campaign_id !== currentCampaignId) return;
+            appendEvent(msg.event);
+        });
+        socket.on('argos_campaign_complete', (msg) => {
+            if (msg.campaign_id !== currentCampaignId) return;
+            liveStatus.textContent = msg.error ? 'error' : 'done';
+            liveStatus.className = 'status ' + (msg.error ? 'fatal' : 'done');
+            if (msg.report) renderReport(msg.report);
+            if (msg.error) {
+                errorBox.textContent = msg.error;
+                errorBox.style.display = 'block';
+            }
+            launchBtn.disabled = false;
+            launchBtn.textContent = 'Launch Campaign';
+        });
+        socket.on('argos_campaign_error', (msg) => {
+            errorBox.textContent = msg.error || 'socket error';
+            errorBox.style.display = 'block';
+        });
+    }
+
+    launchBtn.addEventListener('click', launch);
+    targetInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') launch(); });
+})();
+</script>
+{% endblock %}

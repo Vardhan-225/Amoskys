@@ -38,3 +38,4 @@ from . import routes_soma  # noqa: E402, F401
 from . import routes_command_center  # noqa: E402, F401
 from . import routes_overview  # noqa: E402, F401
 from . import routes_threats  # noqa: E402, F401
+from . import routes_argos_campaign  # noqa: E402, F401

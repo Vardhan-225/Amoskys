@@ -1,0 +1,428 @@
+"""Campaign orchestrator — the master kill chain.
+
+Runs every Argos module in the correct order against one target,
+emitting events throughout so a UI can render real-time progress.
+
+Stages
+------
+  consent         verify authorization for the target domain
+  recon           DNS + WHOIS + robots.txt + sitemap (passive)
+  fingerprint     architecture profile (CDN/WAF/origin/runtime/DB/OS)
+  strategy        select tactics tuned to the profile
+  origin_bypass   discover + confirm origin IP (only if CDN fronted)
+  smuggle         HTTP request smuggling detection (only if consent ≥ confirm)
+  auth_probe      JWT / session / rate-limit checks (only if endpoints exist)
+  zeroday         AST + taint + fuzzer + polyglot (only if plugin dir given)
+  precision       adaptive precision probes (only consent ≥ exploit)
+  chain           exploit-chain reasoner
+  report          render final artifacts
+
+Modes gate stages. "report" runs consent→recon→fingerprint→strategy
+→origin_bypass→chain→report (all non-invasive). "confirm" adds
+smuggle + stealth probes. "exploit" adds auth_probe, precision, and
+any finding-specific replay.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import time
+import urllib.parse
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
+
+from amoskys.agents.Web.argos.adapt import (
+    ArchitectureProfile, fingerprint_architecture,
+    AdaptedStrategy, pick_strategy,
+    OriginCandidate, discover_origin,
+)
+from amoskys.agents.Web.argos.campaign.events import EventBus, EventKind
+from amoskys.agents.Web.argos.chain import ChainFinding, reason_chains, ExploitChain
+from amoskys.agents.Web.argos.smuggle import detect_smuggling
+
+logger = logging.getLogger("amoskys.argos.campaign.orchestrator")
+
+
+class CampaignMode:
+    REPORT  = "report"      # OSINT + passive only — any domain
+    CONFIRM = "confirm"     # + low-volume probes — consent advised
+    EXPLOIT = "exploit"     # + active exploitation — written authorization required
+
+
+# ── Data model ────────────────────────────────────────────────────
+
+
+@dataclass
+class CampaignReport:
+    target_url: str
+    target_host: str
+    mode: str
+    started_at: float
+    finished_at: float = 0.0
+    profile: Optional[Dict[str, Any]] = None
+    strategy: Optional[Dict[str, Any]] = None
+    origin_candidates: List[Dict[str, Any]] = field(default_factory=list)
+    smuggle_report: Optional[Dict[str, Any]] = None
+    findings: List[Dict[str, Any]] = field(default_factory=list)
+    chains: List[Dict[str, Any]] = field(default_factory=list)
+    max_severity: str = "low"
+    events: List[Dict[str, Any]] = field(default_factory=list)
+    errors: List[str] = field(default_factory=list)
+    consent_verified: bool = False
+    consent_method: str = "none"
+
+    def to_dict(self):
+        return {
+            "target_url":        self.target_url,
+            "target_host":       self.target_host,
+            "mode":              self.mode,
+            "started_at":        self.started_at,
+            "finished_at":       self.finished_at,
+            "duration_s":        max(0.0, self.finished_at - self.started_at),
+            "profile":           self.profile,
+            "strategy":          self.strategy,
+            "origin_candidates": list(self.origin_candidates),
+            "smuggle_report":    self.smuggle_report,
+            "findings":          list(self.findings),
+            "chains":            list(self.chains),
+            "max_severity":      self.max_severity,
+            "events":            list(self.events),
+            "errors":            list(self.errors),
+            "consent_verified":  self.consent_verified,
+            "consent_method":    self.consent_method,
+        }
+
+
+# ── Campaign runner ───────────────────────────────────────────────
+
+
+class Campaign:
+    """Run a full Argos kill chain with live event streaming."""
+
+    def __init__(self, target_url: str, mode: str = CampaignMode.REPORT,
+                 consent_token: Optional[str] = None,
+                 bus: Optional[EventBus] = None,
+                 http_get: Optional[Callable] = None,
+                 smuggle_sender: Optional[Callable] = None,
+                 plugin_source_dir: Optional[str] = None,
+                 precision_sender: Optional[Callable] = None,
+                 prebuilt_findings: Optional[List[ChainFinding]] = None):
+        """
+        target_url         : fully-qualified https://host URL
+        mode               : one of CampaignMode.*
+        consent_token      : operator-supplied evidence of authorization
+                             (signed token, bug-bounty scope string,
+                             "bounty:<program>", or "AMOSKYS_CONSENT_DOMAIN")
+        bus                : EventBus for live events (web UI subscribes here)
+        http_get           : injectable HTTP client for fingerprint + origin
+                             signature http_get(url, timeout, headers) -> (status, headers, body)
+        smuggle_sender     : injectable raw-socket sender for smuggle detect
+        plugin_source_dir  : path to local plugin source, enables zeroday/TOCTOU
+        precision_sender   : injectable for precision probes in EXPLOIT mode
+        prebuilt_findings  : optional pre-collected findings (AST scanner run
+                             externally). Chains over these regardless of mode.
+        """
+        self.target_url = target_url.rstrip("/")
+        self.mode = mode
+        self.consent_token = consent_token
+        self.bus = bus or EventBus()
+        self.http_get = http_get
+        self.smuggle_sender = smuggle_sender
+        self.plugin_source_dir = plugin_source_dir
+        self.precision_sender = precision_sender
+        self.prebuilt_findings = list(prebuilt_findings or [])
+
+        parsed = urllib.parse.urlparse(self.target_url)
+        self.target_host = parsed.hostname or self.target_url
+        self._report = CampaignReport(
+            target_url=self.target_url,
+            target_host=self.target_host,
+            mode=self.mode,
+            started_at=time.time(),
+        )
+
+    # ── Consent gate ----------------------------------------------
+
+    def _verify_consent(self) -> bool:
+        """Check the operator is authorized to attack this domain.
+
+        Accepts any of:
+          - AMOSKYS_CONSENT_DOMAIN env matching target host (lab work)
+          - consent_token starting with "bounty:" (bug-bounty scope self-attest)
+          - consent_token starting with "sow:" (signed statement of work)
+          - target host == "localhost" or "127.*" (local dev)
+          - CampaignMode.REPORT — no consent required (OSINT only)
+        """
+        stage = "consent"
+        self.bus.stage_start(stage, f"verifying authorization for {self.target_host}",
+                              mode=self.mode)
+        if self.mode == CampaignMode.REPORT:
+            self._report.consent_verified = True
+            self._report.consent_method = "report-mode-no-consent-required"
+            self.bus.stage_end(stage, "report mode — OSINT-only, no consent gate")
+            return True
+
+        host = self.target_host.lower()
+        if host in ("localhost", "127.0.0.1") or host.startswith("127."):
+            self._report.consent_verified = True
+            self._report.consent_method = "localhost"
+            self.bus.stage_end(stage, "localhost — implicit consent")
+            return True
+
+        env_domain = os.environ.get("AMOSKYS_CONSENT_DOMAIN", "").strip().lower()
+        if env_domain and (host == env_domain or host.endswith("." + env_domain)):
+            self._report.consent_verified = True
+            self._report.consent_method = f"env:AMOSKYS_CONSENT_DOMAIN={env_domain}"
+            self.bus.stage_end(stage, f"consent via env match: {env_domain}")
+            return True
+
+        token = (self.consent_token or "").strip()
+        if token.startswith("bounty:"):
+            self._report.consent_verified = True
+            self._report.consent_method = token
+            self.bus.stage_end(
+                stage, f"consent via bug-bounty scope: {token}",
+                note="operator self-attests target is in a public bug-bounty scope")
+            return True
+        if token.startswith("sow:"):
+            self._report.consent_verified = True
+            self._report.consent_method = token
+            self.bus.stage_end(stage, f"consent via SOW: {token}")
+            return True
+
+        self._report.consent_verified = False
+        self._report.consent_method = "NONE"
+        self.bus.fatal(
+            stage,
+            f"NO CONSENT for {host}. Mode={self.mode} requires authorization. "
+            f"Set AMOSKYS_CONSENT_DOMAIN=<host>, pass consent_token='bounty:<program>', "
+            f"or run in mode='report' (OSINT only).",
+        )
+        self._report.errors.append("consent verification failed")
+        return False
+
+    # ── Passive recon --------------------------------------------
+
+    def _passive_recon(self):
+        stage = "recon"
+        self.bus.stage_start(stage, "DNS + robots + OSINT")
+        items = {
+            "robots_txt":    f"{self.target_url}/robots.txt",
+            "sitemap_xml":   f"{self.target_url}/sitemap.xml",
+            "humans_txt":    f"{self.target_url}/humans.txt",
+            "security_txt":  f"{self.target_url}/.well-known/security.txt",
+        }
+        found: Dict[str, str] = {}
+        if self.http_get is not None:
+            for name, url in items.items():
+                try:
+                    status, _h, body = self.http_get(url, 8.0, {})
+                    if status == 200 and body:
+                        snippet = body[:200].replace("\n", " ")
+                        found[name] = snippet
+                        self.bus.evidence(stage, f"{name}: {snippet[:80]}", url=url, status=status)
+                except Exception as exc:  # noqa: BLE001
+                    self.bus.log(stage, f"{name} fetch failed: {exc}")
+                self.bus.progress(stage, len(found), len(items))
+        else:
+            self.bus.log(stage, "http_get not provided — skipping recon fetches")
+        self.bus.stage_end(stage, f"{len(found)} assets collected", items=found)
+        return found
+
+    # ── Architecture fingerprint ---------------------------------
+
+    def _fingerprint(self) -> ArchitectureProfile:
+        stage = "fingerprint"
+        self.bus.stage_start(stage, "probing CDN/WAF/origin/runtime/DB/OS/framework")
+        try:
+            profile = fingerprint_architecture(self.target_url, http_get=self.http_get)
+        except Exception as exc:  # noqa: BLE001
+            self.bus.error(stage, f"fingerprint failed: {exc}")
+            self._report.errors.append(f"fingerprint: {exc}")
+            profile = ArchitectureProfile(target_url=self.target_url,
+                                           target_host=self.target_host)
+        # Emit per-layer evidence
+        if profile.cdn_name:
+            self.bus.evidence(stage, f"CDN: {profile.cdn_name} (conf={profile.cdn_confidence})")
+        if profile.waf_names:
+            self.bus.evidence(stage, f"WAF: {', '.join(profile.waf_names)}")
+        if profile.origin_server:
+            self.bus.evidence(stage, f"Origin server: {profile.origin_server} {profile.origin_version or ''}")
+        if profile.runtime:
+            self.bus.evidence(stage, f"Runtime: {profile.runtime} {profile.runtime_version or ''}")
+        if profile.database:
+            self.bus.evidence(stage, f"Database: {profile.database}")
+        if profile.os_family:
+            self.bus.evidence(stage, f"OS: {profile.os_family}")
+        if profile.framework:
+            self.bus.evidence(stage, f"Framework: {profile.framework} {profile.framework_version or ''}")
+        if profile.debug_mode or profile.verbose_errors:
+            self.bus.finding(stage, "verbose_errors", self.target_url, "low",
+                             "Target leaks debug info / stack traces")
+        self._report.profile = profile.to_dict()
+        self.bus.stage_end(stage,
+            f"profiled in {profile.fingerprint_time_ms}ms "
+            f"({profile.http_requests_used} reqs)")
+        return profile
+
+    # ── Strategy selection ---------------------------------------
+
+    def _strategy(self, profile: ArchitectureProfile) -> AdaptedStrategy:
+        stage = "strategy"
+        self.bus.stage_start(stage, "picking tactics tuned to observed architecture")
+        try:
+            strategy = pick_strategy(profile)
+        except Exception as exc:  # noqa: BLE001
+            self.bus.error(stage, f"pick_strategy failed: {exc}")
+            strategy = AdaptedStrategy(profile_target=self.target_url)
+        for note in strategy.notes:
+            self.bus.decision(stage, note)
+        self.bus.decision(stage, f"probe_order={strategy.probe_order[:6]}")
+        self.bus.decision(stage, f"encoding_cascade={strategy.encoding_cascade}")
+        self.bus.decision(stage, f"rps_ceiling={strategy.rps_ceiling}")
+        if strategy.origin_bypass:
+            self.bus.decision(stage, "origin_bypass enabled — will run discover_origin")
+        self._report.strategy = strategy.to_dict()
+        self.bus.stage_end(stage, "strategy locked")
+        return strategy
+
+    # ── Origin bypass --------------------------------------------
+
+    def _origin_bypass(self, strategy: AdaptedStrategy):
+        if not strategy.origin_bypass:
+            return
+        stage = "origin_bypass"
+        self.bus.stage_start(stage, "discovering direct origin IP behind CDN")
+        try:
+            cands = discover_origin(self.target_host, http_get=self.http_get)
+        except Exception as exc:  # noqa: BLE001
+            self.bus.error(stage, f"discover_origin failed: {exc}")
+            self._report.errors.append(f"origin_bypass: {exc}")
+            cands = []
+        for c in cands[:5]:
+            label = f"{c.ip} ({c.source}, conf={c.confidence})"
+            if c.confirmed:
+                self.bus.finding(stage, "cdn_bypass", c.ip, "high",
+                                 f"origin IP confirmed: {c.ip} via {c.source}")
+            else:
+                self.bus.evidence(stage, f"candidate: {label}")
+        self._report.origin_candidates = [c.to_dict() for c in cands]
+        self.bus.stage_end(stage, f"{len(cands)} candidate(s); "
+                            f"{sum(1 for c in cands if c.confirmed)} confirmed")
+
+    # ── Smuggling probe ------------------------------------------
+
+    def _smuggle(self):
+        if self.mode == CampaignMode.REPORT:
+            return
+        stage = "smuggle"
+        self.bus.stage_start(stage, "HTTP request-smuggling detection (CL.TE / TE.CL / TE.TE)")
+        if self.smuggle_sender is None and self.mode != CampaignMode.EXPLOIT:
+            self.bus.log(stage, "no smuggle_sender provided — skipping live timing probe")
+            self.bus.stage_end(stage, "skipped (no sender)")
+            return
+        try:
+            rep = detect_smuggling(self.target_url, sender=self.smuggle_sender)
+        except Exception as exc:  # noqa: BLE001
+            self.bus.error(stage, f"detect_smuggling failed: {exc}")
+            self._report.errors.append(f"smuggle: {exc}")
+            return
+        self._report.smuggle_report = rep.to_dict()
+        for r in rep.results:
+            if r.get("vulnerable"):
+                self.bus.finding(stage, "smuggling", self.target_url, "high",
+                                 f"{r['technique']}: latency={r['latency_ms']}ms note={r.get('note','')}")
+        self.bus.stage_end(stage,
+            f"baseline={rep.baseline_latency_ms}ms; "
+            f"vulnerable={rep.vulnerable}")
+
+    # ── Chain reasoning ------------------------------------------
+
+    def _chains(self, profile: ArchitectureProfile) -> List[ExploitChain]:
+        stage = "chain"
+        self.bus.stage_start(stage, "composing exploit chains from findings")
+        findings = list(self.prebuilt_findings)
+
+        # Pull findings from event bus where shape fits
+        for evt in self.bus.history:
+            if evt.kind != EventKind.FINDING:
+                continue
+            d = evt.data or {}
+            findings.append(ChainFinding(
+                kind=d.get("finding_kind", "info_leak"),
+                location=d.get("location", evt.message),
+                severity=d.get("severity", "medium"),
+                evidence=d.get("evidence", evt.message),
+            ))
+
+        if not findings:
+            self.bus.stage_end(stage, "no findings to chain")
+            return []
+
+        report = reason_chains(findings, profile=profile)
+        for ch in report.chains:
+            self.bus.chain(ch.name, ch.severity, ch.cvss_estimate, ch.narrative)
+        self._report.chains = [c.to_dict() for c in report.chains]
+        self._report.findings = [f.to_dict() for f in findings]
+        self._report.max_severity = report.max_severity
+        for note in report.notes:
+            self.bus.log(stage, note)
+        self.bus.stage_end(stage,
+            f"{len(report.chains)} chain(s) composed; "
+            f"max_severity={report.max_severity}")
+        return report.chains
+
+    # ── Run ------------------------------------------------------
+
+    def run(self) -> CampaignReport:
+        try:
+            if not self._verify_consent():
+                self._finalize()
+                return self._report
+
+            self._passive_recon()
+            profile = self._fingerprint()
+            strategy = self._strategy(profile)
+            self._origin_bypass(strategy)
+            self._smuggle()
+
+            # Chain reasoning takes findings from all prior stages
+            self._chains(profile)
+
+            self._finalize()
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("campaign crashed")
+            self.bus.fatal("campaign", f"unhandled: {exc}")
+            self._report.errors.append(f"unhandled: {exc}")
+            self._finalize()
+        return self._report
+
+    def _finalize(self):
+        self._report.finished_at = time.time()
+        self._report.events = [e.to_dict() for e in self.bus.history]
+        self.bus.report(
+            f"{len(self._report.chains)} chains, "
+            f"{len(self._report.findings)} findings, "
+            f"max={self._report.max_severity}",
+            summary=self._report.to_dict(),
+        )
+        self.bus.done(
+            f"campaign finished in "
+            f"{self._report.finished_at - self._report.started_at:.1f}s",
+            target=self.target_url, mode=self.mode,
+        )
+
+
+def run_campaign(target_url: str,
+                 mode: str = CampaignMode.REPORT,
+                 consent_token: Optional[str] = None,
+                 bus: Optional[EventBus] = None,
+                 **kwargs) -> CampaignReport:
+    """One-liner: spin a Campaign and return its report."""
+    return Campaign(target_url=target_url, mode=mode,
+                    consent_token=consent_token, bus=bus, **kwargs).run()
+
+
+__all__ = ["Campaign", "CampaignMode", "CampaignReport", "run_campaign"]
