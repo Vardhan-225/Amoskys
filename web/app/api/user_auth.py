@@ -45,6 +45,35 @@ SESSION_COOKIE_SAMESITE = "Lax"  # CSRF protection
 EMAIL_DEV_MODE = os.environ.get("AMOSKYS_EMAIL_DEV_MODE", "false").lower() == "true"
 
 
+def _public_url(path: str) -> str:
+    """
+    Build a fully-qualified URL for links we embed in outbound email.
+
+    Prefers the AMOSKYS_PUBLIC_URL env var (canonical public origin, e.g.
+    ``https://amoskys.com``) so that verification / reset links are always
+    clickable from email clients, regardless of which upstream (localhost,
+    origin IP, Cloudflare) actually served the request.
+
+    Falls back to ``request.host_url`` for local development where
+    AMOSKYS_PUBLIC_URL is not set.
+
+    Args:
+        path: Path component starting with "/" (e.g. "/auth/reset-password?token=...").
+
+    Returns:
+        Absolute URL with no double slashes at the join point.
+    """
+    base = os.environ.get("AMOSKYS_PUBLIC_URL", "").strip()
+    if not base:
+        # Flask request.host_url always ends with "/"; strip it for consistency.
+        base = request.host_url.rstrip("/")
+    else:
+        base = base.rstrip("/")
+    if not path.startswith("/"):
+        path = "/" + path
+    return f"{base}{path}"
+
+
 def get_client_info() -> Dict[str, Optional[str]]:
     """Extract client IP and user agent from request."""
     # Handle proxy headers for IP
@@ -190,9 +219,9 @@ def signup():
 
         # Send verification email if token was generated (skip in dev mode)
         if result.verification_token and not auto_verified:
-            # Build verification URL
-            verify_url = (
-                f"{request.host_url}auth/verify-email?token={result.verification_token}"
+            # Build verification URL from canonical public origin
+            verify_url = _public_url(
+                f"/auth/verify-email?token={result.verification_token}"
             )
 
             # Send email
@@ -310,9 +339,9 @@ def resend_verification():
 
         # Get the verification token from the result
         if hasattr(result, "verification_token") and result.verification_token:
-            # Send verification email
-            verify_url = (
-                f"{request.host_url}auth/verify-email?token={result.verification_token}"
+            # Send verification email (canonical public URL)
+            verify_url = _public_url(
+                f"/auth/verify-email?token={result.verification_token}"
             )
             email_sent = send_verification_email(email, verify_url)
 
@@ -638,9 +667,9 @@ def forgot_password():
 
         # Send password reset email if token was generated
         if result.reset_token:
-            # Build reset URL
-            reset_url = (
-                f"{request.host_url}auth/reset-password?token={result.reset_token}"
+            # Build reset URL from canonical public origin
+            reset_url = _public_url(
+                f"/auth/reset-password?token={result.reset_token}"
             )
 
             # Send email
