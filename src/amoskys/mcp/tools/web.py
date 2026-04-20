@@ -567,6 +567,84 @@ def web_legitimacy_profile() -> dict:
 
 
 @mcp.tool()
+def web_find_wp_prospects(
+    domains: List[str],
+    want: int = 20,
+    min_score: int = 40,
+    pacing_s: float = 2.5,
+) -> dict:
+    """Qualify + rank a list of domains for Stage-1 outreach.
+
+    Use this when you have a seed list and want to filter to the top
+    prospects (SMB WordPress sites, reachable contact, no active bug
+    bounty program).
+
+    Each domain gets at most 2 HTTP GETs (homepage + security.txt),
+    routed through our legitimacy layer (rotating UA, gaussian pacing).
+    The traffic is indistinguishable from a single curious visitor per
+    candidate — IP reputation risk is minimal.
+
+    Args:
+        domains:    Seed list of domain strings.
+        want:       Stop qualifying after this many prospects score
+                    >= min_score.
+        min_score:  Quality floor (0-100) for inclusion. 40 is
+                    "worth emailing"; 70+ is "great fit".
+        pacing_s:   Seconds between candidate qualifications (±40%
+                    jitter). Increase if you're worried about IP rep;
+                    decrease for speed in trusted contexts.
+
+    Returns: dict with `prospects` (ranked descending by score) and
+    `skipped` (host + reason) so the operator can sanity-check.
+    """
+    from amoskys.agents.Web.argos.prospecting import (
+        find_wp_prospects_from_domain_list,
+    )
+    run = find_wp_prospects_from_domain_list(
+        domains, want=want, min_score=min_score, pacing_s=pacing_s,
+    )
+    return run.to_dict()
+
+
+@mcp.tool()
+def web_render_pitch_pdf(target_url: str, save_path: str) -> dict:
+    """Run Stage 1 and write a downloadable PDF pitch report to disk.
+
+    Combines `web_run_stage1` + `to_pdf_bytes()` into a one-shot
+    "scan and hand me a file to email" operation.
+
+    Args:
+        target_url:  Full URL or bare domain.
+        save_path:   Absolute local filesystem path for the output
+                     PDF (e.g., "/Users/you/Desktop/pitch.pdf").
+
+    Returns: dict with `ok`, `pdf_path`, `pdf_bytes`, and the summary
+    of the underlying dossier.
+    """
+    from amoskys.agents.Web.argos.stage1 import Stage1
+    from amoskys.agents.Web.argos.pitch import to_pdf_bytes
+    dossier = Stage1(target_url).run()
+    pdf = to_pdf_bytes(dossier)
+    if not pdf:
+        return {
+            "ok": False,
+            "error": "WeasyPrint unavailable; install with pip install weasyprint",
+            "summary": dossier.severity_counts(),
+        }
+    with open(save_path, "wb") as fh:
+        fh.write(pdf)
+    return {
+        "ok":          True,
+        "pdf_path":    save_path,
+        "pdf_bytes":   len(pdf),
+        "target_host": dossier.target_host,
+        "duration_s":  dossier.duration_s,
+        "summary":     dossier.severity_counts(),
+        "finding_count": len(dossier.findings),
+    }
+
+
+@mcp.tool()
 def web_aegis_recent_critical(limit: int = 10) -> dict:
     """Return the most recent critical/high severity Aegis events.
 
