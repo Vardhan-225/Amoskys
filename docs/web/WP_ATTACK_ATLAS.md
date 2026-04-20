@@ -29,7 +29,8 @@ L<layer>.<n>  <entry point>
 | v0.4 (baseline)        | 26/93 (28%) | 5/93 (5%)  | — |
 | v0.5 (SQLi pair)       | 29/93 (31%) | 9/93 (10%) | +3 WATCH, +4 PROBE |
 | v0.6 (file-upload) | 32/93 (34%) | 12/93 (13%) | +3 WATCH, +3 PROBE |
-| **v0.7 (POI pair)** | **34/93 (37%)** | **15/93 (16%)** | **+2 WATCH, +3 PROBE** |
+| v0.7 (POI pair) | 34/93 (37%) | 15/93 (16%) | +2 WATCH, +3 PROBE |
+| **v0.8 (CSRF pair)** | **35/93 (38%)** | **17/93 (18%)** | **+1 WATCH, +2 PROBE** |
 
 ### v0.5 additions (this release)
 
@@ -44,7 +45,7 @@ L<layer>.<n>  <entry point>
 - L6.2 · Direct SQL without prepare (static)
 - L9.6 · unserialize() detection → partial (not in this release, planned next)
 
-### Current coverage (v0.7)
+### Current coverage (v0.8)
 
 | Layer | Entries | Aegis | Argos |
 |---|---|---|---|
@@ -52,14 +53,14 @@ L<layer>.<n>  <entry point>
 | L1 · HTTP edge           | 10 | 3/10  | 2/10 |
 | L2 · Core auth           | 9  | 6/9   | 1/9 |
 | L3 · Core surface        | 11 | 8/11  | 2/11 |
-| L4 · Plugins             | 14 | **6/14** | **4/14** |
-| L5 · Themes              | 6  | 1/6   | 0/6 |
+| L4 · Plugins             | 14 | **7/14** | **5/14** |
+| L5 · Themes              | 6  | **2/6** | **1/6** |
 | L6 · DB/session          | 7  | 4/7   | 2/7 |
 | L7 · Filesystem          | 8  | 2/8   | 1/8 |
 | L8 · Supply chain        | 6  | 1/6   | 0/6 |
-| L9 · Server exec         | 7  | **1/7**  | **1/7** |
+| L9 · Server exec         | 7  | 1/7   | 1/7 |
 | L10 · Business logic     | 6  | 0/6   | 0/6 |
-| **Total**                | **93** | **34/93 (37%)** | **15/93 (16%)** |
+| **Total**                | **93** | **35/93 (38%)** | **17/93 (18%)** |
 
 Still not bug-bounty grade. Remaining build list: POI, CSRF, SSRF,
 XSS, dangerous-functions, sandbox infra.
@@ -394,10 +395,14 @@ L4.4  Arbitrary file read (LFI via download.php pattern)
   CWE:   CWE-22
 
 L4.5  CSRF on state-change endpoints (missing check_admin_referer)
-  WATCH: aegis.nonce.failed
-  PROBE: BLIND (AST: admin_post_* / admin-ajax handlers without
-         check_admin_referer in first 5 statements)
+  WATCH: aegis.nonce.failed (v0.3) + aegis.csrf.suspicious_request (v0.8)
+  PROBE: argos.ast.csrf (v0.8 — 5 rules covering admin_post,
+         admin_post_nopriv, wp_ajax, wp_ajax_nopriv, init dispatch)
   CWE:   CWE-352
+  NOTES: v0.8 runtime classifier detects MISSING_REFERER,
+         CROSS_ORIGIN_REFERER, NONCE_FIELD_ABSENT on POST to
+         admin-post/admin-ajax/wp-login. Strike csrf_attempt at
+         threshold 3/60s on missing-referer.
 
 L4.6  IDOR on user-scoped resources
   WATCH: BLIND
@@ -456,8 +461,8 @@ L4.14 Hardcoded credentials / API keys in plugin
 
 ```
 L5.1  Theme option CSRF
-  WATCH: aegis.nonce.failed
-  PROBE: BLIND
+  WATCH: aegis.csrf.suspicious_request (v0.8) + aegis.nonce.failed
+  PROBE: argos.ast.csrf (v0.8)
   CWE:   CWE-352
 
 L5.2  Unsanitized shortcode attributes → XSS
