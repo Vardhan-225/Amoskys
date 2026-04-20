@@ -1,0 +1,408 @@
+{% extends "web/base.html" %}
+{% block title %}Investigate · AMOSKYS Web{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/web/static/css/redesign.css">
+<style>
+  /* ── Investigation page layout ─────────────────────────────────── */
+  .inv-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;
+  }
+  .inv-title { font-size: 1.5rem; font-weight: 800; color: var(--w-fg-0); margin: 0; letter-spacing: -.3px; }
+
+  /* Search bar */
+  .inv-search {
+    display: flex; align-items: center; gap: .5rem; padding: .55rem .75rem;
+    background: var(--w-bg-2); border: 1px solid rgba(0,217,255,.2);
+    border-radius: 10px; margin-bottom: .85rem;
+  }
+  .inv-search input {
+    flex: 1; background: transparent; border: 0; outline: none;
+    font: 500 .95rem 'JetBrains Mono', monospace; color: var(--w-fg-0);
+  }
+  .inv-search input::placeholder { color: var(--w-fg-3); }
+  .inv-search-hint {
+    font-size: .7rem; color: var(--w-fg-3); padding: 2px 8px;
+    border: 1px solid rgba(255,255,255,.08); border-radius: 4px;
+  }
+
+  /* Active-filter chips */
+  .inv-chips { display: flex; gap: .35rem; flex-wrap: wrap; margin-bottom: .85rem; min-height: 22px; }
+  .inv-chip {
+    display: inline-flex; align-items: center; gap: .35rem;
+    padding: .15rem .5rem; border-radius: 100px;
+    font-size: .72rem; font-weight: 600;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+    color: var(--w-fg-2);
+  }
+  .inv-chip-key { color: var(--w-fg-3); font-size: .65rem; text-transform: uppercase; letter-spacing: .5px; }
+  .inv-chip-x {
+    background: transparent; border: 0; color: var(--w-fg-3); cursor: pointer;
+    font-size: 12px; line-height: 1; padding: 0 0 0 4px;
+  }
+  .inv-chip-x:hover { color: var(--w-fg-0); }
+
+  /* Quick presets */
+  .inv-presets { display: flex; gap: .35rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .inv-preset {
+    background: transparent; border: 1px solid rgba(255,255,255,.1); color: var(--w-fg-2);
+    padding: .3rem .65rem; border-radius: 5px; font: 500 .72rem 'Inter', sans-serif;
+    cursor: pointer; text-decoration: none; transition: all .15s;
+  }
+  .inv-preset:hover { border-color: var(--w-accent); color: var(--w-fg-0); }
+  .inv-preset.active { border-color: var(--w-accent); background: rgba(0,217,255,.08); color: var(--w-fg-0); }
+
+  /* Histogram strip */
+  .inv-hist {
+    background: var(--w-bg-2); border: 1px solid rgba(0,217,255,.12);
+    border-radius: 10px; padding: .85rem 1rem; margin-bottom: 1rem;
+  }
+  .inv-hist-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 1rem; margin-bottom: .55rem;
+  }
+  .inv-hist-title { font-size: .82rem; font-weight: 700; color: var(--w-fg-0); }
+  .inv-hist-meta { font-size: .72rem; color: var(--w-fg-3); }
+  #histChart { height: 110px; width: 100%; }
+
+  /* Two-column body */
+  .inv-body { display: grid; grid-template-columns: 240px 1fr; gap: 1rem; }
+  @media (max-width: 1000px) { .inv-body { grid-template-columns: 1fr; } }
+
+  /* Sidebar facets */
+  .inv-facet {
+    background: var(--w-bg-2); border: 1px solid rgba(255,255,255,.06);
+    border-radius: 10px; padding: .8rem .9rem; margin-bottom: .75rem;
+  }
+  .inv-facet-title {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .8px;
+    color: var(--w-accent); font-weight: 700; margin-bottom: .55rem;
+  }
+  .inv-facet-row {
+    display: flex; align-items: center; gap: .5rem; padding: .25rem 0;
+    color: var(--w-fg-2); font-size: .82rem; cursor: pointer;
+    text-decoration: none; transition: color .15s;
+  }
+  .inv-facet-row:hover { color: var(--w-fg-0); }
+  .inv-facet-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'JetBrains Mono', monospace; font-size: .76rem; }
+  .inv-facet-bar  { width: 64px; height: 4px; background: rgba(255,255,255,.05); border-radius: 2px; overflow: hidden; }
+  .inv-facet-fill { height: 100%; background: var(--w-accent); }
+  .inv-facet-cnt  { font-variant-numeric: tabular-nums; font-size: .76rem; color: var(--w-fg-3); min-width: 28px; text-align: right; font-family: 'JetBrains Mono', monospace; }
+
+  /* Severity tile colors for facet bars */
+  .inv-facet-row[data-key="severity"][data-val="critical"] .inv-facet-fill { background: #dc2626; }
+  .inv-facet-row[data-key="severity"][data-val="high"]     .inv-facet-fill { background: #ff3366; }
+  .inv-facet-row[data-key="severity"][data-val="warn"]     .inv-facet-fill { background: #ffaa00; }
+  .inv-facet-row[data-key="severity"][data-val="info"]     .inv-facet-fill { background: #00d9ff; }
+
+  /* Result table */
+  .inv-results {
+    background: var(--w-bg-2); border: 1px solid rgba(0,217,255,.1);
+    border-radius: 10px; overflow: hidden;
+  }
+  .inv-results-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .75rem 1rem; border-bottom: 1px solid rgba(255,255,255,.05);
+    background: rgba(255,255,255,.02);
+  }
+  .inv-results-title { font-size: .82rem; font-weight: 700; color: var(--w-fg-0); }
+  .inv-results-meta  { font-size: .72rem; color: var(--w-fg-3); }
+  .inv-row {
+    display: grid; grid-template-columns: 110px 80px 110px 1fr auto;
+    gap: .75rem; padding: .55rem 1rem;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+    font-size: .82rem; align-items: start;
+    cursor: pointer; transition: background .1s;
+  }
+  .inv-row:hover { background: rgba(0,217,255,.04); }
+  .inv-row-time   { font-family: 'JetBrains Mono', monospace; font-size: .72rem; color: var(--w-fg-3); }
+  .inv-row-sev    { display: flex; }
+  .inv-row-fam    { font-family: 'JetBrains Mono', monospace; font-size: .72rem; color: var(--w-fg-2); }
+  .inv-row-main code { color: var(--w-accent); }
+  .inv-row-meta {
+    font-size: .7rem; color: var(--w-fg-3); margin-top: .15rem;
+    display: flex; flex-wrap: wrap; gap: .35rem;
+  }
+  .inv-pivot {
+    display: inline-flex; align-items: center; padding: 1px 5px;
+    border: 1px solid rgba(255,255,255,.08); border-radius: 3px;
+    color: var(--w-fg-2); text-decoration: none; cursor: pointer;
+    font: 600 10px 'JetBrains Mono', monospace; transition: all .12s;
+  }
+  .inv-pivot:hover { border-color: var(--w-accent); color: var(--w-fg-0); background: rgba(0,217,255,.08); }
+  .inv-row-arrow { color: var(--w-fg-3); font-size: 16px; }
+  .inv-row-empty { padding: 3rem; text-align: center; color: var(--w-fg-3); font-size: .85rem; }
+
+  /* View-switcher tabs */
+  .inv-views { display: flex; gap: .35rem; }
+  .inv-view-btn {
+    padding: .35rem .75rem; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,.08); background: transparent;
+    color: var(--w-fg-2); font: 600 .75rem 'Inter', sans-serif;
+    text-decoration: none; transition: all .12s;
+  }
+  .inv-view-btn:hover { border-color: var(--w-accent); color: var(--w-fg-0); }
+  .inv-view-btn.active { background: rgba(0,217,255,.08); border-color: var(--w-accent); color: var(--w-fg-0); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="inv-head">
+  <div>
+    <div class="section-eyebrow">Investigate</div>
+    <h1 class="inv-title">What happened, who did it, and in what order</h1>
+    <div class="card-sub" style="margin-top:.25rem;">
+      {% if result.total == 0 %}
+        Nothing matches this filter. Try widening the time window or clearing filters.
+      {% elif result.total == 1 %}
+        One event matches this filter.
+      {% else %}
+        {{ "{:,}".format(result.total) }} events match — showing the {{ result.rows | length }} most recent. Click any row to trace its chain.
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Same data, three perspectives -->
+  <div class="inv-views">
+    <a href="{{ url_for('web.investigate', q=q) }}" class="inv-view-btn active">List</a>
+    <a href="{{ url_for('web.timeline',    q=q) }}" class="inv-view-btn">Timeline</a>
+    <a href="{{ url_for('web.graph',       q=q) }}" class="inv-view-btn">Graph</a>
+  </div>
+</div>
+
+<!-- Search bar -->
+<form method="GET" action="{{ url_for('web.investigate') }}">
+  <div class="inv-search">
+    <span style="color:var(--w-fg-3); font-size:14px;">⌕</span>
+    <input type="text" name="q" id="qInput" value="{{ q }}"
+           placeholder="Try: since:1h   ip:38.2.43.171   severity:high   family:auth"
+           autocomplete="off" autofocus>
+    <span class="inv-search-hint">↵ search</span>
+  </div>
+</form>
+
+<!-- Active-filter chips -->
+<div class="inv-chips">
+  {% if chips %}
+    {% for c in chips %}
+      <span class="inv-chip" style="border-color:{{ c.color }}33;">
+        <span class="inv-chip-key">{{ c.key }}</span>
+        <span style="color:{{ c.color }};">{{ c.value }}</span>
+        <button type="button" class="inv-chip-x" onclick="removeChip('{{ c.key }}','{{ c.value }}')" title="Remove">×</button>
+      </span>
+    {% endfor %}
+    <a href="{{ url_for('web.investigate') }}" class="inv-chip" style="cursor:pointer; text-decoration:none;">clear all ×</a>
+  {% else %}
+    <span class="inv-chip" style="border-style:dashed;">Showing activity from the last hour. Add filters below to narrow in.</span>
+  {% endif %}
+</div>
+
+<!-- Quick presets — plain-language jump-points into common investigations -->
+<div class="inv-presets">
+  <a href="{{ url_for('web.investigate', q='since:5m')  }}" class="inv-preset">Just now (5 min)</a>
+  <a href="{{ url_for('web.investigate', q='since:1h')  }}" class="inv-preset">Last hour</a>
+  <a href="{{ url_for('web.investigate', q='since:6h')  }}" class="inv-preset">Last 6 hours</a>
+  <a href="{{ url_for('web.investigate', q='since:24h') }}" class="inv-preset">Last day</a>
+  <span style="width:1px; height:18px; background:rgba(255,255,255,.06);"></span>
+  <a href="{{ url_for('web.investigate', q='severity:critical,high since:24h') }}" class="inv-preset">🛑 Anything serious · day</a>
+  <a href="{{ url_for('web.investigate', q='family:auth since:24h') }}" class="inv-preset">🔐 Sign-in activity · day</a>
+  <a href="{{ url_for('web.investigate', q='family:rest since:24h') }}" class="inv-preset">🛰 REST probes · day</a>
+  <a href="{{ url_for('web.investigate', q='family:block since:24h') }}" class="inv-preset">🧱 Blocks fired · day</a>
+  <a href="{{ url_for('web.investigate', q='family:outbound since:24h') }}" class="inv-preset">🌐 Outbound calls · day</a>
+</div>
+
+<!-- Histogram strip -->
+<div class="inv-hist">
+  <div class="inv-hist-head">
+    <div>
+      <span class="inv-hist-title">When things happened</span>
+      <span class="inv-hist-meta">· bars coloured by how serious</span>
+    </div>
+    <div class="inv-hist-meta">
+      Log integrity:
+      <strong style="color:{% if result.chain_breaks %}#ff3366{% else %}#00ff88{% endif %};"
+              title="Every event is cryptographically linked to the one before it. Breaks usually mean an interleaved burst, not tampering — but worth a look if the number grows.">
+        {% if result.chain_breaks == 0 %}
+          intact
+        {% else %}
+          {{ "{:,}".format(result.chain_breaks) }} break{% if result.chain_breaks != 1 %}s{% endif %}
+        {% endif %}
+      </strong>
+    </div>
+  </div>
+  <canvas id="histChart"></canvas>
+</div>
+
+<!-- Two-column body: facets sidebar + results table -->
+<div class="inv-body">
+  <div>
+    <!-- Severity facet -->
+    <div class="inv-facet">
+      <div class="inv-facet-title">How serious</div>
+      {% for f in result.facets.severity %}
+      <a class="inv-facet-row" href="{{ url_for('web.investigate', q=(canonical_q + ' severity:' + f.value)|trim) }}"
+         data-key="severity" data-val="{{ f.value }}">
+        <span class="inv-facet-name">{{ f.value }}</span>
+        <span class="inv-facet-bar"><span class="inv-facet-fill" style="width:{{ f.pct }}%;"></span></span>
+        <span class="inv-facet-cnt">{{ f.count }}</span>
+      </a>
+      {% else %}<div class="text-muted" style="font-size:.78rem;">—</div>{% endfor %}
+    </div>
+
+    <!-- Family facet -->
+    <div class="inv-facet">
+      <div class="inv-facet-title">What kind of event</div>
+      {% for f in result.facets.family %}
+      <a class="inv-facet-row" href="{{ url_for('web.investigate', q=(canonical_q + ' family:' + f.value)|trim) }}">
+        <span class="inv-facet-name">{{ f.value }}</span>
+        <span class="inv-facet-bar"><span class="inv-facet-fill" style="width:{{ f.pct }}%;"></span></span>
+        <span class="inv-facet-cnt">{{ f.count }}</span>
+      </a>
+      {% else %}<div class="text-muted" style="font-size:.78rem;">—</div>{% endfor %}
+    </div>
+
+    <!-- IP facet -->
+    <div class="inv-facet">
+      <div class="inv-facet-title">Who's talking (top 12)</div>
+      {% for f in result.facets.ip %}
+      <a class="inv-facet-row" href="{{ url_for('web.investigate', q=(canonical_q + ' ip:' + f.value)|trim) }}">
+        <span class="inv-facet-name" title="{{ f.value }}">{{ f.value }}</span>
+        <span class="inv-facet-bar"><span class="inv-facet-fill" style="width:{{ f.pct }}%;"></span></span>
+        <span class="inv-facet-cnt">{{ f.count }}</span>
+      </a>
+      {% else %}<div class="text-muted" style="font-size:.78rem;">—</div>{% endfor %}
+    </div>
+
+    <!-- Event-type facet -->
+    <div class="inv-facet">
+      <div class="inv-facet-title">Specific event (top 12)</div>
+      {% for f in result.facets.event_type %}
+      <a class="inv-facet-row" href="{{ url_for('web.investigate', q=(canonical_q + ' event_type:' + f.value)|trim) }}">
+        <span class="inv-facet-name" title="{{ f.value }}">{{ f.value }}</span>
+        <span class="inv-facet-bar"><span class="inv-facet-fill" style="width:{{ f.pct }}%;"></span></span>
+        <span class="inv-facet-cnt">{{ f.count }}</span>
+      </a>
+      {% else %}<div class="text-muted" style="font-size:.78rem;">—</div>{% endfor %}
+    </div>
+  </div>
+
+  <!-- Result table — natural-English rows, concern-coloured -->
+  <div class="inv-results">
+    <div class="inv-results-head">
+      <span class="inv-results-title">What's been happening</span>
+      <span class="inv-results-meta">
+        newest first · {{ result.rows | length }} shown
+        {% if result.capped %} · <span class="text-offense">cap reached, narrow the window</span>{% endif %}
+      </span>
+    </div>
+    {% for r in result.rows %}
+    <a class="event-row ev-concern-{{ r.concern }}"
+       href="{{ url_for('web.event_detail', event_id=r.event_id) }}"
+       title="{{ r.event_type }}">
+      <div class="event-verdict" aria-hidden="true">{{ r.verdict }}</div>
+      <div>
+        <div class="event-phrase">
+          {{ r.phrase }}
+          <span class="event-detail">
+            {% if r.detail %}{{ r.detail }}{% endif %}
+            {% if r.request.ip %}
+              {% if r.detail %} · {% endif %}
+              from <code>{{ r.request.ip }}</code>
+              {% if r.request.method and r.request.uri %}
+                · <code>{{ r.request.method }} {{ r.request.uri | truncate(60) }}</code>
+              {% endif %}
+            {% elif r.request.method and r.request.uri %}
+              {% if r.detail %} · {% endif %}
+              <code>{{ r.request.method }} {{ r.request.uri | truncate(60) }}</code>
+            {% endif %}
+            {% if r.attributes %}
+              {% set kvs = r.attributes.items() | list %}
+              {% for k, v in kvs[:2] %}
+                {% if loop.first and (r.detail or r.request.ip) %} · {% endif %}
+                {{ k }}=<code>{{ v|string|truncate(30) }}</code>{% if not loop.last %} · {% endif %}
+              {% endfor %}
+            {% endif %}
+          </span>
+          {% if r.action and r.concern >= 3 %}
+          <span class="event-action-hint">→ {{ r.action }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="event-cat">{{ r.category }}</div>
+      <div class="event-time" title="sig {{ r.sig_short }}…">{{ r.ts_ns | humantime }}</div>
+    </a>
+    {% else %}
+    <div class="inv-row-empty">
+      No events match this filter. Try a wider time window or
+      <a href="{{ url_for('web.investigate') }}" style="color:var(--w-accent);">clear all</a>.
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+  // ── Histogram (Chart.js) ──────────────────────────────────────────
+  var hist = {{ result.histogram | tojson }};
+  if (hist && hist.length && typeof Chart !== 'undefined') {
+    var ctx = document.getElementById('histChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: hist.map(function(b) { return new Date(b.ts_ms).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }),
+        datasets: [
+          { label: 'critical', data: hist.map(function(b){return b.critical;}), backgroundColor: '#dc2626', stack: 's' },
+          { label: 'high',     data: hist.map(function(b){return b.high;}),     backgroundColor: '#ff3366', stack: 's' },
+          { label: 'warn',     data: hist.map(function(b){return b.warn;}),     backgroundColor: '#ffaa00', stack: 's' },
+          { label: 'info',     data: hist.map(function(b){return b.info;}),     backgroundColor: '#00d9ff', stack: 's' },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#b4bcd0', font: { size: 10, family: 'Inter' }, boxWidth: 10 } },
+          tooltip: { callbacks: { title: function(items){ return new Date(hist[items[0].dataIndex].ts_ms).toLocaleString(); } } },
+        },
+        scales: {
+          x: { ticks: { color: '#6b7a99', font: { size: 9, family: 'JetBrains Mono' }, maxTicksLimit: 8 }, stacked: true, grid: { display: false } },
+          y: { ticks: { color: '#6b7a99', font: { size: 9 }, precision: 0 }, stacked: true, grid: { color: 'rgba(255,255,255,.04)' } },
+        },
+      },
+    });
+  }
+
+  // ── Chip removal — strips one constraint and reloads with the new q ─
+  window.removeChip = function(key, value) {
+    var q = ({{ canonical_q | tojson }} || '').trim();
+    if (!q) { window.location = '{{ url_for("web.investigate") }}'; return; }
+    var tokens = q.match(/("[^"]+"|\S+)/g) || [];
+    var kept = tokens.filter(function(t) {
+      if (key === 'text') return t.indexOf(':') !== -1; // drop bare-text tokens
+      var p = t.split(':'); if (p.length < 2) return true;
+      if (p[0].toLowerCase() !== key) return true;
+      // Multi-value: drop just the matching value
+      var vals = p.slice(1).join(':').split(',').filter(function(v){ return v !== value; });
+      if (!vals.length) return false; // entire token removed
+      // Otherwise rebuild it without the removed value
+      this.replacement = p[0] + ':' + vals.join(',');
+      return false;
+    });
+    if (this.replacement) kept.push(this.replacement);
+    var newQ = kept.join(' ').trim();
+    var url = '{{ url_for("web.investigate") }}' + (newQ ? '?q=' + encodeURIComponent(newQ) : '');
+    window.location = url;
+  };
+
+  // ── Mark active preset ────────────────────────────────────────────
+  document.querySelectorAll('.inv-preset').forEach(function(a) {
+    var u = new URL(a.href);
+    if (u.searchParams.get('q') === '{{ canonical_q }}') a.classList.add('active');
+  });
+})();
+</script>
+{% endblock %}
