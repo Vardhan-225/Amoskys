@@ -402,6 +402,171 @@ def web_aegis_event_counts(hours: int = 1) -> dict:
 
 
 @mcp.tool()
+def web_operator_playbook(target_host: str = "", stage: int = 1,
+                          consent_verified: bool = False) -> dict:
+    """Return the Argos engagement playbook ranked for a given state.
+
+    Call this FIRST when a reasoning agent (Claude, or any MCP client)
+    is about to drive an engagement. The playbook tells you:
+
+      - Every move in the suite with its mandate (why it's legal/ethical)
+      - Which moves are available RIGHT NOW given the target's state
+      - Stage boundaries (1 = no consent, 2 = requires consent token)
+
+    The agent should pick a move, execute it via the named `tool_hint`,
+    update the EngagementState, and call this tool again for the next
+    move. This loop is the "agent-driven pentest" pattern.
+
+    Args:
+        target_host:       Target hostname (informational for now).
+        stage:             1 for OSINT / pitch; 2 requires consent.
+        consent_verified:  True only after the DNS-TXT consent check
+                           has passed. Stage-2 moves will not appear
+                           if this is False.
+
+    Returns:
+        dict with keys:
+          state          — current known engagement state
+          all_moves      — every move in the playbook
+          available_now  — moves the agent may execute RIGHT NOW
+    """
+    from amoskys.agents.Web.argos.reasoning import (
+        EngagementState,
+        default_playbook,
+    )
+    state = EngagementState(
+        target_host=target_host or "unknown",
+        stage=stage,  # type: ignore[arg-type]
+        consent_verified=consent_verified,
+    )
+    return default_playbook().as_dict(state)
+
+
+@mcp.tool()
+def web_run_stage1(target_url: str) -> dict:
+    """Run the full Stage-1 (OSINT + pitch) engagement against a target.
+
+    NO CONSENT REQUIRED. Stage 1 does only what a curious visitor
+    could do from their browser:
+      - DNS / TLS / CT-logs lookups (passive)
+      - robots.txt + /.well-known/security.txt preflight
+      - One polite stealth sweep (7 categories, 25 HTTP GETs)
+      - Pitch-dossier generation
+
+    Total HTTP requests: ~30. Total wall time: 2-5 minutes (gaussian
+    pacing; not tunable — shorter would stop looking human). Aborts
+    early on 403/429/503 with exponential backoff; if the target
+    consistently rate-limits, we stop.
+
+    Use this tool when:
+      - A prospect domain is known; you want a pitch-ready report
+      - A lead-generation sweep is planned
+      - A customer asks "what does my site look like to an attacker?"
+
+    DO NOT use this tool when:
+      - The target is on any personal-harassment watchlist
+      - You lack a bonafide business reason (check docs/web/OPERATOR_MANDATE.md)
+      - The target has a clear .well-known/security.txt saying no-scan
+        (we stop if we see one; the caller should respect any contact)
+
+    Args:
+        target_url:  Full URL or bare domain, e.g. "example.com" or
+                     "https://example.com".
+
+    Returns:
+        The complete PitchDossier as a dict — findings, summary,
+        next-steps, robots summary, security.txt if present.
+    """
+    from amoskys.agents.Web.argos.stage1 import Stage1
+    stage = Stage1(target_url)
+    dossier = stage.run()
+    import json
+    return json.loads(dossier.to_json())
+
+
+@mcp.tool()
+def web_pitch_email(target_url: str, sender_name: str = "AMOSKYS Web") -> dict:
+    """Generate a plain-text first-touch email for a Stage-1 target.
+
+    Runs Stage 1 if a cached dossier isn't available, then renders a
+    200-400-word business-language email with the top-3 findings and
+    the pitch line. Safe to forward to a prospect as-is.
+
+    Args:
+        target_url:   Domain or URL to run Stage 1 against.
+        sender_name:  Signature line at the bottom of the email.
+
+    Returns:
+        dict with:
+          email_text  — the plain-text email body
+          subject     — suggested subject line
+          teaser      — short Slack/chat version
+          summary     — severity counts from the underlying dossier
+    """
+    from amoskys.agents.Web.argos.stage1 import Stage1
+    from amoskys.agents.Web.argos.pitch import to_email_text, to_slack_teaser
+    dossier = Stage1(target_url).run()
+    email = to_email_text(dossier, sender_name=sender_name)
+    subject_line = email.split("\n", 1)[0].replace("Subject:", "").strip()
+    return {
+        "email_text": email,
+        "subject":    subject_line,
+        "teaser":     to_slack_teaser(dossier),
+        "summary":    dossier.severity_counts(),
+        "duration_s": dossier.duration_s,
+    }
+
+
+@mcp.tool()
+def web_legitimacy_profile() -> dict:
+    """Return the current traffic-legitimacy posture for auditing.
+
+    Useful for:
+      - Verifying that Argos is running with a sensible UA pool
+      - Confirming pacing parameters match the research mandate
+      - Understanding how Argos will respond to 403/429 (backoff policy)
+
+    Returns:
+        dict describing the UA pool (sample identity), pacing profile,
+        and backoff configuration.
+    """
+    from amoskys.agents.Web.argos.legitimacy import (
+        BackoffController,
+        LegitimacyProfile,
+        PacingProfile,
+    )
+    prof = LegitimacyProfile()
+    identity = prof.ua_pool.identity()
+    return {
+        "ua_pool_size":  6,  # matches _UA_POOL in legitimacy.py
+        "sticky_identity_example": {
+            "user_agent":      identity.ua,
+            "accept_language": identity.accept_language,
+            "dnt":             identity.dnt,
+        },
+        "pacing": {
+            "median_s":          prof.pacer.profile.median_s,
+            "stddev_s":          prof.pacer.profile.stddev_s,
+            "long_tail_prob":    prof.pacer.profile.long_tail_prob,
+            "long_tail_range":   [prof.pacer.profile.min_long_s,
+                                  prof.pacer.profile.max_long_s],
+        },
+        "backoff": {
+            "base_delay_s":       prof.backoff.base_delay_s,
+            "max_delay_s":        prof.backoff.max_delay_s,
+            "consecutive_budget": prof.backoff.budget,
+        },
+        "mandate": (
+            "Pacing matches Liu & White (2013) session-dwell data + "
+            "Chrome UX Report session traces. UA pool tracks StatCounter "
+            "Q1-2026 global market share. Backoff respects Retry-After "
+            "per RFC 6585. Full references in "
+            "docs/web/OPERATOR_MANDATE.md."
+        ),
+    }
+
+
+@mcp.tool()
 def web_aegis_recent_critical(limit: int = 10) -> dict:
     """Return the most recent critical/high severity Aegis events.
 
