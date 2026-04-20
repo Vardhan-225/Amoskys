@@ -32,7 +32,9 @@ L<layer>.<n>  <entry point>
 | v0.7 (POI pair) | 34/93 (37%) | 15/93 (16%) | +2 WATCH, +3 PROBE |
 | v0.8 (CSRF pair) | 35/93 (38%) | 17/93 (18%) | +1 WATCH, +2 PROBE |
 | v0.9 (SSRF pair) | 37/93 (40%) | 19/93 (20%) | +2 WATCH, +2 PROBE |
-| **v1.0 (MCP sandbox)** | **(no new rules)** | **(no new rules)** | **Source sandbox + 7 MCP tools** |
+| v1.0 (MCP sandbox) | (no new rules) | (no new rules) | Source sandbox + 7 MCP tools |
+| v1.1 (benchmark) | (no new rules) | (no new rules) | 11-CVE corpus + first honest score 18.2% |
+| **v1.2 (stealth recon pair)** | **+1 WATCH** | **+7 categories** | **Argos Stealth Recon + Aegis recon.campaign** |
 
 Note: v1.0 adds no new scanners — it exposes the existing ones over MCP
 so a Claude Code / Desktop agent can call them directly. The atlas
@@ -134,11 +136,14 @@ L0.8 wp-cron.php reachable as DOS amplifier
          now threshold this if we wire it as a strike rule.
 
 L0.9 readme.html / wp-links-opml.php version disclosure
-  WATCH: BLIND
-  PROBE: BLIND (trivial: HEAD + regex)
+  WATCH: aegis.recon.campaign (v1.2 — triggers if readme.html is one
+         of 5+ distinct category-probes in 10 min from one IP)
+  PROBE: argos.recon.stealth (v1.2) — check_id wp.readme_html
   CWE:   CWE-200
-  NOTES: First artifact every scanner pulls. Tells attacker exactly
-         which CVEs apply.
+  NOTES: v1.2 stealth recon includes 7 categories — wp_core,
+         dev_leaks, plugin_inventory, infra, user_enum, supply_chain,
+         and subdomains. Every check carries a research-backed mandate
+         citation.
 ```
 
 ## L1 — HTTP edge
