@@ -28,6 +28,7 @@ from amoskys.agents.Web.argos.ast.file_upload import FileUploadScanner
 from amoskys.agents.Web.argos.ast.poi import PoiScanner
 from amoskys.agents.Web.argos.ast.rest_authz import RestAuthzScanner
 from amoskys.agents.Web.argos.ast.sql_injection import SqlInjectionScanner
+from amoskys.agents.Web.argos.ast.ssrf import SsrfScanner
 
 __all__ = [
     "ASTFinding",
@@ -39,6 +40,7 @@ __all__ = [
     "PoiScanner",
     "RestAuthzScanner",
     "SqlInjectionScanner",
+    "SsrfScanner",
     "find_calls",
     "strip_comments_and_strings",
 ]

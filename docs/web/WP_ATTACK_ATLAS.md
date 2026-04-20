@@ -30,7 +30,8 @@ L<layer>.<n>  <entry point>
 | v0.5 (SQLi pair)       | 29/93 (31%) | 9/93 (10%) | +3 WATCH, +4 PROBE |
 | v0.6 (file-upload) | 32/93 (34%) | 12/93 (13%) | +3 WATCH, +3 PROBE |
 | v0.7 (POI pair) | 34/93 (37%) | 15/93 (16%) | +2 WATCH, +3 PROBE |
-| **v0.8 (CSRF pair)** | **35/93 (38%)** | **17/93 (18%)** | **+1 WATCH, +2 PROBE** |
+| v0.8 (CSRF pair) | 35/93 (38%) | 17/93 (18%) | +1 WATCH, +2 PROBE |
+| **v0.9 (SSRF pair)** | **37/93 (40%)** | **19/93 (20%)** | **+2 WATCH, +2 PROBE** |
 
 ### v0.5 additions (this release)
 
@@ -45,22 +46,22 @@ L<layer>.<n>  <entry point>
 - L6.2 · Direct SQL without prepare (static)
 - L9.6 · unserialize() detection → partial (not in this release, planned next)
 
-### Current coverage (v0.8)
+### Current coverage (v0.9)
 
 | Layer | Entries | Aegis | Argos |
 |---|---|---|---|
 | L0 · Edge/infra          | 9  | 2/9   | 0/9 |
-| L1 · HTTP edge           | 10 | 3/10  | 2/10 |
+| L1 · HTTP edge           | 10 | **4/10** | **3/10** |
 | L2 · Core auth           | 9  | 6/9   | 1/9 |
 | L3 · Core surface        | 11 | 8/11  | 2/11 |
-| L4 · Plugins             | 14 | **7/14** | **5/14** |
-| L5 · Themes              | 6  | **2/6** | **1/6** |
+| L4 · Plugins             | 14 | **8/14** | **6/14** |
+| L5 · Themes              | 6  | 2/6   | 1/6 |
 | L6 · DB/session          | 7  | 4/7   | 2/7 |
 | L7 · Filesystem          | 8  | 2/8   | 1/8 |
 | L8 · Supply chain        | 6  | 1/6   | 0/6 |
 | L9 · Server exec         | 7  | 1/7   | 1/7 |
 | L10 · Business logic     | 6  | 0/6   | 0/6 |
-| **Total**                | **93** | **35/93 (38%)** | **17/93 (18%)** |
+| **Total**                | **93** | **37/93 (40%)** | **19/93 (20%)** |
 
 Still not bug-bounty grade. Remaining build list: POI, CSRF, SSRF,
 XSS, dangerous-functions, sandbox infra.
@@ -144,11 +145,12 @@ L1.1 Direct plugin file access (e.g., /wp-content/plugins/<slug>/admin.php)
          bypassing the wp-admin auth wrapper. Classic RCE source.
 
 L1.2 Open proxy via media-library / tools-fetch endpoints
-  WATCH: aegis.outbound.http (we see the egress, not the intent)
-  PROBE: BLIND
+  WATCH: aegis.outbound.ssrf_attempt (v0.9) + aegis.outbound.http
+  PROBE: argos.ast.ssrf (v0.9)
   CWE:   CWE-918 (SSRF)
-  NOTES: /wp-admin/tools.php action=fetch-oembed is a canonical
-         SSRF source when plugins override oEmbed.
+  NOTES: v0.9 runtime classifier detects cloud-metadata targets,
+         loopback, private-network, and non-HTTP schemes right at
+         the pre_http_request filter before the packet leaves.
 
 L1.3 Media upload accepting PHP via MIME confusion
   WATCH: aegis.media.uploaded (flags suspicious MIME)
@@ -411,9 +413,10 @@ L4.6  IDOR on user-scoped resources
   CWE:   CWE-639
 
 L4.7  SSRF via URL-fetch features
-  WATCH: aegis.outbound.http
-  PROBE: BLIND (AST: wp_remote_get(request-input) without host
-         allow-list)
+  WATCH: aegis.outbound.ssrf_attempt (v0.9) + aegis.outbound.http
+  PROBE: argos.ast.ssrf (v0.9) — wp_remote_*_tainted,
+         file_get_contents_remote_tainted, curl_exec_tainted_url,
+         no_url_allowlist
   CWE:   CWE-918
 
 L4.8  Stored XSS
