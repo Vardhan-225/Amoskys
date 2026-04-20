@@ -307,6 +307,127 @@ below are known gaps we'd already planned for v1.8+.
 
 ---
 
+### Cycle 003 — 2026-04-20 · Argos Precision Mode vs Aegis
+**Target:** lab.amoskys.com (our own lab, whitelisted for consented pentest)
+**Mode:** Argos v1.9 Precision Mode (APT-grade orchestrator)
+**Paired defense:** Aegis v1.9 `aegis.attacker.precision_probe` sensor
+
+#### The shift this cycle represents
+
+Cycles 001-002 were **commodity vs Aegis**. nuclei + wpscan fire
+hundreds-to-thousands of probes blindly. Aegis's `scanner_shape` sensor
+catches them by VOLUME + PATH_DIVERSITY + UA_ROTATION.
+
+Cycle 003 changes the game. **APT-grade offense** fires ONE probe per
+AST-confirmed finding, from a previously-unseen IP, at a
+plugin-specific endpoint, with no volume to score on. None of our
+commodity-facing sensors catch it — scanner_shape watches for
+diversity; we send one request. priv_esc watches for strike bursts;
+we send one request. None of the payload-class sensors
+(db.suspicious_query, csrf.suspicious_request, etc.) fire unless the
+attack shape textually matches their regex — and a precision probe
+from a fresh IP looks, to all the commodity sensors, like a benign
+first visit.
+
+This is the blind spot APT-tier attackers exploit in real WAFs too.
+
+#### Argos Precision Mode (v1.9 offense)
+
+Six new Python modules, 25 passing tests:
+
+- **argos/precision/payload_synth.py** — AST finding → one minimal
+  HTTP probe per class (SQLi time-based blind, inert-GIF upload,
+  stdClass-only POI, cross-origin CSRF, canary-URL SSRF, REST-authz
+  enum). No 50-variant fuzzing, no arbitrary-file-write, no shell
+  upload — just the minimum that confirms or denies each bug class.
+- **argos/precision/temporal.py** — low-and-slow scheduling: gaussian-
+  jittered, timezone-aware (target biz-hours), 3-14 day spread, deter-
+  ministic given seed. 20 probes across 14 days looks nothing like a
+  scanner.
+- **argos/precision/chain.py** — probe DAG by tier: intel.enum first
+  (namespace enumeration), then confirm.passive (canary SSRF, time-
+  based SQLi), then confirm.active (upload, POI, CSRF). Escalate tier
+  is off-by-default; operator opt-in only.
+- **argos/precision/precision.py** — end-to-end: plugin inventory →
+  wp.org source fetch → AST scan → synthesize probes → build plan →
+  schedule. Returns a PrecisionEngagement the operator reviews before
+  any probe fires.
+
+The key discipline: **never fire a blind probe**. If we don't know the
+exact expected-vulnerable-response signature and the exact expected-
+safe-response signature, the probe is not synthesized.
+
+#### Aegis Precision-Probe Sensor (v1.9 defense)
+
+New sensor `aegis.attacker.precision_probe` at `init @ -80`. Four
+conjunctive conditions:
+
+1. **PATH_IS_PLUGIN_SPECIFIC** — /wp-admin/admin-ajax.php,
+   /wp-admin/admin-post.php, or /wp-json/<plugin-slug>/...
+2. **CONTAINS_EXPLOITATION_SHAPE** — request carries one of:
+   TIME_BASED_SQLI, SERIALIZED_OBJECT, PHP_OPEN_TAG, PATH_TRAVERSAL,
+   CANARY_DOMAIN, UNION_SELECT_SCHEMA, BASE64_EVAL.
+3. **SOURCE_IS_NEW** — this IP has not hit any plugin path in the
+   last 7 days (bounded seen-IP map in wp_options).
+4. **NOT ALREADY_SCANNER_SHAPE** — scanner_shape hasn't already
+   emitted for this IP (commodity-scanner traffic is handled there).
+
+When all four hit, emit CRITICAL + strike `precision_probe`
+(threshold=1 → instant 10-min block).
+
+#### Live verification (2026-04-20)
+
+Fired one SQLi precision probe from my IP:
+```
+GET /wp-admin/admin-ajax.php?action=PLACEHOLDER&id=1' AND SLEEP(0.05)-- -
+```
+
+Aegis response:
+```
+[critical] aegis.attacker.precision_probe
+    ip: 38.2.43.171
+    path: /wp-admin/admin-ajax.php
+    matched_classes: ['TIME_BASED_SQLI']
+    ua: curl/8.7.1
+```
+
+Block fired. First time a single-request exploit attempt was caught
+by Aegis on the lab.
+
+#### Debugging we did along the way
+
+First attempt at detection: DIDN'T fire. Added debug pings at each
+condition — the sensor was bailing on condition (4) because the bare
+`amoskys_scanner_shape_<md5>` transient is CREATED for every repeat
+visitor to track their state, not just when scanner_shape fires. Fix:
+check `$rec['emitted']` flag, not transient existence. Documented in
+finding 010.
+
+#### What this means for the arms race
+
+- **Argos can now attack like an APT**: one probe, one finding, days
+  between probes, timezone-aligned. Commodity shape-detectors don't
+  trip.
+- **Aegis can now catch that**: the precision_probe sensor doesn't
+  need volume or diversity; it catches single exploit-shaped requests
+  from unseen sources.
+- **Both sides get stronger in this cycle.** The loop tightens.
+
+#### Remaining APT techniques we haven't modeled yet
+
+Still ahead of the current Aegis/Argos pair:
+- TLS fingerprint spoofing (JA3/JA4 match to target's browser mix)
+- HTTP/2 priority-frame ordering impersonation
+- Multi-IP session-spanning correlation (one attacker, different IPs,
+  same pacing fingerprint)
+- Living-off-the-land probing via oEmbed / pingback
+- Zero-day hypothesis synthesis from AST results (find NEW CVEs, not
+  just confirm known ones)
+
+These become v2.0+ pairs as we layer offense and defense.
+
+---
+
 ## Findings-to-fix ledger
 
 | # | Date | Finding | Detected-by-Aegis? | Fix (sensor to add) |
@@ -320,6 +441,9 @@ below are known gaps we'd already planned for v1.8+.
 | 007 | 2026-04-20 | Rate-limit bypass via `X-Forwarded-For` / `X-Real-IP` spoofing against our block engine | ❌ BLIND | Add a sensor that correlates trust-proxy-set responses to unmatched source IPs and flags inconsistency |
 | 008 | 2026-04-20 | Timing-attack login enumeration (password-reset response time difference for valid vs invalid users) | ❌ BLIND | Add response-timing fingerprint to login/reset endpoints; v1.9+ |
 | 009 | 2026-04-20 | Plant a known-vulnerable plugin on lab for Cycle 003 to validate Argos catches real CVE-grade bugs (not just scanner probes) | — | **Required next cycle.** Candidate plugins: wpforms-lite 1.6.2 (CVE-2022-1768), layerslider 7.9.11 (CVE-2024-2879), wp-file-manager 6.9 (CVE-2020-25213) |
+| 010 | 2026-04-20 | precision_probe sensor's "scanner_shape already fired" check was too strict — checked transient existence, not the emitted flag. Every repeat-visitor created a transient, blocking precision detection. | ✅ FIXED in v1.9 | Read `$rec['emitted']`, not `get_transient()` truthiness. |
+| 011 | 2026-04-20 | APT attackers can still evade precision_probe via first-visit-from-distributed-origins: each of N IPs sends ONE probe, never again. Our 7-day seen-IP window lets all N look fresh. | ❌ BLIND | Add multi-IP temporal correlation — cluster IPs by pacing/referer/UA fingerprint similarity; treat the cluster as one attacker. v2.0 target. |
+| 012 | 2026-04-20 | TLS JA3/JA4 fingerprint + HTTP/2 priority-frame ordering impersonation | ❌ BLIND | Requires Tier-4 (nginx module or sidecar) to observe; PHP-tier sensors can't see TLS handshake bytes. v2.0+. |
 
 ## Bug-bounty candidates discovered
 
