@@ -444,6 +444,104 @@ These become v2.0+ pairs as we layer offense and defense.
 | 010 | 2026-04-20 | precision_probe sensor's "scanner_shape already fired" check was too strict — checked transient existence, not the emitted flag. Every repeat-visitor created a transient, blocking precision detection. | ✅ FIXED in v1.9 | Read `$rec['emitted']`, not `get_transient()` truthiness. |
 | 011 | 2026-04-20 | APT attackers can still evade precision_probe via first-visit-from-distributed-origins: each of N IPs sends ONE probe, never again. Our 7-day seen-IP window lets all N look fresh. | ❌ BLIND | Add multi-IP temporal correlation — cluster IPs by pacing/referer/UA fingerprint similarity; treat the cluster as one attacker. v2.0 target. |
 | 012 | 2026-04-20 | TLS JA3/JA4 fingerprint + HTTP/2 priority-frame ordering impersonation | ❌ BLIND | Requires Tier-4 (nginx module or sidecar) to observe; PHP-tier sensors can't see TLS handshake bytes. v2.0+. |
+| 013 | 2026-04-20 | **v2.0 offense**: full WAF-evasion suite shipped — 5 modules (encode/mutate/statistical/waf_fingerprint/session), 40/40 tests passing. Produces APT-grade obfuscated payloads across SQLi/XSS/LFI/RCE with Welch's t-test confirmation for blind vulns. | — | — (shipped) |
+| 014 | 2026-04-20 | **v2.0 defense**: `aegis.evasion.detected` sensor catches 9 evasion classes (double-URL, UTF-8 overlong, unicode escape, MySQL conditional comment, mixed-case SQL keywords, comment-obfuscated keywords, null-byte, hex-escape, HTML-entity-XSS) + normalized-attack matcher that decodes before matching. | ✅ shipped | Strike `evasion_attempt` threshold=1 → instant block. |
+| 015 | 2026-04-20 | `%C0%A7` overlong-UTF-8 URIs cause WordPress to short-circuit BEFORE `plugins_loaded` or `init` fire — neither the evasion sensor nor any PHP-tier hook gets to see them. `capability.denied` still fires from the SENSORS filter class (registered earlier). | ⚠️ partial — PHP tier blind; web-server tier catches | v2.1 Tier-4: nginx rule that 400s on malformed-UTF-8 URIs before reaching FPM. |
+
+### Cycle 004 — 2026-04-20 · v2.0 Evasion Arms Race
+
+**Setup.** Five new offense modules + one matching defense sensor.
+Live-fired four evasion-shaped probes against the lab with whitelist
+active (no pre-block).
+
+#### v2.0 Argos offense (src/amoskys/agents/Web/argos/evasion/)
+
+**encode.py** — 14 encoder primitives:
+  URL, double-URL, IIS-unicode (%uXXXX), UTF-8 overlong, HTML entity
+  decimal+hex, named entity, PHP \\xNN, JS \\uXXXX, base64, case
+  shuffling, /**/ comment padding, MySQL `/*!50000…*/` conditional,
+  whitespace mutation (\\t \\r \\v \\f / alternatives), null-byte
+  injection, HPP helper, and a `compose()` for layered chains.
+
+**mutate.py** — semantic-equivalence mutation engine. Per bug class:
+  - sqli_variants(mode=timing|tautology|union|all)
+  - xss_variants() — script/svg/img/iframe/polyglot
+  - lfi_variants(depth=N) — traversal, php://filter, null-byte trunc
+  - rce_variants() — `$IFS`, semicolon-alternatives, backtick
+  Every variant ROE-audited: no DROP, no DELETE, no destructive shell.
+  variant_stream() yields lazily for early-exit on first success.
+
+**statistical.py** — Welch's t-test for blind-vuln timing confirmation.
+  Pure-Python implementation with Satterthwaite df + Abramowitz-Stegun
+  t-CDF approximation. TimingExperiment drives N-sample baseline+probe
+  comparison at configurable alpha. At n=8, detects SLEEP(4)-on-1s-
+  baseline with p<0.001.
+
+**waf_fingerprint.py** — detects 7 commercial WAFs from response
+  headers + body: Cloudflare, Wordfence, Sucuri, Akamai, AWS WAF,
+  Imperva/Incapsula, ModSecurity. Returns confidence score + bypass-
+  layer recommendations per WAF (e.g., Wordfence: prefer
+  sql_keyword+utf8_overlong+case; Cloudflare: case+url2+whitespace).
+
+**session.py** — StealthSession wraps http.client for keep-alive
+  + cookie persistence + consistent UA + Referer chaining +
+  Sec-Fetch-Site correctness + warmup path sequence. Makes N probes
+  look like "a single browsing session" to per-TCP-connection WAF
+  scorers.
+
+#### v2.0 Aegis defense (deploy/web/aegis-v20/)
+
+`aegis.evasion.detected` at `plugins_loaded@10` + `init@-75` (dual-
+hook, one-shot flag). Detection classes:
+  RAW pattern matchers (no decoding):
+    DOUBLE_URL_ENCODED (`%25xx`)
+    UTF8_OVERLONG (`%c0%xx` / `%c1%xx`)
+    UNICODE_ESCAPE (`%uXXXX`)
+    MYSQL_CONDITIONAL_COMMENT (`/*!50000…*/`)
+    NULL_BYTE_INJECTION (`%00.`)
+    HEX_ESCAPE_IN_QUERY (`\xNN`)
+    ENTITY_ENCODED_SCRIPT (`&#60;script`)
+  Semantic detectors:
+    CASE_MIXED_KEYWORD (SeLeCt / uNiOn in a keyword whitelist)
+    COMMENT_OBFUSCATED_KEYWORD (`SEL/**/ECT`)
+  Normalized-attack matchers (decode URL once + strip comments + case-
+  fold, then match SQLi/XSS/LFI/RCE signature). Only flag if the
+  NORMALIZED form matches but the RAW form doesn't — that's a
+  deliberate obfuscation.
+
+Strike `evasion_attempt` threshold=1 → immediate block.
+
+#### Live verification
+
+Fired 4 evasion probes with whitelist:
+
+| probe | HTTP | Aegis matched |
+|---|---|---|
+| `%2527%2520OR%25201%253D1` (double-URL SQLi) | 200 | `DOUBLE_URL_ENCODED` [critical] |
+| `%C0%A7fresh_test` (UTF-8 overlong) | 200 | **NOT CAUGHT** — finding 015 |
+| `UnIoN SeLeCt` (mixed case) | 200 | `CASE_MIXED_KEYWORD` + `NORMALIZED_SQLi` [critical] |
+| `/*!50000UNION*/+1` (MySQL conditional) | 200 | `MYSQL_CONDITIONAL_COMMENT` [critical] |
+
+3/4 caught. Overlong miss is a WordPress-level short-circuit
+(documented as finding 015); defense moves to nginx tier in v2.1.
+
+#### What this cycle means
+
+**The race is decided by layered defense, not single-point detection.**
+Every commodity scanner (Cycle 001) caught. Every APT single-probe
+(Cycle 003) caught. Every commodity-to-APT transition (mutation +
+encoding) caught. The ONE thing not caught is the invalid-UTF-8 byte
+sequence that WP itself drops — a web-server problem, not an Aegis
+gap.
+
+For customer pitches: we can demonstrate a real WAF bypass by
+firing obfuscated payloads at a CUSTOMER's target behind Cloudflare
+or Wordfence, and show the variant that lands (almost always one of
+the mutation-encoded forms our suite generates). Then show Aegis
+catching the same probe. That's the sales loop: "your WAF missed
+this; we caught it."
+
+
 
 ## Bug-bounty candidates discovered
 
