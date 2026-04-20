@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AMOSKYS Argos — WordPress Hunter</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/web/static/images/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="192x192" href="/web/static/images/favicon-192x192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #05070f;
+  --bg-elev:  #0b1220;
+  --bg-card:  #111827;
+  --accent:   #00d9ff;
+  --accent2:  #60e3ff;
+  --ok:       #00ff88;
+  --warn:     #f0ad4e;
+  --danger:   #ff3366;
+  --critical: #dc2626;
+  --muted:    #6b7a99;
+  --text:     #ffffff;
+  --text2:    #b4bcd0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.55;
+}
+a { color: var(--accent); text-decoration: none; }
+
+.banner {
+  background: linear-gradient(90deg, var(--danger), #ff6680);
+  color: white; padding: .5rem 1.25rem; font-size: .75rem;
+  font-weight: 700; text-align: center;
+  letter-spacing: .4px; text-transform: uppercase;
+  position: sticky; top: 0; z-index: 120;
+}
+
+.nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.5rem; border-bottom: 1px solid rgba(0,217,255,0.1);
+  background: rgba(11,18,32,0.8); backdrop-filter: blur(12px);
+}
+.logo { display: flex; align-items: center; gap: 0.5rem; font-weight: 800; font-size: 1rem; }
+.logo-mark {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--bg); font-weight: 900; font-size: 1rem;
+}
+.logo-name { letter-spacing: 0.04em; }
+.logo-suffix { color: var(--muted); font-weight: 500; margin-left: 0.2rem; }
+
+.shell {
+  max-width: 1200px; margin: 0 auto; padding: 2rem 1.25rem;
+  display: grid; grid-template-columns: 380px 1fr; gap: 1.5rem;
+}
+
+@media (max-width: 900px) { .shell { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--bg-card);
+  border: 1px solid rgba(0,217,255,0.12);
+  border-radius: 10px; padding: 1.5rem;
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.panel h2 {
+  font-size: 0.85rem; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding-bottom: 0.5rem; border-bottom: 1px solid rgba(0,217,255,0.2);
+}
+.panel p { color: var(--text2); font-size: 0.88rem; }
+.panel label {
+  display: block; font-size: 0.72rem; color: var(--text2);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  margin-bottom: 0.3rem;
+}
+.panel input, .panel select {
+  width: 100%; background: var(--bg-elev);
+  color: var(--text); border: 1px solid rgba(0,217,255,0.25);
+  border-radius: 5px; padding: 0.65rem 0.85rem;
+  font-family: inherit; font-size: 0.93rem; outline: none;
+  transition: border-color 0.15s;
+}
+.panel input:focus, .panel select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0,217,255,0.12);
+}
+.panel button {
+  background: var(--accent); color: var(--bg);
+  border: none; border-radius: 5px;
+  padding: 0.85rem 1.2rem; font-weight: 800;
+  font-family: inherit; cursor: pointer; letter-spacing: 0.05em;
+  text-transform: uppercase; font-size: 0.85rem;
+  transition: background 0.15s;
+}
+.panel button:hover { background: var(--accent2); }
+.panel button:disabled { background: var(--muted); cursor: not-allowed; }
+
+.wp-hero {
+  background: linear-gradient(135deg, #0b1220 0%, #1a2a4c 100%);
+  border: 1px solid rgba(0,217,255,0.2);
+  border-radius: 10px;
+  padding: 1.5rem; margin-bottom: 1.25rem;
+}
+.wp-hero .tag {
+  display: inline-block; background: rgba(0,217,255,0.15); color: var(--accent);
+  padding: 3px 10px; border-radius: 3px; font-size: 0.7rem;
+  letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700;
+}
+.wp-hero h1 {
+  font-size: 1.6rem; margin-top: 0.6rem; letter-spacing: -0.01em;
+}
+.wp-hero .sub {
+  color: var(--text2); font-size: 0.9rem; margin-top: 0.4rem;
+}
+.wp-hero ul {
+  margin-top: 0.75rem; padding-left: 1.2rem; color: var(--text2);
+  font-size: 0.82rem; line-height: 1.8;
+}
+.wp-hero ul li::marker { color: var(--accent); }
+.wp-hero code {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+  background: rgba(0,217,255,0.1); padding: 1px 5px; border-radius: 2px;
+  color: var(--accent2);
+}
+
+.live {
+  background: #02030a;
+  border: 1px solid rgba(0,217,255,0.12);
+  border-radius: 10px; padding: 1rem;
+  display: flex; flex-direction: column;
+  min-height: 560px;
+}
+.live header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-bottom: 0.8rem; margin-bottom: 1rem;
+  border-bottom: 1px solid rgba(0,217,255,0.18);
+}
+.live .target {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent); font-size: 0.92rem;
+}
+.live .status {
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 0.2rem 0.7rem; border-radius: 3px;
+  background: rgba(107,122,153,0.15); color: var(--muted);
+}
+.live .status.running { color: var(--accent); background: rgba(0,217,255,0.12);
+  animation: pulse 1.4s infinite; }
+.live .status.done    { color: var(--ok); background: rgba(0,255,136,0.1); }
+.live .status.fatal   { color: var(--danger); background: rgba(255,51,102,0.15); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+.stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 0.45rem; margin-bottom: 1rem;
+}
+.stage {
+  padding: 0.45rem 0.6rem;
+  background: rgba(0,217,255,0.04); border: 1px solid rgba(0,217,255,0.1);
+  border-radius: 5px; font-size: 0.7rem;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); text-align: center;
+  transition: all 0.2s;
+}
+.stage.active {
+  background: rgba(0,217,255,0.14); border-color: var(--accent);
+  color: var(--accent); box-shadow: 0 0 6px rgba(0,217,255,0.25);
+}
+.stage.done   { background: rgba(0,255,136,0.08);  border-color: var(--ok);     color: var(--ok); }
+.stage.failed { background: rgba(255,51,102,0.08); border-color: var(--danger); color: var(--danger); }
+
+.stream {
+  flex: 1; overflow-y: auto; padding: 0.25rem;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; line-height: 1.5;
+  max-height: 520px;
+}
+.stream::-webkit-scrollbar { width: 5px; }
+.stream::-webkit-scrollbar-thumb { background: rgba(0,217,255,0.25); border-radius: 3px; }
+
+.evt {
+  display: grid; grid-template-columns: 60px 80px 1fr;
+  gap: 0.5rem; padding: 0.3rem 0.5rem;
+  border-left: 2px solid transparent; border-radius: 2px;
+}
+.evt .ts { color: var(--muted); font-variant-numeric: tabular-nums; }
+.evt .stg { color: var(--accent2); font-weight: 700; font-size: 0.7rem; letter-spacing: 0.05em; }
+.evt .msg { color: var(--text); word-break: break-word; }
+
+.evt.k-stage_start { border-left-color: var(--accent);    background: rgba(0,217,255,0.04); }
+.evt.k-stage_end   { border-left-color: var(--ok); }
+.evt.k-progress    { border-left-color: var(--accent2); opacity: 0.8; }
+.evt.k-finding     { border-left-color: var(--warn);      background: rgba(240,173,78,0.05); }
+.evt.k-evidence    { border-left-color: var(--muted); }
+.evt.k-decision    { border-left-color: #a855f7; }
+.evt.k-chain       { border-left-color: var(--danger);    background: rgba(255,51,102,0.07); font-weight: 600; }
+.evt.k-log         { opacity: 0.7; }
+.evt.k-error       { border-left-color: var(--warn); color: var(--warn); }
+.evt.k-fatal       { border-left-color: var(--critical);  background: rgba(220,38,38,0.1); }
+.evt.k-report      { border-left-color: var(--accent); font-weight: 700; }
+.evt.k-done        { border-left-color: var(--ok); font-weight: 700; background: rgba(0,255,136,0.06); }
+
+.report-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(0,217,255,0.15);
+  border-radius: 10px; padding: 1.5rem;
+  margin-top: 1rem; display: none;
+}
+.report-card.visible { display: block; }
+.report-card h3 {
+  color: var(--accent); font-size: 0.95rem; margin-bottom: 0.85rem;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+
+.dl-row {
+  display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;
+  margin-top: 1rem;
+}
+.dl-btn {
+  background: var(--accent); color: var(--bg);
+  padding: 0.55rem 1.1rem; border-radius: 5px;
+  font-weight: 800; text-decoration: none;
+  letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.76rem;
+}
+.dl-btn.secondary {
+  background: var(--bg-elev); color: var(--accent);
+  border: 1px solid rgba(0,217,255,0.3);
+}
+
+.chain-card {
+  background: var(--bg-elev);
+  border-left: 3px solid var(--danger);
+  padding: 0.9rem 1.1rem; border-radius: 4px; margin-bottom: 0.8rem;
+}
+.chain-card.critical { border-left-color: var(--critical); }
+.chain-card.high     { border-left-color: #ea580c; }
+.chain-card.medium   { border-left-color: #ca8a04; }
+.chain-card .name { font-weight: 800; font-size: 1rem; }
+.chain-card .cvss { color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+.chain-card .narrative {
+  color: var(--text2); font-size: 0.82rem; white-space: pre-wrap;
+  margin-top: 0.6rem; padding: 0.5rem 0.7rem;
+  border-left: 1px dotted var(--muted);
+}
+
+.sev {
+  display: inline-block; padding: 1px 8px; border-radius: 3px;
+  font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.06em; color: white;
+}
+.sev.critical { background: var(--critical); }
+.sev.high     { background: #ea580c; }
+.sev.medium   { background: #ca8a04; }
+.sev.low      { background: #2563eb; }
+.sev.info     { background: #6b7280; }
+
+.profile {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.5rem; margin-top: 0.5rem;
+}
+.cell {
+  background: var(--bg-elev); padding: 0.5rem 0.8rem;
+  border-radius: 4px; font-size: 0.78rem;
+}
+.cell .k { color: var(--muted); font-size: 0.65rem;
+  text-transform: uppercase; letter-spacing: 0.05em; }
+.cell .v { color: var(--text); font-weight: 700; margin-top: 2px; }
+
+.err {
+  background: rgba(255,51,102,0.1); color: var(--danger);
+  border: 1px solid rgba(255,51,102,0.3);
+  padding: 0.5rem 0.8rem; border-radius: 4px;
+  font-size: 0.83rem; display: none;
+}
+
+.legal {
+  color: var(--muted); font-size: 0.68rem; line-height: 1.6;
+  padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.06);
+  margin-top: auto;
+}
+.legal strong { color: var(--text2); }
+
+</style>
+</head>
+<body>
+
+<div class="banner">
+  LAB PREVIEW · Argos runs on the deliberately-attackable WordPress host at
+  <code style="background:rgba(0,0,0,.3);padding:1px 6px;border-radius:2px;">lab.amoskys.com</code>
+</div>
+
+<nav class="nav">
+  <a href="/web/" class="logo">
+    <span class="logo-mark">A</span>
+    <span>
+      <span class="logo-name">AMOSKYS</span><span class="logo-suffix">·WEB</span>
+    </span>
+  </a>
+  <div style="display:flex; gap: 1.5rem; font-size: 0.85rem;">
+    <a href="/web/" style="color: var(--text2);">Product</a>
+    <a href="/web/threats" style="color: var(--text2);">Threats</a>
+    <a href="/web/hunt" style="color: var(--accent);">Hunt</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<div class="shell" style="display:block; max-width:1200px;">
+<div class="wp-hero">
+  <span class="tag">WordPress · Argos v2.4</span>
+  <h1>Break a WordPress site. Watch every move. Keep the report.</h1>
+  <p class="sub">
+    Argos fingerprints a WordPress deployment end-to-end, picks the
+    attack plan its stack is known to be weak against, reasons about
+    chainable exploits, and hands you a branded pentest report you can
+    forward to the site owner.
+  </p>
+  <ul>
+    <li>Fingerprints CDN (Cloudflare, Sucuri) · WAF (Wordfence, Sucuri, ModSecurity) · PHP · MySQL · core + plugin versions</li>
+    <li>Picks <strong>WordPress-tuned probe order</strong>: REST auth → SQLi → file upload → object injection → CSRF → SSRF → LFI → XSS → RCE</li>
+    <li>Adapts encoding cascade to the observed WAF (Wordfence = <code>comment_pad + utf8_overlong + case_mutate</code>)</li>
+    <li>Attempts <strong>origin-IP discovery</strong> (CT-log SAN bleed, SPF) to bypass Cloudflare</li>
+    <li>Chains findings into full exploit paths (LFI → <code>wp-config.php</code> → DB takeover; upload + LFI → RCE)</li>
+  </ul>
+</div>
+</div>
+
+<div class="shell">
+  <!-- LEFT: Launch panel -->
+  <section class="panel">
+    <h2>Launch Hunt</h2>
+    <p>Enter a WordPress site. Report mode runs OSINT-only against any domain.</p>
+
+    <div>
+      <label for="target">WordPress site URL</label>
+      <input id="target" type="text" placeholder="example-wp-site.com or https://example.com/" autocomplete="off">
+    </div>
+
+    <div>
+      <label for="mode">Engagement mode</label>
+      <select id="mode">
+        <option value="report">Report — OSINT + passive fingerprint (any domain, safe)</option>
+        <option value="confirm">Confirm — + low-volume probes, hidden-param fuzz (consent advised)</option>
+        <option value="exploit">Exploit — full kill chain + JWT/auth attacks (authorization required)</option>
+      </select>
+    </div>
+
+    <div id="consent-row" style="display:none;">
+      <label for="consent">Consent token</label>
+      <input id="consent" type="text" placeholder="bounty:program-name  or  sow:client-name">
+      <div style="color: var(--muted); font-size: 0.68rem; margin-top: 0.3rem;">
+        For bug-bounty: <code style="color:var(--accent2);">bounty:&lt;program&gt;</code>.
+        For signed engagements: <code style="color:var(--accent2);">sow:&lt;client&gt;</code>.
+      </div>
+    </div>
+
+    <button id="launch">Launch Hunt</button>
+    <div class="err" id="error"></div>
+
+    <div class="legal">
+      <strong>Legal</strong><br>
+      Report mode uses only DNS, CT logs, robots.txt, and fingerprint-grade
+      GETs — no consent required. Confirm/Exploit require authorization.
+      CFAA §1030(a)(2)(C) · Van Buren (2021) · hiQ v. LinkedIn (2022).
+    </div>
+  </section>
+
+  <!-- RIGHT: Live stream + report -->
+  <section>
+    <div class="live">
+      <header>
+        <div class="target" id="live-target">— idle —</div>
+        <div class="status" id="live-status">idle</div>
+      </header>
+
+      <div class="stages" id="stages">
+        <div class="stage" data-stage="consent">Consent</div>
+        <div class="stage" data-stage="recon">Recon</div>
+        <div class="stage" data-stage="fingerprint">Fingerprint</div>
+        <div class="stage" data-stage="strategy">Strategy</div>
+        <div class="stage" data-stage="origin_bypass">Origin</div>
+        <div class="stage" data-stage="smuggle">Smuggle</div>
+        <div class="stage" data-stage="fuzz_params">Fuzz</div>
+        <div class="stage" data-stage="auth_probe">Auth</div>
+        <div class="stage" data-stage="chain">Chains</div>
+      </div>
+
+      <div class="stream" id="stream">
+        <div style="color: var(--muted); padding: 1.5rem; text-align: center;">
+          Events will stream here in real time once you launch.
+        </div>
+      </div>
+    </div>
+
+    <div class="report-card" id="report">
+      <h3>Final Pentest Report</h3>
+      <div id="report-summary"></div>
+      <h3 style="margin-top:1.25rem;">Architecture profile</h3>
+      <div class="profile" id="report-profile"></div>
+      <h3 style="margin-top:1.25rem;">Exploit chains</h3>
+      <div id="report-chains"></div>
+      <div class="dl-row">
+        <a class="dl-btn" id="dl-html" href="#">Download HTML report</a>
+        <a class="dl-btn secondary" id="dl-json" href="#">Download JSON</a>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function() {
+  const $ = (id) => document.getElementById(id);
+  const launchBtn = $('launch');
+  const targetInp = $('target');
+  const modeSel   = $('mode');
+  const consentRow= $('consent-row');
+  const consentInp= $('consent');
+  const errBox    = $('error');
+  const liveTarget= $('live-target');
+  const liveStatus= $('live-status');
+  const streamBox = $('stream');
+  const stagesBox = $('stages');
+  const reportBox = $('report');
+  const reportSum = $('report-summary');
+  const reportProf= $('report-profile');
+  const reportChns= $('report-chains');
+  const dlHtml    = $('dl-html');
+  const dlJson    = $('dl-json');
+
+  let es = null;
+  let currentId = null;
+
+  modeSel.addEventListener('change', () => {
+    consentRow.style.display = (modeSel.value === 'report') ? 'none' : 'block';
+  });
+
+  function esc(s) {
+    return (s == null ? '' : String(s))
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function setStage(stage, state) {
+    const el = stagesBox.querySelector(`[data-stage="${stage}"]`);
+    if (!el) return;
+    el.classList.remove('active', 'done', 'failed');
+    if (state) el.classList.add(state);
+  }
+
+  function appendEvent(evt) {
+    const ts = new Date(evt.timestamp * 1000).toTimeString().slice(0, 8);
+    const row = document.createElement('div');
+    row.className = `evt k-${evt.kind}`;
+    row.innerHTML = `<div class="ts">${ts}</div>
+      <div class="stg">${esc(evt.stage)}</div>
+      <div class="msg">${esc(evt.message)}</div>`;
+    streamBox.appendChild(row);
+    streamBox.scrollTop = streamBox.scrollHeight;
+
+    if (evt.kind === 'stage_start') setStage(evt.stage, 'active');
+    else if (evt.kind === 'stage_end') setStage(evt.stage, 'done');
+    else if (evt.kind === 'fatal') {
+      setStage(evt.stage, 'failed');
+      liveStatus.textContent = 'fatal';
+      liveStatus.className = 'status fatal';
+    } else if (evt.kind === 'error') setStage(evt.stage, 'failed');
+  }
+
+  function renderReport(report) {
+    if (!report) return;
+    reportBox.classList.add('visible');
+
+    const maxSev = (report.max_severity || 'low').toLowerCase();
+    reportSum.innerHTML = `<div class="profile">
+      <div class="cell"><div class="k">Target</div>
+        <div class="v" style="font-family:'JetBrains Mono',monospace; color:var(--accent);">${esc(report.target_url)}</div></div>
+      <div class="cell"><div class="k">Mode</div><div class="v">${esc(report.mode)}</div></div>
+      <div class="cell"><div class="k">Duration</div><div class="v">${(report.duration_s||0).toFixed(2)}s</div></div>
+      <div class="cell"><div class="k">Max severity</div><div class="v"><span class="sev ${esc(maxSev)}">${esc(maxSev)}</span></div></div>
+      <div class="cell"><div class="k">Consent</div><div class="v" style="font-size:0.72rem;">${esc(report.consent_method||'—')}</div></div>
+    </div>`;
+
+    const p = report.profile || {};
+    const rows = [
+      ['CDN',       (p.cdn && p.cdn.name) || '—'],
+      ['WAF',       (p.waf && (p.waf.names||[]).join(', ')) || '—'],
+      ['Origin',    (p.origin && p.origin.server) ? `${p.origin.server} ${p.origin.version||''}` : '—'],
+      ['Runtime',   (p.runtime && p.runtime.name) ? `${p.runtime.name} ${p.runtime.version||''}` : '—'],
+      ['Database',  (p.database && p.database.name) || '—'],
+      ['OS',        (p.os && p.os.family) || '—'],
+      ['Framework', (p.framework && p.framework.name) ? `${p.framework.name} ${p.framework.version||''}` : '—'],
+      ['Verbose',   p.verbose_errors ? 'YES' : 'no'],
+    ];
+    reportProf.innerHTML = rows.map(([k,v]) =>
+      `<div class="cell"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join('');
+
+    const chains = report.chains || [];
+    if (chains.length === 0) {
+      reportChns.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;">No exploit chains composed from current findings.</div>';
+    } else {
+      reportChns.innerHTML = chains.map(c => `
+        <div class="chain-card ${esc(c.severity)}">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
+            <span class="name">${esc(c.name)}</span>
+            <span class="cvss">CVSS ${Number(c.cvss_estimate||0).toFixed(1)}</span>
+          </div>
+          <div style="margin-top:6px;">
+            <span class="sev ${esc(c.severity)}">${esc(c.severity)}</span>
+            <span style="color:var(--muted);margin-left:8px;font-size:0.75rem;">confidence ${esc(c.confidence)}%</span>
+          </div>
+          <div class="narrative">${esc(c.narrative)}</div>
+          <div style="margin-top:6px; color:var(--warn); font-size:0.78rem;">
+            Business impact: ${esc(c.business_impact)}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    dlHtml.href = `/web/hunt/${currentId}/report.html`;
+    dlJson.href = `/web/hunt/${currentId}/report.json`;
+  }
+
+  async function launch() {
+    errBox.style.display = 'none';
+    reportBox.classList.remove('visible');
+    const target = targetInp.value.trim();
+    const mode = modeSel.value;
+    const consent = consentInp.value.trim();
+    if (!target) {
+      errBox.textContent = 'target is required';
+      errBox.style.display = 'block';
+      return;
+    }
+    launchBtn.disabled = true;
+    launchBtn.textContent = 'Starting…';
+    streamBox.innerHTML = '';
+    stagesBox.querySelectorAll('.stage').forEach(s => s.classList.remove('active','done','failed'));
+
+    try {
+      const res = await fetch('/web/hunt/submit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, mode, consent_token: consent }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        errBox.textContent = data.error || 'failed to start hunt';
+        errBox.style.display = 'block';
+        launchBtn.disabled = false;
+        launchBtn.textContent = 'Launch Hunt';
+        return;
+      }
+      currentId = data.campaign_id;
+      liveTarget.textContent = data.target;
+      liveStatus.textContent = 'running';
+      liveStatus.className = 'status running';
+      openStream(data.stream_url);
+    } catch (exc) {
+      errBox.textContent = 'network error: ' + exc.message;
+      errBox.style.display = 'block';
+      launchBtn.disabled = false;
+      launchBtn.textContent = 'Launch Hunt';
+    }
+  }
+
+  function openStream(url) {
+    if (es) { try { es.close(); } catch (e) {} }
+    es = new EventSource(url);
+    es.addEventListener('hello', (e) => {});
+    es.addEventListener('argos_event', (e) => {
+      try { appendEvent(JSON.parse(e.data)); } catch (err) {}
+    });
+    es.addEventListener('report', (e) => {
+      try {
+        const rep = JSON.parse(e.data);
+        renderReport(rep);
+        liveStatus.textContent = 'done';
+        liveStatus.className = 'status done';
+      } catch (err) {}
+    });
+    es.addEventListener('error', (e) => {
+      try {
+        const msg = JSON.parse(e.data || '{}');
+        if (msg.error) {
+          errBox.textContent = msg.error;
+          errBox.style.display = 'block';
+        }
+      } catch (err) {}
+      liveStatus.textContent = 'error';
+      liveStatus.className = 'status fatal';
+    });
+    es.addEventListener('close', (e) => {
+      try { es.close(); } catch (err) {}
+      launchBtn.disabled = false;
+      launchBtn.textContent = 'Launch Hunt';
+    });
+    es.addEventListener('timeout', (e) => {
+      liveStatus.textContent = 'timeout';
+      try { es.close(); } catch (err) {}
+    });
+  }
+
+  launchBtn.addEventListener('click', launch);
+  targetInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') launch(); });
+})();
+</script>
+</body>
+</html>
