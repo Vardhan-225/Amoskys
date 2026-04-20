@@ -1,0 +1,676 @@
+{% extends "web/base.html" %}
+{% block title %}Dashboard — {{ site }} · AMOSKYS Web{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2"></script>
+<link rel="stylesheet" href="/web/static/css/redesign.css">
+<style>
+  /* ── Hero header ───────────────────────────────────────────────── */
+  .db-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem;
+  }
+  .db-header .db-title {
+    font-size: 1.7rem; font-weight: 800; letter-spacing: -.4px;
+    margin: 0; color: var(--w-fg-0);
+  }
+  .db-header .db-sub { font-size: .85rem; color: var(--w-fg-3); margin-top: .25rem; }
+  .db-pill-live {
+    background: rgba(0,255,136,.08); border: 1px solid rgba(0,255,136,.3);
+    color: #00ff88; padding: .25rem .7rem; border-radius: 100px;
+    font-size: .65rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;
+  }
+  .db-pill-live::before {
+    content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px;
+    background: #00ff88; border-radius: 50%; animation: db-pulse 2s infinite;
+  }
+  @keyframes db-pulse { 50% { opacity: .35; } }
+
+  /* ── Globe hero ────────────────────────────────────────────────── */
+  .db-globe-hero {
+    position: relative; width: 100%; height: 620px;
+    background: radial-gradient(ellipse at center, #0a1028 0%, #030712 70%);
+    border: 1px solid rgba(0,217,255,.15); border-radius: 16px;
+    overflow: hidden; margin-bottom: 1.25rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #db-globe-root {
+    width: 100%; height: 100%; cursor: grab;
+    /* Globe.gl draws a transparent sphere centered in this element.
+       Flex centering on the parent + full-bleed here = visually centered. */
+  }
+  #db-globe-root:active { cursor: grabbing; }
+  .db-globe-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+
+  /* Compact corner cards — keep the centre clear for the globe */
+  .db-globe-corner {
+    position: absolute; pointer-events: auto;
+    background: rgba(5,8,22,.85); border: 1px solid rgba(0,217,255,.18);
+    border-radius: 8px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .db-globe-tl { top: 14px; left: 16px; padding: 10px 14px; max-width: 260px; }
+  .db-globe-tr { top: 14px; right: 16px; padding: 8px 12px; }
+  .db-globe-bl { bottom: 14px; left: 16px; padding: 8px 12px; display: flex; gap: 6px; }
+  .db-globe-br { bottom: 14px; right: 16px; padding: 7px 12px; display: flex; gap: 14px; align-items: center; font-size: 10.5px; color: var(--w-fg-2); }
+
+  .db-globe-eyebrow { font-size: 10px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--w-accent); font-weight: 700; }
+  .db-globe-title   { font-size: 16px; font-weight: 800; margin-top: 3px; color: var(--w-fg-0); }
+  .db-globe-sub     { font-size: 11px; color: var(--w-fg-3); margin-top: 4px; line-height: 1.45; }
+
+  .db-rate {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  }
+  .db-rate-num { color: var(--w-accent); font-weight: 700; min-width: 26px; text-align: right; }
+  .db-rate-lbl { color: var(--w-fg-3); font-size: 10px; text-transform: uppercase; letter-spacing: .8px; }
+  .db-rate-pulse {
+    width: 8px; height: 8px; border-radius: 50%; background: #00ff88;
+    box-shadow: 0 0 8px rgba(0,255,136,.65);
+  }
+  .db-rate-pulse.idle { background: var(--w-fg-3); box-shadow: none; }
+
+  .db-ctrl-btn {
+    background: transparent; border: 1px solid rgba(255,255,255,.12);
+    color: var(--w-fg-2); font-size: 11px; padding: 5px 10px; border-radius: 5px;
+    cursor: pointer; font-family: inherit; font-weight: 600;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .db-ctrl-btn:hover { border-color: var(--w-accent); color: var(--w-fg-0); }
+  .db-ctrl-btn.active { border-color: var(--w-accent); color: var(--w-fg-0); background: rgba(0,217,255,.08); }
+
+  .db-legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: middle; }
+
+  .db-globe-empty {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 10px; color: var(--w-fg-3); text-align: center;
+    padding: 1rem; pointer-events: auto;
+  }
+  .db-globe-empty .empty-title { font-size: 1.1rem; color: var(--w-fg-1); font-weight: 700; }
+  .db-globe-empty .empty-body  { font-size: .85rem; max-width: 480px; }
+
+  /* ── Bars ──────────────────────────────────────────────────────── */
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 900px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .db-globe-hero   { height: 480px; }
+    .db-globe-tl     { max-width: 70%; }
+    .db-globe-br     { display: none; } /* legend hides on mobile */
+  }
+  .db-bar { margin: .4rem 0; }
+  .db-bar-row { display: flex; align-items: center; gap: .75rem; margin: .25rem 0; font-size: .85rem; }
+  .db-bar-name { flex: 0 0 150px; color: var(--w-fg-1); }
+  .db-bar-track { flex: 1; height: 8px; background: var(--w-border); border-radius: 4px; overflow: hidden; position: relative; }
+  .db-bar-fill { height: 100%; border-radius: 4px; }
+  .db-bar-count { flex: 0 0 60px; text-align: right; font-weight: 700; color: var(--w-fg-0); font-variant-numeric: tabular-nums; font-size: .85rem; }
+  .db-bar-fill.sev-info     { background: var(--w-accent); }
+  .db-bar-fill.sev-warn     { background: #ffaa00; }
+  .db-bar-fill.sev-high     { background: #ff3366; }
+  .db-bar-fill.sev-critical { background: #7F1D1D; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ═══ HEADER ═══ -->
+<div class="db-header">
+  <div>
+    <div class="section-eyebrow">Customer-zero · live telemetry</div>
+    <h1 class="db-title">{{ site }}</h1>
+    <div class="db-sub">
+      Signed in as <strong>{{ user_email }}</strong>
+      {% if wp_version %}· WordPress <strong>{{ wp_version }}</strong>{% endif %}
+      · Aegis chain v2 · auto-refresh 30s
+    </div>
+  </div>
+  <div style="display:flex; gap:.5rem; align-items:center;">
+    <span class="db-pill-live">LIVE</span>
+    <a href="{{ url_for('web.signout') }}" class="btn btn-ghost btn-sm">Sign out</a>
+  </div>
+</div>
+
+<!-- ═══ RIGHT-NOW NARRATIVE BANNER ═══ -->
+{# Replaces raw "140,817 total events" vanity counter with what actually matters
+   to an operator: posture (normal/watching/attack), one specific fact, one CTA.
+   Computed server-side per render from the live Aegis snapshot. #}
+{% if narrative %}
+<div class="now-banner now-{{ narrative.accent_class }}{% if narrative.pulse %} now-pulse{% endif %}">
+  <div class="now-banner-body">
+    <div class="now-headline">{{ narrative.headline }}</div>
+    <p class="now-detail">{{ narrative.detail | safe }}</p>
+  </div>
+  {% if narrative.cta_text and narrative.cta_href %}
+  <a href="{{ narrative.cta_href }}" class="now-cta">{{ narrative.cta_text }}</a>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- ═══ CATEGORY ROLLUP PILLS ═══ -->
+{% if category_rollup %}
+<div class="cat-pills" style="margin-bottom:1.1rem;">
+  {% for cat in category_rollup %}
+  <a class="cat-pill" data-cat="{{ cat.category }}"
+     href="{{ url_for('web.investigate', q='category:' + cat.category|string) }}"
+     title="{{ cat.top | map(attribute='phrase') | list | join(' · ') }}">
+    {{ cat.category }}
+    <span class="cat-pill-count">{{ "{:,}".format(cat.count) }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- ═══ INLINE LIVE GLOBE — REAL DATA ONLY ═══ -->
+<!-- Statistical contract: each arc = one Aegis event, visible only for the
+     event's real duration (HTTP duration_ms × 4, clamped 0.4-4s) or 1.5s
+     default for instantaneous events. Idle log → empty globe. -->
+<div class="db-globe-hero">
+  <div id="db-globe-root"></div>
+
+  <div class="db-globe-overlay">
+    {% if globe.site %}
+    <!-- Top-left: site identity (compact) -->
+    <div class="db-globe-corner db-globe-tl">
+      <div class="db-globe-eyebrow">Your site · live</div>
+      <div class="db-globe-title">{{ globe.site.domain }}</div>
+      <div class="db-globe-sub">
+        {{ globe.site.ip }} · {{ globe.site.city }}, {{ globe.site.country }}<br>
+        {{ globe.site.org or globe.site.asn }}
+      </div>
+    </div>
+
+    <!-- Top-right: live event-rate counter (client-side, derived from polled events) -->
+    <div class="db-globe-corner db-globe-tr">
+      <div class="db-rate" title="Aegis events ingested per second over the last 5s window">
+        <span class="db-rate-pulse idle" id="dbRatePulse"></span>
+        <span class="db-rate-num" id="dbRateNum">0.0</span>
+        <span class="db-rate-lbl">ev/s · 5s avg</span>
+      </div>
+      <div class="db-rate" style="margin-top:4px;" title="Total events visible on the globe right now">
+        <span class="db-rate-pulse" style="background:var(--w-accent); box-shadow:0 0 8px rgba(0,217,255,.65);"></span>
+        <span class="db-rate-num" id="dbArcsNum">0</span>
+        <span class="db-rate-lbl">arcs in flight</span>
+      </div>
+    </div>
+
+    <!-- Bottom-left: controls -->
+    <div class="db-globe-corner db-globe-bl">
+      <button type="button" id="dbCtrlSpin"  class="db-ctrl-btn" title="Toggle auto-spin (off by default)">▶ Spin</button>
+      <button type="button" id="dbCtrlReset" class="db-ctrl-btn" title="Re-centre on your site">⌖ Centre</button>
+      <button type="button" id="dbCtrlPause" class="db-ctrl-btn" title="Pause/resume the live feed">⏸ Pause feed</button>
+    </div>
+
+    <!-- Bottom-right: legend -->
+    <div class="db-globe-corner db-globe-br">
+      <span><span class="db-legend-dot" style="background:#00d9ff;box-shadow:0 0 6px rgba(0,217,255,.7);"></span>Your site</span>
+      <span><span class="db-legend-dot" style="background:#00d9ff;"></span>info</span>
+      <span><span class="db-legend-dot" style="background:#ffaa00;"></span>warn</span>
+      <span><span class="db-legend-dot" style="background:#ff3366;"></span>high</span>
+      <span><span class="db-legend-dot" style="background:#dc2626;"></span>crit</span>
+    </div>
+    {% else %}
+    <div class="db-globe-empty">
+      <div class="empty-title">Globe unavailable</div>
+      <div class="empty-body">
+        We couldn't resolve <code>{{ site }}</code> to a public IP, or the
+        ip-api lookup failed. Globe will populate as soon as the site is
+        DNS-reachable from this host.
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ═══ Headline metrics — all real, all clickable into investigate ═══ -->
+<div class="metrics">
+  <a class="metric metric-accent metric-link" href="{{ url_for('web.investigate', q='since:24h') }}" title="All events in the last 24h">
+    <div class="metric-label">Total Aegis events</div>
+    <div class="metric-value">{{ "{:,}".format(snap.total_events) }}</div>
+    <div class="metric-delta">chain-linked · open log →</div>
+  </a>
+  <a class="metric metric-link {% if snap.severities.get('critical', 0) + snap.severities.get('high', 0) > 0 %}metric-offense{% else %}metric-ok{% endif %}"
+     href="{{ url_for('web.investigate', q='severity:critical,high since:24h') }}"
+     title="Only critical + high severity, last 24h">
+    <div class="metric-label">High / Critical</div>
+    <div class="metric-value">{{ snap.severities.get('critical', 0) + snap.severities.get('high', 0) }}</div>
+    <div class="metric-delta">severity escalations · hunt →</div>
+  </a>
+  <a class="metric metric-accent metric-link" href="{{ url_for('web.graph', q='since:24h') }}" title="Open the entity graph for the last 24h">
+    <div class="metric-label">Sensor families firing</div>
+    <div class="metric-value">{{ snap.sensors | length }}<span class="text-muted" style="font-size:1rem;">/{{ sensor_catalog | length }}</span></div>
+    <div class="metric-delta">open graph view →</div>
+  </a>
+  <a class="metric metric-accent metric-link" href="{{ url_for('web.investigate', q='since:24h') }}" title="Logs grouped by source IP">
+    <div class="metric-label">External IPs observed</div>
+    <div class="metric-value">{{ snap.external_ips | length }}</div>
+    <div class="metric-delta">unique callers · open log →</div>
+  </a>
+  <a class="metric metric-link {% if snap.chain_breaks > 0 %}metric-offense{% else %}metric-ok{% endif %}"
+     href="{{ url_for('web.timeline', q='since:24h') }}"
+     title="Event timeline — chain visualized over time">
+    <div class="metric-label">Chain integrity</div>
+    <div class="metric-value">
+      {% if snap.total_events %}{{ "%.1f"|format(100 * snap.chain_ok / snap.total_events) }}%{% else %}—{% endif %}
+    </div>
+    <div class="metric-delta">{{ snap.chain_ok }} ok · {{ snap.chain_breaks }} breaks · timeline →</div>
+  </a>
+</div>
+
+<!-- ═══ Crawler / bot breakdown — real Aegis User-Agents ═══ -->
+<div class="card" style="padding:1.25rem; margin-bottom:1rem;">
+  <div class="card-head">
+    <div>
+      <div class="card-title">Who's visiting {{ site }}</div>
+      <div class="card-sub">User-Agent classification of real Aegis HTTP events — humans, search/SEO, AI crawlers, active scanners</div>
+    </div>
+  </div>
+
+  <div class="grid-3" style="margin-top:1rem;">
+    <div>
+      <div class="section-eyebrow">Humans &amp; benign</div>
+      <div style="margin-top:.4rem;">
+        <a class="db-bar-row db-bar-link" href="{{ url_for('web.investigate', q='family:http since:24h') }}">
+          <span class="db-bar-name">Humans</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-info" style="width:{{ (crawlers.totals.human / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.human }}</div>
+        </a>
+        <a class="db-bar-row db-bar-link" href="{{ url_for('web.investigate', q='family:http since:24h') }}">
+          <span class="db-bar-name">Search crawlers</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-info" style="width:{{ (crawlers.totals.search / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.search }}</div>
+        </a>
+        <a class="db-bar-row db-bar-link" href="{{ url_for('web.investigate', q='family:http since:24h') }}">
+          <span class="db-bar-name">SEO tools</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-info" style="width:{{ (crawlers.totals.seo / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.seo }}</div>
+        </a>
+        <a class="db-bar-row db-bar-link" href="{{ url_for('web.investigate', q='family:http since:24h') }}">
+          <span class="db-bar-name">Security research</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-info" style="width:{{ (crawlers.totals.security / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.security }}</div>
+        </a>
+      </div>
+    </div>
+    <div>
+      <div class="section-eyebrow">Concerning</div>
+      <div style="margin-top:.4rem;">
+        <a class="db-bar-row db-bar-link" href="{{ url_for('web.investigate', q='family:http since:24h') }}">
+          <span class="db-bar-name">AI crawlers</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-warn" style="width:{{ (crawlers.totals.ai / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.ai }}</div>
+        </a>
+        <a class="db-bar-row db-bar-link" href="{{ url_for('web.investigate', q='severity:high,warn family:http since:24h') }}">
+          <span class="db-bar-name">Active scanners</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-high" style="width:{{ (crawlers.totals.scanner / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.scanner }}</div>
+        </a>
+        <a class="db-bar-row db-bar-link" href="{{ url_for('web.investigate', q='family:http since:24h') }}">
+          <span class="db-bar-name">Other bots</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-warn" style="width:{{ (crawlers.totals.bot_other / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.bot_other }}</div>
+        </a>
+        <a class="db-bar-row db-bar-link" href="{{ url_for('web.investigate', q='family:http since:24h') }}">
+          <span class="db-bar-name">Unknown</span>
+          <div class="db-bar-track"><div class="db-bar-fill sev-warn" style="width:{{ (crawlers.totals.unknown / max_bot * 100) if max_bot else 0 }}%;"></div></div>
+          <div class="db-bar-count">{{ crawlers.totals.unknown }}</div>
+        </a>
+      </div>
+    </div>
+    <div>
+      <div class="section-eyebrow">Top identified callers</div>
+      <div style="margin-top:.4rem;">
+        {% for b in crawlers.top_bots[:8] %}
+        <div style="margin:.35rem 0; font-size:.82rem; display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
+          <span>
+            <span class="pill sev-{{ b.severity }}" style="font-size:.6rem;">{{ b.category }}</span>
+            <span style="color:var(--w-fg-1);">{{ b.pretty_name }}</span>
+          </span>
+          <strong style="color:var(--w-fg-0); font-variant-numeric:tabular-nums;">{{ b.count }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Plugin inventory + recent events ═══ -->
+<div class="grid-2" style="margin-bottom:1rem;">
+  <div class="card" style="padding:1.25rem;">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Plugin inventory</div>
+        <div class="card-sub">Derived from public /wp-json/ + Aegis lifecycle events</div>
+      </div>
+    </div>
+    <div class="table-wrap" style="margin-top:1rem;">
+      <table class="w-table">
+        <thead><tr><th>Plugin</th><th>Version</th><th>State</th><th></th></tr></thead>
+        <tbody>
+        {% for p in plugins %}
+          <tr class="row-click" onclick="window.location='{{ url_for('web.investigate', q='family:plugin event_type:' + (p.slug|string)) }}'" style="cursor:pointer;">
+            <td class="mono">{{ p.slug }}</td>
+            <td>{{ p.version or "—" }}</td>
+            <td>
+              {% if p.state == "active" %}<span class="pill sev-info">active</span>
+              {% elif p.state == "inactive" %}<span class="pill sev-warn">inactive</span>
+              {% elif p.state == "updated_recently" %}<span class="pill sev-warn">updated recently</span>
+              {% else %}<span class="pill sev-warn">{{ p.state }}</span>{% endif %}
+            </td>
+            <td style="text-align:right; color:var(--w-fg-3); font-size:.85rem;">›</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="text-muted" style="text-align:center;">No plugins observed yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:.75rem; font-size:.72rem; color:var(--w-fg-3);">
+      Click any row → filtered to that plugin's lifecycle events.
+    </div>
+  </div>
+
+  <div class="card" style="padding:1.25rem;">
+    <div class="card-head">
+      <div>
+        <div class="card-title">Noteworthy recent activity</div>
+        <div class="card-sub">User-facing events only · heartbeats hidden · click a row to drill in</div>
+      </div>
+      <a href="{{ url_for('web.investigate') }}" class="btn btn-ghost btn-sm" style="font-size:.72rem;">All events →</a>
+    </div>
+    <div class="event-feed" style="margin-top:.75rem;">
+      {# Humanized feed: only events that matter to an operator.
+         Raw aegis.db.summary / aegis.capability.denied / aegis.http.request
+         are filtered server-side (audience="internal"). #}
+      {% if humanized_events %}
+        {% for e in humanized_events %}
+        <a class="event-row ev-concern-{{ e.meaning.concern }}"
+           href="{{ url_for('web.event_detail', event_id=e.event_id) if e.event_id else url_for('web.investigate', q='event_type:' + e.event_type) }}">
+          <div class="event-verdict" title="{{ e.meaning.category }} · concern={{ e.meaning.concern }}">{{ e.meaning.verdict }}</div>
+          <div>
+            <div class="event-phrase">
+              {{ e.meaning.phrase }}
+              {% if e.meaning.detail %}
+              <span class="event-detail">{{ e.meaning.detail }}
+                {% if e.request and e.request.ip %} · from <code>{{ e.request.ip }}</code>{% endif %}
+              </span>
+              {% elif e.request and e.request.ip %}
+              <span class="event-detail">from <code>{{ e.request.ip }}</code></span>
+              {% endif %}
+              {% if e.meaning.action and e.meaning.concern >= 3 %}
+              <span class="event-action-hint">→ {{ e.meaning.action }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="event-cat" title="{{ e.event_type }}">{{ e.meaning.category }}</div>
+          <div class="event-time">{{ e.ts_ns | humantime }}</div>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div style="padding: 1.5rem .4rem; text-align:center; color:var(--w-fg-3); font-size:.85rem;">
+          No noteworthy activity in the current tail — only routine heartbeats.
+          <a href="{{ url_for('web.investigate') }}" style="color:var(--w-accent); text-decoration:underline;">
+            see everything including internals →
+          </a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Deep-dive navigation: the three investigation perspectives ═══ -->
+<div class="db-nav-row">
+  <a href="{{ url_for('web.investigate', q='since:1h') }}" class="db-nav-card">
+    <div class="db-nav-icon">📋</div>
+    <div>
+      <div class="db-nav-title">Investigate</div>
+      <div class="db-nav-sub">Search &amp; pivot across the chain · histogram, facets, expandable rows</div>
+    </div>
+  </a>
+  <a href="{{ url_for('web.timeline', q='since:6h') }}" class="db-nav-card">
+    <div class="db-nav-icon">⏱</div>
+    <div>
+      <div class="db-nav-title">Timeline</div>
+      <div class="db-nav-sub">Chronological view · one lane per sensor family · zoom to the incident window</div>
+    </div>
+  </a>
+  <a href="{{ url_for('web.graph', q='since:6h') }}" class="db-nav-card">
+    <div class="db-nav-icon">🕸</div>
+    <div>
+      <div class="db-nav-title">Graph</div>
+      <div class="db-nav-sub">Entity relationships · site ↔ families ↔ source IPs · click-to-pivot</div>
+    </div>
+  </a>
+  <a href="{{ url_for('web.threats') }}" class="db-nav-card">
+    <div class="db-nav-icon">⚠</div>
+    <div>
+      <div class="db-nav-title">Threat wall</div>
+      <div class="db-nav-sub">Curated live feed · recent CVEs · what's actually trying to land</div>
+    </div>
+  </a>
+</div>
+
+<div style="margin-top:1rem; display:flex; gap:.6rem; flex-wrap:wrap;">
+  <a href="{{ url_for('web.preview') }}" class="btn btn-ghost btn-sm">Run a passive preview</a>
+  <a href="{{ url_for('web.redemption') }}" class="btn btn-ghost btn-sm">Queue an Argos engagement</a>
+</div>
+
+<div class="text-muted" style="text-align:center; font-size:.7rem; margin:1.5rem 0;">
+  All data on this page is pulled live from the Aegis plugin's chain-linked event log
+  (no seed data, no mock values). Globe IPs geo-resolved via ip-api.com (cached 30 days).
+</div>
+
+<!-- ═══ Globe renderer — site point + transient per-event arcs ═══ -->
+<!-- Statistical contract:
+       - Each arc represents ONE Aegis event with a real timestamp.
+       - Arc lives for `visible_ms` from server (HTTP duration × 4, clamped 400-4000ms;
+         non-HTTP events default 1500ms). Then it disappears.
+       - At any moment, arcs in flight ≈ current activity rate.
+       - Idle log → empty globe (truthful). -->
+<script>
+(function() {
+  var payload = {{ globe_json | safe }};
+  if (!payload || !payload.site) return; // server-rendered empty state
+
+  var root = document.getElementById('db-globe-root');
+  if (!root || typeof Globe === 'undefined') return;
+
+  var SITE = payload.site;
+  var sitePoints = [{ lat: SITE.lat, lng: SITE.lng, color: SITE.color }];
+  var ringsData  = [{ lat: SITE.lat, lng: SITE.lng, maxR: 5,
+                      propagationSpeed: 2.4, repeatPeriod: 1600 }];
+
+  // Live arcs — managed client-side. Each entry has an `expiresAt` (ms epoch).
+  // Periodically pruned. Pushed-into when we receive new events from the poll.
+  var liveArcs = [];
+
+  // Rolling event-rate window (5s) for the top-right counter.
+  var rateWindow = []; // array of ts_ms when events arrived
+
+  var globe = Globe()(root)
+    .backgroundColor('rgba(0,0,0,0)')
+    .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+    .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+    .atmosphereColor('#00d9ff')
+    .atmosphereAltitude(0.20)
+    .pointsData(sitePoints)
+      .pointLat('lat').pointLng('lng')
+      .pointColor('color')
+      .pointAltitude(0.04)
+      .pointRadius(0.6)
+      .pointLabel(function() {
+        return '<div style="background:#0a0e27;border:1px solid #00d9ff;padding:8px 12px;border-radius:6px;font:500 12px Inter,sans-serif;color:#fff;">'
+          + '<strong style="color:#00d9ff;">' + SITE.domain + '</strong><br>'
+          + (SITE.city || '') + (SITE.country ? ', ' + SITE.country : '') + '<br>'
+          + '<span style="color:#b4bcd0;">' + SITE.ip + ' · ' + (SITE.org || SITE.asn || '') + '</span>'
+          + '</div>';
+      })
+    .arcsData([])
+      .arcStartLat('startLat').arcStartLng('startLng')
+      .arcEndLat('endLat').arcEndLng('endLng')
+      .arcColor('color')
+      .arcStroke(0.55)
+      .arcDashLength(0.55)
+      .arcDashGap(0.8)
+      // Match the dash animation cycle to the visible lifetime so the line
+      // appears to flow from origin to target over the event's duration.
+      .arcDashAnimateTime(function(d) { return d.visible_ms; })
+      .arcAltitudeAutoScale(0.4)
+      .arcLabel(function(d) {
+        return '<div style="background:#0a0e27;border:1px solid ' + d.color + ';padding:8px 12px;border-radius:6px;font:500 12px Inter,sans-serif;color:#fff;max-width:320px;">'
+          + '<strong style="color:' + d.color + ';">' + d.attack + '</strong><br>'
+          + '<span style="color:#fff;">' + d.ip + '</span> '
+          + '<span style="color:#b4bcd0;">' + (d.origin_org ? '(' + d.origin_org + ')' : '') + '</span><br>'
+          + '<span style="color:#b4bcd0;">' + (d.origin_city ? d.origin_city + ', ' : '') + (d.origin_country || '') + '</span><br>'
+          + '<span style="color:#b4bcd0;">event_type </span><code style="color:#fff;">' + d.event_type + '</code><br>'
+          + '<span style="color:#b4bcd0;">severity </span><strong style="color:' + d.color + ';">' + d.severity + '</strong>'
+          + (d.real_duration_ms != null
+              ? '<br><span style="color:#b4bcd0;">request duration </span><strong style="color:#fff;">' + d.real_duration_ms + 'ms</strong>'
+              : '')
+          + '</div>';
+      })
+    .ringsData(ringsData)
+      .ringLat('lat').ringLng('lng')
+      .ringColor(function() { return function(t) { return 'rgba(0,217,255,' + (1 - t) + ')'; }; })
+      .ringMaxRadius('maxR')
+      .ringPropagationSpeed('propagationSpeed')
+      .ringRepeatPeriod('repeatPeriod');
+
+  // ── Camera / controls ──────────────────────────────────────────────
+  // Initial POV: center on the site, mid-altitude. NO auto-rotate by default —
+  // the user is in control.
+  setTimeout(function() {
+    globe.pointOfView({ lat: SITE.lat, lng: SITE.lng, altitude: 2.2 }, 1200);
+    globe.controls().autoRotate = false;
+    globe.controls().enableDamping = true;
+    globe.controls().dampingFactor = 0.08;
+  }, 250);
+
+  // Resize-safe
+  function fitGlobe() { globe.width(root.clientWidth).height(root.clientHeight); }
+  window.addEventListener('resize', fitGlobe);
+
+  // ── Severity → colour ──────────────────────────────────────────────
+  function colorOf(sev) {
+    if (sev === 'critical') return '#dc2626';
+    if (sev === 'high')     return '#ff3366';
+    if (sev === 'warn')     return '#ffaa00';
+    return '#00d9ff';
+  }
+
+  // ── Live poll loop ─────────────────────────────────────────────────
+  // Server returns events newer than `since_ms`. We honour the server's
+  // `now_ms` as the next watermark to avoid clock-skew drift.
+  // Prime with the last ~1s of activity so the user sees motion immediately
+  // instead of waiting one full poll cycle for the first arc.
+  var sinceMs = Date.now() - 1000;
+  var paused  = false;
+
+  function poll() {
+    if (paused) return;
+    fetch('/web/api/dashboard/live-arcs.json?since_ms=' + sinceMs, {
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data) return;
+        sinceMs = data.now_ms || sinceMs;
+        var nowClient = Date.now();
+        (data.events || []).forEach(function(ev) {
+          var arc = {
+            startLat:        ev.start_lat,
+            startLng:        ev.start_lng,
+            endLat:          ev.end_lat,
+            endLng:          ev.end_lng,
+            ip:              ev.ip,
+            attack:          ev.attack,
+            severity:        ev.severity,
+            event_type:      ev.event_type,
+            origin_city:     ev.origin_city,
+            origin_country:  ev.origin_country,
+            origin_org:      ev.origin_org,
+            real_duration_ms: ev.real_duration_ms,
+            visible_ms:      ev.visible_ms,
+            color:           colorOf(ev.severity),
+            spawnedAt:       nowClient,
+            expiresAt:       nowClient + ev.visible_ms + 200, // small buffer
+          };
+          liveArcs.push(arc);
+          rateWindow.push(nowClient);
+        });
+        if ((data.events || []).length) {
+          globe.arcsData(liveArcs.slice());
+        }
+      })
+      .catch(function() { /* silent — next tick will try */ });
+  }
+
+  // Prune expired arcs every 250ms so the lines truly disappear after their
+  // event's duration. This is what makes the visualization statistically
+  // honest — only events happening NOW are visible.
+  function pruneTick() {
+    var now = Date.now();
+    var before = liveArcs.length;
+    liveArcs = liveArcs.filter(function(a) { return a.expiresAt > now; });
+    if (liveArcs.length !== before) {
+      globe.arcsData(liveArcs.slice());
+    }
+
+    // Rate counter: count spawn timestamps in the last 5000ms
+    var cutoff = now - 5000;
+    while (rateWindow.length && rateWindow[0] < cutoff) rateWindow.shift();
+    var rate = rateWindow.length / 5.0;
+    var rateNum   = document.getElementById('dbRateNum');
+    var ratePulse = document.getElementById('dbRatePulse');
+    var arcsNum   = document.getElementById('dbArcsNum');
+    if (rateNum)   rateNum.textContent = rate.toFixed(rate >= 10 ? 0 : 1);
+    if (ratePulse) ratePulse.classList.toggle('idle', rate < 0.05);
+    if (arcsNum)   arcsNum.textContent = liveArcs.length;
+  }
+
+  // Kick off the loops
+  poll(); // immediate
+  var pollTimer  = setInterval(poll, 2500);     // 2.5s poll cadence
+  var pruneTimer = setInterval(pruneTick, 250); // 4 Hz prune
+
+  // Page-visibility: pause network traffic when the tab is hidden
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      clearInterval(pollTimer); pollTimer = null;
+    } else if (!pollTimer && !paused) {
+      pollTimer = setInterval(poll, 2500);
+      poll();
+    }
+  });
+
+  // ── Control buttons ────────────────────────────────────────────────
+  var spinBtn  = document.getElementById('dbCtrlSpin');
+  var resetBtn = document.getElementById('dbCtrlReset');
+  var pauseBtn = document.getElementById('dbCtrlPause');
+
+  if (spinBtn) {
+    spinBtn.addEventListener('click', function() {
+      var ctrl = globe.controls();
+      ctrl.autoRotate = !ctrl.autoRotate;
+      ctrl.autoRotateSpeed = 0.45;
+      spinBtn.classList.toggle('active', ctrl.autoRotate);
+      spinBtn.textContent = ctrl.autoRotate ? '⏸ Stop spin' : '▶ Spin';
+    });
+  }
+  if (resetBtn) {
+    resetBtn.addEventListener('click', function() {
+      globe.pointOfView({ lat: SITE.lat, lng: SITE.lng, altitude: 2.2 }, 900);
+    });
+  }
+  if (pauseBtn) {
+    pauseBtn.addEventListener('click', function() {
+      paused = !paused;
+      pauseBtn.classList.toggle('active', paused);
+      pauseBtn.textContent = paused ? '▶ Resume feed' : '⏸ Pause feed';
+      if (!paused && !pollTimer) {
+        pollTimer = setInterval(poll, 2500);
+        poll();
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

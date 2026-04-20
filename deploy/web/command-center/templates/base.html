@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AMOSKYS Web — autonomous offense + defense + AI brain for WordPress.">
+    <title>{% block title %}AMOSKYS Web — WordPress Security{% endblock %}</title>
+
+    <!-- Favicon (reuse endpoint assets) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='images/favicon-192x192.png') }}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/web.css') }}">
+
+    <!-- Chart.js for trend + donut -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+    {% if preview_mode %}
+    <!-- ═══ PREVIEW BANNER (lab deploy only) ═══ -->
+    <div style="background:linear-gradient(90deg,#ff3366,#ff6680); color:white; padding:.55rem 1.25rem; font-size:.78rem; font-weight:700; text-align:center; letter-spacing:.4px; text-transform:uppercase; position:sticky; top:0; z-index:150; box-shadow:0 2px 10px rgba(255,51,102,.4);">
+        LAB PREVIEW · This console runs on the deliberately-attackable WP host. Do not enter real customer data. Production cutover to <code style="background:rgba(0,0,0,.25);padding:1px 6px;border-radius:3px;font-family:monospace;font-weight:600;">app.amoskys.com</code>.
+    </div>
+    {% endif %}
+
+    <!-- ═══ HEADER ═══ -->
+    <header class="web-header">
+        <a href="{{ url_for('web.landing') }}" class="web-logo">
+            <img src="{{ url_for('static', filename='images/amoskys-logo.svg') }}" alt="">
+            <span class="web-logo-text">
+                <span class="web-logo-primary">AMOSKYS</span><span class="web-logo-suffix">·WEB</span>
+            </span>
+        </a>
+
+        <!-- Marketing nav (always visible) -->
+        <nav class="web-nav web-nav-marketing">
+            <a href="{{ url_for('web.landing') }}" class="web-nav-link" data-route="landing">Product</a>
+            <a href="{{ url_for('web.how_it_works') }}" class="web-nav-link" data-route="how">How it works</a>
+            <a href="{{ url_for('web.preview') }}" class="web-nav-link" data-route="preview">Quick&nbsp;scan</a>
+            <a href="{{ url_for('web.threats') }}" class="web-nav-link" data-route="threats" style="color:#ff3366;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#ff3366;margin-right:4px;vertical-align:middle;"></span>Threats</a>
+            <a href="{{ url_for('web.redemption') }}" class="web-nav-link web-nav-cta" data-route="redemption">
+                <span class="web-cta-dot"></span> Free pentest
+            </a>
+            {% if session.get("web_user_email") %}
+            <a href="{{ url_for('web.dashboard') }}" class="web-nav-link" data-route="dashboard">Dashboard</a>
+            <a href="{{ url_for('web.signout') }}" class="web-nav-link" data-route="signout">Sign out</a>
+            {% else %}
+            <a href="{{ url_for('web.signin') }}" class="web-nav-link" data-route="signin" style="color:var(--w-fg-2);">Sign in</a>
+            <a href="{{ url_for('web.signup') }}" class="web-nav-link" data-route="signup" style="color:var(--w-accent); font-weight:700;">Sign up</a>
+            {% endif %}
+        </nav>
+
+        <div class="web-nav-sep"></div>
+
+        <!-- Tenant nav (only meaningful when signed in) -->
+        {% if current_tenant %}
+        <nav class="web-nav web-nav-tenant">
+            <a href="{{ url_for('web.sites_list') }}" class="web-nav-link" data-route="sites">Sites</a>
+            <a href="{{ url_for('web.arena') }}" class="web-nav-link" data-route="arena">Red&nbsp;Team Arena</a>
+        </nav>
+        {% endif %}
+
+        <div class="web-hdr-right">
+            {% if demo_mode %}
+            <!-- Dev-only tenant switcher -->
+            <div class="web-tenant-switcher" id="tenantSwitcher">
+                <button class="web-tenant-btn" type="button" aria-haspopup="true" aria-expanded="false">
+                    {% if current_tenant %}
+                        <span class="web-tenant-dot web-tenant-dot-{{ current_tenant.plan }}"></span>
+                        <span class="web-tenant-name">{{ current_tenant.display_name }}</span>
+                        <span class="web-tenant-plan">{{ current_tenant.plan|upper }}</span>
+                    {% else %}
+                        <span class="web-tenant-dot web-tenant-dot-none"></span>
+                        <span class="web-tenant-name">No tenant</span>
+                    {% endif %}
+                    <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+                </button>
+                <div class="web-tenant-menu" role="menu">
+                    <div class="web-tenant-menu-head">Demo tenant</div>
+                    {% for t in demo_tenants %}
+                    <a href="{{ url_for('web.demo_use_tenant', slug=t.slug) }}" class="web-tenant-menu-item" role="menuitem">
+                        <span class="web-tenant-dot web-tenant-dot-{{ t.plan }}"></span>
+                        <span class="web-tenant-menu-name">{{ t.display_name }}</span>
+                        <span class="web-tenant-menu-plan">{{ t.plan }}</span>
+                    </a>
+                    {% endfor %}
+                    <div class="web-tenant-menu-sep"></div>
+                    <a href="{{ url_for('web.demo_clear_tenant') }}" class="web-tenant-menu-item web-tenant-menu-item-muted" role="menuitem">
+                        Sign out of demo
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </header>
+
+    <!-- ═══ FLASH MESSAGES ═══ -->
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+        {% if msgs %}
+        <div class="web-flash-wrap">
+            {% for cat, msg in msgs %}
+            <div class="web-flash web-flash-{{ cat }}">{{ msg }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- ═══ MAIN ═══ -->
+    <main class="web-main {% block main_class %}{% endblock %}">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer class="web-footer">
+        <div class="web-footer-inner">
+            <div class="web-footer-col">
+                <div class="web-footer-title">AMOSKYS Web</div>
+                <div class="web-footer-blurb">
+                    Autonomous offense, defense, and reasoning — purpose-built for WordPress.
+                    Scope-locked, multi-tenant, bug-bounty-grade.
+                </div>
+            </div>
+            <div class="web-footer-col">
+                <div class="web-footer-heading">Product</div>
+                <a href="{{ url_for('web.landing') }}">Overview</a>
+                <a href="{{ url_for('web.how_it_works') }}">How it works</a>
+                <a href="{{ url_for('web.redemption') }}">Free external pentest</a>
+            </div>
+            <div class="web-footer-col">
+                <div class="web-footer-heading">Pillars</div>
+                <a href="#argos">Argos · Offense</a>
+                <a href="#aegis">Aegis · Defense</a>
+                <a href="#igris">IGRIS-Web · Brain</a>
+            </div>
+            <div class="web-footer-col">
+                <div class="web-footer-heading">Trust</div>
+                <span>Scope-locked: WordPress only</span>
+                <span>Multi-tenant isolation enforced</span>
+                <span>SHA-256 chain-linked events</span>
+            </div>
+        </div>
+        <div class="web-footer-bottom">
+            <span>&copy; 2026 AMOSKYS</span>
+            <span class="web-footer-sep">·</span>
+            <span>Securing WordPress by attacking it first</span>
+        </div>
+    </footer>
+
+    <!-- ═══ IGRIS-WEB CHAT WIDGET ═══ -->
+    {# Shown on every page for signed-in operators. The `is_signed_in` flag
+       comes from the global context processor (web_product/blueprint.py
+       _inject_common) — authoritative check against auth_core sessions. #}
+    {% if is_signed_in or current_tenant %}
+    {% include 'web/_partials/igris_widget.html' %}
+    {% endif %}
+
+    <!-- ═══ SCRIPTS ═══ -->
+    <script>
+    (function() {
+        // Active nav highlighting
+        var path = window.location.pathname;
+        var map = {
+            '/web': 'landing',
+            '/web/': 'landing',
+            '/web/how-it-works': 'how',
+            '/web/redemption': 'redemption',
+            '/web/sites': 'sites',
+            '/web/arena': 'arena',
+        };
+        var active = map[path];
+        if (!active) {
+            if (path.indexOf('/web/sites') === 0) active = 'sites';
+            else if (path.indexOf('/web/arena') === 0) active = 'arena';
+            else if (path.indexOf('/web/redemption') === 0) active = 'redemption';
+        }
+        document.querySelectorAll('.web-nav-link').forEach(function(a) {
+            if (a.dataset.route === active) a.classList.add('active');
+        });
+
+        // Tenant switcher dropdown
+        var ts = document.getElementById('tenantSwitcher');
+        if (ts) {
+            var btn = ts.querySelector('.web-tenant-btn');
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                ts.classList.toggle('open');
+                btn.setAttribute('aria-expanded', ts.classList.contains('open') ? 'true' : 'false');
+            });
+            document.addEventListener('click', function() { ts.classList.remove('open'); });
+        }
+    })();
+    </script>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

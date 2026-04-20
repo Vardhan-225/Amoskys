@@ -62,6 +62,9 @@ from .auth import (
 )
 from .crawler_classifier import summarize as summarize_crawlers
 from .plugin_inventory import build_inventory, _fetch_wp_json as _fetch_wp_json_cached
+from . import event_semantics as _ev_sem
+from . import dashboard_narrative as _narr
+from . import igris_chat as _igris
 
 
 web_bp = Blueprint(
@@ -109,6 +112,17 @@ web_bp.add_app_template_filter(_humantime_abs, "humantime_abs")
 @web_bp.context_processor
 def _inject_common():
     """Every template under /web gets these without explicit passing."""
+    # `is_signed_in` is the single authoritative flag for conditional UI
+    # (like the IGRIS widget) — true for anyone with a valid auth_core
+    # session (amoskys_web_sid cookie), regardless of whether Flask's own
+    # session-cookie also happens to carry their email. This reliably shows
+    # the widget to every signed-in operator on every page.
+    try:
+        _signed_in = bool(signed_in())
+        _user_email = current_user_email() if _signed_in else None
+    except Exception:
+        _signed_in = False
+        _user_email = None
     return {
         "current_tenant": getattr(g, "tenant", None),
         "demo_tenants": demo_tenants(),
@@ -117,6 +131,8 @@ def _inject_common():
         "owasp_top10": OWASP_WEB_TOP10,
         "wp_attack_classes": WP_ATTACK_CLASSES,
         "aegis_sensors": AEGIS_SENSORS,
+        "is_signed_in": _signed_in,
+        "signed_in_email": _user_email,
     }
 
 
@@ -721,6 +737,22 @@ def dashboard():
     max_bot = max([v for v in crawlers["totals"].values()] + [1])
     plugins = build_inventory(f"https://{site}", snap)
 
+    # ── Semantic layer: humanize events + compute posture + narrative banner ──
+    # This is what replaces the engineer-debug view (raw aegis.* type strings)
+    # with something an operator can scan in 2 seconds.
+    humanized_recent = _ev_sem.humanize_events(
+        snap.recent, hide_internal=True, limit=10,
+    )
+    category_rollup = _ev_sem.category_rollup(snap.event_types)
+    concerns = _ev_sem.active_concerns(
+        event_types=snap.event_types,
+        severities=snap.severities,
+        recent_events=snap.recent,
+        active_blocks_count=getattr(snap, "blocks_started_count", 0),
+        chain_breaks=getattr(snap, "chain_breaks", 0),
+    )
+    narrative = _narr.build(snap, concerns, crawlers.get("totals")).to_dict()
+
     # WP version — read from the shared 5-minute-TTL /wp-json/ cache in
     # plugin_inventory. Before this, every dashboard render paid ~450ms
     # for this single probe; now the steady-state cost is near zero and
@@ -749,6 +781,11 @@ def dashboard():
         plugins=plugins,
         globe=globe_payload,
         globe_json=json.dumps(globe_payload),
+        # ── Redesign additions ──
+        narrative=narrative,
+        humanized_events=humanized_recent,
+        category_rollup=category_rollup,
+        concerns=concerns,
     )
 
 
@@ -851,6 +888,75 @@ def dashboard_live_arcs():
     return jsonify({
         "now_ms":  server_now_ms,
         "events":  out[-300:],
+    })
+
+
+# ═════════════════════════════════════════════════════════════════════
+# IGRIS-Web chat
+#
+# POST /web/api/igris/chat
+# Request body:
+#     {"message": "...", "history": [{"role": "user"|"assistant", "content": "..."}]}
+#
+# Response body:
+#     {"reply": "...", "backend": "live/claude-sonnet-4-5" | "ground/...",
+#      "mode": "live"|"ground", "posture": "normal"|"watching"|"attack",
+#      "took_ms": 123, "warning": null|"..."}
+#
+# The server does not persist chat state — the client echoes history back
+# on every turn. Keeps the server stateless; easy to scale; no multi-
+# tenant confusion.
+#
+# Backend auto-selects by ANTHROPIC_API_KEY presence. Without the key,
+# ground mode still produces useful rule-based answers from the live
+# Aegis snapshot. See igris_chat.py for the taxonomy.
+# ═════════════════════════════════════════════════════════════════════
+
+@web_bp.route("/api/igris/chat", methods=["POST"])
+@require_signed_in
+def igris_chat():
+    data = request.get_json(silent=True) or {}
+    user_message = (data.get("message") or "").strip()
+    if not user_message:
+        return jsonify({"error": "empty message"}), 400
+    if len(user_message) > 2000:
+        return jsonify({"error": "message too long (2000 char cap)"}), 400
+
+    # Validate history schema — keep permissive but prune anything weird
+    raw_hist = data.get("history") or []
+    history: list = []
+    if isinstance(raw_hist, list):
+        for turn in raw_hist:
+            if not isinstance(turn, dict):
+                continue
+            role = turn.get("role")
+            content = turn.get("content")
+            if role in ("user", "assistant") and isinstance(content, str) and content.strip():
+                history.append({"role": role, "content": content[:4000]})
+
+    snap = _aegis_tail.snapshot()
+    concerns = _ev_sem.active_concerns(
+        event_types=snap.event_types,
+        severities=snap.severities,
+        recent_events=snap.recent,
+        active_blocks_count=getattr(snap, "blocks_started_count", 0),
+        chain_breaks=getattr(snap, "chain_breaks", 0),
+    )
+
+    reply = _igris.chat(
+        user_message=user_message,
+        history=history,
+        snap=snap,
+        active_concerns_payload=concerns,
+    )
+
+    return jsonify({
+        "reply":   reply.text,
+        "backend": reply.backend,
+        "mode":    reply.mode,
+        "posture": reply.posture,
+        "took_ms": reply.took_ms,
+        "warning": reply.warning,
     })
 
 

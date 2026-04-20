@@ -1,0 +1,338 @@
+/*
+ * AMOSKYS Web dashboard — redesign additions.
+ *
+ * Layered ON TOP of web.css (loaded via extra_head in dashboard.html).
+ * Everything here is new; nothing here overrides existing selectors.
+ *
+ * Sections:
+ *   1. Narrative banner (the "right-now posture" hero at top)
+ *   2. Humanized event feed (replaces raw `aegis.*` dump)
+ *   3. Category rollup pills
+ *   4. IGRIS widget additions (mode badge, posture dot, chips, thinking)
+ */
+
+/* ──────────────────────────────────────────────────────────────
+ * 1. Narrative banner
+ * ────────────────────────────────────────────────────────────── */
+
+.now-banner {
+    position: relative;
+    margin: 0 0 1.25rem;
+    padding: 1.1rem 1.4rem;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.08);
+    background: linear-gradient(
+        135deg,
+        rgba(0,217,255,.05) 0%,
+        rgba(12, 18, 46, 0.9) 60%
+    );
+    display: flex; align-items: center; gap: 1.2rem;
+    overflow: hidden;
+}
+
+/* Left edge accent stripe — color by posture */
+.now-banner::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: var(--w-accent);
+}
+.now-banner.now-norm::before  { background: #10b981; }
+.now-banner.now-warn::before  { background: #ffaa00; }
+.now-banner.now-alert::before { background: #ff3366; }
+
+.now-banner.now-alert {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 51, 102, 0.12) 0%,
+        rgba(12, 18, 46, 0.9) 60%
+    );
+    border-color: rgba(255, 51, 102, 0.35);
+}
+.now-banner.now-warn {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 170, 0, 0.1) 0%,
+        rgba(12, 18, 46, 0.9) 60%
+    );
+    border-color: rgba(255, 170, 0, 0.3);
+}
+
+/* Pulse when under attack */
+.now-banner.now-pulse {
+    animation: now-banner-pulse 2.2s ease-in-out infinite;
+}
+@keyframes now-banner-pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(255,51,102, .35); }
+    50%     { box-shadow: 0 0 28px 4px rgba(255,51,102, .18); }
+}
+
+.now-banner-body  { flex: 1; min-width: 0; }
+.now-headline     {
+    font-size: 1.05rem; font-weight: 700;
+    color: var(--w-fg-0); letter-spacing: .2px;
+    margin: 0 0 .25rem;
+}
+.now-detail       {
+    font-size: .88rem; color: var(--w-fg-2);
+    margin: 0;
+}
+.now-detail code  {
+    background: rgba(255,255,255,.06);
+    padding: 1px 5px; border-radius: 4px;
+    font-size: .82rem; color: var(--w-fg-0);
+}
+.now-cta {
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+    color: var(--w-fg-0); text-decoration: none;
+    padding: .45rem .85rem; border-radius: 8px;
+    font-size: .8rem; font-weight: 600; white-space: nowrap;
+    transition: background .15s, transform .15s;
+}
+.now-cta:hover { background: rgba(255,255,255,.12); transform: translateX(2px); }
+.now-banner.now-alert .now-cta { background: rgba(255,51,102,.15); border-color: rgba(255,51,102,.4); }
+.now-banner.now-warn  .now-cta { background: rgba(255,170,0,.12);  border-color: rgba(255,170,0,.35); }
+
+/* ──────────────────────────────────────────────────────────────
+ * 2. Humanized event feed
+ * Replaces the "raw aegis.db.summary" style with a scannable
+ * narrative of what actually happened.
+ * ────────────────────────────────────────────────────────────── */
+
+.event-feed { display: flex; flex-direction: column; gap: 0; }
+
+.event-row {
+    display: grid;
+    grid-template-columns: 28px 1fr auto auto;
+    gap: .75rem;
+    align-items: start;
+    padding: .7rem .4rem;
+    border-bottom: 1px solid var(--w-border);
+    color: inherit; text-decoration: none;
+    transition: background .1s;
+}
+.event-row:last-child { border-bottom: none; }
+.event-row:hover { background: rgba(0,217,255,.04); }
+
+.event-verdict {
+    font-size: 1rem;
+    line-height: 1.4;
+    text-align: center;
+    width: 28px;
+    color: var(--w-fg-2);
+}
+.event-row.ev-concern-0 .event-verdict,
+.event-row.ev-concern-1 .event-verdict { color: var(--w-fg-3); }
+.event-row.ev-concern-2 .event-verdict,
+.event-row.ev-concern-3 .event-verdict { color: #ffaa00; }
+.event-row.ev-concern-4 .event-verdict,
+.event-row.ev-concern-5 .event-verdict { color: #ff3366; }
+
+.event-phrase {
+    font-size: .88rem;
+    color: var(--w-fg-0);
+    font-weight: 500;
+    line-height: 1.35;
+}
+.event-phrase .event-detail {
+    display: block;
+    font-weight: 400;
+    color: var(--w-fg-2);
+    font-size: .78rem;
+    margin-top: .15rem;
+}
+.event-phrase .event-detail code {
+    background: rgba(255,255,255,.05);
+    padding: 0 4px; border-radius: 3px; color: var(--w-fg-1);
+    font-size: .72rem;
+}
+.event-action-hint {
+    display: block;
+    font-size: .72rem;
+    color: var(--w-purple);
+    margin-top: .2rem;
+    font-style: italic;
+}
+
+.event-cat {
+    font-size: .65rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--w-fg-3);
+    padding: .1rem .45rem;
+    border: 1px solid var(--w-border);
+    border-radius: 4px;
+    font-weight: 600;
+    white-space: nowrap;
+    align-self: center;
+}
+
+.event-time {
+    font-size: .72rem;
+    color: var(--w-fg-3);
+    white-space: nowrap;
+    align-self: center;
+    font-variant-numeric: tabular-nums;
+}
+
+/* When it's the user's own IP we de-emphasize it, not elevate it */
+.event-row.ev-own-ip { opacity: .62; }
+
+/* ──────────────────────────────────────────────────────────────
+ * 3. Category rollup pills
+ * ────────────────────────────────────────────────────────────── */
+
+.cat-pills { display: flex; flex-wrap: wrap; gap: .5rem; }
+.cat-pill {
+    display: inline-flex; align-items: center; gap: .45rem;
+    padding: .35rem .65rem;
+    background: rgba(0,217,255,.05);
+    border: 1px solid var(--w-border);
+    border-radius: 999px;
+    font-size: .75rem;
+    color: var(--w-fg-1);
+    text-decoration: none;
+    transition: background .12s, border-color .12s;
+}
+.cat-pill:hover {
+    background: rgba(0,217,255,.1);
+    border-color: rgba(0,217,255,.3);
+}
+.cat-pill-count {
+    font-weight: 700;
+    color: var(--w-fg-0);
+    font-variant-numeric: tabular-nums;
+}
+.cat-pill[data-cat="Access"]  { border-color: rgba(167,139,250,.25); }
+.cat-pill[data-cat="Probe"]   { border-color: rgba(255,170,0,.25);  }
+.cat-pill[data-cat="Code"]    { border-color: rgba(0,217,255,.25);  }
+.cat-pill[data-cat="Site"]    { border-color: rgba(255,51,102,.25); }
+.cat-pill[data-cat="Data"]    { border-color: rgba(16,185,129,.25); }
+
+/* ──────────────────────────────────────────────────────────────
+ * 4. IGRIS widget additions (mode badge, posture dot, chips, thinking)
+ * ────────────────────────────────────────────────────────────── */
+
+.igris-web-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--w-purple), #7c3aed);
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 800; flex-shrink: 0;
+    box-shadow: 0 0 12px rgba(167,139,250,.3);
+}
+
+.igris-web-close {
+    background: none; border: none; color: var(--w-fg-3);
+    cursor: pointer; font-size: 1.3rem; line-height: 1;
+    padding: 0 .2rem;
+}
+.igris-web-close:hover { color: var(--w-fg-0); }
+
+/* Posture dot on the floating toggle */
+.igris-web-posture {
+    position: absolute; bottom: 4px; right: 4px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #10b981; /* normal */
+    border: 2px solid var(--w-bg-1);
+    box-shadow: 0 0 0 2px rgba(16,185,129,.25);
+    transition: background .2s, box-shadow .2s;
+}
+.igris-web-toggle { position: relative; }
+.igris-web-posture[data-posture="watching"] {
+    background: #ffaa00;
+    box-shadow: 0 0 0 2px rgba(255,170,0,.35);
+}
+.igris-web-posture[data-posture="attack"] {
+    background: #ff3366;
+    box-shadow: 0 0 0 2px rgba(255,51,102,.4);
+    animation: igris-posture-pulse 1.2s ease-in-out infinite;
+}
+@keyframes igris-posture-pulse {
+    0%,100% { transform: scale(1); }
+    50%     { transform: scale(1.25); }
+}
+
+/* Mode badge inline with IGRIS-Web name */
+.igris-web-mode {
+    display: inline-block;
+    margin-left: .35rem;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: .6rem;
+    font-weight: 700;
+    letter-spacing: .5px;
+    vertical-align: middle;
+    color: var(--w-fg-3);
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    text-transform: uppercase;
+}
+.igris-web-mode[data-mode="live"] {
+    color: #10b981;
+    background: rgba(16,185,129,.12);
+    border-color: rgba(16,185,129,.35);
+}
+.igris-web-mode[data-mode="ground"] {
+    color: var(--w-fg-3);
+}
+
+/* Suggestion chips under the welcome message */
+.igris-web-chips {
+    display: flex; flex-wrap: wrap; gap: .4rem;
+    margin-top: .5rem;
+}
+.igris-chip {
+    background: rgba(167,139,250,.06);
+    border: 1px solid rgba(167,139,250,.2);
+    color: var(--w-fg-1);
+    padding: .35rem .65rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    cursor: pointer;
+    transition: background .12s, transform .12s;
+    font-family: inherit;
+}
+.igris-chip:hover {
+    background: rgba(167,139,250,.14);
+    transform: translateY(-1px);
+}
+
+/* Thinking dots — three fading blobs while waiting on backend */
+.igris-web-msg-thinking { display: inline-flex; align-items: center; }
+.igris-dots { display: inline-flex; gap: 4px; align-items: center; }
+.igris-dots span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--w-purple);
+    opacity: .4;
+    animation: igris-dot 1.2s ease-in-out infinite;
+}
+.igris-dots span:nth-child(2) { animation-delay: .15s; }
+.igris-dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes igris-dot {
+    0%,100% { opacity: .25; transform: scale(.8); }
+    50%     { opacity: 1;   transform: scale(1);  }
+}
+
+/* Minor alignment fix: inline <code> in a bot message */
+.igris-web-msg code {
+    background: rgba(255,255,255,.06);
+    padding: 1px 4px; border-radius: 3px;
+    font-size: .8em; color: var(--w-fg-0);
+}
+
+/* Warning ribbon shown below a reply when live fell back to ground */
+.igris-web-warning {
+    font-size: .68rem;
+    color: #ffaa00;
+    margin: -.3rem 0 .5rem .4rem;
+    opacity: .85;
+}
+
+/* Mode badge show a leading dot */
+.igris-web-mode::before {
+    content: "●";
+    margin-right: .25rem;
+    font-size: .6em;
+    vertical-align: middle;
+}

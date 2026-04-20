@@ -1,0 +1,213 @@
+{#
+  IGRIS-Web chat widget — interactive.
+
+  Wired to POST /web/api/igris/chat. Two backend modes (auto-selected by
+  presence of ANTHROPIC_API_KEY on the server):
+    * LIVE    — real Claude reasoning, aware of the current Aegis state
+    * GROUND  — rule-based responder that still reads live state and
+                answers a fixed set of useful questions with real numbers
+
+  Conversation state lives on the client in a module-local array. No
+  localStorage yet (per-tenant isolation story is cleaner when we commit).
+  Refresh = fresh conversation.
+
+  Posture dot next to the "IGRIS-Web" title reflects the *last reply's*
+  posture (normal/watching/attack) so an operator can glance at the
+  widget even when collapsed and see if anything changed.
+#}
+<div class="igris-web-widget" id="igrisWebWidget">
+    <button type="button" class="igris-web-toggle" aria-label="Open IGRIS-Web chat"
+            onclick="document.getElementById('igrisWebWidget').classList.toggle('open')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/>
+            <path d="M9 9h.01M15 9h.01M9.5 13a3.5 3.5 0 0 0 5 0"/>
+        </svg>
+        <span class="igris-web-posture" id="igrisPostureDot" title="IGRIS posture" data-posture="normal"></span>
+    </button>
+    <div class="igris-web-panel" role="dialog" aria-label="IGRIS-Web assistant">
+        <div class="igris-web-head">
+            <div class="igris-web-avatar">I</div>
+            <div style="flex:1; min-width:0;">
+                <div class="igris-web-head-name">
+                    IGRIS-Web
+                    <span class="igris-web-mode" id="igrisModeBadge" title="Backend mode">…</span>
+                </div>
+                <div class="igris-web-head-sub">
+                    Reasoning brain · scoped to {{ (current_tenant.display_name if current_tenant else (site if site is defined else signed_in_email)) or 'your site' }}
+                </div>
+            </div>
+            <button type="button" class="igris-web-close"
+                    onclick="document.getElementById('igrisWebWidget').classList.remove('open')">×</button>
+        </div>
+        <div class="igris-web-body" id="igrisBody">
+            <div class="igris-web-msg igris-web-msg-bot">
+                I'm IGRIS-Web. Ask me things like
+                <em>"what's happening right now"</em>,
+                <em>"top IPs"</em>, <em>"any blocks"</em>, or
+                <em>"chain integrity"</em>.
+                I read your live Aegis telemetry — every answer is grounded in the log right now.
+            </div>
+            <div class="igris-web-chips" id="igrisChips">
+                <button type="button" class="igris-chip" data-q="what's happening right now">What's happening right now</button>
+                <button type="button" class="igris-chip" data-q="top IPs hitting my site">Top IPs</button>
+                <button type="button" class="igris-chip" data-q="any blocks">Any blocks?</button>
+                <button type="button" class="igris-chip" data-q="chain integrity">Chain integrity</button>
+            </div>
+        </div>
+        <div class="igris-web-input">
+            <input type="text" id="igrisInput" placeholder="Ask IGRIS-Web…" autocomplete="off">
+            <button type="button" id="igrisSend">Send</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    'use strict';
+    var widget = document.getElementById('igrisWebWidget');
+    if (!widget) return;
+
+    var body    = document.getElementById('igrisBody');
+    var input   = document.getElementById('igrisInput');
+    var sendBtn = document.getElementById('igrisSend');
+    var modeBadge = document.getElementById('igrisModeBadge');
+    var postureDot = document.getElementById('igrisPostureDot');
+    var chips   = document.getElementById('igrisChips');
+
+    var history = [];            // [{role:"user"|"assistant", content:"..."}]
+    var busy = false;
+    var backendProbed = false;
+
+    // ── tiny render helpers ────────────────────────────────────────
+    function escapeHtml(s){
+        return String(s == null ? '' : s)
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;');
+    }
+    function renderMsg(role, text){
+        var cls = (role === 'user') ? 'igris-web-msg-user' : 'igris-web-msg-bot';
+        var div = document.createElement('div');
+        div.className = 'igris-web-msg ' + cls;
+        // Light markup: turn `code` into <code> and newlines into <br>.
+        // Everything else escaped before it reaches the DOM.
+        var safe = escapeHtml(text)
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\n/g, '<br>');
+        div.innerHTML = safe;
+        body.appendChild(div);
+        body.scrollTop = body.scrollHeight;
+        return div;
+    }
+    function renderThinking(){
+        var div = document.createElement('div');
+        div.className = 'igris-web-msg igris-web-msg-bot igris-web-msg-thinking';
+        div.innerHTML = '<span class="igris-dots"><span></span><span></span><span></span></span>';
+        body.appendChild(div);
+        body.scrollTop = body.scrollHeight;
+        return div;
+    }
+    function setPosture(p){
+        if (!postureDot) return;
+        postureDot.dataset.posture = p || 'normal';
+    }
+    function setMode(m){
+        if (!modeBadge) return;
+        modeBadge.textContent = (m === 'live') ? 'live' : 'ground';
+        modeBadge.dataset.mode = m;
+    }
+
+    // ── send ───────────────────────────────────────────────────────
+    function send(text){
+        if (busy) return;
+        text = (text || input.value || '').trim();
+        if (!text) return;
+        input.value = '';
+        busy = true;
+        sendBtn.disabled = true;
+        input.disabled = true;
+        if (chips) chips.style.display = 'none';
+
+        renderMsg('user', text);
+        var thinking = renderThinking();
+        history.push({role:'user', content:text});
+
+        fetch('/web/api/igris/chat', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+            credentials: 'same-origin',
+            body: JSON.stringify({message:text, history: history.slice(0, -1)}),
+        })
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            thinking.remove();
+            if (data.error){
+                renderMsg('bot', '⚠ ' + data.error);
+                return;
+            }
+            renderMsg('bot', data.reply || '(no reply)');
+            history.push({role:'assistant', content: data.reply || ''});
+            if (data.posture) setPosture(data.posture);
+            if (data.mode)    setMode(data.mode);
+            if (data.warning) {
+                var w = document.createElement('div');
+                w.className = 'igris-web-warning';
+                w.textContent = '(fallback: ' + data.warning + ')';
+                body.appendChild(w);
+            }
+            // Keep history bounded client-side too.
+            if (history.length > 20) history = history.slice(-20);
+        })
+        .catch(function(err){
+            thinking.remove();
+            renderMsg('bot', '⚠ network error: ' + (err && err.message ? err.message : err));
+        })
+        .finally(function(){
+            busy = false;
+            sendBtn.disabled = false;
+            input.disabled = false;
+            input.focus();
+        });
+    }
+
+    // ── wire events ────────────────────────────────────────────────
+    sendBtn.addEventListener('click', function(){ send(); });
+    input.addEventListener('keydown', function(e){
+        if (e.key === 'Enter' && !e.shiftKey){
+            e.preventDefault();
+            send();
+        }
+    });
+    if (chips){
+        chips.querySelectorAll('.igris-chip').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                send(btn.dataset.q || btn.textContent);
+            });
+        });
+    }
+
+    // ── opportunistic backend probe on first open ──────────────────
+    // Posture dot reflects "what would IGRIS say right now without me asking?"
+    // Done by a silent status request the first time the widget opens.
+    var toggleBtn = widget.querySelector('.igris-web-toggle');
+    if (toggleBtn){
+        toggleBtn.addEventListener('click', function(){
+            if (widget.classList.contains('open') && !backendProbed){
+                backendProbed = true;
+                fetch('/web/api/igris/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    credentials: 'same-origin',
+                    body: JSON.stringify({message:'status', history:[]}),
+                })
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    if (data && data.mode)    setMode(data.mode);
+                    if (data && data.posture) setPosture(data.posture);
+                })
+                .catch(function(){ /* silent */ });
+            }
+            setTimeout(function(){ if (widget.classList.contains('open')) input.focus(); }, 50);
+        });
+    }
+})();
+</script>
