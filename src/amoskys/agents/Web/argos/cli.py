@@ -474,6 +474,117 @@ def cmd_customer_recon(args: argparse.Namespace) -> int:
     return 0 if not any(r.errors for r in result.source_results) else 1
 
 
+def cmd_customer_scan(args: argparse.Namespace) -> int:
+    """Queue + run scans across the customer's recon'd surface.
+
+    Requires: customer consent verified, authorized operator (ANALYST+).
+    """
+    from amoskys.agents.Web.argos.schedule import (
+        CustomerConsentRequiredError,
+        ScanScheduler,
+    )
+    from amoskys.agents.Web.argos.storage import AssetsDB, OperatorRole
+
+    db_path = Path(args.db or Path.home() / ".argos" / "customer.db")
+    db = AssetsDB(db_path)
+    db.initialize()
+
+    op, _svc = _resolve_operator(args, db, OperatorRole.ANALYST)
+
+    report_dir = Path(args.report_dir or Path.home() / ".argos" / "customer-scans")
+    scheduler = ScanScheduler(
+        db=db,
+        operator=op,
+        report_dir=report_dir,
+        tool_bundle=args.tool_bundle,
+    )
+
+    try:
+        queue = scheduler.queue_surface(args.customer_id)
+    except CustomerConsentRequiredError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    except LookupError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    progress_pre = scheduler.progress(queue.queue_id)
+    print(f"[argos customer scan] queue {queue.queue_id}")
+    print(f"[argos customer scan] operator: {op.email} (role={op.role.value})")
+    print(f"[argos customer scan] tool_bundle: {queue.tool_bundle}")
+    print(f"[argos customer scan] jobs queued: {progress_pre.total} "
+          f"(skipped_pre_run: {progress_pre.skipped})")
+    print(f"[argos customer scan] running synchronously...")
+
+    if args.dry_run:
+        print("[argos customer scan] --dry-run: not executing; queue created only.")
+        print()
+        print(progress_pre.render())
+        return 0
+
+    try:
+        progress = scheduler.run_all(queue.queue_id)
+    except CustomerConsentRequiredError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    print()
+    print(progress.render())
+    print()
+    print(f"[argos customer scan] inspect with: "
+          f"argos customer scan-status {queue.queue_id}")
+    return 0 if progress.failed == 0 else 1
+
+
+def cmd_customer_scan_status(args: argparse.Namespace) -> int:
+    """Show the state of a scan queue + its jobs."""
+    from amoskys.agents.Web.argos.schedule import ScanScheduler
+    from amoskys.agents.Web.argos.storage import AssetsDB, Operator, OperatorRole
+
+    db_path = Path(args.db or Path.home() / ".argos" / "customer.db")
+    db = AssetsDB(db_path)
+    db.initialize()
+
+    queue = db.get_scan_queue(args.queue_id)
+    if queue is None:
+        print(f"error: no scan_queue with id {args.queue_id!r}", file=sys.stderr)
+        return 2
+
+    # We don't authorize for read-only inspection; anyone with DB access
+    # can view. (Writes still require operator auth via the scheduler.)
+    op_for_display = db.get_operator(queue.operator_id)
+    op_email = op_for_display.email if op_for_display else "(unknown)"
+
+    jobs = db.list_scan_jobs(queue.queue_id)
+    counts = db.scan_queue_status_counts(queue.queue_id)
+    total_findings = sum(j.findings_count for j in jobs)
+
+    print(f"queue:          {queue.queue_id}")
+    print(f"  customer:     {queue.customer_id}")
+    print(f"  operator:     {op_email}")
+    print(f"  tool_bundle:  {queue.tool_bundle}")
+    print(f"  created:      {queue.created_at_ns}")
+    print(f"  completed:    {queue.completed_at_ns or '(in progress)'}")
+    print(f"  jobs:         total={queue.total_jobs or len(jobs)}")
+    for status in ("pending", "running", "complete", "failed", "skipped"):
+        n = counts.get(status, 0)
+        if n:
+            print(f"    {status}: {n}")
+    print(f"  findings:     {total_findings}")
+
+    if jobs:
+        print()
+        print(f"{'asset':<40} {'kind':<10} {'status':<10} {'findings':>8}  note")
+        print("-" * 90)
+        for j in jobs:
+            note = j.skip_reason or j.error or ""
+            print(
+                f"{j.asset_value[:39]:<40} {j.asset_kind:<10} {j.status:<10} "
+                f"{j.findings_count:>8}  {note[:40]}"
+            )
+    return 0
+
+
 def cmd_customer_surface(args: argparse.Namespace) -> int:
     from amoskys.agents.Web.argos.storage import AssetKind
 
@@ -700,6 +811,44 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_db_arg(surface)
     surface.set_defaults(func=cmd_customer_surface)
+
+    scan = customer_sub.add_parser(
+        "scan",
+        help="queue + run Engagements across every in-scope surface asset "
+             "(requires authorized operator, analyst+)",
+    )
+    scan.add_argument("customer_id")
+    scan.add_argument(
+        "--tool-bundle",
+        default="wp-full-ast",
+        help="tool bundle (see TOOL_REGISTRY). Default: wp-full-ast",
+    )
+    scan.add_argument(
+        "--report-dir",
+        default=None,
+        help="where to write per-engagement artifacts (default: ~/.argos/customer-scans)",
+    )
+    scan.add_argument(
+        "--operator",
+        default=None,
+        help="operator email or id (overrides ARGOS_OPERATOR)",
+    )
+    scan.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="create the queue + jobs but don't execute — useful for reviewing "
+             "which assets are in-scope before spending probe budget",
+    )
+    _add_db_arg(scan)
+    scan.set_defaults(func=cmd_customer_scan)
+
+    scan_status = customer_sub.add_parser(
+        "scan-status",
+        help="inspect a scan queue (read-only; no operator auth required)",
+    )
+    scan_status.add_argument("queue_id")
+    _add_db_arg(scan_status)
+    scan_status.set_defaults(func=cmd_customer_scan_status)
 
     # ── operator subcommands ────────────────────────────────────────
     operator = sub.add_parser(
