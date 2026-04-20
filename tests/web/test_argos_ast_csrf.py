@@ -13,17 +13,17 @@ from amoskys.agents.Web.argos.ast import CsrfScanner
 class _FakePlugin:
     slug: str
     version: str
-    root: Path
+    plugin_root: Path
     files: List[Path]
 
-    def iter_php_files(self) -> Iterator[Path]:
+    def iter_php(self) -> Iterator[Path]:
         return iter(self.files)
 
 
 def _run(tmp_path, source, name="t.php"):
     p = tmp_path / name
     p.write_text(source, encoding="utf-8")
-    plugin = _FakePlugin(slug="test", version="1", root=tmp_path, files=[p])
+    plugin = _FakePlugin(slug="test", version="1", plugin_root=tmp_path, files=[p])
     return CsrfScanner().scan(plugin)
 
 

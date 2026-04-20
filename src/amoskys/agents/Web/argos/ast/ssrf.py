@@ -90,9 +90,9 @@ class SsrfScanner(ASTScanner):
 
     def scan(self, plugin) -> List[ASTFinding]:
         findings: List[ASTFinding] = []
-        for path in plugin.iter_php_files():
+        for path in plugin.iter_php():
             try:
-                source = PHPSource(path, relative_to=plugin.root)
+                source = PHPSource(path, relative_to=plugin.plugin_root)
             except OSError:
                 continue
             findings.extend(self._scan_wp_remote(source, plugin))

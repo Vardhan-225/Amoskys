@@ -189,9 +189,9 @@ class SqlInjectionScanner(ASTScanner):
 
     def scan(self, plugin) -> List[ASTFinding]:
         findings: List[ASTFinding] = []
-        for php_path in plugin.iter_php_files():
+        for php_path in plugin.iter_php():
             try:
-                source = PHPSource(php_path, relative_to=plugin.root)
+                source = PHPSource(php_path, relative_to=plugin.plugin_root)
             except OSError:
                 continue
             findings.extend(self._scan_wpdb_methods(source, plugin))

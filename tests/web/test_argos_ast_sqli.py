@@ -22,10 +22,10 @@ class _FakePlugin:
 
     slug: str
     version: str
-    root: Path
+    plugin_root: Path
     files: List[Path]
 
-    def iter_php_files(self) -> Iterator[Path]:
+    def iter_php(self) -> Iterator[Path]:
         return iter(self.files)
 
 
@@ -37,7 +37,7 @@ def _write(tmp_path: Path, name: str, body: str) -> Path:
 
 def _run(tmp_path: Path, source: str, name: str = "t.php"):
     f = _write(tmp_path, name, source)
-    plugin = _FakePlugin(slug="test-plug", version="1.0.0", root=tmp_path, files=[f])
+    plugin = _FakePlugin(slug="test-plug", version="1.0.0", plugin_root=tmp_path, files=[f])
     return SqlInjectionScanner().scan(plugin)
 
 
