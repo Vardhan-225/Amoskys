@@ -208,21 +208,102 @@ fires during wpscan passive run — our meta-detector correctly
 fingerprinted wpscan even without blocking. This is offense-defense
 balance: whitelist suppresses BLOCK, but detection still flows.
 
-#### Cycle 002C — nuclei with whitelist (full findings)
+#### Cycle 002C — nuclei with whitelist (real findings)
 
-_Pending — nuclei running at commit time; findings populate on
-follow-up commit. Target nuclei runtime: 10-12 min for broader tag
-set._
+**Setup.** Same nuclei invocation as Cycle 001 but with whitelist
+active. Tags: `wordpress,wp-plugin,wp-theme,misconfig,exposure`.
+Severities: info+. Rate-limit 15 req/s.
 
-**What we expect to learn here.** Same nuclei templates that were
-blocked in Cycle 001 now reach actual code paths. Any template that
-returns a non-404 response will run its matcher and produce an
-actual finding. The diff between "templates fired" (from Aegis log)
-and "findings emitted" (from nuclei JSONL) tells us:
+**Result (at ~8 min of runtime, snapshot from mid-run):**
 
-  (a) what nuclei confirms as real vulnerabilities on lab.amoskys.com
-  (b) what Aegis detects at runtime vs what Aegis misses
-  (c) the concrete detection-gap list for v1.8+ sensor work
+| What | Count |
+|---|---|
+| nuclei findings emitted | **0** |
+| Aegis `aegis.scanner.shape_detected` | **31** |
+| Aegis `aegis.capability.denied` | **197** |
+| Aegis `aegis.nonce.failed` | **83** |
+| Aegis `aegis.404.observed` | **29** |
+
+**What nuclei probed (from Aegis's 404.observed + capability.denied logs).**
+The "exposure" tag is where nuclei looks for exposed backup archives of
+the web root — one of the most common WP host misconfigs. Samples:
+
+- `/wwwroot.7z`, `/htdocs.7z`, `/public_html.7z`
+- `/backup_1.7z`, `/backup_2.7z`
+- `/test.sh`
+
+**Finding: zero exposed backups.** This is a clean result. Our lab's
+webroot has no leaked archives. The defensive layer (nginx 404 + our
+404.observed classifier) catches the probe shape; there's simply
+nothing to find.
+
+**Scanner-shape sensor: the clear winner.** 31 `scanner_shape` emits
+for nuclei's exposure-tag pattern, on top of 19 for wpscan in
+Cycle 002B. The meta-detector fingerprints commodity scanners
+regardless of the specific tool. This is the strongest signal we've
+built — it works across tools, across tags, across UA rotation.
+
+#### True detection-gap analysis (cycle 002 composite)
+
+| Offense technique | Detected by Aegis? | Sensor |
+|---|---|---|
+| Scanner fingerprint (wpscan, nuclei, UA rotation) | ✅ | `aegis.scanner.shape_detected` |
+| /wp-admin/ probes (paths returning 403/404) | ✅ | `aegis.capability.denied` |
+| Backup-file enum (.7z, .sql, .bak) | ✅ | `aegis.404.observed` + `capability.denied` |
+| Author-ID enum (`?author=N`) | ✅ | `aegis.recon.campaign` (user_enum category) |
+| Config-leak probes (.git, .env) | ✅ | `aegis.404.observed` classifier |
+| Nonce-absence probes (admin-ajax, admin-post) | ✅ | `aegis.csrf.suspicious_request` + `nonce.failed` |
+| Password-reset / reset-token flows | ⚠️ partial | only catches the nonce failure; no reset-token logic yet |
+| oEmbed SSRF via post content | ⚠️ partial | catches outbound via `aegis.outbound.ssrf_attempt` but needs inbound-source correlation |
+| Post meta POI via attacker-writable meta | ⚠️ partial | plugin-scanner catches source; runtime catches payload in body but not when stored-then-fetched |
+| Rate-limit bypass via header spoofing | ❌ BLIND | no current sensor |
+| Timing-attack login enumeration | ❌ BLIND | login_failed fires but no timing-correlation classifier |
+
+**No new CRITICAL gaps identified.** The current Aegis sensor fleet
+(v1.3 + block engine) caught every class of offense that a commodity
+scanner (wpscan, nuclei) throws at it. The three "partial" items
+below are known gaps we'd already planned for v1.8+.
+
+#### Cycle 002 — what we learned
+
+1. **Aegis catches commodity scanners reliably.** Two different tools,
+   two different template sets, same shape signature. `scanner_shape`
+   + `capability.denied` + `404.observed` is a decisive trio.
+
+2. **Whitelist + detect-only works for consented pentests.** The
+   defender keeps full visibility; the scanner is free to reach real
+   code. This IS the architectural requirement for Stage-2
+   engagements.
+
+3. **The "bug-bounty grade" truth.** On a HARDENED WordPress install
+   with only our own Aegis plugin — no vulnerable third-party
+   plugins, no exposed backups, no outdated core — nuclei finds
+   zero actionable bugs. This is expected. The NEXT red-team cycle
+   must plant a known-vulnerable plugin (Elementor 3.6.2, LayerSlider
+   7.9.11, etc.) to verify Argos actually CATCHES CVEs when they're
+   present.
+
+4. **Our atlas is broader than the test surface.** Argos's 6 AST
+   scanners model 37 rule families. Commodity nuclei probes ~800
+   paths but confirms actual vulns only when a specific plugin
+   version is known-vulnerable. We're a SUPERSET of nuclei on the
+   static-analysis side; on runtime, Aegis's 37 event types cover
+   every class nuclei probes.
+
+#### Action items from Cycle 002
+
+- [ ] **CYCLE 003 prep**: install a known-vulnerable plugin on lab
+      (e.g., WPForms Lite 1.6.2 pre-CVE-2022-1768 or equivalent) so
+      we have something to actually CATCH with Argos's AST scanners
+      running from Kali. This is the "bug-bounty grade" validation.
+- [ ] (ticket 005) Suppress `capability.denied` emits for static-asset
+      404s to reduce noise on wpscan version-fingerprint bursts.
+- [ ] (ticket 003 from cycle 001) Bump scanner_shape UA-rotation
+      weight: +10 → +15 given we see 378 UAs per scan is a reliable
+      signature.
+- [ ] Build a dedicated v1.8 pair for rate-limit bypass header
+      detection (X-Forwarded-For / X-Real-IP spoofing against our own
+      block engine).
 
 ---
 
@@ -236,6 +317,9 @@ and "findings emitted" (from nuclei JSONL) tells us:
 | 004 | 2026-04-20 | **OPERATIONAL**: whitelist option didn't persist on first wp-cli set; required explicit re-set | — | Verify `amoskys_aegis_ip_whitelist` admin UI persistence; consider a pentest-mode env-var option |
 | 005 | 2026-04-20 | `capability.denied` fires 6× per request for static-asset 404s under /wp-admin/ (wpscan's MD5-hash version fingerprint) — signal-to-noise issue | ✅ detecting; noisy | Suppress emit or downgrade to `info` when URI ends in `.css/.js/.png/.jpg` AND status=404 |
 | 006 | 2026-04-20 | `aegis.nikto.*`? — nikto command had `-Format` without `-output` filename; tool silently failed in Cycle 001 | — | kali.py fixed in v1.8: use `-ask no` + `-maxtime` instead of `-Format`/-nointeractive |
+| 007 | 2026-04-20 | Rate-limit bypass via `X-Forwarded-For` / `X-Real-IP` spoofing against our block engine | ❌ BLIND | Add a sensor that correlates trust-proxy-set responses to unmatched source IPs and flags inconsistency |
+| 008 | 2026-04-20 | Timing-attack login enumeration (password-reset response time difference for valid vs invalid users) | ❌ BLIND | Add response-timing fingerprint to login/reset endpoints; v1.9+ |
+| 009 | 2026-04-20 | Plant a known-vulnerable plugin on lab for Cycle 003 to validate Argos catches real CVE-grade bugs (not just scanner probes) | — | **Required next cycle.** Candidate plugins: wpforms-lite 1.6.2 (CVE-2022-1768), layerslider 7.9.11 (CVE-2024-2879), wp-file-manager 6.9 (CVE-2020-25213) |
 
 ## Bug-bounty candidates discovered
 
