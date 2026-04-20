@@ -134,6 +134,33 @@ class _HTTPResult:
     error:    Optional[str] = None
 
 
+def _decompress_body(body_bytes: bytes, encoding: Optional[str]) -> str:
+    """Decompress per Content-Encoding. A browser that advertises gzip
+    MUST handle gzip; silently failing is a traffic-shape anomaly."""
+    if not body_bytes:
+        return ""
+    enc = (encoding or "").lower().strip()
+    try:
+        if enc == "gzip":
+            import gzip
+            body_bytes = gzip.decompress(body_bytes)
+        elif enc == "deflate":
+            import zlib
+            try:
+                body_bytes = zlib.decompress(body_bytes)
+            except zlib.error:
+                body_bytes = zlib.decompress(body_bytes, -zlib.MAX_WBITS)
+        elif enc == "br":
+            try:
+                import brotli  # type: ignore
+                body_bytes = brotli.decompress(body_bytes)
+            except ImportError:
+                pass
+    except Exception:
+        pass
+    return body_bytes.decode("utf-8", errors="replace")
+
+
 def _http_get(url: str, timeout: float = _DEFAULT_TIMEOUT,
               user_agent: str = _DEFAULT_UA,
               max_bytes: int = 512 * 1024) -> _HTTPResult:
@@ -149,25 +176,28 @@ def _http_get(url: str, timeout: float = _DEFAULT_TIMEOUT,
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body_bytes = resp.read(max_bytes)
-            # urllib doesn't auto-decode gzip — but most WP installs will not
-            # gzip when we advertise `Accept-Encoding` because the client
-            # handling is on us. We omit real decompression here; in prod,
-            # swap for requests/httpx.  If body looks binary, treat as empty.
-            try:
-                body = body_bytes.decode("utf-8", errors="replace")
-            except Exception:
-                body = ""
+            resp_headers = {k.lower(): v for k, v in resp.headers.items()}
+            body = _decompress_body(body_bytes,
+                                    resp_headers.get("content-encoding"))
             return _HTTPResult(
                 status=resp.status,
-                headers={k.lower(): v for k, v in resp.headers.items()},
+                headers=resp_headers,
                 body=body,
                 url=resp.url,
             )
     except urllib.error.HTTPError as e:
+        err_headers = {k.lower(): v for k, v in (e.headers or {}).items()}
+        body = ""
+        if e.fp:
+            try:
+                body = _decompress_body(e.fp.read(max_bytes),
+                                        err_headers.get("content-encoding"))
+            except Exception:
+                pass
         return _HTTPResult(
             status=e.code,
-            headers={k.lower(): v for k, v in (e.headers or {}).items()},
-            body=(e.read(max_bytes).decode("utf-8", errors="replace") if e.fp else ""),
+            headers=err_headers,
+            body=body,
             url=url,
         )
     except Exception as e:  # noqa: BLE001
