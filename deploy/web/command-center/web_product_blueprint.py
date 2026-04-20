@@ -13,7 +13,7 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from flask import (
     Blueprint,
@@ -888,6 +888,177 @@ def dashboard_live_arcs():
     return jsonify({
         "now_ms":  server_now_ms,
         "events":  out[-300:],
+    })
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Threat map — per-IP aggregate over a time window.
+#
+# GET /web/api/dashboard/threat-map.json?window=1h&top=50
+#
+# Returns the top-N source IPs active in the last `window`, each with
+# geo-resolution, event count, max concern level, short list of the
+# most frequent event phrases, and first/last timestamps.
+#
+# This is the *persistent* data source for the redesigned globe —
+# unlike live-arcs.json which returns transient per-event arcs, this
+# gives the operator a readable "who has been hammering me lately"
+# view that doesn't flicker in and out on page load.
+#
+# Research note on the default window: real-time SOC dashboards (Norse,
+# Kaspersky ThreatCloud, Check Point) typically offer both a live-pulse
+# view and a windowed-aggregate view. 1h strikes the usable middle —
+# long enough to see patterns, short enough that the globe doesn't turn
+# into an illegible spaghetti of historical activity.
+# ═════════════════════════════════════════════════════════════════════
+
+_WINDOW_UNITS = {"m": 60, "h": 3600, "d": 86400, "s": 1}
+
+def _parse_window_to_ms(spec: str, default_ms: int = 3600 * 1000) -> int:
+    """Convert strings like '1h', '30m', '6h' to milliseconds.
+    Falls back to default on parse failure."""
+    if not spec:
+        return default_ms
+    import re
+    m = re.fullmatch(r"(\d+)([smhd])", spec.strip().lower())
+    if not m:
+        return default_ms
+    return int(m.group(1)) * _WINDOW_UNITS[m.group(2)] * 1000
+
+
+@web_bp.route("/api/dashboard/threat-map.json")
+@require_signed_in
+def dashboard_threat_map():
+    window_ms = _parse_window_to_ms(request.args.get("window", "1h"), default_ms=3600_000)
+    top_n = max(1, min(200, int(request.args.get("top", "50") or 50)))
+    window_ms = max(60_000, min(window_ms, 7 * 86400 * 1000))  # clamp 1 min .. 7 days
+
+    site = current_user_site() or customer_site()
+    site_ip = resolve_domain_ip(site)
+    site_geo = _geoip_cache.resolve(site_ip) if site_ip else None
+    now_ms = int(time.time() * 1000)
+    cutoff_ms = now_ms - window_ms
+
+    # Reuse the parsed-event cache from investigate_view — populated on
+    # the first /web/investigate hit and kept incrementally up to date.
+    # Avoids a second parse of the 93 MB JSONL just for the globe.
+    from .investigate_view import _ensure_parsed_cache
+    from .aegis_live import LOG_PATH
+    events = _ensure_parsed_cache(LOG_PATH)
+
+    # ── Aggregate per-IP over the window ──────────────────────────
+    # actors: ip -> {count, max_concern, concern_hist, phrase_counts, first_ns, last_ns}
+    actors: Dict[str, Dict[str, Any]] = {}
+    ignore_ips = {"127.0.0.1", "::1", ""}
+    if site_ip:
+        ignore_ips.add(site_ip)
+
+    for e in events:
+        ts_ns = e.get("event_timestamp_ns") or 0
+        if ts_ns // 1_000_000 < cutoff_ms:
+            continue
+        ip = ((e.get("request") or {}).get("ip") or "").strip()
+        if not ip or ip in ignore_ips:
+            continue
+        et = e.get("event_type") or ""
+        meaning = _ev_sem.meaning_for(et)
+
+        a = actors.get(ip)
+        if a is None:
+            a = {
+                "ip":            ip,
+                "count":         0,
+                "max_concern":   0,
+                "concern_hist":  [0, 0, 0, 0, 0, 0],
+                "phrases":       {},
+                "categories":    {},
+                "first_ns":      ts_ns,
+                "last_ns":       ts_ns,
+                "ua":            (e.get("request") or {}).get("ua") or "",
+            }
+            actors[ip] = a
+        a["count"] += 1
+        a["concern_hist"][meaning.concern] += 1
+        if meaning.concern > a["max_concern"]:
+            a["max_concern"] = meaning.concern
+        if ts_ns < a["first_ns"]: a["first_ns"] = ts_ns
+        if ts_ns > a["last_ns"]:  a["last_ns"]  = ts_ns
+        # Only count phrases that a human cares about — internal taxonomy
+        # items (db summaries, http request heartbeats) would drown out
+        # the useful ones.
+        if meaning.audience == "user":
+            a["phrases"][meaning.phrase] = a["phrases"].get(meaning.phrase, 0) + 1
+            a["categories"][meaning.category] = a["categories"].get(meaning.category, 0) + 1
+
+    if not site_geo:
+        return jsonify({
+            "generated_at_ms": now_ms,
+            "window_ms": window_ms,
+            "site": None,
+            "actors": [],
+            "total_event_count": 0,
+            "total_actor_count": 0,
+        })
+
+    # Sort actors by concern first (descending), then raw count.
+    # Non-internal hits get a weight bonus so the globe prioritises
+    # meaningful attackers over noisy-but-boring ones.
+    def _actor_score(a):
+        user_phrase_hits = sum(a["phrases"].values())
+        return (a["max_concern"], user_phrase_hits * 2 + a["count"])
+
+    ranked = sorted(actors.values(), key=_actor_score, reverse=True)
+    selected = ranked[:top_n]
+
+    # ── Resolve geo for the selected (bounded — don't hammer ip-api) ──
+    out_actors: List[Dict[str, Any]] = []
+    cold_lookups_left = 5
+    for a in selected:
+        ip = a["ip"]
+        geo = _geoip_cache.get(ip)
+        if not geo and cold_lookups_left > 0:
+            geo = _geoip_cache.resolve(ip)
+            cold_lookups_left -= 1
+        if not geo:
+            # Skip unresolvable IPs on the globe but still carry a stub so
+            # the client can report totals correctly.
+            continue
+        top_phrases = sorted(a["phrases"].items(), key=lambda kv: kv[1], reverse=True)[:3]
+        out_actors.append({
+            "ip":              ip,
+            "count":           a["count"],
+            "max_concern":     a["max_concern"],
+            "concern_hist":    a["concern_hist"],
+            "first_ms":        a["first_ns"] // 1_000_000,
+            "last_ms":         a["last_ns"]  // 1_000_000,
+            "start_lat":       geo.lat,
+            "start_lng":       geo.lon,
+            "origin_city":     geo.city,
+            "origin_country":  geo.country,
+            "origin_org":      geo.org or geo.asn,
+            "top_phrases":     [{"phrase": p, "count": c} for p, c in top_phrases],
+            "top_category":    (max(a["categories"].items(), key=lambda kv: kv[1])[0]
+                                if a["categories"] else None),
+        })
+
+    total_events = sum(a["count"] for a in actors.values())
+
+    return jsonify({
+        "generated_at_ms":   now_ms,
+        "window_ms":         window_ms,
+        "site": {
+            "domain":  site,
+            "ip":      site_ip,
+            "end_lat": site_geo.lat,
+            "end_lng": site_geo.lon,
+            "city":    site_geo.city,
+            "country": site_geo.country,
+            "org":     site_geo.org or site_geo.asn,
+        },
+        "actors":              out_actors,
+        "total_event_count":   total_events,
+        "total_actor_count":   len(actors),
+        "resolved_actor_count": len(out_actors),
     })
 
 

@@ -178,25 +178,51 @@
       </div>
     </div>
 
-    <!-- Top-right: live event-rate counter (client-side, derived from polled events) -->
+    <!-- Top-right: live-pulse counters + last-hour summary, shown one at a time -->
     <div class="db-globe-corner db-globe-tr">
-      <div class="db-rate" title="Aegis events ingested per second over the last 5s window">
-        <span class="db-rate-pulse idle" id="dbRatePulse"></span>
-        <span class="db-rate-num" id="dbRateNum">0.0</span>
-        <span class="db-rate-lbl">ev/s · 5s avg</span>
+      <!-- Last-hour mode counters -->
+      <div class="db-summary" id="dbSummaryHour">
+        <div class="db-rate" title="Number of unique IPs that talked to your site in the last hour.">
+          <span class="db-rate-pulse" style="background:#00d9ff; box-shadow:0 0 8px rgba(0,217,255,.7);"></span>
+          <span class="db-rate-num" id="dbActorsNum">—</span>
+          <span class="db-rate-lbl">IPs · last hour</span>
+        </div>
+        <div class="db-rate" style="margin-top:4px;" title="Total Aegis events from those IPs in the last hour.">
+          <span class="db-rate-pulse" style="background:var(--w-accent); box-shadow:0 0 6px rgba(0,217,255,.5);"></span>
+          <span class="db-rate-num" id="dbEventsNum">—</span>
+          <span class="db-rate-lbl">events · last hour</span>
+        </div>
       </div>
-      <div class="db-rate" style="margin-top:4px;" title="Total events visible on the globe right now">
-        <span class="db-rate-pulse" style="background:var(--w-accent); box-shadow:0 0 8px rgba(0,217,255,.65);"></span>
-        <span class="db-rate-num" id="dbArcsNum">0</span>
-        <span class="db-rate-lbl">arcs in flight</span>
+      <!-- Live-pulse mode counters (hidden by default) -->
+      <div class="db-summary" id="dbSummaryLive" style="display:none;">
+        <div class="db-rate" title="Aegis events ingested per second over the last 5s window.">
+          <span class="db-rate-pulse idle" id="dbRatePulse"></span>
+          <span class="db-rate-num" id="dbRateNum">0.0</span>
+          <span class="db-rate-lbl">ev/s · 5s avg</span>
+        </div>
+        <div class="db-rate" style="margin-top:4px;" title="Events visible on the globe right now (they fade when their duration ends).">
+          <span class="db-rate-pulse" style="background:var(--w-accent); box-shadow:0 0 8px rgba(0,217,255,.65);"></span>
+          <span class="db-rate-num" id="dbArcsNum">0</span>
+          <span class="db-rate-lbl">arcs in flight</span>
+        </div>
       </div>
     </div>
 
-    <!-- Bottom-left: controls -->
+    <!-- Bottom-left: view-mode toggle + standard controls -->
     <div class="db-globe-corner db-globe-bl">
+      <div class="db-mode-tabs" role="tablist" aria-label="Globe view mode">
+        <button type="button" id="dbModeHour" class="db-mode-tab active"
+                title="Show every IP that has talked to your site in the last hour, as persistent arcs sized by event count and coloured by how concerning it is.">
+          Last hour
+        </button>
+        <button type="button" id="dbModeLive" class="db-mode-tab"
+                title="Pulse view — each arc is one live event, visible for its real duration. Feels like a real-time radar.">
+          Live pulse
+        </button>
+      </div>
       <button type="button" id="dbCtrlSpin"  class="db-ctrl-btn" title="Toggle auto-spin (off by default)">▶ Spin</button>
       <button type="button" id="dbCtrlReset" class="db-ctrl-btn" title="Re-centre on your site">⌖ Centre</button>
-      <button type="button" id="dbCtrlPause" class="db-ctrl-btn" title="Pause/resume the live feed">⏸ Pause feed</button>
+      <button type="button" id="dbCtrlPause" class="db-ctrl-btn" title="Pause/resume the live feed">⏸ Pause</button>
     </div>
 
     <!-- Bottom-right: legend -->
@@ -548,12 +574,171 @@
   function fitGlobe() { globe.width(root.clientWidth).height(root.clientHeight); }
   window.addEventListener('resize', fitGlobe);
 
-  // ── Severity → colour ──────────────────────────────────────────────
+  // ── Severity → colour (for the live-pulse mode only) ──────────────
   function colorOf(sev) {
     if (sev === 'critical') return '#dc2626';
     if (sev === 'high')     return '#ff3366';
     if (sev === 'warn')     return '#ffaa00';
     return '#00d9ff';
+  }
+
+  // ── Two view modes ─────────────────────────────────────────────────
+  //
+  // 'hour'  — default. One persistent arc per unique source IP over the
+  //           last hour, sized by event count and coloured by how serious
+  //           the most-concerning event from that IP was. Refreshed every
+  //           60s from /api/dashboard/threat-map.json.
+  //
+  //           This is the "who has been targeting my site lately" view.
+  //           It's the right default for non-live-soc operators — you
+  //           can glance at it for 3 seconds and know whether anything
+  //           needs attention today.
+  //
+  // 'live'   — the original live-pulse view: every arc is one event,
+  //           visible only for its real duration. Polled every 2.5s
+  //           from /api/dashboard/live-arcs.json.
+  //
+  // Only one mode's arcs are rendered at a time — switching replaces the
+  // data set entirely so the UI doesn't mix persistent and transient arcs
+  // (which would be confusing about what's "now" vs "historical").
+
+  var mode = 'hour';      // default
+  var hourArcs = [];      // aggregate view
+  var liveArcs = [];      // pulse view
+  var rateWindow = [];    // live-pulse ev/s counter
+
+  // Concern level → colour (matches dashboard narrative banner).
+  function colorOfConcern(c) {
+    if (c >= 5) return '#dc2626';   // critical
+    if (c === 4) return '#ff3366';  // high
+    if (c === 3) return '#ff884d';  // suspicious (distinct from warn amber)
+    if (c === 2) return '#ffaa00';  // warn
+    if (c === 1) return '#3ea9ff';  // noteworthy-info
+    return '#00d9ff';               // routine
+  }
+
+  function concernLabel(c) {
+    return ['routine', 'noteworthy', 'slightly off', 'suspicious', 'hostile', 'actively attacking'][Math.min(c, 5)] || 'routine';
+  }
+
+  // Map { count -> stroke width }. Log-ish so a 10k-hit actor doesn't crush
+  // a 10-hit one into invisibility.
+  function strokeForCount(n) {
+    // 1 event  -> 0.25, 10 -> 0.5, 100 -> 0.9, 1000 -> 1.4, 10000 -> 2.0
+    return Math.max(0.25, Math.min(2.0, Math.log10(Math.max(1, n)) * 0.42 + 0.25));
+  }
+
+  function formatNum(n) {
+    if (n >= 1000) return (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k';
+    return String(n);
+  }
+
+  function describeAgo(ms) {
+    if (!ms) return '';
+    var s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+    if (s < 60) return s + 's ago';
+    if (s < 3600) return Math.round(s / 60) + 'm ago';
+    if (s < 86400) return Math.round(s / 3600) + 'h ago';
+    return Math.round(s / 86400) + 'd ago';
+  }
+
+  // ── Apply arc config for a mode ────────────────────────────────────
+  // Two modes have slightly different arc behaviour (one is persistent,
+  // the other animates to match real event duration). Rather than
+  // fighting globe.gl's render pipeline, we reconfigure the arc settings
+  // when the mode flips.
+  function applyHourArcs() {
+    globe
+      .arcsData(hourArcs)
+      .arcStroke(function(d) { return d.stroke; })
+      .arcDashLength(0.9)
+      .arcDashGap(0.25)
+      .arcDashAnimateTime(function(d) { return 4500; })  // slow gentle flow
+      .arcLabel(function(d) {
+        var top = (d.top_phrases || []).map(function(p) {
+          return '<span style="color:#fff;">' + p.phrase + '</span> ' +
+                 '<span style="color:#6b7a99;">· ' + p.count + '</span>';
+        }).join('<br>');
+        return '<div style="background:#0a0e27;border:1px solid ' + d.color +
+            ';padding:10px 14px;border-radius:6px;font:500 12px Inter,sans-serif;color:#fff;max-width:340px;">'
+          + '<div style="font-weight:700;color:' + d.color + ';margin-bottom:4px;">' + d.ip + '</div>'
+          + '<div style="color:#b4bcd0;font-size:11px;margin-bottom:6px;">'
+            + (d.origin_city ? d.origin_city + ', ' : '') + (d.origin_country || '')
+            + (d.origin_org  ? '<br>' + d.origin_org : '')
+          + '</div>'
+          + '<div style="margin-bottom:4px;"><strong>' + formatNum(d.count) + '</strong>'
+            + ' events <span style="color:#6b7a99;">in the last hour</span></div>'
+          + '<div style="color:' + d.color + ';font-size:11px;margin-bottom:4px;">' + concernLabel(d.max_concern) + '</div>'
+          + (top ? '<div style="border-top:1px solid rgba(255,255,255,.08);padding-top:5px;margin-top:4px;font-size:11px;">' + top + '</div>' : '')
+          + '<div style="color:#6b7a99;font-size:10px;margin-top:6px;">'
+          + 'first seen ' + describeAgo(d.first_ms) + ' · most recent ' + describeAgo(d.last_ms) + '</div>'
+          + '</div>';
+      });
+  }
+
+  function applyLiveArcs() {
+    globe
+      .arcsData(liveArcs)
+      .arcStroke(0.55)
+      .arcDashLength(0.55)
+      .arcDashGap(0.8)
+      .arcDashAnimateTime(function(d) { return d.visible_ms; })
+      .arcLabel(function(d) {
+        return '<div style="background:#0a0e27;border:1px solid ' + d.color +
+            ';padding:8px 12px;border-radius:6px;font:500 12px Inter,sans-serif;color:#fff;max-width:320px;">'
+          + '<strong style="color:' + d.color + ';">' + d.attack + '</strong><br>'
+          + '<span style="color:#fff;">' + d.ip + '</span> '
+          + '<span style="color:#b4bcd0;">' + (d.origin_org ? '(' + d.origin_org + ')' : '') + '</span><br>'
+          + '<span style="color:#b4bcd0;">' + (d.origin_city ? d.origin_city + ', ' : '') + (d.origin_country || '') + '</span><br>'
+          + '<span style="color:#b4bcd0;">event_type </span><code style="color:#fff;">' + d.event_type + '</code><br>'
+          + '<span style="color:#b4bcd0;">severity </span><strong style="color:' + d.color + ';">' + d.severity + '</strong>'
+          + (d.real_duration_ms != null
+              ? '<br><span style="color:#b4bcd0;">request duration </span><strong style="color:#fff;">' + d.real_duration_ms + 'ms</strong>'
+              : '')
+          + '</div>';
+      });
+  }
+
+  // ── Last-hour poll (threat-map endpoint) ───────────────────────────
+  // Cadence: 60s. The backend computes an in-memory aggregation from the
+  // parsed-event cache, so cost per poll is low; we don't need to hit it
+  // every few seconds — the operator-relevant signal (who's been
+  // targeting us) moves on minute-timescales, not second-timescales.
+  function pollHour() {
+    if (paused || mode !== 'hour') return;
+    fetch('/web/api/dashboard/threat-map.json?window=1h&top=50', {
+      credentials: 'same-origin',
+    })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !data.site) return;
+        hourArcs = (data.actors || []).map(function(a) {
+          return {
+            startLat:      a.start_lat,
+            startLng:      a.start_lng,
+            endLat:        data.site.end_lat,
+            endLng:        data.site.end_lng,
+            ip:            a.ip,
+            count:         a.count,
+            max_concern:   a.max_concern,
+            top_phrases:   a.top_phrases,
+            origin_city:   a.origin_city,
+            origin_country: a.origin_country,
+            origin_org:    a.origin_org,
+            first_ms:      a.first_ms,
+            last_ms:       a.last_ms,
+            color:         colorOfConcern(a.max_concern),
+            stroke:        strokeForCount(a.count),
+          };
+        });
+        if (mode === 'hour') applyHourArcs();
+
+        var aNum = document.getElementById('dbActorsNum');
+        var eNum = document.getElementById('dbEventsNum');
+        if (aNum) aNum.textContent = formatNum(data.total_actor_count || 0);
+        if (eNum) eNum.textContent = formatNum(data.total_event_count || 0);
+      })
+      .catch(function() { /* silent — next tick will try */ });
   }
 
   // ── Live poll loop ─────────────────────────────────────────────────
@@ -565,7 +750,8 @@
   var paused  = false;
 
   function poll() {
-    if (paused) return;
+    // Live-pulse mode only; 'hour' mode uses pollHour.
+    if (paused || mode !== 'live') return;
     fetch('/web/api/dashboard/live-arcs.json?since_ms=' + sinceMs, {
       credentials: 'same-origin',
     })
@@ -596,8 +782,8 @@
           liveArcs.push(arc);
           rateWindow.push(nowClient);
         });
-        if ((data.events || []).length) {
-          globe.arcsData(liveArcs.slice());
+        if ((data.events || []).length && mode === 'live') {
+          applyLiveArcs();
         }
       })
       .catch(function() { /* silent — next tick will try */ });
@@ -606,12 +792,14 @@
   // Prune expired arcs every 250ms so the lines truly disappear after their
   // event's duration. This is what makes the visualization statistically
   // honest — only events happening NOW are visible.
+  // Only active in live-pulse mode; hour-mode arcs are persistent.
   function pruneTick() {
+    if (mode !== 'live') return;
     var now = Date.now();
     var before = liveArcs.length;
     liveArcs = liveArcs.filter(function(a) { return a.expiresAt > now; });
     if (liveArcs.length !== before) {
-      globe.arcsData(liveArcs.slice());
+      applyLiveArcs();
     }
 
     // Rate counter: count spawn timestamps in the last 5000ms
@@ -626,20 +814,55 @@
     if (arcsNum)   arcsNum.textContent = liveArcs.length;
   }
 
-  // Kick off the loops
-  poll(); // immediate
-  var pollTimer  = setInterval(poll, 2500);     // 2.5s poll cadence
-  var pruneTimer = setInterval(pruneTick, 250); // 4 Hz prune
+  // ── Kick off the loops ──────────────────────────────────────────────
+  // Hour mode starts immediately (default). Live poll runs continuously
+  // but returns early when mode !== 'live' — keeps the code simple and
+  // avoids stopping/starting timers every switch.
+  pollHour();  // immediate
+  poll();      // immediate (no-op in hour mode but kept for state init)
+  var hourTimer  = setInterval(pollHour, 60_000);  // 60s cadence
+  var pollTimer  = setInterval(poll, 2500);        // 2.5s cadence
+  var pruneTimer = setInterval(pruneTick, 250);    // 4 Hz prune
 
   // Page-visibility: pause network traffic when the tab is hidden
   document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
       clearInterval(pollTimer); pollTimer = null;
-    } else if (!pollTimer && !paused) {
-      pollTimer = setInterval(poll, 2500);
-      poll();
+      clearInterval(hourTimer); hourTimer = null;
+    } else {
+      if (!pollTimer && !paused) { pollTimer = setInterval(poll, 2500); poll(); }
+      if (!hourTimer && !paused) { hourTimer = setInterval(pollHour, 60_000); pollHour(); }
     }
   });
+
+  // ── Mode toggle ─────────────────────────────────────────────────────
+  var modeHourBtn = document.getElementById('dbModeHour');
+  var modeLiveBtn = document.getElementById('dbModeLive');
+  var sumHour     = document.getElementById('dbSummaryHour');
+  var sumLive     = document.getElementById('dbSummaryLive');
+
+  function setMode(next) {
+    if (next === mode) return;
+    mode = next;
+    if (mode === 'hour') {
+      modeHourBtn && modeHourBtn.classList.add('active');
+      modeLiveBtn && modeLiveBtn.classList.remove('active');
+      if (sumHour) sumHour.style.display = '';
+      if (sumLive) sumLive.style.display = 'none';
+      applyHourArcs();
+      pollHour();   // immediate refresh
+    } else {
+      modeLiveBtn && modeLiveBtn.classList.add('active');
+      modeHourBtn && modeHourBtn.classList.remove('active');
+      if (sumHour) sumHour.style.display = 'none';
+      if (sumLive) sumLive.style.display = '';
+      applyLiveArcs();
+      poll();
+    }
+  }
+
+  if (modeHourBtn) modeHourBtn.addEventListener('click', function() { setMode('hour'); });
+  if (modeLiveBtn) modeLiveBtn.addEventListener('click', function() { setMode('live'); });
 
   // ── Control buttons ────────────────────────────────────────────────
   var spinBtn  = document.getElementById('dbCtrlSpin');

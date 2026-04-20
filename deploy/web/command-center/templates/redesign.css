@@ -336,3 +336,34 @@
     font-size: .6em;
     vertical-align: middle;
 }
+
+/* ──────────────────────────────────────────────────────────────
+ * 5. Globe mode tabs (Last hour / Live pulse)
+ * ────────────────────────────────────────────────────────────── */
+
+.db-mode-tabs {
+    display: inline-flex;
+    background: rgba(10, 14, 39, .75);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 8px;
+    overflow: hidden;
+    pointer-events: auto;
+    margin-right: .5rem;
+    backdrop-filter: blur(8px);
+}
+.db-mode-tab {
+    background: transparent;
+    border: 0;
+    color: var(--w-fg-2);
+    padding: .35rem .65rem;
+    font: 500 .72rem 'Inter', sans-serif;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+}
+.db-mode-tab:hover { color: var(--w-fg-0); background: rgba(255,255,255,.04); }
+.db-mode-tab.active {
+    background: rgba(0, 217, 255, .12);
+    color: var(--w-fg-0);
+    box-shadow: inset 0 0 0 1px rgba(0, 217, 255, .4);
+}
+
