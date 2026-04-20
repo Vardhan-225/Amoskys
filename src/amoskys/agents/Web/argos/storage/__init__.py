@@ -21,6 +21,7 @@ from amoskys.agents.Web.argos.storage.assets_db import (
     ReconRun,
     ScanJob,
     ScanQueue,
+    StoredFinding,
     SurfaceAsset,
 )
 
@@ -36,5 +37,6 @@ __all__ = [
     "ReconRun",
     "ScanJob",
     "ScanQueue",
+    "StoredFinding",
     "SurfaceAsset",
 ]

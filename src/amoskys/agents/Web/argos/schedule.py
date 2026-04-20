@@ -60,6 +60,7 @@ from amoskys.agents.Web.argos.storage import (
     OperatorRole,
     ScanJob,
     ScanQueue,
+    StoredFinding,
     SurfaceAsset,
 )
 
@@ -128,7 +129,15 @@ class EngagementRunner:
     """ABC-ish hook so tests can swap in a fake Engagement runner.
 
     The scheduler hands each job to `.run(asset_value, customer, report_dir)`
-    and expects back a dict with {engagement_id, findings_count, errors}.
+    and expects back a dict with:
+        engagement_id : str | None
+        findings_count: int
+        errors        : list[str]
+        findings      : list[dict]  # raw engagement-Finding shape for persistence
+
+    Each finding dict SHOULD carry: template_id, severity, title,
+    description, tool, evidence, references, cwe, cvss, mitre_techniques.
+    Missing fields are tolerated — they map to SQL NULL.
     """
 
     def run(
@@ -138,13 +147,7 @@ class EngagementRunner:
         report_dir: Path,
         tool_bundle: str,
     ) -> Dict[str, Any]:
-        """Default implementation: build a real Engagement + run it.
-
-        Builds a Scope that trusts the customer's pre-verified consent:
-        skip_dns_verify=True because the customer already DNS-TXT'd (or
-        signed / emailed) the apex. Sub-asset engagements inherit that
-        authorization transitively.
-        """
+        """Default implementation: build a real Engagement + run it."""
         from amoskys.agents.Web.argos.cli import TOOL_REGISTRY
         from amoskys.agents.Web.argos.engine import Engagement, Scope
 
@@ -154,6 +157,7 @@ class EngagementRunner:
                 "engagement_id": None,
                 "findings_count": 0,
                 "errors": [f"unknown tool_bundle: {tool_bundle!r}"],
+                "findings": [],
             }
         raw = tools_builder()
         tools = raw if isinstance(raw, list) else [raw]
@@ -174,10 +178,31 @@ class EngagementRunner:
         )
         engagement = Engagement(scope=scope, tools=tools, report_dir=report_dir)
         result = engagement.run()
+
+        # Serialize engagement Finding dataclasses into simple dicts for
+        # persistence. Reach into each field explicitly so we don't
+        # couple to the Finding class shape.
+        finding_dicts: List[Dict[str, Any]] = []
+        for f in result.findings:
+            finding_dicts.append({
+                "template_id": f.template_id,
+                "severity": f.severity.value if hasattr(f.severity, "value") else str(f.severity),
+                "title": f.title,
+                "description": f.description,
+                "tool": f.tool,
+                "cwe": f.cwe,
+                "cvss": f.cvss,
+                "references": list(f.references or []),
+                "mitre_techniques": list(f.mitre_techniques or []),
+                "evidence": dict(f.evidence or {}),
+                "detected_at_ns": f.detected_at_ns,
+            })
+
         return {
             "engagement_id": result.engagement_id,
             "findings_count": len(result.findings),
             "errors": list(result.errors),
+            "findings": finding_dicts,
         }
 
 
@@ -376,8 +401,15 @@ class ScanScheduler:
 
         # Record result
         errors = result.get("errors") or []
+        finding_dicts = result.get("findings") or []
         job.engagement_id = result.get("engagement_id")
-        job.findings_count = int(result.get("findings_count") or 0)
+        # Prefer the length of the returned findings list; fall back to
+        # the declared count. This handles older runners that don't emit
+        # individual findings.
+        if finding_dicts:
+            job.findings_count = len(finding_dicts)
+        else:
+            job.findings_count = int(result.get("findings_count") or 0)
         job.completed_at_ns = int(time.time() * 1e9)
         # If the runner reported errors AND zero findings, call it failed;
         # errors with findings = partial success, still 'complete'.
@@ -387,6 +419,11 @@ class ScanScheduler:
         else:
             job.status = "complete"
         self.db.update_scan_job(job)
+
+        # Persist findings to the DB so consolidated reports + future
+        # queries can operate across scans without re-reading JSON files.
+        self._persist_findings(job, finding_dicts)
+
         self._audit(
             queue_id=job.queue_id,
             action="scan_job_complete",
@@ -400,6 +437,35 @@ class ScanScheduler:
             run_id=job.job_id,
         )
         return job
+
+    def _persist_findings(self, job: ScanJob, findings: List[Dict[str, Any]]) -> None:
+        """Map runner finding dicts into StoredFinding rows."""
+        if not findings:
+            return
+        for f in findings:
+            stored = StoredFinding(
+                finding_id=str(uuid.uuid4()),
+                customer_id=job.customer_id,
+                queue_id=job.queue_id,
+                job_id=job.job_id,
+                engagement_id=job.engagement_id,
+                asset_value=job.asset_value,
+                template_id=f.get("template_id"),
+                severity=str(f.get("severity") or "info").lower(),
+                title=str(f.get("title") or "")[:500],
+                description=str(f.get("description") or "")[:4000],
+                tool=f.get("tool"),
+                cwe=f.get("cwe"),
+                cvss=f.get("cvss"),
+                references=list(f.get("references") or []),
+                mitre_techniques=list(f.get("mitre_techniques") or []),
+                evidence=dict(f.get("evidence") or {}),
+                detected_at_ns=int(f.get("detected_at_ns") or 0),
+            )
+            try:
+                self.db.create_finding(stored)
+            except Exception:  # noqa: BLE001
+                logger.exception("finding persist failed")
 
     # ── Inspection ────────────────────────────────────────────────
 

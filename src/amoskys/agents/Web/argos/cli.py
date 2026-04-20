@@ -536,6 +536,36 @@ def cmd_customer_scan(args: argparse.Namespace) -> int:
     return 0 if progress.failed == 0 else 1
 
 
+def cmd_customer_report(args: argparse.Namespace) -> int:
+    """Render a consolidated HTML + PDF report for a completed scan queue."""
+    from amoskys.agents.Web.argos.consolidated_report import build_report, render
+    from amoskys.agents.Web.argos.storage import AssetsDB
+
+    db_path = Path(args.db or Path.home() / ".argos" / "customer.db")
+    db = AssetsDB(db_path)
+    db.initialize()
+
+    try:
+        report = build_report(db, args.queue_id)
+    except LookupError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    out_dir = Path(args.out_dir or Path.home() / ".argos" / "customer-reports")
+    result = render(report, out_dir=out_dir, html_only=args.html_only)
+
+    print(f"[argos customer report] queue:         {report.queue.queue_id}")
+    print(f"[argos customer report] customer:      {report.customer.name}")
+    print(f"[argos customer report] findings:      {report.total_findings} "
+          f"(critical+high: {report.critical_plus_high})")
+    print(f"[argos customer report] HTML:          {result.html_path}")
+    if result.pdf_path:
+        print(f"[argos customer report] PDF:           {result.pdf_path}")
+    elif result.pdf_error:
+        print(f"[argos customer report] PDF skipped:   {result.pdf_error}")
+    return 0
+
+
 def cmd_customer_scan_status(args: argparse.Namespace) -> int:
     """Show the state of a scan queue + its jobs."""
     from amoskys.agents.Web.argos.schedule import ScanScheduler
@@ -849,6 +879,22 @@ def build_parser() -> argparse.ArgumentParser:
     scan_status.add_argument("queue_id")
     _add_db_arg(scan_status)
     scan_status.set_defaults(func=cmd_customer_scan_status)
+
+    cust_report = customer_sub.add_parser(
+        "report",
+        help="render a consolidated HTML + PDF customer report for a scan queue",
+    )
+    cust_report.add_argument("queue_id")
+    cust_report.add_argument(
+        "--out-dir", default=None,
+        help="where to write the report (default: ~/.argos/customer-reports)",
+    )
+    cust_report.add_argument(
+        "--html-only", action="store_true",
+        help="skip PDF render (useful when WeasyPrint isn't installed)",
+    )
+    _add_db_arg(cust_report)
+    cust_report.set_defaults(func=cmd_customer_report)
 
     # ── operator subcommands ────────────────────────────────────────
     operator = sub.add_parser(

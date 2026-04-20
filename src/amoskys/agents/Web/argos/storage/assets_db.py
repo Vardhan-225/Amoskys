@@ -284,6 +284,33 @@ class ScanQueue:
 
 
 @dataclass
+class StoredFinding:
+    """One vulnerability finding persisted into the customer DB.
+
+    Every Engagement emits findings as JSON on disk; the scheduler
+    re-hydrates them into this table so the whole set is queryable
+    across scans / customers / time without parsing files.
+    """
+    finding_id: str
+    customer_id: str
+    queue_id: str
+    job_id: str
+    engagement_id: Optional[str]
+    asset_value: str       # denormalized — which target this was found on
+    template_id: Optional[str]
+    severity: str          # info | low | medium | high | critical
+    title: str
+    description: str
+    tool: Optional[str]
+    cwe: Optional[str] = None
+    cvss: Optional[float] = None
+    references: List[str] = field(default_factory=list)
+    mitre_techniques: List[str] = field(default_factory=list)
+    evidence: Dict[str, Any] = field(default_factory=dict)
+    detected_at_ns: int = 0
+
+
+@dataclass
 class ScanJob:
     """One asset → one Engagement mapping inside a ScanQueue.
 
@@ -1020,6 +1047,92 @@ class AssetsDB:
         finally:
             conn.close()
 
+    # ── Findings ──────────────────────────────────────────────────
+
+    def create_finding(self, finding: StoredFinding) -> None:
+        conn = self._conn_ctx()
+        try:
+            with self._lock:
+                conn.execute(
+                    "INSERT INTO findings "
+                    "(finding_id, customer_id, queue_id, job_id, engagement_id, "
+                    " asset_value, template_id, severity, title, description, "
+                    " tool, cwe, cvss, references_json, mitre_json, "
+                    " evidence_json, detected_at_ns) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        finding.finding_id,
+                        finding.customer_id,
+                        finding.queue_id,
+                        finding.job_id,
+                        finding.engagement_id,
+                        finding.asset_value,
+                        finding.template_id,
+                        finding.severity,
+                        finding.title,
+                        finding.description,
+                        finding.tool,
+                        finding.cwe,
+                        finding.cvss,
+                        json.dumps(finding.references),
+                        json.dumps(finding.mitre_techniques),
+                        json.dumps(finding.evidence),
+                        finding.detected_at_ns,
+                    ),
+                )
+        finally:
+            conn.close()
+
+    def list_findings(
+        self,
+        *,
+        customer_id: Optional[str] = None,
+        queue_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+        severity: Optional[str] = None,
+    ) -> List[StoredFinding]:
+        """Filter by any combination of the columns above. None = wildcard."""
+        where: List[str] = []
+        params: List[Any] = []
+        if customer_id:
+            where.append("customer_id = ?")
+            params.append(customer_id)
+        if queue_id:
+            where.append("queue_id = ?")
+            params.append(queue_id)
+        if job_id:
+            where.append("job_id = ?")
+            params.append(job_id)
+        if severity:
+            where.append("severity = ?")
+            params.append(severity)
+        sql = "SELECT * FROM findings"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY CASE severity "
+        sql += "   WHEN 'critical' THEN 0 WHEN 'high' THEN 1 "
+        sql += "   WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, "
+        sql += "detected_at_ns DESC"
+
+        conn = self._conn_ctx()
+        try:
+            rows = conn.execute(sql, params).fetchall()
+            return [_finding_from_row(r) for r in rows]
+        finally:
+            conn.close()
+
+    def finding_severity_counts(self, queue_id: str) -> Dict[str, int]:
+        conn = self._conn_ctx()
+        try:
+            rows = conn.execute(
+                "SELECT severity, COUNT(*) AS n FROM findings "
+                "WHERE queue_id = ? GROUP BY severity",
+                (queue_id,),
+            ).fetchall()
+            return {row["severity"]: int(row["n"]) for row in rows}
+        finally:
+            conn.close()
+
     def scan_queue_status_counts(self, queue_id: str) -> Dict[str, int]:
         conn = self._conn_ctx()
         try:
@@ -1144,6 +1257,28 @@ def _scan_queue_from_row(row: sqlite3.Row) -> ScanQueue:
         completed_at_ns=_row_get(row, "completed_at_ns"),
         total_jobs=int(row["total_jobs"] or 0),
         tool_bundle=row["tool_bundle"],
+    )
+
+
+def _finding_from_row(row: sqlite3.Row) -> StoredFinding:
+    return StoredFinding(
+        finding_id=row["finding_id"],
+        customer_id=row["customer_id"],
+        queue_id=row["queue_id"],
+        job_id=row["job_id"],
+        engagement_id=_row_get(row, "engagement_id"),
+        asset_value=row["asset_value"],
+        template_id=_row_get(row, "template_id"),
+        severity=row["severity"],
+        title=row["title"],
+        description=_row_get(row, "description") or "",
+        tool=_row_get(row, "tool"),
+        cwe=_row_get(row, "cwe"),
+        cvss=_row_get(row, "cvss"),
+        references=json.loads(_row_get(row, "references_json") or "[]"),
+        mitre_techniques=json.loads(_row_get(row, "mitre_json") or "[]"),
+        evidence=json.loads(_row_get(row, "evidence_json") or "{}"),
+        detected_at_ns=int(_row_get(row, "detected_at_ns") or 0),
     )
 
 
@@ -1288,4 +1423,30 @@ CREATE TABLE IF NOT EXISTS scan_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_scan_jobs_queue ON scan_jobs(queue_id);
 CREATE INDEX IF NOT EXISTS idx_scan_jobs_status ON scan_jobs(status);
+
+CREATE TABLE IF NOT EXISTS findings (
+    finding_id TEXT PRIMARY KEY,
+    customer_id TEXT NOT NULL,
+    queue_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    engagement_id TEXT,
+    asset_value TEXT NOT NULL,
+    template_id TEXT,
+    severity TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    tool TEXT,
+    cwe TEXT,
+    cvss REAL,
+    references_json TEXT,
+    mitre_json TEXT,
+    evidence_json TEXT,
+    detected_at_ns INTEGER NOT NULL,
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id) ON DELETE CASCADE,
+    FOREIGN KEY (queue_id) REFERENCES scan_queues(queue_id) ON DELETE CASCADE,
+    FOREIGN KEY (job_id) REFERENCES scan_jobs(job_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_findings_customer ON findings(customer_id);
+CREATE INDEX IF NOT EXISTS idx_findings_queue ON findings(queue_id);
+CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
 """
