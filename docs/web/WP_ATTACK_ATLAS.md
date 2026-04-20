@@ -31,7 +31,14 @@ L<layer>.<n>  <entry point>
 | v0.6 (file-upload) | 32/93 (34%) | 12/93 (13%) | +3 WATCH, +3 PROBE |
 | v0.7 (POI pair) | 34/93 (37%) | 15/93 (16%) | +2 WATCH, +3 PROBE |
 | v0.8 (CSRF pair) | 35/93 (38%) | 17/93 (18%) | +1 WATCH, +2 PROBE |
-| **v0.9 (SSRF pair)** | **37/93 (40%)** | **19/93 (20%)** | **+2 WATCH, +2 PROBE** |
+| v0.9 (SSRF pair) | 37/93 (40%) | 19/93 (20%) | +2 WATCH, +2 PROBE |
+| **v1.0 (MCP sandbox)** | **(no new rules)** | **(no new rules)** | **Source sandbox + 7 MCP tools** |
+
+Note: v1.0 adds no new scanners — it exposes the existing ones over MCP
+so a Claude Code / Desktop agent can call them directly. The atlas
+parser now counts coverage directly from the per-entry WATCH/PROBE
+fields (auto-computed; see `web_atlas_coverage` MCP tool) rather than
+from the manually-maintained summary numbers above.
 
 ### v0.5 additions (this release)
 
