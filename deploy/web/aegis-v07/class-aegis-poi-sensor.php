@@ -104,12 +104,6 @@ class Amoskys_Aegis_Poi_Sensor {
 		}
 		$this->inspected = true;
 
-		// DEBUG: prove the hook fires.
-		$this->emitter->emit( 'aegis.request.poi_sensor_tick', array(
-			'post_count' => isset( $_POST ) && is_array( $_POST ) ? count( $_POST ) : -1,
-			'get_count'  => isset( $_GET )  && is_array( $_GET )  ? count( $_GET )  : -1,
-		), 'info' );
-
 		// Skip WP-CLI and cron — no HTTP request to scan.
 		if ( ( defined( 'WP_CLI' ) && WP_CLI )
 		  || ( defined( 'DOING_CRON' ) && DOING_CRON ) ) {
@@ -207,7 +201,11 @@ class Amoskys_Aegis_Poi_Sensor {
 				continue;
 			}
 			if ( is_string( $v ) && $v !== '' ) {
-				$this->check_value( $v, $sub_path, $hits );
+				// WordPress's wp_magic_quotes() adds backslashes to $_GET,
+				// $_POST, $_COOKIE, $_REQUEST for BC with PHP<5.4. Strip
+				// them before matching — otherwise O:8:"stdClass" comes
+				// through as O:8:\"stdClass\" and our regex misses.
+				$this->check_value( wp_unslash( $v ), $sub_path, $hits );
 				$scanned++;
 			}
 		}

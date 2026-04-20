@@ -28,7 +28,8 @@ L<layer>.<n>  <entry point>
 |---|---|---|---|
 | v0.4 (baseline)        | 26/93 (28%) | 5/93 (5%)  | — |
 | v0.5 (SQLi pair)       | 29/93 (31%) | 9/93 (10%) | +3 WATCH, +4 PROBE |
-| **v0.6 (file-upload)** | **32/93 (34%)** | **12/93 (13%)** | **+3 WATCH, +3 PROBE** |
+| v0.6 (file-upload) | 32/93 (34%) | 12/93 (13%) | +3 WATCH, +3 PROBE |
+| **v0.7 (POI pair)** | **34/93 (37%)** | **15/93 (16%)** | **+2 WATCH, +3 PROBE** |
 
 ### v0.5 additions (this release)
 
@@ -43,22 +44,22 @@ L<layer>.<n>  <entry point>
 - L6.2 · Direct SQL without prepare (static)
 - L9.6 · unserialize() detection → partial (not in this release, planned next)
 
-### Current coverage (v0.6)
+### Current coverage (v0.7)
 
 | Layer | Entries | Aegis | Argos |
 |---|---|---|---|
 | L0 · Edge/infra          | 9  | 2/9   | 0/9 |
 | L1 · HTTP edge           | 10 | 3/10  | 2/10 |
 | L2 · Core auth           | 9  | 6/9   | 1/9 |
-| L3 · Core surface        | 11 | **8/11** | **2/11** |
-| L4 · Plugins             | 14 | **5/14** | **3/14** |
+| L3 · Core surface        | 11 | 8/11  | 2/11 |
+| L4 · Plugins             | 14 | **6/14** | **4/14** |
 | L5 · Themes              | 6  | 1/6   | 0/6 |
 | L6 · DB/session          | 7  | 4/7   | 2/7 |
-| L7 · Filesystem          | 8  | **2/8**  | **1/8** |
+| L7 · Filesystem          | 8  | 2/8   | 1/8 |
 | L8 · Supply chain        | 6  | 1/6   | 0/6 |
-| L9 · Server exec         | 7  | 0/7   | 0/7 |
+| L9 · Server exec         | 7  | **1/7**  | **1/7** |
 | L10 · Business logic     | 6  | 0/6   | 0/6 |
-| **Total**                | **93** | **32/93 (34%)** | **12/93 (13%)** |
+| **Total**                | **93** | **34/93 (37%)** | **15/93 (16%)** |
 
 Still not bug-bounty grade. Remaining build list: POI, CSRF, SSRF,
 XSS, dangerous-functions, sandbox infra.
@@ -288,10 +289,14 @@ L3.1 REST unauth-routes registered by any plugin
          without capability check.
 
 L3.2 REST PHP Object Injection via serialized body
-  WATCH: aegis.rest.poi_canary
-  PROBE: BLIND
+  WATCH: aegis.rest.poi_canary (v0.4) + aegis.request.poi_payload (v0.7)
+  PROBE: argos.ast.poi (v0.7 — 5 rules)
   CWE:   CWE-502
-  NOTES: v0.4 canary fires; v0.4 block engine blocks on 1 hit.
+  NOTES: v0.4 canary covers the specific bait route; v0.7 extends
+         detection to EVERY $_GET/$_POST/$_COOKIE/$_REQUEST/header/
+         body, matching PHP's serialize() grammar for O: and C:
+         object markers. Strike poi_attempt at threshold 1 → instant
+         block on any hit.
 
 L3.3 admin-ajax.php auth'd action CSRF
   WATCH: aegis.nonce.failed
@@ -338,12 +343,10 @@ L3.8 Serialized option tampering (PHP object injection)
   NOTES: Emit hash of new value; compare distribution.
 
 L3.9 Post meta deserialization POI
-  WATCH: BLIND
-  PROBE: BLIND
+  WATCH: aegis.request.poi_payload (v0.7 — catches the payload
+         delivery regardless of where it lands)
+  PROBE: argos.ast.poi — rule poi.unserialize_on_meta
   CWE:   CWE-502
-  NOTES: Plugins that store object in postmeta and later unserialize
-         untrusted input. AST scanner: unserialize( $_POST / $_REQUEST
-         / get_post_meta ).
 
 L3.10 Shortcode callback injection
   WATCH: BLIND
@@ -425,8 +428,11 @@ L4.10 DOM XSS in plugin-shipped JS
   CWE:   CWE-79
 
 L4.11 PHP Object Injection in plugin unserialize
-  WATCH: aegis.rest.poi_canary (core surface only)
-  PROBE: BLIND (AST: unserialize(request-input))
+  WATCH: aegis.request.poi_payload (v0.7) — full request surface
+  PROBE: argos.ast.poi (v0.7) — unserialize_on_request,
+         maybe_unserialize_on_request, unserialize_on_option,
+         unserialize_on_meta, phar_stream_on_user_path, unserialize_
+         no_allowed_classes
   CWE:   CWE-502
 
 L4.12 Privilege escalation (capability check elsewhere than entry)
@@ -633,8 +639,8 @@ L9.5  include() / require() with request-derived path
   CWE:   CWE-98
 
 L9.6  unserialize() with request-derived payload
-  WATCH: aegis.rest.poi_canary (core surface only)
-  PROBE: BLIND (AST for plugin coverage)
+  WATCH: aegis.request.poi_payload (v0.7 — full surface)
+  PROBE: argos.ast.poi (v0.7 — 6 rules)
   CWE:   CWE-502
 
 L9.7  XXE in XML parsing (libxml_disable_entity_loader off)
