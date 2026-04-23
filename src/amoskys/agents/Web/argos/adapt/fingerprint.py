@@ -322,9 +322,16 @@ def _detect_framework(r: _Response, login_r: Optional[_Response]
             return ("drupal", v.group(1) if v else None, 95, evidence)
         if "joomla" in gen.lower():
             return ("joomla", None, 90, evidence)
+    # WordPress REST API hint via Link header (hardened themes hide the
+    # generator meta tag but wp-json is almost always advertised via
+    # `Link: <https://host/wp-json/>; rel="https://api.w.org/"`)
+    link_hdr = (r.headers.get("link") or "").lower()
+    if "wp-json" in link_hdr or "api.w.org" in link_hdr:
+        evidence.append(f"Link header: {link_hdr[:120]}")
+        return ("wordpress", None, 90, evidence)
     # Inline hints.
-    if "/wp-content/" in body or "wp-json" in body:
-        evidence.append("body:/wp-content/ /wp-json")
+    if "/wp-content/" in body or "/wp-includes/" in body or "wp-json" in body:
+        evidence.append("body: wp-content / wp-includes / wp-json")
         return ("wordpress", None, 85, evidence)
     if login_r and login_r.status == 200 and "wordpress" in (login_r.body or "").lower():
         evidence.append("wp-login.php present")
