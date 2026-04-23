@@ -44,6 +44,7 @@ from amoskys.agents.Web.argos.auth import (
 from amoskys.agents.Web.argos.campaign.events import EventBus, EventKind
 from amoskys.agents.Web.argos.chain import ChainFinding, reason_chains, ExploitChain
 from amoskys.agents.Web.argos.smuggle import detect_smuggling
+from amoskys.agents.Web.argos.campaign.wp_probe import run_wp_probe
 from amoskys.agents.Web.argos.zeroday import (
     HIDDEN_PARAM_WORDLIST, discover_hidden_params,
 )
@@ -325,6 +326,72 @@ class Campaign:
         self.bus.stage_end(stage, f"{len(cands)} candidate(s); "
                             f"{sum(1 for c in cands if c.confirmed)} confirmed")
 
+    # ── WordPress active probe (framework=wordpress only) --------
+
+    def _wp_active_probe(self, profile: ArchitectureProfile):
+        """Real WP-specific probes: core version, user enum, plugin
+        enum + CVE match, xmlrpc, REST namespaces, dev-leak files."""
+        if self.mode == CampaignMode.REPORT:
+            return
+        fw = (getattr(profile, "framework", None) or "").lower()
+        if "wordpress" not in fw:
+            return
+        if self.http_get is None:
+            self.bus.log("wp_probe", "no http_get — skipping")
+            return
+
+        stage = "wp_probe"
+        self.bus.stage_start(
+            stage,
+            "WordPress active probes: core/users/plugins/xmlrpc/REST/dev-leaks"
+        )
+
+        def _progress(name, done, total):
+            self.bus.progress(stage, done, total, message=f"probing: {name}")
+
+        try:
+            result = run_wp_probe(self.target_url, self.http_get, progress=_progress)
+        except Exception as exc:  # noqa: BLE001
+            self.bus.error(stage, f"wp_probe crashed: {exc}")
+            self._report.errors.append(f"wp_probe: {exc}")
+            return
+
+        # Summary evidence
+        if result.core_version:
+            self.bus.evidence(stage, f"WP core version: {result.core_version}")
+        self.bus.evidence(
+            stage,
+            f"plugins detected: {len(result.plugins)} · "
+            f"themes: {len(result.themes)} · "
+            f"users enumerated: {len(result.users)} · "
+            f"xmlrpc_open: {result.xmlrpc_open} · "
+            f"rest_namespaces: {len(result.rest_namespaces)} · "
+            f"dev_leaks: {len(result.dev_leaks)}"
+        )
+
+        # Emit each plugin detection as an info event so operator sees inventory
+        for p in result.plugins[:10]:
+            self.bus.evidence(
+                stage,
+                f"plugin: {p.get('slug')} version={p.get('version') or '?'}"
+            )
+
+        # Emit findings into the bus + stash on report
+        for f in result.findings:
+            self.bus.finding(
+                stage,
+                f.get("kind", "info_leak"),
+                f.get("location", self.target_url),
+                f.get("severity", "medium"),
+                f.get("evidence", ""),
+                metadata=f.get("metadata", {}),
+            )
+
+        self.bus.stage_end(
+            stage,
+            f"{len(result.findings)} finding(s) from active WP probes"
+        )
+
     # ── Hidden-param fuzzer (CONFIRM / EXPLOIT) ------------------
 
     def _hidden_params(self):
@@ -494,6 +561,7 @@ class Campaign:
             profile = self._fingerprint()
             strategy = self._strategy(profile)
             self._origin_bypass(strategy)
+            self._wp_active_probe(profile)
             self._smuggle()
             self._hidden_params()
             self._auth_probe()
