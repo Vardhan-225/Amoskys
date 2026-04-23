@@ -530,6 +530,7 @@ class Campaign:
                 location=d.get("location", evt.message),
                 severity=d.get("severity", "medium"),
                 evidence=d.get("evidence", evt.message),
+                metadata=dict(d.get("metadata") or {}),
             ))
 
         if not findings:

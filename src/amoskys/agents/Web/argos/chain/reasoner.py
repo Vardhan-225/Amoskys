@@ -386,6 +386,237 @@ def _rule_cdn_bypass_plus_weak_origin(findings, profile):
     )
 
 
+def _rule_cve_match_is_its_own_chain(findings, profile):
+    """Every detected CVE is ITSELF a chain — it has a discoverable
+    exploitation path, known severity, and concrete impact. Earlier
+    versions of the reasoner required two or more findings to compose
+    a chain, but a cve_match finding already carries CVE metadata
+    (cve_id, component, version) and a published exploit narrative."""
+    cves = _find(findings, "cve_match")
+    if not cves:
+        return None
+    # Group by CVE id so duplicate matches don't explode into N chains
+    by_id: Dict[str, ChainFinding] = {}
+    for f in cves:
+        cve = (f.metadata or {}).get("cve") or "UNKNOWN-CVE"
+        if cve not in by_id:
+            by_id[cve] = f
+    # Emit one chain per unique CVE
+    chains: List[ExploitChain] = []
+    for cve_id, f in by_id.items():
+        sev = f.severity or "medium"
+        comp = (f.metadata or {}).get("component") or "unknown"
+        ver = (f.metadata or {}).get("version") or "?"
+        cvss_map = {"critical": 9.5, "high": 8.0, "medium": 5.5, "low": 3.5}
+        cvss = cvss_map.get(sev, 5.5)
+        chains.append(ExploitChain(
+            name=f"{cve_id} applies to {comp} {ver}",
+            severity=sev, cvss_estimate=cvss,
+            links=[f],
+            narrative=(
+                f"1. Argos detected {comp} version {ver} via readme.txt / "
+                f"meta-generator / style.css headers.\n"
+                f"2. {cve_id} publicly affects {(f.metadata or {}).get('affected', '')} "
+                f"— operator's site matches that range.\n"
+                f"3. {f.evidence}\n"
+                f"4. Public exploit paths for {cve_id} are documented on "
+                f"Wordfence, Patchstack, and NVD. A prepared attacker reaches "
+                f"exploitation within minutes of Argos's finding."
+            ),
+            business_impact=(
+                f"{f.evidence.split('—')[-1].strip() if '—' in f.evidence else f.evidence}. "
+                f"Remediation: update {comp} beyond {ver}."
+            ),
+            evidence_trail=[f.evidence, f"version detected: {ver}"],
+            confidence=85,
+        ))
+    # Return the single highest-severity chain; others will be produced
+    # on subsequent rule passes if the reasoner loop permits. For the
+    # current one-pass-per-rule loop we pick a deterministic best-of.
+    chains.sort(key=lambda c: (SEV_LEVELS.get(c.severity, 2), c.cvss_estimate), reverse=True)
+    return chains[0]
+
+
+def _rule_cve_match_all(findings, profile):
+    """Second pass so we catch every CVE, not just the top one. This
+    is a hack around the single-return rule contract — returning a
+    synthetic 'summary' chain when >1 distinct CVE exists."""
+    cves = _find(findings, "cve_match")
+    ids = set()
+    for f in cves:
+        cid = (f.metadata or {}).get("cve")
+        if cid:
+            ids.add(cid)
+    if len(ids) < 2:
+        return None
+    # Compose a portfolio summary chain
+    worst_sev = "low"
+    for f in cves:
+        if SEV_LEVELS.get(f.severity, 0) > SEV_LEVELS.get(worst_sev, 0):
+            worst_sev = f.severity
+    return ExploitChain(
+        name=f"{len(ids)} CVEs applicable — portfolio risk",
+        severity=worst_sev,
+        cvss_estimate=SEV_CVSS.get(worst_sev, 5.5),
+        links=list(cves),
+        narrative=(
+            f"Argos matched {len(ids)} distinct published CVEs against detected "
+            f"versions on this target:\n"
+            + "\n".join(
+                f"  • {(f.metadata or {}).get('cve', '?')}  "
+                f"(severity: {f.severity}, component: {(f.metadata or {}).get('component', '?')})"
+                for f in cves[:8]
+            )
+            + "\n\nEach of these has a public exploit path. The more CVEs "
+              "stack up on one target, the more likely an opportunistic "
+              "attacker already has the runbook."
+        ),
+        business_impact=(
+            "Portfolio-level exposure — update the affected components to "
+            "close all matched CVEs at once rather than triaging each."
+        ),
+        evidence_trail=[f.evidence for f in cves[:5]],
+        confidence=80,
+    )
+
+
+def _rule_user_enum_plus_xmlrpc(findings, profile):
+    """Classic WordPress credential-spray chain: enumerated usernames
+    + open xmlrpc.php = brute-force at amplified scale. xmlrpc's
+    system.multicall lets an attacker try 1000 passwords per HTTP
+    request — even a 1000-password wordlist fits in ONE request."""
+    info_leaks = _find(findings, "info_leak")
+    user_enum = [f for f in info_leaks if "user" in (f.location or "").lower()
+                 or "user" in (f.evidence or "").lower()]
+    xmlrpc = [f for f in info_leaks if "xmlrpc" in (f.location or "").lower()]
+    if not (user_enum and xmlrpc):
+        return None
+    return ExploitChain(
+        name="User enumeration + xmlrpc = credential spray at 1000x",
+        severity="high", cvss_estimate=8.1,
+        links=[user_enum[0], xmlrpc[0]],
+        narrative=(
+            "1. REST API public user endpoint discloses site usernames "
+            "(Argos harvested the list in §5).\n"
+            "2. xmlrpc.php is reachable and implements system.multicall — "
+            "lets an attacker batch 1,000+ login attempts per single HTTP "
+            "request.\n"
+            "3. Attacker cycles known usernames × common-passwords wordlist "
+            "via multicall; at 1 req/sec they try 1M passwords in 17 minutes.\n"
+            "4. Successful login → admin dashboard → plugin upload → RCE."
+        ),
+        business_impact=(
+            "Brute-force at scale that tripwire-style rate limits usually miss "
+            "because all attempts arrive in one POST. Any weak password on "
+            "ANY enumerated user is game over."
+        ),
+        evidence_trail=[user_enum[0].evidence, xmlrpc[0].evidence],
+        confidence=88,
+    )
+
+
+def _rule_user_enum_plus_cve(findings, profile):
+    """User enumeration + any CVE targeting account-level exploitation
+    (auth bypass, priv esc, password reset) becomes a targeted attack
+    with high success probability."""
+    info_leaks = _find(findings, "info_leak")
+    user_enum = [f for f in info_leaks if "user" in (f.location or "").lower()]
+    cves = _find(findings, "cve_match")
+    # Only fire for CVEs that mention auth / password / reset / priv esc
+    auth_cves = [f for f in cves if any(kw in (f.evidence or "").lower()
+                 for kw in ("auth", "password", "reset", "priv", "user", "takeover"))]
+    if not (user_enum and auth_cves):
+        return None
+    return ExploitChain(
+        name="Targeted exploitation: username list + auth-affecting CVE",
+        severity="critical", cvss_estimate=9.2,
+        links=[user_enum[0]] + auth_cves[:1],
+        narrative=(
+            f"1. Argos harvested specific usernames via the public REST API.\n"
+            f"2. {(auth_cves[0].metadata or {}).get('cve','?')} affects the "
+            f"detected version and impacts authentication / authorization.\n"
+            f"3. Attacker combines the username list + CVE's exploit path to "
+            f"compromise SPECIFIC known accounts, not random brute-force.\n"
+            f"4. Each successful compromise scales to admin via vertical "
+            f"privilege escalation."
+        ),
+        business_impact=(
+            "Known targets × known exploit = near-certain compromise. This is "
+            "not a statistical attack; it's a named-hit campaign."
+        ),
+        evidence_trail=[user_enum[0].evidence, auth_cves[0].evidence],
+        confidence=85,
+    )
+
+
+def _rule_exposed_config_leak(findings, profile):
+    """An exposed .env, .git/HEAD, wp-config.php.bak, or debug.log is
+    game-over on its own. No chain partner required — the artifact
+    IS the compromise."""
+    leaks = _find(findings, "exposed_config")
+    if not leaks:
+        return None
+    worst = sorted(leaks, key=lambda f: SEV_LEVELS.get(f.severity, 0), reverse=True)[0]
+    return ExploitChain(
+        name="Development artifact exposure → instant compromise",
+        severity="critical", cvss_estimate=9.8,
+        links=[worst],
+        narrative=(
+            f"1. Argos fetched {worst.location} directly over HTTPS and "
+            f"received a 200 OK with content.\n"
+            f"2. Evidence: {worst.evidence[:200]}\n"
+            f"3. If the exposed file is .env / wp-config.php.bak — it contains "
+            f"DB credentials, AUTH_KEY salts, and service API keys.\n"
+            f"4. If .git/HEAD — attacker runs `git-dumper` to reconstruct the "
+            f"full source tree, including uncommitted secrets.\n"
+            f"5. If debug.log — it often contains recent stack traces that "
+            f"reveal internal paths, user emails, and session tokens."
+        ),
+        business_impact=(
+            "Full application compromise without exploiting any vulnerability — "
+            "the target simply published the keys to the kingdom. Typical "
+            "remediation: rotate every credential, add the file to nginx deny "
+            "rules, scrub the webroot."
+        ),
+        evidence_trail=[worst.evidence],
+        confidence=95,
+    )
+
+
+def _rule_rest_namespace_authz_audit(findings, profile):
+    """Third-party REST namespaces registered on a WP site are
+    potential authz holes. Every namespace registered by a plugin
+    theoretically exposes routes that may be missing a permission
+    callback."""
+    ra = _find(findings, "rest_authz")
+    if not ra:
+        return None
+    return ExploitChain(
+        name="Third-party REST namespaces — authz audit required",
+        severity="medium", cvss_estimate=6.5,
+        links=[ra[0]],
+        narrative=(
+            "1. Argos enumerated registered REST namespaces at /wp-json/ "
+            "and identified third-party (non-core) routes.\n"
+            "2. Each third-party namespace potentially exposes routes without "
+            "a permission_callback — WordPress core defaults to public access "
+            "when the callback is missing.\n"
+            "3. Argos recommends auditing each route for:\n"
+            "   • permission_callback set (not omitted, not '__return_true')\n"
+            "   • capability checks matching the action's sensitivity\n"
+            "   • nonce verification for state-changing operations\n"
+            "4. Public tooling (wp-json-scanner, WPScan) automates this audit."
+        ),
+        business_impact=(
+            "Unauthed REST routes are the single largest bug-bounty class on "
+            "WordPress: stored XSS, option writes, user creates, even RCE via "
+            "file_put_contents through misconfigured routes."
+        ),
+        evidence_trail=[ra[0].evidence],
+        confidence=75,
+    )
+
+
 def _rule_poi_plus_rce_gadget(findings, profile):
     poi = _find(findings, "poi")
     rce = _find(findings, "rce")
@@ -418,6 +649,13 @@ CHAIN_RULES: List[Tuple[str, Callable, int]] = [
     ("smuggling_plus_waf",       _rule_smuggling_plus_waf,       85),
     ("cdn_bypass_plus_weak",     _rule_cdn_bypass_plus_weak_origin, 80),
     ("poi_plus_rce_gadget",      _rule_poi_plus_rce_gadget,      65),
+    # New in v2.5 — cover findings emitted by wp_probe
+    ("cve_match_is_chain",       _rule_cve_match_is_its_own_chain,   85),
+    ("cve_portfolio",            _rule_cve_match_all,                80),
+    ("user_enum_plus_xmlrpc",    _rule_user_enum_plus_xmlrpc,        88),
+    ("user_enum_plus_cve",       _rule_user_enum_plus_cve,           85),
+    ("exposed_config_leak",      _rule_exposed_config_leak,          95),
+    ("rest_ns_authz_audit",      _rule_rest_namespace_authz_audit,   75),
 ]
 
 
