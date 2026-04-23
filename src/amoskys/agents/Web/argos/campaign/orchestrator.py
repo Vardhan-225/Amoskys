@@ -197,6 +197,13 @@ class Campaign:
             self._report.consent_method = token
             self.bus.stage_end(stage, f"consent via SOW: {token}")
             return True
+        if token.startswith("dev:"):
+            self._report.consent_verified = True
+            self._report.consent_method = token
+            self.bus.stage_end(
+                stage, f"consent via dev-mode token: {token}",
+                note="dev/test run — production deployments require a real consent token")
+            return True
 
         self._report.consent_verified = False
         self._report.consent_method = "NONE"

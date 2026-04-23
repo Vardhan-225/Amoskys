@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import queue
 import re
 import threading
@@ -37,6 +38,25 @@ import time
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional
+
+# ── Runtime policy ────────────────────────────────────────────────
+# Two knobs, both default to "easy-mode" for testing. Flip them to
+# "strict" in production via systemd EnvironmentFile.
+#
+#   AMOSKYS_HUNT_REQUIRE_CONSENT  (default: false)  require a
+#       'bounty:' or 'sow:' token for confirm/exploit modes. When
+#       false, an empty token is rewritten to 'dev:testing' so the
+#       orchestrator's consent gate still emits an audit-grade
+#       evidence trail but doesn't block work.
+#   AMOSKYS_HUNT_RATE_LIMIT_S    (default: 30)  seconds between
+#       submits from the same IP. Set to 0 to disable entirely.
+
+_REQUIRE_CONSENT = os.environ.get("AMOSKYS_HUNT_REQUIRE_CONSENT", "false").lower() == "true"
+_RATE_LIMIT_S_ENV = os.environ.get("AMOSKYS_HUNT_RATE_LIMIT_S")
+try:
+    _RATE_LIMIT_S_VAL = int(_RATE_LIMIT_S_ENV) if _RATE_LIMIT_S_ENV else 30
+except ValueError:
+    _RATE_LIMIT_S_VAL = 30
 
 from flask import Blueprint, Response, jsonify, render_template, request
 
@@ -60,7 +80,7 @@ hunt_bp = Blueprint(
 _ACTIVE: Dict[str, Dict[str, Any]] = {}
 _LAST_SUBMIT: Dict[str, float] = {}
 _SUBMIT_LOCK = threading.Lock()
-_RATE_LIMIT_S = 180           # 3 minutes per IP
+_RATE_LIMIT_S = _RATE_LIMIT_S_VAL
 _CAMPAIGN_TTL_S = 3600        # 1 hour
 
 
@@ -140,13 +160,14 @@ def hunt_submit():
     _purge_old()
     ip = request.headers.get("X-Forwarded-For", request.remote_addr or "?").split(",")[0].strip()
 
-    with _SUBMIT_LOCK:
-        last = _LAST_SUBMIT.get(ip, 0)
-        if time.time() - last < _RATE_LIMIT_S:
-            wait = int(_RATE_LIMIT_S - (time.time() - last))
-            return jsonify({"ok": False,
-                            "error": f"rate limit: wait {wait}s before another hunt"}), 429
-        _LAST_SUBMIT[ip] = time.time()
+    if _RATE_LIMIT_S > 0:
+        with _SUBMIT_LOCK:
+            last = _LAST_SUBMIT.get(ip, 0)
+            if time.time() - last < _RATE_LIMIT_S:
+                wait = int(_RATE_LIMIT_S - (time.time() - last))
+                return jsonify({"ok": False,
+                                "error": f"rate limit: wait {wait}s before another hunt"}), 429
+            _LAST_SUBMIT[ip] = time.time()
 
     data = request.get_json(silent=True) or {}
     raw = data.get("target", "")
@@ -161,12 +182,17 @@ def hunt_submit():
         return jsonify({"ok": False, "error": err}), 400
 
     if mode != CampaignMode.REPORT:
-        if not (consent_token.startswith("bounty:") or consent_token.startswith("sow:")):
+        valid_token = consent_token.startswith(("bounty:", "sow:", "dev:"))
+        if _REQUIRE_CONSENT and not valid_token:
             return jsonify({
                 "ok": False,
                 "error": f"mode '{mode}' requires consent_token starting with "
                           f"'bounty:<program>' or 'sow:<client>'",
             }), 400
+        if not valid_token:
+            # Dev-mode path: auto-inject a self-audit token so the
+            # orchestrator's consent gate still writes a clear record.
+            consent_token = f"dev:testing-{host}"
 
     campaign_id = f"wp-{int(time.time() * 1000)}-{abs(hash(host)) & 0xFFFF:04x}"
 

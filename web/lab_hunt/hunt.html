@@ -353,11 +353,12 @@ a { color: var(--accent); text-decoration: none; }
     </div>
 
     <div id="consent-row" style="display:none;">
-      <label for="consent">Consent token</label>
-      <input id="consent" type="text" placeholder="bounty:program-name  or  sow:client-name">
+      <label for="consent">Consent token <span style="color:var(--muted);font-size:0.7rem;text-transform:none;letter-spacing:0;">(optional during preview)</span></label>
+      <input id="consent" type="text" placeholder="leave blank for preview — bounty:program or sow:client in prod">
       <div style="color: var(--muted); font-size: 0.68rem; margin-top: 0.3rem;">
-        For bug-bounty: <code style="color:var(--accent2);">bounty:&lt;program&gt;</code>.
-        For signed engagements: <code style="color:var(--accent2);">sow:&lt;client&gt;</code>.
+        Preview build: leave blank to run freely. In production this field
+        enforces scope via <code style="color:var(--accent2);">bounty:&lt;program&gt;</code>
+        or <code style="color:var(--accent2);">sow:&lt;client&gt;</code>.
       </div>
     </div>
 
