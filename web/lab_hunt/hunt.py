@@ -64,6 +64,13 @@ from amoskys.agents.Web.argos.campaign import (
     Campaign, CampaignMode, EventBus, render_campaign_html,
 )
 
+try:
+    from amoskys.agents.Web.argos.campaign import render_campaign_pdf
+    _PDF_AVAILABLE = True
+except Exception:  # noqa: BLE001
+    render_campaign_pdf = None   # type: ignore
+    _PDF_AVAILABLE = False
+
 logger = logging.getLogger("amoskys.lab.hunt")
 
 
@@ -339,4 +346,33 @@ def hunt_report_json(campaign_id: str):
         json.dumps(meta["report"], indent=2, default=str),
         mimetype="application/json",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@hunt_bp.route("/<campaign_id>/report.pdf")
+def hunt_report_pdf(campaign_id: str):
+    """Customer-grade PDF — WeasyPrint-rendered, A4, proper pagination."""
+    _purge_old()
+    meta = _ACTIVE.get(campaign_id)
+    if meta is None or meta.get("report") is None:
+        return jsonify({"ok": False, "error": "campaign not found or still running"}), 404
+    if not _PDF_AVAILABLE or render_campaign_pdf is None:
+        return jsonify({
+            "ok": False,
+            "error": ("PDF rendering unavailable on this host (WeasyPrint "
+                      "not installed). Use /report.html and Save-as-PDF."),
+        }), 503
+    try:
+        pdf_bytes = render_campaign_pdf(meta["report"])
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("PDF render failed")
+        return jsonify({"ok": False, "error": f"PDF render failed: {exc}"}), 500
+    fname = f"argos-hunt-{meta['host']}-{campaign_id}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{fname}"',
+            "X-Content-Type-Options": "nosniff",
+        },
     )

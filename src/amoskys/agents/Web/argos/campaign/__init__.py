@@ -49,9 +49,14 @@ from amoskys.agents.Web.argos.campaign.orchestrator import (
 from amoskys.agents.Web.argos.campaign.report_html import (
     render_campaign_html,
 )
+from amoskys.agents.Web.argos.campaign.report_pdf import (
+    render_campaign_html_for_pdf,
+    render_campaign_pdf,
+)
 
 __all__ = [
     "CampaignEvent", "EventKind", "EventBus", "null_bus",
     "Campaign", "CampaignMode", "CampaignReport", "run_campaign",
     "render_campaign_html",
+    "render_campaign_html_for_pdf", "render_campaign_pdf",
 ]

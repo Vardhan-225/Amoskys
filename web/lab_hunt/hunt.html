@@ -409,8 +409,9 @@ a { color: var(--accent); text-decoration: none; }
       <h3 style="margin-top:1.25rem;">Exploit chains</h3>
       <div id="report-chains"></div>
       <div class="dl-row">
-        <a class="dl-btn" id="dl-html" href="#">Download HTML report</a>
-        <a class="dl-btn secondary" id="dl-json" href="#">Download JSON</a>
+        <a class="dl-btn" id="dl-pdf" href="#">📄 Download PDF Report</a>
+        <a class="dl-btn secondary" id="dl-html" href="#">HTML</a>
+        <a class="dl-btn secondary" id="dl-json" href="#">JSON</a>
       </div>
     </div>
   </section>
@@ -433,6 +434,7 @@ a { color: var(--accent); text-decoration: none; }
   const reportSum = $('report-summary');
   const reportProf= $('report-profile');
   const reportChns= $('report-chains');
+  const dlPdf     = $('dl-pdf');
   const dlHtml    = $('dl-html');
   const dlJson    = $('dl-json');
 
@@ -524,6 +526,7 @@ a { color: var(--accent); text-decoration: none; }
       `).join('');
     }
 
+    dlPdf.href  = `/web/hunt/${currentId}/report.pdf`;
     dlHtml.href = `/web/hunt/${currentId}/report.html`;
     dlJson.href = `/web/hunt/${currentId}/report.json`;
   }
