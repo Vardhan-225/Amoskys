@@ -21,8 +21,21 @@ from amoskys.agents.Web.argos.chain.reasoner import (
     ChainReasoner,
     reason_chains,
 )
+from amoskys.agents.Web.argos.chain.graph import (
+    AttackState,
+    AttackEdge,
+    AttackGraph,
+    build_wordpress_graph,
+)
+from amoskys.agents.Web.argos.chain.graph_reasoner import (
+    ExploitPath,
+    GraphReport,
+    reason_graph,
+)
 
 __all__ = [
     "ChainFinding", "ChainReport", "ExploitChain",
     "ChainReasoner", "reason_chains",
+    "AttackState", "AttackEdge", "AttackGraph", "build_wordpress_graph",
+    "ExploitPath", "GraphReport", "reason_graph",
 ]

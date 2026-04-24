@@ -758,6 +758,25 @@ def _strategy(report: Dict[str, Any]) -> str:
 def _chains_section(report: Dict[str, Any]) -> str:
     target = report.get("target_url") or "—"
     chains = report.get("chains") or []
+    graph = report.get("graph") or {}
+
+    # Graph-reasoner metadata strip
+    meta_html = ""
+    if graph:
+        defenses = graph.get("defenses_detected") or []
+        meta_html = f"""
+        <div class="kv-grid" style="margin-bottom:4mm;">
+          <div class="kv-cell"><div class="k">Goals reached</div>
+            <div class="v" style="font-size:9pt;">{len(graph.get('goals_reached') or [])} of {len([g for g in ['account_admin','code_execution','database_write','file_write','persistence','data_exfil','full_compromise']])}</div></div>
+          <div class="kv-cell"><div class="k">Graph edges active</div>
+            <div class="v">{graph.get('activated_edges',0)} / {graph.get('total_edges',0)}</div></div>
+          <div class="kv-cell"><div class="k">Defenses detected</div>
+            <div class="v" style="font-size:9pt;">{_esc(', '.join(defenses) or 'none')}</div></div>
+          <div class="kv-cell"><div class="k">Near-miss paths</div>
+            <div class="v">{len(graph.get('near_misses') or [])}</div></div>
+        </div>
+        """
+
     if not chains:
         return f"""
         <section>
@@ -767,6 +786,7 @@ def _chains_section(report: Dict[str, Any]) -> str:
           Chains require multiple compatible findings to compose; if findings
           are below critical mass, this section will be empty even when the
           target has weaknesses.</p>
+          {meta_html}
         </section>
         """
 
@@ -775,30 +795,127 @@ def _chains_section(report: Dict[str, Any]) -> str:
         sev = (c.get("severity") or "info").lower()
         evidence_items = "".join(f"<li>{_esc(e)}</li>"
                                   for e in (c.get("evidence_trail") or []))
+        # Graph-path extras
+        ev_score    = c.get("expected_value")
+        prob        = c.get("success_prob")
+        detect      = c.get("detectability")
+        cost        = c.get("cost_minutes")
+        mitre       = c.get("mitre_chain") or []
+        defense_n   = c.get("defense_notes") or []
+        assumptions = c.get("assumptions") or []
+        replay_cmds = c.get("replay_commands") or []
+
+        econ_html = ""
+        if ev_score is not None and prob is not None:
+            econ_html = f"""
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:2mm; margin:2mm 0;">
+              <div class="kv-cell" style="padding:2mm;"><div class="k">Expected value</div><div class="v">{ev_score:.2f}</div></div>
+              <div class="kv-cell" style="padding:2mm;"><div class="k">Success prob</div><div class="v">{prob*100:.0f}%</div></div>
+              <div class="kv-cell" style="padding:2mm;"><div class="k">Stealth</div><div class="v">{(1-detect)*100:.0f}%</div></div>
+              <div class="kv-cell" style="padding:2mm;"><div class="k">Cost</div><div class="v">{cost} min</div></div>
+            </div>
+            """
+
+        mitre_html = ""
+        if mitre:
+            mitre_html = f"""
+            <div style="margin-top:2mm; font-size:8.5pt; color:#4b5563;">
+              <strong>MITRE ATT&amp;CK:</strong> {" &nbsp;→&nbsp; ".join(_esc(m) for m in mitre)}
+            </div>
+            """
+
+        assumptions_html = ""
+        if assumptions:
+            lis = "".join(f"<li>{_esc(a)}</li>" for a in assumptions)
+            assumptions_html = f"""
+            <div class="evidence" style="margin-top:2mm;">
+              <strong>Assumptions:</strong><ul>{lis}</ul>
+            </div>
+            """
+
+        defense_html = ""
+        if defense_n:
+            lis = "".join(f"<li>{_esc(d)}</li>" for d in defense_n)
+            defense_html = f"""
+            <div class="evidence" style="margin-top:2mm;">
+              <strong>Defender friction:</strong><ul>{lis}</ul>
+            </div>
+            """
+
+        replay_html = ""
+        if replay_cmds:
+            lis = "".join(
+                f'<li><code style="font-size:8pt;">{_esc(r)}</code></li>'
+                for r in replay_cmds
+            )
+            replay_html = f"""
+            <div class="evidence" style="margin-top:2mm;">
+              <strong>Replay commands:</strong><ul>{lis}</ul>
+            </div>
+            """
+
         cards.append(f"""
         <div class="chain {_esc(sev)}">
           <div class="head">
-            <div><span class="muted">Chain #{i:02d}</span> <span class="name">{_esc(c.get("name"))}</span></div>
+            <div><span class="muted">Path #{i:02d}</span> <span class="name">{_esc(c.get("name"))}</span></div>
             <div class="cvss">CVSS {float(c.get('cvss_estimate') or 0):.1f}</div>
           </div>
           <div class="meta">
             {_sev_pill(sev)}
             <span style="margin-left:4mm;">confidence {_esc(c.get("confidence"))}%</span>
           </div>
+          {econ_html}
+          {mitre_html}
           <div class="narrative">{_esc(c.get('narrative'))}</div>
           <div class="impact"><strong>Business impact:</strong> {_esc(c.get('business_impact'))}</div>
+          {defense_html}
+          {assumptions_html}
+          {replay_html}
           <div class="evidence"><strong>Evidence trail:</strong><ul>{evidence_items}</ul></div>
         </div>
         """)
+
+    # Near-miss section
+    near_html = ""
+    nms = graph.get("near_misses") or []
+    if nms:
+        near_cards = []
+        for nm in nms:
+            miss = nm.get("missing_for_completion") or []
+            near_cards.append(f"""
+            <div class="chain" style="border-left-color:#6b7280; background:#f9fafb;">
+              <div class="head">
+                <span class="name">{_esc(nm.get("name",""))}</span>
+              </div>
+              <div class="meta">
+                <span class="pill" style="background:#6b7280;color:white;">NEAR-MISS</span>
+                <span style="margin-left:4mm;">would unlock goal: <code>{_esc(nm.get('goal_state'))}</code></span>
+              </div>
+              <div class="narrative" style="font-size:9pt;">{_esc(nm.get('narrative','')[:400])}</div>
+              <div class="impact"><strong>What's missing:</strong>
+                <code>{_esc("|".join(miss))}</code> — if one of these
+                is detected in a future scan this chain activates.</div>
+            </div>
+            """)
+        near_html = f"""
+        <h2 class="sub" style="margin-top:6mm;">Near-miss paths (one finding away)</h2>
+        <p class="muted">These paths would activate if the listed finding kind
+        surfaces. Real attackers remember these; you should too.</p>
+        {"".join(near_cards)}
+        """
 
     return f"""
     <section>
       <div class="running" data-target="{_esc(target)}"></div>
       <h1 class="section-title"><span class="num">§4</span>Exploit Chains</h1>
-      <p>Chains are compositions of individual findings that together achieve
-      impact far greater than any single finding. Each chain below is ranked
-      by severity, then CVSS estimate, then confidence in the composition.</p>
+      <p>Chains are attack paths through a state graph: each transition is a
+      transition the attacker can make given a discovered finding. For every
+      path Argos computes <strong>expected value = success probability ×
+      impact × stealth</strong>, with defense-aware pruning applied when a
+      detected WAF or sensor family is known to block a given edge.</p>
+      {meta_html}
       {"".join(cards)}
+      {near_html}
     </section>
     """
 

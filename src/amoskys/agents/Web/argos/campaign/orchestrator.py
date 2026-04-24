@@ -42,7 +42,10 @@ from amoskys.agents.Web.argos.auth import (
     scan_jwt, bypass_case_variation,
 )
 from amoskys.agents.Web.argos.campaign.events import EventBus, EventKind
-from amoskys.agents.Web.argos.chain import ChainFinding, reason_chains, ExploitChain
+from amoskys.agents.Web.argos.chain import (
+    ChainFinding, reason_chains, ExploitChain,
+    reason_graph,
+)
 from amoskys.agents.Web.argos.smuggle import detect_smuggling
 from amoskys.agents.Web.argos.campaign.wp_probe import run_wp_probe
 from amoskys.agents.Web.argos.zeroday import (
@@ -79,6 +82,7 @@ class CampaignReport:
     errors: List[str] = field(default_factory=list)
     consent_verified: bool = False
     consent_method: str = "none"
+    graph: Optional[Dict[str, Any]] = None   # graph reasoner extras
 
     def to_dict(self):
         return {
@@ -99,6 +103,7 @@ class CampaignReport:
             "errors":            list(self.errors),
             "consent_verified":  self.consent_verified,
             "consent_method":    self.consent_method,
+            "graph":             self.graph,
         }
 
 
@@ -537,18 +542,87 @@ class Campaign:
             self.bus.stage_end(stage, "no findings to chain")
             return []
 
-        report = reason_chains(findings, profile=profile)
-        for ch in report.chains:
+        # ── Legacy pattern reasoner (17 hand-coded rules) ──────
+        pattern_rep = reason_chains(findings, profile=profile)
+
+        # ── Graph reasoner (attack-graph search + scoring) ─────
+        try:
+            graph_rep = reason_graph(findings, profile=profile)
+        except Exception as exc:  # noqa: BLE001
+            self.bus.error(stage, f"graph_reasoner failed: {exc}")
+            graph_rep = None
+
+        # Merge: graph paths first (more principled), then legacy
+        # pattern chains for any coverage the graph missed.
+        merged: List[Any] = []
+        seen_names: set = set()
+
+        if graph_rep is not None:
+            for n in graph_rep.notes:
+                self.bus.log(stage, f"graph: {n}")
+            if graph_rep.defenses_detected:
+                self.bus.decision(
+                    stage,
+                    f"graph: defenses detected = {graph_rep.defenses_detected}; "
+                    f"{len(graph_rep.pruned_edges)} edges dampened",
+                )
+            for p in graph_rep.paths:
+                merged.append(p)
+                seen_names.add(p.name)
+                self.bus.chain(p.name, p.severity, p.cvss_estimate, p.narrative)
+            # Surface near-miss paths as a special event type
+            for nm in graph_rep.near_misses:
+                self.bus.log(
+                    stage,
+                    f"near-miss: {nm.name}  (impact={nm.impact:.1f}, "
+                    f"needs: {nm.missing_for_completion})",
+                )
+
+        for ch in pattern_rep.chains:
+            # Skip if similar-enough name already covered by graph
+            if any(ch.name.split()[0] in sn for sn in seen_names):
+                continue
+            merged.append(ch)
             self.bus.chain(ch.name, ch.severity, ch.cvss_estimate, ch.narrative)
-        self._report.chains = [c.to_dict() for c in report.chains]
+
+        # Persist
+        chain_dicts = [c.to_dict() for c in merged]
+        self._report.chains = chain_dicts
         self._report.findings = [f.to_dict() for f in findings]
-        self._report.max_severity = report.max_severity
-        for note in report.notes:
+
+        # Max severity — from the merged set
+        sev_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
+        max_sev = "low"
+        for c in merged:
+            s = getattr(c, "severity", None) or (c.get("severity") if isinstance(c, dict) else None)
+            if sev_rank.get(s, 0) > sev_rank.get(max_sev, 0):
+                max_sev = s
+        self._report.max_severity = max_sev
+
+        # Stash graph metadata for the report renderer
+        if graph_rep is not None:
+            self._report_extra = {
+                "graph": {
+                    "near_misses":       [nm.to_dict() for nm in graph_rep.near_misses],
+                    "defenses_detected": list(graph_rep.defenses_detected),
+                    "pruned_edges":      list(graph_rep.pruned_edges),
+                    "activated_edges":   graph_rep.activated_edges,
+                    "total_edges":       graph_rep.total_edges,
+                    "goals_reached":     sorted(graph_rep.goals_reached),
+                },
+            }
+
+        for note in pattern_rep.notes:
             self.bus.log(stage, note)
-        self.bus.stage_end(stage,
-            f"{len(report.chains)} chain(s) composed; "
-            f"max_severity={report.max_severity}")
-        return report.chains
+
+        self.bus.stage_end(
+            stage,
+            f"{len(merged)} chain(s) total "
+            f"({len(graph_rep.paths) if graph_rep else 0} graph, "
+            f"{len(pattern_rep.chains)} legacy) · "
+            f"max_severity={max_sev}",
+        )
+        return merged
 
     # ── Run ------------------------------------------------------
 
@@ -581,6 +655,9 @@ class Campaign:
     def _finalize(self):
         self._report.finished_at = time.time()
         self._report.events = [e.to_dict() for e in self.bus.history]
+        extra = getattr(self, "_report_extra", None)
+        if extra and isinstance(extra, dict):
+            self._report.graph = extra.get("graph")
         self.bus.report(
             f"{len(self._report.chains)} chains, "
             f"{len(self._report.findings)} findings, "
