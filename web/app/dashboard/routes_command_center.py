@@ -17,7 +17,7 @@ from pathlib import Path
 
 import requests as http_client
 
-from flask import jsonify, render_template, request
+from flask import Response, jsonify, render_template, request
 
 from ..middleware import get_current_user, require_login
 from . import dashboard_bp
@@ -128,6 +128,33 @@ def cc_device_telemetry(device_id):
         return jsonify(data)
 
     return jsonify({"error": "Device not found or ops server unreachable"}), 404
+
+
+@dashboard_bp.route("/api/command-center/device/<device_id>/export")
+@require_login
+def cc_device_export(device_id):
+    """Download all telemetry for one device as a JSON evidence bundle.
+
+    Proxies the ops bulk-export (read-only) scoped to this device and
+    returns it as a file attachment for incident-response / forensics.
+    """
+    hours = min(request.args.get("hours", 24, type=int), 72)
+    data = _ops_get("/api/v1/bulk-export", {"device_id": device_id, "hours": hours})
+    if data is None:
+        return jsonify({"error": "Ops server unreachable"}), 502
+
+    bundle = {
+        "device_id": device_id,
+        "window_hours": hours,
+        "exported_at": int(time.time()),
+        "tables": data,
+    }
+    fname = f"amoskys-{device_id[:12]}-{hours}h.json"
+    return Response(
+        json.dumps(bundle, indent=2, default=str),
+        mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 # ── API Endpoints ──────────────────────────────────────────────────

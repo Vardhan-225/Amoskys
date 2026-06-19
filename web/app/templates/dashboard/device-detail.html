@@ -2,159 +2,228 @@
 {% block title %}AMOSKYS — Device{% endblock %}
 {% block content %}
 <div class="dd">
-    <!-- Device sub-navigation -->
     {% set tab = active_tab|default('overview') %}
+
+    <!-- Command bar (device identity + action rail) — filled by JS -->
+    <div class="dd-cmdbar" id="dd-cmdbar"></div>
+
+    <!-- Tab navigation -->
     <div class="dd-subnav" id="dd-subnav">
-        <a href="/dashboard/" class="dd-subnav-link dd-subnav-back">&larr; Devices</a>
-        <div class="dd-subnav-sep"></div>
         <a href="/dashboard/device/{{ device_id }}" class="dd-subnav-link {{ 'active' if tab == 'overview' }}">Overview</a>
         <a href="/dashboard/device/{{ device_id }}/agents" class="dd-subnav-link {{ 'active' if tab == 'agents' }}">Agents</a>
         <a href="/dashboard/device/{{ device_id }}/threats" class="dd-subnav-link {{ 'active' if tab == 'threats' }}">Threats</a>
         <a href="/dashboard/device/{{ device_id }}/network" class="dd-subnav-link {{ 'active' if tab == 'network' }}">Network</a>
         <a href="/dashboard/device/{{ device_id }}/processes" class="dd-subnav-link {{ 'active' if tab == 'processes' }}">Processes</a>
         <a href="/dashboard/device/{{ device_id }}/events" class="dd-subnav-link {{ 'active' if tab == 'events' }}">Events</a>
+        <a href="/dashboard/device/{{ device_id }}/advanced" class="dd-subnav-link {{ 'active' if tab == 'advanced' }}">Detection</a>
         <div class="dd-subnav-sep"></div>
-        <a href="/dashboard/device/{{ device_id }}/observatory" class="dd-subnav-link">Observatory</a>
-        <a href="/dashboard/device/{{ device_id }}/advanced" class="dd-subnav-link {{ 'active' if tab == 'advanced' }}">Advanced</a>
+        <a href="/dashboard/device/{{ device_id }}/observatory" class="dd-subnav-link">Observatory &nearr;</a>
     </div>
 
     <!-- Tab content -->
     <div id="dd-root"><div class="dd-loading"><div class="neural-loading"></div></div></div>
+
+    <div class="dd-foot" id="dd-foot"></div>
 </div>
 
 <style>
-.dd { max-width: 1100px; margin: 0 auto; padding: 16px 20px 40px; }
+.dd {
+    --bg:#0a0e27; --panel:#0f1628; --panel2:#0b1022; --ink:#0a0e20;
+    --bd:#1e2a45; --bds:#16203a; --tx:#e8eefc; --sub:#c8d6e5; --mut:#6b7a99;
+    --cyan:#00d9ff; --grn:#00ff88; --amb:#f0ad4e; --org:#ff8c42; --red:#ff3366; --yel:#ffcc44;
+    max-width: 1140px; margin: 0 auto; padding: 14px 20px 48px;
+}
 .dd-loading { text-align: center; padding: 60px; }
+.dd svg { display: inline-block; vertical-align: -1px; }
 
-/* Sub-navigation */
-.dd-subnav {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    border-bottom: 1px solid #1e2a45;
-    margin: 0 0 16px;
-    overflow-x: auto;
-}
-.dd-subnav-back {
-    color: #6b7a99 !important;
-    border-bottom-color: transparent !important;
-}
-.dd-subnav-back:hover { color: #fff !important; }
-.dd-subnav-sep {
-    width: 1px;
-    height: 20px;
-    background: #1e2a45;
-    margin: 0 4px;
-    flex-shrink: 0;
-}
-.dd-subnav-link {
-    padding: 10px 16px;
-    color: #6b7a99;
-    text-decoration: none;
-    font-size: 0.8em;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    border-bottom: 2px solid transparent;
-    white-space: nowrap;
-    transition: all 0.15s;
-}
-.dd-subnav-link:hover { color: #c8d6e5; }
-.dd-subnav-link.active {
-    color: #00d9ff;
-    border-bottom-color: #00d9ff;
-}
+/* ── Command bar ── */
+.dd-cmdbar { display:flex; align-items:center; gap:12px; padding:10px 0 14px; flex-wrap:wrap; }
+.dd-cb-back { color:var(--mut); text-decoration:none; font-size:0.78em; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+.dd-cb-back:hover { color:#fff; }
+.dd-cb-dot { width:11px; height:11px; border-radius:50%; flex-shrink:0; }
+.dd-cb-dot.online { background:var(--grn); box-shadow:0 0 9px #00ff8855; }
+.dd-cb-dot.offline { background:#4a5670; }
+.dd-cb-name { font-size:1.25em; font-weight:800; color:#fff; letter-spacing:-0.2px; }
+.dd-cb-id { font-family:'SF Mono',ui-monospace,monospace; font-size:0.7em; color:var(--mut); background:var(--panel);
+    border:1px solid var(--bd); padding:4px 9px; border-radius:6px; cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
+.dd-cb-id:hover { color:var(--cyan); border-color:#2a3a5e; }
+.dd-cb-badge { padding:3px 11px; border-radius:6px; font-weight:700; font-size:0.66em; text-transform:uppercase; letter-spacing:0.5px; }
+.dd-cb-badge.online { background:rgba(0,255,136,0.1); color:var(--grn); }
+.dd-cb-badge.offline { background:rgba(100,110,140,0.18); color:#8190b0; }
+.dd-cb-actions { margin-left:auto; display:flex; gap:7px; }
+.dd-act { display:inline-flex; align-items:center; gap:6px; font-size:0.74em; font-weight:600; font-family:inherit;
+    padding:7px 13px; border-radius:7px; border:1px solid var(--bd); background:transparent; color:var(--sub); cursor:pointer; transition:all .15s; text-decoration:none; }
+.dd-act:hover { border-color:#2a3a5e; color:#fff; background:var(--panel); }
+.dd-act-primary { color:var(--cyan); border-color:rgba(0,217,255,0.3); background:rgba(0,217,255,0.05); }
+.dd-act-primary:hover { background:rgba(0,217,255,0.12); color:var(--cyan); }
+.dd-act-disabled { color:#4a5670; border-color:var(--bds); cursor:not-allowed; opacity:0.7; }
+.dd-act-disabled:hover { border-color:var(--bds); color:#4a5670; background:transparent; }
 
+/* ── Sub-navigation ── */
+.dd-subnav { display:flex; align-items:center; gap:0; border-bottom:1px solid var(--bd); margin:0 0 16px; overflow-x:auto; }
+.dd-subnav-sep { width:1px; height:18px; background:var(--bd); margin:0 4px; flex-shrink:0; }
+.dd-subnav-link { padding:10px 15px; color:var(--mut); text-decoration:none; font-size:0.79em; font-weight:600;
+    letter-spacing:0.3px; border-bottom:2px solid transparent; white-space:nowrap; transition:all .15s; }
+.dd-subnav-link:hover { color:var(--sub); }
+.dd-subnav-link.active { color:var(--cyan); border-bottom-color:var(--cyan); }
 
-/* Header */
-.dd-hdr { display: flex; align-items: center; gap: 14px; margin: 16px 0; }
-.dd-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
-.dd-dot.online { background: #00ff88; box-shadow: 0 0 10px #00ff8866; }
-.dd-dot.offline { background: #555; }
-.dd-name { font-size: 1.4em; font-weight: 800; color: #fff; }
-.dd-tags { display: flex; gap: 6px; margin-top: 4px; }
-.dd-tag { padding: 2px 8px; background: rgba(0,217,255,0.08); border: 1px solid #1e2a45; border-radius: 4px; font-size: 0.75em; color: #8899bb; }
-.dd-badge { padding: 4px 12px; border-radius: 6px; font-weight: 700; font-size: 0.75em; text-transform: uppercase; margin-left: auto; }
-.dd-badge.online { background: rgba(0,255,136,0.12); color: #00ff88; }
-.dd-badge.offline { background: rgba(100,100,100,0.2); color: #666; }
+/* ── Panels ── */
+.dd-panel { background:var(--panel); border:1px solid var(--bd); border-radius:11px; padding:14px 16px; margin-bottom:12px; }
+.dd-panel-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:11px; }
+.dd-label { font-size:0.72em; color:var(--cyan); text-transform:uppercase; letter-spacing:0.6px; font-weight:700; }
+.dd-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+@media (max-width:760px){ .dd-grid2 { grid-template-columns:1fr; } }
+.dd-empty { text-align:center; color:#4a5670; padding:22px; font-size:0.84em; }
 
-/* Posture */
-.dd-posture { display: flex; align-items: center; gap: 20px; background: #0f1628; border: 1px solid #1e2a45; border-radius: 12px; padding: 18px 22px; margin-bottom: 14px; }
-.dd-posture-ring { position: relative; width: 70px; height: 70px; flex-shrink: 0; }
-.dd-posture-ring svg { width: 70px; height: 70px; transform: rotate(-90deg); }
-.dd-posture-ring .ring-bg { fill: none; stroke: #1e2a45; stroke-width: 6; }
-.dd-posture-ring .ring-fg { fill: none; stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset 0.8s ease-out; }
-.dd-posture-score { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 1.1em; font-weight: 800; }
-.dd-posture-info { flex: 1; }
-.dd-posture-level { font-size: 1.1em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-.dd-posture-desc { font-size: 0.8em; color: #6b7a99; margin-top: 2px; }
-.dd-risk-pills { display: flex; gap: 12px; margin-top: 8px; }
-.dd-risk-pill { font-size: 0.78em; font-weight: 700; }
+/* ── Verdict hero ── */
+.dd-hero { display:grid; grid-template-columns:1.1fr 1.15fr 1fr; gap:11px; margin-bottom:12px; }
+@media (max-width:880px){ .dd-hero { grid-template-columns:1fr; } }
+.dd-hero-card { background:var(--panel); border:1px solid var(--bd); border-radius:12px; padding:15px 17px; }
+.dd-hero-card.verdict { border-color:var(--vc,#243a2e); }
+.dd-hc-label { font-size:0.64em; letter-spacing:0.7px; color:var(--mut); text-transform:uppercase; margin-bottom:11px; }
+.dd-id-row { display:flex; justify-content:space-between; font-size:0.82em; padding:5px 0; }
+.dd-id-row span:first-child { color:var(--mut); }
+.dd-id-row span:last-child { color:var(--sub); text-align:right; }
+.dd-verdict { display:flex; gap:14px; align-items:center; }
+.dd-ring { position:relative; width:66px; height:66px; flex-shrink:0; }
+.dd-ring svg { width:66px; height:66px; transform:rotate(-90deg); }
+.dd-ring .bg { fill:none; stroke:var(--bd); stroke-width:6; }
+.dd-ring .fg { fill:none; stroke-width:6; stroke-linecap:round; transition:stroke-dashoffset .8s ease-out; }
+.dd-ring-score { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:1.15em; font-weight:800; }
+.dd-verdict-level { font-size:0.95em; font-weight:800; text-transform:uppercase; letter-spacing:0.8px; }
+.dd-verdict-text { font-size:0.78em; color:#9aa8c8; line-height:1.4; margin:4px 0 9px; }
+.dd-pills { display:flex; gap:10px; font-size:0.72em; font-weight:700; }
+.dd-sensor-big { display:flex; align-items:baseline; gap:7px; }
+.dd-sensor-n { font-size:1.7em; font-weight:800; color:var(--cyan); line-height:1; }
+.dd-sensor-u { font-size:0.74em; color:var(--mut); }
+.dd-sensor-bar { display:flex; gap:2px; margin:10px 0 11px; }
+.dd-sensor-bar i { flex:1; height:5px; border-radius:2px; }
+.dd-sensor-row { display:flex; justify-content:space-between; font-size:0.78em; padding:3px 0; }
+.dd-sensor-row span:first-child { color:var(--mut); }
 
-/* Cards row */
-.dd-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 14px; }
-.dd-card { background: #0f1628; border: 1px solid #1e2a45; border-radius: 10px; padding: 12px 14px; }
-.dd-card-l { font-size: 0.65em; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.5px; }
-.dd-card-v { font-size: 1.5em; font-weight: 700; margin-top: 2px; line-height: 1.1; }
+/* ── Slim context bar (sub-tabs) ── */
+.dd-slim { display:flex; align-items:center; gap:16px; background:var(--panel); border:1px solid var(--bd);
+    border-radius:10px; padding:11px 16px; margin-bottom:14px; flex-wrap:wrap; }
+.dd-slim-chip { display:inline-flex; align-items:center; gap:7px; font-size:0.82em; font-weight:700; }
+.dd-slim-chip b { font-size:1.05em; }
+.dd-slim-sep { width:1px; height:18px; background:var(--bd); }
+.dd-slim-pills { display:flex; gap:10px; font-size:0.74em; font-weight:700; }
+.dd-slim-meta { margin-left:auto; font-size:0.76em; color:var(--mut); }
 
-/* Grid 2-col */
-.dd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-@media (max-width: 700px) { .dd-grid { grid-template-columns: 1fr; } }
+/* ── Activity spine ── */
+.dd-spine { display:flex; align-items:flex-end; gap:2px; height:56px; }
+.dd-spine-bar { flex:1; min-width:3px; border-radius:2px 2px 0 0; transition:height .3s; position:relative; opacity:0.92; }
+.dd-spine-bar:hover { opacity:1; }
+.dd-spine-bar:hover::after { content:attr(data-tip); position:absolute; bottom:105%; left:50%; transform:translateX(-50%);
+    background:#10182e; border:1px solid #2a3a5e; padding:3px 8px; border-radius:4px; font-size:0.62rem; white-space:nowrap; color:#cfe; z-index:5; }
+.dd-spine-axis { display:flex; justify-content:space-between; font-size:0.62em; color:#4a5670; margin-top:6px; }
+.dd-legend { font-size:0.68em; color:var(--mut); display:flex; align-items:center; gap:10px; }
+.dd-legend i { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:3px; vertical-align:0; }
 
-/* Section */
-.dd-sec { background: #0f1628; border: 1px solid #1e2a45; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
-.dd-sec-t { font-size: 0.78em; color: #00d9ff; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+/* ── Needs attention / event rows ── */
+.dd-sec-hd { display:flex; align-items:center; gap:9px; margin:4px 0 8px; }
+.dd-sec-hd .t { font-size:0.78em; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; display:inline-flex; align-items:center; gap:5px; }
+.dd-sec-hd .c { font-size:0.74em; color:var(--mut); }
+.dd-ev { background:var(--panel); border:1px solid var(--bd); border-radius:9px; padding:0; margin-bottom:7px; overflow:hidden; }
+.dd-ev.sev-c { border-left:3px solid var(--red); }
+.dd-ev.sev-h { border-left:3px solid var(--amb); }
+.dd-ev.sev-m { border-left:3px solid var(--yel); }
+.dd-ev.sev-l { border-left:3px solid #2a4a6a; }
+.dd-ev-head { display:flex; align-items:center; gap:9px; padding:10px 13px; cursor:pointer; }
+.dd-ev-head:hover { background:#121a30; }
+.dd-ev-score { font-size:0.86em; font-weight:800; min-width:34px; }
+.dd-ev-cat { font-size:0.84em; font-weight:600; color:var(--tx); }
+.dd-ev-mitre { font-family:'SF Mono',monospace; font-size:0.66em; color:var(--cyan); background:rgba(0,217,255,0.06);
+    border:1px solid var(--bd); padding:1px 6px; border-radius:4px; }
+.dd-ev-meta { margin-left:auto; font-size:0.72em; color:var(--mut); display:inline-flex; align-items:center; gap:7px; white-space:nowrap; }
+.dd-ev-chev { transition:transform .2s; color:#4a5670; }
+.dd-ev.open .dd-ev-chev { transform:rotate(180deg); }
+.dd-ev-body { display:none; padding:0 13px 12px; }
+.dd-ev.open .dd-ev-body { display:block; }
+.dd-ev-kv { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; padding-top:11px; border-top:1px solid #1a2238; }
+@media (max-width:680px){ .dd-ev-kv { grid-template-columns:repeat(2,1fr); } }
+.dd-ev-kv .k { font-size:0.62em; color:var(--mut); text-transform:uppercase; letter-spacing:0.4px; }
+.dd-ev-kv .v { font-size:0.8em; color:var(--sub); margin-top:2px; word-break:break-word; }
+.dd-ev-kv .v.mono { font-family:'SF Mono',monospace; }
+.dd-ev-desc { font-size:0.78em; color:#9aa8c8; margin-top:10px; line-height:1.5; }
+.sc-c{color:var(--red);} .sc-h{color:var(--amb);} .sc-m{color:var(--yel);} .sc-l{color:var(--grn);}
 
-/* Bars (categories, MITRE, etc) */
-.dd-bar-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
-.dd-bar-label { font-size: 0.78em; min-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dd-bar-bg { flex: 1; height: 14px; background: #0a0e27; border-radius: 3px; overflow: hidden; }
-.dd-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
-.dd-bar-count { font-size: 0.72em; color: #6b7a99; min-width: 35px; text-align: right; }
+/* ── All-clear ── */
+.dd-clear { background:var(--panel); border:1px solid #1e3a2a; border-radius:11px; padding:26px; text-align:center; margin-bottom:12px; }
+.dd-clear-ic { width:42px; height:42px; margin:0 auto 10px; border-radius:50%; background:rgba(0,255,136,0.1);
+    display:flex; align-items:center; justify-content:center; color:var(--grn); }
+.dd-clear-t { font-size:0.92em; font-weight:700; color:var(--grn); }
+.dd-clear-s { font-size:0.78em; color:var(--mut); margin-top:4px; }
 
-/* MITRE tags */
-.dd-mitre-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-.dd-mitre-tag { padding: 4px 10px; background: rgba(0,217,255,0.06); border: 1px solid #1e2a45; border-radius: 4px; font-size: 0.78em; color: #00d9ff; font-family: 'SF Mono', monospace; }
-.dd-mitre-cnt { color: #6b7a99; margin-left: 4px; }
+/* ── Bars / lists ── */
+.dd-bar { display:flex; align-items:center; gap:8px; padding:4px 0; }
+.dd-bar-l { font-size:0.78em; min-width:104px; max-width:130px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--sub); }
+.dd-bar-bg { flex:1; height:12px; background:var(--ink); border-radius:3px; overflow:hidden; }
+.dd-bar-f { height:100%; border-radius:3px; transition:width .5s; }
+.dd-bar-c { font-size:0.72em; color:var(--mut); min-width:32px; text-align:right; }
+.dd-row { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid #0e1426; font-size:0.8em; }
+.dd-row:last-child { border-bottom:none; }
+.dd-row .nm { flex:1; color:var(--sub); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dd-row .sub { color:var(--mut); font-size:0.92em; }
+.dd-row .mono { font-family:'SF Mono',monospace; }
+.dd-mitre-grid { display:flex; flex-wrap:wrap; gap:5px; }
+.dd-mitre-tag { padding:3px 9px; background:rgba(0,217,255,0.05); border:1px solid var(--bd); border-radius:5px;
+    font-size:0.74em; color:var(--cyan); font-family:'SF Mono',monospace; }
+.dd-mitre-tag b { color:var(--mut); margin-left:4px; font-weight:400; }
 
-/* Timeline */
-.dd-timeline { display: flex; align-items: flex-end; gap: 2px; height: 60px; }
-.dd-tl-bar { flex: 1; min-width: 4px; border-radius: 2px 2px 0 0; transition: height 0.3s; position: relative; }
-.dd-tl-bar:hover::after { content: attr(data-tip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #1a1f35; border: 1px solid #2a3050; padding: 2px 6px; border-radius: 3px; font-size: 0.65em; white-space: nowrap; color: #ccc; }
+/* ── Detection (advanced) ── */
+.dd-stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:8px; }
+.dd-stat { background:var(--ink); border-radius:9px; padding:12px 14px; }
+.dd-stat .l { font-size:0.64em; color:var(--mut); text-transform:uppercase; letter-spacing:0.4px; }
+.dd-stat .v { font-size:1.5em; font-weight:800; margin-top:3px; line-height:1; }
+.dd-nav-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.dd-nav-card { display:block; padding:13px 15px; background:var(--ink); border:1px solid #18213c; border-radius:9px; text-decoration:none; transition:all .15s; }
+.dd-nav-card:hover { border-color:rgba(0,217,255,0.25); }
+.dd-nav-card .t { font-size:0.85em; font-weight:700; color:var(--sub); }
+.dd-nav-card .d { font-size:0.7em; color:#54607e; margin-top:3px; line-height:1.4; }
 
-/* Agents list */
-.dd-agent-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #0a0e20; }
-.dd-agent-row:last-child { border-bottom: none; }
-.dd-agent-dot { width: 6px; height: 6px; border-radius: 50%; background: #00ff88; }
-.dd-agent-name { font-size: 0.82em; flex: 1; }
-.dd-agent-cnt { font-size: 0.75em; color: #6b7a99; }
-
-/* Connections & DNS */
-.dd-conn-row { display: flex; gap: 8px; padding: 5px 0; border-bottom: 1px solid #0a0e20; font-size: 0.8em; align-items: center; }
-.dd-conn-row:last-child { border-bottom: none; }
-.dd-conn-ip { font-family: 'SF Mono', monospace; color: #c8d6e5; min-width: 120px; }
-.dd-conn-meta { color: #6b7a99; flex: 1; }
-.dd-conn-bytes { color: #6b7a99; font-size: 0.85em; }
-
-/* Events table */
-.dd-ev-row { display: grid; grid-template-columns: 110px 1fr 55px 90px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid #0a0e20; font-size: 0.8em; align-items: center; }
-.dd-ev-hdr { font-size: 0.68em; color: #6b7a99; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #1e2a45; padding-bottom: 6px; margin-bottom: 2px; }
-.dd-ev-time { color: #6b7a99; font-family: 'SF Mono', monospace; font-size: 0.9em; }
-.dd-ev-cat { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dd-ev-risk { font-weight: 700; text-align: center; }
-.dd-risk-c { color: #ff3366; } .dd-risk-h { color: #f0ad4e; } .dd-risk-m { color: #ffcc44; } .dd-risk-l { color: #00ff88; }
-.dd-ev-agent { color: #6b7a99; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dd-ev-detail { color: #6b7a99; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dd-ev-row:hover { background: #121a30; }
-
-.dd-empty { text-align: center; color: #555; padding: 20px; font-size: 0.85em; }
+.dd-foot { font-size:0.68em; color:#3e486a; text-align:center; padding:10px; }
 </style>
 
 <script nonce="{{ csp_nonce() }}">
 (function() {
     var deviceId = '{{ device_id }}';
+    // Fallback when the page is served without Jinja (e.g. raw static preview):
+    // derive the id from the URL so the fetch never sees an un-rendered token.
+    if (!deviceId || deviceId.charAt(0) === '{') {
+        var _mId = location.pathname.match(/\/device\/([^\/?#]+)/);
+        deviceId = _mId ? _mId[1] : '';
+    }
     var root = document.getElementById('dd-root');
+    var cmdbar = document.getElementById('dd-cmdbar');
+    var foot = document.getElementById('dd-foot');
     var currentTab = '{{ active_tab|default("overview") }}';
-    var telemetryData = null;
+    if (!currentTab || currentTab.charAt(0) === '{') {
+        var _mTab = location.pathname.match(/\/device\/[^\/]+\/([^\/?#]+)/);
+        currentTab = _mTab ? _mTab[1] : 'overview';
+    }
+    var D = null;
+
+    // Expand/collapse events (delegated; survives re-render)
+    root.addEventListener('click', function(ev) {
+        var head = ev.target.closest('.dd-ev-head');
+        if (head && head.parentElement.classList.contains('dd-ev')) {
+            head.parentElement.classList.toggle('open');
+        }
+    });
+
+    // Command-bar actions — CSP-safe delegation (inline onclick is blocked by CSP)
+    cmdbar.addEventListener('click', function(ev) {
+        var b = ev.target.closest('[data-act]');
+        if (!b) return;
+        var act = b.getAttribute('data-act');
+        if (act === 'export') {
+            window.location.href = '/dashboard/api/command-center/device/' + deviceId + '/export';
+        } else if (act === 'copy') {
+            if (navigator.clipboard) navigator.clipboard.writeText(deviceId);
+            var o = b.innerHTML; b.innerHTML = 'copied ✓'; setTimeout(function() { b.innerHTML = o; }, 1200);
+        }
+    });
 
     load();
     setInterval(load, 30000);
@@ -163,419 +232,460 @@
         try {
             var resp = await fetch('/dashboard/api/command-center/device/' + deviceId + '/telemetry');
             var data = await resp.json();
-            if (!data.device) { root.innerHTML = '<p style="color:#ff5555;padding:40px;">Device not found</p>'; return; }
+            if (!data.device) { root.innerHTML = '<div class="dd-empty" style="padding:50px;color:#ff5555;">Device not found</div>'; return; }
+            D = data;
             var ctxEl = document.getElementById('hdr-device-ctx');
             if (ctxEl) ctxEl.textContent = data.device.hostname || deviceId;
-            telemetryData = data;
+            renderCmdBar(data);
             renderTab(data);
-        } catch(e) {
-            root.innerHTML = '<p style="color:#ff5555;padding:40px;">Error: ' + e.message + '</p>';
+            foot.textContent = 'Live · auto-refresh 30s · ' + (data.summary.total_events || 0) + ' events in 24h window';
+        } catch (e) {
+            root.innerHTML = '<div class="dd-empty" style="padding:50px;color:#ff5555;">Error: ' + esc(e.message) + '</div>';
         }
     }
 
     function renderTab(d) {
-        switch(currentTab) {
-            case 'overview': renderOverview(d); break;
-            case 'agents': renderAgents(d); break;
-            case 'threats': renderThreats(d); break;
-            case 'network': renderNetwork(d); break;
-            case 'processes': renderProcesses(d); break;
-            case 'events': renderAllEvents(d); break;
-            case 'advanced': renderAdvanced(d); break;
-            default: renderOverview(d);
-        }
+        var fn = { overview:renderOverview, agents:renderAgents, threats:renderThreats,
+                   network:renderNetwork, processes:renderProcesses, events:renderAllEvents, advanced:renderDetection };
+        (fn[currentTab] || renderOverview)(d);
     }
 
-    function renderOverview(d) {
+    // ═══════════════════════ COMMAND BAR ═══════════════════════
+    function renderCmdBar(d) {
         var dev = d.device;
-        var p = d.posture;
-        var s = d.summary;
         var sc = dev.status === 'online' ? 'online' : 'offline';
+        cmdbar.innerHTML =
+            '<a href="/dashboard/" class="dd-cb-back">' + IC.back + ' Fleet</a>'
+            + '<span class="dd-cb-dot ' + sc + '"></span>'
+            + '<span class="dd-cb-name">' + esc(dev.hostname || deviceId) + '</span>'
+            + '<button class="dd-cb-id" data-act="copy" title="Copy full device ID">' + esc((deviceId || '').slice(0, 16)) + ' ' + IC.copy + '</button>'
+            + '<span class="dd-cb-badge ' + sc + '">' + sc + '</span>'
+            + '<div class="dd-cb-actions">'
+            + '<a class="dd-act dd-act-primary" href="/dashboard/igris" title="Investigate this device with IGRIS">' + IC.spark + ' Ask IGRIS</a>'
+            + '<button class="dd-act" data-act="export" title="Download a JSON evidence bundle for this device">' + IC.export + ' Export</button>'
+            + '<button class="dd-act dd-act-disabled" disabled title="Device isolation requires the fleet control-plane (in development)">' + IC.shield + ' Isolate</button>'
+            + '</div>';
+    }
 
-        // Posture color
-        var pc = p.level === 'safe' ? '#00ff88' : p.level === 'guarded' ? '#f0ad4e' : '#ff3366';
-        var circ = 2 * Math.PI * 28;
-        var offset = circ * (1 - p.score);
+    // ═══════════════════════ OVERVIEW ═══════════════════════
+    function renderOverview(d) {
+        var html = verdictHero(d);
+        html += activitySpine(d);
+        html += needsAttention(d);
 
-        var html = '';
-
-        // Header
-        html += '<div class="dd-hdr"><div class="dd-dot ' + sc + '"></div><div><div class="dd-name">' + esc(dev.hostname) + '</div>'
-            + '<div class="dd-tags"><span class="dd-tag">' + esc(dev.os) + ' ' + esc(dev.arch) + '</span><span class="dd-tag">v' + esc(dev.agent_version) + '</span></div>'
-            + '</div><span class="dd-badge ' + sc + '">' + sc + '</span></div>';
-
-        // Posture
-        html += '<div class="dd-posture">'
-            + '<div class="dd-posture-ring"><svg viewBox="0 0 64 64"><circle class="ring-bg" cx="32" cy="32" r="28"/>'
-            + '<circle class="ring-fg" cx="32" cy="32" r="28" stroke="' + pc + '" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '"/></svg>'
-            + '<div class="dd-posture-score" style="color:' + pc + '">' + Math.round(p.score * 100) + '</div></div>'
-            + '<div class="dd-posture-info"><div class="dd-posture-level" style="color:' + pc + '">' + esc(p.level) + '</div>'
-            + '<div class="dd-posture-desc">Security posture based on ' + s.total_events + ' events in the last 24 hours</div>'
-            + '<div class="dd-risk-pills">'
-            + '<span class="dd-risk-pill" style="color:#ff3366;">' + s.critical + ' critical</span>'
-            + '<span class="dd-risk-pill" style="color:#f0ad4e;">' + s.high + ' high</span>'
-            + '<span class="dd-risk-pill" style="color:#ffcc44;">' + s.medium + ' medium</span>'
-            + '<span class="dd-risk-pill" style="color:#00ff88;">' + s.low + ' low</span>'
-            + '</div></div></div>';
-
-        // Cards
-        html += '<div class="dd-cards">'
-            + card('Events', s.total_events, '#00d9ff') + card('Critical', s.critical, s.critical > 0 ? '#ff3366' : '#00ff88')
-            + card('Agents', (d.agents || []).length, '#00d9ff') + card('MITRE', (d.mitre_techniques || []).length, '#00d9ff')
-            + card('Processes', (d.processes || []).length, '#8899bb') + card('Connections', (d.connections || []).length, '#8899bb')
+        // Reference grid — categories + MITRE
+        html += '<div class="dd-grid2">'
+            + panel('Threat categories', categoryBars(d.categories))
+            + panel('MITRE ATT&CK · ' + (d.mitre_techniques || []).length + ' techniques', mitreTags(d.mitre_techniques))
             + '</div>';
 
-        // Timeline
-        if (d.timeline && d.timeline.length > 0) {
-            html += '<div class="dd-sec"><div class="dd-sec-t">Event Timeline (24h)</div><div class="dd-timeline">';
-            var maxTl = Math.max.apply(null, d.timeline.map(function(t) { return t.count; }));
-            for (var i = 0; i < d.timeline.length; i++) {
-                var t = d.timeline[i];
-                var h = Math.max(4, (t.count / maxTl) * 100);
-                var clr = t.critical > 0 ? '#ff3366' : t.high > 0 ? '#f0ad4e' : '#00d9ff';
-                var tip = (t.hour || '').slice(11) + ':00 — ' + t.count + ' events';
-                html += '<div class="dd-tl-bar" style="height:' + h + '%;background:' + clr + ';" data-tip="' + tip + '"></div>';
-            }
-            html += '</div></div>';
-        }
-
-        // 2-col: Categories + MITRE
-        html += '<div class="dd-grid">';
-
-        // Categories
-        html += '<div class="dd-sec"><div class="dd-sec-t">Threat Categories</div>';
-        if (d.categories && d.categories.length > 0) {
-            var maxCat = d.categories[0].count;
-            for (var i = 0; i < d.categories.length; i++) {
-                var c = d.categories[i];
-                var pct = Math.max(4, (c.count / maxCat) * 100);
-                var clr = c.avg_risk >= 0.7 ? '#ff3366' : c.avg_risk >= 0.4 ? '#f0ad4e' : '#00d9ff';
-                html += '<div class="dd-bar-row"><span class="dd-bar-label">' + esc(c.category) + '</span>'
-                    + '<div class="dd-bar-bg"><div class="dd-bar-fill" style="width:' + pct + '%;background:' + clr + ';"></div></div>'
-                    + '<span class="dd-bar-count">' + c.count + '</span></div>';
-            }
-        } else { html += '<div class="dd-empty">No threats detected</div>'; }
-        html += '</div>';
-
-        // MITRE
-        html += '<div class="dd-sec"><div class="dd-sec-t">MITRE ATT&CK</div>';
-        if (d.mitre_techniques && d.mitre_techniques.length > 0) {
-            html += '<div class="dd-mitre-grid">';
-            for (var i = 0; i < d.mitre_techniques.length; i++) {
-                var m = d.mitre_techniques[i];
-                html += '<span class="dd-mitre-tag">' + esc(m.technique) + '<span class="dd-mitre-cnt">' + m.count + '</span></span>';
-            }
-            html += '</div>';
-        } else { html += '<div class="dd-empty">No MITRE hits</div>'; }
-        html += '</div></div>';
-
-        // 2-col: Agents + Processes
-        html += '<div class="dd-grid">';
-
-        // Agents
-        html += '<div class="dd-sec"><div class="dd-sec-t">Active Agents</div>';
-        if (d.agents && d.agents.length > 0) {
-            for (var i = 0; i < d.agents.length; i++) {
-                var a = d.agents[i];
-                html += '<div class="dd-agent-row"><div class="dd-agent-dot"></div><span class="dd-agent-name">' + esc(a.name) + '</span><span class="dd-agent-cnt">' + a.event_count + '</span></div>';
-            }
-        } else { html += '<div class="dd-empty">No agent data</div>'; }
-        html += '</div>';
-
-        // Processes
-        html += '<div class="dd-sec"><div class="dd-sec-t">Top Processes</div>';
-        if (d.processes && d.processes.length > 0) {
-            for (var i = 0; i < Math.min(10, d.processes.length); i++) {
-                var pr = d.processes[i];
-                html += '<div class="dd-agent-row"><span class="dd-agent-name">' + esc(pr.name) + '</span><span class="dd-agent-cnt">' + esc(pr.username || '') + '</span><span class="dd-agent-cnt">' + pr.count + '</span></div>';
-            }
-        } else { html += '<div class="dd-empty">No process data</div>'; }
-        html += '</div></div>';
-
-        // Connections + DNS
-        if ((d.connections && d.connections.length > 0) || (d.dns && d.dns.length > 0)) {
-            html += '<div class="dd-grid">';
-            html += '<div class="dd-sec"><div class="dd-sec-t">Network Connections</div>';
-            if (d.connections && d.connections.length > 0) {
-                for (var i = 0; i < Math.min(10, d.connections.length); i++) {
-                    var cn = d.connections[i];
-                    html += '<div class="dd-conn-row"><span class="dd-conn-ip">' + esc(cn.dst_ip) + ':' + (cn.dst_port || '') + '</span>'
-                        + '<span class="dd-conn-meta">' + esc(cn.process || '') + ' ' + esc(cn.country || '') + '</span>'
-                        + '<span class="dd-conn-bytes">' + fmtBytes(cn.bytes_tx + cn.bytes_rx) + '</span></div>';
-                }
-            } else { html += '<div class="dd-empty">No connections</div>'; }
-            html += '</div>';
-
-            html += '<div class="dd-sec"><div class="dd-sec-t">DNS Queries</div>';
-            if (d.dns && d.dns.length > 0) {
-                for (var i = 0; i < Math.min(10, d.dns.length); i++) {
-                    var dn = d.dns[i];
-                    html += '<div class="dd-conn-row"><span class="dd-conn-ip">' + esc(dn.domain) + '</span><span class="dd-conn-bytes">' + dn.count + ' queries</span></div>';
-                }
-            } else { html += '<div class="dd-empty">No DNS data</div>'; }
-            html += '</div></div>';
-        }
-
-        // Recent Events
-        html += '<div class="dd-sec"><div class="dd-sec-t">Recent Security Events</div>';
-        var events = d.recent_events || [];
-        if (events.length > 0) {
-            html += '<div class="dd-ev-row dd-ev-hdr"><span>Time</span><span>Category</span><span>Risk</span><span>Agent</span><span>Detail</span></div>';
-            for (var i = 0; i < events.length; i++) {
-                var e = events[i];
-                var risk = e.risk_score || 0;
-                var rc = risk >= 0.8 ? 'c' : risk >= 0.6 ? 'h' : risk >= 0.3 ? 'm' : 'l';
-                html += '<div class="dd-ev-row"><span class="dd-ev-time">' + (esc(e.timestamp_dt) || '').replace('T',' ').slice(11,19) + '</span>'
-                    + '<span class="dd-ev-cat">' + esc(e.event_category) + '</span>'
-                    + '<span class="dd-ev-risk dd-risk-' + rc + '">' + risk.toFixed(2) + '</span>'
-                    + '<span class="dd-ev-agent">' + esc(e.collection_agent) + '</span>'
-                    + '<span class="dd-ev-detail">' + esc(e.process_name || e.description || '') + '</span></div>';
-            }
-        } else { html += '<div class="dd-empty">No events in the last 24 hours</div>'; }
-        html += '</div>';
+        // Reference grid — processes + network
+        html += '<div class="dd-grid2">'
+            + panel('Top processes', processList(d.processes, 8))
+            + panel('Network', networkBlock(d))
+            + '</div>';
 
         root.innerHTML = html;
     }
 
-    // ═══ AGENTS TAB ═══
+    // ═══════════════════════ AGENTS ═══════════════════════
     function renderAgents(d) {
-        var html = deviceHeader(d);
-        html += '<div class="dd-sec"><div class="dd-sec-t">Active Security Agents (' + (d.agents||[]).length + ')</div>';
-        if (d.agents && d.agents.length > 0) {
-            for (var i = 0; i < d.agents.length; i++) {
-                var a = d.agents[i];
-                html += '<div class="dd-agent-row" style="padding:10px 0;">'
-                    + '<div class="dd-agent-dot"></div>'
-                    + '<span class="dd-agent-name" style="font-size:0.9em;">' + esc(a.name) + '</span>'
-                    + '<span class="dd-agent-cnt" style="font-size:0.85em;">' + a.event_count + ' events</span>'
-                    + '</div>';
+        var html = slimBar(d);
+        var agents = d.agents || [];
+        html += '<div class="dd-sec-hd"><span class="t" style="color:var(--cyan);">' + IC.bolt + ' Reporting agents</span><span class="c">' + agents.length + ' active in 24h</span></div>';
+        html += '<div class="dd-panel">';
+        if (agents.length) {
+            var maxA = agents[0].event_count || 1;
+            for (var i = 0; i < agents.length; i++) {
+                var a = agents[i];
+                html += '<div class="dd-bar"><span class="dd-bar-l" style="min-width:160px;max-width:200px;color:#cfe;">'
+                    + dot('var(--grn)') + ' ' + esc(a.name) + '</span>'
+                    + '<span class="dd-bar-bg"><span class="dd-bar-f" style="width:' + Math.max(3, (a.event_count / maxA) * 100) + '%;background:linear-gradient(90deg,#00d9ff33,#00d9ff);"></span></span>'
+                    + '<span class="dd-bar-c">' + fmtNum(a.event_count) + '</span></div>';
             }
-        } else { html += '<div class="dd-empty">No agent data available</div>'; }
+        } else { html += '<div class="dd-empty">No agent telemetry in the last 24h</div>'; }
         html += '</div>';
 
-        // MITRE coverage
-        html += '<div class="dd-sec"><div class="dd-sec-t">MITRE ATT&CK Coverage</div>';
-        if (d.mitre_techniques && d.mitre_techniques.length > 0) {
-            var maxM = d.mitre_techniques[0].count;
-            for (var i = 0; i < d.mitre_techniques.length; i++) {
-                var m = d.mitre_techniques[i];
-                var pct = Math.max(4, (m.count / maxM) * 100);
-                html += '<div class="dd-bar-row"><span class="dd-bar-label" style="font-family:monospace;color:#00d9ff;">' + esc(m.technique) + '</span>'
-                    + '<div class="dd-bar-bg"><div class="dd-bar-fill" style="width:' + pct + '%;background:linear-gradient(90deg,#00d9ff44,#00d9ff);"></div></div>'
-                    + '<span class="dd-bar-count">' + m.count + '</span></div>';
-            }
-        } else { html += '<div class="dd-empty">No MITRE hits</div>'; }
-        html += '</div>';
+        html += panel('MITRE ATT&CK coverage', mitreBars(d.mitre_techniques));
         root.innerHTML = html;
     }
 
-    // ═══ THREATS TAB ═══
+    // ═══════════════════════ THREATS ═══════════════════════
     function renderThreats(d) {
-        var html = deviceHeader(d);
-        // Filter to high/critical only
+        var html = slimBar(d);
         var threats = (d.recent_events || []).filter(function(e) { return (e.risk_score || 0) >= 0.6; });
-        html += '<div class="dd-sec"><div class="dd-sec-t">High & Critical Threats (' + threats.length + ')</div>';
-        if (threats.length > 0) {
-            html += eventsTable(threats);
+        html += '<div class="dd-sec-hd"><span class="t sc-h">' + IC.alert + ' High &amp; critical</span><span class="c">' + threats.length + ' events</span></div>';
+        if (threats.length) {
+            html += eventList(threats);
         } else {
-            html += '<div class="dd-empty" style="padding:40px;"><div style="font-size:2em;margin-bottom:10px;">&#x2705;</div>No high-risk threats detected in the last 24 hours</div>';
+            html += allClear(d);
         }
-        html += '</div>';
-
-        // Categories sorted by risk
-        var cats = (d.categories || []).slice().sort(function(a,b) { return (b.max_risk||0) - (a.max_risk||0); });
-        html += '<div class="dd-sec"><div class="dd-sec-t">Categories by Risk</div>';
-        if (cats.length > 0) {
-            for (var i = 0; i < cats.length; i++) {
-                var c = cats[i];
-                var clr = c.avg_risk >= 0.7 ? '#ff3366' : c.avg_risk >= 0.4 ? '#f0ad4e' : '#00d9ff';
-                html += '<div class="dd-bar-row"><span class="dd-bar-label">' + esc(c.category) + '</span>'
-                    + '<div class="dd-bar-bg"><div class="dd-bar-fill" style="width:' + Math.max(4,(c.count/(cats[0].count||1))*100) + '%;background:' + clr + ';"></div></div>'
-                    + '<span class="dd-bar-count" style="color:' + clr + ';">' + c.count + '</span></div>';
-            }
-        }
-        html += '</div>';
+        var cats = (d.categories || []).slice().sort(function(a, b) { return (b.max_risk || 0) - (a.max_risk || 0); });
+        html += panel('Categories by peak risk', categoryBars(cats, true));
         root.innerHTML = html;
     }
 
-    // ═══ NETWORK TAB ═══
+    // ═══════════════════════ NETWORK ═══════════════════════
     function renderNetwork(d) {
-        var html = deviceHeader(d);
-
-        // Connections
-        html += '<div class="dd-sec"><div class="dd-sec-t">Network Connections (' + (d.connections||[]).length + ')</div>';
-        if (d.connections && d.connections.length > 0) {
-            html += '<div class="dd-ev-row dd-ev-hdr" style="grid-template-columns:150px 60px 100px 1fr 80px 80px;"><span>Destination</span><span>Port</span><span>Process</span><span>Location</span><span>Sent</span><span>Received</span></div>';
-            for (var i = 0; i < d.connections.length; i++) {
-                var cn = d.connections[i];
-                html += '<div class="dd-ev-row" style="grid-template-columns:150px 60px 100px 1fr 80px 80px;">'
-                    + '<span style="font-family:monospace;color:#c8d6e5;">' + esc(cn.dst_ip) + '</span>'
-                    + '<span style="color:#6b7a99;">' + (cn.dst_port||'') + '</span>'
-                    + '<span style="color:#8899bb;">' + esc(cn.process||'') + '</span>'
-                    + '<span style="color:#6b7a99;">' + esc(cn.country||'') + ' ' + esc(cn.asn||'') + '</span>'
-                    + '<span style="color:#f0ad4e;">' + fmtBytes(cn.bytes_tx) + '</span>'
-                    + '<span style="color:#00d9ff;">' + fmtBytes(cn.bytes_rx) + '</span>'
-                    + '</div>';
+        var html = slimBar(d);
+        var conns = d.connections || [];
+        html += '<div class="dd-panel"><div class="dd-panel-hd"><span class="dd-label">Connections</span><span class="dd-bar-c">' + conns.length + '</span></div>';
+        if (conns.length) {
+            html += '<div class="dd-row" style="color:var(--mut);font-size:0.66em;text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid var(--bd);">'
+                + '<span class="nm">Destination</span><span style="width:50px;">Port</span><span style="width:96px;">Process</span><span style="width:120px;">Location</span><span style="width:62px;text-align:right;">Sent</span><span style="width:62px;text-align:right;">Recv</span></div>';
+            for (var i = 0; i < conns.length; i++) {
+                var c = conns[i];
+                html += '<div class="dd-row">'
+                    + '<span class="nm mono" style="color:#cfe;">' + esc(c.dst_ip) + '</span>'
+                    + '<span style="width:50px;color:var(--mut);">' + (c.dst_port || '') + '</span>'
+                    + '<span style="width:96px;" class="sub">' + esc(c.process || '—') + '</span>'
+                    + '<span style="width:120px;" class="sub">' + esc((c.country || '') + ' ' + (c.asn || '')) + '</span>'
+                    + '<span style="width:62px;text-align:right;color:var(--amb);">' + fmtBytes(c.bytes_tx) + '</span>'
+                    + '<span style="width:62px;text-align:right;color:var(--cyan);">' + fmtBytes(c.bytes_rx) + '</span></div>';
             }
         } else { html += '<div class="dd-empty">No connection data</div>'; }
         html += '</div>';
 
-        // DNS
-        html += '<div class="dd-sec"><div class="dd-sec-t">DNS Queries (' + (d.dns||[]).length + ')</div>';
-        if (d.dns && d.dns.length > 0) {
-            var maxDns = d.dns[0].count;
-            for (var i = 0; i < d.dns.length; i++) {
-                var dn = d.dns[i];
-                var pct = Math.max(4, (dn.count / maxDns) * 100);
-                var clr = dn.avg_risk >= 0.5 ? '#ff3366' : dn.avg_risk >= 0.2 ? '#f0ad4e' : '#00d9ff';
-                html += '<div class="dd-bar-row"><span class="dd-bar-label">' + esc(dn.domain) + '</span>'
-                    + '<div class="dd-bar-bg"><div class="dd-bar-fill" style="width:' + pct + '%;background:' + clr + ';"></div></div>'
-                    + '<span class="dd-bar-count">' + dn.count + '</span></div>';
-            }
-        } else { html += '<div class="dd-empty">No DNS data</div>'; }
-        html += '</div>';
+        html += panel('DNS queries · ' + (d.dns || []).length, dnsBars(d.dns));
         root.innerHTML = html;
     }
 
-    // ═══ PROCESSES TAB ═══
+    // ═══════════════════════ PROCESSES ═══════════════════════
     function renderProcesses(d) {
-        var html = deviceHeader(d);
-        html += '<div class="dd-sec"><div class="dd-sec-t">Top Processes (' + (d.processes||[]).length + ')</div>';
-        if (d.processes && d.processes.length > 0) {
-            html += '<div class="dd-ev-row dd-ev-hdr" style="grid-template-columns:1fr 200px 100px 60px;"><span>Process</span><span>Executable</span><span>User</span><span>Count</span></div>';
-            for (var i = 0; i < d.processes.length; i++) {
-                var pr = d.processes[i];
-                html += '<div class="dd-ev-row" style="grid-template-columns:1fr 200px 100px 60px;">'
-                    + '<span style="font-weight:600;">' + esc(pr.name) + '</span>'
-                    + '<span style="color:#6b7a99;font-size:0.85em;overflow:hidden;text-overflow:ellipsis;">' + esc(pr.exe||'') + '</span>'
-                    + '<span style="color:#8899bb;">' + esc(pr.username||'') + '</span>'
-                    + '<span style="color:#00d9ff;font-weight:700;">' + pr.count + '</span>'
-                    + '</div>';
+        var html = slimBar(d);
+        var procs = d.processes || [];
+        html += '<div class="dd-panel"><div class="dd-panel-hd"><span class="dd-label">Processes</span><span class="dd-bar-c">' + procs.length + '</span></div>';
+        if (procs.length) {
+            html += '<div class="dd-row" style="color:var(--mut);font-size:0.66em;text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid var(--bd);">'
+                + '<span class="nm">Process</span><span style="flex:1.4;">Executable</span><span style="width:100px;">User</span><span style="width:50px;text-align:right;">Seen</span></div>';
+            for (var i = 0; i < procs.length; i++) {
+                var p = procs[i];
+                html += '<div class="dd-row">'
+                    + '<span class="nm" style="font-weight:600;color:#cfe;">' + esc(p.name) + '</span>'
+                    + '<span style="flex:1.4;" class="sub mono" title="' + esc(p.exe || '') + '">' + esc(p.exe || '—') + '</span>'
+                    + '<span style="width:100px;" class="sub">' + esc(p.username || '—') + '</span>'
+                    + '<span style="width:50px;text-align:right;color:var(--cyan);font-weight:700;">' + fmtNum(p.count) + '</span></div>';
             }
         } else { html += '<div class="dd-empty">No process data</div>'; }
         html += '</div>';
         root.innerHTML = html;
     }
 
-    // ═══ ALL EVENTS TAB ═══
+    // ═══════════════════════ EVENTS ═══════════════════════
     function renderAllEvents(d) {
-        var html = deviceHeader(d);
+        var html = slimBar(d);
         var events = d.recent_events || [];
-        html += '<div class="dd-sec"><div class="dd-sec-t">All Security Events (' + events.length + ')</div>';
-        if (events.length > 0) {
-            html += eventsTable(events);
-        } else { html += '<div class="dd-empty">No events</div>'; }
-        html += '</div>';
+        html += '<div class="dd-sec-hd"><span class="t" style="color:var(--cyan);">All security events</span><span class="c">' + events.length + ' · newest first · click to expand</span></div>';
+        html += events.length ? eventList(events) : '<div class="dd-empty">No events in the last 24h</div>';
         root.innerHTML = html;
     }
 
-    // ═══ SHARED HELPERS ═══
+    // ═══════════════════════ DETECTION (real, per-device) ═══════════════════════
+    function renderDetection(d) {
+        var html = slimBar(d);
+        var events = d.recent_events || [];
 
-    function deviceHeader(d) {
-        var dev = d.device;
-        var p = d.posture;
-        var sc = dev.status === 'online' ? 'online' : 'offline';
-        var pc = p.level === 'safe' ? '#00ff88' : p.level === 'guarded' ? '#f0ad4e' : '#ff3366';
-        return '<div class="dd-hdr"><div class="dd-dot ' + sc + '"></div><div><div class="dd-name">' + esc(dev.hostname) + '</div>'
-            + '<div class="dd-tags"><span class="dd-tag">' + esc(dev.os) + ' ' + esc(dev.arch) + '</span>'
-            + '<span class="dd-tag">v' + esc(dev.agent_version) + '</span>'
-            + '<span class="dd-tag" style="color:' + pc + ';">Posture: ' + Math.round(p.score*100) + '</span></div>'
-            + '</div><span class="dd-badge ' + sc + '">' + sc + '</span></div>';
-    }
-
-    function eventsTable(events) {
-        var html = '<div class="dd-ev-row dd-ev-hdr"><span>Time</span><span>Category</span><span>Risk</span><span>Agent</span><span>Detail</span></div>';
+        // Real stats computed from this device's own events
+        var bySource = {}, byProbe = {}, confSum = 0, confN = 0;
         for (var i = 0; i < events.length; i++) {
             var e = events[i];
-            var risk = e.risk_score || 0;
-            var rc = risk >= 0.8 ? 'c' : risk >= 0.6 ? 'h' : risk >= 0.3 ? 'm' : 'l';
-            html += '<div class="dd-ev-row"><span class="dd-ev-time">' + (esc(e.timestamp_dt)||'').replace('T',' ').slice(11,19) + '</span>'
-                + '<span class="dd-ev-cat">' + esc(e.event_category) + '</span>'
-                + '<span class="dd-ev-risk dd-risk-' + rc + '">' + risk.toFixed(2) + '</span>'
-                + '<span class="dd-ev-agent">' + esc(e.collection_agent) + '</span>'
-                + '<span class="dd-ev-detail">' + esc(e.process_name || e.description || '') + '</span></div>';
+            if (e.detection_source) bySource[e.detection_source] = (bySource[e.detection_source] || 0) + 1;
+            if (e.probe_name) byProbe[e.probe_name] = (byProbe[e.probe_name] || 0) + 1;
+            if (typeof e.confidence === 'number') { confSum += e.confidence; confN++; }
+        }
+        var avgConf = confN ? (confSum / confN) : null;
+
+        html += '<div class="dd-panel"><div class="dd-label" style="margin-bottom:11px;">Detection summary · this device, 24h</div>'
+            + '<div class="dd-stat-grid">'
+            + stat('Events scored', fmtNum(events.length), 'var(--cyan)')
+            + stat('Avg risk', (d.posture.avg_risk != null ? d.posture.avg_risk.toFixed(2) : '—'), 'var(--sub)')
+            + stat('Peak risk', (d.posture.max_risk != null ? d.posture.max_risk.toFixed(2) : '—'), d.posture.max_risk >= 0.6 ? 'var(--amb)' : 'var(--grn)')
+            + stat('Avg confidence', (avgConf != null ? Math.round(avgConf * 100) + '%' : '—'), 'var(--grn)')
+            + stat('Detection sources', Object.keys(bySource).length, 'var(--sub)')
+            + '</div></div>';
+
+        html += '<div class="dd-grid2">'
+            + panel('Detection sources', kvBars(bySource, 'var(--cyan)'))
+            + panel('Probes fired (this device)', kvBars(byProbe, 'var(--amb)'));
+        html += '</div>';
+
+        // Honest links to the deeper, fleet-wide engines (real pages)
+        html += '<div class="dd-panel"><div class="dd-label" style="margin-bottom:11px;">Go deeper</div>'
+            + '<div class="dd-nav-grid">'
+            + navCard('Cortex', 'Fleet posture, NEXUS scoring pipeline, constellation', '/dashboard/cortex')
+            + navCard('Observatory', 'Per-agent health, probes and domain telemetry', '/dashboard/observatory')
+            + navCard('Intelligence', 'SOMA baselines, probe calibration, INADS scoring', '/dashboard/intelligence')
+            + navCard('IGRIS', 'Ask the analyst, run hunts, investigate this device', '/dashboard/igris')
+            + '</div></div>';
+
+        root.innerHTML = html;
+    }
+
+    // ═══════════════════════ BUILDERS ═══════════════════════
+
+    function verdictHero(d) {
+        var dev = d.device, p = d.posture, s = d.summary;
+        var pc = postureColor(p.level);
+        var circ = 2 * Math.PI * 30, off = circ * (1 - (p.score || 0));
+        var agentsN = (d.agents || []).length;
+
+        // Identity
+        var idCard = '<div class="dd-hero-card"><div class="dd-hc-label">Identity</div>'
+            + idRow('OS', esc((dev.os || '') + ' ' + (dev.os_version || '') + ' · ' + (dev.arch || '')))
+            + idRow('Agent', 'v' + esc(dev.agent_version || '?'))
+            + idRow('Enrolled', dev.first_seen ? timeAgo(dev.first_seen) : '—')
+            + idRow('First seen', dev.first_seen ? fmtDate(dev.first_seen) : '—')
+            + '</div>';
+
+        // Verdict
+        var vCard = '<div class="dd-hero-card verdict" style="--vc:' + pc + '44;"><div class="dd-verdict">'
+            + '<div class="dd-ring"><svg viewBox="0 0 66 66"><circle class="bg" cx="33" cy="33" r="30"/>'
+            + '<circle class="fg" cx="33" cy="33" r="30" stroke="' + pc + '" stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '"/></svg>'
+            + '<div class="dd-ring-score" style="color:' + pc + ';">' + Math.round((p.score || 0) * 100) + '</div></div>'
+            + '<div style="flex:1;"><div class="dd-verdict-level" style="color:' + pc + ';">' + esc(p.level.replace('_', ' ')) + '</div>'
+            + '<div class="dd-verdict-text">' + postureVerdict(p.level, s) + '</div>'
+            + '<div class="dd-pills">'
+            + '<span class="sc-c">' + s.critical + ' crit</span><span class="sc-h">' + s.high + ' high</span>'
+            + '<span class="sc-m">' + s.medium + ' med</span><span class="sc-l">' + s.low + ' low</span>'
+            + '</div></div></div></div>';
+
+        // Sensor health
+        var segs = '';
+        var n = Math.min(agentsN, 18);
+        for (var i = 0; i < Math.max(n, 1); i++) segs += '<i style="background:' + (agentsN ? 'var(--grn)' : 'var(--bd)') + ';"></i>';
+        var sCard = '<div class="dd-hero-card"><div class="dd-hc-label">Sensor health</div>'
+            + '<div class="dd-sensor-big"><span class="dd-sensor-n">' + agentsN + '</span><span class="dd-sensor-u">agents reporting (24h)</span></div>'
+            + '<div class="dd-sensor-bar">' + segs + '</div>'
+            + sensorRow('Last event', '<span style="color:var(--grn);">' + (dev.last_seen ? timeAgo(dev.last_seen) : '—') + '</span>')
+            + sensorRow('Events / 24h', '<span style="color:var(--sub);">' + fmtNum(s.total_events) + '</span>')
+            + sensorRow('Status', '<span style="color:' + (dev.status === 'online' ? 'var(--grn)' : '#8190b0') + ';">' + dev.status + '</span>')
+            + '</div>';
+
+        return '<div class="dd-hero">' + idCard + vCard + sCard + '</div>';
+    }
+
+    function slimBar(d) {
+        var p = d.posture, s = d.summary, dev = d.device;
+        var pc = postureColor(p.level);
+        return '<div class="dd-slim">'
+            + '<span class="dd-slim-chip" style="color:' + pc + ';">' + dot(pc) + '<b>' + Math.round((p.score || 0) * 100) + '</b> ' + esc(p.level.replace('_', ' ')) + '</span>'
+            + '<span class="dd-slim-sep"></span>'
+            + '<span class="dd-slim-pills"><span class="sc-c">' + s.critical + ' crit</span><span class="sc-h">' + s.high + ' high</span><span class="sc-m">' + s.medium + ' med</span><span class="sc-l">' + s.low + ' low</span></span>'
+            + '<span class="dd-slim-sep"></span>'
+            + '<span class="dd-slim-chip" style="color:var(--mut);font-weight:600;">' + (d.agents || []).length + ' agents</span>'
+            + '<span class="dd-slim-meta">last event ' + (dev.last_seen ? timeAgo(dev.last_seen) : '—') + '</span>'
+            + '</div>';
+    }
+
+    function activitySpine(d) {
+        var tl = d.timeline || [];
+        if (!tl.length) return '';
+        var max = Math.max.apply(null, tl.map(function(t) { return t.count; })) || 1;
+        var bars = '';
+        for (var i = 0; i < tl.length; i++) {
+            var t = tl[i];
+            var h = Math.max(6, (t.count / max) * 100);
+            var clr = t.critical > 0 ? 'var(--red)' : t.high > 0 ? 'var(--amb)' : '#2a6da8';
+            var lbl = (t.hour || '').slice(11) + ':00';
+            var tip = lbl + ' · ' + t.count + ' ev' + (t.critical ? ' · ' + t.critical + 'c' : '') + (t.high ? ' · ' + t.high + 'h' : '');
+            bars += '<div class="dd-spine-bar" style="height:' + h + '%;background:' + clr + ';" data-tip="' + esc(tip) + '"></div>';
+        }
+        return '<div class="dd-panel"><div class="dd-panel-hd"><span class="dd-label">Activity · last 24h</span>'
+            + '<span class="dd-legend"><span><i style="background:var(--red);"></i>critical</span><span><i style="background:var(--amb);"></i>high</span><span><i style="background:#2a6da8;"></i>normal</span></span></div>'
+            + '<div class="dd-spine">' + bars + '</div>'
+            + '<div class="dd-spine-axis"><span>' + ((tl[0].hour || '').slice(11) + ':00') + '</span><span>now</span></div></div>';
+    }
+
+    function needsAttention(d) {
+        var events = (d.recent_events || []).filter(function(e) { return (e.risk_score || 0) >= 0.6; })
+            .sort(function(a, b) { return (b.risk_score || 0) - (a.risk_score || 0); }).slice(0, 6);
+        if (!events.length) return allClear(d);
+        var html = '<div class="dd-sec-hd"><span class="t sc-h">' + IC.alert + ' Needs attention</span><span class="c">' + events.length + ' events ranked by risk · click to expand</span></div>';
+        return html + eventList(events, true);
+    }
+
+    function allClear(d) {
+        return '<div class="dd-clear"><div class="dd-clear-ic">' + IC.check + '</div>'
+            + '<div class="dd-clear-t">All clear — no high-severity events in 24h</div>'
+            + '<div class="dd-clear-s">' + fmtNum((d.summary || {}).total_events || 0) + ' events observed, all medium or below.</div></div>';
+    }
+
+    function eventList(events, firstOpen) {
+        var html = '';
+        for (var i = 0; i < events.length; i++) {
+            html += eventRow(events[i], firstOpen && i === 0);
         }
         return html;
     }
 
-    // ═══ ADVANCED TAB ═══
-    function renderAdvanced(d) {
-        var html = deviceHeader(d);
+    function eventRow(e, open) {
+        var risk = e.risk_score || 0;
+        var rm = riskMeta(risk);
+        var mitre = parseMitre(e.mitre_techniques);
+        var t = (e.timestamp_dt || '').replace('T', ' ').slice(11, 19);
+        var mtags = mitre.slice(0, 3).map(function(m) { return '<span class="dd-ev-mitre">' + esc(m) + '</span>'; }).join(' ');
 
-        // Advanced tools grid — links to existing observatory pages
-        html += '<div class="dd-sec"><div class="dd-sec-t">Advanced Observability</div>'
-            + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
-            + advCard('Cortex', 'Full system overview — posture, constellation, NEXUS pipeline', '/dashboard/cortex')
-            + advCard('Observatory', 'Deep agent analysis — per-agent health, probes, domain data', '/dashboard/observatory')
-            + advCard('Intelligence', 'Scoring engine — SOMA baselines, probe calibration, INADS', '/dashboard/intelligence')
-            + advCard('Threats', 'Incidents, fusion rules, kill chain tracking, risk funnel', '/dashboard/threats')
-            + advCard('IGRIS', 'AI security analyst — ask questions, run hunts, investigate', '/dashboard/igris')
-            + advCard('Fleet', 'Agent management, deploy tokens, reliability metrics', '/dashboard/fleet')
+        var kvs = '';
+        kvs += kv('Process', e.process_name);
+        kvs += kv('Remote', e.remote_ip ? (e.remote_ip + (e.geo_src_country ? ' · ' + e.geo_src_country : '')) : null, true);
+        kvs += kv('Domain', e.domain, true);
+        kvs += kv('User', e.username);
+        kvs += kv('Probe', e.probe_name);
+        kvs += kv('Source', e.detection_source);
+        kvs += kv('Confidence', (typeof e.confidence === 'number') ? Math.round(e.confidence * 100) + '%' : null);
+        kvs += kv('ASN', e.asn_src_org);
+        kvs += kv('Path', e.path, true);
+
+        return '<div class="dd-ev sev-' + rm.cls + (open ? ' open' : '') + '">'
+            + '<div class="dd-ev-head">'
+            + '<span class="dd-ev-score sc-' + rm.cls + '">' + risk.toFixed(2) + '</span>'
+            + '<span class="dd-ev-cat">' + esc(e.event_category || 'event') + '</span>'
+            + mtags
+            + '<span class="dd-ev-meta">' + t + ' · ' + esc(e.collection_agent || '') + ' ' + IC.chev + '</span>'
+            + '</div>'
+            + '<div class="dd-ev-body"><div class="dd-ev-kv">' + (kvs || '<div class="v" style="color:var(--mut);">No additional detail recorded.</div>') + '</div>'
+            + (e.description ? '<div class="dd-ev-desc">' + esc(e.description) + '</div>' : '')
             + '</div></div>';
+    }
 
-        // Scoring breakdown
-        html += '<div class="dd-sec"><div class="dd-sec-t">ML Scoring Pipeline</div>'
-            + '<div style="font-size:0.82em;color:#6b7a99;margin-bottom:10px;">Every event passes through 4 scoring layers + SOMA baseline + probe calibration</div>'
-            + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'
-            + mlCard('Geometric', 'Process tree structure, connection patterns', '#00d9ff')
-            + mlCard('Temporal', 'Time-series anomaly, event sequences', '#00ff88')
-            + mlCard('Behavioral', 'Deviation from learned baseline', '#f0ad4e')
-            + '</div></div>';
+    function categoryBars(cats, byRisk) {
+        cats = cats || [];
+        if (!cats.length) return '<div class="dd-empty">No threats detected</div>';
+        var max = cats.reduce(function(m, c) { return Math.max(m, c.count); }, 1);
+        return cats.map(function(c) {
+            var clr = (c.avg_risk || 0) >= 0.7 ? 'var(--red)' : (c.avg_risk || 0) >= 0.4 ? 'var(--amb)' : 'var(--cyan)';
+            return '<div class="dd-bar"><span class="dd-bar-l">' + esc(c.category) + '</span>'
+                + '<span class="dd-bar-bg"><span class="dd-bar-f" style="width:' + Math.max(3, (c.count / max) * 100) + '%;background:' + clr + ';"></span></span>'
+                + '<span class="dd-bar-c">' + fmtNum(c.count) + '</span></div>';
+        }).join('');
+    }
 
-        // SOMA status
-        var somaPatterns = d.summary ? d.summary.total_events : 0;
-        html += '<div class="dd-sec"><div class="dd-sec-t">SOMA Frequency Memory</div>'
-            + '<div style="display:flex;gap:20px;align-items:center;">'
-            + '<div style="text-align:center;"><div style="font-size:1.8em;font-weight:800;color:#00d9ff;">4,546</div><div style="font-size:0.68em;color:#6b7a99;">Patterns Learned</div></div>'
-            + '<div style="flex:1;font-size:0.82em;color:#6b7a99;line-height:1.6;">'
-            + 'SOMA observes process + file + network patterns and builds a frequency baseline. '
-            + 'Familiar patterns are suppressed. Novel patterns get higher risk scores. '
-            + 'The more the agent runs, the fewer false positives it generates.</div>'
-            + '</div></div>';
+    function mitreTags(m) {
+        m = m || [];
+        if (!m.length) return '<div class="dd-empty">No MITRE hits</div>';
+        return '<div class="dd-mitre-grid">' + m.map(function(x) {
+            return '<span class="dd-mitre-tag">' + esc(x.technique) + '<b>' + x.count + '</b></span>';
+        }).join('') + '</div>';
+    }
 
-        // Probe calibration
-        html += '<div class="dd-sec"><div class="dd-sec-t">Probe Calibration (Beta-Binomial)</div>'
-            + '<div style="font-size:0.82em;color:#6b7a99;margin-bottom:10px;">Self-calibrating precision tracking — probes that produce false positives get their scores reduced automatically</div>';
+    function mitreBars(m) {
+        m = m || [];
+        if (!m.length) return '<div class="dd-empty">No MITRE hits</div>';
+        var max = m[0].count || 1;
+        return m.map(function(x) {
+            return '<div class="dd-bar"><span class="dd-bar-l mono" style="color:var(--cyan);">' + esc(x.technique) + '</span>'
+                + '<span class="dd-bar-bg"><span class="dd-bar-f" style="width:' + Math.max(3, (x.count / max) * 100) + '%;background:linear-gradient(90deg,#00d9ff33,#00d9ff);"></span></span>'
+                + '<span class="dd-bar-c">' + x.count + '</span></div>';
+        }).join('');
+    }
 
-        var probes = [
-            {name:'DNS Beaconing', precision:0.985, updates:67, color:'#00ff88'},
-            {name:'Config Backdoor', precision:0.970, updates:31, color:'#00ff88'},
-            {name:'Exfil Spike', precision:0.943, updates:49, color:'#00ff88'},
-            {name:'Rapid App Switch', precision:0.862, updates:70, color:'#00d9ff'},
-            {name:'LOLBin Execution', precision:0.485, updates:512, color:'#f0ad4e'},
-            {name:'Process Spawn', precision:0.109, updates:2782, color:'#ff3366'},
-            {name:'Discovery', precision:0.053, updates:81, color:'#ff3366'},
-            {name:'TCC Permission', precision:0.017, updates:147, color:'#ff3366'},
-            {name:'New Connection', precision:0.010, updates:215, color:'#ff3366'},
-        ];
-        for (var i = 0; i < probes.length; i++) {
-            var p = probes[i];
-            var pct = Math.max(2, p.precision * 100);
-            html += '<div class="dd-bar-row"><span class="dd-bar-label">' + p.name + '</span>'
-                + '<div class="dd-bar-bg"><div class="dd-bar-fill" style="width:' + pct + '%;background:' + p.color + ';"></div></div>'
-                + '<span class="dd-bar-count" style="color:' + p.color + ';">' + (p.precision * 100).toFixed(1) + '%</span></div>';
+    function processList(procs, n) {
+        procs = procs || [];
+        if (!procs.length) return '<div class="dd-empty">No process data</div>';
+        return procs.slice(0, n).map(function(p) {
+            return '<div class="dd-row"><span class="nm" style="font-weight:600;">' + esc(p.name) + '</span>'
+                + '<span class="sub">' + esc(p.username || '') + '</span>'
+                + '<span class="dd-bar-c">' + fmtNum(p.count) + '</span></div>';
+        }).join('');
+    }
+
+    function networkBlock(d) {
+        var conns = (d.connections || []).slice(0, 5);
+        var dns = (d.dns || []).slice(0, 5);
+        var html = '';
+        if (conns.length) {
+            html += conns.map(function(c) {
+                return '<div class="dd-row"><span class="nm mono" style="color:#cfe;">' + esc(c.dst_ip) + '</span>'
+                    + '<span class="sub">' + esc(c.country || c.process || '') + '</span>'
+                    + '<span class="dd-bar-c">' + fmtBytes((c.bytes_tx || 0) + (c.bytes_rx || 0)) + '</span></div>';
+            }).join('');
         }
-        html += '</div>';
-
-        root.innerHTML = html;
+        if (dns.length) {
+            html += '<div style="font-size:0.66em;color:var(--mut);text-transform:uppercase;letter-spacing:0.4px;margin:9px 0 3px;">DNS</div>';
+            html += dns.map(function(x) {
+                return '<div class="dd-row"><span class="nm">' + esc(x.domain) + '</span><span class="dd-bar-c">' + fmtNum(x.count) + '</span></div>';
+            }).join('');
+        }
+        return html || '<div class="dd-empty">No network data</div>';
     }
 
-    function advCard(title, desc, href) {
-        return '<a href="' + href + '" style="display:block;padding:14px;background:#0a0e20;border:1px solid #1a2040;border-radius:8px;text-decoration:none;transition:all .15s;"'
-            + ' onmouseover="this.style.borderColor=\'#00d9ff33\'" onmouseout="this.style.borderColor=\'#1a2040\'">'
-            + '<div style="font-size:0.88em;font-weight:700;color:#c8d6e5;">' + title + '</div>'
-            + '<div style="font-size:0.72em;color:#555;margin-top:3px;">' + desc + '</div></a>';
+    function dnsBars(dns) {
+        dns = dns || [];
+        if (!dns.length) return '<div class="dd-empty">No DNS data</div>';
+        var max = dns[0].count || 1;
+        return dns.map(function(x) {
+            var clr = (x.avg_risk || 0) >= 0.5 ? 'var(--red)' : (x.avg_risk || 0) >= 0.2 ? 'var(--amb)' : 'var(--cyan)';
+            return '<div class="dd-bar"><span class="dd-bar-l" style="max-width:200px;">' + esc(x.domain) + '</span>'
+                + '<span class="dd-bar-bg"><span class="dd-bar-f" style="width:' + Math.max(3, (x.count / max) * 100) + '%;background:' + clr + ';"></span></span>'
+                + '<span class="dd-bar-c">' + fmtNum(x.count) + '</span></div>';
+        }).join('');
     }
 
-    function mlCard(title, desc, color) {
-        return '<div style="padding:12px;background:#0a0e20;border-radius:8px;border:1px solid #1a2040;">'
-            + '<div style="font-size:0.85em;font-weight:700;color:' + color + ';">' + title + '</div>'
-            + '<div style="font-size:0.7em;color:#555;margin-top:3px;">' + desc + '</div></div>';
+    function kvBars(obj, clr) {
+        var keys = Object.keys(obj).sort(function(a, b) { return obj[b] - obj[a]; });
+        if (!keys.length) return '<div class="dd-empty">No data for this device</div>';
+        var max = obj[keys[0]] || 1;
+        return keys.slice(0, 10).map(function(k) {
+            return '<div class="dd-bar"><span class="dd-bar-l">' + esc(k) + '</span>'
+                + '<span class="dd-bar-bg"><span class="dd-bar-f" style="width:' + Math.max(3, (obj[k] / max) * 100) + '%;background:' + clr + ';"></span></span>'
+                + '<span class="dd-bar-c">' + fmtNum(obj[k]) + '</span></div>';
+        }).join('');
     }
 
-    function card(l, v, c) { return '<div class="dd-card"><div class="dd-card-l">' + l + '</div><div class="dd-card-v" style="color:' + c + ';">' + v + '</div></div>'; }
-    function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-    function fmtBytes(b) { if (!b || b < 1024) return (b||0) + 'B'; if (b < 1048576) return (b/1024).toFixed(1) + 'KB'; return (b/1048576).toFixed(1) + 'MB'; }
+    // ═══════════════════════ HELPERS ═══════════════════════
+    function panel(label, body) { return '<div class="dd-panel"><div class="dd-label" style="margin-bottom:11px;">' + label + '</div>' + body + '</div>'; }
+    function idRow(l, v) { return '<div class="dd-id-row"><span>' + l + '</span><span>' + v + '</span></div>'; }
+    function sensorRow(l, v) { return '<div class="dd-sensor-row"><span>' + l + '</span>' + v + '</div>'; }
+    function stat(l, v, c) { return '<div class="dd-stat"><div class="l">' + l + '</div><div class="v" style="color:' + c + ';">' + v + '</div></div>'; }
+    function navCard(t, dsc, href) { return '<a class="dd-nav-card" href="' + href + '"><div class="t">' + t + '</div><div class="d">' + dsc + '</div></a>'; }
+    function kv(k, v, mono) { return v ? '<div><div class="k">' + k + '</div><div class="v' + (mono ? ' mono' : '') + '">' + esc(String(v)) + '</div></div>' : ''; }
+    function dot(c) { return '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + c + ';"></span>'; }
+
+    function postureColor(level) { return { safe: 'var(--grn)', guarded: 'var(--amb)', at_risk: 'var(--org)', critical: 'var(--red)' }[level] || 'var(--cyan)'; }
+    function postureVerdict(level, s) {
+        var hi = (s.critical || 0) + (s.high || 0);
+        if (level === 'critical') return s.critical + ' critical event' + (s.critical === 1 ? '' : 's') + ' require immediate action.';
+        if (level === 'at_risk') return hi + ' high-severity event' + (hi === 1 ? '' : 's') + ' need review.';
+        if (level === 'guarded') return hi > 0 ? ('No active threats. ' + hi + ' elevated event' + (hi === 1 ? '' : 's') + ' worth a look.') : 'Stable. Mostly routine activity.';
+        return 'Healthy — no active threats in the last 24 hours.';
+    }
+    function riskMeta(r) {
+        if (r >= 0.8) return { cls: 'c' }; if (r >= 0.6) return { cls: 'h' }; if (r >= 0.3) return { cls: 'm' }; return { cls: 'l' };
+    }
+    function parseMitre(raw) {
+        try {
+            if (!raw) return [];
+            var p = JSON.parse(raw);
+            if (typeof p === 'string') p = JSON.parse(p);
+            return Array.isArray(p) ? p.filter(function(t) { return typeof t === 'string' && t[0] === 'T'; }) : [];
+        } catch (e) { return []; }
+    }
+    function timeAgo(sec) {
+        if (!sec) return '—';
+        var diff = Math.max(0, (Date.now() / 1000) - sec);
+        if (diff < 60) return Math.round(diff) + 's ago';
+        if (diff < 3600) return Math.round(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.round(diff / 3600) + 'h ago';
+        return Math.round(diff / 86400) + 'd ago';
+    }
+    function fmtDate(sec) { try { return new Date(sec * 1000).toISOString().slice(0, 10); } catch (e) { return '—'; } }
+    function fmtNum(n) { n = n || 0; return n >= 1000 ? (n / 1000).toFixed(1).replace('.0', '') + 'k' : String(n); }
+    function fmtBytes(b) { if (!b || b < 1024) return (b || 0) + 'B'; if (b < 1048576) return (b / 1024).toFixed(1) + 'KB'; if (b < 1073741824) return (b / 1048576).toFixed(1) + 'MB'; return (b / 1073741824).toFixed(1) + 'GB'; }
+    function esc(s) { if (s == null) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    // Inline SVG icons (match dashboard convention: 16-viewBox, currentColor)
+    var IC = {
+        back:  '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9.5 3.5L5 8l4.5 4.5"/></svg>',
+        copy:  '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="8" height="9" rx="1.3"/><path d="M3 11V3a1 1 0 011-1h6.5"/></svg>',
+        export:'<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>',
+        shield:'<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5L2.5 4v4c0 3.3 2.3 5.7 5.5 6.5 3.2-.8 5.5-3.2 5.5-6.5V4L8 1.5z"/></svg>',
+        spark: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 1.5l1.5 4.2 4.2 1.5-4.2 1.5L8 12.9l-1.5-4.2L2.3 7.2l4.2-1.5L8 1.5z"/></svg>',
+        chev:  '<svg class="dd-ev-chev" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6l4 4 4-4"/></svg>',
+        alert: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2L1 14h14L8 2z"/><path d="M8 6.5v3.5M8 12h.01"/></svg>',
+        bolt:  '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 1.5L3.5 9H7l-.5 5.5L12.5 7H8.5L9 1.5z"/></svg>',
+        check: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l4 4 10-10"/></svg>'
+    };
+
 })();
 </script>
 {% endblock %}
