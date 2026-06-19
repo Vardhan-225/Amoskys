@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.amoskys.threat-intel</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3.13</string>
+        <string>/Library/Amoskys/scripts/threat_intel_autoupdate.py</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>AMOSKYS_THREAT_INTEL_DB</key>
+        <string>/var/lib/amoskys/data/threat_intel.db</string>
+    </dict>
+    <!-- Run once at install, then daily at 04:00 to keep indicators fresh. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>4</integer>
+        <key>Minute</key><integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/var/log/amoskys/threat-intel.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/amoskys/threat-intel.err.log</string>
+</dict>
+</plist>

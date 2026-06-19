@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.amoskys.doctor</string>
+    <!-- IGRIS control plane: observe the whole system and self-heal critical
+         signals every 5 minutes. Verdict appended (JSON) to doctor.log. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3.13</string>
+        <string>/Library/Amoskys/tools/amoskys_doctor.py</string>
+        <string>--heal</string>
+        <string>--auto</string>
+        <string>--json</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>AMOSKYS_OPS_KEY</key>
+        <string>/Users/athanneeru/.ssh/amoskys-deploy</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>300</integer>
+    <key>StandardOutPath</key>
+    <string>/var/log/amoskys/doctor.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/amoskys/doctor.err.log</string>
+</dict>
+</plist>

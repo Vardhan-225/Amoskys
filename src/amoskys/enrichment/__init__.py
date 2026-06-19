@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from typing import Any, Dict, List, Optional
@@ -99,8 +100,14 @@ class EnrichmentPipeline:
     ) -> None:
         self._geoip = GeoIPEnricher(db_path=geoip_db_path)
         self._asn = ASNEnricher(db_path=asn_db_path)
+        # Path precedence: explicit arg → AMOSKYS_THREAT_INTEL_DB env → CWD default.
+        # The env var is the lever for deployed agents, whose CWD (e.g.
+        # /var/lib/amoskys) is NOT the repo — without it the enricher silently
+        # creates an empty DB at the wrong path and every match returns False.
         self._threat_intel = ThreatIntelEnricher(
-            db_path=threat_intel_db_path or "data/threat_intel.db"
+            db_path=threat_intel_db_path
+            or os.getenv("AMOSKYS_THREAT_INTEL_DB")
+            or "data/threat_intel.db"
         )
         self._mitre = MITREEnricher()
         self._stages: List[tuple] = [
@@ -170,6 +177,7 @@ class EnrichmentPipeline:
             },
             "threat_intel": {
                 "available": self._threat_intel.available,
+                "degraded": getattr(self._threat_intel, "degraded", None),
                 "indicators": self._threat_intel.indicator_count(),
                 "cache": self._threat_intel.cache_info(),
             },

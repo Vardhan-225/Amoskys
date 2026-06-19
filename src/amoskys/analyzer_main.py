@@ -241,12 +241,18 @@ def main() -> int:
     # ── Direct Queue Reader (single-machine mode, bypasses EventBus) ──
     queue_dir = DATA_DIR / "queue"
 
-    def _drain_agent_queues():
+    def _drain_agent_queues(budget, rotate=0):
         """Read events directly from per-agent queue DBs into telemetry.db.
 
         This bypasses the EventBus → WAL path for single-machine deployment.
         Each agent writes DeviceTelemetry protobufs to its own queue DB.
         We read them, deserialize, and store directly.
+
+        Bounded + fair: process at most ``budget`` queue rows per call so a single
+        cycle stays responsive (low latency), and rotate which queue leads so a
+        high-volume agent (e.g. macos_auth) cannot starve the others. ``budget``
+        replaces the old hardcoded LIMIT 5000-per-queue-per-cycle, which made one
+        cycle drain the entire backlog and run for hours.
         """
         import glob
         import sqlite3 as _sqlite3
@@ -254,11 +260,20 @@ def main() -> int:
         from amoskys.proto import universal_telemetry_pb2 as pb2
 
         total = 0
-        for qdb_path in glob.glob(str(queue_dir / "*.db")):
+        qpaths = sorted(glob.glob(str(queue_dir / "*.db")))
+        if qpaths and rotate:
+            r = rotate % len(qpaths)
+            qpaths = qpaths[r:] + qpaths[:r]
+        per_queue_cap = max(1, budget // 4)  # no single queue takes >1/4 of a cycle
+        for qdb_path in qpaths:
+            remaining = budget - total
+            if remaining <= 0:
+                break
             try:
                 conn = _sqlite3.connect(qdb_path, timeout=2)
                 rows = conn.execute(
-                    "SELECT id, bytes FROM queue ORDER BY id LIMIT 5000"
+                    "SELECT id, bytes FROM queue ORDER BY id LIMIT ?",
+                    (min(remaining, per_queue_cap),),
                 ).fetchall()
 
                 if not rows:
@@ -816,6 +831,13 @@ def main() -> int:
     logger.info("Direct queue reader enabled (single-machine mode)")
 
     # ── Analysis loop ──
+    # Adaptive cadence (no hardcoded batches): drain a bounded number of rows per
+    # cycle and pace subsystems by wall-clock, not cycle count, so the loop stays
+    # responsive ("high frame rate") whether idle or chewing through a backlog.
+    DRAIN_MAX_ROWS = int(os.getenv("AMOSKYS_DRAIN_MAX_ROWS", "1500"))
+    TACTICAL_EVERY_S, IGRIS_EVERY_S = 10.0, 60.0
+    FUSION_EVERY_S, RETENTION_EVERY_S = 60.0, 600.0
+    _last = {"tactical": 0.0, "igris": 0.0, "fusion": 0.0, "retention": 0.0, "log": 0.0}
     cycle = 0
     total_events_processed = 0
 
@@ -828,20 +850,22 @@ def main() -> int:
             # Process WAL batches (EventBus path)
             if wal_processor:
                 try:
-                    processed = wal_processor.process_batch(batch_size=500)
+                    processed = wal_processor.process_batch(batch_size=DRAIN_MAX_ROWS)
                     events_this_cycle += processed
                 except Exception:
                     logger.error("WAL processing failed", exc_info=True)
 
-            # Direct queue drain (single-machine path — bypasses EventBus)
+            # Direct queue drain (single-machine path — bypasses EventBus).
+            # Bounded to DRAIN_MAX_ROWS, rotated by cycle for cross-agent fairness.
             try:
-                drained = _drain_agent_queues()
+                drained = _drain_agent_queues(DRAIN_MAX_ROWS, rotate=cycle)
                 events_this_cycle += drained
             except Exception:
                 logger.error("Queue drain failed", exc_info=True)
 
-            # IGRIS tactical assessment (every 10s — the minister reads the battlefield)
-            if tactical and cycle % 5 == 0:  # 5 * 2s = 10s
+            # IGRIS tactical assessment (~every 10s, wall-clock paced)
+            if tactical and t0 - _last["tactical"] >= TACTICAL_EVERY_S:
+                _last["tactical"] = t0
                 try:
                     state = tactical.assess()
                     if state.hunt_mode:
@@ -854,15 +878,17 @@ def main() -> int:
                 except Exception:
                     logger.debug("IGRIS tactical assessment failed", exc_info=True)
 
-            # IGRIS observation cycle (every 60s — organism coherence)
-            if igris and cycle % 30 == 0:  # 30 * 2s = 60s
+            # IGRIS observation cycle (~every 60s — organism coherence)
+            if igris and t0 - _last["igris"] >= IGRIS_EVERY_S:
+                _last["igris"] = t0
                 try:
                     igris.observe()
                 except Exception:
                     logger.debug("IGRIS observation failed", exc_info=True)
 
-            # Run fusion evaluation (every 60s)
-            if fusion and cycle % 30 == 0:
+            # Run fusion evaluation (~every 60s, wall-clock paced)
+            if fusion and t0 - _last["fusion"] >= FUSION_EVERY_S:
+                _last["fusion"] = t0
                 try:
                     # Evaluate all devices with recent events
                     for device_id in fusion.get_active_devices():
@@ -897,8 +923,11 @@ def main() -> int:
                 except Exception:
                     logger.debug("Fusion evaluation failed", exc_info=True)
 
-            # Retention cleanup (every ~10 min = 300 cycles × 2s)
-            if cycle % 300 == 0:
+            # Retention cleanup (~every 10 min, wall-clock paced). Cycle-count
+            # gating silently STOPPED running when cycles took hours — which is
+            # how telemetry.db grew to 27 GB and corrupted. Wall-clock fixes it.
+            if t0 - _last["retention"] >= RETENTION_EVERY_S:
+                _last["retention"] = t0
                 try:
                     deleted = store.cleanup_old_data(max_age_days=3)
                     total_deleted = sum(deleted.values())
@@ -912,7 +941,8 @@ def main() -> int:
             total_events_processed += events_this_cycle
             dt = (time.time() - t0) * 1000
 
-            if events_this_cycle > 0 or cycle % 30 == 1:
+            if (events_this_cycle > 0 and t0 - _last["log"] >= 2.0) or cycle % 30 == 1:
+                _last["log"] = t0
                 logger.info(
                     "Cycle %d: processed %d events in %.0fms (total: %d)",
                     cycle,
@@ -927,7 +957,10 @@ def main() -> int:
         except Exception:
             logger.error("Analysis cycle %d failed", cycle, exc_info=True)
 
-        shutdown_event.wait(timeout=2.0)
+        # Adaptive pacing: if we hit the drain budget there is more backlog —
+        # loop again almost immediately (high frame rate). If we drained less, we
+        # are caught up — relax to 2s to stay cheap.
+        shutdown_event.wait(timeout=0.05 if events_this_cycle >= DRAIN_MAX_ROWS else 2.0)
 
     # ── Shutdown: persist state so baselines survive restarts ──
     logger.info(

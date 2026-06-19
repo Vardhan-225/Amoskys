@@ -61,6 +61,24 @@ GATE_ALERT = 0.5       # Notify / create incident
 GATE_CONTAIN = 0.7     # Block IP / domain
 GATE_RESPOND = 0.9     # Kill process / isolate device
 
+# Auto-resolve a brain operational incident if its condition hasn't recurred
+# within this window — the missing piece that let alerts accumulate forever.
+RESOLVE_GRACE_S = 1800
+
+# Operational signals are organism-health, not security threats. They must never
+# feed the security incident count (that was the feedback loop) and they
+# auto-resolve when the underlying condition clears.
+_OPERATIONAL_PREFIXES = (
+    "THRESHOLD_FLEET",
+    "THRESHOLD_EVENTS.FRESHNESS",
+    "FLEET_ANOMALY",
+    "THRESHOLD_INCIDENTS",
+)
+
+
+def _incident_category(signal_type: str) -> str:
+    return "operational" if signal_type.startswith(_OPERATIONAL_PREFIXES) else "security"
+
 # ── Data Classes ───────────────────────────────────────────────────
 
 
@@ -189,6 +207,7 @@ class IGRISCloudBrain:
             return
         self._running = True
         self._state.started_at = time.time()
+        self._ensure_incident_schema()
         self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._run_loop, daemon=True, name="igris-cloud-brain"
@@ -253,6 +272,10 @@ class IGRISCloudBrain:
         # 5. Decide + act (confidence-gated)
         actions = self._decide_and_act(signals)
 
+        # 5b. Incident intelligence: auto-resolve conditions that have cleared,
+        #     so the incident count DECAYS instead of growing forever.
+        self._resolve_stale_incidents(time.time())
+
         # 6. Self-heal (every Nth cycle)
         if cycle % self.HEAL_INTERVAL_CYCLES == 0:
             self._self_heal_cycle(metrics)
@@ -295,8 +318,13 @@ class IGRISCloudBrain:
             "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ?",
             (hours_ago_ns(0.083),),  # 5 minutes
         ) or 0
+        # A "critical event" must be BOTH high-risk AND not self-classified
+        # legitimate by the engine. Without the classification gate, calibrated-
+        # benign beacons (risk 0.9998, class 'legitimate') pinned this at >=5
+        # forever and drove the incident feedback loop.
         m["events.critical_1h"] = scalar(
-            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? AND risk_score >= 0.9",
+            "SELECT COUNT(*) FROM security_events WHERE timestamp_ns > ? "
+            "AND risk_score >= 0.9 AND final_classification != 'legitimate'",
             (hours_ago_ns(1),),
         ) or 0
         m["events.high_1h"] = scalar(
@@ -312,27 +340,23 @@ class IGRISCloudBrain:
             (now - latest_ns / 1e9) if latest_ns else 9999
         )
 
-        # Incident velocity
+        # Incident velocity — SECURITY incidents only.
         #
-        # CRITICAL FIX (IGRIS Fix 1 from NOISE_AUDIT.md): exclude incidents
-        # that were created by the THRESHOLD_INCIDENTS.CRITICAL signal
-        # itself. Previously, this metric included self-generated incidents,
-        # causing an amplification loop: every firing of the threshold
-        # created a new incident, which raised the next measurement, which
-        # guaranteed the next firing.
-        #
-        # Titles of self-created incidents follow the pattern:
-        #   '[IGRIS Brain] THRESHOLD_INCIDENTS.CRITICAL'
-        # (see _decide_and_act).
+        # Incident Intelligence v2: the count that feeds posture/thresholds must
+        # exclude ALL brain-generated operational meta-incidents (freshness,
+        # fleet offline, statistical anomalies, and the old self-threshold), not
+        # just THRESHOLD_INCIDENTS. Counting operational alerts here is what made
+        # the brain measure its own output and amplify forever.
+        _not_op = (
+            "AND title NOT LIKE '[IGRIS Brain] THRESHOLD_%' "
+            "AND title NOT LIKE '[IGRIS Brain] FLEET_ANOMALY_%'"
+        )
         m["incidents.open"] = scalar(
-            "SELECT COUNT(*) FROM fleet_incidents "
-            "WHERE status != 'resolved' "
-            "AND title NOT LIKE '[IGRIS Brain] THRESHOLD_INCIDENTS.%'"
+            "SELECT COUNT(*) FROM fleet_incidents WHERE status != 'resolved' " + _not_op
         ) or 0
         m["incidents.critical"] = scalar(
             "SELECT COUNT(*) FROM fleet_incidents "
-            "WHERE severity = 'critical' AND status != 'resolved' "
-            "AND title NOT LIKE '[IGRIS Brain] THRESHOLD_INCIDENTS.%'"
+            "WHERE severity = 'critical' AND status != 'resolved' " + _not_op
         ) or 0
 
         # Malicious classification rate
@@ -409,10 +433,11 @@ class IGRISCloudBrain:
                 lambda v: v > 0.1, "high",
                 "Malicious event rate at {v:.1%} — elevated attack activity",
             ),
-            "incidents.critical": (
-                lambda v: v > 0, "critical",
-                "{v} unresolved critical incident(s) — immediate attention required",
-            ),
+            # The old "incidents.critical > 0 → critical incident" rule was
+            # removed in Incident Intelligence v2: it created an incident about
+            # having incidents — a pure self-amplifying meta-alert. Posture still
+            # reflects the count (see _update_posture); we just don't manufacture
+            # an incident from it.
         }
 
         rule = rules.get(key)
@@ -535,32 +560,25 @@ class IGRISCloudBrain:
             if signal.confidence < GATE_ALERT:
                 continue
 
-            # Create incident for high-confidence signals
+            # Create/update incident for high-confidence signals — UPSERT, so one
+            # live condition is one incident (not one per cycle), and it can be
+            # auto-resolved when the condition clears.
             if signal.confidence >= GATE_ALERT and signal.severity in ("high", "critical"):
                 try:
-                    execute("""
-                        INSERT INTO fleet_incidents (severity, title, description,
-                                                     device_ids, mitre_techniques,
-                                                     status, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, '[]', 'open', ?, ?)
-                    """, (
-                        signal.severity,
-                        f"[IGRIS Brain] {signal.signal_type}",
-                        signal.message,
-                        json.dumps(signal.device_ids),
-                        time.time(), time.time(),
-                    ))
-                    action = {
-                        "action": "CREATE_INCIDENT",
-                        "signal": signal.signal_type,
-                        "severity": signal.severity,
-                        "timestamp": time.time(),
-                    }
-                    actions.append(action)
-                    signal.actions_taken.append("incident_created")
-                    logger.info("Brain auto-created incident: %s", signal.message)
+                    outcome = self._upsert_incident(signal, time.time())
+                    if outcome == "created":
+                        actions.append({
+                            "action": "CREATE_INCIDENT",
+                            "signal": signal.signal_type,
+                            "severity": signal.severity,
+                            "timestamp": time.time(),
+                        })
+                        signal.actions_taken.append("incident_created")
+                        logger.info("Brain opened incident: %s", signal.message)
+                    else:
+                        signal.actions_taken.append("incident_updated")
                 except Exception:
-                    logger.exception("Failed to create incident for signal %s", signal.signal_id)
+                    logger.exception("Failed to upsert incident for signal %s", signal.signal_id)
 
             # Queue containment for very high confidence lateral movement
             if (signal.confidence >= GATE_CONTAIN
@@ -671,6 +689,90 @@ class IGRISCloudBrain:
             self._heal_log.extend(healed)
             self._heal_log = self._heal_log[-200:]  # Cap
             logger.info("Brain self-heal cycle: %d repairs executed", len(healed))
+
+    # ── Incident Intelligence v2 ────────────────────────────────
+
+    def _ensure_incident_schema(self) -> None:
+        """Add incident-intelligence columns + one-time noise cleanup. Idempotent."""
+        for ddl in (
+            "ALTER TABLE fleet_incidents ADD COLUMN dedup_key TEXT",
+            "ALTER TABLE fleet_incidents ADD COLUMN category TEXT",
+            "ALTER TABLE fleet_incidents ADD COLUMN occurrence_count INTEGER DEFAULT 1",
+            "ALTER TABLE fleet_incidents ADD COLUMN last_seen REAL",
+        ):
+            try:
+                execute(ddl)
+            except Exception:
+                pass  # column already exists
+        # One-time backlog cleanup: resolve accumulated operational noise so the
+        # count reflects reality. Real security incidents are left untouched.
+        try:
+            now = time.time()
+            with write_conn() as conn:
+                cur = conn.execute(
+                    "UPDATE fleet_incidents SET status = 'resolved', resolved_at = ? "
+                    "WHERE status != 'resolved' AND ("
+                    "title LIKE '[IGRIS Brain] THRESHOLD_%' OR "
+                    "title LIKE '[IGRIS Brain] FLEET_ANOMALY_%')",
+                    (now,),
+                )
+                logger.warning(
+                    "Incident intelligence: resolved %d backlog noise incidents",
+                    cur.rowcount,
+                )
+        except Exception:
+            logger.exception("Incident backlog cleanup failed")
+
+    def _upsert_incident(self, signal: "BrainSignal", now: float) -> str:
+        """One incident per live condition. Update if already open, else create.
+        Returns 'updated' or 'created'."""
+        key = signal.signal_type + (
+            ("|" + signal.device_ids[0]) if signal.device_ids else ""
+        )
+        existing = scalar(
+            "SELECT id FROM fleet_incidents WHERE dedup_key = ? AND status != 'resolved'",
+            (key,),
+        )
+        if existing:
+            execute(
+                "UPDATE fleet_incidents SET updated_at = ?, last_seen = ?, "
+                "occurrence_count = COALESCE(occurrence_count, 1) + 1, "
+                "severity = ?, description = ? WHERE id = ?",
+                (now, now, signal.severity, signal.message, existing),
+            )
+            return "updated"
+        execute(
+            "INSERT INTO fleet_incidents (severity, title, description, device_ids, "
+            "mitre_techniques, status, created_at, updated_at, dedup_key, category, "
+            "occurrence_count, last_seen) "
+            "VALUES (?, ?, ?, ?, '[]', 'open', ?, ?, ?, ?, 1, ?)",
+            (signal.severity, f"[IGRIS Brain] {signal.signal_type}", signal.message,
+             json.dumps(signal.device_ids), now, now, key,
+             _incident_category(signal.signal_type), now),
+        )
+        return "created"
+
+    def _resolve_stale_incidents(self, now: float) -> int:
+        """Auto-resolve brain incidents whose condition hasn't recurred within
+        RESOLVE_GRACE_S. An active condition refreshes last_seen every cooldown,
+        so only genuinely-cleared conditions age out and resolve."""
+        try:
+            with write_conn() as conn:
+                cur = conn.execute(
+                    "UPDATE fleet_incidents SET status = 'resolved', resolved_at = ? "
+                    "WHERE status != 'resolved' AND title LIKE '[IGRIS Brain]%' "
+                    "AND last_seen IS NOT NULL AND last_seen < ?",
+                    (now, now - RESOLVE_GRACE_S),
+                )
+                n = cur.rowcount or 0
+            if n:
+                logger.info(
+                    "Incident intelligence: auto-resolved %d cleared condition(s)", n
+                )
+            return n
+        except Exception:
+            logger.exception("resolve_stale_incidents failed")
+            return 0
 
     # ── Helpers ─────────────────────────────────────────────────
 

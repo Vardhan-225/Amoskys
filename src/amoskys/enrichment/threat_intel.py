@@ -73,7 +73,24 @@ class ThreatIntelEnricher:
 
         self._check_cached = lru_cache(maxsize=cache_size)(self._check_impl)
         self._available = True
-        logger.info("ThreatIntel enricher initialized: %s", db_path)
+
+        # Fail loud, not open: an empty indicator store means every lookup
+        # returns False — a silent false-clean. Surface it at startup so a
+        # missing/unpopulated feed cannot masquerade as "no threats found".
+        self.degraded = self.indicator_count() == 0
+        if self.degraded:
+            logger.warning(
+                "ThreatIntel DB has 0 indicators (%s) — threat_intel_match will "
+                "ALWAYS be False. Populate via scripts/update_threat_intel.py "
+                "(set AMOSKYS_THREAT_INTEL_DB for deployed agents).",
+                db_path,
+            )
+        else:
+            logger.info(
+                "ThreatIntel enricher initialized: %s (%d indicators)",
+                db_path,
+                self.indicator_count(),
+            )
 
     @property
     def available(self) -> bool:
