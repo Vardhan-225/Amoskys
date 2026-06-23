@@ -76,7 +76,7 @@ deploy_local() {
     echo -e "\n${CYAN}── STEP 3: Update local Mac agent ──${NC}"
 
     # rsync from main repo to installed location
-    sudo rsync -a "$REPO/src/amoskys/" "$INSTALL/" --exclude=__pycache__ --delete
+    sudo rsync -a "$REPO/src/amoskys/" "$INSTALL/" --exclude=__pycache__ --exclude='agents/Web' --exclude='agents/Web/' --delete
     ok "Code synced to $INSTALL"
 
     # Restart agent

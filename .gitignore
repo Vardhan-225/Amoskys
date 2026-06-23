@@ -205,3 +205,8 @@ ipython_config.py
 target/
 kali/.env
 certs/*.key
+
+# ---- Out-of-Scope Bloat (WordPress/Argos, local docs, MCP config) ----
+src/amoskys/agents/Web/
+docs/_local/
+.mcp.json
