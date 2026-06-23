@@ -23,6 +23,12 @@ from .dashboard.utils import (
 
 logger = logging.getLogger(__name__)
 
+# Guards against signal-feed log spam: the presentation DB may not have a
+# 'signals' table. Without this, every ~5s poll would re-trigger an
+# OperationalError log. We detect the missing table once, warn once, then
+# short-circuit so the feed is simply empty instead of error-spamming.
+_signals_table_missing = False
+
 
 def _get_cors_origins():
     """Get CORS allowed origins from environment. Empty list means same-origin only."""
@@ -91,15 +97,50 @@ def _get_live_posture() -> dict:
 
 
 def _get_live_signals() -> dict:
-    """Fetch open signals for real-time push."""
+    """Fetch open signals for real-time push.
+
+    The presentation DB may not have a 'signals' table. If it's missing we
+    warn exactly once and thereafter return an empty feed without touching
+    the table, so a dead feed degrades gracefully instead of spamming an
+    error every poll cycle.
+    """
+    global _signals_table_missing
+    empty = {"signals": [], "signal_count": 0}
+
+    if _signals_table_missing:
+        return empty
+
     try:
         store = get_telemetry_store()
         if store is None:
-            return {"signals": [], "signal_count": 0}
+            return empty
+
+        # Cheap one-time existence check so we never invoke get_signals()
+        # (and its error logging) against a missing table more than once.
+        row = store.db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='signals' LIMIT 1"
+        ).fetchone()
+        if row is None:
+            _signals_table_missing = True
+            logger.warning(
+                "Signals feed disabled: no 'signals' table in presentation DB; "
+                "returning empty feed (this warning is logged once)"
+            )
+            return empty
+
         signals = store.get_signals(status="open", limit=20)
         return {"signals": signals, "signal_count": len(signals)}
-    except Exception:
-        return {"signals": [], "signal_count": 0}
+    except Exception as exc:
+        # A missing-table / OperationalError surfacing here is treated the
+        # same way: warn once, then stay quiet and serve an empty feed.
+        if not _signals_table_missing:
+            _signals_table_missing = True
+            logger.warning(
+                "Signals feed disabled after error (%s); returning empty feed "
+                "(this warning is logged once)",
+                exc,
+            )
+        return empty
 
 
 class DashboardUpdater:
