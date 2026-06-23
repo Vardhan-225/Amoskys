@@ -1195,12 +1195,30 @@ class ScoringEngine:
             ):
                 classification = original
 
+        # ── Risk reconciliation — make the calibrated verdict authoritative ──
+        # The probe stamps a raw risk_score (often hardcoded ~1.0). Bind the
+        # STORED risk to the scorer's classification band: a 'legitimate' verdict
+        # caps risk low, 'malicious' floors it high — killing the over-attribution
+        # where 100% of events read risk>0 / max 1.0. A known-bad threat-intel hit
+        # always escalates and surfaces. The raw probe value is kept under
+        # risk_score_raw for forensics. (AMOSKYS calibration move 1, 2026-06-18.)
+        if event.get("threat_intel_match") and _SEVERITY_ORDER.get(classification, 0) < 2:
+            classification = "malicious"
+        _band = {"legitimate": (0.0, 0.30), "suspicious": (0.35, 0.69),
+                 "malicious": (0.70, 1.0)}
+        _lo, _hi = _band.get(classification, (0.0, 0.30))
+        _reconciled = min(_hi, max(_lo, composite))
+        if event.get("threat_intel_match"):
+            _reconciled = max(_reconciled, 0.85)
+
         # Populate event
         event["geometric_score"] = round(geo_score, 4)
         event["temporal_score"] = round(temp_score, 4)
         event["behavioral_score"] = round(behav_score, 4)
         event["final_classification"] = classification
         event["composite_score"] = round(composite, 4)
+        event["risk_score_raw"] = round(float(event.get("risk_score", 0.0) or 0.0), 4)
+        event["risk_score"] = round(_reconciled, 4)
         event["score_factors"] = geo_factors + temp_factors + behav_factors + ml_factors
 
         self._total_scored += 1
