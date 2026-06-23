@@ -661,6 +661,7 @@ def receive_telemetry():
     db = get_db()
     now = time.time()
     stored = 0
+    failed = 0
 
     # Look up org_id for this device (cached per request)
     device_row = db.execute(
@@ -690,6 +691,9 @@ def receive_telemetry():
     allowed_cols = ALLOWED_TABLES[table]
 
     for event in events:
+        # Defined up-front so the failure handler can always reference it,
+        # even if the exception fires before the pop below.
+        source_id = event.get("id") if isinstance(event, dict) else None
         try:
             # Force device_id and org_id from server context (prevent spoofing)
             event["device_id"] = device_id
@@ -714,16 +718,29 @@ def receive_telemetry():
             )
             stored += 1
         except Exception as e:
-            logger.debug("Skip event in %s: %s", table, e)
+            # A clean log must mean healthy, not blind: surface per-event
+            # store failures so silently-dropped data is visible.
+            failed += 1
+            logger.error(
+                "INGEST_DROP: table=%s device=%s source_id=%s err=%s: %s",
+                table, device_id[:8], source_id, type(e).__name__, e,
+            )
 
     db.commit()
+
+    if failed > 0:
+        # Pipeline-health summary — only when data was actually dropped.
+        logger.error(
+            "ingest: received=%d stored=%d failed=%d table=%s device=%s",
+            len(events), stored, failed, table, device_id[:8],
+        )
 
     logger.info(
         "Received %d/%d %s events from %s",
         stored, len(events), table, device_id[:8],
     )
 
-    return jsonify({"status": "ok", "stored": stored})
+    return jsonify({"status": "ok", "stored": stored, "failed": failed})
 
 
 @app.route("/api/v1/devices/<device_id>", methods=["DELETE"])
