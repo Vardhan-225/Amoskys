@@ -75,6 +75,21 @@ class ThreatIntelEnricher:
         self._available = True
         logger.info("ThreatIntel enricher initialized: %s", db_path)
 
+        # Loud-on-empty: an indicator DB with 0 rows means every
+        # threat_intel_match will be False. Fail loud, not open — scream
+        # rather than silently passing all events as clean.
+        count = self.indicator_count()
+        self.degraded = count == 0
+        if self.degraded:
+            logger.warning(
+                "ThreatIntel DB %s has 0 indicators — threat_intel_match will "
+                "ALWAYS be False. Load indicators or set AMOSKYS_THREAT_INTEL_DB "
+                "to a populated database.",
+                db_path,
+            )
+        else:
+            logger.info("ThreatIntel DB loaded with %d active indicators", count)
+
     @property
     def available(self) -> bool:
         return self._available

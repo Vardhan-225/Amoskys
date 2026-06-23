@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from typing import Any, Dict, List, Optional
@@ -100,7 +101,9 @@ class EnrichmentPipeline:
         self._geoip = GeoIPEnricher(db_path=geoip_db_path)
         self._asn = ASNEnricher(db_path=asn_db_path)
         self._threat_intel = ThreatIntelEnricher(
-            db_path=threat_intel_db_path or "data/threat_intel.db"
+            db_path=threat_intel_db_path
+            or os.getenv("AMOSKYS_THREAT_INTEL_DB")
+            or "data/threat_intel.db"
         )
         self._mitre = MITREEnricher()
         self._stages: List[tuple] = [
@@ -171,6 +174,7 @@ class EnrichmentPipeline:
             "threat_intel": {
                 "available": self._threat_intel.available,
                 "indicators": self._threat_intel.indicator_count(),
+                "degraded": getattr(self._threat_intel, "degraded", None),
                 "cache": self._threat_intel.cache_info(),
             },
             "mitre": {
