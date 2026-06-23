@@ -562,7 +562,7 @@ class InternalError(AmoskysError):
         super().__init__(message, **kwargs)
 
 
-class NotImplementedError(AmoskysError):
+class AmoskysNotImplemented(AmoskysError):
     """Feature not implemented."""
 
     http_status_code = 501
@@ -574,6 +574,23 @@ class NotImplementedError(AmoskysError):
             details={"feature": feature},
             **kwargs,
         )
+
+
+# Backward-compat alias for the old class name. The class above was renamed from
+# ``NotImplementedError`` (which SHADOWED the Python builtin — a footgun) to
+# ``AmoskysNotImplemented``.
+#
+# This module-scoped ``NotImplementedError`` alias keeps existing imports such as
+# ``from amoskys.common.exceptions import NotImplementedError`` working (it is
+# still re-exported by ``amoskys/common/__init__.py.__all__``). It does NOT
+# rebind the builtin for code that simply does ``raise NotImplementedError``
+# without importing it from here.
+#
+# External references that should eventually migrate to ``AmoskysNotImplemented``
+# (these import the CUSTOM class, not the builtin — see residual_risk):
+#   - src/amoskys/common/__init__.py (import + __all__ re-export)
+#   - tests/unit/common/test_exceptions.py (imports as AmoskysNotImplementedError)
+NotImplementedError = AmoskysNotImplemented  # noqa: A001 (intentional compat alias)
 
 
 class ServiceUnavailableError(AmoskysError):
