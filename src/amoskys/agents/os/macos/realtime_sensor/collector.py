@@ -1031,7 +1031,7 @@ class RealtimeSensorCollector:
         self._log = UnifiedLogStreamCollector()
         self._crit = CriticalFileWatcher()
 
-        self._sources = [self._fs, self._proc, self._log, self._crit]
+        self._sources: List[Any] = [self._fs, self._proc, self._log, self._crit]
         self._started = False
 
     def start(self) -> None:

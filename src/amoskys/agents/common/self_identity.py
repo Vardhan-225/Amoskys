@@ -33,6 +33,7 @@ class SelfIdentity:
     """Singleton that knows AMOSKYS's own footprint on the system."""
 
     _instance: Optional["SelfIdentity"] = None
+    _initialized: bool = False
 
     def __new__(cls) -> "SelfIdentity":
         if cls._instance is None:

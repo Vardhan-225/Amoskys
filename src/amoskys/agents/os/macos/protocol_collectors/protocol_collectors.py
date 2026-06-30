@@ -34,7 +34,7 @@ import os
 import socket
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, cast
 
 import grpc
 
@@ -246,7 +246,10 @@ class ProtocolCollectors(MicroProbeAgentMixin, HardenedAgentBase):
     def _register_default_probes(self) -> None:
         """Register all default protocol collector probes."""
         for probe_class in PROTOCOL_PROBES:
-            probe = probe_class()
+            # PROTOCOL_PROBES holds concrete MicroProbe subclasses; mypy infers
+            # the imported list's element type as the abstract base, so cast the
+            # class to a concrete callable before instantiating it.
+            probe = cast(Callable[[], MicroProbe], probe_class)()
             self.register_probe(probe)
         logger.info(
             f"Registered {len(PROTOCOL_PROBES)} default protocol_collectors probes"

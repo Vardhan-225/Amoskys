@@ -36,7 +36,7 @@ try:
     )
 except ImportError:
     # Fallback for standalone testing
-    from mesh import (
+    from mesh import (  # type: ignore[no-redef]
         ActionExecutor,
         EventType,
         MeshBus,

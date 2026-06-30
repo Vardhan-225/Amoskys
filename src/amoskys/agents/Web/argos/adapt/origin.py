@@ -269,7 +269,7 @@ def _spf_candidates(host: str) -> List[OriginCandidate]:
 def _resolve_a(host: str) -> List[str]:
     try:
         infos = socket.getaddrinfo(host, None)
-        return sorted({i[4][0] for i in infos if ":" not in i[4][0]})
+        return sorted({str(i[4][0]) for i in infos if ":" not in str(i[4][0])})
     except socket.gaierror:
         return []
 

@@ -33,7 +33,7 @@ from __future__ import annotations
 import logging
 import time
 from collections import defaultdict, deque
-from typing import Any, Deque, Dict, List, Optional, Set
+from typing import Any, Deque, Dict, List, Optional, Set, Type
 
 from amoskys.agents.common.probes import (
     MicroProbe,
@@ -1513,7 +1513,7 @@ class CredentialDumpProbe(MicroProbe):
 # =============================================================================
 
 # All probes for this agent
-KERNEL_AUDIT_PROBES = [
+KERNEL_AUDIT_PROBES: List[Type[MicroProbe]] = [
     ExecveHighRiskProbe,
     PrivEscSyscallProbe,
     KernelModuleLoadProbe,

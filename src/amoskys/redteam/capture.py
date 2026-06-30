@@ -56,6 +56,7 @@ from amoskys.agents.os.linux.kernel_audit.agent_types import KernelAuditEvent
 from amoskys.agents.os.macos.auth.probes import AuthEvent
 from amoskys.redteam.harness import (
     AdversarialCase,
+    CaseResult,
     RedTeamHarness,
     Scenario,
     ScenarioResult,
@@ -355,7 +356,7 @@ class ReplayHarness(RedTeamHarness):
         return "\n".join(lines)
 
 
-def _format_cr(cr: Optional["CaseResult"]) -> str:  # noqa: F821
+def _format_cr(cr: Optional[CaseResult]) -> str:
     """Short summary of a CaseResult for the diff table."""
     if cr is None:
         return "(missing)"

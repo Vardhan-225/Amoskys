@@ -65,7 +65,7 @@ class ZeroDayReport:
     generated_at: float = 0.0
     errors: List[str] = field(default_factory=list)
 
-    def summary(self) -> Dict[str, int]:
+    def summary(self) -> Dict[str, Any]:
         p = len(self.patch_diff.patched_findings) if self.patch_diff else 0
         sev_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
         for f in self.taint_findings:

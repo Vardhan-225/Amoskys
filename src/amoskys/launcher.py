@@ -175,7 +175,7 @@ else:
     # TODO: Linux/Windows support via Igris multi-platform engine (future)
     # For now, fallback to macOS agents — they use psutil which works on Linux too.
     # Full Linux-native agents will be built when Igris is implemented.
-    CORE_AGENTS: List[ComponentDef] = [
+    CORE_AGENTS = [
         ("proc-agent", "amoskys.agents.os.macos.process", [], "all", "agent", None),
         ("auth-agent", "amoskys.agents.os.macos.auth", [], "all", "agent", None),
         ("fim-agent", "amoskys.agents.os.macos.filesystem", [], "all", "agent", None),
@@ -199,7 +199,7 @@ else:
         ),
     ]
 
-    EXTENDED_AGENTS: List[ComponentDef] = [
+    EXTENDED_AGENTS = [
         ("applog-agent", "amoskys.agents.os.macos.applog", [], "all", "agent", None),
         (
             "db-activity-agent",

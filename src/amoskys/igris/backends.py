@@ -347,7 +347,9 @@ class AgentMindBackend:
         if context:
             system += f"\n\nCurrent context:\n{json.dumps(context, default=str)[:2000]}"
 
-        messages = [{"role": "user", "content": anomaly_description}]
+        messages: List[Dict[str, Any]] = [
+            {"role": "user", "content": anomaly_description}
+        ]
 
         total_input = 0
         total_output = 0

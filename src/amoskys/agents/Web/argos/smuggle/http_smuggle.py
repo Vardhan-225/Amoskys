@@ -56,7 +56,7 @@ import ssl
 import time
 import urllib.parse
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("amoskys.argos.smuggle")
 
@@ -119,7 +119,7 @@ class SmuggleReport:
 # ── Probe builders ────────────────────────────────────────────────
 
 
-def _base_host_port(target_url: str) -> (str, int, bool):
+def _base_host_port(target_url: str) -> Tuple[str, int, bool]:
     p = urllib.parse.urlparse(target_url)
     host = p.hostname or ""
     use_tls = p.scheme == "https"

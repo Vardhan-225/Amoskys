@@ -34,10 +34,13 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 
 from amoskys.agents.Web.argos.ast import ASTFinding, ASTScanner, RestAuthzScanner
 from amoskys.agents.Web.argos.corpus import WPOrgCorpus, WPOrgCorpusError
+
+if TYPE_CHECKING:
+    from amoskys.agents.Web.argos.storage import AssetsDB
 
 logger = logging.getLogger("amoskys.argos.hunt")
 

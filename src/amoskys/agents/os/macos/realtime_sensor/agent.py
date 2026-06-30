@@ -94,7 +94,7 @@ class PersistenceDropProbe(MicroProbe):
         "crontab": "T1053.003",
     }
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -142,7 +142,7 @@ class TempExecutionProbe(MicroProbe):
     requires_fields = {}
     requires_event_types = frozenset()
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -202,7 +202,7 @@ class QuarantineBypassProbe(MicroProbe):
 
     RISKY_EXTENSIONS = {".command", ".app", ".pkg", ".dmg", ".sh", ".terminal"}
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -263,7 +263,7 @@ class ShortLivedProcessProbe(MicroProbe):
     requires_fields = {}
     requires_event_types = frozenset()
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -307,7 +307,7 @@ class TCCPermissionProbe(MicroProbe):
     requires_fields = {}
     requires_event_types = frozenset()
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -358,7 +358,7 @@ class XProtectMalwareProbe(MicroProbe):
     requires_fields = {}
     requires_event_types = frozenset()
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -417,7 +417,7 @@ class AMFICodeSigningProbe(MicroProbe):
     requires_fields = {}
     requires_event_types = frozenset()
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -458,7 +458,7 @@ class FirewallProbe(MicroProbe):
     requires_fields = {}
     requires_event_types = frozenset()
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -499,7 +499,7 @@ class SSHRealtimeProbe(MicroProbe):
     requires_fields = {}
     requires_event_types = frozenset()
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -562,7 +562,7 @@ class DiskMountProbe(MicroProbe):
     requires_fields = {}
     requires_event_types = frozenset()
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -608,7 +608,7 @@ class GatekeeperRealtimeProbe(MicroProbe):
     requires_fields = {}
     requires_event_types = frozenset()
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -663,7 +663,7 @@ class CriticalFileProbe(MicroProbe):
         "/etc/resolv.conf": ("T1565.001", Severity.MEDIUM, 0.70),
     }
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -715,7 +715,7 @@ class LogDestructionProbe(MicroProbe):
     requires_fields = {}
     requires_event_types = frozenset()
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -804,7 +804,7 @@ class AppLifecycleProbe(MicroProbe):
         }
     )
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -907,7 +907,7 @@ class IMessageFaceTimeProbe(MicroProbe):
         self._RATE_WINDOW_NS = 60_000_000_000  # 60 seconds in nanoseconds
         self._RATE_THRESHOLD = 50  # messages per minute threshold
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events: List[TelemetryEvent] = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -1139,7 +1139,7 @@ class KeyloggerDetectionProbe(MicroProbe):
         }
     )
 
-    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:
+    def scan(self, shared_data: Dict[str, Any]) -> List[TelemetryEvent]:  # type: ignore[override]  # realtime probes use event-stream contract
         events: List[TelemetryEvent] = []
         rt_events: List[RealTimeEvent] = shared_data.get("realtime_events", [])
         device_id = shared_data.get("device_id", "")
@@ -1469,6 +1469,5 @@ class MacOSRealtimeSensorAgent(HardenedAgentBase, MicroProbeAgentMixin):
 
         return [dt]
 
-    def shutdown(self) -> bool:
+    def shutdown(self) -> None:
         self._collector.stop()
-        return True
