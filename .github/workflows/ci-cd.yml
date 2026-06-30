@@ -57,12 +57,17 @@ jobs:
     - name: Install project with dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e ".[dev,web,agents]"
+        # ml = numpy/scikit-learn/pandas — the SOMA-brain & AMRDR tests import
+        # these. There is no 'agents' extra (it was a silent no-op); ml is
+        # required for the intelligence-layer tests to even collect.
+        pip install -e ".[dev,web,ml]"
     - name: Run comprehensive tests
-      # TEMPORARY (ship-first): the 3975-test suite needs Docker + a numpy dep
-      # gap fixed before it is green; keep it reporting but non-blocking so a
-      # clean branch can deploy. Re-harden in the optimize phase (add numpy to
-      # the agents extra, guard ML-optional tests, then drop continue-on-error).
+      # Still non-blocking, but healthier: the numpy gap is fixed (install now
+      # pulls [ml]; collection is clean, +1500 tests collectable). Remaining
+      # before this can block: (1) tests/unit/auth/test_auth_stack.py — User
+      # model not registered on amoskys.db.Base before create_all (68 errors);
+      # (2) Docker-backed integration tests in `make check`. Then drop
+      # continue-on-error. Tracked as a follow-up.
       continue-on-error: true
       run: make check PYTHON=python
     - name: Upload test results
@@ -125,11 +130,8 @@ jobs:
     - name: Lint with flake8
       run: flake8 src/ tests/ web/
     - name: Type check with mypy
-      # TEMPORARY (ship-first): mypy is advisory and must not block deploys.
-      # ~40 residual errors are type-noise + peripheral-code bugs (redteam/argos),
-      # none on the serving path. Re-harden in the optimize phase: fix remaining
-      # errors, then drop continue-on-error. Tracked as a follow-up.
-      continue-on-error: true
+      # BLOCKING again: all 40 prior errors fixed — `mypy src/amoskys` is clean
+      # (Success: no issues found in 409 source files).
       run: |
         pip uninstall amoskys -y || true
         python -m mypy src/amoskys --exclude "proto/"
