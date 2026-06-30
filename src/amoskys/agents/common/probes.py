@@ -536,6 +536,7 @@ class MicroProbe(abc.ABC):
         confidence: float = 0.8,
         correlation_id: Optional[str] = None,
         tags: Optional[List[str]] = None,
+        mitre_techniques: Optional[List[str]] = None,
     ) -> TelemetryEvent:
         """Helper to create TelemetryEvent with probe defaults.
 
@@ -563,7 +564,11 @@ class MicroProbe(abc.ABC):
             severity=severity,
             probe_name=self.name,
             data=data,
-            mitre_techniques=self.mitre_techniques.copy(),
+            mitre_techniques=(
+                list(mitre_techniques)
+                if mitre_techniques is not None
+                else self.mitre_techniques.copy()
+            ),
             mitre_tactics=self.mitre_tactics.copy(),
             confidence=confidence,
             correlation_id=correlation_id,
