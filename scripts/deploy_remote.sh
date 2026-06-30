@@ -19,7 +19,13 @@ set -euo pipefail
 # Configuration
 APP_DIR="/opt/amoskys"
 VENV_DIR="$APP_DIR/venv"
-BRANCH="${GIT_REF:-main}"
+# What to deploy, in priority order:
+#   1. GIT_REF       — explicit commit SHA / branch / tag (CI passes github.sha)
+#   2. DEPLOY_BRANCH — operator override for manual runs
+#   3. the branch this checkout currently tracks — NEVER a hardcoded 'main'
+#      (that previously rolled production back when prod tracked another branch)
+CURRENT_BRANCH="$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+BRANCH="${GIT_REF:-${DEPLOY_BRANCH:-$CURRENT_BRANCH}}"
 DEPLOY_MARKER="$APP_DIR/.last_deploy"
 HEALTH_URL="http://127.0.0.1:5001/api/v1/health/ping"
 HEALTH_SYSTEM_URL="http://127.0.0.1:5001/api/v1/health/system"
@@ -66,12 +72,16 @@ fi
 log_info "Step 1/8: Fetching latest code..."
 git fetch --all --prune
 
-if [[ "$BRANCH" == "main" ]]; then
-    git reset --hard "origin/main"
+# Resolve BRANCH into a concrete ref: prefer the remote-tracking branch when
+# it names a branch, otherwise treat it as a raw commit SHA / tag. Reset hard
+# to exactly that — no implicit 'origin/main' fallback.
+if git rev-parse --verify --quiet "origin/$BRANCH^{commit}" >/dev/null 2>&1; then
+    TARGET="origin/$BRANCH"
 else
-    # For specific commits/refs
-    git checkout "$BRANCH" 2>/dev/null || git reset --hard "$BRANCH"
+    TARGET="$BRANCH"
 fi
+log_info "Resolving deploy target: $BRANCH -> $TARGET"
+git reset --hard "$TARGET"
 
 DEPLOYED_COMMIT=$(git rev-parse HEAD)
 DEPLOYED_REF=$(git describe --tags --always 2>/dev/null || echo "$DEPLOYED_COMMIT")
